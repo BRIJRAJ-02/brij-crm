@@ -513,6 +513,8 @@ export const PublicChatReply = z.object({
    * prompt box asks for exactly that. Absent when nothing is held, or once the details are read back.
    */
   asks: z.enum(['details', 'name', 'email', 'phone']).optional(),
+  /** The visitor's name as the chat heard it (4 Nov 2026): the page draws their initials beside their lines. */
+  name: z.string().max(200).optional(),
   duration: BookingDuration,
   booked: PublicBooked.optional(),
 });

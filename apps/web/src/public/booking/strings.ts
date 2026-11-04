@@ -66,9 +66,13 @@ export const strings = {
   // Book by chat (spec 0042).
   /** The chat's confirm card names the meeting as the confirmation does. */
   chatCardTitle: (title: string, host: string) => `${title} with ${host}`,
-  chatGreeting: (host: string, title: string, minutes: number) =>
-    `Booking your ${String(minutes)} min ${title} with ${host}. When suits you?`,
-  chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
+  /**
+   * The chat speaks as the host (owner, 4 Nov 2026: "that person is doing it", not an assistant): their first name on
+   * a personal page, the team's name on a team page, and the core agent's replies in the same voice.
+   */
+  chatGreeting: (who: { readonly label: string; readonly isTeam: boolean }, title: string, minutes: number) =>
+    `Hi, ${who.isTeam ? `it’s ${who.label}` : `I’m ${who.label}`}. When suits you for a ${String(minutes)} min ${title}?`,
+  chatNoTimes: (isTeam: boolean) => `${isTeam ? 'We’re' : 'I’m'} fully booked right now. Check back soon.`,
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   /**
    * What the prompt box asks after each reply (the owner, 4 Nov 2026: the words follow the conversation): the first
@@ -82,9 +86,9 @@ export const strings = {
     name: 'Your name',
     email: 'Your email',
     phone: 'Your phone number',
-    confirm: 'Yes, or what to change',
+    confirm: 'Or say what to change',
   },
-  chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
+  chatTooMany: 'That was a lot at once. Try again in a few seconds.',
   chatTooLong: 'This chat is too long to go on. Start over to book.',
   chatBooked: 'Booked. Opening your booking.',
   chatRequested: 'Request sent. Opening your request.',

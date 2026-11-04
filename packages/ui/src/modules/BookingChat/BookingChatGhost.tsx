@@ -8,10 +8,10 @@ const GHOST_TIMES = 6;
 const ignore = () => undefined;
 
 /**
- * Book by chat's shape while the page's times load (4 November 2026): the greeting's bubble, a day's label over a
- * few times (SlotList's own offers, loading) and the prompt box at the foot, each where the loaded chat puts it, so
- * the times fill in rather than arriving into an empty card. Small and in the page's first load, unlike BookingChat,
- * which loads on its own.
+ * Book by chat's shape while the page's times load (4 November 2026): the host's name, their face beside the
+ * greeting's bubble, a day's label over a few times (SlotList's own offers, loading) and the prompt box at the foot,
+ * each where the loaded chat puts it, so the times fill in rather than arriving into an empty card. Small and in the
+ * page's first load, unlike BookingChat, which loads on its own.
  */
 export function BookingChatGhost() {
   // Two parts, as the chat's own (its thread, its prompt box), straight into the view's column: the thread takes the
@@ -19,19 +19,27 @@ export function BookingChatGhost() {
   return (
     <>
       <div className={styles.thread} aria-busy="true">
-        <div className={styles.bubble}>
-          <Skeleton shape="fill" />
+        <div className={styles.who}>
+          <Skeleton shape="text" width="short" />
         </div>
-        <SlotList
-          variant="offers"
-          layout="grid"
-          heading=""
-          slots={[]}
-          value={undefined}
-          onChange={ignore}
-          isLoading
-          ghosts={GHOST_TIMES}
-        />
+        <div className={styles.said}>
+          <Skeleton shape="circle" size="md" />
+          <div className={styles.bubble}>
+            <Skeleton shape="fill" />
+          </div>
+        </div>
+        <div className={styles.offers}>
+          <SlotList
+            variant="offers"
+            layout="grid"
+            heading=""
+            slots={[]}
+            value={undefined}
+            onChange={ignore}
+            isLoading
+            ghosts={GHOST_TIMES}
+          />
+        </div>
       </div>
       <div className={styles.composer}>
         <Skeleton shape="fill" />

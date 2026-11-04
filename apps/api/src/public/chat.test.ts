@@ -137,14 +137,14 @@ describe('booking by chat (AC-1513 to AC-1522)', () => {
       first.conversationId,
     );
     expect(readBack.reply.text).toBe(
-      `${MONDAY_SAID} at 9:00 AM, 30 minutes, for Grace Hopper (grace@navy.example). Shall I book it?`,
+      `${MONDAY_SAID} at 9:00 AM, 30 min, for Grace Hopper (grace@navy.example). Shall I book it?`,
     );
     expect(readBack.reply.booked).toBeUndefined();
 
     const said = ['monday at 9am', "I'm Grace Hopper, grace@navy.example", 'Yes, book it'];
     const done = await chat(page.publicKey, said, first.conversationId);
     expect(done.reply.text).toBe(
-      `Done. You’re booked for ${MONDAY_SAID} at 9:00 AM. The details are on their way to grace@navy.example.`,
+      'You’re booked. See you tomorrow at 9:00 AM. Details are on their way to grace@navy.example.',
     );
     expect(done.reply.booked?.booking.start).toBe(MONDAY_9);
     const token = done.reply.booked?.manageToken ?? '';
@@ -171,7 +171,7 @@ describe('booking by chat (AC-1513 to AC-1522)', () => {
     // The booked time is no longer offered to anyone.
     const next = await chat(page.publicKey, ['monday at 9am']);
     expect(next.reply.offers).not.toContain(MONDAY_9);
-    expect(next.reply.text).toMatch(/^That time isn’t open\./);
+    expect(next.reply.text).toMatch(/^I can’t do that time\./);
   });
 
   it('keeps nothing for a conversation that never books', async () => {

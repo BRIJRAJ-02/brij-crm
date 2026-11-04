@@ -54,7 +54,7 @@ function draw(children: ReactNode): void {
 const GREETING: BookingChatLine = {
   id: 'greeting',
   role: 'assistant',
-  text: 'Booking your 30 min meeting with Brijraj Rana. When suits you?',
+  text: 'Hi, I’m Brijraj. When suits you for a 30 min meeting?',
   days: [
     {
       day: 'Wed, Nov 4',
@@ -70,6 +70,7 @@ const GREETING: BookingChatLine = {
 };
 
 const ignore = () => undefined;
+const HOST = { name: 'Brijraj Rana', label: 'Brijraj' };
 const BOOK = 'Book';
 
 /** The chat (or its ghost) in a box the size the booking card gives it. */
@@ -90,25 +91,34 @@ function placeOf(element: Element | null | undefined): { top: number; bottom: nu
 }
 
 describe('Book by chat while its times load', () => {
-  it('holds the greeting’s, the times’ and the prompt box’s places, not two bars', () => {
+  it('holds the host’s name and face, the greeting’s, the times’ and the prompt box’s places, not two bars', async () => {
+    // A wide page, where the card keeps the month's height and the prompt box stands at its foot.
+    await page.viewport(1280, 800);
     draw(inCard(<BookingChatGhost />));
     const ghost = host.querySelector('[aria-busy="true"]');
-    // The bubble, the day's six times and the prompt box: more than two shapes, and the six times in a grid.
-    const shapes = ghost?.querySelectorAll('[aria-hidden="true"]') ?? [];
-    expect(shapes.length).toBeGreaterThanOrEqual(9);
-    const shapeList = [...shapes];
-    const first = shapeList.at(0);
-    const time = ghost?.querySelector('li');
-    // The prompt box's place stands after the thread, at the foot.
-    const composer = host.lastElementChild;
-    const ghostPlaces = { bubble: placeOf(first), time: placeOf(time), composer: placeOf(composer) };
+    // The host's name, their face, the bubble, the day's six times: more than two shapes.
+    expect(ghost?.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThanOrEqual(9);
+    const said = ghost?.children[1];
+    const ghostPlaces = {
+      who: placeOf(ghost?.firstElementChild),
+      face: placeOf(said?.firstElementChild),
+      bubble: placeOf(said?.lastElementChild),
+      time: placeOf(ghost?.querySelector('li')),
+      // The prompt box's place stands after the thread, at the foot.
+      composer: placeOf(host.lastElementChild),
+    };
 
-    draw(inCard(<BookingChat lines={[GREETING]} onSend={ignore} onPickTime={ignore} />));
-    const bubble = host.querySelector('[role="log"] p');
-    const firstTime = host.querySelector('[role="log"] button');
-    const box = host.querySelector('textarea, input')?.closest('[class*="composer"]');
-    const loaded = { bubble: placeOf(bubble), time: placeOf(firstTime), composer: placeOf(box) };
+    draw(inCard(<BookingChat lines={[GREETING]} host={HOST} onSend={ignore} onPickTime={ignore} />));
+    const loaded = {
+      who: placeOf(host.querySelector('[class*="who"]')),
+      face: placeOf(host.querySelector('[class*="face"]')),
+      bubble: placeOf(host.querySelector('[role="log"] p')),
+      time: placeOf(host.querySelector('[role="log"] button')),
+      composer: placeOf(host.querySelector('textarea, input')?.closest('[class*="composer"]')),
+    };
 
+    expect(Math.abs(ghostPlaces.who.top - loaded.who.top)).toBeLessThanOrEqual(TOLERANCE);
+    expect(Math.abs(ghostPlaces.face.bottom - loaded.face.bottom)).toBeLessThanOrEqual(TOLERANCE);
     expect(Math.abs(ghostPlaces.bubble.top - loaded.bubble.top)).toBeLessThanOrEqual(TOLERANCE);
     expect(Math.abs(ghostPlaces.time.top - loaded.time.top)).toBeLessThanOrEqual(TOLERANCE);
     expect(Math.abs(ghostPlaces.time.height - loaded.time.height)).toBeLessThanOrEqual(TOLERANCE);
@@ -118,7 +128,7 @@ describe('Book by chat while its times load', () => {
 });
 
 describe('Book by chat on a phone', () => {
-  const frame = () => (
+  const frame = (lines: readonly BookingChatLine[] = [GREETING]) => (
     <BookingFrame
       host={{ name: 'Brijraj Rana' }}
       title="meeting"
@@ -135,7 +145,7 @@ describe('Book by chat on a phone', () => {
         </Button>
       }
       view="chat"
-      cover={<BookingChat lines={[GREETING]} onSend={ignore} onPickTime={ignore} />}
+      cover={<BookingChat lines={lines} host={HOST} onSend={ignore} onPickTime={ignore} />}
     >
       <MonthTiles
         month="2026-11"
@@ -149,6 +159,32 @@ describe('Book by chat on a phone', () => {
       />
     </BookingFrame>
   );
+
+  it('brings a later reply’s times into view above the prompt box, the page the only scroller', async () => {
+    await page.viewport(375, 667);
+    draw(frame());
+    globalThis.scrollTo(0, 0);
+    const reply: BookingChatLine = {
+      id: 'a1',
+      role: 'assistant',
+      text: 'Here’s when I’m free Thursday.',
+      days: [
+        { day: 'Thu, Nov 5', times: (GREETING.days?.[0]?.times ?? []).map((time) => ({ ...time, id: `t${time.id}` })) },
+      ],
+    };
+    draw(frame([GREETING, { id: 'v1', role: 'visitor', text: 'thursday' }, reply]));
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 900));
+    const thread = host.querySelector('[role="log"]');
+    // The thread scrolls nothing itself: the page does.
+    expect(thread?.scrollHeight).toBeLessThanOrEqual((thread?.clientHeight ?? 0) + 1);
+    const times = [...host.querySelectorAll('[role="log"] > :last-child li button')];
+    expect(times).toHaveLength(6);
+    const lastTime = times.at(-1)?.getBoundingClientRect();
+    const composer = host.querySelector('textarea, input')?.closest('[class*="composer"]')?.getBoundingClientRect();
+    expect(lastTime).toBeDefined();
+    expect(lastTime?.bottom ?? Infinity).toBeLessThanOrEqual(composer?.top ?? 0);
+    expect(lastTime?.top ?? -1).toBeGreaterThan(0);
+  });
 
   for (const [width, height] of [
     [390, 844],

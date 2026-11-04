@@ -24,8 +24,19 @@ const MAX_TEXT = 500;
 /** How many times the greeting offers. */
 const GREETING_TIMES = 6;
 
-/** A line as the panel keeps it: as shown, and as sent (a time button's words). */
-type Line = BookingChatLine & { readonly sent: string };
+/** A line as the panel keeps it: as shown, as sent (a time button's words), and the visitor's name the chat had heard. */
+type Line = BookingChatLine & { readonly sent: string; readonly heard?: string };
+
+/** Who the chat speaks as (BookingChat's host): the rail's face, and the host's first name or the team's name. */
+function hostOf(page: PublicBookingPage) {
+  const isTeam = page.team !== undefined;
+  return {
+    name: page.hostName,
+    ...(isTeam || page.hostImage === undefined ? {} : { image: page.hostImage }),
+    label: isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
+    isTeam,
+  };
+}
 
 /** The conversation, held by the page across the panel's mounts. */
 export interface ChatMemory {
@@ -73,22 +84,28 @@ function promptOf(reply: {
   readonly confirm?: string;
   readonly asks?: 'details' | 'name' | 'email' | 'phone';
   readonly days: readonly BookingChatDay[];
-}): string | undefined {
-  if (reply.confirm !== undefined) return strings.chatPrompts.confirm;
-  if (reply.asks !== undefined) return strings.chatPrompts[reply.asks];
-  if (reply.days.length === 1) return strings.chatPrompts.time;
-  if (reply.days.length > 1) return strings.chatPrompts.when;
-  return undefined;
+}): Pick<BookingChatLine, 'prompt' | 'answer'> {
+  if (reply.confirm !== undefined) return { prompt: strings.chatPrompts.confirm };
+  if (reply.asks !== undefined)
+    return {
+      prompt: strings.chatPrompts[reply.asks],
+      // The phone's keyboard and autofill follow the question: an email, a number, a name.
+      ...(reply.asks === 'email' ? { answer: 'email' as const } : {}),
+      ...(reply.asks === 'phone' ? { answer: 'tel' as const } : {}),
+      ...(reply.asks === 'name' || reply.asks === 'details' ? { answer: 'name' as const } : {}),
+    };
+  if (reply.days.length === 1) return { prompt: strings.chatPrompts.time };
+  if (reply.days.length > 1) return { prompt: strings.chatPrompts.when };
+  return {};
 }
 
 /** A new conversation: a fresh id and the greeting, drawn from the times the page holds. */
 function fresh(props: ChatPanelProps): ChatMemory {
   const { page, starts, zone, locale, hour12, duration } = props;
   const offered = starts.slice(0, GREETING_TIMES);
+  const host = hostOf(page);
   const text =
-    offered.length === 0
-      ? strings.chatNoTimes(page.hostName)
-      : strings.chatGreeting(page.hostName, page.title, duration);
+    offered.length === 0 ? strings.chatNoTimes(host.isTeam) : strings.chatGreeting(host, page.title, duration);
   return {
     conversationId: crypto.randomUUID(),
     lines: [
@@ -118,6 +135,8 @@ export function ChatPanel(props: ChatPanelProps) {
     onMemory(next);
   };
   const { conversationId, lines } = chat;
+  // The visitor's name as the chat last heard it: their initials beside their lines from then on.
+  const visitorName = lines.findLast((line) => line.heard !== undefined)?.heard;
 
   const turn = (thread: readonly Line[]) => {
     const said: PublicChatLine[] = thread
@@ -142,7 +161,7 @@ export function ChatPanel(props: ChatPanelProps) {
         (reply) => {
           setWaiting(false);
           const days = daysOf(reply.offers, zone, locale, hour12, reply.duration);
-          const prompt = promptOf({
+          const asked = promptOf({
             days,
             ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
             ...(reply.asks === undefined ? {} : { asks: reply.asks }),
@@ -154,7 +173,8 @@ export function ChatPanel(props: ChatPanelProps) {
             sent: reply.text,
             days,
             suggestions: reply.suggestions,
-            ...(prompt === undefined ? {} : { prompt }),
+            ...asked,
+            ...(reply.name === undefined ? {} : { heard: reply.name }),
             ...(reply.confirm === undefined ? {} : { confirm: reply.confirm }),
             ...(reply.readBack === undefined
               ? {}
@@ -225,6 +245,8 @@ export function ChatPanel(props: ChatPanelProps) {
   return (
     <BookingChat
       lines={lines}
+      host={hostOf(page)}
+      {...(visitorName === undefined ? {} : { visitorName })}
       isWaiting={isWaiting}
       isDone={ended !== undefined}
       {...(ended === 'booked'

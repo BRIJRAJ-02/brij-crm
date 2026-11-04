@@ -19,7 +19,7 @@ import {
   readPublicSlots,
   type PublicBookingDeps,
 } from '../public.ts';
-import { answer, fullTimeLabel, OFFER_COUNT, replay, settledLength, type ChatPage } from './agent.ts';
+import { answer, OFFER_COUNT, replay, settledLength, timeLabel, voiceOf, type ChatPage } from './agent.ts';
 import { isYes } from './parse.ts';
 
 /** The furthest one turn looks ahead, in days: the slots read's own cap. */
@@ -63,6 +63,7 @@ export async function chatTurn(
   const chatPage: ChatPage = {
     title: page.title,
     hostName: page.hostName,
+    ...(page.team === undefined ? {} : { isTeam: true }),
     durations: page.durations,
     location: page.location,
   };
@@ -80,8 +81,8 @@ export async function chatTurn(
     isNew: boolean,
   ): ChatTurn => ({
     reply: {
-      text: `Done. You’re booked for ${fullTimeLabel(booking.booking.start, now, input.hour12)}. ${
-        email === undefined ? 'The details are in your email.' : `The details are on their way to ${email}.`
+      text: `You’re booked. See you ${timeLabel(booking.booking.start, now, input.hour12)}. ${
+        email === undefined ? 'The details are in your email.' : `Details are on their way to ${email}.`
       }`,
       offers: [],
       suggestions: [],
@@ -105,9 +106,8 @@ export async function chatTurn(
   });
   // Fail closed, as the picker does: no calendar, no times.
   if (read.calendar === 'unreachable') {
-    return quiet(
-      `${page.hostName}’s calendar can’t be read right now, so I can’t offer times. Try again a little later.`,
-    );
+    const we = voiceOf(chatPage);
+    return quiet(`${we.i === 'I' ? 'I' : 'We'} can’t see ${we.my} calendar right now. Try again in a bit.`);
   }
   const slots = read.slots.map((slot) => slot.start);
   const context = { slots, now, horizonDays, needsPhone, durations: page.durations };
@@ -123,6 +123,8 @@ export async function chatTurn(
         suggestions: [...said.suggestions],
         ...(said.confirm === undefined ? {} : { confirm: said.confirm }),
         ...(said.asks === undefined ? {} : { asks: said.asks }),
+        // The name the chat has heard, so the page can draw the visitor's initials beside their lines.
+        ...(state.name === undefined ? {} : { name: state.name }),
         ...(said.confirm === undefined ||
         state.held === undefined ||
         state.name === undefined ||
@@ -136,7 +138,7 @@ export async function chatTurn(
   }
 
   const start = state.held;
-  if (options.mayBook?.() === false) return quiet('I couldn’t book that just now. Say yes again in a moment.');
+  if (options.mayBook?.() === false) return quiet('That didn’t go through. Say yes again in a moment.');
   try {
     const booked = await bookPublicSlot(
       entry,
@@ -168,8 +170,8 @@ export async function chatTurn(
       reply: {
         text:
           others.length === 0
-            ? 'Someone just took that time, and nothing else is open. Sorry.'
-            : 'Someone just took that time. Here’s what’s closest now.',
+            ? 'Someone just took that time, and nothing else is free. Sorry.'
+            : 'Someone just took that time. These are the closest.',
         offers: others,
         suggestions: [],
         duration,

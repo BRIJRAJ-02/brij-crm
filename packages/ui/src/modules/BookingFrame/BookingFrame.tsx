@@ -326,6 +326,8 @@ export function BookingFrame({
               data-moved={shown.isMoved || undefined}
               data-instant={shown.isInstant || undefined}
               data-place={isCovered ? coverPlace : undefined}
+              // The view over the month: on a phone Book by chat sets the card's height itself (BookingChat).
+              data-view={isCovered ? view : undefined}
               data-enter={enter}
             >
               {/* Covered, the month still sets the card's size: hidden, out of the reading order and out of reach. */}
@@ -340,9 +342,7 @@ export function BookingFrame({
               </div>
               {isCovered && (
                 <div key={view} className={styles.cover}>
-                  <div className={styles.coverBody} data-view={view}>
-                    {cover}
-                  </div>
+                  <div className={styles.coverBody}>{cover}</div>
                   {coverFooter !== undefined && <div className={styles.footer}>{coverFooter}</div>}
                 </div>
               )}

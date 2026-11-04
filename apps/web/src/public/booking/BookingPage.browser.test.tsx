@@ -270,12 +270,14 @@ describe('the times’ read (4 Nov 2026: the chat view sat on its loading shape 
     show();
     await loaded();
     expect(chosenView()).toBe('chat');
-    // The view on show (the month under it is inert): far more than two bars, the bubble, the day's label, six times
-    // and the prompt box.
-    const shown = [...(host?.querySelectorAll('[aria-busy="true"]') ?? [])].filter(
-      (each) => each.closest('[inert]') === null,
-    );
-    const shapes = Math.max(0, ...shown.map((each) => each.querySelectorAll('[aria-hidden="true"]').length));
-    expect(shapes).toBeGreaterThanOrEqual(9);
+    // The view on show (the month under it is inert): far more than two bars, the host's name and face, the bubble,
+    // the day's label and six times. It comes with the chat's code, fetched beside the page's facts.
+    await vi.waitFor(() => {
+      const shown = [...(host?.querySelectorAll('[aria-busy="true"]') ?? [])].filter(
+        (each) => each.closest('[inert]') === null,
+      );
+      const shapes = Math.max(0, ...shown.map((each) => each.querySelectorAll('[aria-hidden="true"]').length));
+      expect(shapes).toBeGreaterThanOrEqual(9);
+    });
   });
 });

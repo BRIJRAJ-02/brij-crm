@@ -538,7 +538,10 @@ export function LoadingBooking({
   );
 }
 
-/** The chat's shape while it loads: the greeting's bubble, a day's times and the prompt box, where the chat puts them. */
+/**
+ * The chat's shape while it loads: the host's name and face, the greeting's bubble, a day's times and the prompt box,
+ * where the chat puts them.
+ */
 function ChatLoading() {
   return <BookingChatGhost />;
 }

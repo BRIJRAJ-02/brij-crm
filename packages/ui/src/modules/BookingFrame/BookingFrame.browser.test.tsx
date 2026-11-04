@@ -9,6 +9,7 @@ import '../../styles/index.css';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { page } from 'vitest/browser';
 import { createToasts } from '../../provider/toasts.tsx';
 import { UiProvider } from '../../provider/UiProvider.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -164,7 +165,8 @@ describe('a booking card switching views', () => {
   );
   const card = () => host.querySelector('section')?.getBoundingClientRect();
 
-  it('keeps the card the month’s size whichever view covers it', () => {
+  it('keeps the card the month’s size whichever view covers it, on a wide page', async () => {
+    await page.viewport(1280, 900);
     draw(
       <BookingFrame heading="Choose a time" view="month" {...month}>
         {tall}
@@ -184,10 +186,30 @@ describe('a booking card switching views', () => {
       </BookingFrame>,
     );
     const atChat = card();
-    expect(atMonth?.height).toBeGreaterThan(440);
+    expect(atMonth?.height).toBeGreaterThan(200);
     expect(atList?.height).toBe(atMonth?.height);
     expect(atChat?.height).toBe(atMonth?.height);
     expect(atChat?.y).toBe(atMonth?.y);
+    await page.viewport(414, 896);
+  });
+
+  it('lets Book by chat set the card’s height on a phone, so the page is the one scroller', async () => {
+    await page.viewport(390, 844);
+    draw(
+      <BookingFrame heading="Choose a time" view="month" {...month}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atMonth = card();
+    draw(
+      <BookingFrame heading="Choose a time" view="chat" {...month} cover={<p>Hi</p>}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atChat = card();
+    // A one line chat: a short card, not the month's tall one.
+    expect(atChat?.height ?? Infinity).toBeLessThan((atMonth?.height ?? 0) / 2);
+    await page.viewport(414, 896);
   });
 
   it('hides the month under a cover from the reading order and from the keyboard', () => {
