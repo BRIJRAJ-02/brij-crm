@@ -50,7 +50,7 @@ export interface ManagePageProps {
 type Loaded =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly booking: PublicManagedBooking }
-  | { readonly state: 'gone' | 'failed' };
+  | { readonly state: 'gone' | 'failed' | 'busy' };
 
 /** How far ahead Move looks: three weeks, as the timefix guest page does. */
 const MOVE_DAYS = 21;
@@ -115,13 +115,27 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   useEffect(() => {
     client.managed(token).then(
       (booking) => setLoaded({ state: 'ready', booking }),
-      (error: unknown) => setLoaded({ state: isDataError(error) && error.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
+      (error: unknown) =>
+        setLoaded({
+          state: !isDataError(error)
+            ? 'failed'
+            : error.code === 'NOT_FOUND'
+              ? 'gone'
+              : // Too many reads from this address for a moment (B-18): busy, not broken.
+                error.code === 'RATE_LIMITED'
+                ? 'busy'
+                : 'failed',
+        }),
     );
   }, [client, token, attempt]);
   const titleOf = (state: Loaded): string | undefined => {
     if (state.state !== 'ready') {
       if (state.state === 'loading') return undefined;
-      return state.state === 'gone' ? strings.linkGone : strings.failedTitle;
+      return state.state === 'gone'
+        ? strings.linkGone
+        : state.state === 'busy'
+          ? strings.busyTitle
+          : strings.failedTitle;
     }
     if (state.booking.state === 'cancelled') return strings.titles.cancelled;
     if (state.booking.state === 'past') return strings.titles.past;
@@ -137,9 +151,9 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
   if (loaded.state !== 'ready') {
     return (
       <BookingMessage
-        title={loaded.state === 'gone' ? strings.linkGone : strings.failedTitle}
+        title={title ?? strings.failedTitle}
         page={brandPage}
-        {...(loaded.state === 'failed'
+        {...(loaded.state !== 'gone'
           ? {
               onRetry: () => {
                 setLoaded({ state: 'loading' });
@@ -148,7 +162,11 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
             }
           : {})}
       >
-        {loaded.state === 'failed' ? strings.failedText : strings.linkGoneText}
+        {loaded.state === 'gone'
+          ? strings.linkGoneText
+          : loaded.state === 'busy'
+            ? strings.busyText
+            : strings.failedText}
       </BookingMessage>
     );
   }

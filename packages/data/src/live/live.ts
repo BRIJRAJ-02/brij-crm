@@ -241,6 +241,7 @@ const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
   nav: { lists: ['memberIds'] },
   calendars: { lists: ['memberIds'] },
   time_off: {},
+  bookings: {},
   automations: {},
   jobs: { lists: ['jobIds'], coarse: true },
   comments: { optionalRefs: ['objectId'], lists: ['recordIds', 'threadIds'], coarse: true },

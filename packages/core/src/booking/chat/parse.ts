@@ -4,6 +4,7 @@
 // exactly the phrases the spec lists, and all zone math in luxon (the slot
 // engine's library), so "tomorrow" is the visitor's tomorrow wherever the
 // server runs.
+import { isNumberToCall, visitorNameProblem } from '@crm/contracts';
 import { DateTime } from 'luxon';
 
 /** A time the visitor asked for: one instant, or a window with the words to say it back in. */
@@ -278,8 +279,9 @@ export function readEmail(text: string): string | undefined {
 export function readPhone(text: string): string | undefined {
   const match = /(\+?\d[\d\s().-]{5,26}\d)/.exec(text.replace(EMAIL, ' '));
   if (match === null) return undefined;
-  const digits = (match[1] ?? '').replaceAll(/\D/g, '');
-  return digits.length >= 7 && digits.length <= 20 ? (match[1] ?? '').trim() : undefined;
+  // One line, spaces only (B-07): a line break or tab between the digits never reaches the booking.
+  const typed = (match[1] ?? '').replaceAll(/\s+/g, ' ').trim();
+  return isNumberToCall(typed) ? typed : undefined;
 }
 
 /** Words never taken for a name on their own. */
@@ -362,7 +364,12 @@ export function readIntroducedName(text: string): string | undefined {
     .slice(0, 4);
   if (words === undefined || words.length === 0) return undefined;
   if (words.some((word) => NOT_A_NAME.has(word.toLowerCase()))) return undefined;
-  return words.join(' ');
+  return heardName(words.join(' '));
+}
+
+/** A heard name, or undefined when the book input would refuse it (control characters, a web address; B-06, B-07). */
+function heardName(name: string): string | undefined {
+  return visitorNameProblem(name) === undefined ? name : undefined;
 }
 
 /** A message that is little more than a name ("Ada Lovelace", "Ada, ada@example.com"), or undefined. */
@@ -378,7 +385,7 @@ export function readBareName(text: string): string | undefined {
   if (words.length < 1 || words.length > 4) return undefined;
   if (words.some((word) => NOT_A_NAME.has(word.toLowerCase().replaceAll(/[^a-z]/g, '')))) return undefined;
   if (!words.every((word) => /^\p{L}[\p{L}.'-]*$/u.test(word))) return undefined;
-  return words.join(' ');
+  return heardName(words.join(' '));
 }
 
 /** A meeting length a message asks for, in minutes, or undefined. */

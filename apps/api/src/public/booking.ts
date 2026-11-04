@@ -133,7 +133,7 @@ import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
 import { handoffForPage } from '../forms/handoff.ts';
-import { BOOKING_LIMITS, botReason, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
+import { BOOKING_LIMITS, botReason, limitAddress, limitEmail, type LimitRule, type PublicLimiter } from './limits.ts';
 import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureLoad } from './picture.ts';
 import { iconResponse, type FaviconFetch } from './favicon.ts';
 import { shareImageResponse } from './share-image.ts';
@@ -354,13 +354,21 @@ function ok(body: unknown, setCookies: readonly string[] = []): Response {
   return Response.json(body, { headers });
 }
 
-/** The client address as a short hash: limits key on it, and no raw address is kept. */
+/** The client address as a short hash: limits key on it (an IPv6 address by its /64, B-02), and no raw address is kept. */
 function addressKey(clientIp: string | undefined): string {
   return createHash('sha256')
-    .update(clientIp ?? 'unknown')
+    .update(limitAddress(clientIp) ?? 'unknown')
     .digest('base64url')
     .slice(0, 22);
 }
+
+/** A visitor's email as a limiter key (B-02): hashed, so no address sits in the limiter's memory. */
+function emailKey(email: string): string {
+  return createHash('sha256').update(limitEmail(email)).digest('base64url').slice(0, 22);
+}
+
+/** The header a form's hand off travels in on the page's reads, so no request log keeps it (security review). */
+const HANDOFF_HEADER = 'x-crm-handoff';
 
 /** Mounts the public booking routes on the app (its base path is `/api`). */
 export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services: PublicBookingServices): void {
@@ -387,6 +395,36 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
     return undefined;
   };
+
+  /**
+   * Spends one of the page's daily guest invitations per guest (B-02): 429 once the page has invited
+   * `guestInvitesPerPage` people today, else undefined. Keyed by the page's id, so the booking and the guest page's
+   * Add guests share one budget.
+   */
+  const guestsLimited = (pageId: string, count: number): Response | undefined => {
+    for (let spent = 0; spent < count; spent += 1) {
+      const refused = limited([[`booking:guests-page:${pageId}`, BOOKING_LIMITS.guestInvitesPerPage]]);
+      if (refused !== undefined) return refused;
+    }
+    return undefined;
+  };
+
+  /** Whether a bot check finds a booking a bot's (B-04): the ticket is the clock wherever a ticket book exists. */
+  const botOf = (
+    key: string,
+    input: { readonly company_url?: string; readonly startedAt?: number; readonly ticket?: string },
+  ) => {
+    const ticket = services.tickets?.check(`booking:${key}`, input.ticket);
+    const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
+    const now = (services.now?.() ?? new Date()).getTime();
+    return {
+      reason: botReason(input, now, elapsed, { tickets: services.tickets !== undefined }),
+      ticket: ticket?.kind ?? 'none',
+    };
+  };
+
+  /** A form's hand off as the page's reads send it: in a header (security review, 4 Nov 2026), never the address a request log keeps. */
+  const handoffTokenOf = (c: Context<{ Variables: Variables }>): string | undefined => c.req.header(HANDOFF_HEADER);
 
   /** The request's visitor on this page: nobody without the visitor services, or when finding them fails. */
   const visitorOf = (c: Context<{ Variables: Variables }>, entry: BookingEntry): Promise<FoundVisitor> => {
@@ -906,6 +944,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       const found = await changeEntry(c);
       if ('refused' in found) return found.refused;
+      const spent = guestsLimited(found.entry.pageId, input.data.emails.length);
+      if (spent !== undefined) return spent;
       const added = await addGuests(guestTarget(found.entry), deps, { emails: input.data.emails });
       if (added.added > 0) wakeRelay();
       return ok({ added: added.added, guests: [...added.guests] });
@@ -1140,7 +1180,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         getPublicBookingPage(
           entry,
           services.pictures,
-          routedLink(entry, c.req.query('p')),
+          routedLink(entry, handoffTokenOf(c)),
           // A one off link's state (spec 0062, AC-6204), asked by the token's hash: the token itself stays in the
           // address's fragment and the booking's body, never a query a log keeps.
           oneOffHashOf(c.req.query('o')),
@@ -1161,7 +1201,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      const handoff = handoffFor(entry, c.req.query('p'));
+      const handoff = handoffFor(entry, handoffTokenOf(c));
       // The name and email come from the stored submission, never from the link.
       const visitor: PublicPrefill = handoff === undefined ? {} : await readHandoffPrefill(entry, handoff.submissionId);
       // The page's own questions a form answered (spec 0057, AC-5713) ride along: the same stored submission, same token.
@@ -1213,7 +1253,14 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
             ),
       );
       const [slots, { setCookies }, visitorBusy] = await Promise.all([
-        readPublicSlots(entry, deps, query.data, routedLink(entry, query.data.p)),
+        readPublicSlots(
+          entry,
+          deps,
+          query.data,
+          routedLink(entry, handoffTokenOf(c)),
+          // An invitation only page's times only beside an open one off link (B-10), asked by the token's hash.
+          query.data.o === undefined ? undefined : { hash: query.data.o },
+        ),
         found,
         busy,
       ]);
@@ -1444,18 +1491,25 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const link = routedLink(entry, input.data.p);
       const turn = await chatTurn(entry, deps, input.data, [outboxHook()], {
         ...(link === undefined ? {} : { link }),
-        mayBook: () => {
-          bookRefused = limited([
-            [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
-            [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
-          ]);
-          if (bookRefused !== undefined) return false;
-          const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
-          const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
-          const now = (services.now?.() ?? new Date()).getTime();
-          const isBot = looksLikeBot({ startedAt: input.data.startedAt ?? now }, now, elapsed);
-          if (isBot) log.warn('booking.chat.bot_refused', { requestId: c.get('requestId') });
-          return !isBot;
+        mayBook: (booking) => {
+          // The bot check first: a refused bot spends no one's limits.
+          const bot = botOf(key, input.data);
+          if (bot.reason !== undefined) {
+            log.warn('booking.chat.bot_refused', {
+              requestId: c.get('requestId'),
+              reason: bot.reason,
+              ticket: bot.ticket,
+            });
+            return false;
+          }
+          bookRefused =
+            limited([
+              ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
+              [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
+              [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
+              [`booking:book-email:${key}:${emailKey(booking.email)}`, BOOKING_LIMITS.booksPerEmail],
+            ]) ?? guestsLimited(entry.pageId, booking.guests);
+          return bookRefused === undefined;
         },
       });
       if (bookRefused !== undefined) return bookRefused;
@@ -1480,7 +1534,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.post('/public/booking/:publicKey/book', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
+    // The instance's own ceiling first (B-02): nothing below runs in a flood.
     const refused = limited([
+      ['booking:book:instance', BOOKING_LIMITS.booksPerInstance],
       [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
       [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
     ]);
@@ -1493,16 +1549,21 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
     const input = PublicBookInput.safeParse(body);
     if (!input.success) return invalid(input.error.issues);
-    const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
-    const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
-    const bot = botReason(input.data, (services.now?.() ?? new Date()).getTime(), elapsed);
-    if (bot !== undefined) {
+    const bot = botOf(key, input.data);
+    if (bot.reason !== undefined) {
       // A person can land here too (autofill filled the honeypot, 25 Oct 2026): the reason says which check it was.
-      log.warn('booking.bot_refused', { requestId: c.get('requestId'), reason: bot, ticket: ticket?.kind ?? 'none' });
+      log.warn('booking.bot_refused', { requestId: c.get('requestId'), reason: bot.reason, ticket: bot.ticket });
       return answer('INPUT_INVALID', BOT_REFUSED);
     }
+    // Each booking mails its visitor: 5 an hour per page and address typed (B-02, the forms' per form rule), hashed.
+    const emailRefused = limited([
+      [`booking:book-email:${key}:${emailKey(input.data.email)}`, BOOKING_LIMITS.booksPerEmail],
+    ]);
+    if (emailRefused !== undefined) return emailRefused;
     try {
       const entry = await enterBookingPage({ db }, key);
+      const guestsRefused = guestsLimited(entry.pageId, input.data.guests?.length ?? 0);
+      if (guestsRefused !== undefined) return guestsRefused;
       const handoff = handoffFor(entry, input.data.prefill);
       const booked = await bookPublicSlot(
         entry,

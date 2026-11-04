@@ -7,9 +7,14 @@ import type { LimitRule } from '../limits.ts';
 
 export { createMemoryLimiter, type LimitDecision, type LimitRule, type PublicLimiter } from '../limits.ts';
 
-/** AC-643 and spec 0023: per client address, 60 slot reads and 5 bookings a minute; per page, more. */
+/**
+ * AC-643 and spec 0023: per client address, 120 reads and 5 bookings a minute; per page, more. Reads were 60 an
+ * address until B-18 (4 Nov 2026): one visit spends 3 to 5 (the facts, the first times, the viewer, a prefill, a
+ * read per month moved), a chat turn spends one, and an office, a school or a mobile carrier's shared address holds
+ * many visitors, so 60 refused real people. The per page 600 and the busy cache still bound what reads cost.
+ */
 export const BOOKING_LIMITS = {
-  readsPerAddress: { max: 60, windowMs: 60_000 },
+  readsPerAddress: { max: 120, windowMs: 60_000 },
   booksPerAddress: { max: 5, windowMs: 60_000 },
   readsPerPage: { max: 600, windowMs: 60_000 },
   /** The guest page (spec 0025 experience): 20 a minute per address. */
@@ -17,6 +22,19 @@ export const BOOKING_LIMITS = {
   /** A guest's changes (move, guests, cancel): 8 a minute per booking, keyed by its id, never the token. */
   managePerBooking: { max: 8, windowMs: 60_000 },
   booksPerPage: { max: 50, windowMs: 60_000 },
+  /**
+   * B-02, the forms' numbers: 50 bookings a second across this instance (`forms:instance`'s ceiling), checked before
+   * anything else, and 5 an hour per page and visitor email (hashed, a `+tag` dropped), since each booking mails its
+   * visitor.
+   * A form's per email limit only marks a submission for review; a booking that sends mail is refused instead.
+   */
+  booksPerInstance: { max: 50, windowMs: 1_000 },
+  booksPerEmail: { max: 5, windowMs: 3_600_000 },
+  /**
+   * B-02: the guest invitations one page sends in a day, each guest one, from the booking and the guest page's Add
+   * guests alike. Each booking may invite 10, so 200 is 20 full bookings a day before the page stops inviting more.
+   */
+  guestInvitesPerPage: { max: 200, windowMs: 86_400_000 },
   /** The booking chat (spec 0042, AC-1520): 30 turns a minute per address, 600 per page; a turn that books also counts as a booking. */
   chatPerAddress: { max: 30, windowMs: 60_000 },
   chatPerPage: { max: 600, windowMs: 60_000 },
@@ -57,6 +75,37 @@ export const BOOKING_LIMITS = {
   iconsPerHandle: { max: 60, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
+/**
+ * The part of a client address a limit keys on (B-02): an IPv4 address whole, an IPv6 address by its /64, since one
+ * home or one server holds a whole /64 and would otherwise be a new visitor at every address in it. An IPv4 mapped
+ * IPv6 address (`::ffff:192.0.2.1`) is its IPv4 address. Anything else is taken as given.
+ */
+export function limitAddress(ip: string | undefined): string | undefined {
+  if (ip === undefined || !ip.includes(':')) return ip;
+  const bare = ip.replace(/^\[|\]$/g, '').split('%')[0] ?? '';
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(bare);
+  if (mapped !== null) return mapped[1];
+  const [head = '', tail] = bare.toLowerCase().split('::');
+  const front = head === '' ? [] : head.split(':');
+  const back = tail === undefined || tail === '' ? [] : tail.split(':');
+  const groups =
+    tail === undefined
+      ? front
+      : [...front, ...Array.from({ length: Math.max(0, 8 - front.length - back.length) }, () => '0'), ...back];
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) return bare;
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
+}
+
+/** A visitor's email as the per email limit keys it: lower case, trimmed, a `+tag` dropped (the forms' rule). */
+export function limitEmail(email: string): string {
+  const plain = email.trim().toLowerCase();
+  const at = plain.lastIndexOf('@');
+  return at < 0 ? plain : `${plain.slice(0, at).replace(/\+.*$/u, '')}${plain.slice(at)}`;
+}
+
 /** The least time a person takes from opening the page to booking. */
 export const MIN_FILL_MS = 2_000;
 
@@ -65,25 +114,21 @@ export type BotReason = 'trap' | 'too_fast';
 
 /**
  * The bot checks a booking passes (AC-643): the honeypot left empty, and not
- * sent faster than a person could: by the server's clock when the page sent a
- * valid fill ticket (`ticketElapsedMs`), else by the page's `startedAt`. The
- * reason goes in the refusal's log line, so a person refused can be traced.
+ * sent faster than a person could, by the server's clock: a valid fill ticket
+ * (`ticketElapsedMs`) at least `MIN_FILL_MS` old. With tickets set up (every
+ * deploy: `createApp` makes the book), a missing or invalid ticket is
+ * `too_fast` (B-04): the client's own `startedAt` can say anything, so it is
+ * read only where no ticket book exists (`tickets: false`). The reason goes in
+ * the refusal's log line, so a person refused can be traced.
  */
 export function botReason(
   input: { readonly company_url?: string; readonly startedAt?: number },
   now: number,
   ticketElapsedMs?: number,
+  options: { readonly tickets?: boolean } = {},
 ): BotReason | undefined {
   if (input.company_url !== undefined && input.company_url !== '') return 'trap';
   if (ticketElapsedMs !== undefined) return ticketElapsedMs < MIN_FILL_MS ? 'too_fast' : undefined;
+  if (options.tickets !== false) return 'too_fast';
   return input.startedAt !== undefined && now - input.startedAt < MIN_FILL_MS ? 'too_fast' : undefined;
-}
-
-/** Whether a booking reads as a bot's (`botReason` found one). */
-export function looksLikeBot(
-  input: { readonly company_url?: string; readonly startedAt?: number },
-  now: number,
-  ticketElapsedMs?: number,
-): boolean {
-  return botReason(input, now, ticketElapsedMs) !== undefined;
 }

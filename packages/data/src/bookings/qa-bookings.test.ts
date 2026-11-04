@@ -1,7 +1,11 @@
 // The bookings QA lane's sync check (4 November 2026): what the owner sees on Bookings after a visitor books on the
-// public page. A test marked BUG fails today on purpose (see apps/web/e2e/BOOKINGS-QA.md).
+// public page. B-17 is fixed (see apps/web/e2e/BOOKINGS-QA.md).
 import { describe, expect, it } from 'vitest';
+import type { BookingListItem } from '@crm/contracts';
+import { createLiveRouter } from '../live/router.ts';
 import { FRESH_EVERY_MS, keepFresh } from './fresh.ts';
+import { BOOKINGS_EVENT_WAIT_MS, followBookings } from './live.ts';
+import { createBookingsStore } from './store.ts';
 
 /** A clock the test turns by hand. */
 function manualClock() {
@@ -46,29 +50,60 @@ describe('a booking made on the public page reaches the owner’s open Bookings 
     expect(reads).toBe(2);
   });
 
-  // BUG (B-17): bookings have no change event yet ("a `bookings` event kind is the follow-up", store.ts), and the
-  // minute timer runs only while live updates are paused or off. So with live updates connected, an owner watching
-  // Bookings (window focused, tab visible) never sees a visitor's new booking, move or cancel until they leave the
-  // tab and come back. Fix (API + data): a `bookings` change event from the public book, move and cancel (the
-  // outbox row core already writes for records), or until then keep the minute timer running while live too.
-  it('BUG: with live updates connected, it shows within a couple of minutes without leaving the page', async () => {
+  // B-17 (fixed): a `bookings` change event comes from every public book, move and cancel (and a host's answer)
+  // through the outbox and the relay, and the data layer reads Bookings' held reads again in place. So with live
+  // updates connected, an owner watching Bookings sees a visitor's new booking within about a second, without leaving
+  // the page, and the list stays on screen while it reads.
+  it('with live updates connected, a bookings event reads the open list again in place', async () => {
     const clock = manualClock();
     let reads = 0;
-    keepFresh(
-      () => {
-        reads += 1;
-        return Promise.resolve(true);
+    let answer: (rows: readonly BookingListItem[]) => void = () => undefined;
+    const store = createBookingsStore({
+      api: {
+        listAll: () => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve([])
+            : new Promise<readonly BookingListItem[]>((resolve) => {
+                answer = resolve;
+              });
+        },
+        calendar: () => Promise.reject(new Error('not read')),
       },
-      {
-        onReturn: () => () => undefined,
-        isVisible: () => true,
-        live: { status: () => 'live', subscribe: () => () => undefined },
-        later: clock.later,
-        random: () => 0.5,
+      onReturn: () => () => undefined,
+      isVisible: () => true,
+      live: { status: () => 'live', subscribe: () => () => undefined },
+      later: clock.later,
+      random: () => 0.5,
+    });
+    const list = store.view('ws', 'upcoming');
+    const release = list.retain();
+    await list.ready();
+    const router = createLiveRouter();
+    followBookings(
+      router,
+      (workspace) => {
+        store.refreshHeld(workspace);
       },
+      { later: clock.later, random: () => 0.5 },
     );
+    // A burst of events reads once.
+    router.dispatch('ws', { kind: 'bookings', seq: 2, at: '2027-01-04T09:00:00.000Z' });
+    router.dispatch('ws', { kind: 'bookings', seq: 3, at: '2027-01-04T09:00:00.100Z' });
+    expect(reads).toBe(1);
+    clock.advance(BOOKINGS_EVENT_WAIT_MS.most);
+    expect(reads).toBe(2);
+    // In place: the list stays shown while it reads, then takes the answer.
+    expect(list.getSnapshot().status).toBe('ready');
+    answer([{ id: 'b1' } as unknown as BookingListItem]);
     await Promise.resolve();
-    clock.advance(2 * FRESH_EVERY_MS * 1.1);
-    expect(reads).toBeGreaterThan(1);
+    await Promise.resolve();
+    const shown = list.getSnapshot();
+    expect(shown.status === 'ready' ? shown.bookings.map((each) => each.id) : []).toEqual(['b1']);
+    // Another workspace's event reads nothing here.
+    router.dispatch('other', { kind: 'bookings', seq: 1, at: '2027-01-04T09:01:00.000Z' });
+    clock.advance(BOOKINGS_EVENT_WAIT_MS.most);
+    expect(reads).toBe(2);
+    release();
   });
 });

@@ -8,7 +8,7 @@
 // number in E.164 with the country it was dialled from.
 import { choiceKeysOf, LONG_ANSWER_MAX, RATING_COUNT, SHORT_ANSWER_MAX } from './answer-keys.ts';
 import type { AnswerType } from './answer-types.ts';
-import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
+import { compactPhone, DIAL_CODES, internationalPhone, isE164 } from './dial-codes.ts';
 import { walkPath, type FormLayout, type PathStep } from './path.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
 import { matchesShowWhen } from './show-when.ts';
@@ -76,7 +76,6 @@ export const ADDRESS_PARTS = ['line1', 'line2', 'city', 'region', 'postcode', 'c
 const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const E164 = /^\+[1-9]\d{6,14}$/;
 
 /** A web address as typed, made absolute: `acme.com` becomes `https://acme.com`. Undefined when it isn't one. */
 export function websiteOf(text: string): string | undefined {
@@ -348,17 +347,16 @@ function checkOne(
     case 'phone': {
       // A site's own form posts the number as typed: taken when it is international (+ and the code).
       if (typeof raw === 'string') {
-        const compact = raw.replace(/[\s().-]/g, '');
-        const country = E164.test(compact) ? countryOfE164(compact) : undefined;
-        return country === undefined ? { error: words.phone } : { value: { number: compact, country } };
+        const phone = internationalPhone(raw);
+        return phone === undefined ? { error: words.phone } : { value: phone };
       }
       if (typeof raw !== 'object' || raw === null) return { error: words.phone };
       const { number, country } = raw as { readonly number?: unknown; readonly country?: unknown };
       if (typeof number !== 'string' || typeof country !== 'string' || !/^[A-Z]{2}$/.test(country)) {
         return { error: words.phone };
       }
-      const compact = number.replace(/[\s().-]/g, '');
-      return E164.test(compact) ? { value: { number: compact, country } } : { error: words.phone };
+      const compact = compactPhone(number);
+      return isE164(compact) ? { value: { number: compact, country } } : { error: words.phone };
     }
     case 'file':
       return uploadOf(raw, words.fileInvalid);

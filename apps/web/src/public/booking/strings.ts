@@ -153,6 +153,9 @@ export const strings = {
   notFoundText: 'There’s nothing at this address.',
   failedTitle: 'This page didn’t load',
   failedText: 'Check your connection and try again.',
+  /** Refused 429 (B-18): too many reads from this address for a moment, not a broken page. */
+  busyTitle: 'Busy, try again in a moment',
+  busyText: 'Lots of people are opening this page right now.',
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',

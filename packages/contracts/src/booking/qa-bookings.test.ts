@@ -1,7 +1,7 @@
 // The bookings QA lane's pure checks (4 November 2026, "bulletproof before release"): what a visitor may type into a
 // booking (names in any script, emoji, long names, emails, guests, a number to call), what a slots read may ask for,
-// and what the public shapes strip before anything leaves the server. A test marked BUG fails today on purpose: it is
-// a real defect, left red until it is fixed (see apps/web/e2e/BOOKINGS-QA.md).
+// and what the public shapes strip before anything leaves the server. A comment marked Fixed names a defect the QA
+// lane found and the fix lane closed (see apps/web/e2e/BOOKINGS-QA.md).
 import { describe, expect, it } from 'vitest';
 import {
   PUBLIC_SLOTS_MAX_DAYS,
@@ -47,20 +47,20 @@ describe('a visitor’s name', () => {
     expect(book({ name: '   ' }).success).toBe(false);
   });
 
-  // BUG (B-07): the name goes into email subjects ("… booked Intro call") and the .ics; a CR or LF reaches a mail
+  // Fixed (B-07): the name goes into email subjects ("… booked Intro call") and the .ics; a CR or LF reaches a mail
   // header on any SMTP path, and a NUL or other control character is never a name. Refuse [\x00-\x1F\x7F].
   it.each([
     ['a CRLF and a header', 'Eve\r\nBcc: victim@example.com'],
     ['a bare line feed', 'Eve\nSecond line'],
     ['a NUL', 'Eve\u0000'],
     ['a bell', 'Eve\u0007'],
-  ])('BUG: %s in the name is refused', (_label, name) => {
+  ])('%s in the name is refused', (_label, name) => {
     expect(book({ name }).success).toBe(false);
   });
 
-  // BUG (B-06): the guest invitation reads "<name> invited you to …", so a name carrying a web address turns a booking
+  // Fixed (B-06): the guest invitation reads "<name> invited you to …", so a name carrying a web address turns a booking
   // into a phishing mail sent from our domain to up to 10 strangers. A person's name never needs a URL.
-  it('BUG: a web address in the name is refused', () => {
+  it('a web address in the name is refused', () => {
     expect(book({ name: 'Your account is locked, verify at https://evil.example' }).success).toBe(false);
   });
 });
@@ -77,16 +77,16 @@ describe('a visitor’s email', () => {
     },
   );
 
-  // BUG (B-12, low): `.trim()` runs after the email check in Zod 4, so a phone keyboard's trailing space (iOS adds one
+  // Fixed (B-12): `.trim()` runs after the email check in Zod 4, so a phone keyboard's trailing space (iOS adds one
   // after an autofill suggestion) is refused by an API or chat client that doesn't trim first. The page's own form
   // trims, so only other callers meet it. Fix: `z.string().trim().toLowerCase().pipe(z.email().max(254))`.
-  it('BUG: an email with spaces around it is taken, trimmed', () => {
+  it('an email with spaces around it is taken, trimmed', () => {
     const parsed = book({ email: '  Grace@Navy.example ' });
     expect(parsed.success).toBe(true);
     expect(parsed.data?.email).toBe('grace@navy.example');
   });
 
-  it('BUG: a guest email with spaces around it is taken, trimmed', () => {
+  it('a guest email with spaces around it is taken, trimmed', () => {
     const parsed = book({ guests: [' Ada@Example.com '] });
     expect(parsed.success).toBe(true);
     expect(parsed.data?.guests).toEqual(['ada@example.com']);
@@ -104,10 +104,10 @@ describe('a number to call (a phone page)', () => {
     expect(book({ phone: '+44 20 7946 0958' }).success).toBe(true);
   });
 
-  // BUG (B-08): a phone page books with any text up to 40 characters as "the number to call", so the host learns at
+  // Fixed (B-08): a phone page books with any text up to 40 characters as "the number to call", so the host learns at
   // the meeting time that "call me" or "asdf" is not a number. Forms already refuse these (contracts forms check.ts,
   // "a phone of letters", "a phone too short"); a booking page's number should pass the same check.
-  it.each([['call me'], ['asdf'], ['12'], ['<script>']])('BUG: %s is refused as a number to call', (phone) => {
+  it.each([['call me'], ['asdf'], ['12'], ['<script>']])('%s is refused as a number to call', (phone) => {
     expect(book({ phone }).success).toBe(false);
   });
 });
@@ -167,7 +167,7 @@ describe('the slots reads the public page sends, across a clock change', () => {
     expect(read('2026-11-04T00:00:00.000Z', '2027-01-05T00:00:00.000Z', 'Europe/London').success).toBe(true);
   });
 
-  // BUG (B-01): 62 calendar days that hold a clock going back are 62 days and one hour long, and PublicSlotsQuery
+  // Fixed (B-01): 62 calendar days that hold a clock going back are 62 days and one hour long, and PublicSlotsQuery
   // refuses anything past 62 × 24 hours. Every chunk after the first starts at a local midnight, so on a page whose
   // window is longer than 62 days, the chunk holding the end of summer time answers "Ask for a range of at most 62
   // days." and the visitor sees no times for those two months. The first chunk fails the same way for a visitor who
@@ -202,7 +202,7 @@ describe('the slots reads the public page sends, across a clock change', () => {
       '2026-11-02T00:00:00.000Z',
       'Europe/London',
     ],
-  ])('BUG: %s is taken', (_label, from, to, tz) => {
+  ])('%s is taken', (_label, from, to, tz) => {
     expect(read(from, to, tz).success).toBe(true);
   });
 });

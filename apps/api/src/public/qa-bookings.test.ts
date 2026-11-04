@@ -1,5 +1,5 @@
 // The bookings QA lane's abuse checks on the public booking routes (4 November 2026): the bot check and the limits a
-// flood meets. Pure. A test marked BUG fails today on purpose (see apps/web/e2e/BOOKINGS-QA.md).
+// flood meets. Pure. A comment marked Fixed names a defect the QA lane found and the fix lane closed (see apps/web/e2e/BOOKINGS-QA.md).
 import { describe, expect, it } from 'vitest';
 import { BOOKING_LIMITS, botReason, MIN_FILL_MS } from './limits.ts';
 
@@ -19,15 +19,15 @@ describe('the bot check on a booking', () => {
     expect(botReason({ startedAt: NOW - 100 }, NOW)).toBe('too_fast');
   });
 
-  // BUG (B-04): with no ticket the check trusts the client's own `startedAt`, so a script sends `startedAt: 0` (or
+  // Fixed (B-04): with no ticket the check trusts the client's own `startedAt`, so a script sends `startedAt: 0` (or
   // leaves both out) and passes as a person who took 57 years to fill the form. Fix (API, booking.ts /book and the
   // chat turn that books): once the ticket book is set up, a missing or invalid ticket is `too_fast`; `startedAt`
   // stays only for a deploy without tickets.
-  it('BUG: no ticket and startedAt 0 is not waved through', () => {
+  it('no ticket and startedAt 0 is not waved through', () => {
     expect(botReason({ startedAt: 0 }, NOW, undefined)).toBe('too_fast');
   });
 
-  it('BUG: no ticket and no startedAt is not waved through', () => {
+  it('no ticket and no startedAt is not waved through', () => {
     expect(botReason({}, NOW, undefined)).toBe('too_fast');
   });
 });
@@ -39,15 +39,15 @@ describe('the limits a flood of bookings meets', () => {
     expect(BOOKING_LIMITS.managePerBooking.max).toBeLessThanOrEqual(8);
   });
 
-  // BUG (B-02): forms have an instance ceiling (`forms:instance`) and a per email limit (5 an hour), bookings have
+  // Fixed (B-02): forms have an instance ceiling (`forms:instance`) and a per email limit (5 an hour), bookings have
   // neither. Each booking sends up to 11 emails (the visitor and 10 guests) from our domain, and the per address key
   // hashes the whole IP, so each IPv6 address in one /64 is a new visitor. Fix (API, public/limits.ts and
   // booking.ts): `booksPerInstance`, `booksPerEmail` (hashed, an hour), and key IPv6 on its /64.
-  it('BUG: a per instance ceiling and a per email limit exist for booking', () => {
+  it('a per instance ceiling and a per email limit exist for booking', () => {
     expect(Object.keys(BOOKING_LIMITS)).toEqual(expect.arrayContaining(['booksPerInstance', 'booksPerEmail']));
   });
 
-  it('BUG: a daily ceiling on guest invitations per page exists', () => {
+  it('a daily ceiling on guest invitations per page exists', () => {
     expect(Object.keys(BOOKING_LIMITS).some((key) => /invit|guests/i.test(key))).toBe(true);
   });
 });

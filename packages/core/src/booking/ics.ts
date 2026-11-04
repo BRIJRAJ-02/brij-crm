@@ -44,6 +44,21 @@ function escapeText(value: string): string {
     .replace(/\r\n|\r|\n/g, '\\n');
 }
 
+/**
+ * A parameter value (RFC 5545 §3.2, B-09): always quoted, so a `:`, `;` or `,` in a name stays inside it, with the
+ * one character a quoted value can't hold (`"`) and every control character dropped. Text escaping (`\;`) is not
+ * allowed in a parameter, and a bare colon there ends the parameters early.
+ */
+function paramValue(value: string): string {
+  // Code unit by code unit: a surrogate pair (an emoji) is two units above 0x20 and passes whole.
+  let kept = '';
+  for (let at = 0; at < value.length; at += 1) {
+    const code = value.charCodeAt(at);
+    if (code >= 0x20 && code !== 0x7f && code !== 0x22) kept += value.charAt(at);
+  }
+  return `"${kept}"`;
+}
+
 /** Folds a content line at 75 octets (continuations at 74 after their space), never inside a character. */
 function fold(line: string): string {
   const encoder = new TextEncoder();
@@ -86,10 +101,10 @@ export function buildBookingIcs(input: IcsInput): string {
     `DESCRIPTION:${escapeText(input.description)}`,
     ...(location === '' ? [] : [`LOCATION:${escapeText(location)}`]),
     `URL:${escapeText(input.url)}`,
-    `ORGANIZER;CN=${escapeText(input.organizerName)}:MAILTO:${input.organizerEmail}`,
+    `ORGANIZER;CN=${paramValue(input.organizerName)}:MAILTO:${input.organizerEmail}`,
     ...input.attendees.map(
       (attendee) =>
-        `ATTENDEE;CN=${escapeText(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=${cancelled ? 'DECLINED' : 'ACCEPTED'};RSVP=FALSE:MAILTO:${attendee.email}`,
+        `ATTENDEE;CN=${paramValue(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=${cancelled ? 'DECLINED' : 'ACCEPTED'};RSVP=FALSE:MAILTO:${attendee.email}`,
     ),
     `STATUS:${cancelled ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:OPAQUE',

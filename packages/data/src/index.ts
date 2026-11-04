@@ -179,6 +179,7 @@ import { createPreview, type PreviewSource } from './computed/preview.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
+import { followBookings } from './bookings/live.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import {
   createBookingsStore,
@@ -2345,6 +2346,11 @@ export function createDataLayer({
       },
       100 + Math.round(random() * 300),
     );
+  });
+  // A booking made, moved, cancelled or answered (B-17), on a public page, in chat or by a member in another tab:
+  // Bookings' held reads read again in place, once for a burst (`bookings/live.ts`).
+  followBookings(router, (workspace) => {
+    refreshBookings(workspace);
   });
   // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
   router.on('automations', (workspace) => {

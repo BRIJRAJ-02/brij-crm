@@ -17,7 +17,9 @@ import * as z from 'zod';
 import { type AppServices, createApp } from './app.ts';
 import { createAuth } from './auth/auth.ts';
 import type { CalendarServices } from './calendar/services.ts';
-import type { ApiEnv } from './env.ts';
+import { LOCAL_FORMS_IP_SALT, type ApiEnv } from './env.ts';
+import { createTicketBook } from './forms/ticket.ts';
+import { createMemoryLimiter } from './limits.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import type { OutsideFetch } from './public/outside.ts';
@@ -232,4 +234,21 @@ export function captureLogs(): { lines: () => LogLine[]; restore: () => void } {
       err.mockRestore();
     },
   };
+}
+
+/**
+ * A public booking's or booking chat turn's body with a fill ticket for its page (B-04: with tickets set up, a
+ * booking without one is refused as too fast), issued `ageMs` ago on the app's own salt (`FORMS_IP_SALT` unset in
+ * `testEnv`, so the local one), unless the body names its own `ticket` (a key set to undefined sends none). Anything
+ * else passes as given.
+ */
+export function withBookingTicket(path: string, body: unknown, ageMs = 60_000): unknown {
+  const found = /(?:^|\/)([A-Za-z0-9_-]{16})\/(?:book|chat)$/.exec(path);
+  if (found === null || typeof body !== 'object' || body === null || 'ticket' in body) return body;
+  const book = createTicketBook({
+    salt: LOCAL_FORMS_IP_SALT,
+    limiter: createMemoryLimiter(),
+    now: () => Date.now() - ageMs,
+  });
+  return { ...body, ticket: book.issue(`booking:${found[1] ?? ''}`) };
 }

@@ -246,12 +246,12 @@ export const bookingsRouter = member.bookings.router({
   ),
   // Changing a booking (AC-640): its host, a co-host, the page's owner or an admin moves or cancels it (`seen.ts`); the
   // guest is emailed.
-  // Bookings write no change event: the screen reads its lists again after the change.
+  // A change stores one `bookings` row naming nothing (B-17), with this write's mutation id: other tabs read again.
   cancel: member.bookings.cancel.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       cancelBooking(
         hostTarget(context.scope, input.bookingId),
-        { calendar: context.bookingCalendar, log },
+        { calendar: context.bookingCalendar, log, hooks },
         { reason: input.reason },
       ),
     ),
@@ -271,10 +271,10 @@ export const bookingsRouter = member.bookings.router({
     ),
   ),
   move: member.bookings.move.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       moveBooking(
         hostTarget(context.scope, input.bookingId),
-        { calendar: context.bookingCalendar, log },
+        { calendar: context.bookingCalendar, log, hooks },
         { start: new Date(input.start), ...(input.minutes === undefined ? {} : { minutes: input.minutes }) },
       ),
     ),
@@ -578,13 +578,13 @@ export const bookingFlowRouter = member.bookingFlow.router({
   ),
   requests: member.bookingFlow.requests.handler(({ context, input }) => listRequests(context.scope, input)),
   confirm: member.bookingFlow.confirm.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      confirmBooking(hostTarget(context.scope, input.bookingId), {}),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      confirmBooking(hostTarget(context.scope, input.bookingId), { hooks }),
     ),
   ),
   decline: member.bookingFlow.decline.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      declineBooking(hostTarget(context.scope, input.bookingId), {}, { reason: input.reason }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      declineBooking(hostTarget(context.scope, input.bookingId), { hooks }, { reason: input.reason }),
     ),
   ),
 });

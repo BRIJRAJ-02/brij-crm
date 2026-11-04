@@ -75,8 +75,9 @@ describe('createBookingClient', () => {
   it('reads a form’s hand off for the page by its token, cookies left out (AC-1058)', async () => {
     const { client, calls } = fake(() => Response.json({ name: 'Ada', email: 'ada@example.com' }));
     expect(await client.prefill(KEY, 'fb1.a.b')).toEqual({ name: 'Ada', email: 'ada@example.com' });
-    expect(calls[0]?.url).toBe(`https://app.test/api/public/booking/${KEY}/prefill?p=fb1.a.b`);
-    expect(calls[0]?.init).toMatchObject({ credentials: 'omit' });
+    // The token travels in a header, never the address a request log keeps (security review, 4 Nov 2026).
+    expect(calls[0]?.url).toBe(`https://app.test/api/public/booking/${KEY}/prefill`);
+    expect(calls[0]?.init).toMatchObject({ credentials: 'omit', headers: { 'x-crm-handoff': 'fb1.a.b' } });
   });
 
   it('sends a chat turn as JSON with no cookies, and a refusal as a DataError with its wait (spec 0042)', async () => {

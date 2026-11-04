@@ -1,8 +1,8 @@
 // The bookings QA lane's core checks (4 November 2026, "bulletproof before release"): the calendar file a guest and
 // a host import, the slot engine on the days clocks change, two changes to one booking racing, a guest's token used
 // where it shouldn't be, an invitation only page, a request the host hasn't answered, and what an old guest link still
-// shows. Against a real Postgres. A test marked BUG fails today on purpose: it is a real defect, left red until it is
-// fixed (see apps/web/e2e/BOOKINGS-QA.md).
+// shows. Against a real Postgres. A comment marked Fixed names a defect the QA lane found and the fix lane closed (see
+// apps/web/e2e/BOOKINGS-QA.md).
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
@@ -148,11 +148,11 @@ describe('the calendar file', () => {
     expect(lines.filter((line) => line.startsWith('ORGANIZER'))).toHaveLength(1);
   });
 
-  // BUG (B-09): a CN parameter is escaped as TEXT (`\;`, `\,`), which RFC 5545 doesn't allow in a parameter, and a
+  // Fixed (B-09): a CN parameter is escaped as TEXT (`\;`, `\,`), which RFC 5545 doesn't allow in a parameter, and a
   // colon is left bare, so "Eve:MAILTO:attacker@evil.example" ends the parameters early: a calendar reads the
   // attendee's address as the attacker's, in the host's and the guest's file alike. Fix (core, ics.ts): a
   // `paramValue()` that wraps the name in DQUOTE and drops `"` and control characters (RFC 5545 §3.2).
-  it('BUG: an attendee’s name is a quoted parameter, so a colon in it can’t change the address', () => {
+  it('an attendee’s name is a quoted parameter, so a colon in it can’t change the address', () => {
     const lines = unfold(
       buildBookingIcs({ ...ICS_BASE, attendees: [{ name: 'Eve:MAILTO:attacker@evil.example;X=', email: 'eve@x.io' }] }),
     );
@@ -162,7 +162,7 @@ describe('the calendar file', () => {
     expect(params?.[2]).toBe('MAILTO:eve@x.io');
   });
 
-  it('BUG: a name with a comma or semicolon is quoted, not backslash escaped', () => {
+  it('a name with a comma or semicolon is quoted, not backslash escaped', () => {
     const lines = unfold(
       buildBookingIcs({ ...ICS_BASE, attendees: [{ name: 'Hopper, Grace; PhD', email: 'g@x.io' }] }),
     );
@@ -320,10 +320,10 @@ describe('two changes to one booking at once', () => {
 // ---------------------------------------------------------------------------------------------------------------
 
 describe('an invitation only page (one off links only)', () => {
-  // BUG (B-10): `readPublicSlots` never reads `linksOnly`, so anyone holding the plain /b/<key> address reads the
+  // Fixed (B-10): `readPublicSlots` never reads `linksOnly`, so anyone holding the plain /b/<key> address reads the
   // host's free times for two months, though booking is refused. Fix (core, public.ts): answer no slots when
   // `linksOnly` is on and no open one off link was given (the slots read then needs the link's hash, as /book has).
-  it('BUG: offers no times without a link', async () => {
+  it('offers no times without a link', async () => {
     const s = await setup();
     await updateBookingPage(s.host, { pageId: s.page.id, settings: { linksOnly: true } });
     const entry = await enterBookingPage({ db }, s.page.publicKey);
@@ -344,10 +344,10 @@ describe('an invitation only page (one off links only)', () => {
 });
 
 describe('a request the host hasn’t answered', () => {
-  // BUG (B-11): `addGuests` checks only cancelled and past, not `approval === 'pending'`, so a visitor's unanswered
+  // Fixed (B-11): `addGuests` checks only cancelled and past, not `approval === 'pending'`, so a visitor's unanswered
   // request on a "confirm each booking" page sends invitation emails to up to 10 people for a meeting that may never
   // happen (and feeds B-06's spam route). `checkMovable` already refuses a pending one. Fix (core, change.ts).
-  it('BUG: refuses more guests until the host confirms it', async () => {
+  it('refuses more guests until the host confirms it', async () => {
     const s = await setup();
     await updateBookingPage(s.host, { pageId: s.page.id, settings: { requiresConfirmation: true } });
     const booked = await s.book();
@@ -359,10 +359,10 @@ describe('a request the host hasn’t answered', () => {
 });
 
 describe('what an old guest link still shows', () => {
-  // BUG (B-13, low): a manage token never expires and can't be revoked, so a forwarded confirmation shows the
+  // Fixed (B-13): a manage token never expires and can't be revoked, so a forwarded confirmation shows the
   // visitor's name, email, guests and note forever, a cancelled meeting a year on included. Fix (core,
   // readManagedBooking): past or cancelled for more than 30 days, answer the state, time and title only.
-  it('BUG: a booking cancelled long ago no longer shows the visitor’s email or guests', async () => {
+  it('a booking cancelled long ago no longer shows the visitor’s email or guests', async () => {
     const s = await setup();
     const booked = await s.book({ guests: ['ann@navy.example'], note: 'My private reason' });
     const target = guestTarget(await enterBookingByToken({ db }, booked.manageToken));

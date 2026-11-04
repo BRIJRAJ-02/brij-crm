@@ -174,7 +174,7 @@ interface EarlySlots {
 type Loaded =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly page: PublicBookingPage; readonly early?: EarlySlots }
-  | { readonly state: 'gone' | 'closed' | 'failed' | 'used' | 'invitation' };
+  | { readonly state: 'gone' | 'closed' | 'failed' | 'busy' | 'used' | 'invitation' };
 
 /** One slots read covers 62 days (two months of the month view). */
 const CHUNK_DAYS = 62;
@@ -233,6 +233,13 @@ export function BookingPage({
   }, [client, publicKey, handoff]);
   const prefill = given ?? handed;
   const [startedAt] = useState(now);
+  // The fill ticket (spec 0023, B-04), asked for as the page loads: the server's clock for the bot check a booking
+  // passes. A booking without one is refused as too fast, so the page carries it rather than its own clock.
+  const [ticket] = useState(() => client.ticket(publicKey));
+  // A one off link's token hashed once (spec 0062): the facts and every slots read send it (B-10).
+  const [linkHash] = useState(() =>
+    oneOffToken === undefined ? Promise.resolve(undefined) : oneOffHash(oneOffToken).catch(() => undefined),
+  );
   // What a return from Google carried (the choices and what happened), read once; the address is then tidied.
   // What this visit opened with: a return from Google (the choices and what happened), and a next times chip's
   // `at` and `len` (spec 0061, AC-6110). Read once; the Google parts are then tidied out of the address.
@@ -266,19 +273,22 @@ export function BookingPage({
       ? {
           zone,
           duration: back.chosen.duration,
-          answer: client.slots(publicKey, {
-            from: new Date(Math.max(startOfDay(today, zone), now())).toISOString(),
-            to: new Date(startOfDay(addDays(today, CHUNK_DAYS), zone)).toISOString(),
-            tz: zone,
-            ...(back.chosen.duration === undefined ? {} : { duration: back.chosen.duration }),
-            ...(handoff === undefined ? {} : { p: handoff }),
-          }),
+          answer: linkHash.then((o) =>
+            client.slots(publicKey, {
+              from: new Date(Math.max(startOfDay(today, zone), now())).toISOString(),
+              to: new Date(startOfDay(addDays(today, CHUNK_DAYS), zone)).toISOString(),
+              tz: zone,
+              ...(back.chosen.duration === undefined ? {} : { duration: back.chosen.duration }),
+              ...(handoff === undefined ? {} : { p: handoff }),
+              ...(o === undefined ? {} : { o }),
+            }),
+          ),
         }
       : undefined;
     // Nobody may take it (the page turned out closed, or gone): its failure is then nobody's to report.
     early?.answer.catch(() => undefined);
-    (oneOffToken === undefined ? Promise.resolve(undefined) : oneOffHash(oneOffToken))
-      .then((linkHash) => client.page(publicKey, handoff, linkHash))
+    linkHash
+      .then((o) => client.page(publicKey, handoff, o))
       .then(
         (page) => {
           // A one off link with nothing left to book (spec 0062, AC-6204): its own calm state.
@@ -320,10 +330,20 @@ export function BookingPage({
         },
         (error: unknown) => {
           const code = isDataError(error) ? error.code : undefined;
-          setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
+          setLoaded({
+            state:
+              code === 'NOT_FOUND'
+                ? 'gone'
+                : code === 'BOOKING_CLOSED'
+                  ? 'closed'
+                  : // Too many reads from this address for a moment (B-18): busy, not broken.
+                    code === 'RATE_LIMITED'
+                    ? 'busy'
+                    : 'failed',
+          });
         },
       );
-  }, [client, publicKey, handoff, oneOffToken, isEditorPreview, onAddress, back, timeZone, now, addressPath]);
+  }, [client, publicKey, handoff, linkHash, isEditorPreview, onAddress, back, timeZone, now, addressPath]);
   useEffect(load, [load]);
   useEffect(() => {
     if (isPreview) return;
@@ -380,6 +400,8 @@ export function BookingPage({
           detected={timeZone}
           now={now}
           startedAt={startedAt}
+          ticket={ticket}
+          linkHash={linkHash}
           onBooked={onBooked}
           onEnded={ended}
           {...(loaded.early === undefined ? {} : { early: loaded.early })}
@@ -406,15 +428,16 @@ export function BookingPage({
     case 'closed':
       return <BookingMessage title={strings.paused} />;
     case 'failed':
+    case 'busy':
       return (
         <BookingMessage
-          title={strings.failedTitle}
+          title={loaded.state === 'busy' ? strings.busyTitle : strings.failedTitle}
           onRetry={() => {
             setLoaded({ state: 'loading' });
             load();
           }}
         >
-          {strings.failedText}
+          {loaded.state === 'busy' ? strings.busyText : strings.failedText}
         </BookingMessage>
       );
   }
@@ -579,6 +602,8 @@ function Booking({
   detected,
   now,
   startedAt,
+  ticket,
+  linkHash,
   prefill,
   handoff,
   oneOffToken,
@@ -618,6 +643,10 @@ function Booking({
   readonly detected: string;
   readonly now: () => number;
   readonly startedAt: number;
+  /** The page's fill ticket (B-04): every booking and chat turn carries it. */
+  readonly ticket: Promise<string | undefined>;
+  /** The one off link's token hashed, when the page was opened with one (B-10): every slots read sends it. */
+  readonly linkHash: Promise<string | undefined>;
   readonly prefill?: Prefill;
   readonly onBooked: (manageToken: string, redirectUrl?: string) => void;
   /** A one off link's token (spec 0062, AC-6204): sent with the booking, never in an address. */
@@ -733,17 +762,20 @@ function Booking({
       (early.duration ?? page.durations[0]) === duration;
     const request = isEarly
       ? early.answer
-      : client.slots(
-          page.publicKey,
-          {
-            from: new Date(Math.max(from, now())).toISOString(),
-            to: new Date(to).toISOString(),
-            duration,
-            tz: zone,
-            // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
-            ...(handoff === undefined ? {} : { p: handoff }),
-          },
-          controller.signal,
+      : linkHash.then((o) =>
+          client.slots(
+            page.publicKey,
+            {
+              from: new Date(Math.max(from, now())).toISOString(),
+              to: new Date(to).toISOString(),
+              duration,
+              tz: zone,
+              // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
+              ...(handoff === undefined ? {} : { p: handoff }),
+              ...(o === undefined ? {} : { o }),
+            },
+            controller.signal,
+          ),
         );
     request.then(
       (answer) => {
@@ -842,6 +874,7 @@ function Booking({
     notYou,
     showAll,
     handoff,
+    linkHash,
     onEnded,
     at,
     early,
@@ -902,23 +935,26 @@ function Booking({
   const book = (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
     if (time === undefined) return Promise.resolve({ kind: 'failed', message: strings.errors.failed });
     const needsPhone = page.location.type === 'phone';
-    return client
-      .book(page.publicKey, {
-        idempotencyKey: step.attempt,
-        start: time,
-        duration,
-        name: values.name,
-        email: values.email,
-        timeZone: zone,
-        ...(needsPhone ? { phone: values.phone } : {}),
-        ...(values.guests.length === 0 ? {} : { guests: [...values.guests] }),
-        ...(values.note === '' ? {} : { note: values.note }),
-        ...(Object.keys(values.answers).length === 0 ? {} : { answers: { ...values.answers } }),
-        company_url: values.trap,
-        startedAt,
-        ...(handoff === undefined ? {} : { prefill: handoff }),
-        ...(oneOffToken === undefined ? {} : { oneOffToken }),
-      })
+    return ticket
+      .then((filled) =>
+        client.book(page.publicKey, {
+          idempotencyKey: step.attempt,
+          start: time,
+          duration,
+          name: values.name,
+          email: values.email,
+          timeZone: zone,
+          ...(needsPhone ? { phone: values.phone } : {}),
+          ...(values.guests.length === 0 ? {} : { guests: [...values.guests] }),
+          ...(values.note === '' ? {} : { note: values.note }),
+          ...(Object.keys(values.answers).length === 0 ? {} : { answers: { ...values.answers } }),
+          company_url: values.trap,
+          startedAt,
+          ...(filled === undefined ? {} : { ticket: filled }),
+          ...(handoff === undefined ? {} : { prefill: handoff }),
+          ...(oneOffToken === undefined ? {} : { oneOffToken }),
+        }),
+      )
       .then(
         (booked): BookingDetailsOutcome => {
           // The receipt opens once Confirm has shown Booked for a beat.
@@ -1418,6 +1454,7 @@ function Booking({
             duration={duration}
             starts={allStarts}
             startedAt={startedAt}
+            ticket={ticket}
             memory={chatMemory}
             onMemory={setChatMemory}
             onDuration={(minutes) => {
