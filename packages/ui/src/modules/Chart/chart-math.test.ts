@@ -7,6 +7,9 @@ import {
   charsThatFit,
   cutLabel,
   labelStep,
+  labelStepFor,
+  estimateLabelWidth,
+  LABEL_GAP,
   linePath,
   nearestIndex,
   niceTicks,
@@ -97,5 +100,41 @@ describe('nearestIndex', () => {
     expect(nearestIndex(-20, 4, 400)).toBe(0);
     expect(nearestIndex(999, 4, 400)).toBe(3);
     expect(nearestIndex(10, 0, 400)).toBe(-1);
+  });
+});
+
+describe('labelStepFor (T7)', () => {
+  /** The drawn labels' boxes at a step: [left, right], each centred in its slot. */
+  const boxes = (widths: readonly number[], slot: number, step: number) =>
+    widths.flatMap((width, at) =>
+      at % step === 0 ? [[slot * (at + 0.5) - width / 2, slot * (at + 0.5) + width / 2] as const] : [],
+    );
+
+  it('never lets two drawn labels touch, at any range and width', () => {
+    const monthDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    for (const count of [2, 7, 14, 30, 31, 60, 89, 90, 120, 365]) {
+      const widths = Array.from({ length: count }, (_, at) =>
+        estimateLabelWidth(monthDay.format(new Date(Date.UTC(2026, 7, 7 + at))), 12),
+      );
+      for (const plot of [120, 240, 320, 480, 760, 1100, 1600, 2400, 3200]) {
+        const slot = plot / count;
+        const step = labelStepFor(widths, slot);
+        const drawn = boxes(widths, slot, step);
+        expect(drawn.length).toBeGreaterThan(0);
+        for (let at = 1; at < drawn.length; at += 1) {
+          expect((drawn[at]?.[0] ?? 0) - (drawn[at - 1]?.[1] ?? 0)).toBeGreaterThanOrEqual(LABEL_GAP - 1e-9);
+        }
+      }
+    }
+  });
+
+  it('draws every label when they fit, and the least step that keeps the gap when they don’t', () => {
+    expect(labelStepFor([30, 30, 30], 100)).toBe(1);
+    // 89 days of "Aug 7" in 760px: about 8.5px a day, so a label every few days, never every second one.
+    const widths = Array.from({ length: 89 }, () => estimateLabelWidth('Aug 17', 12));
+    const step = labelStepFor(widths, 760 / 89);
+    expect(step).toBeGreaterThan(2);
+    expect(step * (760 / 89)).toBeGreaterThanOrEqual((widths[0] ?? 0) + LABEL_GAP);
+    expect(labelStepFor([40], 10)).toBe(1);
   });
 });
