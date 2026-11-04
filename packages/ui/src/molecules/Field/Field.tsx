@@ -78,6 +78,11 @@ export interface FieldProps {
   readonly error?: string;
   /** A unit or a picker at the start of the box: `USD`, `%`, a currency Select. */
   readonly prefix?: ReactNode;
+  /**
+   * `label`: a text prefix that names the field inside its box ("Question", "Placeholder") takes one width, so the
+   * values of a stack of such fields start on one line.
+   */
+  readonly prefixWidth?: 'label';
   /** Something at the end of the box: a clear button, a picker trigger. */
   readonly suffix?: ReactNode;
   /**
@@ -208,6 +213,7 @@ export function Field({
   hint,
   error,
   prefix,
+  prefixWidth,
   suffix,
   isSuffixDescribing = false,
   after,
@@ -341,6 +347,7 @@ export function Field({
       className={styles.root}
       data-size={size}
       data-variant={variant}
+      data-prefix-width={prefixWidth}
       data-align={align === 'end' ? 'end' : undefined}
       data-error-floats={isErrorFloating || undefined}
       data-in-popover={isInPopover || undefined}

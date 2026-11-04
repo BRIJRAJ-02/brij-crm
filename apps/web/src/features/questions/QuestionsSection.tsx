@@ -1528,6 +1528,7 @@ function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onS
         isLabelHidden
         // Its name inside the box, as the Placeholder's is under it (the owner, 5 November 2026).
         prefix={isConsent ? strings.consentWording : strings.question}
+        prefixWidth="label"
         isWrapping
         placeholder={
           isConsent
@@ -1605,6 +1606,7 @@ function QuestionEditor({
           isLabelHidden
           // Its name inside the box, every field in the card one size (the owner, 5 November 2026).
           prefix={strings.description}
+          prefixWidth="label"
           isWrapping
           placeholder={strings.descriptionPlaceholder}
           value={question.description}
@@ -1668,6 +1670,7 @@ function QuestionEditor({
           label={strings.placeholder}
           isLabelHidden
           prefix={strings.placeholder}
+          prefixWidth="label"
           placeholder={strings.placeholderInline}
           value={question.placeholder ?? ''}
           maxLength={80}
