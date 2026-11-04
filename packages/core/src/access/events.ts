@@ -49,6 +49,7 @@ export const EVENT_KINDS = [
   'calendars',
   'time_off',
   'automations',
+  'forms',
   'files',
 ] as const satisfies readonly EventRow['kind'][];
 
@@ -399,6 +400,10 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       return row;
     // Time off (spec 0037) names nothing: every audience hears that it changed, and reads what it may.
     case 'time_off':
+      return row;
+    // A form's status changed (forms fixes 3): the row names nothing, so every audience hears it and an open editor
+    // or the Forms list reads again through the door, which answers only the forms that member may see.
+    case 'forms':
       return row;
     // Automations (parity #53) name nothing, but only people who manage them have a screen for them: an audience with
     // anyone else in it gets the stub, so the stream stays gap free and no one else learns when runs finish.

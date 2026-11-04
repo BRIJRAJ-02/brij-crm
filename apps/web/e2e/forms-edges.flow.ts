@@ -242,7 +242,7 @@ test.describe('the form journey’s edges', () => {
     await newForm(page);
     // What comes after sending is set before the first publish, at the end of the Form tab, as one sentence (T39:
     // "Everyone sees [A booking page] [Intro call] after [5 seconds]").
-    await page.getByRole('button', { name: /What everyone else sees$/ }).click();
+    await page.getByRole('button', { name: /Show everyone( else)?$/ }).click();
     await page.getByRole('option', { name: 'A booking page' }).click();
     await page
       .getByRole('button', { name: /Booking page$/ })

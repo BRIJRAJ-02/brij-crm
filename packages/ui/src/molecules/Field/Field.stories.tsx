@@ -329,6 +329,14 @@ export const Title: Story = {
         error="Keep the title to 200 characters."
       />
       <Field label="Disabled title" isLabelHidden variant="title" isWrapping isDisabled defaultValue="Kickoff call" />
+      <Field
+        label="Line under it"
+        isLabelHidden
+        variant="title"
+        size="sm"
+        isWrapping
+        placeholder="Add a line under it"
+      />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

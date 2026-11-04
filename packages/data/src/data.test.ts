@@ -816,6 +816,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       useNewAnswer: os.submissions.useNewAnswer.handler(notServed),
       undoUseNewAnswer: os.submissions.undoUseNewAnswer.handler(notServed),
       restore: os.submissions.restore.handler(notServed),
+      deleteMany: os.submissions.deleteMany.handler(notServed),
+      restoreMany: os.submissions.restoreMany.handler(notServed),
       exportNow: os.submissions.exportNow.handler(notServed),
       delete: os.submissions.delete.handler(notServed),
       addToCrm: os.submissions.addToCrm.handler(notServed),

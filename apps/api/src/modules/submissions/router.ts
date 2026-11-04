@@ -1,7 +1,9 @@
 import {
   addToCrm,
   deleteSubmission,
+  deleteSubmissions,
   restoreSubmission,
+  restoreSubmissions,
   getExport,
   exportSubmissionsNow,
   startSubmissionsExport,
@@ -80,6 +82,17 @@ export const submissionsRouter = member.submissions.router({
   restore: member.submissions.restore.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       restoreSubmission(context.scope, { submissionId: input.submissionId }, hooks),
+    ),
+  ),
+  // Bulk Delete and its Undo (forms fixes 3): one write for the picked submissions of one form.
+  deleteMany: member.submissions.deleteMany.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteSubmissions(context.scope, { formId: input.formId, submissionIds: input.submissionIds }, hooks),
+    ),
+  ),
+  restoreMany: member.submissions.restoreMany.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      restoreSubmissions(context.scope, { formId: input.formId, submissionIds: input.submissionIds }, hooks),
     ),
   ),
   // Add to CRM (spec 0023 follow-up): the member's `forms.file` job over the submissions that qualify.

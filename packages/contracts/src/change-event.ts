@@ -294,6 +294,17 @@ export const AutomationsEvent = z.object({
   mutationId,
 });
 
+/**
+ * A form's status changed (forms fixes 3): paused, resumed, archived or restored by someone, or paused by the send,
+ * Publish or Settings change that filled it. Names nothing, so every audience may hear it; a screen holding a form or
+ * the Forms list reads again what it may.
+ */
+export const FormsEvent = z.object({
+  ...place,
+  kind: z.literal('forms'),
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -333,6 +344,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   CalendarsEvent,
   TimeOffEvent,
   AutomationsEvent,
+  FormsEvent,
   CommentsEvent,
   FilesEvent,
   NotificationsEvent,
@@ -360,6 +372,7 @@ export const CHANGE_EVENT_KINDS = [
   'calendars',
   'time_off',
   'automations',
+  'forms',
   'files',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];

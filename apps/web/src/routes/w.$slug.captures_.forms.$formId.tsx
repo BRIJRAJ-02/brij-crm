@@ -124,7 +124,6 @@ function FormPending() {
       <EditorPending
         title={strings.forms}
         icon="clipboard-list"
-        currentPage="forms"
         // Submissions loads as its table does (forms fix a6), not as the Form tab's cards.
         {...(tab === 'submissions'
           ? {
@@ -166,7 +165,7 @@ function FormRoute() {
   if (page === undefined) {
     return (
       <WorkspacePage
-        currentPage="forms"
+        currentPage="captures"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
           body: <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>,
@@ -198,7 +197,7 @@ function FormError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="forms"
+      currentPage="captures"
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (

@@ -6,14 +6,7 @@
 // Leaves out: anything about one visitor (every figure is a count of daily hashes, never a person), and live
 // updates — a visitor sends no change event here, so the figures are read when the tab opens and when the person
 // comes back to it.
-import type {
-  DataLayer,
-  FormAnalytics,
-  FormAnalyticsHeld,
-  FormAnalyticsRange,
-  FormAnalyticsState,
-  FormView,
-} from '@crm/data';
+import type { DataLayer, FormAnalytics, FormAnalyticsRange, FormView } from '@crm/data';
 import { useFormAnalytics } from '@crm/data/react';
 import { ButtonLink, EmptyState, SegmentedControl, SettingsStack, Skeleton, Stats, type StatItem } from '@crm/ui';
 import { useMemo, useState } from 'react';
@@ -285,53 +278,4 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
       />
     </SettingsStack>
   );
-}
-
-/** One question's chip: the figure the card shows, and what it is of, as its tooltip. */
-export interface QuestionStat {
-  readonly stat: string;
-  readonly statTitle: string;
-}
-
-/** The range the Form tab's chips read (AC-6322): the Analytics tab's own default, so the two share one read. */
-export const FORM_CHIP_RANGE: FormAnalyticsRange = 30;
-
-/**
- * A stand in for a form with no analytics to read: a draft. Its snapshot is
- * one frozen object, because `useSyncExternalStore` compares snapshots by
- * identity — a fresh object here would re-render for ever.
- */
-const NO_ANALYTICS_STATE: FormAnalyticsState = { status: 'loading' };
-const NO_ANALYTICS: FormAnalyticsHeld = {
-  subscribe: () => () => undefined,
-  getSnapshot: () => NO_ANALYTICS_STATE,
-  retain: () => () => undefined,
-  reload: () => undefined,
-};
-
-/**
- * Each question's chip for the Form tab (AC-6322): "82% answered", by question
- * id, so a weak question is visible where it is edited.
- *
- * A question nobody reached gets no entry at all, and a form nobody has
- * visited gets no map: a chip reading "0% answered" on a question no one has
- * seen would be a statement about the form's traffic dressed up as one about
- * the question.
- */
-export function useQuestionStats(view: FormAnalyticsHeld | undefined): ReadonlyMap<string, QuestionStat> | undefined {
-  const state = useFormAnalytics(view ?? NO_ANALYTICS);
-  return useMemo(() => {
-    if (state.status !== 'ready') return undefined;
-    const entries = state.analytics.byQuestion.flatMap((row) => {
-      if (row.reached === 0) return [];
-      const answered = percent(row.answered, row.reached);
-      // The card has room for the percentage only, so the tooltip carries what it is a percentage of.
-      const stat = {
-        stat: strings.analyticsChip(answered),
-        statTitle: strings.analyticsReached(answered, figure(row.reached)),
-      };
-      return [[row.questionId, stat]] as const;
-    });
-    return entries.length === 0 ? undefined : new Map(entries);
-  }, [state]);
 }

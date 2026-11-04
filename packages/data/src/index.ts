@@ -25,6 +25,8 @@ import type {
   StagedRow,
   StageResult,
   AddToCrmResult,
+  DeleteSubmissionsResult,
+  RestoreSubmissionsResult,
   CalendarProvider,
   ExportView,
   SubmissionSelection,
@@ -698,6 +700,8 @@ export type {
   SearchResult,
   SignedInUser,
   AddToCrmResult,
+  DeleteSubmissionsResult,
+  RestoreSubmissionsResult,
   ExportView,
   SubmissionAnswer,
   SubmissionCrm,
@@ -2352,6 +2356,23 @@ export function createDataLayer({
   router.on('automations', (workspace) => {
     automationsLoaded?.changed(workspace);
   });
+  // A form's status changed (forms fixes 3): Pause, Resume, Archive or Restore in another tab, or a send that filled
+  // the form and paused it. The event names nothing, so once for a burst, spread over 100 to 400 ms: the held Forms
+  // list reads again, and every screen holding a form (`forms.onChanged`) reads its form again.
+  const formListeners = new Map<string, Set<() => void>>();
+  const formsDue = new Set<string>();
+  router.on('forms', (workspace) => {
+    if (formsDue.has(workspace)) return;
+    formsDue.add(workspace);
+    setTimeout(
+      () => {
+        formsDue.delete(workspace);
+        formLists.changed(workspace);
+        for (const listener of [...(formListeners.get(workspace) ?? [])]) listener();
+      },
+      100 + Math.round(random() * 300),
+    );
+  });
   router.on('jobs', (workspace, event) => {
     jobs.changed(workspace, event);
   });
@@ -3022,6 +3043,23 @@ export function createDataLayer({
       );
     },
   });
+  /**
+   * A form write whose answer may come back as one `forms` event (forms fixes 3: a status change, or a publish or a
+   * setting that fills the form and pauses it): its mutation id is logged so this tab skips its own echo rather than
+   * reading the form again under an edit of its own. A write that stores no event lets the id expire.
+   */
+  const formEcho = async <T>(send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations.answered(mutationId, 1);
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
+  };
   const formLists = createCaptureList<FormSummary>({
     read: (workspace) =>
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
@@ -7634,6 +7672,22 @@ export function createDataLayer({
       view: (workspace: string): CaptureListView<FormSummary> => formLists.view(workspace),
       /** One form with its draft and live documents and its settings. */
       get: (workspace: string, formId: string) => call((options) => api.forms.get({ workspace, formId }, options)),
+      /**
+       * Hears that a form's status changed elsewhere (forms fixes 3): Pause in another tab, or a send that filled a
+       * form and paused it. `listener` runs once for a burst; the screen reads its form again with `get`. The
+       * workspace is watched while subscribed. Answers the unsubscribe.
+       */
+      onChanged: (workspace: string, listener: () => void): (() => void) => {
+        const listeners = formListeners.get(workspace) ?? new Set<() => void>();
+        formListeners.set(workspace, listeners);
+        listeners.add(listener);
+        const unwatch = watch(workspace);
+        return () => {
+          unwatch();
+          listeners.delete(listener);
+          if (listeners.size === 0 && formListeners.get(workspace) === listeners) formListeners.delete(workspace);
+        };
+      },
       /** The target object and the attributes a question may be filed on (AC-658). */
       attributes: (workspace: string, formId: string) =>
         call((options) => api.forms.attributes({ workspace, formId }, options)),
@@ -7713,8 +7767,10 @@ export function createDataLayer({
       ) =>
         formLists.write(workspace, {
           send: () =>
-            call((options) =>
-              api.forms.applySettings({ workspace, formId, settings, expectedRevision, mutationId: mintId() }, options),
+            formEcho((mutationId) =>
+              call((options) =>
+                api.forms.applySettings({ workspace, formId, settings, expectedRevision, mutationId }, options),
+              ),
             ),
           land: landForm(formId),
         }),
@@ -7726,7 +7782,9 @@ export function createDataLayer({
       ) =>
         formLists.write(workspace, {
           send: () =>
-            call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
+            formEcho((mutationId) =>
+              call((options) => api.forms.publish({ workspace, formId, ...input, mutationId }, options)),
+            ),
           land: landForm(formId),
         }),
       /**
@@ -7779,7 +7837,9 @@ export function createDataLayer({
       setStatus: (workspace: string, formId: string, status: FormStatus) =>
         formLists.write(workspace, {
           send: () =>
-            call((options) => api.forms.setStatus({ workspace, formId, status, mutationId: mintId() }, options)),
+            formEcho((mutationId) =>
+              call((options) => api.forms.setStatus({ workspace, formId, status, mutationId }, options)),
+            ),
           ...shownPatch(formLists.items(workspace), formId, (form) => ({ ...form, status })),
           land: landForm(formId),
         }),
@@ -7909,6 +7969,33 @@ export function createDataLayer({
       /** Undo a delete (forms fixes 2): deletes are soft, so the submission comes back as it was. */
       restore: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.restore({ workspace, submissionId, mutationId: mintId() }, options)),
+      /**
+       * Deletes many of one form's submissions in one request (forms fixes 3), at most 500 (`DELETE_SUBMISSIONS_MAX`),
+       * by the rules of `delete`. Answers the ids it deleted (hand exactly these to `restoreMany` for Undo), how many
+       * were still being filed (left as they were) and how many it left out. One `mutationId` per press, so a retry
+       * of the same press is the same write.
+       */
+      deleteMany: (
+        workspace: string,
+        formId: string,
+        submissionIds: readonly string[],
+      ): Promise<DeleteSubmissionsResult> => {
+        const mutationId = mintId();
+        return call((options) =>
+          api.submissions.deleteMany({ workspace, formId, submissionIds: [...submissionIds], mutationId }, options),
+        );
+      },
+      /** Undo for `deleteMany`: puts back the ids it answered; answers the ones it put back and how many it couldn't. */
+      restoreMany: (
+        workspace: string,
+        formId: string,
+        submissionIds: readonly string[],
+      ): Promise<RestoreSubmissionsResult> => {
+        const mutationId = mintId();
+        return call((options) =>
+          api.submissions.restoreMany({ workspace, formId, submissionIds: [...submissionIds], mutationId }, options),
+        );
+      },
       /**
        * Add to CRM: files submissions that aren't in the CRM with the form's
        * published mapping, in one `forms.file` job (follow it with `jobs`).

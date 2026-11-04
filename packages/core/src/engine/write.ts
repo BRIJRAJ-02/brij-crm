@@ -207,6 +207,12 @@ export interface Change {
   /** Automations whose definition or run outcomes the write changed (parity #53): one `automations` outbox row. */
   readonly automations: readonly string[];
   /**
+   * Forms whose status the write changed (forms fixes 3): Pause, Resume, Archive, Restore, and the send, Publish or
+   * Settings change that pauses a form by filling it. One `forms` outbox row naming nothing, so an open editor and
+   * the Forms list read again what they may. Never published by id.
+   */
+  readonly forms: readonly string[];
+  /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
    * `records` rows carry `fromJob`.
@@ -371,6 +377,7 @@ const LIST_KEYS = [
   'schedules',
   'timeOff',
   'automations',
+  'forms',
   'nav',
   'comments',
   'notifications',
@@ -507,6 +514,7 @@ export async function runWrite<T>(
           schedules: [] as string[],
           timeOff: [] as string[],
           automations: [] as string[],
+          forms: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
@@ -553,6 +561,7 @@ export async function runWrite<T>(
             append(collected.schedules, part.schedules);
             append(collected.timeOff, part.timeOff);
             append(collected.automations, part.automations);
+            append(collected.forms, part.forms);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
@@ -613,6 +622,7 @@ export async function runWrite<T>(
           schedules: [...new Set(collected.schedules)],
           timeOff: [...new Set(collected.timeOff)],
           automations: [...new Set(collected.automations)],
+          forms: [...new Set(collected.forms)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],

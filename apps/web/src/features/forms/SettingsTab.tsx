@@ -31,6 +31,7 @@ import {
   DatePicker,
   Field,
   InfoTip,
+  Modal,
   Select,
   SettingsRow,
   SettingsSection,
@@ -440,6 +441,20 @@ export function SettingsTab({
   const ownerError = settings.fieldError('owner') ?? ownerProblem;
   const notifyError = settings.fieldError('notifyMemberIds');
   const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
+  // Also create a deal, turned off (forms fixes 3): questions saved on the deal become Not filed, and turning it back
+  // on doesn't save them there again, so no Undo could put them back. With any saved there it asks first (the house
+  // rule: an ending action asks in a Modal unless Undo works); with none, it just turns off.
+  const [isDealOffOpen, setDealOffOpen] = useState(false);
+  const dealQuestions = draft.questions.filter((question) => question.filedOn?.objectRole === 'deal').length;
+  const setDeal = (isOn: boolean) => {
+    if (deals === undefined) return;
+    onSettingsChange({ deal: isOn }, (before) => {
+      const { deal: _deal, ...rest } = before.targets;
+      if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
+      // No deal, so nothing is saved on one: those answers stay with the submission.
+      return { ...before, targets: rest, questions: before.questions.map(offDeal) };
+    });
+  };
 
   return (
     // The full width Settings › General uses (lane 3c): the labels at the start, the controls at the end, no dead
@@ -635,16 +650,38 @@ export function SettingsTab({
               isSelected={draft.targets.deal !== undefined}
               isReadOnly={isReadOnly}
               onChange={(isOn) => {
-                onSettingsChange({ deal: isOn }, (before) => {
-                  const { deal: _deal, ...rest } = before.targets;
-                  if (isOn) return { ...before, targets: { ...rest, deal: { objectId: deals.id } } };
-                  // No deal, so nothing is saved on one: those answers stay with the submission.
-                  return { ...before, targets: rest, questions: before.questions.map(offDeal) };
-                });
+                if (!isOn && dealQuestions > 0) {
+                  setDealOffOpen(true);
+                  return;
+                }
+                setDeal(isOn);
               }}
             />
           </SettingsRow>
         )}
+        <Modal
+          title={strings.dealOffTitle}
+          variant="confirm"
+          tone="danger"
+          isOpen={isDealOffOpen}
+          onOpenChange={setDealOffOpen}
+          actions={
+            <>
+              <Button slot="close">{strings.cancel}</Button>
+              <Button
+                variant="danger-solid"
+                onPress={() => {
+                  setDealOffOpen(false);
+                  setDeal(false);
+                }}
+              >
+                {strings.dealOffAction}
+              </Button>
+            </>
+          }
+        >
+          <p>{strings.dealOffText(dealQuestions)}</p>
+        </Modal>
         {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
         {isFiling && (
           <SettingsRow title={strings.owner} meta={tip(strings.owner, ownerTip)} control="field">

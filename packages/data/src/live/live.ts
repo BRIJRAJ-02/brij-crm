@@ -242,6 +242,7 @@ const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
   calendars: { lists: ['memberIds'] },
   time_off: {},
   automations: {},
+  forms: {},
   jobs: { lists: ['jobIds'], coarse: true },
   comments: { optionalRefs: ['objectId'], lists: ['recordIds', 'threadIds'], coarse: true },
   notifications: { lists: ['memberIds'] },

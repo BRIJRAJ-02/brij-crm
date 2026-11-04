@@ -142,6 +142,8 @@ export const strings = {
   /** Joins a step's questions to the step above it (the break goes). */
   mergeUp: 'Merge with the step above',
   stepMerged: (name: string) => `Merged ${name} into the step above.`,
+  /** Two or more merges in a row, said once with one Undo (forms fixes 3). */
+  stepsMerged: (count: number) => `Merged ${String(count)} steps into the ones above.`,
   /** A divider's name: its step's place ("New step" while empty), then its title when it has one ("Step 2 · Your company"). */
   stepName: (number: number, title?: string) => {
     // A divider with nothing under it yet is no step a visitor counts.
@@ -246,6 +248,10 @@ export const strings = {
   jumpGone: 'This jump no longer points to a step below this one. Choose where it goes.',
   /** One at a time: a question as a jump's target, after "→": its own words, as its card shows them (no number). */
   jumpToQuestion: (label: string) => label,
+  /** A card's rules on its second line (forms fixes 3): "Skips to Budget", or how many it has. */
+  skipsTo: (name: string) => `Skips to ${name}`,
+  rulesCount: (n: number) => (n === 1 ? '1 rule' : `${String(n)} rules`),
+  logicSeparator: ' · ',
   jumpGoneQuestion: 'This jump no longer points to a question below this one. Choose where it goes.',
   /** One at a time: the heading over a question's rules, and its rules row under it. */
   afterQuestion: 'After this question',

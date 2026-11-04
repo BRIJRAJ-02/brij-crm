@@ -1220,6 +1220,7 @@ describe('deletion', () => {
       schedules: [],
       timeOff: [],
       automations: [],
+      forms: [],
       nav: [],
       comments: [],
       notifications: [],

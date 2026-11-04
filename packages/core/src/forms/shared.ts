@@ -25,6 +25,7 @@ import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/valu
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { companyFilingTarget } from '../engine/filing.ts';
+import type { WriteContext } from '../engine/write.ts';
 
 const { attributeOptions, forms, formVersions, objects } = schema;
 
@@ -477,12 +478,20 @@ export async function answersHeld(tx: WorkspaceTx, formId: string, upTo: number)
   return counted.rows[0]?.n ?? 0;
 }
 
-/** Pauses a live form now (it has reached its number of answers), as Pause does. */
-export async function pauseFull(tx: WorkspaceTx, formId: string): Promise<void> {
-  await tx
+/**
+ * Pauses a live form now (it has reached its number of answers), as Pause does, and notes the change as Pause does
+ * (forms fixes 3): one `forms` outbox row in this same write, so an open editor and the Forms list stop saying Live
+ * without a reload. A form that was not live changes nothing and notes nothing. Answers whether it paused.
+ */
+export async function pauseFull(context: Pick<WriteContext, 'tx' | 'record'>, formId: string): Promise<boolean> {
+  const paused = await context.tx
     .update(forms)
     .set({ status: 'paused', updatedAt: sql`now()` })
-    .where(and(eq(forms.id, formId), eq(forms.status, 'live')));
+    .where(and(eq(forms.id, formId), eq(forms.status, 'live')))
+    .returning({ id: forms.id });
+  if (paused.length === 0) return false;
+  context.record({ forms: [formId] });
+  return true;
 }
 
 /**
@@ -490,8 +499,11 @@ export async function pauseFull(tx: WorkspaceTx, formId: string): Promise<void> 
  * does, so the page says the closed message and nothing counts again until someone raises the number or resumes it.
  * Answers whether it paused.
  */
-export async function pauseIfFull(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
-  if (!(await isFull(tx, formId, document))) return false;
-  await pauseFull(tx, formId);
-  return true;
+export async function pauseIfFull(
+  context: Pick<WriteContext, 'tx' | 'record'>,
+  formId: string,
+  document: FormDocument,
+): Promise<boolean> {
+  if (!(await isFull(context.tx, formId, document))) return false;
+  return pauseFull(context, formId);
 }

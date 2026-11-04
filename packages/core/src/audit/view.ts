@@ -579,7 +579,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     // A form appearing. Its name is in the row, but the line reads it through `names.forms` like every other
     // form line, so a form since renamed reads by the name it has now, and a deleted one still reads.
     case 'form.created':
+    case 'form.exported':
       return { ...base, action, target: thing('form', names.forms), params: {}, changes: [] };
+    case 'form.submissions_deleted':
+    case 'form.submissions_restored':
+      return {
+        ...base,
+        action,
+        target: thing('form', names.forms),
+        params: { submissions: Math.max(1, Math.trunc(numberOf(after.submissions) ?? 1)) },
+        changes: [],
+      };
     case 'form.owner_changed': {
       const leadsTo = (side: Bag): AuditValue | undefined => {
         const rotationId = uuidOf(side.ownerRotationId);

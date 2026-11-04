@@ -21,6 +21,8 @@ export {
   // A form's closing rule's own limits (forms fix b2).
   CLOSE_AFTER_MAX,
   CLOSED_MESSAGE_MAX,
+  // How many submissions one delete takes (forms fixes 3): the Submissions tab says so before sending more.
+  DELETE_SUBMISSIONS_MAX,
   choiceKeysOf,
   FILES_ONTO,
   FORM_CHOICES_MAX,

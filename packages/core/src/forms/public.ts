@@ -734,7 +734,7 @@ export async function submitForm(
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
       // The send that takes the last place pauses the form, in this same write (forms fixes 2): a page view then
       // reads the paused form and counts nothing. Spam takes no place.
-      if (cap !== undefined && state !== 'spam' && held + 1 >= cap) await pauseFull(tx, form.id);
+      if (cap !== undefined && state !== 'spam' && held + 1 >= cap) await pauseFull(context, form.id);
       if (state === 'received') {
         // The form is sent, so nothing stays saved for later (AC-6319), and today's visit is a completion
         // (AC-6320). Both ride in this transaction: a submission that doesn't commit changes neither. A spam or

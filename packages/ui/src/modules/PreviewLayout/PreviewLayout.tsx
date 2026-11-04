@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import styles from './PreviewLayout.module.css';
@@ -22,6 +23,12 @@ import { strings } from './strings.ts';
  * The page in it scrolls (PreviewFrame), so its foot is never out of reach however short the phone is.
  */
 const PHONE = { width: 375, height: 812, minHeight: 640 } as const;
+
+/** A laptop's window, for `previewDevice="desktop"`: the page laid out this wide, then scaled to the column. */
+const DESKTOP = { width: 1024, height: 768, minHeight: 480 } as const;
+
+/** Which screen the preview lays its page out at. */
+type Device = 'phone' | 'desktop';
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
@@ -61,6 +68,18 @@ export interface PreviewLayoutProps {
    * sits beside a sidebar (Settings › Account › Link page), whose layout would otherwise hide the phone on a laptop.
    */
   readonly previewShare?: 'third' | 'wide';
+  /**
+   * `canvas` sets the preview on a sunken canvas (forms fixes 3, the design critic: a full height white slab in dark
+   * mode): the frame takes the height of what it shows, at most the room there is, centred on the canvas, and the
+   * "Preview" heading is left to screen readers (the controls stay). Left out, the phone keeps its full height.
+   */
+  readonly previewSurface?: 'canvas';
+  /**
+   * The screen the preview lays its page out at: `phone` (the default) or `desktop`, a laptop's window scaled to
+   * the column, as Tally's and Typeform's previews switch (forms fixes 3). The caller offers the switch in its
+   * `previewControls`.
+   */
+  readonly previewDevice?: Device;
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -365,9 +384,10 @@ interface PhoneFit {
 }
 
 /** The scale that fits the phone into the stage's width, and the height the stage leaves it (see `PHONE`). */
-function usePhoneFit() {
+function usePhoneFit(device: Device = 'phone') {
+  const screen = device === 'desktop' ? DESKTOP : PHONE;
   const ref = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState<PhoneFit>({ scale: 1, height: PHONE.height });
+  const [fit, setFit] = useState<PhoneFit>({ scale: 1, height: screen.height });
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
@@ -376,15 +396,44 @@ function usePhoneFit() {
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
       // Less the phone's two hairlines, so its outline fits too.
-      const scale = Math.min(1, (width - 2) / PHONE.width, (height - 2) / PHONE.minHeight);
-      setFit({ scale, height: Math.min(PHONE.height, Math.floor((height - 2) / scale)) });
+      const scale = Math.min(1, (width - 2) / screen.width, (height - 2) / screen.minHeight);
+      setFit({ scale, height: Math.min(screen.height, Math.floor((height - 2) / scale)) });
     });
     observer.observe(element);
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [screen]);
   return { ref, ...fit };
+}
+
+/**
+ * The height of what the screen shows, laid out at the screen's width (unscaled), while `isOn`: the canvas frame
+ * hugs it. Undefined while off or not yet measured.
+ */
+function useContentHeight(screen: RefObject<HTMLDivElement | null>, isOn: boolean): number | undefined {
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const element = screen.current;
+    if (!isOn || element === null) return;
+    const sizes = new ResizeObserver(() => {
+      const content = element.firstElementChild;
+      if (content instanceof HTMLElement) setHeight(Math.ceil(content.scrollHeight));
+    });
+    // A preview whose root is swapped (a branded preview for the plain one) is watched again.
+    const watch = () => {
+      sizes.disconnect();
+      if (element.firstElementChild !== null) sizes.observe(element.firstElementChild);
+    };
+    const children = new MutationObserver(watch);
+    children.observe(element, { childList: true });
+    watch();
+    return () => {
+      children.disconnect();
+      sizes.disconnect();
+    };
+  }, [screen, isOn]);
+  return isOn ? height : undefined;
 }
 
 /** Whether the screen's content runs past its foot (a long form), so it scrolls and takes focus to be scrolled. */
@@ -420,6 +469,12 @@ interface PhoneColumnProps {
   readonly headingId?: string;
   readonly controls?: ReactNode;
   readonly note?: ReactNode;
+  /** `pane` (bare only): the phone takes its pane's whole height (PhonePreview's `size`). */
+  readonly size?: 'pane';
+  /** `canvas`: on a sunken canvas, the frame as tall as what it shows (PreviewLayout's `previewSurface`). */
+  readonly surface?: 'canvas';
+  /** The screen the page is laid out at (PreviewLayout's `previewDevice`). */
+  readonly device?: Device;
   /** What the phone shows. */
   readonly children: ReactNode;
 }
@@ -430,24 +485,44 @@ interface PhoneColumnProps {
  * fit the room left under them (never above 1). When what it shows runs past the phone's foot (a long form), the
  * screen scrolls, and takes focus so the keyboard can scroll it too.
  */
-function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumnProps) {
-  const { ref, scale, height } = usePhoneFit();
+function PhoneColumn({
+  place,
+  headingId,
+  controls,
+  note,
+  size,
+  surface,
+  device = 'phone',
+  children,
+}: PhoneColumnProps) {
+  const { ref, scale, height } = usePhoneFit(device);
   const { ref: screenRef, isOverflowing } = useOverflow();
+  const content = useContentHeight(screenRef, surface === 'canvas');
+  // On the canvas the frame is as tall as what it shows, never taller than the room there is.
+  const shown = content === undefined ? height : Math.min(height, Math.max(content, 1));
   return (
     <div
       className={styles.preview}
       data-place={place}
+      data-size={size}
+      data-surface={surface}
+      data-device={device}
       style={{
-        '--phone-width': `${String(PHONE.width)}px`,
-        '--phone-height': `${String(height)}px`,
+        '--phone-width': `${String(device === 'desktop' ? DESKTOP.width : PHONE.width)}px`,
+        '--phone-height': `${String(shown)}px`,
         '--phone-scale': String(scale),
       }}
     >
       {place !== 'bare' && (
         <div className={styles.head}>
-          <h2 className={styles.heading} {...(headingId === undefined ? {} : { id: headingId })}>
-            {strings.preview}
-          </h2>
+          {surface === 'canvas' ? (
+            // The controls say what the column is; its name stays for screen readers (the aside is named by it).
+            <VisuallyHidden {...(headingId === undefined ? {} : { id: headingId })}>{strings.preview}</VisuallyHidden>
+          ) : (
+            <h2 className={styles.heading} {...(headingId === undefined ? {} : { id: headingId })}>
+              {strings.preview}
+            </h2>
+          )}
           {controls !== undefined && <div className={styles.controls}>{controls}</div>}
         </div>
       )}
@@ -457,7 +532,10 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
           <div
             ref={screenRef}
             className={styles.screen}
-            {...(isOverflowing ? { tabIndex: 0, role: 'region', 'aria-label': strings.phone } : {})}
+            data-hug={surface === 'canvas' || undefined}
+            {...(isOverflowing
+              ? { tabIndex: 0, role: 'region', 'aria-label': device === 'desktop' ? strings.desktop : strings.phone }
+              : {})}
           >
             {children}
           </div>
@@ -471,6 +549,12 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
 export interface PhonePreviewProps {
   /** What the phone shows: a page drawn at a phone's width, which is then scaled to the room there is. */
   readonly children: ReactNode;
+  /**
+   * `pane` lets the phone take its pane's whole height, with no breath above and below and no page card cap: a side
+   * pane given to the preview alone (the form template gallery, forms fixes 3, where the capped phone sat small in a
+   * tall empty pane). Left out, the phone keeps a page card's height, centred.
+   */
+  readonly size?: 'pane';
 }
 
 /**
@@ -484,8 +568,12 @@ export interface PhonePreviewProps {
  * It fills the room its container gives it, and the page inside it scrolls
  * when it runs past the phone's foot.
  */
-export function PhonePreview({ children }: PhonePreviewProps) {
-  return <PhoneColumn place="bare">{children}</PhoneColumn>;
+export function PhonePreview({ children, size }: PhonePreviewProps) {
+  return (
+    <PhoneColumn place="bare" {...(size === undefined ? {} : { size })}>
+      {children}
+    </PhoneColumn>
+  );
 }
 
 /** Props for PreviewPage. */
@@ -536,7 +624,13 @@ export function PreviewLayout({
   bodyLayout = 'stack',
   bodyWidth = 'full',
   previewShare = 'third',
+  previewSurface,
+  previewDevice,
 }: PreviewLayoutProps) {
+  const look = {
+    ...(previewSurface === undefined ? {} : { surface: previewSurface }),
+    ...(previewDevice === undefined ? {} : { device: previewDevice }),
+  };
   // The sheet's phone is drawn only while it is open, so a narrow page loads no second frame until asked.
   const [isOpen, setOpen] = useState(false);
   const hasPreview = preview !== undefined && preview !== null;
@@ -567,7 +661,7 @@ export function PreviewLayout({
             </div>
             {hasPreview && (
               <aside className={styles.side} aria-labelledby={headingId}>
-                <PhoneColumn place="side" headingId={headingId} controls={previewControls} note={previewNote}>
+                <PhoneColumn place="side" headingId={headingId} controls={previewControls} note={previewNote} {...look}>
                   {preview}
                 </PhoneColumn>
               </aside>
@@ -580,7 +674,7 @@ export function PreviewLayout({
         <Modal title={strings.preview} variant="sheet" isOpen={isOpen} onOpenChange={setOpen}>
           {isOpen && (
             // The sheet's bar holds Close alone: the column's own heading names what it shows.
-            <PhoneColumn place="sheet" controls={previewControls} note={previewNote}>
+            <PhoneColumn place="sheet" controls={previewControls} note={previewNote} {...look}>
               {preview}
             </PhoneColumn>
           )}

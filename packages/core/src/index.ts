@@ -839,7 +839,9 @@ export {
 } from './forms/export.ts';
 export {
   deleteSubmission,
+  deleteSubmissions,
   restoreSubmission,
+  restoreSubmissions,
   DELETED_SUBMISSIONS_KEPT_DAYS,
   getSubmission,
   listSubmissions,

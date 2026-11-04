@@ -122,17 +122,18 @@ describe('the gallery (AC-6323)', () => {
     await expect.element(page.getByText('Start from an empty page.')).toBeVisible();
     const group = document.querySelector('[role="radiogroup"]');
     expect(group?.querySelectorAll('[data-tile]').length).toBe(TEMPLATES.length);
-    // No thumbnails (T4): each tile is a small mark beside its name and line, a list to scan.
-    expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(0);
+    // Each tile is the form it makes, small, over its name and line (forms fixes 3, after Miro's template grid).
+    expect(group?.querySelectorAll('[data-tile][data-tall]').length).toBe(TEMPLATES.length);
     expect(group?.querySelectorAll('[data-tile][data-described]').length).toBe(TEMPLATES.length);
     await expect.element(page.getByRole('button', { name: 'Use Blank form' })).toBeVisible();
   });
 
-  it('shows the picked template beside the list, as a visitor sees it, and the arrows move it', async () => {
+  it('shows each template as a visitor sees it, on its own card, and the arrows move the pick', async () => {
     await open();
-    await expect.element(page.getByText('Fill this in')).toBeVisible();
+    // Blank shows the empty form it makes, never a sample's words (forms fixes 3).
+    await expect.element(page.getByText('Untitled form')).toBeVisible();
     await userEvent.keyboard('{ArrowDown}');
-    // The preview follows the pick: the Feedback form's own headline and question.
+    // Each card holds its own form: the Feedback form's headline and question.
     await expect.element(page.getByText('How did we do?')).toBeVisible();
     await expect.element(page.getByText('How was it?')).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
@@ -146,6 +147,20 @@ describe('the gallery (AC-6323)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Use Feedback' }).element());
     await expect.poll(() => run.made.map((form) => form.id)).toEqual([MADE.id]);
     expect(run.asked).toEqual([{ templateId: 'feedback' }]);
+  });
+
+  it('uses a template on Enter, as Use does (forms fixes 3)', async () => {
+    const run = await open();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.element(page.getByRole('radio', { name: 'Feedback' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => run.asked).toEqual([{ templateId: 'feedback' }]);
+  });
+
+  it('uses a template on a double click (forms fixes 3)', async () => {
+    const run = await open();
+    await userEvent.dblClick(page.getByText('A rating, and why. Anonymous.'));
+    await expect.poll(() => run.asked).toEqual([{ templateId: 'feedback' }]);
   });
 
   it('turns the other tiles off while it is making one, so a second Use makes no second form', async () => {
@@ -214,7 +229,7 @@ describe('the gallery (AC-6323)', () => {
     expect(run.asked).toEqual([]);
   });
 
-  it('draws the list beside the picked template’s preview, and the list alone on a phone, in both themes', async () => {
+  it('draws each template as the form it makes, on a phone too, in both themes', async () => {
     for (const width of [1280, 390] as const) {
       for (const theme of ['light', 'dark'] as const) {
         await page.viewport(width, width === 390 ? 844 : 900);
@@ -222,8 +237,8 @@ describe('the gallery (AC-6323)', () => {
         await open();
         await userEvent.keyboard('{ArrowDown}');
         await expect.element(page.getByRole('button', { name: 'Use Feedback' })).toBeVisible();
-        // The preview is beside the list only where the window holds both.
-        if (width === 1280) await expect.element(page.getByText('How did we do?')).toBeVisible();
+        // Every card shows its own form, at every width (forms fixes 3).
+        await expect.element(page.getByText('How did we do?')).toBeVisible();
         await new Promise((resolve) => globalThis.setTimeout(resolve, 500));
         await page.screenshot({ path: `.vitest/shots/gallery-${String(width)}-${theme}.png` });
         shown?.unmount();

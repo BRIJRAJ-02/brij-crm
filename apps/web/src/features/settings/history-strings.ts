@@ -49,6 +49,10 @@ const actor = (text: string): Sentence => ({ subject: 'actor', text });
 /** A signed count of a round robin adjustment: "+2", "−1" (a minus sign, not a dash). */
 const units = (value: number): string => (value > 0 ? `+${String(value)}` : `−${String(Math.abs(value))}`);
 
+/** "a submission" or "3 submissions". */
+const submissionsOf = (count: number): string =>
+  count === 1 ? 'a submission' : `${count.toLocaleString('en')} submissions`;
+
 const PROFILE_FIELDS = {
   name: 'name',
   timeZone: 'time zone',
@@ -215,6 +219,11 @@ const SENTENCES: SentenceTemplates = {
   'form.created': (entry, w) => actor(`made the form ${w.thing(entry.target)}`),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
+  'form.exported': (entry, w) => actor(`exported the submissions of ${w.thing(entry.target)}`),
+  'form.submissions_deleted': (entry, w) =>
+    actor(`deleted ${submissionsOf(entry.params.submissions)} of ${w.thing(entry.target)}`),
+  'form.submissions_restored': (entry, w) =>
+    actor(`restored ${submissionsOf(entry.params.submissions)} of ${w.thing(entry.target)}`),
   // Lists (spec 0048): "Ada made the list Sales pipeline".
   'list.created': (entry, w) => actor(`made the list ${w.thing(entry.target)}`),
   'list.updated': (entry, w) => actor(`changed the list ${w.thing(entry.target)}`),

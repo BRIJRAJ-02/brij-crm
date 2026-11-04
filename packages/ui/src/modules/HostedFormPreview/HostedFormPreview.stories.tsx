@@ -173,6 +173,44 @@ export const LayoutTiles: Story = {
 };
 
 /**
+ * The form small (size="thumbnail"), a picture of it on a choice tile: the form template gallery's cards (forms
+ * fixes 3, after Miro's template grid). Laid out at a panel's width, shown at half size, cropped to the tile.
+ */
+export const Thumbnail: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Start a form"
+        showsDescription
+        keepsPicture
+        pictureSize="large"
+        value="contact"
+        tiles={[
+          {
+            id: 'contact',
+            name: 'Contact us',
+            description: 'Name, email and a message.',
+            thumbnail: <HostedFormPreview form={CONTACT} size="thumbnail" />,
+          },
+          {
+            id: 'dark',
+            name: 'Contact us, dark',
+            description: 'The same form in its dark look.',
+            thumbnail: (
+              <HostedFormPreview form={{ ...CONTACT, look: { colour: 'dark', corners: 'square' } }} size="thumbnail" />
+            ),
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: 'Contact us' })).toBeChecked();
+  },
+};
+
+/**
  * A template's own answers in miniature (`rows`), as the form template gallery's tiles draw them (spec 0063,
  * AC-6323): every tile keeps its tall preview and takes its name and purpose underneath, so the shapes say what
  * kind of form it is while the line says what it is for.

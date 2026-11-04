@@ -42,6 +42,7 @@ import {
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
+import { DELETE_SUBMISSIONS_MAX } from '@crm/data/forms';
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
@@ -165,7 +166,16 @@ export function SubmissionsTab({
     more.for === page
       ? more
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
-  const rows = [...page.items, ...held.items];
+  // Deleted here and not yet confirmed or brought back (forms fixes 3): hidden at once, shown again on a refusal or
+  // an Undo.
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
+  const rows = [...page.items, ...held.items].filter((submission) => !gone.has(submission.id));
+  const hide = (ids: readonly string[]) => {
+    setGone((before) => new Set([...before, ...ids]));
+  };
+  const unhide = (ids: readonly string[]) => {
+    setGone((before) => new Set([...before].filter((id) => !ids.includes(id))));
+  };
   const [busy, setBusy] = useState<string | undefined>(undefined);
   // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
   // The picked ids stay while the dialog plays its exit, so its title keeps its count.
@@ -452,62 +462,78 @@ export function SubmissionsTab({
   };
 
   /**
-   * Deletes the picked submissions one after another, with progress in the bar, as the other bulk actions run, then
-   * offers Undo for every one deleted (forms fixes 2: deletes are soft, so it asks nothing first). A refusal stops
-   * there and says why; the ones not deleted yet stay picked.
+   * Undo of a bulk delete (forms fixes 3): one request. The rows come back at once and go again if the request is
+   * refused.
+   */
+  const undoDeleteMany = (ids: readonly string[]) => {
+    unhide(ids);
+    data.submissions.restoreMany(slug, formId, ids).then(
+      (result) => {
+        toasts.toast({ tone: 'success', message: strings.restoredMany(result.restoredIds.length) });
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        hide(ids);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
+  };
+
+  /**
+   * Deletes the picked submissions in one request (forms fixes 3), at once on screen: the rows go as it is pressed,
+   * then the toast offers Undo for every one deleted (deletes are soft, so it asks nothing first). A refusal brings
+   * them back, still picked; one still being added to the CRM stays, and the toast says so.
    */
   const deleteAll = (ids: readonly string[]) => {
     if (bulk !== undefined) return;
-    let done = 0;
-    setBulk({ label: strings.deletingMany, value: 0 });
-    const step = (index: number): Promise<void> => {
-      const id = ids[index];
-      if (id === undefined) return Promise.resolve();
-      return data.submissions.delete(slug, id).then(() => {
-        done += 1;
-        setBulk({ label: strings.deletingMany, value: Math.round((done / ids.length) * 100) });
-        return step(index + 1);
-      });
-    };
-    step(0).then(
-      () => {
-        setBulk(undefined);
-        setSelected(new Set());
+    // Over what one request takes: said at once, nothing hidden first (review, forms fixes 3).
+    if (ids.length > DELETE_SUBMISSIONS_MAX) {
+      toasts.toast({ tone: 'danger', message: strings.deleteTooMany(DELETE_SUBMISSIONS_MAX) });
+      return;
+    }
+    hide(ids);
+    setSelected(new Set());
+    // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
+    focusLater(() => pageHeading(document));
+    // The open one may be among them: the panel closes with it, and opens again if the delete is refused.
+    const closedId = open !== undefined && ids.includes(open.id) ? open.id : undefined;
+    if (closedId !== undefined) go(undefined);
+    data.submissions.deleteMany(slug, formId, ids).then(
+      (result) => {
+        const deleted = result.deletedIds;
+        const kept = ids.filter((id) => !deleted.includes(id));
+        if (kept.length > 0) unhide(kept);
+        const why = [
+          ...(result.stillFiling > 0 ? [strings.stillFilingKept(result.stillFiling)] : []),
+          ...(result.skipped > 0 ? [strings.deleteSkipped(result.skipped)] : []),
+        ];
         toasts.toast({
-          tone: 'success',
-          message: strings.deletedMany(done),
-          action: {
-            label: strings.undo,
-            onAction: () => {
-              undoDelete(ids, false);
-            },
-          },
-        });
-        // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
-        focusLater(() => pageHeading(document));
-        // The open one may be among them: the panel closes with it.
-        if (open !== undefined && ids.includes(open.id)) go(undefined);
-        else void router.invalidate();
-      },
-      (error: unknown) => {
-        setBulk(undefined);
-        setSelected(new Set(ids.slice(done)));
-        const reason = isDataError(error) ? error.message : strings.failedText;
-        toasts.toast({
-          tone: 'danger',
-          message: done === 0 ? reason : `${strings.deletedSome(done, ids.length)} ${reason}`,
-          ...(done === 0
+          tone: kept.length > 0 ? 'info' : 'success',
+          message: [strings.deletedMany(deleted.length), ...why].join(' '),
+          ...(deleted.length === 0
             ? {}
             : {
                 action: {
                   label: strings.undo,
                   onAction: () => {
-                    undoDelete(ids.slice(0, done), false);
+                    undoDeleteMany(deleted);
                   },
                 },
               }),
         });
-        void router.invalidate();
+        // Once the page reads again they are gone from it anyway, so they leave the hidden set (one restored
+        // elsewhere later shows again). With the panel closed, its own navigation already read the page.
+        const reread = closedId === undefined ? router.invalidate() : Promise.resolve();
+        void reread.then(() => {
+          unhide(deleted);
+        });
+      },
+      (error: unknown) => {
+        // Nothing was deleted: the rows come back, still picked, and the open one opens again.
+        unhide(ids);
+        setSelected(new Set(ids));
+        if (closedId !== undefined) go(closedId);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
@@ -772,7 +798,6 @@ export function SubmissionsTab({
           <Button
             variant="danger"
             icon="trash"
-            isPending={bulk?.label === strings.deletingMany}
             onPress={() => {
               deleteAll(picked.map((submission) => submission.id));
             }}

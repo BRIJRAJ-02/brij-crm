@@ -19,6 +19,7 @@ import {
   type FormJump,
   type FormLayout,
   type FormStep,
+  type JumpTarget,
 } from '@crm/data/forms';
 import {
   Button,
@@ -78,6 +79,7 @@ import {
   questionJumpChoices,
   removeJump,
   targetOfId,
+  targetWords,
 } from './jumps.ts';
 import {
   changeStep,
@@ -160,12 +162,6 @@ export interface QuestionsSectionProps {
   readonly toasts: Toasts;
   /** The question a publish refused, and why: kept open, with the error inline. */
   readonly problem?: { readonly questionId: string; readonly message: string };
-  /**
-   * How each question performs, by question id (spec 0063, AC-6322): a short chip on the card's second line, so a
-   * weak question is visible where it is edited. Absent on a form with no analytics, and a question nobody has
-   * reached has no entry.
-   */
-  readonly stats?: ReadonlyMap<string, { readonly stat: string; readonly statTitle: string }>;
   /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
   readonly focusQuestionId?: string;
   /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
@@ -180,6 +176,11 @@ export interface QuestionsSectionProps {
   readonly onOpened?: (rowId: string) => void;
   /** Before Add a question in the list's header: a form's Logic. */
   readonly actionsStart?: ReactNode;
+  /**
+   * Only the cards that carry rules (a form's Logic · n pressed, forms fixes 3): questions with a Show only if or
+   * rules of their own, steps with either. Nothing moves and nothing is added while it is on.
+   */
+  readonly logicOnly?: boolean;
   /**
    * What is wrong with the logic at one place (T41), in words: a question's Show only if, a step, or one of a step's
    * rules. A form passes it; a booking page has no logic to check.
@@ -328,7 +329,6 @@ function TypeMenu({ children, label, allowed, current, onPick, presets }: TypeMe
 /** The questions: a header with the count and Add a question, then the cards. */
 export function QuestionsSection(props: QuestionsSectionProps) {
   const { questions, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
-  const { stats } = props;
   const warningsAt = (place: LogicPlaceRef): readonly string[] => props.logicWarnings?.(place) ?? [];
   const isFilingOff = props.isFilingOff === true;
   const isLocked = (question: FormQuestion) => props.locked?.ids.has(question.id) === true;
@@ -578,8 +578,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       : {}),
     // Where an answer is saved shows in its editor, not on the row: the row stays the question and its type (T17).
     // Only a complete condition is said: one still being written shows nothing rather than "Shows when … is".
-    ...shownWhenOf(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))),
-    ...(stats?.get(question.id) ?? {}),
+    ...logicLineOf(
+      shownWhenOf(question.showWhen, questionFacts(questions.slice(0, questions.indexOf(question)))).condition,
+      jumpsLine(question.jumps ?? [], (to) =>
+        targetWords(to, questionJumpChoices(questions, breaks?.endings ?? [], question.id)),
+      ),
+    ),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
   // Steps as pages (spec 0063; T20, 5 November 2026: Tally's page breaks): with the Steps layout each break is an
@@ -626,7 +630,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               // Clearly a step (T39): its number, its name and how many questions it holds.
               note: strings.questionCount(place.count),
               // Named by every question, so one that comes after the step reads by its label, not as removed.
-              ...shownWhenOf(step.showWhen, questionFacts(questions)),
+              ...logicLineOf(
+                shownWhenOf(step.showWhen, questionFacts(questions)).condition,
+                jumpsLine(step.jumps ?? [], (to) => targetWords(to, jumpChoices(flow, breaks.endings ?? [], step.id))),
+              ),
               hasProblem: stepProblem?.stepId === step.id,
             },
           ];
@@ -635,7 +642,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   // A step's rules sit under its last question (critique c, 7: read after the questions they read), as a note row:
   // "After this step: If … → …, Otherwise → …".
   // With One at a time a question's rules sit right under it, the same note row: "After this question: If … → …".
-  const items: readonly QuestionListItem[] = !isStepped
+  const allItems: readonly QuestionListItem[] = !isStepped
     ? !isOneByOne
       ? headed
       : headed.flatMap((item): QuestionListItem[] => {
@@ -653,6 +660,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         if (step === undefined || (step.jumps?.length ?? 0) === 0) return [item];
         return [item, { id: `${AFTER_ROW}${step.id}`, kind: 'note', label: strings.afterStep(header?.label ?? '') }];
       });
+
+  // Logic · n pressed (forms fixes 3): only the cards that carry rules, each saying them on its second line.
+  const isLogicOnly = props.logicOnly === true;
+  const items: readonly QuestionListItem[] = isLogicOnly
+    ? allItems.filter((item) => item.kind !== 'note' && item.condition !== undefined)
+    : allItems;
 
   // A step with logic shows it under its header, always: its rules are what the header is about.
   const shownOpen: ReadonlySet<string> = new Set([
@@ -804,6 +817,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     props.onOpened?.(`${STEP_ROW}${stepId}`);
   };
 
+  // The merges whose toast is still showing (forms fixes 3: two merges in a row stacked two toasts): one more merge
+  // replaces that toast with one saying how many, whose Undo puts every one of them back.
+  const mergeRun = useRef<{ readonly key: string; readonly merged: readonly MergedStep[] } | undefined>(undefined);
+
   /** Merge with the step above: the break goes, its questions join the step before it, with Undo. */
   const merge = (stepId: string) => {
     if (breaks === undefined || flow === undefined) return;
@@ -812,16 +829,25 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     const name = strings.stepName(places.get(stepId)?.number ?? 1, step.title);
     const index = breaks.steps.indexOf(step);
     breaks.onChange((before) => removeStep(before, stepId).flow);
-    toasts.toast({
+    const run = mergeRun.current;
+    const isRunShowing = run !== undefined && toasts.queue.visibleToasts.some((each) => each.key === run.key);
+    const merged: readonly MergedStep[] = [...(isRunShowing ? run.merged : []), { step, index }];
+    if (isRunShowing) toasts.dismiss(run.key);
+    const key = toasts.toast({
       tone: 'info',
-      message: strings.stepMerged(name),
+      message: merged.length === 1 ? strings.stepMerged(name) : strings.stepsMerged(merged.length),
       action: {
         label: strings.undo,
         onAction: () => {
-          breaks.onChange((before) => restoreStep(before, step, index));
+          mergeRun.current = undefined;
+          // The last merged first, so each step goes back where it stood before its own merge.
+          breaks.onChange((before) =>
+            [...merged].reverse().reduce((flowNow, each) => restoreStep(flowNow, each.step, each.index), before),
+          );
         },
       },
     });
+    mergeRun.current = { key, merged };
   };
 
   const commitRename = () => {
@@ -998,6 +1024,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             </Button>
           )}
           {!isReadOnly &&
+            // Nothing is added while only the cards with rules show: a new one has none, so it would vanish.
+            !isLogicOnly &&
             (isFull ? (
               // Off at the most a form holds, and says so on hover and focus.
               <Tooltip content={tooMany}>
@@ -1023,8 +1051,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         </>
       }
       items={items}
-      // A quiet + between the cards, always there (T39: adding in between was "a find"); not on a read only list.
-      {...(isReadOnly ? {} : { gaps: 'shown' as const, renderGap: gapFor })}
+      // The + between two cards shows while a pointer is over the gap or focus is in it (forms fixes 3, the design
+      // critic: a + under every card was noise); not on a read only list, nor while only the cards with rules show.
+      {...(isReadOnly || isLogicOnly ? {} : { renderGap: gapFor })}
       openIds={shownOpen}
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.
@@ -1145,51 +1174,65 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
-          <QuestionEditor
-            question={question}
-            questions={questions}
-            // Its type change reads the deal's fields too, so an answer saved on the deal keeps its place (forms fixes 2).
-            attributes={[...attributes, ...(props.deal?.items ?? [])]}
-            isLocked={isLocked(question)}
-            isReadOnly={isReadOnly}
-            refFor={refFor}
-            focusOn={focusOn}
-            onChange={(change) => {
-              onChange((before) => changeQuestion(before, id, change, liveIds));
-            }}
-            onChoicesInvalid={(isInvalid) => {
-              markRefused(id, isInvalid);
-            }}
-            warnings={warningsAt({ kind: 'question', questionId: id })}
-          />
+          <>
+            <QuestionHead
+              question={question}
+              isReadOnly={isReadOnly}
+              // A question just added, or one a publish refused, takes focus and comes into view.
+              isJustAdded={justAdded === id || problem?.questionId === id}
+              {...(problem?.questionId === id ? { problem: problem.message } : {})}
+              onLabel={(label) => {
+                setFresh((before) => (before.has(id) ? new Set([...before].filter((each) => each !== id)) : before));
+                // Its words pick a field the object already has, until Save answer to is chosen by hand (T40).
+                const field =
+                  objectName === undefined || isFilingOff || chosen.has(id) || question.filedOn !== undefined
+                    ? undefined
+                    : question.kept === true
+                      ? matchingField(questions, id, label, attributes)
+                      : undefined;
+                onChange((before) =>
+                  changeQuestion(before, id, field === undefined ? { label } : { label, filedOn: field }, liveIds),
+                );
+              }}
+              onSubmit={() => {
+                // Enter goes on to the next question, of the same type, under this one (Typeform's way).
+                if (question.label.trim() !== '') addAt(question.answerType);
+              }}
+              onEscape={() => dropFresh(question)}
+            />
+            <QuestionEditor
+              question={question}
+              questions={questions}
+              // Its type change reads the deal's fields too, so an answer saved on the deal keeps its place (forms fixes 2).
+              attributes={[...attributes, ...(props.deal?.items ?? [])]}
+              isLocked={isLocked(question)}
+              isReadOnly={isReadOnly}
+              refFor={refFor}
+              focusOn={focusOn}
+              onChange={(change) => {
+                onChange((before) => changeQuestion(before, id, change, liveIds));
+              }}
+              onChoicesInvalid={(isInvalid) => {
+                markRefused(id, isInvalid);
+              }}
+              warnings={warningsAt({ kind: 'question', questionId: id })}
+            />
+          </>
         );
       }}
+      // The open card's head (forms fixes 3, after Typeform's and Sprig's cards): its answer type as one labelled
+      // menu, then Required and the ⋯ at its end; the words are the body's first field, full width.
+      actionsIn="head"
       renderOpenHead={(id) => {
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
-          <QuestionHead
+          <TypeRow
             question={question}
             allowed={allowed}
             isLocked={isLocked(question)}
             {...(props.locked === undefined ? {} : { lockReason: props.locked.reason })}
             isReadOnly={isReadOnly}
-            // A question just added, or one a publish refused, takes focus and comes into view.
-            isJustAdded={justAdded === id || problem?.questionId === id}
-            {...(problem?.questionId === id ? { problem: problem.message } : {})}
-            onLabel={(label) => {
-              setFresh((before) => (before.has(id) ? new Set([...before].filter((each) => each !== id)) : before));
-              // Its words pick a field the object already has, until Save answer to is chosen by hand (T40).
-              const field =
-                objectName === undefined || isFilingOff || chosen.has(id) || question.filedOn !== undefined
-                  ? undefined
-                  : question.kept === true
-                    ? matchingField(questions, id, label, attributes)
-                    : undefined;
-              onChange((before) =>
-                changeQuestion(before, id, field === undefined ? { label } : { label, filedOn: field }, liveIds),
-              );
-            }}
             onType={(type) => {
               onChange((before) =>
                 changeQuestion(
@@ -1200,11 +1243,6 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                 ),
               );
             }}
-            onSubmit={() => {
-              // Enter goes on to the next question, of the same type, under this one (Typeform's way).
-              if (question.label.trim() !== '') addAt(question.answerType);
-            }}
-            onEscape={() => dropFresh(question)}
           />
         );
       }}
@@ -1369,7 +1407,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           </MenuTrigger>
         );
       }}
-      {...(isReadOnly
+      {...(isReadOnly || isLogicOnly
         ? {}
         : {
             onMove: (id: string, index: number) => {
@@ -1433,6 +1471,12 @@ function filingItem(
 /** A lead header's stand in id: the questions before the first break, which have no break of their own yet. */
 const LEAD = '~lead';
 
+/** A step merged into the one above, and where it stood: what its Undo puts back. */
+interface MergedStep {
+  readonly step: FormStep;
+  readonly index: number;
+}
+
 /** A question's first points, one click from Give points: the answer itself, yes over no, or 1, 2, 3 by choice. */
 function startingPoints(question: FormQuestion): NonNullable<FormQuestion['points']> {
   if (question.answerType === 'rating' || question.answerType === 'scale') return 'value';
@@ -1443,17 +1487,11 @@ function startingPoints(question: FormQuestion): NonNullable<FormQuestion['point
 /** Props for an open question's head. */
 interface QuestionHeadProps {
   readonly question: FormQuestion;
-  readonly allowed: ReadonlySet<AnswerType>;
-  /** A question that stays as it is: its type can't change. */
-  readonly isLocked: boolean;
-  /** Why it stays, said on its type. */
-  readonly lockReason?: string;
   readonly isReadOnly: boolean;
   /** Just added: its words take focus, and the card comes into view. */
   readonly isJustAdded: boolean;
   readonly problem?: string;
   readonly onLabel: (label: string) => void;
-  readonly onType: (type: AnswerType) => void;
   /** Enter: the next question. */
   readonly onSubmit: () => void;
   /** Escape: a new question never given words goes again; answers whether it did. */
@@ -1461,23 +1499,10 @@ interface QuestionHeadProps {
 }
 
 /**
- * An open question's head (T40, 5 November 2026; owner: "cluttered and not proper"): the question typed right in the
- * card's header row, large, with its answer type as a small icon menu at its start. No second title, no separate
- * Question field.
+ * An open question's words (T40, 5 November 2026; forms fixes 3, the owner: the type beside the words read cramped):
+ * the body's first field, large and full width, as Typeform's and Sprig's cards put the question under their head.
  */
-function QuestionHead({
-  question,
-  allowed,
-  isLocked,
-  lockReason,
-  isReadOnly,
-  isJustAdded,
-  problem,
-  onLabel,
-  onType,
-  onSubmit,
-  onEscape,
-}: QuestionHeadProps) {
+function QuestionHead({ question, isReadOnly, isJustAdded, problem, onLabel, onSubmit, onEscape }: QuestionHeadProps) {
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // A question just added takes focus without jumping, then glides into view (at once with reduced motion).
   // After the type menu that made it has closed and handed focus back (forms QA: by keyboard, focus stayed behind).
@@ -1494,33 +1519,8 @@ function QuestionHead({
     });
   }, [isJustAdded]);
   const isConsent = question.answerType === 'consent';
-  const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
-  // Its type, said and changeable at a glance (UX review): the icon, the type's name and a chevron.
-  const typeButton = (
-    <Button
-      variant="ghost"
-      size="sm"
-      icon={TYPE_ICONS[question.answerType]}
-      iconRight="chevrons-up-down"
-      // On a phone the icon and chevron stand alone, so the question keeps the room to be read.
-      isLabelCollapsible
-      label={strings.typeMenu(typeName)}
-      isDisabled={isReadOnly || isLocked}
-    >
-      {typeName}
-    </Button>
-  );
   return (
     <>
-      {isLocked && lockReason !== undefined ? (
-        <Tooltip content={lockReason}>{typeButton}</Tooltip>
-      ) : isReadOnly || isLocked ? (
-        typeButton
-      ) : (
-        <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>
-          {typeButton}
-        </TypeMenu>
-      )}
       <Field
         ref={labelRef}
         // A consent's label is its exact wording, shown beside the tick box (spec 0023, AC-1053).
@@ -1568,7 +1568,7 @@ interface QuestionEditorProps {
 /**
  * One question open, under its head (T40): only what its type needs. Its choices (with Choice's two switches, pick
  * more than one and show as a dropdown), its type's settings, its points once it gives some, its placeholder edited
- * in place, and its Show only if once it has one. Required and the ⋯ are in the card's footer.
+ * in place, and its Show only if once it has one. Required and the ⋯ are in the card's head.
  */
 function QuestionEditor({
   question,
@@ -1596,12 +1596,11 @@ function QuestionEditor({
   }, [isDescriptionNew]);
   return (
     <>
-      {/* The quiet line under the question, once added: left empty, it goes again. */}
+      {/* The line under the question, once added: left empty, it goes again. Labelled, as every body field is. */}
       {question.description !== undefined && (
         <Field
           ref={descriptionRef}
           label={strings.description}
-          isLabelHidden
           size="sm"
           isWrapping
           placeholder={strings.descriptionPlaceholder}
@@ -1664,7 +1663,6 @@ function QuestionEditor({
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
-          isLabelHidden
           size="sm"
           placeholder={strings.placeholderInline}
           value={question.placeholder ?? ''}
@@ -1702,6 +1700,47 @@ function QuestionEditor({
         />
       )}
     </>
+  );
+}
+
+/** Props for an open question's answer type row. */
+interface TypeRowProps {
+  readonly question: FormQuestion;
+  readonly allowed: ReadonlySet<AnswerType>;
+  /** A question that stays as it is: its type can't change. */
+  readonly isLocked: boolean;
+  readonly lockReason?: string;
+  readonly isReadOnly: boolean;
+  readonly onType: (type: AnswerType) => void;
+}
+
+/**
+ * An open question's answer type, at the start of its head (forms fixes 3, after Typeform's type select): the type's
+ * icon, name and a chevron on a secondary button, named "<type>, answer type", opening the grouped type menu. It was a
+ * ghost menu squeezed beside the question's words.
+ */
+function TypeRow({ question, allowed, isLocked, lockReason, isReadOnly, onType }: TypeRowProps) {
+  const typeName = strings.answerTypes[CHOICE_FAMILY.has(question.answerType) ? 'choice' : question.answerType];
+  const typeButton = (
+    <Button
+      variant="secondary"
+      size="sm"
+      icon={TYPE_ICONS[question.answerType]}
+      iconRight="chevrons-up-down"
+      // On a phone the icon and chevron stand alone, so Required and the ⋯ keep their place in the head.
+      isLabelCollapsible
+      label={strings.typeMenu(typeName)}
+      isDisabled={isReadOnly || isLocked}
+    >
+      {typeName}
+    </Button>
+  );
+  if (isLocked && lockReason !== undefined) return <Tooltip content={lockReason}>{typeButton}</Tooltip>;
+  if (isReadOnly || isLocked) return typeButton;
+  return (
+    <TypeMenu label={strings.answerType} allowed={allowed} current={question.answerType} onPick={onType}>
+      {typeButton}
+    </TypeMenu>
   );
 }
 
@@ -2466,6 +2505,27 @@ function StepEditor({
       )}
     </>
   );
+}
+
+/**
+ * A card's rules on its second line (forms fixes 3, the design critic: rules shown where they live): its Show only if
+ * and where its own rules send people, joined, or nothing when it has neither.
+ */
+function logicLineOf(shown: string | undefined, jumps: string | undefined): { readonly condition?: string } {
+  const parts = [shown, jumps].filter((part): part is string => part !== undefined);
+  return parts.length === 0 ? {} : { condition: parts.join(strings.logicSeparator) };
+}
+
+/** Where a card's rules send people, said short: "Skips to Budget" for one rule, "3 rules" for more. */
+function jumpsLine(
+  jumps: readonly { readonly to: JumpTarget }[],
+  nameOf: (to: JumpTarget) => string | undefined,
+): string | undefined {
+  const [only] = jumps;
+  if (only === undefined) return undefined;
+  if (jumps.length > 1) return strings.rulesCount(jumps.length);
+  const name = nameOf(only.to);
+  return name === undefined ? strings.rulesCount(1) : strings.skipsTo(name);
 }
 
 /** A row's "Shows when …" line, only when its Show when has a complete condition to say. */
