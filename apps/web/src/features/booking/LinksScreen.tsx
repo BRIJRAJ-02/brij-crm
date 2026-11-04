@@ -194,11 +194,11 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               ? { badge: strings.hostRemoved }
               : isOff
                 ? { badge: strings.notTakingBookings }
-              : page.isPrivate
-                ? { badge: strings.linkOnly }
-                : page.isEditor === true
-                  ? { badge: sharingStrings.editorBadge }
-                  : {}),
+                : page.isPrivate
+                  ? { badge: strings.linkOnly }
+                  : page.isEditor === true
+                    ? { badge: sharingStrings.editorBadge }
+                    : {}),
       isOff,
       isPending,
       ...(isViewOnly || isDraft

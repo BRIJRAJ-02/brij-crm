@@ -383,9 +383,7 @@ function viewOf(
   const drafted = draftedView(view, page, (questions) => seen(questions, page.answersObjectId));
   // A host's own meeting link is for those who change the page and those who booked (critic B-07): a member who may
   // only see it (a workspace link, a colleague's page) gets the location without it, the draft's included.
-  return changeable
-    ? drafted
-    : { ...drafted, location: withoutMeetingLink(drafted.location) };
+  return changeable ? drafted : { ...drafted, location: withoutMeetingLink(drafted.location) };
 }
 
 /**
