@@ -192,8 +192,13 @@ async function start(): Promise<void> {
       for (const key of [...url.searchParams.keys()]) if (key !== 'resume') url.searchParams.delete(key);
       return url.toString();
     };
+    // A site's inline embed may ask for a clear ground and no headline (the Share tab's switches).
+    if (embed?.isTransparent === true) document.documentElement.dataset.ground = 'none';
     const drawn = mountHostedForm(root, form, {
       mode,
+      ...(embed === undefined
+        ? {}
+        : { embedLook: { isTransparent: embed.isTransparent, isTitleHidden: embed.isTitleHidden } }),
       countryGuess: guessCountry(),
       // The answers that came back take the link's own prefill: a visitor coming back wants what they typed,
       // not what the address suggested the first time.

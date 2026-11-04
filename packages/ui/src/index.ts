@@ -387,6 +387,7 @@ export {
 } from './modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
 export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
+export { EmbedPreview, type EmbedPreviewProps } from './modules/EmbedPreview/EmbedPreview.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';

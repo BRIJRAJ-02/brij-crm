@@ -38,3 +38,18 @@ export const States: Story = {
     await expect(canvas.getByText(/Over the limit/)).toBeInTheDocument();
   },
 };
+
+/** A share in a row of figures (a form's funnel): one data colour at every share, read but not shown. */
+export const Share: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Meter tone="share" label="Your name" value={6} maxValue={6} valueText="6 of 6 people" />
+      <Meter tone="share" label="What budget do you have in mind?" value={4} maxValue={6} valueText="4 of 6 people" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('meter', { name: 'Your name' })).toHaveAttribute('aria-valuetext', '6 of 6 people');
+    // Full is not a warning: no words beside it.
+    await expect(canvas.queryByText(/Over the limit/)).toBeNull();
+  },
+};

@@ -360,6 +360,31 @@ export const Title: Story = {
 };
 
 /** A quiet "(optional)" after the label, as a public form marks an optional question: muted, and part of the name. */
+/** Underline: a public form's one large answer, a line in the accent; focus doubles it. */
+export const Underline: Story = {
+  args: { label: 'Your name', variant: 'underline', placeholder: 'Ada Lovelace' },
+  render: (args) => (
+    <Stage width="dialog">
+      <Field {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Your name' }));
+    await expect(canvas.getByRole('textbox', { name: 'Your name' })).toHaveFocus();
+  },
+};
+
+/** Underline's states: refused, read only and disabled. */
+export const UnderlineStates: Story = {
+  render: () => (
+    <Stage direction="column" width="dialog">
+      <Field label="Work email" variant="underline" value="ada@" error="Enter an email address." />
+      <Field label="Company" variant="underline" value="Acme" isReadOnly />
+      <Field label="Job title" variant="underline" isDisabled />
+    </Stage>
+  ),
+};
+
 export const OptionalMark: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (

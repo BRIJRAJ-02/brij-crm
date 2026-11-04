@@ -21,6 +21,8 @@ Ported from the artifact's Rating card. It is the rating type's one display (rea
 
 - `field` makes it a form's question (a hosted form's Rating, spec 0063): the label shows over the stars as a radio group's question does, with its `aside` ("(optional)"), the stars a size up (`md`) for a visitor's finger, and `error` under them, which the group is described by; `isLabelHidden` keeps the name for screen readers where a larger heading shows it (one at a time). Why a variant: it is the rating's one editor, and a form asks for the same five stars with the frame every other question has.
 
+- `count` sets how many stars, 3 to 10 (a form's Rating, 5 November 2026); left out, five, the rating attribute's. `field.ends` puts what the first and last star mean under the row at its two ends ("Poor", "Excellent"), describing the group, as a Scale's end words do (ChoiceChips' `ends`). Why options: the stars, their keys and their states are the same; only how many there are and two words under them change.
+
 ## States
 
 No rating, rated, hover, focus, pressed, read only, disabled; as a form's question, with an error.

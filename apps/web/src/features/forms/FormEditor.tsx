@@ -66,9 +66,9 @@ import { BrandedFormPreview, DesignButton } from './FormBrand.tsx';
 import { LogicMap } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
-import { InstallTab } from './InstallTab.tsx';
+import { ShareTab } from './ShareTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
-import { ReadyDialog } from './PublishDialog.tsx';
+import { ReadyDialog, type LiveFiling } from './PublishDialog.tsx';
 import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
 import {
   dropQuestionLogic,
@@ -151,6 +151,8 @@ export function FormEditor(props: FormEditorProps) {
   const [isPublishing, setPublishing] = useState(false);
   // The form the first publish just put live: the Ready dialog shows its link (one click, no fields first).
   const [justLive, setJustLive] = useState<FormView | undefined>(undefined);
+  // What the first publish set up in the CRM, said once in the live dialog rather than in a toast (5 November 2026).
+  const [liveFiling, setLiveFiling] = useState<LiveFiling | undefined>(undefined);
   // Discard changes asks first: it loses every edit since the last publish.
   const [isDiscarding, setDiscarding] = useState(false);
   // Delete asks first; Pause and Resume act at once with Undo (the owner, 22 October 2026).
@@ -370,6 +372,14 @@ export function FormEditor(props: FormEditorProps) {
     latest.current = next;
     const choices = await data.forms.attributes(slug, form.id);
     setTarget(choices);
+    // The first publish says it in its live dialog, with Change; a later one in a toast with Undo.
+    if (!isPublished) {
+      setLiveFiling({
+        objectName: target.objectName ?? '',
+        made: made.flatMap((each) => plans.find((plan) => plan.questionId === each.questionId)?.title ?? []),
+      });
+      return { document: next, choices };
+    }
     toasts.toast({
       tone: 'success',
       message: strings.createdAttributes(made.length, target.objectName ?? ''),
@@ -508,6 +518,10 @@ export function FormEditor(props: FormEditorProps) {
         latest.current = view.draft;
         // The first time, the Ready dialog says it is live and hands over the link.
         if (!wasPublished) {
+          if (target.objectName !== undefined && view.live?.targets.main !== undefined) {
+            const objectName = target.objectName;
+            setLiveFiling((before) => before ?? { objectName, made: [] });
+          } else setLiveFiling(undefined);
           setJustLive(view);
           return;
         }
@@ -782,8 +796,8 @@ export function FormEditor(props: FormEditorProps) {
             onStatusChange={setStatus}
           />
         );
-      case 'install':
-        return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
+      case 'share':
+        return <ShareTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
       case 'analytics':
         // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
         return <AnalyticsTab data={data} slug={slug} form={form} />;
@@ -1097,7 +1111,9 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       <ReadyDialog
+        slug={slug}
         form={justLive}
+        {...(liveFiling === undefined ? {} : { filing: liveFiling })}
         onClose={() => {
           setJustLive(undefined);
           // Publish left once the form went live; focus goes to the menu beside where it was.
@@ -1151,7 +1167,7 @@ export function FormEditor(props: FormEditorProps) {
                   { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
                   ...(isPublished
                     ? [
-                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
+                        { id: 'share', label: strings.tabShare, href: formHref(slug, form.id, 'share') },
                         {
                           id: 'submissions',
                           label: strings.tabSubmissions,

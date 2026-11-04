@@ -32,15 +32,20 @@ export interface StatsProps {
   readonly isLoading?: boolean;
   /** `large` sets each value in the page's biggest type: one headline figure on its own (a report's big number). */
   readonly size?: 'default' | 'large';
+  /**
+   * `cards` sets each figure on Card's own surface, hairline and corners, in one row that wraps: a page's figures
+   * leading the cards under them (a form's Analytics), so they read as one family with those cards.
+   */
+  readonly variant?: 'plain' | 'cards';
 }
 
 /** A row of figures that wraps: Home's metrics, this week against last. Nothing at all with no figures. */
-export function Stats({ label, items, isLoading = false, size = 'default' }: StatsProps) {
+export function Stats({ label, items, isLoading = false, size = 'default', variant = 'plain' }: StatsProps) {
   if (!isLoading && items.length === 0) return null;
   return (
     <div role="group" aria-label={label} aria-busy={isLoading || undefined}>
       {isLoading ? (
-        <div className={styles.root} data-size={size}>
+        <div className={styles.root} data-size={size} data-variant={variant}>
           {Array.from({ length: Math.max(items.length, LOADING_COUNT) }, (_, index) => (
             <div key={index} className={styles.stat}>
               <Skeleton width="short" />
@@ -51,7 +56,7 @@ export function Stats({ label, items, isLoading = false, size = 'default' }: Sta
           ))}
         </div>
       ) : (
-        <dl className={styles.root} data-size={size}>
+        <dl className={styles.root} data-size={size} data-variant={variant}>
           {items.map((item) => (
             <div key={item.id} className={styles.stat}>
               <dt className={styles.label}>

@@ -1,5 +1,5 @@
 import { useId, useRef, type ReactNode } from 'react';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { QrCode } from '../../atoms/QrCode/QrCode.tsx';
@@ -46,6 +46,15 @@ export interface ReadyPanelProps {
    * footer already has the primary button (Done), so the dialog keeps one primary.
    */
   readonly copyVariant?: 'primary' | 'secondary';
+  /**
+   * `panel` (the default): the link under its label in a box, Copy and Share, and the QR code in its own band.
+   * `pill`: the link as one read only pill (the address's start muted, the page's own name strong) with Copy and a
+   * quiet Open, no label over it and no QR band, for a caller that shows its own row of ways to share under it (a
+   * form's live dialog and its Share tab, 5 November 2026).
+   */
+  readonly variant?: 'panel' | 'pill';
+  /** `pill`: the page to open in a new tab, the quiet Open beside Copy: a real link, so it middle clicks and copies. */
+  readonly openHref?: string;
 }
 
 /**
@@ -69,7 +78,10 @@ export function ReadyPanel({
   children,
   actions,
   copyVariant = 'primary',
+  variant = 'panel',
+  openHref,
 }: ReadyPanelProps) {
+  const isPill = variant === 'pill';
   const titleId = useId();
   const linkId = useId();
   const linkRef = useRef<HTMLSpanElement>(null);
@@ -87,24 +99,38 @@ export function ReadyPanel({
   const cut = link.lastIndexOf('/', link.length - 2) + 1;
   const hasTail = cut > link.indexOf('//') + 2 && cut < link.length;
   return (
-    <section className={styles.root} {...(title === undefined ? {} : { 'aria-labelledby': titleId })}>
-      <div className={styles.head} data-probe="edge" data-untitled={title === undefined || undefined}>
-        <span className={styles.check} role="img" aria-label={strings.done}>
-          <Icon name="check" size="sm" />
-        </span>
-        <div className={styles.titles}>
-          {title !== undefined && (
-            <h2 id={titleId} className={styles.title}>
-              {title}
-            </h2>
-          )}
-          {message !== undefined && <p className={styles.message}>{message}</p>}
+    <section
+      className={styles.root}
+      data-variant={variant}
+      {...(title === undefined ? {} : { 'aria-labelledby': titleId })}
+    >
+      {/* With neither a heading nor a line (a pill in a dialog whose title says it), there is no head to draw. */}
+      {(title !== undefined || message !== undefined) && (
+        <div className={styles.head} data-probe="edge" data-untitled={title === undefined || undefined}>
+          <span className={styles.check} role="img" aria-label={strings.done}>
+            <Icon name="check" size="sm" />
+          </span>
+          <div className={styles.titles}>
+            {title !== undefined && (
+              <h2 id={titleId} className={styles.title}>
+                {title}
+              </h2>
+            )}
+            {message !== undefined && <p className={styles.message}>{message}</p>}
+          </div>
         </div>
-      </div>
-      <span id={linkId} className={styles.linkLabel} data-probe="edge">
-        {linkLabel}
-      </span>
-      <div className={styles.link} role="group" aria-labelledby={linkId} data-probe="edge row">
+      )}
+      {!isPill && (
+        <span id={linkId} className={styles.linkLabel} data-probe="edge">
+          {linkLabel}
+        </span>
+      )}
+      <div
+        className={styles.link}
+        role="group"
+        {...(isPill ? { 'aria-label': linkLabel } : { 'aria-labelledby': linkId })}
+        data-probe="edge row"
+      >
         <span ref={linkRef} className={styles.address}>
           {hasTail ? (
             <>
@@ -123,27 +149,34 @@ export function ReadyPanel({
           variant={copyVariant}
           sourceRef={linkRef}
         />
-        {canShare && (
+        {isPill && openHref !== undefined && (
+          <ButtonLink icon="external-link" variant="ghost" size="lg" href={openHref} isExternal>
+            {strings.open}
+          </ButtonLink>
+        )}
+        {!isPill && canShare && (
           <Button icon="share" size="lg" onPress={share}>
             {strings.share}
           </Button>
         )}
       </div>
-      <div className={styles.visual} data-probe="edge" data-alone={preview === undefined || undefined}>
-        <div className={styles.qr}>
-          <QrCode value={link} label={qrLabel} size="sm" />
-        </div>
-        {/* No line beside the code: a QR explains itself, and the owner asked for the telling off (1 November
-            2026). */}
-        {preview !== undefined && (
-          <div className={styles.preview} role="group" aria-label={previewLabel} data-scale={previewScale}>
-            {/* A glimpse to look at: nothing in it takes focus, a press or a scroll. */}
-            <div className={styles.glimpse} inert>
-              {preview}
-            </div>
+      {!isPill && (
+        <div className={styles.visual} data-probe="edge" data-alone={preview === undefined || undefined}>
+          <div className={styles.qr}>
+            <QrCode value={link} label={qrLabel} size="sm" />
           </div>
-        )}
-      </div>
+          {/* No line beside the code: a QR explains itself, and the owner asked for the telling off (1 November
+            2026). */}
+          {preview !== undefined && (
+            <div className={styles.preview} role="group" aria-label={previewLabel} data-scale={previewScale}>
+              {/* A glimpse to look at: nothing in it takes focus, a press or a scroll. */}
+              <div className={styles.glimpse} inert>
+                {preview}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {children !== undefined && (
         <div className={styles.more} data-probe="edge">
           {children}

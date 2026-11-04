@@ -56,10 +56,37 @@ describe('checkAnswers (spec 0023, AC-553, AC-556, AC-660)', () => {
         website: 'https://acme.com',
         budget: '$1–5k',
         terms: true,
-        news: false,
         country: 'United Kingdom',
       },
     });
+  });
+
+  it('takes a rating up to its own number of stars, five when it names none', () => {
+    const rated = (count?: number) => ({
+      ...form,
+      questions: [
+        {
+          key: 'stars',
+          answerType: 'rating' as const,
+          required: true,
+          ...(count === undefined ? {} : { options: { count } }),
+        },
+      ],
+    });
+    expect(checkAnswers(rated(), { stars: 5 }).ok).toBe(true);
+    expect(checkAnswers(rated(), { stars: 6 }).ok).toBe(false);
+    expect(checkAnswers(rated(7), { stars: 7 }).ok).toBe(true);
+    expect(checkAnswers(rated(7), { stars: 8 }).ok).toBe(false);
+  });
+
+  it('takes a yes or no left unpicked as no answer, never No, and asks for a pick where one is required', () => {
+    const asked = { ...form, questions: [{ key: 'news', answerType: 'yes_no' as const, required: false }] };
+    expect(checkAnswers(asked, {})).toEqual({ ok: true, answers: {} });
+    expect(checkAnswers(asked, { news: false })).toEqual({ ok: true, answers: { news: false } });
+    const required = { ...form, questions: [{ key: 'news', answerType: 'yes_no' as const, required: true }] };
+    const refused = checkAnswers(required, {});
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.fields).toEqual({ news: 'Answer this question.' });
   });
 
   it('names each question that fails, by key', () => {

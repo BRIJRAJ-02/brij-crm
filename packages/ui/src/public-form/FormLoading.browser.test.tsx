@@ -10,6 +10,7 @@
 import '../styles/index.css';
 import type { PublicForm } from '@crm/contracts/forms';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { page } from 'vitest/browser';
 import { mountFormLoading, mountHostedForm, type HostedFormHandle } from './hosted-form.ts';
 
 const FORM: PublicForm = {
@@ -115,7 +116,8 @@ it('draws One at a time’s loading shape with no card, as the form itself has n
   drawn.destroy();
   // The chunk loaded with the test before, so it draws at once now, as a second Steps form on a page would.
   drawn = mountHostedForm(host, { ...FORM, layout: 'conversational' }, { mode: 'page' });
-  await expect.poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext')).toBe('1 of 3');
+  // It opens on its welcome screen (T42), in the same open frame.
+  await expect.element(page.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   expect(host.querySelector('[data-frame="open"]')).not.toBeNull();
 });
 

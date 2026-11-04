@@ -1,6 +1,8 @@
-import type { PublicQuestion } from '@crm/contracts/forms';
+import type { FormStrings, PublicQuestion } from '@crm/contracts/forms';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
+import { Icon } from '../atoms/Icon/Icon.tsx';
+import { Kbd } from '../atoms/Kbd/Kbd.tsx';
 import { ProgressBar } from '../atoms/ProgressBar/ProgressBar.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import {
@@ -27,7 +29,8 @@ import { useHostedForm } from './use-hosted-form.ts';
 export interface HostedFormStepsProps extends HostedFormProps {
   /**
    * In the builder's preview, which step (or question, one at a time) shows: the one being edited beside it, since
-   * the inert preview can't be stepped through. Clamped to the steps there are; ignored outside the preview.
+   * the inert preview can't be stepped through. Clamped to the steps there are; ignored outside the preview. Left
+   * out, a one at a time preview shows its welcome screen.
    */
   readonly previewStep?: number;
 }
@@ -39,7 +42,7 @@ type StepsLayout = 'steps' | 'conversational';
 function takesEnter(question: PublicQuestion | undefined): boolean {
   return (
     question !== undefined &&
-    ['short_text', 'long_text', 'email', 'phone', 'website', 'number', 'choice', 'rating', 'scale'].includes(
+    ['short_text', 'long_text', 'email', 'phone', 'website', 'number', 'choice', 'yes_no', 'rating', 'scale'].includes(
       question.answerType,
     )
   );
@@ -71,7 +74,7 @@ function backByKey(event: KeyboardEvent<HTMLFormElement>): boolean {
  * animation; ids, label links and question marks are taken off it so it never doubles a field. Nothing happens without the Web
  * Animations API.
  */
-function leaveFrom(form: HTMLFormElement | null, way: 'forward' | 'back'): void {
+function leaveFrom(form: HTMLElement | null, way: 'forward' | 'back'): void {
   const parent = form?.parentElement;
   if (form === null || parent === null || parent === undefined || typeof form.animate !== 'function') return;
   const ghost = form.cloneNode(true);
@@ -96,7 +99,7 @@ function leaveFrom(form: HTMLFormElement | null, way: 'forward' | 'back'): void 
   });
   parent.insertBefore(ghost, form);
   const tokens = getComputedStyle(form);
-  const distance = tokens.getPropertyValue('--space-16').trim() || '0px';
+  const distance = tokens.getPropertyValue('--space-8').trim() || '0px';
   const duration = Number.parseFloat(tokens.getPropertyValue('--duration-exit')) || 0;
   const remove = () => {
     ghost.remove();
@@ -145,9 +148,11 @@ export function HostedFormSteps({
   onEmailResume,
   resumedStepId,
   now = Date.now,
+  previewEnding,
   logo = TIMEFIX_LOGO,
-  previewStep = 0,
+  previewStep,
   brand,
+  embedLook,
 }: HostedFormStepsProps) {
   // A resumed fill opens on the step it was left on (AC-6319), found by id among the steps this path shows.
   // A step the answers have since taken away, or an id from an older version, leaves them at the first step.
@@ -156,7 +161,11 @@ export function HostedFormSteps({
   const [moved, setMoved] = useState<'forward' | 'back' | undefined>(undefined);
   const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
-  const [focusesStep, setFocusesStep] = useState(false);
+  // One at a time on its own page, a fill coming back (no welcome screen) starts with focus in its question, so the
+  // first key types the answer (critique c, 8).
+  const [focusesStep, setFocusesStep] = useState(
+    form.layout === 'conversational' && mode === 'page' && resumedStepId !== undefined,
+  );
   const [round, setRound] = useState(0);
   // One at a time, the pointer picks on the question showing (each restarts the pause before going on).
   const [picks, setPicks] = useState(0);
@@ -175,6 +184,7 @@ export function HostedFormSteps({
     onSave,
     onEmailResume,
     now,
+    previewEnding,
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
       const at = groups.findIndex((group) => group.questions.some((question) => keys.includes(question.key)));
@@ -186,6 +196,13 @@ export function HostedFormSteps({
   });
   const { words, preview } = state;
   const layout: StepsLayout = form.layout === 'conversational' ? 'conversational' : 'steps';
+  // One at a time opens on a welcome screen (T42, Typeform's way): the headline, its line and Start, so the
+  // questions never repeat the headline. Not for a fill being resumed, which goes straight back to its question, and
+  // in the builder's preview only while no question is being edited.
+  const [isWelcome, setWelcome] = useState(
+    layout === 'conversational' && form.headline.trim() !== '' && resumedStepId === undefined,
+  );
+  const welcomeRef = useRef<HTMLDivElement>(null);
   const byKey = new Map(form.questions.map((question) => [question.key, question]));
   // A hidden question has nothing to draw (spec 0063), so a step of hidden questions alone is no step to show.
   const groups = state.path.steps.flatMap((shown) => {
@@ -200,6 +217,7 @@ export function HostedFormSteps({
   if (state.round !== round) {
     setRound(state.round);
     setIndex(0);
+    setWelcome(layout === 'conversational' && form.headline.trim() !== '');
     setMoved(undefined);
     setFocusesStep(false);
     setPicks(0);
@@ -213,7 +231,8 @@ export function HostedFormSteps({
     const at = groups.findIndex((group) => group.id === resumedStepId);
     if (at > 0) setIndex(at);
   }
-  const index = Math.max(0, Math.min(mode === 'preview' ? previewStep : shownIndex, groups.length - 1));
+  const index = Math.max(0, Math.min(mode === 'preview' ? (previewStep ?? 0) : shownIndex, groups.length - 1));
+  const welcomes = isWelcome && (mode !== 'preview' || previewStep === undefined);
   const step = groups[index] ?? { id: undefined, title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
@@ -221,17 +240,40 @@ export function HostedFormSteps({
   // Only the step on screen is reached (AC-6321): the steps behind it were, the steps ahead have not been, and
   // that difference is the whole of the drop off bar on a stepped form.
   useEffect(() => {
-    if (state.view.kind === 'form' && !state.isClosed) {
+    if (state.view.kind === 'form' && !state.isClosed && !welcomes) {
       state.reached(step.questions.filter((question) => question.answerType !== 'hidden').map((q) => q.id));
     }
   });
 
   // A step reached by Continue or Back puts focus on its first question.
   useEffect(() => {
-    if (!focusesStep || first === undefined) return;
+    if (!focusesStep || first === undefined || welcomes) return;
     state.focus(first.key);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the step changes
-  }, [index]);
+  }, [index, welcomes]);
+
+  const start = () => {
+    leaveFrom(welcomeRef.current, 'forward');
+    setMoved('forward');
+    setFocusesStep(true);
+    setWelcome(false);
+  };
+  // The welcome screen goes on with Enter wherever focus is (Typeform's way), as its hint says.
+  useEffect(() => {
+    if (!welcomes || preview || state.view.kind !== 'form' || state.isClosed) return undefined;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest('button, a, input, textarea, select') !== null) {
+        return;
+      }
+      event.preventDefault();
+      start();
+    };
+    globalThis.addEventListener('keydown', onKey);
+    return () => {
+      globalThis.removeEventListener('keydown', onKey);
+    };
+  });
 
   const go = (next: number) => {
     setPicks(0);
@@ -279,13 +321,14 @@ export function HostedFormSteps({
       : !(form.steps ?? []).some(
           (step) => step.id !== undefined && ahead.has(step.id) && (step.jumps?.length ?? 0) > 0,
         );
-  const place = isCertain
-    ? layout === 'conversational'
-      ? words.questionOf(index + 1, groups.length)
-      : words.stepOf(index + 1, groups.length)
-    : layout === 'conversational'
-      ? words.questionNumber(index + 1)
-      : words.stepNumber(index + 1);
+  // Always "Step 2 of 3" (critique c): while a jump ahead may still skip some, the total is the longest the path
+  // can be, every step that has something to show, so it only ever shrinks towards the end, never grows.
+  const longest =
+    layout === 'conversational'
+      ? form.questions.filter((question) => question.answerType !== 'hidden').length
+      : (form.steps ?? []).filter((each) => each.keys.some((key) => byKey.get(key)?.answerType !== 'hidden')).length;
+  const total = isCertain ? groups.length : Math.max(groups.length, longest);
+  const place = layout === 'conversational' ? words.questionOf(index + 1, total) : words.stepOf(index + 1, total);
   const isOpen = layout === 'conversational';
   // A step's title names its questions: a heading a level under the form's.
   const StepTitle = mode === 'page' ? 'h2' : 'h3';
@@ -307,18 +350,37 @@ export function HostedFormSteps({
     );
   } else if (state.view.kind === 'thanks')
     body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
-  else {
+  else if (welcomes) {
+    // The welcome screen (T42): the headline and its line, then Start with Enter beside it.
+    body = (
+      <div ref={welcomeRef} className={styles.welcome} data-enter={moved}>
+        <FormHeader form={form} mode={mode} heading={refs.heading} />
+        <div className={styles.buttons} data-layout={layout}>
+          <Button variant="primary" size="lg" onPress={start}>
+            {words.start}
+          </Button>
+          <EnterHint words={words} />
+        </div>
+      </div>
+    );
+  } else {
     body = (
       <>
         {isOpen && groups.length > 0 ? (
           <div className={styles.line} data-mode={mode}>
-            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
+            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={total} isLabelHidden />
           </div>
         ) : null}
-        {!isOpen || index === 0 ? (
-          <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={index === 0} />
+        {!isOpen ? (
+          <FormHeader
+            form={form}
+            mode={mode}
+            heading={refs.heading}
+            isSubheadingShown={index === 0}
+            isVisuallyHidden={embedLook?.isTitleHidden === true}
+          />
         ) : (
-          // Past the first question the page keeps its heading, for screen readers only.
+          // One at a time the welcome screen showed the headline: each question keeps it for screen readers only.
           <VisuallyHidden>
             <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={false} />
           </VisuallyHidden>
@@ -326,9 +388,7 @@ export function HostedFormSteps({
         {/* One step is no progress to show: only its title, when it has one. */}
         {!isOpen && (groups.length > 1 || step.title !== undefined) && (
           <div className={styles.progress}>
-            {groups.length > 1 && (
-              <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
-            )}
+            {groups.length > 1 && <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={total} />}
             {step.title !== undefined && <StepTitle className={styles.title}>{step.title}</StepTitle>}
           </div>
         )}
@@ -348,8 +408,10 @@ export function HostedFormSteps({
           onPointerDownCapture={() => {
             byPointer.current = true;
           }}
-          onKeyDownCapture={() => {
-            byPointer.current = false;
+          onKeyDownCapture={(event) => {
+            // A letter key picks a lettered choice as a press does (T42), so it goes on by itself the same way.
+            byPointer.current =
+              /^[a-z]$/i.test(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey && !preview;
           }}
           onKeyDown={(event) => {
             // Back by key (T23, Typeform): the up arrow from a one line text field goes to the step before.
@@ -388,9 +450,13 @@ export function HostedFormSteps({
               <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
                 {isOpen && (
                   <p className={styles.ask} data-mode={mode} aria-hidden="true">
-                    <span className={styles.number}>{String(index + 1)}</span>
+                    <span className={styles.number}>
+                      {String(index + 1)}
+                      <Icon name="arrow-right" size="xs" />
+                    </span>
                     <span>
                       {labelOf(question, words, state.read)}
+                      {/* "(optional)" small and quiet after the words, never wrapping at the question's size (T42). */}
                       {aside !== undefined && (
                         <>
                           {' '}
@@ -413,7 +479,7 @@ export function HostedFormSteps({
                     if (
                       isOpen &&
                       !preview &&
-                      ['choice', 'rating', 'scale'].includes(question.answerType) &&
+                      ['choice', 'yes_no', 'rating', 'scale'].includes(question.answerType) &&
                       byPointer.current &&
                       !isLast
                     ) {
@@ -422,6 +488,7 @@ export function HostedFormSteps({
                   }}
                   files={state.files}
                   isLabelHidden={isOpen}
+                  isUnderlined={isOpen}
                   hint={isOpen && question.answerType === 'long_text' ? words.newLine : undefined}
                 />
               </QuestionSlot>
@@ -432,7 +499,8 @@ export function HostedFormSteps({
             {!isOpen && <ErrorSummary state={state} among={step.questions} />}
             <FormAlert state={state} />
             <div className={styles.buttons} data-layout={layout}>
-              {index > 0 && (
+              {/* One at a time, the way back is the quiet up arrow at the foot (T42); Steps keep Back here. */}
+              {index > 0 && !isOpen && (
                 <Button variant="ghost" size="lg" icon="arrow-left" onPress={() => go(index - 1)}>
                   {words.back}
                 </Button>
@@ -441,14 +509,37 @@ export function HostedFormSteps({
                 variant="primary"
                 size="lg"
                 type={preview ? 'button' : 'submit'}
-                {...(isOpen ? (takesEnter(step.questions[0]) ? { kbd: '↵' } : {}) : { isFullWidth: 'center' as const })}
+                isDisabled={state.isClosedMidFill}
+                {...(isOpen ? (isLast ? {} : { iconRight: 'check' as const }) : { isFullWidth: 'center' as const })}
               >
                 {state.isSending ? words.sending : isLast ? form.buttonText : isOpen ? words.ok : words.next}
               </Button>
+              {isOpen && takesEnter(first) && <EnterHint words={words} />}
             </div>
             <FinishLater state={state} language={form.language} stepId={step.id} />
           </div>
         </form>
+        {/* One at a time's arrows and place (T42, Typeform's way): up to the question before, down on to the next
+            (through the same check as OK), and "2 of 6"; at the window's foot on a page, under the form elsewhere. */}
+        {isOpen && groups.length > 1 && (
+          <nav className={styles.nav} data-mode={mode} aria-label={words.questionsNav}>
+            <span className={styles.place} aria-hidden="true">
+              {words.questionOf(index + 1, total)}
+            </span>
+            <Button
+              icon="chevron-up"
+              label={words.previousQuestion}
+              isDisabled={index === 0 || preview}
+              onPress={() => go(index - 1)}
+            />
+            <Button
+              icon="chevron-down"
+              label={words.nextQuestion}
+              isDisabled={isLast || preview}
+              onPress={() => formRef.current?.requestSubmit()}
+            />
+          </nav>
+        )}
       </>
     );
   }
@@ -458,11 +549,21 @@ export function HostedFormSteps({
       mode={mode}
       kind={isOpen ? 'open' : 'card'}
       {...(brand === undefined ? {} : { brand })}
+      {...(embedLook === undefined ? {} : { embedLook })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}
     >
       {body}
     </FormFrame>
+  );
+}
+
+/** "press Enter ↵" beside Start and OK (T42): only where a keyboard is (its CSS hides it under a finger). */
+function EnterHint({ words }: { readonly words: Pick<FormStrings, 'pressEnter' | 'enterKey'> }) {
+  return (
+    <span className={styles.enter} aria-hidden="true">
+      {words.pressEnter} <Kbd tone="soft">{words.enterKey}</Kbd>
+    </span>
   );
 }
