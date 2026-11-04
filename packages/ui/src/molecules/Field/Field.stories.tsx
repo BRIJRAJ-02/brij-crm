@@ -346,9 +346,10 @@ export const Title: Story = {
     await userEvent.click(title);
     await userEvent.keyboard('Kickoff call');
     await expect(title).toHaveValue('Kickoff call');
-    // Focused, it still draws no box or ring: the caret marks it.
+    // Focused, it wears the field's ring around its words (the owner, 5 November 2026: "doesn't look editable"),
+    // but still no border, so it reads as the page's title.
     await expect(getComputedStyle(box).borderStyle).toBe('none');
-    await expect(getComputedStyle(box).boxShadow).toBe('none');
+    await expect(getComputedStyle(box).boxShadow).not.toBe('none');
     await expect(getComputedStyle(title).fontSize).toBe('28px');
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
     const readOnly = canvas.getByRole('textbox', { name: 'Read only title' });
