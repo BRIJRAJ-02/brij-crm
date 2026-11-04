@@ -315,7 +315,7 @@ test.describe('the Menu app from an empty workspace', () => {
         .poll(
           async () => {
             await guest.goto(guestUrl);
-            return guest.getByText('This menu isn’t available right now.').count();
+            return guest.getByRole('heading', { name: 'This menu isn’t available right now' }).count();
           },
           { timeout: 20_000 },
         )

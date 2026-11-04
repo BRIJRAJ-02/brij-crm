@@ -119,20 +119,14 @@ function MenuPage() {
       </EmptyState>
     );
   }
-  // Taken down for now (Live or Hidden): the business's name and one plain line, nothing of the menu.
-  if (menu.hidden === true) {
-    return (
-      <EmptyState icon="utensils" title={menu.business.name}>
-        {strings.hidden}
-      </EmptyState>
-    );
-  }
+  // Taken down for now (Live or Hidden): MenuList's own unavailable page, in the menu's look with its header, the
+  // ways still open (Reserve a table, Call) and the foot; nothing of the menu.
   return (
     <MenuList
       menu={menu}
       {...(menu.logo === undefined ? {} : { logoHref: menuLogoPath(key, menu.logo) })}
       photoHref={(photoId, size, version) => menuPhotoPath(key, photoId, size, version)}
-      {...(table === undefined ? {} : { table })}
+      {...(table === undefined || menu.hidden === true ? {} : { table })}
       picks={chosen}
       onPicksChange={(next) => {
         setChosen(next);

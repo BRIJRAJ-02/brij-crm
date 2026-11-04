@@ -75,3 +75,8 @@ Escape closes a sheet.
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
 
 - `at` reads the menu at another instant than now (the editor's Preview at, after checklabs' `?at=` preview): which menus and sections serve, and the open line, follow it.
+
+## Unavailable (Live or Hidden)
+
+A menu its owner has hidden (`menu.hidden`) draws as the same page, in the menu's look with its bar, header (name, address, phone) and foot, and one card in place of the dishes: "This menu isn't available right now", with the ways still open: Reserve a table (only an `/r/<key>` path the answer carries, while the place takes reservations online) and Call (the place's phone). No search, filters or menu switcher. A variant, not a new component: the look, the header and the foot are MenuList's own, and a separate page would draw them twice.
+

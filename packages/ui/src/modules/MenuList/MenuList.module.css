@@ -493,6 +493,46 @@
     padding-block: var(--space-16);
   }
 
+  /* A hidden menu (Live or Hidden): the menu's own look and header, one quiet card saying so, and the ways open. */
+  .unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    margin-block: var(--space-16);
+    padding: var(--space-32) var(--space-20);
+    border: var(--border-width-hairline) solid var(--look-line);
+    border-radius: var(--radius-xl);
+    background: var(--look-card);
+    color: var(--look-quiet);
+    text-align: center;
+  }
+
+  .unavailableMark {
+    display: grid;
+    place-items: center;
+    inline-size: var(--size-bar);
+    block-size: var(--size-bar);
+    margin-block-end: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--look-chip);
+    color: var(--look-text);
+  }
+
+  .unavailableTitle {
+    margin: 0;
+    color: var(--look-text);
+    font: var(--text-heading);
+  }
+
+  .unavailableActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8);
+    margin-block-start: var(--space-8);
+  }
+
   /* Your picks: a pill in the accent at the foot of the screen, rising in with the first pick. */
   .picksDock {
     position: fixed;

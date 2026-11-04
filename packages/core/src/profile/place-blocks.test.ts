@@ -16,6 +16,7 @@ import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { installApp, removeApp } from '../hospitality/apps.ts';
 import { publishMenus, saveItem, saveMenu, saveSection, setMenuHidden } from '../hospitality/menu.ts';
+import { enterMenuPage, readPublicMenu } from '../hospitality/public-menu.ts';
 import { getBusiness } from '../hospitality/places.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
 import { setEarlyAccess } from '../operator/early-access.ts';
@@ -256,5 +257,25 @@ describe('the places a block may name', () => {
     expect(await refusalOf(saveProfileItem(w.scope, { id: newId(), block: menuBlock(w.placeId) }))).toBe(
       'LIMIT_REACHED',
     );
+  });
+});
+
+describe('a hidden menu’s page (spec 0065, Live or Hidden)', () => {
+  it('carries the reservation page only while hidden and taking reservations online, and no dish', async () => {
+    const w = await somewhere();
+    const key = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ menu_key: string }>(sql`select menu_key from places where id = ${w.placeId}::uuid`),
+    );
+    const entry = await enterMenuPage({ db }, key.rows[0]?.menu_key ?? '');
+    if (entry === undefined) throw new Error('No menu door.');
+    await takeReservations(w);
+    expect((await readPublicMenu({ db }, entry))?.menu.reservePath).toBeUndefined();
+    await setMenuHidden(w.scope, { hidden: true });
+    const hidden = (await readPublicMenu({ db }, entry))?.menu;
+    expect(hidden?.hidden).toBe(true);
+    expect(hidden?.reservePath).toMatch(/^\/r\/[A-Za-z0-9_-]{16}$/);
+    expect(Object.keys(hidden?.menu.items ?? {})).toEqual([]);
+    await removeApp(w.scope, { app: 'table_seating' });
+    expect((await readPublicMenu({ db }, entry))?.menu.reservePath).toBeUndefined();
   });
 });

@@ -467,6 +467,11 @@ export const PublicMenu = z.object({
    * photos, and the page says it isn't available right now.
    */
   hidden: z.literal(true).optional(),
+  /**
+   * While hidden, the place's reservation page (`/r/<key>`) when Table seating takes reservations there online, so
+   * the page can still offer Reserve a table. Absent otherwise.
+   */
+  reservePath: z.string().optional(),
 });
 /** The guest menu's answer. */
 export type PublicMenu = z.infer<typeof PublicMenu>;

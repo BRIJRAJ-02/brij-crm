@@ -98,7 +98,25 @@ function sectionHtml(
 }
 
 /** What a hidden menu's page says (the page's own `strings.hidden`). */
-export const MENU_HIDDEN_LINE = 'This menu isn’t available right now.';
+export const MENU_HIDDEN_LINE = 'This menu isn’t available right now';
+
+/** A hidden menu's words and the ways still open: Reserve a table (our own path only) and Call. */
+function hiddenHtml(menu: PublicMenu): string {
+  const reserve =
+    menu.reservePath !== undefined && /^\/r\/[A-Za-z0-9_-]{16}$/.test(menu.reservePath) ? menu.reservePath : undefined;
+  const phone = menu.place.phone?.replace(/[^0-9+]/g, '');
+  const ways = [
+    reserve === undefined ? '' : tag('a', 'Reserve a table', ` href="${escapeHtml(reserve)}"`),
+    phone === undefined || phone === ''
+      ? ''
+      : tag('a', escapeHtml(`Call ${menu.place.phone ?? ''}`), ` href="tel:${escapeHtml(phone)}"`),
+  ].filter((part) => part !== '');
+  return [
+    tag('h2', MENU_HIDDEN_LINE),
+    ways.length === 0 ? '' : tag('p', ways.join(' · ')),
+    tag('p', 'Powered by Timefix'),
+  ].join('');
+}
 
 /** The whole menu as plain HTML, for reading before (or without) the script. */
 export function menuHtml(menu: PublicMenu): string {
@@ -111,8 +129,9 @@ export function menuHtml(menu: PublicMenu): string {
     [
       tag('h1', escapeHtml(menu.business.name)),
       address === '' ? '' : tag('p', escapeHtml(address)),
-      // Taken down for now (Live or Hidden): the answer holds no menus, and the page says so.
-      menu.hidden === true ? tag('p', MENU_HIDDEN_LINE) : '',
+      // Taken down for now (Live or Hidden): the answer holds no menus, and the page says so, with the ways still
+      // open, as the page's own unavailable view does.
+      menu.hidden === true ? hiddenHtml(menu) : '',
       ...menu.menu.menus.map((each) =>
         tag(
           'section',
