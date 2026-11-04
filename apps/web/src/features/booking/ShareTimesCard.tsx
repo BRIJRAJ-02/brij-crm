@@ -13,6 +13,7 @@ import {
   SectionBar,
   Card,
   ChoiceChips,
+  Select,
   CopyButton,
   InfoTip,
   Skeleton,
@@ -133,6 +134,9 @@ export function ShareTimesCard({
     }
     return [...byDay];
   }, [shownTimes, dayFormat]);
+  // The day whose times show: the one picked, else the first with times.
+  const [pickedDay, setDay] = useState<string | undefined>(undefined);
+  const shownDay = pickedDay !== undefined && days.some(([each]) => each === pickedDay) ? pickedDay : days[0]?.[0];
   const sorted = [...chosen].sort();
   const isEnough = sorted.length >= SHARE_TIMES_MIN;
   const shareLink = timesLink(link, sorted, duration);
@@ -160,26 +164,44 @@ export function ShareTimesCard({
       )}
       {isLive && shownTimes !== undefined && read.status !== 'error' && (
         <>
-          {days.map(([day, starts]) => (
-            <ChoiceChips
-              key={day}
-              label={day}
-              choices={starts.map((start) => ({ id: start, label: timeFormat.format(new Date(start)) }))}
-              // Only this day's chosen times are this group's; the others stay as they are.
-              selected={chosen.filter((start) => starts.includes(start))}
-              {...(refusedDay === day ? { error: strings.tooMany } : {})}
-              onChange={(ids) => {
-                const others = chosen.filter((start) => !starts.includes(start));
-                const next = [...others, ...ids];
-                if (next.length > SHARE_TIMES_MAX) {
-                  setRefusedDay(day);
-                  return;
-                }
-                setRefusedDay(undefined);
-                setChosen(next);
+          {/* One day at a time (a week of chips was a wall): the day in a Select, each day's count beside it, then
+              that day's times as chips. Times ticked on other days stay ticked. */}
+          {days.length > 0 && (
+            <Select
+              label={strings.day}
+              items={days.map(([each, starts]) => {
+                const ticked = chosen.filter((start) => starts.includes(start)).length;
+                return { id: each, label: each, ...(ticked === 0 ? {} : { meta: strings.tickedOn(ticked) }) };
+              })}
+              value={shownDay ?? null}
+              onChange={(next) => {
+                if (next !== null) setDay(next);
               }}
             />
-          ))}
+          )}
+          {days
+            .filter(([each]) => each === shownDay)
+            .map(([day, starts]) => (
+              <ChoiceChips
+                key={day}
+                label={strings.timesOn(day)}
+                isLabelHidden
+                choices={starts.map((start) => ({ id: start, label: timeFormat.format(new Date(start)) }))}
+                // Only this day's chosen times are this group's; the others stay as they are.
+                selected={chosen.filter((start) => starts.includes(start))}
+                {...(refusedDay === day ? { error: strings.tooMany } : {})}
+                onChange={(ids) => {
+                  const others = chosen.filter((start) => !starts.includes(start));
+                  const next = [...others, ...ids];
+                  if (next.length > SHARE_TIMES_MAX) {
+                    setRefusedDay(day);
+                    return;
+                  }
+                  setRefusedDay(undefined);
+                  setChosen(next);
+                }}
+              />
+            ))}
           <SectionBar
             start={
               <Button

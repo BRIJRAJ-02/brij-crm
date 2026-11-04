@@ -80,23 +80,20 @@ export function PageBookingsTab({ data, slug, pageId }: PageActivityProps) {
     if (read.status !== 'ready') return [];
     const day = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone });
     const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone });
-    const byDay = new Map<string, BookingListRow[]>();
-    for (const booking of read.items) {
+    // One group, as the Bookings list's own tab does: each row carries its day, so a heading per day said it twice.
+    const rows: BookingListRow[] = read.items.map((booking) => {
       const start = new Date(booking.startsAt);
-      const label = day.format(start);
-      const rows = byDay.get(label) ?? [];
-      rows.push({
+      return {
         id: booking.id,
-        date: label,
+        date: day.format(start),
         time: `${time.format(start)} – ${time.format(new Date(booking.endsAt))}`,
         title: booking.visitorName,
-        note: booking.visitorEmail,
+        guestName: booking.visitorEmail,
         ...(booking.status === 'cancelled' ? { badge: strings.cancelled, badgeTone: 'neutral' as const } : {}),
-      });
-      byDay.set(label, rows);
-    }
-    return [...byDay].map(([label, rows]) => ({ id: label, label, rows }));
-  }, [read, locale, timeZone]);
+      };
+    });
+    return rows.length === 0 ? [] : [{ id: when, label: when === 'upcoming' ? strings.upcoming : strings.past, rows }];
+  }, [read, locale, timeZone, when]);
   return (
     <SettingsStack>
       <SectionBar
