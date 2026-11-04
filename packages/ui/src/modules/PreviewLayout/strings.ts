@@ -5,6 +5,8 @@ export const strings = {
   showPreview: 'Show preview',
   /** The phone's screen, when a long preview scrolls in it. */
   phone: 'Phone preview',
+  /** The same, laid out at a laptop's width (`previewDevice="desktop"`). */
+  desktop: 'Desktop preview',
   previewOf: (title: string) => `Preview of ${title}`,
   /** EditorStatus's word on a phone's bar, in place of its full words. */
   shortStatus: { live: 'Live', changed: 'Edited', draft: 'Draft', paused: 'Paused' },

@@ -414,14 +414,23 @@ function usePhoneFit(device: Device = 'phone') {
 function useContentHeight(screen: RefObject<HTMLDivElement | null>, isOn: boolean): number | undefined {
   const [height, setHeight] = useState<number | undefined>(undefined);
   useEffect(() => {
-    const content = screen.current?.firstElementChild;
-    if (!isOn || content === null || content === undefined) return;
-    const observer = new ResizeObserver(() => {
-      setHeight(Math.ceil((content as HTMLElement).scrollHeight));
+    const element = screen.current;
+    if (!isOn || element === null) return;
+    const sizes = new ResizeObserver(() => {
+      const content = element.firstElementChild;
+      if (content instanceof HTMLElement) setHeight(Math.ceil(content.scrollHeight));
     });
-    observer.observe(content);
+    // A preview whose root is swapped (a branded preview for the plain one) is watched again.
+    const watch = () => {
+      sizes.disconnect();
+      if (element.firstElementChild !== null) sizes.observe(element.firstElementChild);
+    };
+    const children = new MutationObserver(watch);
+    children.observe(element, { childList: true });
+    watch();
     return () => {
-      observer.disconnect();
+      children.disconnect();
+      sizes.disconnect();
     };
   }, [screen, isOn]);
   return isOn ? height : undefined;
@@ -524,7 +533,9 @@ function PhoneColumn({
             ref={screenRef}
             className={styles.screen}
             data-hug={surface === 'canvas' || undefined}
-            {...(isOverflowing ? { tabIndex: 0, role: 'region', 'aria-label': strings.phone } : {})}
+            {...(isOverflowing
+              ? { tabIndex: 0, role: 'region', 'aria-label': device === 'desktop' ? strings.desktop : strings.phone }
+              : {})}
           >
             {children}
           </div>

@@ -43,6 +43,7 @@ import {
   TabPanel,
   Tabs,
   ToggleButton,
+  Tooltip,
   TopBar,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
@@ -192,6 +193,12 @@ export function FormEditor(props: FormEditorProps) {
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // Logic · n shows only the cards that carry rules (forms fixes 3, the design critic: a map that said only Edit).
   const [isLogicOnly, setLogicOnly] = useState(false);
+  // The cards Logic · n would leave (review, forms fixes 3): After they send's routes have no card here.
+  const ruledCards =
+    draft.questions.filter((question) => question.showWhen !== undefined || (question.jumps?.length ?? 0) > 0).length +
+    (draft.layout === 'steps'
+      ? draft.steps.filter((step) => step.showWhen !== undefined || (step.jumps?.length ?? 0) > 0).length
+      : 0);
   // The screen the preview lays the form out at (forms fixes 3): this tab's own choice, not the form's.
   const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
   // The name, link, owner and who is emailed: each saves on its own on the Settings tab, with no Save.
@@ -1071,23 +1078,27 @@ export function FormEditor(props: FormEditorProps) {
               onOpened={openRow}
               // Logic · n (T41; forms fixes 3): how many rules the form has and how many need a look, pressed to show only
               // the cards that carry them. Off while the form has none.
-              logicOnly={isLogicOnly && logicCount(draft) > 0}
+              logicOnly={isLogicOnly && ruledCards > 0}
               {...(draft.questions.length === 0
                 ? {}
                 : {
-                    actionsStart: (
-                      <ToggleButton
-                        variant="ghost"
-                        icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
-                        isSelected={isLogicOnly && logicCount(draft) > 0}
-                        isDisabled={logicCount(draft) === 0}
-                        onChange={setLogicOnly}
-                      >
-                        {logicIssues.length > 0
-                          ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
-                          : strings.logicButton(logicCount(draft))}
-                      </ToggleButton>
-                    ),
+                    actionsStart: (() => {
+                      const toggle = (
+                        <ToggleButton
+                          variant="ghost"
+                          icon={logicIssues.length > 0 ? 'triangle-alert' : 'git-branch'}
+                          isSelected={isLogicOnly && ruledCards > 0}
+                          isDisabled={ruledCards === 0}
+                          onChange={setLogicOnly}
+                        >
+                          {logicIssues.length > 0
+                            ? strings.logicButtonWarn(logicCount(draft), logicIssues.length)
+                            : strings.logicButton(logicCount(draft))}
+                        </ToggleButton>
+                      );
+                      // Off says why (review, forms fixes 3): no card carries a rule yet.
+                      return ruledCards === 0 ? <Tooltip content={strings.logicNone}>{toggle}</Tooltip> : toggle;
+                    })(),
                   })}
               steps={{
                 steps: draft.steps,

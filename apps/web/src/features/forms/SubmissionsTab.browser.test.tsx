@@ -81,6 +81,8 @@ const used: string[] = [];
 const calls: string[] = [];
 /** Whether a bulk delete is refused, so the rows come back. */
 let deleteRefused = false;
+/** Holds a bulk delete's answer until the test lets it land, so the rows can be seen gone meanwhile. */
+let landDelete: (() => void) | undefined;
 /** Whether the small export is refused as too large, so the job takes it. */
 let exportTooLarge = false;
 
@@ -95,6 +97,7 @@ afterEach(() => {
   calls.length = 0;
   exportTooLarge = false;
   deleteRefused = false;
+  landDelete = undefined;
 });
 
 async function show(open: SubmissionView | undefined, spamCount = 2) {
@@ -117,7 +120,11 @@ async function show(open: SubmissionView | undefined, spamCount = 2) {
         if (deleteRefused) {
           return Promise.reject(Object.assign(new Error('Try again.'), { name: 'DataError', code: 'INTERNAL' }));
         }
-        return Promise.resolve({ deletedIds: [...ids], stillFiling: 0, skipped: 0 });
+        return new Promise((resolve) => {
+          landDelete = () => {
+            resolve({ deletedIds: [...ids], stillFiling: 0, skipped: 0 });
+          };
+        });
       },
       restoreMany: (_slug: string, _formId: string, ids: readonly string[]) => {
         calls.push(`restoreMany ${ids.join(',')}`);
@@ -211,7 +218,9 @@ describe('the Submissions tab (forms fixes a4, a8, a10)', () => {
     await userEvent.click(page.getByRole('checkbox', { name: 'Select All' }), { force: true });
     await userEvent.click(page.getByRole('button', { name: 'Delete', exact: true }));
     expect(calls.filter((call) => call.startsWith('deleteMany'))).toHaveLength(1);
+    // Gone at once, while the request is still out.
     await expect.element(page.getByRole('row').filter({ hasText: 'Ada Lovelace' })).not.toBeInTheDocument();
+    landDelete?.();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
     await expect.poll(() => calls.filter((call) => call.startsWith('restoreMany'))).toHaveLength(1);
     await expect.element(page.getByRole('row').filter({ hasText: 'Ada Lovelace' })).toBeVisible();

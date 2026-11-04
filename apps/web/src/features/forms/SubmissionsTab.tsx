@@ -42,6 +42,7 @@ import {
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
+import { DELETE_SUBMISSIONS_MAX } from '@crm/data/forms';
 // eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
 import { formatDate, StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
@@ -485,23 +486,30 @@ export function SubmissionsTab({
    */
   const deleteAll = (ids: readonly string[]) => {
     if (bulk !== undefined) return;
+    // Over what one request takes: said at once, nothing hidden first (review, forms fixes 3).
+    if (ids.length > DELETE_SUBMISSIONS_MAX) {
+      toasts.toast({ tone: 'danger', message: strings.deleteTooMany(DELETE_SUBMISSIONS_MAX) });
+      return;
+    }
     hide(ids);
     setSelected(new Set());
     // The bar that held Delete goes with the selection, so focus goes to the page's heading, not the body.
     focusLater(() => pageHeading(document));
-    // The open one may be among them: the panel closes with it.
-    if (open !== undefined && ids.includes(open.id)) go(undefined);
+    // The open one may be among them: the panel closes with it, and opens again if the delete is refused.
+    const closedId = open !== undefined && ids.includes(open.id) ? open.id : undefined;
+    if (closedId !== undefined) go(undefined);
     data.submissions.deleteMany(slug, formId, ids).then(
       (result) => {
         const deleted = result.deletedIds;
         const kept = ids.filter((id) => !deleted.includes(id));
         if (kept.length > 0) unhide(kept);
+        const why = [
+          ...(result.stillFiling > 0 ? [strings.stillFilingKept(result.stillFiling)] : []),
+          ...(result.skipped > 0 ? [strings.deleteSkipped(result.skipped)] : []),
+        ];
         toasts.toast({
           tone: kept.length > 0 ? 'info' : 'success',
-          message:
-            result.stillFiling > 0
-              ? `${strings.deletedMany(deleted.length)} ${strings.stillFilingKept(result.stillFiling)}`
-              : strings.deletedMany(deleted.length),
+          message: [strings.deletedMany(deleted.length), ...why].join(' '),
           ...(deleted.length === 0
             ? {}
             : {
@@ -513,12 +521,18 @@ export function SubmissionsTab({
                 },
               }),
         });
-        void router.invalidate();
+        // Once the page reads again they are gone from it anyway, so they leave the hidden set (one restored
+        // elsewhere later shows again). With the panel closed, its own navigation already read the page.
+        const reread = closedId === undefined ? router.invalidate() : Promise.resolve();
+        void reread.then(() => {
+          unhide(deleted);
+        });
       },
       (error: unknown) => {
-        // Nothing was deleted: the rows come back, still picked.
+        // Nothing was deleted: the rows come back, still picked, and the open one opens again.
         unhide(ids);
         setSelected(new Set(ids));
+        if (closedId !== undefined) go(closedId);
         toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );

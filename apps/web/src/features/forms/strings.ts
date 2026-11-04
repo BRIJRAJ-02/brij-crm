@@ -657,6 +657,10 @@ export const strings = {
   restoredMany: (n: number) =>
     n === 1 ? 'Submission restored.' : `${count(n, 'submission', 'submissions')} restored.`,
   deletedMany: (n: number) => `${count(n, 'submission', 'submissions')} deleted.`,
+  /** Said after a bulk delete when some could not be deleted here (gone already, or not this form's). */
+  deleteSkipped: (n: number) => (n === 1 ? 'One couldn’t be deleted.' : `${String(n)} couldn’t be deleted.`),
+  /** Over what one delete takes (forms fixes 3). */
+  deleteTooMany: (most: number) => `Pick at most ${String(most)} to delete at once.`,
   /** Said after a bulk delete when some were still being added to the CRM, so they stayed (forms fixes 3). */
   stillFilingKept: (n: number) =>
     n === 1
@@ -853,6 +857,8 @@ export const strings = {
       : `${String(count)} rules named that choice, so they went too.`,
   /** The Logic count in the Questions header (T41): every rule, and how many need a look. */
   logicButton: (count: number) => `Logic · ${String(count)}`,
+  /** Why Logic · n is off: no question or step carries a rule (forms fixes 3). */
+  logicNone: 'No question has rules yet. Add one from a question’s ⋯.',
   logicButtonWarn: (count: number, warnings: number) => `Logic · ${String(count)}, ${String(warnings)} to check`,
   /** A thank-you message only a step's jump reaches: said, with where its rule is changed. */
   sentByStep: (step: string) => `${step} sends some people to this thank-you message`,

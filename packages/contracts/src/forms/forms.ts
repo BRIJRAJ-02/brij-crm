@@ -2,6 +2,7 @@
 // the editor's draft, publish and settings, and reading and acting on
 // submissions. Every change needs `forms.manage`; every procedure takes
 // `WorkspaceScoped` input and is served behind the member door.
+import { DELETE_SUBMISSIONS_MAX } from './submission-limits.ts';
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ANSWER_TYPES, FORM_SLUG } from './answer-types.ts';
@@ -489,8 +490,7 @@ export const AddToCrmResult = z.object({
 /** What Add to CRM started. */
 export type AddToCrmResult = z.infer<typeof AddToCrmResult>;
 
-/** The most submissions one bulk Delete (or its Undo) names (forms fixes 3). */
-export const DELETE_SUBMISSIONS_MAX = 500;
+export { DELETE_SUBMISSIONS_MAX } from './submission-limits.ts';
 
 /**
  * Delete, or its Undo, for many of one form's submissions in one request (forms fixes 3): the Submissions tab's bulk

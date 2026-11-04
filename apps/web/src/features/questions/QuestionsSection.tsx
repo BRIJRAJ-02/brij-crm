@@ -1024,6 +1024,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             </Button>
           )}
           {!isReadOnly &&
+            // Nothing is added while only the cards with rules show: a new one has none, so it would vanish.
+            !isLogicOnly &&
             (isFull ? (
               // Off at the most a form holds, and says so on hover and focus.
               <Tooltip content={tooMany}>
