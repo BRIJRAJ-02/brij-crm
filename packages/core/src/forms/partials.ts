@@ -33,7 +33,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { runWrite } from '../engine/write.ts';
 import { queueFormResume } from '../emails/queue.ts';
-import { loadForm, loadVersions, publicFormOf } from './shared.ts';
+import { isClosedByRule, loadForm, loadVersions, publicFormOf } from './shared.ts';
 
 const { formPartials } = schema;
 
@@ -77,6 +77,10 @@ async function liveForm(tx: WorkspaceTx, formId: string) {
   }
   const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
   if (live === undefined) throw new Error('A live form names a version that is gone.');
+  // Closed by its own rule saves no part filled form, so no resume email goes from it (security review).
+  if (await isClosedByRule(tx, form.id, live.document)) {
+    throw refuse('FORM_CLOSED', 'This form isn’t taking enquiries right now.');
+  }
   return { form, live };
 }
 

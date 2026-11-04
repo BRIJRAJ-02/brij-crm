@@ -23,7 +23,7 @@ import {
   isOfferedTemplate,
   publishProblem,
   recordFactProblem,
-  type FormDocument,
+  FormDocument,
   type FormQuestion,
   type FormStatus,
   type FormSummary,
@@ -954,29 +954,51 @@ export async function saveFormDraft(
       const form = await visibleForm(tx, scope, input.formId, true);
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
+      // A document its schema refuses is a refusal with its own words, never a raw parse error (forms QA, 5 Nov).
+      const parsed = FormDocument.safeParse(input.document);
+      if (!parsed.success) {
+        const [issue] = parsed.error.issues;
+        throw refuseOn(
+          'CONFIG_INVALID',
+          issue?.message ?? 'That form can’t be saved.',
+          issue?.path.join('.') || 'document',
+        );
+      }
       checkDraft(form, input.document);
-      await checkDealTarget(tx, scope, input.document);
-      await checkFormAddresses(tx, scope.workspaceId, input.document, options.publicOrigins ?? []);
+      const stored =
+        form.draftVersionId === null
+          ? undefined
+          : (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+      // The remembered mappings are the server's (setFormTarget): whatever a client sends, the stored ones stay.
+      const { filedBefore: _sent, ...sent } = input.document;
+      const document: FormDocument =
+        stored?.document.filedBefore === undefined ? sent : { ...sent, filedBefore: stored.document.filedBefore };
+      // Also create a deal is checked when it is newly turned on (publish checks it always): a member who can't write
+      // Deals can still fix a typo on a form someone else set to make deals.
+      if (document.targets.deal?.objectId !== stored?.document.targets.deal?.objectId) {
+        await checkDealTarget(tx, scope, document);
+      }
+      await checkFormAddresses(tx, scope.workspaceId, document, options.publicOrigins ?? []);
       // A form's conditions never read a person's or a company's field (its editor offers none), refused in publish's
       // words: every member who sees the form reads its draft, so a stored one would show them a field's id and the
       // value looked for, even a field hidden from them (security review, 23 October 2026).
-      const readsField = recordFactProblem(input.document);
+      const readsField = recordFactProblem(document);
       if (readsField !== undefined) {
         throw refuseOn('CONFIG_INVALID', readsField.message, readsField.questionId ?? 'routing');
       }
       // A newly chosen booking page goes through the access door; one already chosen stays, so others can still edit.
-      const chosen = bookingPageOf(input.document);
+      const chosen = bookingPageOf(document);
       if (chosen !== undefined && form.draftVersionId !== null) {
         const before = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
-        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, input.document, 'seen');
-      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, input.document, 'seen');
+        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, document, 'seen');
+      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, document, 'seen');
       // Routing's booking pages go through the door the same way: only pages newly named (spec 0043, AC-1605).
       const earlier =
         form.draftVersionId === null
           ? undefined
           : (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
-      await checkFormRoutes(tx, scope, input.document.routing.rules, 'seen', earlier?.document.routing.rules ?? []);
-      await writeDraft(tx, scope, form, input.document);
+      await checkFormRoutes(tx, scope, document.routing.rules, 'seen', earlier?.document.routing.rules ?? []);
+      await writeDraft(tx, scope, form, document);
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its save.');
       return viewOf(tx, scope, saved);

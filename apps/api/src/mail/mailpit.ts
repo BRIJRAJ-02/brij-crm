@@ -31,7 +31,10 @@ export function createMailpitMailer(options: MailpitOptions): Mailer {
         body: JSON.stringify({
           From: {
             Email: sender.email,
-            Name: (message.fromName === undefined ? undefined : senderName(message.fromName)) ?? sender.name ?? '',
+            Name:
+              (message.fromName === undefined ? undefined : senderName(message.fromName)) === undefined
+                ? (sender.name ?? '')
+                : `${senderName(message.fromName ?? '') ?? ''} via ${sender.name ?? 'Timefix'}`,
           },
           To: [{ Email: message.to }],
           Subject: message.subject,

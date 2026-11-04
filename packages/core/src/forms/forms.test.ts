@@ -844,6 +844,109 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(record?.values[w.attribute('deals.owner')]).toEqual({ type: 'member', id: w.ownerId });
   });
 
+  it('gives a deal’s timeline no answers for a reader who can’t see the person, and makes one deal per submission', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      targets: { ...document.targets, deal: { objectId: w.deals } },
+    }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@navy-labs.com', why: 'A demo' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const deal = (await getSubmission(w.scope, { submissionId: submission.id })).records.find(
+      (each) => each.role === 'deal',
+    );
+    const dealId = deal?.record.recordId ?? '';
+    // The owner sees the answers on the deal's timeline; a member who sees Deals but not People gets the entry only.
+    const mine = (await getActivity(w.scope, { recordId: dealId })).entries.find((each) => each.kind === 'submission');
+    expect(mine?.answers?.length).toBeGreaterThan(0);
+    const noPeople: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: noPeople });
+    const theirs = (await getActivity(member, { recordId: dealId })).entries.find((each) => each.kind === 'submission');
+    expect(theirs).toBeDefined();
+    expect(theirs?.answers).toBeUndefined();
+    // Filed again, it makes no second deal.
+    await w.query(sql`update form_submissions set state = 'received', processed_at = null where id = ${submission.id}`);
+    await processNow(w, submission.id);
+    expect(await w.query(sql`select 1 from form_submission_records where role = 'deal'`)).toHaveLength(1);
+  });
+
+  it('gives no answers to a reader who can’t see the form, though they see the record', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', why: 'Engines' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const recordId = (await getSubmission(w.scope, { submissionId: submission.id })).mainRecord?.recordId ?? '';
+    // Its draft now files onto Deals, which this member can't see: the form is out of their reach.
+    const form = await getForm(w.scope, { formId: live.id });
+    await setFormTarget(w.scope, { formId: live.id, mainObjectId: w.deals, expectedRevision: form.revision });
+    const noDeals: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.deals }, level: 'none' },
+      ],
+      records: [],
+    };
+    const member = rescope(w.scope, { role: 'member', rules: noDeals });
+    const entry = (await getActivity(member, { recordId })).entries.find((each) => each.kind === 'submission');
+    expect(entry).toBeDefined();
+    expect(entry?.answers).toBeUndefined();
+  });
+
+  it('refuses Use new to a member who can’t write the field, see the record, or see the answer (forms fix a4)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const existing = await createRecord(w.scope, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Ada' },
+        [w.attribute('people.email_addresses')]: ['ada@example.com'],
+        [w.attribute('people.job_title')]: 'Countess',
+      },
+    });
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com', title: 'Engineer' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('No submission.');
+    await processNow(w, submission.id);
+    const title = w.attribute('people.job_title');
+    const as = (level: 'read' | 'hidden') =>
+      rescope(w.scope, {
+        role: 'member',
+        rules: {
+          levels: [
+            {
+              subject: { type: 'role', role: 'member' },
+              target: { type: 'attribute', objectId: w.people, attributeId: title },
+              level,
+            },
+          ],
+          records: [],
+        },
+      });
+    const input = { submissionId: submission.id, questionId: 'title' };
+    expect(await refusalOf(useNewAnswer(as('read'), input))).not.toEqual([]);
+    expect(await refusalOf(useNewAnswer(as('hidden'), input))).toMatchObject([{ code: 'FORM_STATE' }]);
+    const noPeople = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(useNewAnswer(noPeople, input))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
+    expect(record?.values[title]).toBe('Countess');
+  });
+
   it('refuses Also create a deal on a form that doesn’t save to People (forms fix a3)', async () => {
     const w = await workspace();
     const created = await createForm(w.scope, { id: newId(), name: 'Deal form' });

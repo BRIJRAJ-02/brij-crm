@@ -361,7 +361,10 @@ export const FormDocument = z
      * object id, each question's attribute there. Moving back puts them back, so trying another object never loses
      * a mapping for good. Only the server writes it (`setFormTarget`); it never reaches a visitor.
      */
-    filedBefore: z.record(Uuid, z.record(z.string().max(64), Uuid)).optional(),
+    filedBefore: z
+      .record(Uuid, z.record(z.string().max(64), Uuid))
+      .refine((objects) => Object.keys(objects).length <= 50, { error: 'Too many remembered objects.' })
+      .optional(),
     /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
     layout: z.enum(FORM_LAYOUTS).default('classic'),
     /** The breaks between steps, in the questions' order. Drawn only by Steps. */

@@ -1151,7 +1151,17 @@ async function fileDeal(
   const people = live('associated_people');
   const companyLink = live('associated_company');
   const owner = live('owner');
-  if (name === undefined || people?.type !== 'record_reference') return { ok: false, failure: DEAL_NOT_MADE };
+  if (name === undefined || people?.type !== 'record_reference' || people.relationshipId === null) {
+    return { ok: false, failure: DEAL_NOT_MADE };
+  }
+  // One deal per submission: filing it again (Add to CRM, a retry) never makes a second while the first is live.
+  const made = await tx.execute(sql`
+    select 1 from form_submission_records l
+    join records r on r.workspace_id = l.workspace_id and r.id = l.record_id and r.deleted_at is null
+    where l.submission_id = ${input.submissionId}::uuid and l.role = 'deal'
+    limit 1
+  `);
+  if (made.rows.length > 0) return { ok: true, recordId: '' };
   const personCompany = [...input.peopleAttributes.values()].find((attribute) => attribute.apiSlug === 'company');
   const companyId = await linkedOn(tx, input.personId, personCompany);
   const companyObjectId =
@@ -1167,7 +1177,12 @@ async function fileDeal(
     [name.id, await dealName(tx, context.scope, input.personId, input.form.name)],
     [people.id, [{ objectId: input.peopleObjectId, recordId: input.personId }]],
   ]);
-  if (companyLink?.type === 'record_reference' && companyId !== undefined && companyObjectId !== undefined) {
+  if (
+    companyLink?.type === 'record_reference' &&
+    companyLink.relationshipId !== null &&
+    companyId !== undefined &&
+    companyObjectId !== undefined
+  ) {
     const reference = { objectId: companyObjectId, recordId: companyId };
     values.set(companyLink.id, companyLink.isMulti ? [reference] : reference);
   }
@@ -1176,16 +1191,20 @@ async function fileDeal(
     values.set(owner.id, owner.isMulti ? [member] : member);
   }
   // Each link's other side: People's Associated deals, and the company's.
+  // Only a real two sided link's other side is made writable; with none, nothing on that object is.
   const sides = async (objectId: string, pair: string | null | undefined) => {
     const all = await loadAttributes(tx, objectId);
-    const side = [...all.values()].find(
-      (attribute) => attribute.relationshipId === pair && attribute.objectId !== input.dealObjectId,
-    );
+    const side =
+      pair === null || pair === undefined
+        ? undefined
+        : [...all.values()].find(
+            (attribute) => attribute.relationshipId === pair && attribute.objectId !== input.dealObjectId,
+          );
     return { objectId, attributeIds: [...all.keys()], writable: new Set(side === undefined ? [] : [side.id]) };
   };
   const also = [
     await sides(input.peopleObjectId, people.relationshipId),
-    ...(companyObjectId === undefined || companyLink === undefined
+    ...(companyObjectId === undefined || companyLink === undefined || !values.has(companyLink.id)
       ? []
       : [await sides(companyObjectId, companyLink.relationshipId)]),
   ];

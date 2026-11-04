@@ -108,17 +108,21 @@ export function createMailer(env: Pick<ApiEnv, 'RESEND_API_KEY' | 'MAIL_FROM' | 
  */
 export function senderName(name: string): string | undefined {
   const clean = name
-    .replace(/[\p{Cc}\u2028\u2029"<>\\]/gu, ' ')
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029"<>\\]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return clean === '' ? undefined : clean.slice(0, 64).trim();
 }
 
-/** The From header with `name` in place of the configured sender's name, keeping its address. */
+/**
+ * The From header naming `name` beside the product, keeping the configured address: "Acme via Timefix" (security
+ * review, 5 November 2026: a workspace's own name alone let anyone send as "PayPal Security" from our address).
+ */
 export function fromWithName(from: string, name: string | undefined): string {
   const safe = name === undefined ? undefined : senderName(name);
   if (safe === undefined) return from;
-  const named = /<([^<>]+)>\s*$/.exec(from.trim());
-  const address = named?.[1] ?? from.trim();
-  return `"${safe}" <${address}>`;
+  const named = /^(.*?)\s*<([^<>]+)>\s*$/.exec(from.trim());
+  const product = senderName(named?.[1]?.replace(/"/g, '') ?? '') ?? 'Timefix';
+  const address = named?.[2] ?? from.trim();
+  return `"${safe} via ${product}" <${address}>`;
 }

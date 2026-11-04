@@ -8,7 +8,6 @@
 import {
   BOOKING_COUNTDOWN,
   checkAnswers,
-  closedByRule,
   FREE_TIME_LIMIT_MS,
   NO_FREE_TIME_MESSAGE,
   RoutingStep,
@@ -43,6 +42,7 @@ import { recordSteps, routeSubmission, storedRoute, submissionDecision } from '.
 import { routeHostIds } from '../routing/hosts.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import {
+  isClosedByRule,
   loadForm,
   loadVersions,
   logicFormOf,
@@ -341,24 +341,6 @@ export async function handoffSubmission(
 
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
 export const FORM_CLOSED_MESSAGE = 'This form isn’t taking enquiries right now.';
-
-/**
- * Whether a live form's own closing rule has closed it (forms fix b2): its moment has passed, or it holds as many
- * answers (spam left out) as it closes after. Counts only when the rule names a number, and stops at that number.
- */
-async function isClosedByRule(tx: WorkspaceTx, formId: string, document: FormDocument): Promise<boolean> {
-  const closing = document.closing;
-  if (closing === undefined) return false;
-  const now = new Date();
-  if (closedByRule(document, { now, answers: 0 })) return true;
-  if (closing.after === undefined) return false;
-  const counted = await tx.execute<{ n: number }>(sql`
-    select count(*)::int as n from (
-      select 1 from form_submissions where form_id = ${formId}::uuid and state <> 'spam' limit ${closing.after}
-    ) kept
-  `);
-  return closedByRule(document, { now, answers: counted.rows[0]?.n ?? 0 });
-}
 
 /** Whether this send's idempotency key already stored a submission on the form (a retry, answered as before). */
 async function alreadySent(tx: WorkspaceTx, formId: string, body: SubmitBody): Promise<boolean> {
