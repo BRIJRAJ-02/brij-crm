@@ -77,6 +77,17 @@ export interface HostedFormProps {
    * Left out, the form wears the brand its own read names (its logo; the page's stylesheet brings the accent).
    */
   readonly brand?: PageBrand;
+  /**
+   * How a site's inline embed asked to draw it (T44's Share tab): `isTransparent` leaves the ground clear so the
+   * site's own background shows, `isTitleHidden` keeps the headline for screen readers only (the site has its own).
+   */
+  readonly embedLook?: EmbedLook;
+}
+
+/** How a site's inline embed asked the form to draw. */
+export interface EmbedLook {
+  readonly isTransparent?: boolean;
+  readonly isTitleHidden?: boolean;
 }
 
 /**
@@ -103,6 +114,7 @@ export function HostedForm({
   now = Date.now,
   logo = TIMEFIX_LOGO,
   brand,
+  embedLook,
 }: HostedFormProps) {
   const { state, refs } = useHostedForm({
     form,
@@ -201,6 +213,7 @@ export function HostedForm({
       form={form}
       mode={mode}
       {...(brand === undefined ? {} : { brand })}
+      {...(embedLook === undefined ? {} : { embedLook })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

@@ -18,6 +18,7 @@ import { poweredByHref } from '../lib/powered-by.ts';
 import { safeImageSrc } from '../lib/safe-image-src.ts';
 import { templateAttributes } from '../lib/page-template.ts';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
+import type { EmbedLook } from './HostedForm.tsx';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
@@ -45,11 +46,14 @@ export function FormGround({
   container,
   previewNote,
   foot,
+  embedLook,
   children,
 }: {
   readonly mode: HostedFormMode;
   readonly kind?: FormFrameKind;
   readonly look?: PublicForm['look'];
+  /** A site's inline embed's look: a clear ground, the headline for screen readers only. */
+  readonly embedLook?: EmbedLook;
   /** The workspace's brand kit (spec 0060, AC-4): its logo over the form, and an app preview's accent. */
   readonly brand?: PageBrand;
   readonly isLoading?: boolean;
@@ -79,6 +83,8 @@ export function FormGround({
         data-corners={look?.corners}
         data-mode={mode}
         data-frame={kind}
+        data-ground={embedLook?.isTransparent === true ? 'none' : undefined}
+        data-head={embedLook?.isTitleHidden === true ? 'none' : undefined}
         {...(isLoading ? { 'aria-busy': true } : {})}
         {...(mode === 'preview' ? { inert: true } : {})}
       >
@@ -140,6 +146,7 @@ export function FormFrame({
   container,
   previewNote,
   foot,
+  embedLook,
   children,
 }: {
   readonly form: PublicForm;
@@ -147,6 +154,7 @@ export function FormFrame({
   readonly kind?: FormFrameKind;
   /** Overrides the brand the form's own `brand` names (an app preview): see `formBrand`. */
   readonly brand?: PageBrand;
+  readonly embedLook?: EmbedLook;
   readonly container?: Ref<HTMLDivElement>;
   /** Read to screen readers before an inert preview. */
   readonly previewNote?: string;
@@ -162,6 +170,7 @@ export function FormFrame({
       {...(container === undefined ? {} : { container })}
       {...(previewNote === undefined ? {} : { previewNote })}
       {...(foot === undefined ? {} : { foot })}
+      {...(embedLook === undefined ? {} : { embedLook })}
     >
       {children}
     </FormGround>

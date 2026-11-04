@@ -1,19 +1,23 @@
 // Brief
-// Purpose: a form's Install tab (spec 0023, 0023-embeds.md), in the order a person needs it: share the link, then put
-// it on a website (in the page, a popup, or a corner button, picked as tiles), then the developer material, closed.
+// Purpose: a form's Share tab (spec 0023, 0023-embeds.md; T44, b5 to b10, S4, S7), in the order a person needs it:
+// the link (one pill with Copy, its QR code and the ways to send it, the same block as the live dialog), then put it
+// on a site (three ways as tiles, a made up site showing the pick, the words, colour and look beside it rewriting
+// the snippet), then the developer material in one quiet sheet.
 // Main task: press Copy link, or pick how it shows and copy its snippet. Nothing else needs touching for it to work.
-// Leaves out: a QR code and analytics; the booking page's own embed lives with the booking page.
-import type { FormQuestion, FormView } from '@crm/data';
+// Leaves out: analytics; the booking page's own embed lives with the booking page.
+import { BRAND_QUICK_PICKS, type FormQuestion, type FormView } from '@crm/data';
 import {
+  AccentPicker,
   Button,
   Callout,
   Card,
   Code,
   DescriptionList,
-  Disclosure,
+  EmbedPreview,
   Field,
   InfoTip,
   Link,
+  Modal,
   SettingsStack,
   Switch,
   Table,
@@ -25,11 +29,12 @@ import { useState } from 'react';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
+import { ShareBlock } from './ShareBlock.tsx';
 import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
 
-/** Props for the Install tab. */
-export interface InstallTabProps {
+/** Props for the Share tab. */
+export interface ShareTabProps {
   readonly slug: string;
   readonly form: FormView;
   readonly isReadOnly: boolean;
@@ -85,12 +90,20 @@ export function prefillExample(link: string, questions: readonly FormQuestion[])
 }
 
 /** Share, Put it on your site (the embed tiles and the snippet), then For developers, closed: own HTML, sites, secret. */
-export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
+export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
   const script = data.forms.embedUrl();
   const shown = form.live ?? form.draft;
   const [mode, setMode] = useState<EmbedMode>('inline');
+  // What the snippet carries beyond the form (b6, S7): the button's words and the corner's colour, and an inline
+  // form's clear ground and headline. Nothing here is saved: the snippet is what leaves, and the site keeps it.
+  const [words, setWords] = useState<string>(strings.embedButtonText);
+  const [accent, setAccent] = useState<string | undefined>(undefined);
+  const [isTransparent, setTransparent] = useState(false);
+  const [isTitleHidden, setTitleHidden] = useState(false);
+  const [isDeveloperOpen, setDeveloperOpen] = useState(false);
+  const buttonWords = words.trim() === '' ? strings.embedButtonText : words.trim();
   const embed = embedSnippet(
     script,
     {
@@ -99,7 +112,10 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       title: shown.headline,
       theme: shown.look.colour,
       // A button on a site's page reads as an invitation, not as the form's own Submit.
-      buttonText: strings.embedButtonText,
+      buttonText: buttonWords,
+      ...(accent === undefined ? {} : { accent }),
+      isTransparent,
+      isTitleHidden,
     },
     mode,
   );
@@ -158,33 +174,17 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
 
   return (
     <>
-      {/* One compact row (the owner, 22 Oct 2026): Share with its help beside it, the link with Copy inside it, and
-          Open; the same row as a booking page's Public link. Copy isn't the page's main action, so it isn't blue. */}
-      <Card>
-        <Field
-          label={strings.shareTitle}
-          info={<InfoTip label={strings.shareTitle}>{strings.shareTip}</InfoTip>}
-          variant="copy"
-          copyLabel={strings.copyLink}
-          value={link}
-          after={
-            <Button
-              icon="external-link"
-              onPress={() => {
-                window.open(link, '_blank', 'noopener');
-              }}
-            >
-              {strings.openLink}
-            </Button>
-          }
-        />
+      {/* Row 1 (T44, S4): the link, the same block as the live dialog: one pill, Copy, its QR code and the ways to
+          send it. */}
+      <Card title={strings.shareTitle}>
+        <ShareBlock name={form.name} link={link} />
       </Card>
-      {/* One way to copy: the code block's own Copy, as the owner asked (no second button under it). */}
+      {/* Row 2 (b6): how it shows on a site, the made up site beside the choices showing the pick, and the snippet
+          they write. One way to copy: the code block's own Copy. */}
       <Card title={strings.websiteTitle} actions={<InfoTip label={strings.websiteTitle}>{strings.websiteTip}</InfoTip>}>
         <TileGrid
           variant="choice"
           label={strings.embedMode}
-          // The same tiles as the first publish's panel: each says what the visitor sees, on the tile.
           showsDescription
           tiles={EMBED_TILES}
           value={mode}
@@ -193,14 +193,47 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             if (tile !== undefined) setMode(tile.id);
           }}
         />
-        <Field
-          label={strings.embedSnippet}
-          {...(mode === 'floating' ? { hint: strings.embedFloatingWords } : {})}
-          variant="copy"
-          isMultiline
-          copyLabel={strings.copyEmbed}
-          value={embed}
-        />
+        <TileGrid columns="two">
+          <SettingsStack variant="plain">
+            {mode === 'inline' ? (
+              <>
+                <Switch
+                  label={strings.embedTransparent}
+                  description={strings.embedTransparentHint}
+                  isSelected={isTransparent}
+                  onChange={setTransparent}
+                />
+                <Switch
+                  label={strings.embedHideTitle}
+                  description={strings.embedHideTitleHint}
+                  isSelected={isTitleHidden}
+                  onChange={setTitleHidden}
+                />
+              </>
+            ) : (
+              <Field label={strings.embedWords} value={words} maxLength={40} onChange={setWords} />
+            )}
+            {mode === 'floating' && (
+              <AccentPicker
+                label={strings.embedColour}
+                defaultName={strings.embedColourDefault}
+                quickPicks={BRAND_QUICK_PICKS}
+                value={accent}
+                onChange={setAccent}
+              />
+            )}
+          </SettingsStack>
+          <EmbedPreview
+            mode={mode}
+            headline={shown.headline}
+            words={buttonWords}
+            {...(accent === undefined ? {} : { colour: accent })}
+            isTransparent={isTransparent}
+            isTitleHidden={isTitleHidden}
+            label={strings.embedPreview}
+          />
+        </TileGrid>
+        <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
         {/* Ask first, then book (the owner, 2 November 2026): the form already hands off to a booking page once it
             is sent, and the embed carries that step with it, so nobody needs a second snippet. Said here because
             the setting lives on another tab, where whoever is pasting the snippet will not see it. */}
@@ -215,8 +248,18 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           </Callout>
         )}
       </Card>
-      {/* A quiet fold at the foot, its cards flush with the cards above it (one left edge, AC-1), spaced as they are. */}
-      <Disclosure title={strings.advancedTitle} variant="quiet">
+      {/* The developer material in one quiet sheet (b10): the prefill link, the site's own HTML, the sites that may
+          post and signed posts, out of the way of everyone who only pastes the snippet. */}
+      <Button
+        variant="ghost"
+        icon="code"
+        onPress={() => {
+          setDeveloperOpen(true);
+        }}
+      >
+        {strings.advancedTitle}
+      </Button>
+      <Modal title={strings.advancedTitle} variant="sheet" isOpen={isDeveloperOpen} onOpenChange={setDeveloperOpen}>
         <SettingsStack variant="plain">
           {/* Prefill (spec 0063, AC-6309): a link that fills a question, and every question's key to fill. */}
           {shown.questions.length > 0 && (
@@ -388,7 +431,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             )}
           </Card>
         </SettingsStack>
-      </Disclosure>
+      </Modal>
       <RemoveSiteDialog
         site={removing}
         onRemove={(origin) => saveSites(form.allowedOrigins.filter((each) => each !== origin))}

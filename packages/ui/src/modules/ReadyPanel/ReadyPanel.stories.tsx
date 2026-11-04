@@ -156,3 +156,23 @@ export const InDialog: Story = {
     await expect(top).toBeGreaterThanOrEqual(preview.getBoundingClientRect().top);
   },
 };
+
+/** The pill: the link as one pill (its own name strong), Copy and a quiet Open, and the caller's share row under it. */
+export const Pill: Story = {
+  args: {
+    title: undefined,
+    variant: 'pill',
+    link: 'https://timefix.com/f/lead-qualification',
+    onOpen: fn(),
+    children: <Skeleton shape="block" />,
+  },
+  play: async ({ canvas, args }) => {
+    await settleAnimations();
+    await expect(canvas.getByRole('group', { name: 'Link' })).toBeInTheDocument();
+    await expect(canvas.getByText('lead-qualification')).toBeInTheDocument();
+    await expect(canvas.queryByRole('img', { name: 'QR code for the link' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Share' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Open' }));
+    await expect(args.onOpen).toHaveBeenCalled();
+  },
+};

@@ -65,7 +65,7 @@ import { BrandedFormPreview, BrandThemeSelect, BrandThemeSelectWithKit } from '.
 import { FlowView } from './FlowView.tsx';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab, FORM_CHIP_RANGE, useQuestionStats } from './AnalyticsTab.tsx';
-import { InstallTab } from './InstallTab.tsx';
+import { ShareTab } from './ShareTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { ReadyDialog } from './PublishDialog.tsx';
 import { AFTER_ROW, AfterSendSection } from './AfterSendSection.tsx';
@@ -767,8 +767,8 @@ export function FormEditor(props: FormEditorProps) {
             onStatusChange={setStatus}
           />
         );
-      case 'install':
-        return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
+      case 'share':
+        return <ShareTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
       case 'analytics':
         // Only a live form has analytics, and the tab is offered only once it is published (see the tab list).
         return <AnalyticsTab data={data} slug={slug} form={form} />;
@@ -1025,6 +1025,7 @@ export function FormEditor(props: FormEditorProps) {
         }}
       />
       <ReadyDialog
+        slug={slug}
         form={justLive}
         onClose={() => {
           setJustLive(undefined);
@@ -1079,7 +1080,7 @@ export function FormEditor(props: FormEditorProps) {
                   { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
                   ...(isPublished
                     ? [
-                        { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
+                        { id: 'share', label: strings.tabShare, href: formHref(slug, form.id, 'share') },
                         {
                           id: 'submissions',
                           label: strings.tabSubmissions,

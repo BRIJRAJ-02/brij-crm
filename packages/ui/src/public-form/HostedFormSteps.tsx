@@ -151,6 +151,7 @@ export function HostedFormSteps({
   logo = TIMEFIX_LOGO,
   previewStep,
   brand,
+  embedLook,
 }: HostedFormStepsProps) {
   // A resumed fill opens on the step it was left on (AC-6319), found by id among the steps this path shows.
   // A step the answers have since taken away, or an id from an older version, leaves them at the first step.
@@ -537,6 +538,7 @@ export function HostedFormSteps({
       mode={mode}
       kind={isOpen ? 'open' : 'card'}
       {...(brand === undefined ? {} : { brand })}
+      {...(embedLook === undefined ? {} : { embedLook })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

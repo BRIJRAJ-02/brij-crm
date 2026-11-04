@@ -202,7 +202,7 @@ export function AnalyticsTab({ data, slug, form }: AnalyticsTabProps) {
         <EmptyState
           icon="chart-line"
           title={strings.analyticsEmpty}
-          actions={<ButtonLink href={formHref(slug, form.id, 'install')}>{strings.analyticsShareIt}</ButtonLink>}
+          actions={<ButtonLink href={formHref(slug, form.id, 'share')}>{strings.analyticsShareIt}</ButtonLink>}
         >
           {strings.analyticsEmptyText}
         </EmptyState>
