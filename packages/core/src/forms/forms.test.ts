@@ -801,6 +801,8 @@ describe('the content checks and Needs review (AC-563, AC-584, the spam follow-u
     const [held] = await submissionIds(w, live.id);
     if (held === undefined) throw new Error('A submission was expected.');
     expect(held.state).toBe('needs_review');
+    // Counted on the form, so Settings' Spam › Review opens where it waits (forms fixes 2).
+    expect((await getForm(w.scope, { formId: live.id })).reviewCount).toBe(1);
     // Release is for spam only. The panel's Not spam must route a held row to `resolve`; if this
     // ever stops refusing, that routing (and this pin) should be revisited together.
     expect(await refusalOf(releaseSubmission(w.scope, registry, { submissionId: held.id }))).toMatchObject([

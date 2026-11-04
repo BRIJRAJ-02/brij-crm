@@ -699,10 +699,21 @@ export function SettingsTab({
           </SettingsRow>
         )}
         {isPublished && (
-          <SettingsRow title={strings.spamRow} meta={tip(strings.spamRow, strings.spamSummary)}>
-            <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
-              {strings.spamReview}
-            </ButtonLink>
+          // Review opens where something waits: Needs review first, else Spam; with neither, it says so instead of
+          // opening an empty list (forms fixes 2).
+          <SettingsRow
+            title={strings.spamRow}
+            meta={tip(strings.spamRow, strings.spamSummary)}
+            {...(form.reviewCount === undefined && form.spamCount === 0 ? { description: strings.spamNone } : {})}
+          >
+            {(form.reviewCount !== undefined || form.spamCount > 0) && (
+              <ButtonLink
+                href={`${formHref(slug, form.id, 'submissions')}&state=${form.reviewCount === undefined ? 'spam' : 'needs_review'}`}
+                variant="secondary"
+              >
+                {strings.spamReview}
+              </ButtonLink>
+            )}
           </SettingsRow>
         )}
       </SettingsSection>

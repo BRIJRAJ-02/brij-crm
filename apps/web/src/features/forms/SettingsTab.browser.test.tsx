@@ -502,6 +502,20 @@ describe('Settings as plain rows (T21)', () => {
       .toHaveAttribute('href', '/w/acme/settings/general');
   });
 
+  it('opens Spam › Review where something waits, and says so when nothing does (forms fixes 2)', async () => {
+    await show(formView({}), []);
+    expect(page.getByRole('link', { name: 'Review' }).query()).toBeNull();
+    await expect.element(page.getByText('Nothing caught')).toBeVisible();
+    shown?.unmount();
+    await show({ ...formView({}), spamCount: 3 }, []);
+    await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
+    expect(page.getByRole('link', { name: 'Review' }).element().getAttribute('href')).toMatch(/state=spam$/);
+    shown?.unmount();
+    await show({ ...formView({}), spamCount: 3, reviewCount: 1 }, []);
+    await expect.element(page.getByRole('link', { name: 'Review' })).toBeVisible();
+    expect(page.getByRole('link', { name: 'Review' }).element().getAttribute('href')).toMatch(/state=needs_review$/);
+  });
+
   it('closes and opens the form from Taking answers', async () => {
     await show(formView({}), []);
     (page.getByRole('switch', { name: 'Taking answers' }).element() as HTMLElement).click();

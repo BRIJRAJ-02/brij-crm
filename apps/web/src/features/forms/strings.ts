@@ -335,6 +335,7 @@ export const strings = {
   spamTitle: 'Spam',
   spamSummary: 'On. Bots go to Spam, and doubtful sends wait in Needs review for you.',
   detailsTitle: 'Details',
+  spamNone: 'Nothing caught',
   spamReview: 'Review',
   settingsFailed: 'That didn’t save.',
 

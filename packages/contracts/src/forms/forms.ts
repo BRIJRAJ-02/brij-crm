@@ -66,6 +66,8 @@ export const FormSummary = z.object({
   submissionsThisMonth: z.number().int().min(0),
   /** Spam waiting in the form, shown only when there is some. */
   spamCount: z.number().int().min(0),
+  /** Held for a spam check in Needs review (forms fixes 2), when there is any: Settings' Spam opens where they wait. */
+  reviewCount: z.number().int().min(1).optional(),
   lastSubmissionAt: Timestamp.optional(),
   /** Every stored submission, counted up to `FORM_COUNT_CAP`. */
   submissionCount: z.number().int().min(0),

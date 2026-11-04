@@ -156,6 +156,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     ...(live === undefined ? {} : { liveVersionNumber: live.number, live: live.document }),
     submissionsThisMonth: count?.month ?? 0,
     spamCount: count?.spam ?? 0,
+    ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
     ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
     submissionCount: count?.total ?? 0,
     updatedAt: form.updatedAt,
@@ -180,12 +181,13 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
 async function countsOf(
   tx: WorkspaceTx,
   formIds: readonly string[],
-): Promise<ReadonlyMap<string, { month: number; spam: number; last: string | null; total: number }>> {
+): Promise<ReadonlyMap<string, { month: number; spam: number; review: number; last: string | null; total: number }>> {
   if (formIds.length === 0) return new Map();
   const rows = await tx.execute<{
     form_id: string;
     month: number;
     spam: number;
+    review: number;
     last: string | null;
     total: number;
   }>(sql`
@@ -197,6 +199,9 @@ async function countsOf(
       (select count(*)::int from (
         select 1 from form_submissions s where s.form_id = f.id and s.state = 'spam' and s.deleted_at is null
         limit ${FORM_COUNT_CAP}) c) as spam,
+      (select count(*)::int from (
+        select 1 from form_submissions s where s.form_id = f.id and s.state = 'needs_review' and s.deleted_at is null
+        limit ${FORM_COUNT_CAP}) c) as review,
       (select to_char(max(s.received_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
         from form_submissions s where s.form_id = f.id and s.state <> 'spam' and s.deleted_at is null) as last,
       (select count(*)::int from (
@@ -256,6 +261,7 @@ export async function listForms(
         ...(row.liveNumber === null ? {} : { liveVersionNumber: row.liveNumber }),
         submissionsThisMonth: count?.month ?? 0,
         spamCount: count?.spam ?? 0,
+        ...((count?.review ?? 0) === 0 ? {} : { reviewCount: count?.review }),
         ...(count?.last === undefined || count.last === null ? {} : { lastSubmissionAt: count.last }),
         submissionCount: count?.total ?? 0,
         updatedAt: row.updatedAt,
