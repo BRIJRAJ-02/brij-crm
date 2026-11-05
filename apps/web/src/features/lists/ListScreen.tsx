@@ -873,6 +873,7 @@ function FirstStepBanner({
 }) {
   return (
     <Callout
+      tone="info"
       placement="banner"
       actions={
         <Button icon="plus" onPress={onAdd}>
