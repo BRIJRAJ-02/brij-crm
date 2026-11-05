@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES, type Theme } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { instantAt } from '../bookings/week.ts';
+import { addDays, instantAt } from '../bookings/week.ts';
 import { ServiceScreen } from './ServiceScreen.tsx';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
@@ -191,7 +191,7 @@ async function show(width: number) {
 describe('Service (checklabs’ reservations page)', () => {
   it('shows the day calendar without cancelled bookings, the bookings list, and a booking’s detail', async () => {
     await show(1280);
-    await expect.element(page.getByText('4 bookings · pick a time to add one')).toBeInTheDocument();
+    await expect.element(page.getByText('4 on the calendar · pick a time to add a booking')).toBeInTheDocument();
     await expect.element(page.getByRole('heading', { name: 'Bookings · 5' })).toBeInTheDocument();
     // A block is named by its guest and times; the cancelled booking stays on the list only.
     await expect.element(page.getByRole('button', { name: /^Grace Hopper, / })).toBeInTheDocument();
@@ -200,15 +200,20 @@ describe('Service (checklabs’ reservations page)', () => {
     const sheet = page.getByRole('dialog', { name: 'Grace Hopper' });
     await expect.element(sheet.getByText('Window seat, cake at nine')).toBeVisible();
     await expect.element(sheet.getByRole('link', { name: '07700 900123' })).toHaveAttribute('href', 'tel:07700900123');
+    // The sheet's moves are buttons: No show, Cancel and Confirm beside Seat.
     await expect.element(sheet.getByRole('button', { name: 'Seat' })).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: 'Confirm' })).toBeVisible();
+    await expect.element(sheet.getByRole('button', { name: 'No show' })).toBeVisible();
   });
 
   it('offers only the tables that seat the party, and books the one picked', async () => {
     const booked = await show(1280);
+    // Tomorrow, so 19:00 is never already gone whenever the suite runs.
+    await userEvent.click(page.getByRole('button', { name: 'Next day' }));
     await userEvent.click(page.getByRole('button', { name: 'New booking' }));
     const sheet = page.getByRole('dialog', { name: 'New booking' });
     await userEvent.fill(sheet.getByRole('textbox', { name: 'Guest name' }), 'Jane Doe');
-    await userEvent.fill(sheet.getByRole('textbox', { name: 'Party size' }), '6');
+    await userEvent.click(sheet.getByText('6', { exact: true }));
     await userEvent.click(sheet.getByRole('button', { name: /Assign table/ }));
     // A party of 6: only T4 (4 to 8 seats) seats them alone, beside the engine's best fit.
     await expect.element(page.getByRole('option', { name: 'Best free table' })).toBeVisible();
@@ -221,7 +226,12 @@ describe('Service (checklabs’ reservations page)', () => {
     await userEvent.click(page.getByRole('option', { name: 'T4 · 8 seats · Inside' }));
     await userEvent.click(sheet.getByRole('button', { name: 'Create booking' }));
     await expect.poll(() => booked.length).toBe(1);
-    expect(booked[0]).toMatchObject({ name: 'Jane Doe', party: 6, resourceIds: [id(14)], start: at(19) });
+    expect(booked[0]).toMatchObject({
+      name: 'Jane Doe',
+      party: 6,
+      resourceIds: [id(14)],
+      start: instantAt(addDays(TODAY, 1), 19 * 60, ZONE).toISOString(),
+    });
   });
 
   it('refuses to send a booking without a name', async () => {

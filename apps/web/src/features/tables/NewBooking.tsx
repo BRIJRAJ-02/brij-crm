@@ -10,35 +10,35 @@ import {
   Badge,
   Button,
   Callout,
+  ChoiceChips,
+  DatePicker,
   DescriptionList,
   Field,
+  FormRow,
   Link,
   Modal,
   Select,
   type DescriptionItem,
   type Hue,
 } from '@crm/ui';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { instantAt } from '../bookings/week.ts';
 import { strings } from './strings.ts';
 
 /** The party a new booking starts with (checklabs' default). */
 const DEFAULT_PARTY = 2;
 
-/** The time a new booking starts at when no hour was picked on the calendar (checklabs' default). */
+/** The largest party picked as a chip, as Walk in picks it; a larger one is typed. */
+const CHIP_PARTY_MAX = 12;
+
+/** The chip that opens the typed party. */
+const MORE = 'more';
+
+/** The time a new booking starts at when no time was picked on the calendar (checklabs' default). */
 export const DEFAULT_BOOKING_MINUTE = 19 * 60;
 
-/** "19:00" from minutes past midnight. */
-export const clockOf = (minute: number) =>
-  `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-
-/** Minutes past midnight from "19:00", or undefined. */
-const minuteOfClock = (clock: string) => {
-  const match = /^(\d{2}):(\d{2})$/.exec(clock);
-  if (match === null) return undefined;
-  const minute = Number(match[1]) * 60 + Number(match[2]);
-  return minute < 24 * 60 ? minute : undefined;
-};
+/** The booking times offered, every quarter hour of the day. */
+const STEP = 15;
 
 /** The tables that seat a party alone (checklabs offers only tables that fit), in floor order. */
 export const tablesFor = (tables: readonly Resource[], party: number) =>
@@ -48,9 +48,9 @@ export const tablesFor = (tables: readonly Resource[], party: number) =>
 const BEST = 'best';
 
 /**
- * New booking (checklabs' sheet, in its order): Guest name, Date and Time (the page's day, 19:00 or the hour picked on
- * the calendar), Party size (2), Assign table (only tables that seat the party, else the best free one), Phone and
- * Email (optional), Notes. Cancel, then Create booking; a refusal (the time or table taken) says so and keeps the sheet.
+ * New booking (checklabs' sheet, in its order): Guest name, Date and Time (the page's day, 19:00 or the time picked on
+ * the calendar), Party size (2), Assign table (only tables that seat the party, else the best free one), Phone, Email
+ * and Notes (optional). Cancel, then Create booking; a refusal (the time or table taken) says so and keeps the sheet.
  */
 export function NewBookingDialog({
   slug,
@@ -59,6 +59,7 @@ export function NewBookingDialog({
   zone,
   date,
   minute,
+  now,
   floorTables,
   areas,
   onClose,
@@ -70,6 +71,8 @@ export function NewBookingDialog({
   readonly zone: string;
   readonly date: string;
   readonly minute: number;
+  /** The clock now, so a time already gone is refused before it is sent. */
+  readonly now: number;
   readonly floorTables: readonly Resource[];
   readonly areas: readonly Area[];
   readonly onClose: () => void;
@@ -77,8 +80,9 @@ export function NewBookingDialog({
 }) {
   const [name, setName] = useState('');
   const [day, setDay] = useState(date);
-  const [clock, setClock] = useState(clockOf(minute));
-  const [partyText, setPartyText] = useState(String(DEFAULT_PARTY));
+  const [at, setAt] = useState(minute - (minute % STEP));
+  const [partyPick, setPartyPick] = useState(String(DEFAULT_PARTY));
+  const [partyText, setPartyText] = useState('');
   const [table, setTable] = useState(BEST);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -86,28 +90,35 @@ export function NewBookingDialog({
   const [problem, setProblem] = useState<string | undefined>();
   const [tried, setTried] = useState(false);
   const [isSaving, setSaving] = useState(false);
-  const party = /^\d+$/.test(partyText) ? Number(partyText) : undefined;
+  // Read synchronously: two Enters in one frame both see the first send.
+  const sending = useRef(false);
+  const typed = partyPick === MORE;
+  const party = typed ? (/^\d+$/.test(partyText) ? Number(partyText) : undefined) : Number(partyPick);
   const partyOk = party !== undefined && party >= 1 && party <= 100;
   const fitting = partyOk ? tablesFor(floorTables, party) : [];
   const areaOf = (id: string | undefined) => areas.find((area) => area.id === id)?.name;
   // A table picked for a party it no longer seats goes back to the best free one.
   const shownTable = table === BEST || fitting.some((each) => each.id === table) ? table : BEST;
-  const at = minuteOfClock(clock);
+  const start = instantAt(day, at, zone);
+  const timeLabel = (each: number) =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+      new Date(2000, 0, 1, Math.floor(each / 60), each % 60),
+    );
   const errors = {
     name: name.trim() === '' ? strings.bookNameRequired : undefined,
-    day: /^\d{4}-\d{2}-\d{2}$/.test(day) ? undefined : strings.bookDayRequired,
-    time: at === undefined ? strings.bookTimeRequired : undefined,
+    time: start.getTime() < now ? strings.bookTimeGone : undefined,
     party: partyOk ? undefined : strings.bookPartyRange,
   };
 
   const create = () => {
     setTried(true);
-    if (isSaving || Object.values(errors).some((each) => each !== undefined) || at === undefined || !partyOk) return;
+    if (sending.current || Object.values(errors).some((each) => each !== undefined) || !partyOk) return;
+    sending.current = true;
     setSaving(true);
     setProblem(undefined);
     void tables
-      .book(slug, placeId, date, {
-        start: instantAt(day, at, zone).toISOString(),
+      .book(slug, placeId, day, {
+        start: start.toISOString(),
         party,
         name,
         phone,
@@ -116,6 +127,7 @@ export function NewBookingDialog({
         ...(shownTable === BEST ? {} : { resourceIds: [shownTable] }),
       })
       .then((refused) => {
+        sending.current = false;
         setSaving(false);
         if (refused === undefined) {
           onBooked(name.trim(), day);
@@ -164,34 +176,57 @@ export function NewBookingDialog({
         onSubmit={create}
         {...(tried && errors.name !== undefined ? { error: errors.name } : {})}
       />
-      <Field
-        label={strings.bookDate}
-        name="booking-date"
-        temporal={{ type: 'date' }}
-        isRequired
-        value={day}
-        onChange={setDay}
-        {...(tried && errors.day !== undefined ? { error: errors.day } : {})}
-      />
-      <Field
-        label={strings.bookTime}
-        name="booking-time"
-        temporal={{ type: 'time' }}
-        isRequired
-        value={clock}
-        onChange={setClock}
-        {...(tried && errors.time !== undefined ? { error: errors.time } : {})}
-      />
-      <Field
+      {/* Date and Time side by side, as checklabs' sheet sets them. */}
+      <FormRow>
+        <DatePicker
+          label={strings.bookDate}
+          isRequired
+          value={day}
+          onChange={(next) => {
+            if (next !== null) setDay(next);
+          }}
+        />
+        <Select
+          label={strings.bookTime}
+          items={Array.from({ length: (24 * 60) / STEP }, (_, index) => ({
+            id: String(index * STEP),
+            label: timeLabel(index * STEP),
+          }))}
+          value={String(at)}
+          onChange={(next) => {
+            if (next !== null) setAt(Number(next));
+          }}
+          {...(tried && errors.time !== undefined ? { error: errors.time } : {})}
+        />
+      </FormRow>
+      <ChoiceChips
         label={strings.partySize}
-        name="party-size"
-        inputMode="numeric"
-        isRequired
-        value={partyText}
-        onChange={setPartyText}
-        onSubmit={create}
-        {...(errors.party !== undefined && (tried || partyText !== '') ? { error: errors.party } : {})}
+        tone="strong"
+        isSingle
+        choices={[
+          ...Array.from({ length: CHIP_PARTY_MAX }, (_, index) => ({
+            id: String(index + 1),
+            label: String(index + 1),
+          })),
+          { id: MORE, label: strings.morePeople(CHIP_PARTY_MAX) },
+        ]}
+        selected={[partyPick]}
+        onChange={(next) => {
+          if (next[0] !== undefined) setPartyPick(next[0]);
+        }}
       />
+      {typed && (
+        <Field
+          label={strings.largerParty}
+          name="party-size"
+          inputMode="numeric"
+          isRequired
+          value={partyText}
+          onChange={setPartyText}
+          onSubmit={create}
+          {...(errors.party !== undefined && (tried || partyText !== '') ? { error: errors.party } : {})}
+        />
+      )}
       <Select
         label={strings.assignTable}
         labelAside={strings.optional}
@@ -232,6 +267,7 @@ export function NewBookingDialog({
       />
       <Field
         label={strings.notes}
+        labelAside={strings.optional}
         placeholder={strings.notesPlaceholder}
         name="booking-notes"
         isMultiline
@@ -249,7 +285,8 @@ const sourceOf = (source: string) =>
 
 /**
  * A booking's detail (checklabs' sheet, in its order): the guest and status, when, Party size, Table, Source, Phone
- * (calls), Email (writes), the code, the occasion and the note; the moves the row offers at its foot.
+ * (calls), Email (writes), the code, the occasion and the note; its moves as buttons at its foot. While it closes it
+ * keeps showing the booking it held, so it never empties on its way out.
  */
 export function VisitSheet({
   visit,
@@ -263,45 +300,60 @@ export function VisitSheet({
   readonly when: string;
   readonly tableLabel: string;
   readonly status: { readonly hue: Hue; readonly text: string };
-  /** The row's moves, drawn as the Service list draws them (a callback, as a table cell is). */
+  /** The sheet's moves (the screen's, as the list's row draws its own). */
   readonly renderActions: () => ReactNode;
   readonly onClose: () => void;
 }) {
+  const [last, setLast] = useState<
+    | {
+        readonly visit: ServiceVisit;
+        readonly when: string;
+        readonly tableLabel: string;
+        readonly status: { readonly hue: Hue; readonly text: string };
+      }
+    | undefined
+  >();
+  if (visit !== undefined && (last?.visit !== visit || last.when !== when || last.status.text !== status.text)) {
+    setLast({ visit, when, tableLabel, status });
+  }
+  const shown = visit === undefined ? last : { visit, when, tableLabel, status };
   const items: DescriptionItem[] =
-    visit === undefined
+    shown === undefined
       ? []
       : [
-          { term: strings.when, description: when },
-          { term: strings.partySize, description: strings.guestsCount(visit.party) },
+          { term: strings.when, description: shown.when },
+          { term: strings.partySize, description: strings.guestsCount(shown.visit.party) },
           {
             term: strings.table,
-            description: tableLabel === '' ? strings.noTable : tableLabel,
-            isPlaceholder: tableLabel === '',
+            description: shown.tableLabel === '' ? strings.noTable : shown.tableLabel,
+            isPlaceholder: shown.tableLabel === '',
           },
-          { term: strings.sourceTitle, description: sourceOf(visit.source) },
-          ...(visit.phone === undefined
+          { term: strings.sourceTitle, description: sourceOf(shown.visit.source) },
+          ...(shown.visit.phone === undefined
             ? []
             : [
                 {
                   term: strings.phone,
-                  description: <Link href={`tel:${visit.phone.replace(/[^\d+]/g, '')}`}>{visit.phone}</Link>,
-                  copy: { value: visit.phone, label: strings.copyPhone },
+                  description: (
+                    <Link href={`tel:${shown.visit.phone.replace(/[^\d+]/g, '')}`}>{shown.visit.phone}</Link>
+                  ),
+                  copy: { value: shown.visit.phone, label: strings.copyPhone },
                 },
               ]),
-          ...(visit.email === undefined
+          ...(shown.visit.email === undefined
             ? []
             : [
                 {
                   term: strings.email,
-                  description: <Link href={`mailto:${visit.email}`}>{visit.email}</Link>,
-                  copy: { value: visit.email, label: strings.copyEmail },
+                  description: <Link href={`mailto:${shown.visit.email}`}>{shown.visit.email}</Link>,
+                  copy: { value: shown.visit.email, label: strings.copyEmail },
                 },
               ]),
-          { term: strings.code, description: visit.lookupCode },
-          ...(visit.occasion === undefined
+          { term: strings.code, description: shown.visit.lookupCode },
+          ...(shown.visit.occasion === undefined
             ? []
-            : [{ term: strings.occasionTitle, description: strings.occasion(visit.occasion) }]),
-          ...(visit.note === undefined ? [] : [{ term: strings.note, description: visit.note }]),
+            : [{ term: strings.occasionTitle, description: strings.occasion(shown.visit.occasion) }]),
+          ...(shown.visit.note === undefined ? [] : [{ term: strings.note, description: shown.visit.note }]),
         ];
   return (
     <Modal
@@ -309,10 +361,10 @@ export function VisitSheet({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={visit?.name ?? ''}
+      title={shown?.visit.name ?? ''}
       icon="calendar-check"
       variant="drawer"
-      status={<Badge dot={status.hue} text={status.text} />}
+      {...(shown === undefined ? {} : { status: <Badge dot={shown.status.hue} text={shown.status.text} /> })}
       actions={
         <>
           <Button slot="close">{strings.close}</Button>

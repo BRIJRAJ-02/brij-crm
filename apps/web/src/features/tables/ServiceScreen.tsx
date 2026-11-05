@@ -231,6 +231,8 @@ function PlaceService({
   // New booking, at the time picked on the calendar or 19:00; and the booking whose detail is open.
   const [booking, setBooking] = useState<{ readonly date: string; readonly minute: number } | undefined>();
   const [openVisit, setOpenVisit] = useState<string | undefined>();
+  // Where focus goes back on the calendar once a sheet closes (its block, or its day when the block has gone).
+  const [focusBlock, setFocusBlock] = useState<{ readonly dayKey: string; readonly blockId?: string } | undefined>();
   const [pending, setPending] = useState<Pending>(new Map());
   // The rows in flight, read synchronously: two taps in one frame both see the first one.
   const inFlight = useRef(new Set<string>());
@@ -379,6 +381,41 @@ function PlaceService({
     );
   };
 
+  /**
+   * The detail sheet's moves (checklabs' footer): No show and Cancel (each asking first), Confirm for a booked guest,
+   * then the next move (Seat, Finish) as the primary; each a button, never the row's menu.
+   */
+  const sheetActions = (visit: ServiceVisit) => {
+    const asked = pending.get(visit.id);
+    const next = asked ?? LOOK[visit.status].next;
+    const open =
+      asked === undefined && (visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived');
+    return (
+      <>
+        {open && (
+          <>
+            <Button icon="user-x" onPress={() => setAsking({ visit, status: 'no_show' })}>
+              {strings.noShow}
+            </Button>
+            <Button icon="circle-x" onPress={() => setAsking({ visit, status: 'cancelled' })}>
+              {strings.cancel}
+            </Button>
+          </>
+        )}
+        {asked === undefined && visit.status === 'booked' && (
+          <Button icon="check" onPress={() => void move(visit, 'confirmed')}>
+            {strings.confirm}
+          </Button>
+        )}
+        {next !== undefined && isToday && (
+          <Button variant="primary" isPending={asked !== undefined} onPress={() => void move(visit, next)}>
+            {next === 'started' ? strings.seat : next === 'completed' ? strings.finish : strings.status[next]}
+          </Button>
+        )}
+      </>
+    );
+  };
+
   const statusOf = (visit: ServiceVisit) =>
     isLate(visit) ? (
       <Badge dot="red" text={strings.late(since(visit.start, now))} />
@@ -451,11 +488,13 @@ function PlaceService({
       new Date(2000, 0, 1, Math.floor(minute / 60), minute % 60),
     );
   const week = weekDays(weekOf(date));
+  // Bookings are taken from today on: a past day reads only.
+  const canBook = date >= today;
   const nowMinute = minuteOfDay(new Date(now), zone);
 
   /** Checklabs' day calendar: the day's bookings by time (cancelled and no shows left out); a picked time books. */
-  const calendar = (value: ServiceDayView) => {
-    const shown = value.visits.filter((visit) => !OFF_CALENDAR.has(visit.status));
+  const calendar = (value: ServiceDayView | undefined) => {
+    const shown = (value?.visits ?? []).filter((visit) => !OFF_CALENDAR.has(visit.status));
     const blocks: readonly WeekCalendarBlock[] = shown.map((visit) => {
       const startMinute = minuteOfDay(new Date(visit.start), zone);
       const length = (Date.parse(visit.end) - Date.parse(visit.start)) / 60_000;
@@ -468,7 +507,7 @@ function PlaceService({
         endMinute,
         title: visit.name,
         time: `${time(visit.start)} – ${time(visit.end)}`,
-        detail: [strings.partyOf(visit.party), ...(table === '' ? [] : [table])].join(' · '),
+        detail: [strings.guestsCount(visit.party), ...(table === '' ? [] : [table])].join(' · '),
         kind: 'booking',
         hue: isLate(visit) ? 'red' : LOOK[visit.status].hue,
         ...(visit.status === 'booked' || visit.status === 'confirmed' ? {} : { status: strings.status[visit.status] }),
@@ -476,7 +515,10 @@ function PlaceService({
     });
     return (
       <>
-        <SectionBar title={strings.dayCalendar} description={strings.dayCalendarHint(shown.length)} />
+        <SectionBar
+          title={strings.dayCalendar}
+          {...(value === undefined ? {} : { description: strings.dayCalendarHint(shown.length, canBook) })}
+        />
         <WeekCalendar
           label={strings.calendarLabel(dayLabel)}
           view="day"
@@ -494,19 +536,21 @@ function PlaceService({
             };
           })}
           blocks={blocks}
+          {...(value === undefined ? { isLoading: true } : {})}
+          {...(openVisit === undefined ? {} : { openId: openVisit })}
+          {...(focusBlock === undefined ? {} : { focusDay: focusBlock })}
           selectedDay={date}
           onSelectDay={setDate}
           hourLabel={hourLabel}
           minuteLabel={minuteLabel}
           {...(isToday ? { now: { dayKey: today, minute: nowMinute, label: minuteLabel(nowMinute) } } : {})}
           scrollToMinute={isToday ? Math.max(CALENDAR_FROM, (Math.floor(nowMinute / 60) - 1) * 60) : CALENDAR_FROM}
-          emptyHint={strings.calendarEmpty}
           onOpen={setOpenVisit}
           onClose={() => setOpenVisit(undefined)}
+          // A picked time opens New booking at its start; the table's hold sets the length (checklabs' click a slot).
           drawMinutes={30}
-          onDraw={(span) => setBooking({ date: span.dayKey, minute: span.startMinute })}
+          {...(canBook ? { onDraw: (span) => setBooking({ date: span.dayKey, minute: span.startMinute }) } : {})}
         />
-        <SectionBar title={strings.bookings(value.visits.length)} />
       </>
     );
   };
@@ -620,30 +664,59 @@ function PlaceService({
         ) : (
           <Button size="sm" icon="user-plus" label={strings.walkIn} onPress={() => setWalkIn({})} />
         ))}
-      {isWide ? (
-        <Button
-          size="sm"
-          variant="primary"
-          icon="plus"
-          onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
-        >
-          {strings.newBooking}
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          variant="primary"
-          icon="plus"
-          label={strings.newBooking}
-          onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
-        />
-      )}
+      {canBook &&
+        (isWide ? (
+          <Button
+            size="sm"
+            variant="primary"
+            icon="plus"
+            onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
+          >
+            {strings.newBooking}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            icon="plus"
+            label={strings.newBooking}
+            onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
+          />
+        ))}
     </TopBar>
   );
 
+  const bookingsBar = (count: number | undefined) => (
+    <SectionBar title={count === undefined ? strings.bookingsTitle : strings.bookings(count)} />
+  );
+  // Checklabs' order is the calendar over the list; a phone puts the list (where the host works) first.
+  const listView = (value: ServiceDayView | undefined) => {
+    const rows = (
+      <>
+        {bookingsBar(value?.visits.length)}
+        {value === undefined ? <Skeleton shape="text" lines={4} /> : list(value)}
+      </>
+    );
+    return isWide ? (
+      <>
+        {calendar(value)}
+        {rows}
+      </>
+    ) : (
+      <>
+        {rows}
+        {calendar(value)}
+      </>
+    );
+  };
+
   const body =
     day.status === 'loading' ? (
-      <Skeleton shape="block" />
+      view === 'list' ? (
+        <PageColumn>{listView(undefined)}</PageColumn>
+      ) : (
+        <Skeleton shape="block" />
+      )
     ) : day.status === 'error' ? (
       <EmptyState icon="circle-alert" title={day.error.message} onRetry={dayHeld.retry} />
     ) : (
@@ -658,10 +731,7 @@ function PlaceService({
         />
         {day.value.truncated && <Callout tone="info">{strings.truncated}</Callout>}
         {view === 'list' ? (
-          <>
-            {calendar(day.value)}
-            {list(day.value)}
-          </>
+          listView(day.value)
         ) : floor.status === 'error' ? (
           <EmptyState icon="circle-alert" title={floor.error.message} onRetry={floorHeld.retry} />
         ) : floor.status === 'loading' ? (
@@ -747,8 +817,15 @@ function PlaceService({
               ? { hue: 'red', text: strings.late(since(shownVisit.start, now)) }
               : { hue: LOOK[shownVisit.status].hue, text: strings.status[shownVisit.status] }
         }
-        renderActions={() => (shownVisit === undefined ? null : actionsOf(shownVisit))}
-        onClose={() => setOpenVisit(undefined)}
+        renderActions={() => (shownVisit === undefined ? null : sheetActions(shownVisit))}
+        onClose={() => {
+          if (shownVisit !== undefined) {
+            setFocusBlock(
+              OFF_CALENDAR.has(shownVisit.status) ? { dayKey: date } : { dayKey: date, blockId: shownVisit.id },
+            );
+          }
+          setOpenVisit(undefined);
+        }}
       />
       {booking !== undefined && (
         <NewBookingDialog
@@ -758,6 +835,7 @@ function PlaceService({
           zone={zone}
           date={booking.date}
           minute={booking.minute}
+          now={now}
           floorTables={tableList}
           areas={floor.status === 'ready' ? floor.value.areas : []}
           onClose={() => setBooking(undefined)}
