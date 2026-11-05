@@ -122,9 +122,7 @@ async function show(width: number) {
   await page.viewport(width, width < 600 ? 844 : 900);
   const stores = storesOf();
   shown = await renderInApp(
-    () => (
-      <ReservationsScreen slug="acme" tables={stores.tables} hospitality={stores.hospitality} toasts={toasts} />
-    ),
+    () => <ReservationsScreen slug="acme" tables={stores.tables} hospitality={stores.hospitality} toasts={toasts} />,
     { data: {}, pattern: '/w/$slug/reservations', at: '/w/acme/reservations' },
   );
   await expect.element(page.getByRole('switch', { name: /Accept online bookings/ })).toBeInTheDocument();
@@ -139,11 +137,11 @@ describe('Reservation settings (checklabs’ Online booking)', () => {
     const at = order.map((label) => text.indexOf(label));
     expect(at.every((each) => each >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
-    await expect.element(page.getByText('Europe/London')).toBeVisible();
-    await expect.element(page.getByText('No bookings').first()).toBeVisible();
+    await expect.element(page.getByText(/London/).first()).toBeVisible();
+    await expect.element(page.getByText('Closed').first()).toBeVisible();
     await expect.element(page.getByRole('textbox', { name: 'Min lead' })).toHaveValue('120');
     await userEvent.fill(page.getByRole('textbox', { name: 'Min lead' }), '45');
-    await userEvent.click(page.getByRole('button', { name: 'Save settings' }));
+    await userEvent.click(page.getByRole('button', { name: 'Save settings' }).first());
     await expect.poll(() => saved.length).toBe(1);
     expect(saved[0]).toMatchObject({ noticeMinutes: 45, stepMinutes: 30, minutes: 90, online: false });
   });
@@ -151,7 +149,7 @@ describe('Reservation settings (checklabs’ Online booking)', () => {
   it('refuses a min party over the max, at the field', async () => {
     const saved = await show(1280);
     await userEvent.fill(page.getByRole('textbox', { name: 'Min party' }), '10');
-    await userEvent.click(page.getByRole('button', { name: 'Save settings' }));
+    await userEvent.click(page.getByRole('button', { name: 'Save settings' }).first());
     await expect.element(page.getByText('Min party can’t be more than max party.')).toBeVisible();
     expect(saved).toHaveLength(0);
   });
@@ -163,6 +161,11 @@ describe('Reservation settings (checklabs’ Online booking)', () => {
         applyTheme(theme);
         expect(await axeViolations()).toEqual([]);
         await shoot('reservations', theme, width);
+        // The page runs past the window: the foot's cards too.
+        globalThis.scrollTo(0, document.body.scrollHeight);
+        document.querySelector('main')?.scrollTo(0, 100_000);
+        await shoot('reservations-foot', theme, width);
+        document.querySelector('main')?.scrollTo(0, 0);
       }
     });
   }

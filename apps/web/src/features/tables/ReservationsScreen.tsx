@@ -32,6 +32,7 @@ import {
 import { useState } from 'react';
 import { WEEK_DAYS } from '@crm/data/hospitality';
 import { clockLabel } from '../hospitality/hours-rows.ts';
+import { zoneDisplay } from '../../public/booking/time.ts';
 import { publicBookingOrigin } from '../booking/links.ts';
 import { businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -88,8 +89,8 @@ const draftOf = (rules: TableRules): Draft => {
     notice: String(rules.noticeMinutes),
     window: String(rules.windowDays),
     covers: rules.coversCap === undefined ? '' : String(rules.coversCap),
-    change: String(rules.changeCutoffMinutes / 60),
-    cancel: String(rules.cancelCutoffMinutes / 60),
+    change: String(rules.changeCutoffMinutes),
+    cancel: String(rules.cancelCutoffMinutes),
   };
 };
 
@@ -123,8 +124,8 @@ const rulesOf = (
     notice: numberOf(draft.notice, { min: 0 }),
     window: numberOf(draft.window, { min: 1 }),
     covers: numberOf(draft.covers, { min: 1, optional: true }),
-    change: numberOf(draft.change, { min: 0, decimals: true }),
-    cancel: numberOf(draft.cancel, { min: 0, decimals: true }),
+    change: numberOf(draft.change, { min: 0 }),
+    cancel: numberOf(draft.cancel, { min: 0 }),
   } satisfies Record<keyof Draft, { readonly value?: number; readonly error?: string }>;
   const errors: Partial<Record<keyof Draft, string>> = Object.fromEntries(
     Object.entries(read).flatMap(([key, each]) => (each.error === undefined ? [] : [[key, each.error]])),
@@ -149,8 +150,8 @@ const rulesOf = (
       noticeMinutes: at('notice'),
       windowDays: at('window'),
       ...(read.covers.value === undefined ? {} : { coversCap: read.covers.value }),
-      changeCutoffMinutes: Math.round(at('change') * 60),
-      cancelCutoffMinutes: Math.round(at('cancel') * 60),
+      changeCutoffMinutes: at('change'),
+      cancelCutoffMinutes: at('cancel'),
       online: base.online,
     },
   };
@@ -320,6 +321,8 @@ function SetupBody({
   const [problem, setProblem] = useState<{ readonly message: string; readonly href?: string } | undefined>();
   const [errors, setErrors] = useState<Readonly<Partial<Record<keyof Draft, string>>>>({});
   const [isStopping, setStopping] = useState(false);
+  // The zone's name reads its offset as of opening the page.
+  const [openedAt] = useState(() => Date.now());
   const set = (key: keyof Draft) => (value: string) => {
     setDraft((now) => ({ ...now, [key]: value }));
     if (errors[key] !== undefined) {
@@ -405,28 +408,29 @@ function SetupBody({
             title: strings.stepRules,
             isDone: setup.saved && stepOf('rules')?.done === true,
             detail: setup.saved ? strings.rulesSaved : strings.rulesDefault,
-            action: strings.save,
+            action: strings.review,
           },
           {
             id: 'publish',
             title: strings.stepPublish,
             isDone: live,
-            // Publish lives on the card beside it, one button for one act.
             detail: live ? link : strings.notLive,
+            ...(live ? {} : { action: strings.publish }),
           },
         ]}
         onAction={(id) => {
           if (id === 'hours' || id === 'tables') globalThis.location.assign(placeTablesHref(slug, place.id));
-          else if (id === 'rules') void save(live);
+          else if (id === 'rules')
+            globalThis.document.querySelector<HTMLInputElement>('input[name="minutes"]')?.focus();
+          else if (id === 'publish') void save(true);
         }}
       />
-      <Card
-        title={live ? strings.pageLive : strings.publishTitle}
-        description={live ? strings.liveText : strings.publishText}
-      >
-        {/* The address on its own line, cut short with its end kept readable. */}
-        {live ? <TruncatedText>{link}</TruncatedText> : undefined}
-      </Card>
+      {live && (
+        <Card title={strings.pageLive} description={strings.liveText}>
+          {/* The address on its own line, cut short with its end kept readable. */}
+          <TruncatedText>{link}</TruncatedText>
+        </Card>
+      )}
       <Card title={strings.alertsTitle} description={strings.alertsText}>
         <Switch
           label={strings.alertsSwitch}
@@ -463,21 +467,19 @@ function SetupBody({
       </Modal>
     </>
   );
+  const saveButton = (
+    <Button isDisabled={isSaving} onPress={() => void save(live)}>
+      {strings.saveSettings}
+    </Button>
+  );
+  const intervals = [15, 30, 45, 60, ...(['15', '30', '45', '60'].includes(draft.step) ? [] : [Number(draft.step)])];
   const day = new Intl.DateTimeFormat(undefined, { weekday: 'long', timeZone: 'UTC' });
   const locale = day.resolvedOptions().locale;
   // 2 January 2023 was a Monday: each week day's name in the reader's language.
   const dayName = (index: number) => day.format(new Date(Date.UTC(2023, 0, 2 + index)));
   return (
     <PageColumn aside={aside} stack="aside-first">
-      <Card
-        title={strings.onlineBooking}
-        description={strings.onlineBookingText(place.name)}
-        actions={
-          <Button variant="primary" isDisabled={isSaving} onPress={() => void save(live)}>
-            {strings.saveSettings}
-          </Button>
-        }
-      >
+      <Card title={strings.onlineBooking} description={strings.onlineBookingText(place.name)} footer={saveButton}>
         {/* 1. Accept online bookings: on publishes (Publish's checks first), off asks first. */}
         <Switch
           label={strings.acceptOnline}
@@ -495,18 +497,18 @@ function SetupBody({
           label={strings.timeZone}
           action={
             <ButtonLink href={placeTablesHref(slug, place.id)} variant="ghost" size="sm">
-              {strings.edit}
+              {strings.editZone}
             </ButtonLink>
           }
         >
-          {place.timeZone}
+          {zoneDisplay(place.timeZone, openedAt)}
         </FieldGroup>
         <FieldGroup
           label={strings.serviceHours}
           hint={strings.serviceHoursHint}
           action={
             <ButtonLink href={placeTablesHref(slug, place.id)} variant="ghost" size="sm">
-              {strings.edit}
+              {strings.editHours}
             </ButtonLink>
           }
         >
@@ -532,7 +534,7 @@ function SetupBody({
         <FormRow>
           <Select
             label={strings.interval}
-            items={[15, 30, 45, 60].map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
+            items={intervals.map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
             value={draft.step}
             onChange={(next) => {
               if (typeof next === 'string') set('step')(next);
@@ -605,7 +607,7 @@ function SetupBody({
         />
       </Card>
       {/* Ours after checklabs' sheet: turn time by party size (its hidden turnBySize) and the guests' own changes. */}
-      <Card title={strings.moreTitle}>
+      <Card title={strings.moreTitle} footer={saveButton}>
         <FormRow>
           <Field
             label={strings.holdFor(3)}
@@ -635,11 +637,13 @@ function SetupBody({
             onChange={set('hold7')}
           />
         </FormRow>
+      </Card>
+      <Card title={strings.changesTitle} footer={saveButton}>
         <FormRow>
           <Field
             label={strings.changeCutoff}
-            inputMode="decimal"
-            suffix={strings.hours}
+            inputMode="numeric"
+            suffix={strings.min}
             name="change"
             value={draft.change}
             {...errorOf('change')}
@@ -647,8 +651,8 @@ function SetupBody({
           />
           <Field
             label={strings.cancelCutoff}
-            inputMode="decimal"
-            suffix={strings.hours}
+            inputMode="numeric"
+            suffix={strings.min}
             name="cancel"
             value={draft.cancel}
             {...errorOf('cancel')}
