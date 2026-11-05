@@ -195,6 +195,28 @@ export const Multiline: Story = {
   },
 };
 
+/** A textarea taking a held column's spare height, down to what follows it. */
+export const Filling: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <div
+      ref={(element) => {
+        if (element !== null)
+          element.style.cssText = 'display:flex;flex-direction:column;block-size:var(--size-sidebar)';
+      }}
+    >
+      <Field label="Note" isMultiline isFilling />
+      <button type="button">Send</button>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('textbox', { name: 'Note' }).getBoundingClientRect();
+    const next = canvas.getByRole('button', { name: 'Send' }).getBoundingClientRect();
+    await expect(box.height).toBeGreaterThan(100);
+    await expect(next.top - box.bottom).toBeLessThan(16);
+  },
+};
+
 function Wrapping() {
   const [value, setValue] = useState('Send the renewal proposal');
   const [submitted, setSubmitted] = useState('');

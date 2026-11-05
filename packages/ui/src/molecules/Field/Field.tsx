@@ -101,6 +101,11 @@ export interface FieldProps {
   /** A textarea that grows with its content (long text). */
   readonly isMultiline?: boolean;
   /**
+   * With `isMultiline`, in a column with height to spare (a card held at a set height): the box takes that height, so
+   * the column ends at what follows it. With none to spare it is the plain textarea.
+   */
+  readonly isFilling?: boolean;
+  /**
    * A one line value that wraps as it grows (a task's title): one line tall
    * at rest, growing a line at a time; Enter calls `onSubmit` rather than
    * breaking the line, and a pasted line break becomes a space.
@@ -220,6 +225,7 @@ export function Field({
   after,
   icon,
   isMultiline = false,
+  isFilling = false,
   isWrapping = false,
   maxLength,
   showCounter = false,
@@ -349,6 +355,7 @@ export function Field({
       data-size={size}
       data-variant={variant}
       data-prefix-width={prefixWidth}
+      data-filling={(isFilling && isMultiline) || undefined}
       data-align={align === 'end' ? 'end' : undefined}
       data-error-floats={isErrorFloating || undefined}
       data-in-popover={isInPopover || undefined}

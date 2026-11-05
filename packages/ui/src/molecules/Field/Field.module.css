@@ -97,6 +97,16 @@
     block-size: auto;
   }
 
+  /* A filling textarea takes its column's spare height; with none to spare, this changes nothing. */
+  .root[data-filling],
+  .root[data-filling] .box {
+    flex: 1;
+  }
+
+  .root[data-filling] .box {
+    align-items: stretch;
+  }
+
   .input {
     flex: 1;
     min-inline-size: 0;

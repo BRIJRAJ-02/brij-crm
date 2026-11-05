@@ -124,6 +124,8 @@ export interface QuestionProps {
   readonly read?: ((text: string) => string) | undefined;
   /** One at a time (T42, Typeform's way): a typed answer is the Field's `underline`, a line in the accent. */
   readonly isUnderlined?: boolean;
+  /** A long text answer takes its column's spare height (the Field's `isFilling`): a booking's held card. */
+  readonly isFilling?: boolean;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -140,6 +142,7 @@ export function Question({
   hint,
   read,
   isUnderlined = false,
+  isFilling = false,
 }: QuestionProps) {
   const label = labelOf(question, words, read);
   const aside = asideOf(question, words);
@@ -159,6 +162,7 @@ export function Question({
           {...underline}
           name={question.key}
           isMultiline
+          isFilling={isFilling}
           value={text}
           onChange={onChange}
           maxLength={LONG_ANSWER_MAX}
