@@ -1,0 +1,66 @@
+/* PlaceBookingFrame: a place heading the rail, its growing times and its closing link, on a restaurant's reservation
+   page. Its own file, so a booking page never loads it. */
+@layer components {
+  /* The business's initials on a square ink tile beside its name, on one row at every width, so the rail is a line
+     shorter on a phone; the title under it takes the heading's weight. */
+  .tileRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .tileRow > .host {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  /* A column at every width: its own row holds the tile and the name, and the title takes the line under them. */
+  .identity[data-identity='tile'] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-8);
+  }
+
+  /* Stacked under the month (a phone), the times take their own height and run with the page rather than scrolling
+     in a box of their own. Beside the month they keep its height (below). */
+  .aside[data-growing] {
+    block-size: auto;
+    contain: none;
+    overflow: visible;
+  }
+
+  /* The rail's closing link ("Manage booking →"): the claim link's quiet line, in the strong weight. */
+  .railLink {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--space-4);
+    margin-block-start: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .railLink:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+  }
+
+  @media (width >= 1024px) {
+    .root:not([data-compact]) .aside[data-growing] {
+      contain: size;
+      overflow-y: auto;
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .railLink:hover {
+      color: var(--text);
+    }
+  }
+}

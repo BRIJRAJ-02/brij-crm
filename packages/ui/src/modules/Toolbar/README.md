@@ -18,7 +18,7 @@ Ported from the artifact's Toolbar card (ViewBar is new: the artifact drew it as
   settings={{ onPress: openSettings, ref: settingsRef, isOpen }}
   layout={{ label: 'Layout', segments: [{ value: 'table', label: 'Table', icon: 'table' }, { value: 'board', label: 'Board', icon: 'kanban' }], value: kind, onChange: setKind }}
 >
-  {isLocked && <Callout placement="bar">Locked by Ada</Callout>}
+  {isLocked && <`CalloutBar`>Locked by Ada</Callout>}
 </ViewBar>
 <Toolbar label="View options" end={isChanged && <><Button variant="ghost">Discard changes</Button><SplitButton menu={saveMenu}>Save</SplitButton></>}>
   <SortChip attribute="Funding raised" direction="descending" onPress={openSorts} />

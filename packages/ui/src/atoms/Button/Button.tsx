@@ -82,8 +82,9 @@ interface ButtonLook {
    * Drawn at its size but pressed across 44px (WCAG 2.5.5): an invisible area round a small control a guest presses
    * with a thumb (the guest menu's 26px and 30px + and steppers, after checklabs' sizes). `md`, `lg` and `xl` only:
    * any other size ignores it (`sm` keeps its own 24px area; `touch` and `sheet` are 44px and more already).
+   * Takes `TOUCH_TARGET` from `touch-target.ts`, which `size="sheet"` needs too: it holds that size's styles.
    */
-  readonly isTouchTarget?: boolean;
+  readonly touchTarget?: string;
   readonly isDisabled?: boolean;
   /**
    * A second label the button may swap to, whose width it keeps from the start, so the swap never moves what is
@@ -216,7 +217,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-collapsible': look.isLabelCollapsible === true || undefined,
     'data-icon-mark': ('isIconMark' in face && face.isIconMark === true) || undefined,
     'data-round': look.isRound === true || undefined,
-    'data-touch-target': look.isTouchTarget === true || undefined,
+    'data-touch-target': look.touchTarget !== undefined || undefined,
   };
 }
 
@@ -387,7 +388,7 @@ function PlainButton(props: ButtonProps) {
     <AriaButton
       ref={ref}
       type={type}
-      className={styles.root}
+      className={props.touchTarget === undefined ? styles.root : `${styles.root ?? ''} ${props.touchTarget}`}
       isDisabled={isDisabled ?? false}
       isPending={isPending}
       {...(slot === undefined ? {} : { slot })}

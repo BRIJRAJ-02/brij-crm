@@ -60,7 +60,7 @@ through the same component.
   - after the first add, the + again after the last remove), so a keyboard never drops to the top of the page.
     A dish with choices, once in the selection, shows its count before its + (Stepper `isFewerHidden`; the + opens the
     sheet again, and taking one away is Your selection's). The + and the stepper's buttons are drawn at checklabs' sizes
-    and pressed across 44px (Button `isTouchTarget`), since a guest presses them with a thumb. Each add and remove is said politely to a screen reader
+    and pressed across 44px (Button `touchTarget`), since a guest presses them with a thumb. Each add and remove is said politely to a screen reader
     ("Added Flat white. 2 in your selection.") through a status line, since the count changes without a word.
 - The foot: over a hairline, ALLERGENS (12px semibold caps), the allergens this menu's dishes contain in the EU
   list's order (13px; a "may contain" stays on the dish's sheet, as checklabs lists only what its dishes carry), and

@@ -26,6 +26,7 @@ import {
   Board,
   Button,
   Callout,
+  CalloutBar,
   EmptyState,
   TopBar,
   ViewBar,
@@ -313,12 +314,12 @@ export function BoardScreen(props: BoardScreenProps) {
             layout={layoutSwitch}
           >
             {live === 'paused' && (
-              <Callout tone="info" placement="bar" isAnnounced>
+              <CalloutBar tone="info" isAnnounced>
                 {workspaceStrings.livePaused}
-              </Callout>
+              </CalloutBar>
             )}
             {outcome.kind === 'board' && outcome.isStandIn && (
-              <Callout tone="info" placement="bar">{strings.standIn(outcome.groupBy.title)}</Callout>
+              <CalloutBar tone="info">{strings.standIn(outcome.groupBy.title)}</CalloutBar>
             )}
             {viewActions}
           </ViewBar>

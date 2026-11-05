@@ -3,6 +3,7 @@ import { expect, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Icon } from '../Icon/Icon.tsx';
 import { Avatar, AvatarStack } from './Avatar.tsx';
+import { AvatarEmpty } from './AvatarEmpty.tsx';
 
 const meta = {
   title: 'Atoms/Avatar',
@@ -87,8 +88,8 @@ export const Mark: Story = {
 export const Empty: Story = {
   render: () => (
     <Stage>
-      <Avatar name="Oysters" mark={<Icon name="plus" size="xs" />} shape="square" size="sm" isEmpty />
-      <Avatar name="Oysters" mark={<Icon name="plus" size="sm" />} shape="square" size="md" isEmpty src={PICTURE} />
+      <AvatarEmpty name="Oysters" mark={<Icon name="plus" size="xs" />} shape="square" size="sm" />
+      <AvatarEmpty name="Oysters" mark={<Icon name="plus" size="sm" />} shape="square" size="md" src={PICTURE} />
     </Stage>
   ),
   play: async ({ canvas }) => {

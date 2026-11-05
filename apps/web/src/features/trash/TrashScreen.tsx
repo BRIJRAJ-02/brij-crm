@@ -19,6 +19,7 @@ import {
   BulkActionBar,
   Button,
   Callout,
+  CalloutBar,
   EmptyState,
   focusLater,
   InfoTip,
@@ -366,17 +367,13 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const actions =
     note?.tone === 'info' ? (
       // A count of zero: said for a moment in the actions' place, while the ticks it was for clear.
-      <Callout tone="info" placement="bar" isAnnounced>
+      <CalloutBar tone="info" isAnnounced>
         {note.text}
-      </Callout>
+      </CalloutBar>
     ) : (
       <>
         {/* A refused start or a failed change says why before the actions, which stay to try again. */}
-        {note !== undefined && (
-          <Callout placement="bar" tone="danger">
-            {note.text}
-          </Callout>
-        )}
+        {note !== undefined && <CalloutBar tone="danger">{note.text}</CalloutBar>}
         <Button variant="primary" icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
           {strings.restore}
         </Button>
@@ -387,9 +384,9 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         )}
         {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
         {!isAllowed && (
-          <Callout tone="info" placement="bar" isAnnounced>
+          <CalloutBar tone="info" isAnnounced>
             {strings.viewOnly}
-          </Callout>
+          </CalloutBar>
         )}
       </>
     );

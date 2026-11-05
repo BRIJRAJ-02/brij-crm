@@ -97,7 +97,14 @@ export function PersonLine({
       {...(isDecorative ? { 'aria-hidden': true } : {})}
     >
       <span className={styles.picture}>
-        <Avatar name={name} id={id} size={size} {...(src === undefined ? {} : { src })} {...(hue === undefined ? {} : { hue })} isDecorative />
+        <Avatar
+          name={name}
+          id={id}
+          size={size}
+          {...(src === undefined ? {} : { src })}
+          {...(hue === undefined ? {} : { hue })}
+          isDecorative
+        />
       </span>
       {hint === undefined ? (
         who

@@ -5,6 +5,7 @@ import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SlotList, type Slot } from './SlotList.tsx';
+import { SlotListGroups } from './SlotListGroups.tsx';
 
 /** Half hours from 9 AM, as a page would give them. */
 function slots(count: number, marks: Partial<Record<number, Partial<Slot>>> = {}): readonly Slot[] {
@@ -290,7 +291,7 @@ function GroupsInPane(args: ComponentProps<typeof SlotList>) {
       <Button variant="ghost" onPress={() => first.current?.focus()}>
         Focus the first time
       </Button>
-      <SlotList {...args} value={value} onChange={setValue} firstRef={first} />
+      <SlotListGroups {...args} value={value} onChange={setValue} firstRef={first} />
     </Stage>
   );
 }

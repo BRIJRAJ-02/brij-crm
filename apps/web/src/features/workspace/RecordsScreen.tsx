@@ -27,6 +27,7 @@ import {
   Button,
   ButtonLink,
   Callout,
+  CalloutBar,
   EmptyState,
   sharedStrings,
   Spinner,
@@ -633,14 +634,14 @@ export function RecordsScreen({
             {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
             {live === 'paused' && (
-              <Callout tone="info" placement="bar" isAnnounced>
+              <CalloutBar tone="info" isAnnounced>
                 {strings.livePaused}
-              </Callout>
+              </CalloutBar>
             )}
             {ungrouped !== undefined && (
-              <Callout tone="info" placement="bar" isAnnounced>
+              <CalloutBar tone="info" isAnnounced>
                 {ungrouped}
-              </Callout>
+              </CalloutBar>
             )}
             {viewActions}
           </ViewBar>

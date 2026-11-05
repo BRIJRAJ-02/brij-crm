@@ -31,6 +31,7 @@ import {
 import { focusLater } from '../../lib/focus-later.ts';
 import { useNow } from '../../provider/context.ts';
 import styles from './MenuList.module.css';
+import { TOUCH_TARGET } from '../../atoms/Button/touch-target.ts';
 import { strings } from './strings.ts';
 
 export type { GuestPick, MenuPhotoHref } from '../ItemSheet/ItemSheet.tsx';
@@ -368,7 +369,7 @@ export function MenuList({
                   <Button
                     size="lg"
                     isRound
-                    isTouchTarget
+                    touchTarget={TOUCH_TARGET}
                     iconRight="chevron-down"
                     label={strings.switchMenu(current.menu.name)}
                   >
@@ -655,7 +656,7 @@ function AddControl({
           size={placement === 'photo' ? 'md' : 'lg'}
           icon="plus"
           isRound
-          isTouchTarget
+          touchTarget={TOUCH_TARGET}
           label={strings.addOne(item.name)}
           onPress={() => {
             onAdd();

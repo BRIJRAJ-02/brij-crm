@@ -14,7 +14,9 @@ import { BookingReceipt } from '../BookingReceipt/BookingReceipt.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
+import { MonthTilesPlain } from '../MonthTiles/MonthTilesPlain.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
+import { SlotListGroups } from '../SlotList/SlotListGroups.tsx';
 import { VisitorBar } from '../VisitorBar/VisitorBar.tsx';
 import { LinkList } from '../LinkList/LinkList.tsx';
 import {
@@ -25,6 +27,7 @@ import {
   BookingProfileSection,
   type BookingFact,
 } from './BookingFrame.tsx';
+import { PlaceBookingFrame } from './PlaceBookingFrame.tsx';
 
 const FACTS: readonly BookingFact[] = [
   { id: 'where', icon: 'video', children: 'Video call' },
@@ -757,7 +760,6 @@ export const Reservation: Story = {
       { id: 'where', icon: 'map-pin', children: '1 Example Street, London' },
       { id: 'phone', icon: 'phone', children: '020 7946 0000' },
     ],
-    identity: 'tile',
     railLink: { label: 'Manage booking', href: '/r/abcdefghijklmnop/manage' },
   },
   render: (args) => (
@@ -832,7 +834,7 @@ function Reserving(args: ComponentProps<typeof BookingFrame>) {
   const label = SERVICES.flatMap((service) => service.slots).find((slot) => slot.id === time)?.label;
   return (
     <Stage width="fill" height="page">
-      <BookingFrame
+      <PlaceBookingFrame
         {...args}
         heading="Choose a date"
         view={step}
@@ -854,7 +856,7 @@ function Reserving(args: ComponentProps<typeof BookingFrame>) {
             }
           : {})}
         aside={
-          <SlotList
+          <SlotListGroups
             heading="Friday 9 October"
             badge={<Badge text="15 available" isWhole />}
             slots={[]}
@@ -875,8 +877,7 @@ function Reserving(args: ComponentProps<typeof BookingFrame>) {
           </Button>
         }
       >
-        <MonthTiles
-          tone="plain"
+        <MonthTilesPlain
           month="2026-10"
           today="2026-10-08"
           openDays={OPEN}
@@ -886,7 +887,7 @@ function Reserving(args: ComponentProps<typeof BookingFrame>) {
           canPrevious={false}
           canNext
         />
-      </BookingFrame>
+      </PlaceBookingFrame>
     </Stage>
   );
 }

@@ -8,6 +8,7 @@ import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkListToolbar } from '../LinkList/LinkList.tsx';
@@ -586,11 +587,7 @@ function ViewBarEnd({ layoutValue = 'table', isOpen = false, isLocked = false, i
       settings={{ onPress: fn(), isOpen, isDisabled }}
       layout={layout}
     >
-      {isLocked && (
-        <Callout tone="info" placement="bar">
-          Locked by Ada Lovelace
-        </Callout>
-      )}
+      {isLocked && <CalloutBar tone="info">Locked by Ada Lovelace</CalloutBar>}
     </ViewBar>
   );
 }

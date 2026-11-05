@@ -31,6 +31,7 @@ import {
   BulkActionBar,
   Button,
   Callout,
+  CalloutBar,
   EmptyState,
   Modal,
   TopBar,
@@ -730,11 +731,7 @@ function ListTable(
                   }
                 : {})}
             >
-              {bulkJob.note !== undefined && (
-                <Callout placement="bar" tone={bulkJob.note.tone}>
-                  {bulkJob.note.text}
-                </Callout>
-              )}
+              {bulkJob.note !== undefined && <CalloutBar tone={bulkJob.note.tone}>{bulkJob.note.text}</CalloutBar>}
               {!isAllMatching && ticked.length > 0 && ticked.length <= BULK_INLINE_MAX && (
                 <Button
                   icon="pencil"

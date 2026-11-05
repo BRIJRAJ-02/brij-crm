@@ -25,6 +25,7 @@ import { useSavedView, useViewsList } from '@crm/data/react';
 import {
   Button,
   Callout,
+  CalloutBar,
   EmptyState,
   focusLater,
   Popover,
@@ -812,11 +813,11 @@ export function ViewScreen(props: ViewScreenProps) {
     view === undefined ? undefined : (
       <>
         {view.visibility === 'workspace' && view.isLocked && (
-          <Callout tone="info" placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
+          <CalloutBar tone="info" {...(isLockedForMe ? { isAnnounced: true } : {})}>
             {isLockedForMe
               ? strings.lockedUnsaved(memberName(members, view.lockedBy))
               : strings.lockedBy(memberName(members, view.lockedBy))}
-          </Callout>
+          </CalloutBar>
         )}
         <TransferMenu
           slug={slug}

@@ -5,6 +5,7 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button, ButtonGroup, ButtonLink, ToggleButton } from './Button.tsx';
+import { TOUCH_TARGET } from './touch-target.ts';
 import { SplitButton } from './SplitButton.tsx';
 
 const meta = {
@@ -751,7 +752,7 @@ export const WithAmount: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
     <Stage width="phone">
-      <Button variant="primary" size="sheet" isRound isFullWidth amount="£9.50">
+      <Button variant="primary" size="sheet" touchTarget={TOUCH_TARGET} isRound isFullWidth amount="£9.50">
         Add to your picks
       </Button>
     </Stage>
@@ -761,14 +762,14 @@ export const WithAmount: Story = {
   },
 };
 
-/** Drawn small, pressed across 44px (`isTouchTarget`): the guest menu's 26px and 30px round controls. */
+/** Drawn small, pressed across 44px (`touchTarget`): the guest menu's 26px and 30px round controls. */
 export const TouchTarget: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
     <Stage>
-      <Button variant="primary" icon="plus" label="Add one" isRound isTouchTarget />
-      <Button variant="primary" size="lg" icon="plus" label="Add one more" isRound isTouchTarget />
-      <Button variant="secondary" size="xl" icon="plus" label="One more guest" isRound isTouchTarget />
+      <Button variant="primary" icon="plus" label="Add one" isRound touchTarget={TOUCH_TARGET} />
+      <Button variant="primary" size="lg" icon="plus" label="Add one more" isRound touchTarget={TOUCH_TARGET} />
+      <Button variant="secondary" size="xl" icon="plus" label="One more guest" isRound touchTarget={TOUCH_TARGET} />
     </Stage>
   ),
   play: async ({ canvas }) => {

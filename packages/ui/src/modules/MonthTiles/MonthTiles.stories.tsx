@@ -3,6 +3,7 @@ import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { MonthTiles } from './MonthTiles.tsx';
+import { MonthTilesPlain } from './MonthTilesPlain.tsx';
 
 const OPEN = new Set([
   '2026-10-08',
@@ -124,12 +125,12 @@ export const Loading: Story = {
 };
 
 /**
- * `tone="plain"` (a restaurant's reservation page, after checklabs): plain numbers in 36px rows, today ringed, the
+ * `MonthTilesPlain` (a restaurant's reservation page, after checklabs): plain numbers in 36px rows, today ringed, the
  * chosen day filled with the accent, an open day filling under the pointer.
  */
 export const Plain: Story = {
-  args: { tone: 'plain', value: '2026-10-13' },
-  render: (args) => <Interactive {...args} />,
+  args: { value: '2026-10-13' },
+  render: (args) => <InteractivePlain {...args} />,
   play: async ({ canvas, canvasElement }) => {
     await expect(canvasElement.querySelector('[data-tone="plain"]')).not.toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: /Friday, October 16/ }));
@@ -141,16 +142,26 @@ export const Plain: Story = {
 /** The plain month while the times load: the numbers wait in grey, and no day says it has no times. */
 export const PlainLoading: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { tone: 'plain', openDays: new Set<string>(), isLoading: true, canPrevious: false, canNext: false },
+  args: { openDays: new Set<string>(), isLoading: true, canPrevious: false, canNext: false },
   render: (args) => (
     <Stage width="narrow">
-      <MonthTiles {...args} />
+      <MonthTilesPlain {...args} />
     </Stage>
   ),
   play: async ({ canvas }) => {
     await expect(canvas.queryByLabelText(/no times/i)).toBeNull();
   },
 };
+
+/** The plain month's own state, as the artifact's preview renders it too. */
+function InteractivePlain(args: ComponentProps<typeof MonthTilesPlain>) {
+  const [value, setValue] = useState(args.value);
+  return (
+    <Stage width="narrow">
+      <MonthTilesPlain {...args} value={value} onChange={setValue} />
+    </Stage>
+  );
+}
 
 /** The story's own state, in a component so the artifact's preview can render it too. */
 function Interactive(args: ComponentProps<typeof MonthTiles>) {

@@ -7,6 +7,8 @@ export {
   type AvatarStackPerson,
   type AvatarStackProps,
 } from './atoms/Avatar/Avatar.tsx';
+/** An Avatar as an empty slot: a menu item with no photo yet. */
+export { AvatarEmpty } from './atoms/Avatar/AvatarEmpty.tsx';
 export { Badge, type BadgeProps, type BadgeTone } from './atoms/Badge/Badge.tsx';
 export {
   Button,
@@ -22,6 +24,10 @@ export {
 export { CopyButton, type CopyButtonProps } from './atoms/Button/CopyButton.tsx';
 export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.tsx';
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
+/** Button's `touchTarget`: pressed across 44px. */
+export { TOUCH_TARGET } from './atoms/Button/touch-target.ts';
+/** A Checkbox as a full width row with its price at the end: a dish's add-ons. */
+export { CheckboxRow } from './atoms/Checkbox/CheckboxRow.tsx';
 export { Code, type CodeProps, type CodeVariant } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
 export { DragHandle, type DragHandleManual, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
@@ -46,6 +52,8 @@ export {
 } from './atoms/ProviderMark/ProviderMark.tsx';
 export { QrCode, type QrCodeProps } from './atoms/QrCode/QrCode.tsx';
 export { Radio, RadioGroup, type RadioGroupProps, type RadioProps } from './atoms/Radio/Radio.tsx';
+/** A RadioGroup as full width rows with their prices at the end: a dish's sizes and options. */
+export { RadioRowsGroup } from './atoms/Radio/RadioRows.tsx';
 export { Rating, type RatingProps } from './atoms/Rating/Rating.tsx';
 export { RecordChip, type RecordChipProps } from './atoms/RecordChip/RecordChip.tsx';
 export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime/RelativeTime.tsx';
@@ -110,6 +118,8 @@ export { safeImageSrc } from './lib/safe-image-src.ts';
 export { currencyOfCountry } from './lib/region-defaults.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
+/** A Callout in a toolbar: the app's bars. */
+export { CalloutBar } from './molecules/Callout/CalloutBar.tsx';
 export {
   SocialLinks,
   socialLinkName,
@@ -421,11 +431,15 @@ export {
 export { QrSheet, type QrSheetCard, type QrSheetLayout, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
 export { EmbedPreview, type EmbedPreviewProps } from './modules/EmbedPreview/EmbedPreview.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
+/** A compact month of plain numbers: a restaurant's reservation page. */
+export { MonthTilesPlain } from './modules/MonthTiles/MonthTilesPlain.tsx';
 /** The guest menu's look around a page (5 November 2026). */
 export { GuestLook, type GuestLookProps } from './modules/GuestLook/GuestLook.tsx';
 /** A reservation's party size (spec 0066 B7, after checklabs): the band with the shared Stepper. */
 export { PartyBand, type PartyBandProps } from './modules/PartyBand/PartyBand.tsx';
 export { SlotList, type Slot, type SlotGroup, type SlotListProps } from './modules/SlotList/SlotList.tsx';
+/** Times under their small headings: a restaurant's Lunch and Dinner. */
+export { SlotListGroups } from './modules/SlotList/SlotListGroups.tsx';
 export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';
 export { usePhotoCrop, type PhotoCropping } from './modules/PhotoCrop/usePhotoCrop.tsx';
 export type { PhotoRect } from './lib/photo/crop-math.ts';

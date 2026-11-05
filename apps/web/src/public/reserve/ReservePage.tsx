@@ -9,16 +9,17 @@
 import {
   Badge,
   BookingDetails,
-  BookingFrame,
+  PlaceBookingFrame,
+  TOUCH_TARGET,
   BookingMessage,
   Button,
   Callout,
   ChoiceChips,
   DayStrip,
   Link,
-  MonthTiles,
+  MonthTilesPlain,
   PartyBand,
-  SlotList,
+  SlotListGroups,
   type BookingDetailsDraft,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
@@ -298,7 +299,7 @@ export function ReservePage({
           </Callout>
         )}
         {/* Lunch and Dinner in one list that scrolls as one, headed by the day and how many times are left. */}
-        <SlotList
+        <SlotListGroups
           heading={dayHeading}
           slots={[]}
           groups={groups}
@@ -421,8 +422,7 @@ export function ReservePage({
         ]),
   ];
   return (
-    <BookingFrame
-      identity="tile"
+    <PlaceBookingFrame
       host={{ name: page.business.name }}
       title={strings.reserveYourTable}
       description={strings.pickAt(page.place.name)}
@@ -437,8 +437,6 @@ export function ReservePage({
           ? { enter: 'back' as const }
           : {})}
       aside={aside}
-      // On a phone the times run with the page: no box scrolling inside it.
-      isAsideGrowing
       {...(isBarShown ? { footer: bookBar } : {})}
     >
       <PartyBand
@@ -469,8 +467,7 @@ export function ReservePage({
           today={page.today}
         />
       ) : (
-        <MonthTiles
-          tone="plain"
+        <MonthTilesPlain
           holdsHeight={!isEmbedded}
           month={month}
           today={page.today}
@@ -490,13 +487,13 @@ export function ReservePage({
           variant="ghost"
           icon="calendar"
           // Drawn small, pressed across 44px: a guest's thumb.
-          isTouchTarget
+          touchTarget={TOUCH_TARGET}
           isExpanded={isFullCalendar}
           onPress={() => setFullCalendar((shown) => !shown)}
         >
           {strings.fullCalendar}
         </Button>
       )}
-    </BookingFrame>
+    </PlaceBookingFrame>
   );
 }

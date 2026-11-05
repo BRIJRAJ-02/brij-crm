@@ -56,6 +56,8 @@ export interface SlotListProps {
   readonly variant?: 'picker' | 'offers';
   /** `column` (one time per row, scrolling in its pane: Month) or `grid` (two to four across: List, and phones). */
   readonly layout?: 'column' | 'grid';
+  /** A variant's classes, from its own stylesheet: `SlotListGroups` passes its groups here. */
+  readonly look?: Readonly<Record<string, string | undefined>>;
   readonly isLoading?: boolean;
   /** How many time boxes stand in while loading: 16 (a nine to five day) unless the caller knows better (the chat's six). */
   readonly ghosts?: number;
@@ -117,6 +119,7 @@ export function SlotList({
   onHour12Change,
   variant = 'picker',
   layout = 'column',
+  look,
   isLoading = false,
   ghosts = GHOST_SLOTS,
   empty,
@@ -234,7 +237,7 @@ export function SlotList({
   return (
     <div
       ref={listRef}
-      className={styles.root}
+      className={look?.root === undefined ? styles.root : `${styles.root ?? ''} ${look.root}`}
       data-layout={groups === undefined ? layout : 'groups'}
       data-variant={variant}
       data-answered={variant === 'offers' && answered !== undefined ? '' : undefined}
@@ -287,17 +290,20 @@ export function SlotList({
         <div className={styles.empty}>{empty}</div>
       ) : shownGroups !== undefined ? (
         // One list that scrolls as one: each group under its small heading, the stagger running on across them.
-        <div key={drawKey} className={styles.scroller}>
+        <div key={drawKey} className={look?.scroller}>
           {shownGroups.map((group, groupIndex) => {
             const before = shownGroups.slice(0, groupIndex).reduce((count, each) => count + each.slots.length, 0);
             const headingId = `${groupId}-${String(groupIndex)}`;
             return (
               // A plain block under its small heading: Lunch and Dinner are never landmarks of their own.
-              <div key={group.id} className={styles.group}>
-                <h3 id={headingId} className={styles.groupHeading}>
+              <div key={group.id} className={look?.group}>
+                <h3 id={headingId} className={look?.groupHeading}>
                   {group.heading}
                 </h3>
-                <ul className={styles.list} aria-label={strings.groupTimes(group.heading, heading)}>
+                <ul
+                  className={look?.list === undefined ? styles.list : `${styles.list ?? ''} ${look.list}`}
+                  aria-label={strings.groupTimes(group.heading, heading)}
+                >
                   {group.slots.map((slot, index) => item(slot, before + index))}
                 </ul>
               </div>

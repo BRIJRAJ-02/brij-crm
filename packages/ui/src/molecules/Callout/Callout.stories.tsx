@@ -3,6 +3,7 @@ import { expect, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Callout } from './Callout.tsx';
+import { CalloutBar } from './CalloutBar.tsx';
 
 const meta = {
   title: 'Molecules/Callout',
@@ -49,9 +50,9 @@ export const Tones: Story = {
 export const InABar: Story = {
   render: () => (
     <Stage>
-      <Callout tone="info" placement="bar" isAnnounced>
+      <CalloutBar tone="info" isAnnounced>
         Live updates paused
-      </Callout>
+      </CalloutBar>
     </Stage>
   ),
   play: async ({ canvas }) => {
@@ -64,9 +65,9 @@ export const InABar: Story = {
 export const InABarNarrow: Story = {
   render: () => (
     <Stage width="phone">
-      <Callout placement="bar" tone="danger">
+      <CalloutBar tone="danger">
         Your workspace is already running 20 background changes. Wait for one to finish.
-      </Callout>
+      </CalloutBar>
     </Stage>
   ),
   play: async ({ canvas }) => {

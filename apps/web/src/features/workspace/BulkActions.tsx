@@ -17,7 +17,7 @@ import {
   type ViewQuery,
   type ViewState,
 } from '@crm/data';
-import { AttributeDisplay, BulkActionBar, Button, Callout, Modal } from '@crm/ui';
+import { AttributeDisplay, BulkActionBar, Button, Callout, CalloutBar, Modal } from '@crm/ui';
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
 import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -480,24 +480,20 @@ export function useBulkActions({
   const actions = !canWrite ? (
     // Spec 0009's words for an object the person may only read; the server refuses them anyway.
     <>
-      <Callout tone="info" placement="bar" isAnnounced>
+      <CalloutBar tone="info" isAnnounced>
         {bulkStrings.readOnly(object.pluralName)}
-      </Callout>
+      </CalloutBar>
       {exportButton}
     </>
   ) : note?.tone === 'info' ? (
     // A count of zero: said for a moment in the actions' place, while the selection it was for clears.
-    <Callout tone="info" placement="bar" isAnnounced>
+    <CalloutBar tone="info" isAnnounced>
       {note.text}
-    </Callout>
+    </CalloutBar>
   ) : (
     <>
       {/* A refused start or a failed change says why before the actions, which stay to try again. */}
-      {note !== undefined && (
-        <Callout placement="bar" tone="danger">
-          {note.text}
-        </Callout>
-      )}
+      {note !== undefined && <CalloutBar tone="danger">{note.text}</CalloutBar>}
       <Button
         icon="pencil"
         onPress={() => {

@@ -1,0 +1,50 @@
+/* TOUCH_TARGET: Button drawn small, pressed across 44px, and a guest sheet's 48px size. Its own file, so a page with no such button never loads it. */
+@layer components {
+  /* Drawn small, pressed across 44px: an invisible area round the button (a public page's 26px, 30px or 36px control
+     under a thumb, the guest menu's + and steppers). Nothing drawn changes. */
+  .root[data-touch-target]:is([data-size='md'], [data-size='lg'], [data-size='xl']) {
+    --touch-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+
+    position: relative;
+  }
+
+  /* The inset counts from inside the border, so the hairline comes off too: 44px from edge to edge. */
+  .root[data-touch-target][data-size='md']::after {
+    position: absolute;
+    inset: calc((var(--size-control) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
+  .root[data-touch-target][data-size='lg']::after {
+    inset: calc((var(--size-input) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-touch-target][data-size='xl']::after {
+    position: absolute;
+    inset: calc((var(--size-input) + var(--space-6) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
+  /* The one action at a guest sheet's foot (the guest menu's Add to selection, after checklabs' 48px pill): 48px,
+     the title's 15px semibold label. Inside the app, nothing is this size. */
+  .root[data-size='sheet'] {
+    gap: var(--space-8);
+    block-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: var(--space-16);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .root[data-icon-only][data-size='sheet'] {
+    inline-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: 0;
+  }
+
+  /* An icon alone at 36px: square, round with `isRound` (a Stepper's party size buttons). */
+  .root[data-icon-only][data-size='xl'] {
+    inline-size: calc(var(--size-input) + var(--space-6));
+  }
+}

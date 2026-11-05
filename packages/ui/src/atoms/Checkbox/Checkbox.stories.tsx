@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Checkbox, CheckboxMark } from './Checkbox.tsx';
+import { CheckboxRow } from './CheckboxRow.tsx';
 
 const meta = {
   title: 'Atoms/Checkbox',
@@ -50,11 +51,11 @@ export const States: Story = {
 export const Rows: Story = {
   render: () => (
     <Stage width="dialog" direction="column">
-      <Checkbox variant="row" label="Soft egg" description="+£1.50" />
-      <Checkbox variant="row" label="Extra chashu" description="+£3.00" defaultSelected />
-      <Checkbox variant="row" label="Bamboo shoots" description="+£1.00" isDisabled />
-      <Checkbox variant="row" label="Spring onion" description="Free" defaultSelected isReadOnly />
-      <Checkbox variant="row" label="Chilli oil" error="Choose chilli oil to add this." />
+      <CheckboxRow label="Soft egg" description="+£1.50" />
+      <CheckboxRow label="Extra chashu" description="+£3.00" defaultSelected />
+      <CheckboxRow label="Bamboo shoots" description="+£1.00" isDisabled />
+      <CheckboxRow label="Spring onion" description="Free" defaultSelected isReadOnly />
+      <CheckboxRow label="Chilli oil" error="Choose chilli oil to add this." />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

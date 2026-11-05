@@ -101,6 +101,12 @@ export {
   type MapsApp,
 } from '../modules/BusinessPage/BusinessPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
+/** A reservation page's compact month. Drawn by no booking page, so its styles stay out of book.html. */
+/** Button's `touchTarget`, for a reservation page's thumb. */
+export { TOUCH_TARGET } from '../atoms/Button/touch-target.ts';
+export { PlaceBookingFrame } from '../modules/BookingFrame/PlaceBookingFrame.tsx';
+/** A reservation page's compact month. Drawn by no booking page, so its styles stay out of book.html. */
+export { MonthTilesPlain } from '../modules/MonthTiles/MonthTilesPlain.tsx';
 /** The guest menu's look around a page (5 November 2026): the reservation page's and the business page's. */
 export { GuestLook, type GuestLookProps } from '../modules/GuestLook/GuestLook.tsx';
 /** The count beside a reservation's times ("12 available"). */
@@ -108,6 +114,8 @@ export { Badge } from '../atoms/Badge/Badge.tsx';
 /** A reservation's party size (spec 0066 B7, after checklabs): the band with − and +, and the way to book bigger. */
 export { PartyBand, type PartyBandProps } from '../modules/PartyBand/PartyBand.tsx';
 export { SlotList, type Slot, type SlotGroup } from '../modules/SlotList/SlotList.tsx';
+/** A reservation page's Lunch and Dinner. Drawn by no booking page, so its styles stay out of book.html. */
+export { SlotListGroups } from '../modules/SlotList/SlotListGroups.tsx';
 /** A reservation's link to the place's menu (spec 0066 B7), opening the guest menu in a tab of its own. */
 export { Link } from '../atoms/Link/Link.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';

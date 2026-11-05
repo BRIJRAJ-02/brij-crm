@@ -18,9 +18,11 @@ import type { OptionGroup, PublicMenu, SnapshotItem, SnapshotMenu } from '@crm/c
 import { useId, useRef, useState } from 'react';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { CheckboxRow } from '../../atoms/Checkbox/CheckboxRow.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
-import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
+import { TOUCH_TARGET } from '../../atoms/Button/touch-target.ts';
+import { Radio } from '../../atoms/Radio/Radio.tsx';
+import { RadioRowsGroup } from '../../atoms/Radio/RadioRows.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stepper } from '../../molecules/Stepper/Stepper.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
@@ -155,10 +157,9 @@ export function ItemSheet({
             <p className={styles.groupName} aria-hidden="true">
               {strings.sizes}
             </p>
-            <RadioGroup
+            <RadioRowsGroup
               label={strings.sizes}
               isLabelHidden
-              variant="rows"
               value={size ?? ''}
               onChange={setSize}
               isDisabled={isSoldOut}
@@ -168,7 +169,7 @@ export function ItemSheet({
                   {each.name}
                 </Radio>
               ))}
-            </RadioGroup>
+            </RadioRowsGroup>
           </div>
         )}
         {groups.map((group) => {
@@ -181,10 +182,9 @@ export function ItemSheet({
               <p className={styles.groupName} aria-hidden="true">
                 {label}
               </p>
-              <RadioGroup
+              <RadioRowsGroup
                 label={label}
                 isLabelHidden
-                variant="rows"
                 value={picked[0] ?? null}
                 onChange={(value) => toggle(group, value)}
                 isDisabled={isSoldOut}
@@ -197,7 +197,7 @@ export function ItemSheet({
                     </Radio>
                   );
                 })}
-              </RadioGroup>
+              </RadioRowsGroup>
             </div>
           ) : (
             <fieldset key={group.id} className={styles.group}>
@@ -209,9 +209,8 @@ export function ItemSheet({
                   const description = priceOf(option.priceDeltaMinor);
                   const isChosen = picked.includes(option.id);
                   return (
-                    <Checkbox
+                    <CheckboxRow
                       key={option.id}
-                      variant="row"
                       label={option.name}
                       {...(description === undefined ? {} : { description })}
                       isSelected={isChosen}
@@ -268,6 +267,7 @@ export function ItemSheet({
               <Button
                 variant="primary"
                 size="sheet"
+                touchTarget={TOUCH_TARGET}
                 isFullWidth
                 isRound
                 amount={price(total)}

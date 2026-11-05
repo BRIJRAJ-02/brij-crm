@@ -6,6 +6,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import styles from './Stepper.module.css';
+import { TOUCH_TARGET } from '../../atoms/Button/touch-target.ts';
 import { strings } from './strings.ts';
 
 /**
@@ -59,7 +60,7 @@ const BUTTON_SIZE = { sm: 'md', md: 'xl', lg: 'lg', row: 'md', sheet: 'lg' } as 
 
 /**
  * A count changed one at a time, as a group: one fewer, the count, one more. Each button is drawn small and pressed
- * across 44px (Button's `isTouchTarget`), since a guest presses it with a thumb. It holds no count of its own: the
+ * across 44px (Button's `touchTarget`), since a guest presses it with a thumb. It holds no count of its own: the
  * caller's `value`, changed through `onChange`. A press that reaches `min` or `max` turns its own button off, and
  * focus moves to the other button, so it never falls out of the group (to a dialog's Close).
  */
@@ -114,7 +115,7 @@ export function Stepper({
           icon="minus"
           label={fewerLabel}
           isRound
-          isTouchTarget
+          touchTarget={TOUCH_TARGET}
           isDisabled={isFewerOff}
           onPress={() => {
             pressed.current = document.activeElement === fewerRef.current ? 'fewer' : undefined;
@@ -136,7 +137,7 @@ export function Stepper({
         icon="plus"
         label={moreLabel}
         isRound
-        isTouchTarget
+        touchTarget={TOUCH_TARGET}
         isDisabled={isMoreOff}
         onPress={() => {
           pressed.current = document.activeElement === moreRef.current ? 'more' : undefined;

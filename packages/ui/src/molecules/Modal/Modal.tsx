@@ -11,6 +11,7 @@ import styles from './Modal.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
 import { useToastClearance } from '../../provider/toast-clearance.ts';
+import { TOUCH_TARGET } from '../../atoms/Button/touch-target.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 
 /** Props for ModalTrigger. */
@@ -355,7 +356,7 @@ export function Modal({
                           icon="x"
                           label={strings.close}
                           isRound
-                          isTouchTarget
+                          touchTarget={TOUCH_TARGET}
                           isDisabled={isBusy}
                         />
                       ) : (

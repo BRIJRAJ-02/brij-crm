@@ -3,6 +3,9 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import styles from './Callout.module.css';
 
+const classes = (own: string | undefined, added: string | undefined) =>
+  added === undefined ? own : `${own ?? ''} ${added}`;
+
 /**
  * `info` for a passing state, quiet and never a permanent explanation; `success` to confirm a result in place;
  * `warning` when someone must act or is about to take a risk; `danger` for what failed.
@@ -16,7 +19,7 @@ export type CalloutTone = 'info' | 'success' | 'warning' | 'danger';
  * inside a bar, a control's height, for a state that must not push the view
  * down when it comes and goes (live updates paused, in the view bar).
  */
-export type CalloutPlacement = 'inline' | 'banner' | 'bar';
+export type CalloutPlacement = 'inline' | 'banner';
 
 /** Props for Callout. */
 export interface CalloutProps {
@@ -26,6 +29,8 @@ export interface CalloutProps {
    */
   readonly tone: CalloutTone;
   readonly placement?: CalloutPlacement;
+  /** `CalloutBar` passes its stylesheet here. */
+  readonly barStyles?: Readonly<Record<string, string | undefined>>;
   /**
    * Said politely by screen readers when it appears (a state that changed
    * under the person, not one they caused). A danger callout is always
@@ -63,6 +68,7 @@ const TONE_ICONS: Readonly<Record<CalloutTone, IconName>> = {
 export function Callout({
   tone,
   placement = 'inline',
+  barStyles,
   isAnnounced = false,
   isPolite = false,
   title,
@@ -82,13 +88,18 @@ export function Callout({
     };
   }, [role]);
   return (
-    <div className={styles.root} data-tone={tone} data-placement={placement} role={role}>
-      <span className={styles.icon}>
+    <div
+      className={classes(styles.root, barStyles?.root)}
+      data-tone={tone}
+      data-placement={barStyles === undefined ? placement : 'bar'}
+      role={role}
+    >
+      <span className={classes(styles.icon, barStyles?.icon)}>
         <Icon name={TONE_ICONS[tone]} size="sm" />
       </span>
       <span className={styles.body}>
         {title !== undefined && <span className={styles.title}>{isFilled ? title : null}</span>}
-        <span className={styles.text}>{isFilled ? children : null}</span>
+        <span className={classes(styles.text, barStyles?.text)}>{isFilled ? children : null}</span>
         {actions !== undefined && <span className={styles.actions}>{actions}</span>}
       </span>
     </div>

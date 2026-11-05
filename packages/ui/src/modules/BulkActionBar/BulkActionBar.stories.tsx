@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BulkActionBar } from './BulkActionBar.tsx';
 
@@ -100,11 +101,7 @@ export const CappedOffer: Story = {
 export const NothingSelected: Story = {
   args: {
     count: 0,
-    children: (
-      <Callout tone="info" placement="bar">
-        Nothing left to change.
-      </Callout>
-    ),
+    children: <CalloutBar tone="info">Nothing left to change.</CalloutBar>,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Nothing left to change.')).toBeInTheDocument();
@@ -309,11 +306,7 @@ export const SelectAllKeepsFocus: Story = {
 export const WithNote: Story = {
   args: {
     count: 620,
-    children: (
-      <Callout tone="info" placement="bar">
-        Nothing left to change.
-      </Callout>
-    ),
+    children: <CalloutBar tone="info">Nothing left to change.</CalloutBar>,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Nothing left to change.')).toBeInTheDocument();
@@ -325,11 +318,7 @@ export const WithNote: Story = {
 export const WithNoteNarrow: Story = {
   args: {
     count: 620,
-    children: (
-      <Callout tone="info" placement="bar">
-        You can view Opportunities but not change them.
-      </Callout>
-    ),
+    children: <CalloutBar tone="info">You can view Opportunities but not change them.</CalloutBar>,
   },
   render: narrow,
   play: async ({ canvas }) => {
@@ -347,9 +336,9 @@ export const WithDangerNote: Story = {
     count: 1234,
     children: (
       <>
-        <Callout placement="bar" tone="danger">
+        <CalloutBar tone="danger">
           Your workspace is already running 20 background changes. Wait for one to finish.
-        </Callout>
+        </CalloutBar>
         <Button icon="pencil">Edit</Button>
         <Button variant="danger" icon="trash">
           Delete

@@ -8,6 +8,7 @@ import type { MenuDraft, MenuItem as Dish, MenuSection, MenuStore } from '@crm/d
 import { formatPrice } from '@crm/data/menu';
 import {
   Avatar,
+  AvatarEmpty,
   Button,
   EmptyState,
   Field,
@@ -724,15 +725,15 @@ export function DishThumb({
   readonly isSlot?: boolean;
 }) {
   const isEmpty = isSlot && item.photo === undefined;
+  const Tile = isEmpty ? AvatarEmpty : Avatar;
   return (
-    <Avatar
+    <Tile
       name={item.name}
       id={item.id}
       size={size}
       shape="square"
       hue="gray"
       isDecorative
-      isEmpty={isEmpty}
       mark={<Icon name={isEmpty ? 'plus' : 'image'} size="xs" />}
       {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
     />

@@ -4,6 +4,7 @@ import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Radio, RadioGroup } from './Radio.tsx';
+import { RadioRowsGroup } from './RadioRows.tsx';
 
 const meta = {
   title: 'Atoms/Radio',
@@ -192,7 +193,7 @@ export const Rows: Story = {
   args: { label: 'Size', isLabelHidden: true, defaultValue: 'regular' },
   render: (args) => (
     <Stage width="dialog">
-      <RadioGroup {...args} variant="rows">
+      <RadioRowsGroup {...args}>
         <Radio value="regular" description="£14.00">
           Regular
         </Radio>
@@ -202,13 +203,13 @@ export const Rows: Story = {
         <Radio value="kids" description="£9.00" isDisabled>
           Kids
         </Radio>
-      </RadioGroup>
-      <RadioGroup label="Broth" isLabelHidden variant="rows" defaultValue="pork" isReadOnly>
+      </RadioRowsGroup>
+      <RadioRowsGroup label="Broth" isLabelHidden defaultValue="pork" isReadOnly>
         <Radio value="pork">Pork</Radio>
         <Radio value="miso" description="+£0.50">
           Miso
         </Radio>
-      </RadioGroup>
+      </RadioRowsGroup>
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

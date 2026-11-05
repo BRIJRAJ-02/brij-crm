@@ -141,19 +141,13 @@ export interface BookingFrameProps {
    */
   readonly brand?: PageBrand;
   /**
-   * `tile` (a place, not a person, 5 November 2026): the rail heads with the business's initials on a square ink tile
-   * (or its logo, when the brand has one) beside its name on one row, at every width, and the title under it in the
+   * `PlaceBookingFrame` passes its stylesheet here: the rail heads with the business's initials on a square ink tile
+   * (or its logo, when the brand has one) beside its name on one row, at every width, the title under it in the
    * heading's weight (a restaurant's "Reserve your table"). Left out, the host's round picture over their name.
    */
-  readonly identity?: 'person' | 'tile';
-  /** A quiet link closing the rail's block, its arrow after it: a reservation's "Manage booking →". */
+  readonly placeLook?: Readonly<Record<string, string | undefined>>;
+  /** A quiet link closing the rail's block, its arrow after it: a reservation's "Manage booking →". With `placeLook`. */
   readonly railLink?: { readonly label: string; readonly href: string };
-  /**
-   * Stacked under the month (a phone), the times take their own height and run with the page, rather than scrolling
-   * in an eight row box (a restaurant's Lunch and Dinner, after checklabs' phone page). Beside the month they still
-   * take its height and scroll in it. Left out, the eight row box.
-   */
-  readonly isAsideGrowing?: boolean;
 }
 
 /** A booking page's or form's brand kit, as the library draws it (spec 0060, AC-4). */
@@ -245,11 +239,11 @@ export function BookingFrame({
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
-  identity = 'person',
+  placeLook,
   railLink,
-  isAsideGrowing = false,
 }: BookingFrameProps) {
-  const isTile = identity === 'tile';
+  const isTile = placeLook !== undefined;
+  const isAsideGrowing = isTile;
   const railHref = railLink === undefined ? undefined : safeHref(railLink.href);
   const isLoading = host === undefined || title === undefined;
   const variables = usePageVariables(brand?.variables);
@@ -354,19 +348,19 @@ export function BookingFrame({
             </div>
           ) : (
             <div
-              className={styles.identity}
+              className={isTile ? `${styles.identity ?? ''} ${placeLook.identity ?? ''}` : styles.identity}
               data-arrived={openedLoading || undefined}
               data-identity={isTile ? 'tile' : undefined}
             >
               {isTile ? (
                 // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
                 // its name, on one row.
-                <div className={styles.tileRow}>
+                <div className={placeLook?.tileRow}>
                   {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
                   {brandLogo === undefined && (
                     <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
                   )}
-                  <p className={styles.host}>{host.name}</p>
+                  <p className={`${styles.host ?? ''} ${placeLook?.host ?? ''}`}>{host.name}</p>
                 </div>
               ) : host.team === undefined ? (
                 <Avatar
@@ -432,7 +426,7 @@ export function BookingFrame({
                 <SocialLinks links={host.socials} label={strings.socials(host.name)} />
               )}
               {railLink !== undefined && railHref !== undefined && (
-                <a className={styles.railLink} href={railHref}>
+                <a className={placeLook?.railLink} href={railHref}>
                   {railLink.label}
                   <Icon name="arrow-right" size="xs" />
                 </a>
@@ -484,7 +478,10 @@ export function BookingFrame({
                       in their shape, so the card is the right height from the first paint. */}
                   <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
                   {aside !== undefined && (
-                    <div className={styles.aside} data-growing={isAsideGrowing || undefined}>
+                    <div
+                      className={isTile ? `${styles.aside ?? ''} ${placeLook.aside ?? ''}` : styles.aside}
+                      data-growing={isAsideGrowing || undefined}
+                    >
                       {aside}
                     </div>
                   )}

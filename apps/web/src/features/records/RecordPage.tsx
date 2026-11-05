@@ -42,6 +42,7 @@ import {
   Badge,
   Button,
   Callout,
+  CalloutBar,
   Card,
   CopyButton,
   EmptyState,
@@ -827,9 +828,9 @@ function RecordScreen({
   // In the same top bar as the loaded page, so focus on its title stays when the record arrives.
   const paused =
     live === 'paused' ? (
-      <Callout tone="info" placement="bar" isAnnounced>
+      <CalloutBar tone="info" isAnnounced>
         {workspaceStrings.livePaused}
-      </Callout>
+      </CalloutBar>
     ) : undefined;
   if (shown === undefined) {
     return (

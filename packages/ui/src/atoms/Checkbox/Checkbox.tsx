@@ -6,18 +6,18 @@ import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Checkbox.module.css';
 import { strings } from './strings.ts';
 
+const classes = (own: string | undefined, added: string | undefined) =>
+  added === undefined ? own : `${own ?? ''} ${added}`;
+
 /** Props for Checkbox. */
 export interface CheckboxProps {
   /** What checking it means, in sentence case. Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
-  /** A line under the label that says more; at the row's end in `variant="row"` (an add-on's +£1.50). */
+  /** A line under the label that says more; at the row's end in `CheckboxRow` (an add-on's +£1.50). */
   readonly description?: string;
-  /**
-   * `row` draws it as a full width row, its description at the row's end, after checklabs' add-on rows: a dish's
-   * add-ons on the guest menu, beside RadioGroup's `rows` for its sizes. `plain` (the default) is the box and label.
-   */
-  readonly variant?: 'plain' | 'row';
+  /** A variant's classes, from its own stylesheet: `CheckboxRow` passes its row here. */
+  readonly look?: Readonly<Record<string, string | undefined>>;
   readonly isSelected?: boolean;
   readonly defaultSelected?: boolean;
   readonly onChange?: (isSelected: boolean) => void;
@@ -51,7 +51,7 @@ export function Checkbox({
   label,
   isLabelHidden = false,
   description,
-  variant = 'plain',
+  look,
   isSelected,
   defaultSelected,
   onChange,
@@ -66,8 +66,8 @@ export function Checkbox({
 }: CheckboxProps) {
   return (
     <CheckboxField
-      className={styles.field}
-      data-variant={variant === 'row' ? 'row' : undefined}
+      className={classes(styles.field, look?.field)}
+      data-variant={look === undefined ? undefined : 'row'}
       {...(isIndeterminate === undefined ? {} : { isIndeterminate })}
       {...(slot === undefined ? {} : { slot })}
       isDisabled={isDisabled}
@@ -79,10 +79,10 @@ export function Checkbox({
       {...(name === undefined ? {} : { name })}
       {...(value === undefined ? {} : { value })}
     >
-      <CheckboxButton className={styles.root}>
+      <CheckboxButton className={classes(styles.root, look?.root)}>
         {({ isSelected: checked, isIndeterminate: partial }) => (
           <>
-            <span className={styles.box} aria-hidden="true">
+            <span className={classes(styles.box, look?.box)} aria-hidden="true">
               {partial ? <Icon name="minus" size="xs" /> : checked && <Icon name="check" size="xs" />}
             </span>
             {leading !== undefined && (
@@ -93,7 +93,10 @@ export function Checkbox({
             {isLabelHidden ? (
               <VisuallyHidden>{label}</VisuallyHidden>
             ) : (
-              <span className={styles.label} data-described={description === undefined ? undefined : ''}>
+              <span
+                className={classes(styles.label, look?.label)}
+                data-described={description === undefined ? undefined : ''}
+              >
                 {label}
               </span>
             )}
@@ -101,7 +104,7 @@ export function Checkbox({
         )}
       </CheckboxButton>
       {description !== undefined && (
-        <Text slot="description" className={styles.description}>
+        <Text slot="description" className={classes(styles.description, look?.description)}>
           {description}
         </Text>
       )}

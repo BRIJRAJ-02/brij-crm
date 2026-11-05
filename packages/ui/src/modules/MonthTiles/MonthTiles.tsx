@@ -5,6 +5,9 @@ import { useFormatSettings } from '../../provider/context.ts';
 import styles from './MonthTiles.module.css';
 import { strings } from './strings.ts';
 
+const classes = (own: string | undefined, added: string | undefined) =>
+  added === undefined ? own : `${own ?? ''} ${added}`;
+
 /** Props for MonthTiles. */
 export interface MonthTilesProps {
   /** The month shown, `YYYY-MM`. */
@@ -29,11 +32,10 @@ export interface MonthTilesProps {
    */
   readonly isLoading?: boolean;
   /**
-   * `tiles` (the default): every day a square tile, open days tinted (the booking page). `plain`: a compact month of
-   * plain numbers in 36px rows, as checklabs' reservation calendar draws it: an open day is plain text that fills under
-   * the pointer, today has a hairline ring, and the chosen day fills with the accent (a restaurant's reservation page).
+   * A variant's classes, from its own stylesheet: `MonthTilesPlain` passes its plain month here. Left out, every day
+   * a square tile, open days tinted (the booking page).
    */
-  readonly tone?: 'tiles' | 'plain';
+  readonly look?: Readonly<Record<string, string | undefined>>;
   /**
    * Every month the same height on a wide page: a month's rows share six weeks' height, so paging between a five and
    * a six week month moves nothing. For a page centred in the window, where a taller month would move everything.
@@ -71,7 +73,7 @@ export function MonthTiles({
   canNext,
   focusesValue = false,
   isLoading = false,
-  tone = 'tiles',
+  look,
   holdsHeight = false,
 }: MonthTilesProps) {
   const { locale, weekStart } = useFormatSettings();
@@ -127,8 +129,8 @@ export function MonthTiles({
   const name = monthParts(month, locale);
   return (
     <div
-      className={styles.root}
-      data-tone={tone === 'plain' ? 'plain' : undefined}
+      className={classes(styles.root, look?.root)}
+      data-tone={look === undefined ? undefined : 'plain'}
       data-holds-height={holdsHeight || undefined}
     >
       <div className={styles.head}>
@@ -144,7 +146,7 @@ export function MonthTiles({
             icon="chevron-left"
             label={strings.previousMonth}
             // A guest's thumb: the plain month's arrows press across 44px, drawn as before.
-            isTouchTarget={tone === 'plain'}
+            {...(look?.touchTarget === undefined ? {} : { touchTarget: look.touchTarget })}
             isDisabled={!canPrevious}
             onPress={() => onMonthChange(shiftMonth(month, -1))}
           />
@@ -152,13 +154,13 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-right"
             label={strings.nextMonth}
-            isTouchTarget={tone === 'plain'}
+            {...(look?.touchTarget === undefined ? {} : { touchTarget: look.touchTarget })}
             isDisabled={!canNext}
             onPress={() => onMonthChange(shiftMonth(month, 1))}
           />
         </div>
       </div>
-      <div className={styles.weekdays} aria-hidden="true">
+      <div className={classes(styles.weekdays, look?.weekdays)} aria-hidden="true">
         {weekdayNames(locale, weekStart).map((weekday) => (
           <span key={weekday.long} className={styles.weekday}>
             {weekday.short}
@@ -168,7 +170,7 @@ export function MonthTiles({
       <div
         ref={grid}
         key={month}
-        className={styles.grid}
+        className={classes(styles.grid, look?.grid)}
         data-direction={shown.direction}
         data-settle={settled === month ? '' : undefined}
         role="group"
@@ -193,7 +195,7 @@ export function MonthTiles({
             return (
               <span
                 key={`outside-${String(index)}`}
-                className={styles.outside}
+                className={classes(styles.outside, look?.outside)}
                 data-date={dayNumber(addDays(first, index - lead))}
                 aria-hidden="true"
               />
@@ -215,7 +217,7 @@ export function MonthTiles({
               key={key}
               type="button"
               data-day={key}
-              className={styles.day}
+              className={classes(styles.day, look?.day)}
               data-loading={isLoading ? '' : undefined}
               data-best={isBest ? '' : undefined}
               data-today={isToday ? '' : undefined}

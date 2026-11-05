@@ -48,7 +48,7 @@ export interface AvatarProps {
    * An empty slot waiting for its picture: no fill, a dashed edge and `mark` in the quiet text colour, at the tile's
    * own size (a menu item with no photo yet, checklabs' dashed "+"). It shows no picture.
    */
-  readonly isEmpty?: boolean;
+  readonly emptyClass?: string;
 }
 
 /**
@@ -72,12 +72,13 @@ export function Avatar({
   isDecorative = false,
   mark,
   fit = 'cover',
-  isEmpty = false,
+  emptyClass,
 }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
   const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
   const picture = useRef<HTMLImageElement>(null);
+  const isEmpty = emptyClass !== undefined;
   const image = isEmpty ? undefined : safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
   const fades = showImage && FADES_IN.has(size);
@@ -97,7 +98,7 @@ export function Avatar({
   const initials = mark ?? initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
     <span
-      className={styles.root}
+      className={isEmpty ? `${styles.root ?? ''} ${emptyClass}` : styles.root}
       data-size={size}
       data-shape={shape}
       data-hue={hue ?? stableHue(id ?? name)}

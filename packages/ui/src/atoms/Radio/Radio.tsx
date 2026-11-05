@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import { createContext, use, type KeyboardEvent, type ReactNode } from 'react';
 import { RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
 import { FieldError } from '../FieldError/FieldError.tsx';
 import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
@@ -30,17 +30,30 @@ export interface RadioProps {
   readonly letter?: string;
 }
 
+/** A variant's classes, from its own stylesheet (`RadioRowsGroup`), set beside the group's and each choice's own. */
+export type RadioLook = Readonly<Record<string, string | undefined>>;
+
+const RadioLookContext = createContext<RadioLook | undefined>(undefined);
+
+const classes = (own: string | undefined, added: string | undefined) =>
+  added === undefined ? own : `${own ?? ''} ${added}`;
+
 /** One choice in a RadioGroup. */
 export function Radio({ value, children, description, icon, preview, isDisabled = false, letter }: RadioProps) {
+  const look = use(RadioLookContext);
   // What sits under the label, read as its description: a card's value, else the line of words.
   const under = preview ?? description;
   return (
-    <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
-      <RadioButton className={styles.radio}>
-        <span className={styles.circle} aria-hidden="true" {...(letter === undefined ? {} : { 'data-letter': letter })}>
-          <span className={styles.dot} />
+    <RadioField className={classes(styles.field, look?.field)} value={value} isDisabled={isDisabled}>
+      <RadioButton className={classes(styles.radio, look?.radio)}>
+        <span
+          className={classes(styles.circle, look?.circle)}
+          aria-hidden="true"
+          {...(letter === undefined ? {} : { 'data-letter': letter })}
+        >
+          <span className={classes(styles.dot, look?.dot)} />
         </span>
-        <span className={styles.label} data-described={under === undefined ? undefined : ''}>
+        <span className={classes(styles.label, look?.label)} data-described={under === undefined ? undefined : ''}>
           {icon !== undefined && <Icon name={icon} size="sm" />}
           {children}
         </span>
@@ -49,7 +62,7 @@ export function Radio({ value, children, description, icon, preview, isDisabled 
         <Text
           slot="description"
           elementType={preview === undefined ? 'span' : 'div'}
-          className={preview === undefined ? styles.description : styles.preview}
+          className={preview === undefined ? classes(styles.description, look?.description) : styles.preview}
         >
           {under}
         </Text>
@@ -79,11 +92,11 @@ export interface RadioGroupProps {
    * a handful of choices that each start a different job, where the choice itself is the first step of a form
    * (the link page's Add item). `letters` draws each choice full width with its letter (A, B, C) in a key before it,
    * the chosen one filling with the accent, and a letter key picks its choice while focus is in the group (a public
-   * form, Typeform's way). `rows` draws each as a full width row with its description at the row's end, after
-   * checklabs' option rows: a dish's sizes and options on the guest menu, each with its price. `plain` (the default)
-   * is the usual stack.
+   * form, Typeform's way). `plain` (the default) is the usual stack. `RadioRowsGroup` draws the rows.
    */
-  readonly variant?: 'plain' | 'cards' | 'letters' | 'rows';
+  readonly variant?: 'plain' | 'cards' | 'letters';
+  /** A variant's own stylesheet: `RadioRowsGroup` passes its rows here. */
+  readonly look?: RadioLook;
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */
@@ -142,6 +155,7 @@ export function RadioGroup({
   error,
   errorId,
   name,
+  look,
 }: RadioGroupProps) {
   return (
     <AriaRadioGroup
@@ -161,12 +175,12 @@ export function RadioGroup({
         <FieldLabel label={label} aside={labelAside} info={info} tone="strong" onInfoKeyDown={keepArrows} />
       )}
       <span
-        className={styles.choices}
+        className={classes(styles.choices, look?.choices)}
         data-orientation={orientation}
-        data-variant={variant}
+        data-variant={look === undefined ? variant : 'rows'}
         {...(variant === 'letters' && !isReadOnly && !isDisabled ? { onKeyDown: pickByLetter } : {})}
       >
-        {children}
+        {look === undefined ? children : <RadioLookContext value={look}>{children}</RadioLookContext>}
       </span>
       {/* React Aria takes a given id over its own, and the group's aria-describedby follows it. */}
       {error !== undefined && <FieldError {...(errorId === undefined ? {} : { id: errorId })}>{error}</FieldError>}
