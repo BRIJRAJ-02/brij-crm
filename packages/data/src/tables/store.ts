@@ -50,6 +50,33 @@ export interface TablesProcedures {
     },
     options: Options,
   ) => Promise<{ id: string; status: VisitStatus }>;
+  readonly book: (
+    input: Scoped & {
+      placeId: string;
+      start: string;
+      party: number;
+      name: string;
+      phone?: string;
+      email?: string;
+      note?: string;
+      resourceIds?: string[];
+      mutationId: string;
+    },
+    options: Options,
+  ) => Promise<{ id: string; status: VisitStatus }>;
+}
+
+/** A reservation the host takes on the Service screen (checklabs' New booking). */
+export interface StaffBooking {
+  /** The start, an ISO instant. */
+  readonly start: string;
+  readonly party: number;
+  readonly name: string;
+  readonly phone?: string;
+  readonly email?: string;
+  readonly note?: string;
+  /** The tables picked; left out, the engine picks the best fit. */
+  readonly resourceIds?: readonly string[];
 }
 
 /** A walk in as the Service screen seats it: the party, the tables picked (one, or up to 3 joined), a name if given. */
@@ -217,6 +244,48 @@ export function openTables(given: {
               party: walkIn.party,
               resourceIds: [...walkIn.resourceIds],
               ...(walkIn.name === undefined || walkIn.name.trim() === '' ? {} : { name: walkIn.name.trim() }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+      } catch (error) {
+        return toDataError(error);
+      }
+      await dayOf(workspace, placeId, date)
+        .read()
+        .catch(() => undefined);
+      return undefined;
+    },
+    /**
+     * Takes a reservation for a guest (checklabs' New booking). The held day of `date` reads again once the server
+     * answers, so it shows on the list and the day calendar; refused (SLOT_TAKEN when the time or table is no longer
+     * free), nothing changed and the refusal comes back.
+     */
+    book: async (
+      workspace: string,
+      placeId: string,
+      date: string,
+      booking: StaffBooking,
+    ): Promise<DataError | undefined> => {
+      const text = (value: string | undefined) =>
+        value === undefined || value.trim() === '' ? undefined : value.trim();
+      const phone = text(booking.phone);
+      const email = text(booking.email);
+      const note = text(booking.note);
+      try {
+        await call((options) =>
+          api.book(
+            {
+              workspace,
+              placeId,
+              start: booking.start,
+              party: booking.party,
+              name: booking.name.trim(),
+              ...(phone === undefined ? {} : { phone }),
+              ...(email === undefined ? {} : { email }),
+              ...(note === undefined ? {} : { note }),
+              ...(booking.resourceIds === undefined ? {} : { resourceIds: [...booking.resourceIds] }),
               mutationId: mintId(),
             },
             options,

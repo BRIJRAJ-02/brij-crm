@@ -1,8 +1,9 @@
 // Brief
 // Purpose: run the evening at the host stand (spec 0066 B7 lite; 0065 AC-6560 to AC-6565): one place's day, live.
-// Main task: see who comes when, and seat, finish, mark no show or cancel in one tap, with Undo; seat a walk in at a
-//   free table that fits; or look at the floor, each table a tile with its state, its timer and its next reservation,
-//   that opens the table with Seat and Finish.
+// Main task: see every reservation of the day on checklabs' day calendar and its bookings list, take a booking (New
+//   booking, or a time picked on the calendar), open one for its detail, and seat, finish, confirm, mark no show or
+//   cancel in one tap, with Undo; seat a walk in at a free table that fits; or look at the floor, each table a tile
+//   with its state, its timer and its next reservation, that opens the table with Seat and Finish.
 // Leaves out: moving tables by drag and joining tables by hand (later slices). Laid out as checklabs' reservations
 //   page (the date, then the bookings list) with its floor as tiles grouped by area after the owner's references; the
 //   no show hint (15 minutes past) is checklabs' alert, never an automatic change. A row's action stays pending until
@@ -43,13 +44,17 @@ import {
   TileGrid,
   TopBar,
   TruncatedText,
+  WeekCalendar,
   type Hue,
   type TableColumn,
   type Toasts,
+  type WeekCalendarBlock,
 } from '@crm/ui';
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { minuteOfDay, weekDays, weekOf } from '../bookings/week.ts';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { DEFAULT_BOOKING_MINUTE, NewBookingDialog, OFF_CALENDAR, VisitSheet } from './NewBooking.tsx';
 import { strings } from './strings.ts';
 
 /** The status a visit shows, its hue and the next likely move. */
@@ -71,6 +76,9 @@ const LATE_MINUTES = 15;
 
 /** The largest walk in the stand seats from the screen; a bigger party is a reservation. */
 const WALK_IN_MAX = 12;
+
+/** Where the day calendar opens (checklabs draws 10:00 to midnight). */
+const CALENDAR_FROM = 10 * 60;
 
 /** Wide enough for the bar's date beside its controls; a phone drops it (the day shows in the list's label). */
 const WIDE = '(min-width: 40rem)';
@@ -220,6 +228,9 @@ function PlaceService({
   >();
   const [openTable, setOpenTable] = useState<string | undefined>();
   const [walkIn, setWalkIn] = useState<{ readonly tableId?: string } | undefined>();
+  // New booking, at the time picked on the calendar or 19:00; and the booking whose detail is open.
+  const [booking, setBooking] = useState<{ readonly date: string; readonly minute: number } | undefined>();
+  const [openVisit, setOpenVisit] = useState<string | undefined>();
   const [pending, setPending] = useState<Pending>(new Map());
   // The rows in flight, read synchronously: two taps in one frame both see the first one.
   const inFlight = useRef(new Set<string>());
@@ -320,6 +331,7 @@ function PlaceService({
     const next = asked ?? LOOK[visit.status].next;
     const canFree =
       asked === undefined && (visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived');
+    const canConfirm = asked === undefined && visit.status === 'booked';
     const words: Partial<Record<VisitStatus, string>> = {
       started: strings.seat,
       completed: strings.finish,
@@ -345,9 +357,15 @@ function PlaceService({
             <Menu
               label={strings.moreFor(visit.name)}
               onAction={(key) => {
+                if (key === 'confirmed') void move(visit, 'confirmed');
                 if (key === 'no_show' || key === 'cancelled') setAsking({ visit, status: key });
               }}
             >
+              {canConfirm && (
+                <MenuItem id="confirmed" icon="check">
+                  {strings.confirm}
+                </MenuItem>
+              )}
               <MenuItem id="no_show" icon="user-x">
                 {strings.noShow}
               </MenuItem>
@@ -399,6 +417,7 @@ function PlaceService({
       columns={columns}
       rows={ordered(value.visits)}
       getRowId={(visit) => visit.id}
+      onRowAction={setOpenVisit}
       emptyState={<EmptyState icon="calendar-check" title={strings.noReservations(dayLabel)} />}
       renderCell={(visit, column) => {
         switch (column) {
@@ -424,6 +443,73 @@ function PlaceService({
       }}
     />
   );
+
+  const hourLabel = (hour: number) =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour));
+  const minuteLabel = (minute: number) =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+      new Date(2000, 0, 1, Math.floor(minute / 60), minute % 60),
+    );
+  const week = weekDays(weekOf(date));
+  const nowMinute = minuteOfDay(new Date(now), zone);
+
+  /** Checklabs' day calendar: the day's bookings by time (cancelled and no shows left out); a picked time books. */
+  const calendar = (value: ServiceDayView) => {
+    const shown = value.visits.filter((visit) => !OFF_CALENDAR.has(visit.status));
+    const blocks: readonly WeekCalendarBlock[] = shown.map((visit) => {
+      const startMinute = minuteOfDay(new Date(visit.start), zone);
+      const length = (Date.parse(visit.end) - Date.parse(visit.start)) / 60_000;
+      const endMinute = Math.max(startMinute + 15, Math.min(24 * 60, startMinute + length));
+      const table = labelOf(visit.resourceIds);
+      return {
+        id: visit.id,
+        dayKey: date,
+        startMinute,
+        endMinute,
+        title: visit.name,
+        time: `${time(visit.start)} – ${time(visit.end)}`,
+        detail: [strings.partyOf(visit.party), ...(table === '' ? [] : [table])].join(' · '),
+        kind: 'booking',
+        hue: isLate(visit) ? 'red' : LOOK[visit.status].hue,
+        ...(visit.status === 'booked' || visit.status === 'confirmed' ? {} : { status: strings.status[visit.status] }),
+      };
+    });
+    return (
+      <>
+        <SectionBar title={strings.dayCalendar} description={strings.dayCalendarHint(shown.length)} />
+        <WeekCalendar
+          label={strings.calendarLabel(dayLabel)}
+          view="day"
+          days={week.map((key) => {
+            const at = new Date(`${key}T12:00:00.000Z`);
+            const format = (options: Intl.DateTimeFormatOptions) =>
+              new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' }).format(at);
+            return {
+              key,
+              weekday: format({ weekday: 'short' }),
+              dayNumber: format({ day: 'numeric' }),
+              label: format({ weekday: 'long', day: 'numeric', month: 'long' }),
+              isToday: key === today,
+              isPast: key < today,
+            };
+          })}
+          blocks={blocks}
+          selectedDay={date}
+          onSelectDay={setDate}
+          hourLabel={hourLabel}
+          minuteLabel={minuteLabel}
+          {...(isToday ? { now: { dayKey: today, minute: nowMinute, label: minuteLabel(nowMinute) } } : {})}
+          scrollToMinute={isToday ? Math.max(CALENDAR_FROM, (Math.floor(nowMinute / 60) - 1) * 60) : CALENDAR_FROM}
+          emptyHint={strings.calendarEmpty}
+          onOpen={setOpenVisit}
+          onClose={() => setOpenVisit(undefined)}
+          drawMinutes={30}
+          onDraw={(span) => setBooking({ date: span.dayKey, minute: span.startMinute })}
+        />
+        <SectionBar title={strings.bookings(value.visits.length)} />
+      </>
+    );
+  };
 
   /** A table's state tonight: who sits there, who comes next, and how it reads. */
   const tableState = (table: Resource, value: ServiceDayView) => {
@@ -510,9 +596,12 @@ function PlaceService({
         />
       )}
       <Button size="sm" icon="chevron-left" label={strings.previousDay} onPress={() => setDate(shift(date, -1))} />
-      <Button size="sm" isDisabled={isToday} onPress={() => setDate(today)}>
-        {strings.today}
-      </Button>
+      {/* A phone keeps the bar to one line: Today shows only away from today (the calendar's days pick the rest). */}
+      {(isWide || !isToday) && (
+        <Button size="sm" isDisabled={isToday} onPress={() => setDate(today)}>
+          {strings.today}
+        </Button>
+      )}
       <Button size="sm" icon="chevron-right" label={strings.nextDay} onPress={() => setDate(shift(date, 1))} />
       <SegmentedControl
         label={strings.view}
@@ -525,12 +614,30 @@ function PlaceService({
       />
       {isToday &&
         (isWide ? (
-          <Button size="sm" variant="primary" icon="user-plus" onPress={() => setWalkIn({})}>
+          <Button size="sm" icon="user-plus" onPress={() => setWalkIn({})}>
             {strings.walkIn}
           </Button>
         ) : (
-          <Button size="sm" variant="primary" icon="user-plus" label={strings.walkIn} onPress={() => setWalkIn({})} />
+          <Button size="sm" icon="user-plus" label={strings.walkIn} onPress={() => setWalkIn({})} />
         ))}
+      {isWide ? (
+        <Button
+          size="sm"
+          variant="primary"
+          icon="plus"
+          onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
+        >
+          {strings.newBooking}
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="primary"
+          icon="plus"
+          label={strings.newBooking}
+          onPress={() => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE })}
+        />
+      )}
     </TopBar>
   );
 
@@ -551,7 +658,10 @@ function PlaceService({
         />
         {day.value.truncated && <Callout tone="info">{strings.truncated}</Callout>}
         {view === 'list' ? (
-          list(day.value)
+          <>
+            {calendar(day.value)}
+            {list(day.value)}
+          </>
         ) : floor.status === 'error' ? (
           <EmptyState icon="circle-alert" title={floor.error.message} onRetry={floorHeld.retry} />
         ) : floor.status === 'loading' ? (
@@ -562,6 +672,7 @@ function PlaceService({
       </PageColumn>
     );
 
+  const shownVisit = day.status === 'ready' ? day.value.visits.find((visit) => visit.id === openVisit) : undefined;
   const detailTable = tableList.find((table) => table.id === openTable);
   const detail = detailTable === undefined || day.status !== 'ready' ? undefined : tableState(detailTable, day.value);
 
@@ -625,6 +736,38 @@ function PlaceService({
           </>
         )}
       </Modal>
+      <VisitSheet
+        visit={shownVisit}
+        when={shownVisit === undefined ? '' : `${dayLabel}, ${time(shownVisit.start)} – ${time(shownVisit.end)}`}
+        tableLabel={shownVisit === undefined ? '' : labelOf(shownVisit.resourceIds)}
+        status={
+          shownVisit === undefined
+            ? { hue: 'gray', text: '' }
+            : isLate(shownVisit)
+              ? { hue: 'red', text: strings.late(since(shownVisit.start, now)) }
+              : { hue: LOOK[shownVisit.status].hue, text: strings.status[shownVisit.status] }
+        }
+        renderActions={() => (shownVisit === undefined ? null : actionsOf(shownVisit))}
+        onClose={() => setOpenVisit(undefined)}
+      />
+      {booking !== undefined && (
+        <NewBookingDialog
+          slug={slug}
+          tables={tables}
+          placeId={place.id}
+          zone={zone}
+          date={booking.date}
+          minute={booking.minute}
+          floorTables={tableList}
+          areas={floor.status === 'ready' ? floor.value.areas : []}
+          onClose={() => setBooking(undefined)}
+          onBooked={(name, bookedDay) => {
+            setBooking(undefined);
+            if (bookedDay !== date) setDate(bookedDay);
+            toasts.toast({ tone: 'success', message: strings.booked(name) });
+          }}
+        />
+      )}
       {walkIn !== undefined && (
         <WalkInDialog
           slug={slug}

@@ -228,6 +228,7 @@ export const ServiceVisit = z.object({
   note: z.string().optional(),
   occasion: z.string().optional(),
   phone: z.string().optional(),
+  email: z.string().optional(),
   lookupCode: z.string(),
   seatedAt: Timestamp.optional(),
   source: z.string(),
@@ -310,9 +311,33 @@ export const WalkInInput = WorkspaceScoped.extend({
 export type WalkInInput = z.infer<typeof WalkInInput>;
 
 /**
+ * A reservation the host takes (checklabs' New booking: a call, an email, a guest at the desk for later): the day's
+ * time, the party, who, how to reach them, a note, and the tables if the host picks them (else the engine's best
+ * fit). Source `desk`; the opening hours apply, the online rules (party range, notice, window) don't.
+ */
+export const StaffBookInput = WorkspaceScoped.extend({
+  placeId: Uuid,
+  start: Timestamp,
+  party: PartySize,
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Give the guest’s name.')
+    .max(VISIT_LIMITS.clientNameMax, 'Use 120 characters or fewer.'),
+  phone: z.string().trim().max(VISIT_LIMITS.clientPhoneMax, 'Use a shorter phone number.').optional(),
+  email: GuestEmail.optional(),
+  note: GuestNote.optional(),
+  resourceIds: z.array(Uuid).min(1, 'Pick a table.').max(3, 'Join at most 3 tables.').optional(),
+  mutationId: Uuid,
+});
+/** A reservation the host takes. */
+export type StaffBookInput = z.infer<typeof StaffBookInput>;
+
+/**
  * Table seating's staff side. `setup` and `saveSetup` are `hospitality.manage`'s; `day` and `setStatus` are Run
  * service's (`hospitality.service`), which reaches table reservations only, as do `setNotify` (the reader's own new
- * reservation emails), `freeTables` and `walkIn` (seat a party that walked in, now). Each refuses `APP_NOT_INSTALLED` without
+ * reservation emails), `freeTables`, `walkIn` (seat a party that walked in, now) and `book` (a reservation
+ * the host takes). Each refuses `APP_NOT_INSTALLED` without
  * Table seating.
  */
 export const tablesContract = {
@@ -323,4 +348,5 @@ export const tablesContract = {
   setNotify: oc.input(SetTableNotifyInput).output(TableNotifySet),
   freeTables: oc.input(FreeTablesInput).output(FreeTablesView),
   walkIn: oc.input(WalkInInput).output(VisitStatusMoved),
+  book: oc.input(StaffBookInput).output(VisitStatusMoved),
 };

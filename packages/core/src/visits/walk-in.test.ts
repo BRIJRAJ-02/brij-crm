@@ -12,7 +12,7 @@ import { rescope } from '../testing.ts';
 import { addResource, visitWorkspace, waiterScope } from '../../test/visits-kit.ts';
 import { getTableSetup, listServiceDay, saveTableSetup } from './table-service.ts';
 import { bookVisit } from './book.ts';
-import { freeTables, seatWalkIn } from './walk-in.ts';
+import { freeTables, reserveForGuest, seatWalkIn } from './walk-in.ts';
 import { readTableService } from './table-service.ts';
 import { inWorkspace } from '../access/run.ts';
 
@@ -155,5 +155,59 @@ describe('walk ins (AC-6671)', () => {
         )
       ).status,
     ).toBe('started');
+  });
+
+  it('takes a reservation for a guest at the table the host picked, or the best fit, and refuses a taken one', async () => {
+    const { w, small, big } = await floor();
+    const at = '2030-01-16T19:30:00.000Z';
+    const picked = await reserveForGuest(
+      w.owner,
+      {
+        placeId: w.placeId,
+        start: at,
+        party: 2,
+        name: 'Ada',
+        phone: '07700 900123',
+        resourceIds: [big],
+        idempotencyKey: randomUUID(),
+      },
+      clock,
+    );
+    expect(picked.status).toBe('booked');
+    const fit = await reserveForGuest(
+      w.owner,
+      { placeId: w.placeId, start: at, party: 2, name: 'Lin', note: 'Window', idempotencyKey: randomUUID() },
+      clock,
+    );
+    const day = await listServiceDay(w.owner, { placeId: w.placeId, date: '2030-01-16' });
+    expect(day.visits).toEqual([
+      expect.objectContaining({
+        id: picked.id,
+        name: 'Ada',
+        phone: '07700 900123',
+        source: 'desk',
+        resourceIds: [big],
+      }),
+      expect.objectContaining({ id: fit.id, name: 'Lin', note: 'Window', status: 'booked', resourceIds: [small] }),
+    ]);
+    expect(
+      await refusal(
+        reserveForGuest(
+          w.owner,
+          { placeId: w.placeId, start: at, party: 2, name: 'Max', resourceIds: [big], idempotencyKey: randomUUID() },
+          clock,
+        ),
+      ),
+    ).toBe('SLOT_TAKEN');
+    const plain = rescope(w.owner, { role: 'member' });
+    expect(
+      await refusal(
+        reserveForGuest(
+          plain,
+          { placeId: w.placeId, start: at, party: 2, name: 'Max', idempotencyKey: randomUUID() },
+          clock,
+        ),
+      ),
+    ).toBe('FORBIDDEN');
   });
 });

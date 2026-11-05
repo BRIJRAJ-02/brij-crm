@@ -364,7 +364,7 @@ import type { HospitalityStore } from './hospitality/store.ts';
 import type { MenuStore } from './menu/store.ts';
 import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
-export type { TablesStore, WalkIn } from './tables/store.ts';
+export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
 import type { BusinessPageStore } from './business-page/store.ts';
 export type { BusinessPageStore, PhotoUpload } from './business-page/store.ts';
 // The business page's editor (spec 0066, B4 lite): the shapes Settings › Business › Page shows.

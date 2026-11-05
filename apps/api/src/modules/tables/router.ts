@@ -4,6 +4,7 @@ import {
   freeTables,
   getTableSetup,
   listServiceDay,
+  reserveForGuest,
   saveTableSetup,
   seatWalkIn,
   setReservationAlert,
@@ -68,6 +69,27 @@ export const tablesRouter = t.router({
           idempotencyKey: input.mutationId,
         },
         { slotCache: context.visitSlots },
+        hooks,
+      ),
+    ),
+  ),
+  // A reservation the host takes (checklabs' New booking), through the visit engine as source `desk`.
+  book: t.book.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      reserveForGuest(
+        context.scope,
+        {
+          placeId: input.placeId,
+          start: input.start,
+          party: input.party,
+          name: input.name,
+          phone: input.phone,
+          email: input.email,
+          note: input.note,
+          resourceIds: input.resourceIds,
+          idempotencyKey: input.mutationId,
+        },
+        { slotCache: context.visitSlots, linkKey: context.bookingLinkKey },
         hooks,
       ),
     ),

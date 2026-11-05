@@ -458,6 +458,7 @@ export interface DayVisit {
   readonly note?: string;
   readonly occasion?: string;
   readonly phone?: string;
+  readonly email?: string;
   readonly lookupCode: string;
   readonly seatedAt?: string;
   readonly source: string;
@@ -497,13 +498,14 @@ export async function listServiceDay(
         note: string | null;
         occasion: string | null;
         client_phone: string | null;
+        client_email: string | null;
         lookup_code: string;
         seated_at: string | null;
         source: string;
         resource_ids: string[] | null;
       }>(sql`
         select a.id::text, a.starts_at, a.ends_at, a.client_name, a.party_size, a.status, a.note, a.occasion, a.client_phone,
-          a.lookup_code, a.seated_at, a.source,
+          a.client_email, a.lookup_code, a.seated_at, a.source,
           (select array_agg(distinct h.resource_id::text) from appointment_holds h
             where h.workspace_id = a.workspace_id and h.appointment_id = a.id and h.resource_id is not null) as resource_ids
         from appointments a
@@ -525,6 +527,7 @@ export async function listServiceDay(
       ...(row.note === null ? {} : { note: row.note }),
       ...(row.occasion === null ? {} : { occasion: row.occasion }),
       ...(row.client_phone === null ? {} : { phone: row.client_phone }),
+      ...(row.client_email === null ? {} : { email: row.client_email }),
       lookupCode: row.lookup_code,
       ...(row.seated_at === null ? {} : { seatedAt: new Date(row.seated_at).toISOString() }),
       source: row.source,

@@ -3251,6 +3251,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // The reader's own reservation emails after the install; a walk in after its tables and the setup.
   'tables.setNotify': 2,
   'tables.walkIn': 4,
+  // A reservation the host takes after the place's hours, its tables and the setup.
+  'tables.book': 5,
   // The business page (spec 0066): installed first (and its address and hours before a publish).
   'businessPage.claimHandle': 2,
   'businessPage.save': 2,
@@ -3927,6 +3929,32 @@ Object.assign(WRITES, {
     const setup = await m.client.tables.setup({ workspace: m.slug, placeId });
     await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules: setup.rules, mutationId: newId() });
     await m.client.tables.walkIn({ workspace: m.slug, placeId, party: 2, resourceIds: [one], mutationId });
+    return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
+  },
+  'tables.book': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    await m.client.hospitality.updatePlace({
+      workspace: m.slug,
+      placeId,
+      place: { name: 'Somewhere', country: 'GB', timeZone: 'Europe/London' },
+      hours: { weekly: { mon: [{ from: '09:00', to: '17:00' }] }, exceptions: [] },
+      mutationId: newId(),
+    });
+    await tablesAt(m, placeId);
+    const setup = await m.client.tables.setup({ workspace: m.slug, placeId });
+    await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules: setup.rules, mutationId: newId() });
+    // A Monday one to two weeks on, at 11:00 in London (inside the hours, past any notice).
+    const at = new Date();
+    at.setUTCDate(at.getUTCDate() + 7 + ((8 - at.getUTCDay()) % 7));
+    at.setUTCHours(11, 0, 0, 0);
+    await m.client.tables.book({
+      workspace: m.slug,
+      placeId,
+      start: at.toISOString(),
+      party: 2,
+      name: 'Ada',
+      mutationId,
+    });
     return [{ kind: 'nav' }, { kind: 'visits', item_ids: [placeId], mutation_id: mutationId }];
   },
 });
