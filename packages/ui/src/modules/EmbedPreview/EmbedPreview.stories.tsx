@@ -38,3 +38,22 @@ export const Popup: Story = { args: { mode: 'popup', words: 'Get a quote' } };
 
 /** Corner button: ours, in its colour and words. */
 export const Floating: Story = { args: { mode: 'floating', colour: '#0f766e' } };
+
+/** Corner button with its mark before the words, as a booking page's snippet can ask for (`data-timefix-icon`). */
+export const FloatingMarked: Story = {
+  args: {
+    mode: 'floating',
+    kind: 'booking',
+    mark: 'calendar',
+    words: 'Book a time',
+    label: 'How the booking page sits on your site',
+  },
+};
+
+/** A booking page in the page: its headline over a fortnight, the weekdays open. */
+export const BookingInline: Story = {
+  args: { kind: 'booking', headline: 'Intro call', label: 'How the booking page sits on your site' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'How the booking page sits on your site' })).toBeInTheDocument();
+  },
+};
