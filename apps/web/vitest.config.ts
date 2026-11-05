@@ -13,6 +13,20 @@ export default mergeConfig(
     optimizeDeps: {
       include: ['@crm/ui > libphonenumber-js/max', '@crm/ui > libphonenumber-js/mobile/examples'],
     },
+    plugins: [
+      {
+        // No api runs behind these tests. A `<link rel="stylesheet" precedence>` that fails rejects a promise React
+        // keeps to itself (`link._p`, with the error Event as its reason), which nothing can catch and which fails the
+        // run with `stack: 'undefined'`. So the Menus editor's look answers here, as an empty stylesheet.
+        name: 'crm:menu-look-for-tests',
+        configureServer(server) {
+          server.middlewares.use('/api/menu/look.css', (_request, response) => {
+            response.setHeader('content-type', 'text/css');
+            response.end('');
+          });
+        },
+      },
+    ],
     test: {
       projects: [
         {

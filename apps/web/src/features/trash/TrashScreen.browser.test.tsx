@@ -128,6 +128,15 @@ describe('Settings › Trash', () => {
     expect(page.getByRole('button', { name: 'Show more' }).elements()).toHaveLength(0);
   });
 
+  it('says on each row the day it is deleted forever', async () => {
+    const { view } = viewOf([CY]);
+    await render(view);
+    const table = page.getByRole('grid', { name: 'Trash' });
+    await expect.element(table.getByRole('columnheader', { name: 'Deleted forever on' })).toBeVisible();
+    // 1 December, 30 days after it was deleted, as the row's own date field writes the day.
+    await expect.element(table.getByRole('row', { name: /Cy Lane/ }).getByText(/Dec.*1|1.*Dec/)).toBeVisible();
+  });
+
   it('restores from the row, leaving what is ticked alone', async () => {
     const { view } = viewOf([CY, BEA]);
     const { restore } = await render(view);

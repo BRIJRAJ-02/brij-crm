@@ -77,7 +77,7 @@ const PAGE = 100;
 
 /**
  * The trash as a settings table (5 November 2026: the records grid's look was clipped in Settings): the record, its
- * kind, who deleted it and when, then Restore. On a phone each row reads as two lines.
+ * kind, who deleted it and when, the day it goes for good, then Restore. On a phone each row reads as two lines.
  */
 const COLUMNS: readonly TableColumn[] = [
   // Inline: a refused restore's words sit beside the name it is about.
@@ -85,6 +85,8 @@ const COLUMNS: readonly TableColumn[] = [
   { id: TRASH_COLUMNS.object, label: strings.columns.kind },
   { id: TRASH_COLUMNS.deletedBy, label: strings.columns.deletedBy },
   { id: TRASH_COLUMNS.deletedAt, label: strings.columns.deletedAt },
+  // The day the daily cleanup takes it, in the workspace's zone: what someone weighing Restore needs to know.
+  { id: TRASH_COLUMNS.expiresAt, label: strings.columns.expiresAt },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
