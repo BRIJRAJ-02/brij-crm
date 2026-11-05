@@ -58,7 +58,8 @@ export const NoirLook: Story = {
   render: () => {
     const look = presetLook('noir');
     return (
-      <Stage width="fill" height="page">
+      // No page height: the frame's own height would end the menu's dark ground under the words that run past it.
+      <Stage width="fill">
         <MenuList
           menu={sampleMenu()}
           photoHref={samplePhotoHref}

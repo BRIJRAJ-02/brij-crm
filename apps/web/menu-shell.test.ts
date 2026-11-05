@@ -65,12 +65,12 @@ describe('the guest menu shell', () => {
 
   it('says a pinned look’s side on the document, and nothing for one that follows the guest', async () => {
     const pinned = await menuShellFor(`/m/${KEY}`, {
-      shell: SHELL.replace('<head>', '<html lang="en"><head>'),
+      shell: SHELL.replace('<html>', '<html lang="en">'),
       readMenu: () => Promise.resolve({ ...MENU, scheme: 'dark' }),
     });
     expect(pinned.body).toContain('<html data-theme="dark" lang="en">');
     const following = await menuShellFor(`/m/${KEY}`, {
-      shell: SHELL.replace('<head>', '<html lang="en"><head>'),
+      shell: SHELL.replace('<html>', '<html lang="en">'),
       readMenu: () => Promise.resolve(MENU),
     });
     expect(following.body).not.toContain('data-theme');
