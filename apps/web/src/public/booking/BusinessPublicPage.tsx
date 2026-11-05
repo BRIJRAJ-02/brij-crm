@@ -12,7 +12,7 @@ import { createBusinessClient, directionsLinks, isDataError, type PublicBusiness
 // The page's read, for main.tsx's late check that a handle names a business: one lazy chunk carries the page and
 // its client (a separate dynamic import of the package split every app route into its own first load file).
 export { createBusinessClient };
-import { BookingFoot, BookingMessage, BusinessPage } from '@crm/ui/public-booking';
+import { BookingFoot, BookingMessage, BusinessPage, GuestLook } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { wearStylesheet } from '../stylesheet.ts';
 import { businessStrings, kindWord } from './business-strings.ts';
@@ -93,32 +93,38 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
   if (loaded.state === 'loading') return <BusinessPage {...EMPTY} isLoading />;
   if (loaded.state === 'gone') {
     return (
-      <BookingMessage title={strings.notFoundTitle} page="business_page">
-        {strings.notFoundText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage title={strings.notFoundTitle} page="business_page">
+          {strings.notFoundText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   if (loaded.state === 'failed') {
     return (
-      <BookingMessage
-        title={strings.failedTitle}
-        page="business_page"
-        onRetry={() => {
-          setLoaded({ state: 'loading' });
-          load();
-        }}
-      >
-        {strings.failedText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage
+          title={strings.failedTitle}
+          page="business_page"
+          onRetry={() => {
+            setLoaded({ state: 'loading' });
+            load();
+          }}
+        >
+          {strings.failedText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   const shown = loaded.page;
   const place = shown.places.find((each) => each.id === shown.placeId) ?? shown.places[0];
   if (place === undefined) {
     return (
-      <BookingMessage title={strings.notFoundTitle} page="business_page">
-        {strings.notFoundText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage title={strings.notFoundTitle} page="business_page">
+          {strings.notFoundText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   const logo = shown.brand?.logo;

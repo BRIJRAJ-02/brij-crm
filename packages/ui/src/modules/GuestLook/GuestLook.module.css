@@ -42,6 +42,10 @@
        filled a primary's gap, so a focused Continue only grew. */
     --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
       color-mix(in oklab, var(--guest-ink) 16%, transparent);
+    /* A focused section tab's or a list mark's inset line, solid in the ink: its 3:1 is its own. */
+    --shadow-focus-inset: inset 0 0 0 var(--border-width-hairline) var(--guest-ink);
+    /* A primary's faint drop in a control's neutral one: the token's is tinted blue. */
+    --shadow-primary: var(--shadow-control);
 
     display: contents;
   }
