@@ -185,6 +185,14 @@ describe('Settings › Trash', () => {
     });
   });
 
+  it('reads on past 1,000 records, so no record in the trash is out of reach', async () => {
+    const { onRangeChange, view } = viewOf([CY], 1200);
+    await render(view);
+    const more = page.getByRole('button', { name: 'Show more' });
+    for (const _press of Array.from({ length: 11 })) await more.click();
+    expect(onRangeChange).toHaveBeenLastCalledWith({ start: 0, end: 1200 });
+  });
+
   it('keeps the foot while rows are missing, and asks again for a block that failed', async () => {
     const { onRangeChange, view } = viewOf([CY], 2);
     await render(view);

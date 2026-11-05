@@ -4,7 +4,7 @@ A small, non virtual list in rows and columns: members, API keys, invoices, webh
 
 ## Why it exists
 
-New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row header and row actions. It wraps React Aria's `Table`, so the arrow keys move between cells. Records never use it: React Aria's Table holds every row in memory, so records go through DataGrid (milestone 3). One exception, Settings › Trash (5 November 2026): the grid filling the view was clipped there, and its rows are read only, 100 to a press of Show more, each value through AttributeDisplay, so memory grows only as far as the person asks.
+New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row header and row actions. It wraps React Aria's `Table`, so the arrow keys move between cells. Records never use it: React Aria's Table holds every row in memory, so records go through DataGrid (milestone 3). One exception, Settings › Trash (5 November 2026): the grid filling the view was clipped there, and its rows are read only, 100 to a press of Show more with no cap, each value through AttributeDisplay, so memory grows only as far as the person asks.
 
 ## Use
 

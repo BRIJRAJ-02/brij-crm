@@ -75,9 +75,6 @@ const ALL = 'all';
 /** Rows a Show more adds: the trash store's block, so each press reads one block. */
 const PAGE = 100;
 
-/** The most rows the table draws (it holds every row it shows): past it, the filter or Select all matching. */
-const MOST_SHOWN = 1000;
-
 /**
  * The trash as a settings table (5 November 2026: the records grid's look was clipped in Settings): the record, its
  * kind, who deleted it and when, then Restore. On a phone each row reads as two lines.
@@ -635,22 +632,19 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 footer: (
                   <>
                     {strings.shownOf(rows.length, total, state.count.atLeast)}
-                    {rows.length < MOST_SHOWN ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onPress={() => {
-                          const next = Math.min(shown + PAGE, MOST_SHOWN);
-                          setHeld((before) => ({ ...before, view, shown: next }));
-                          // Asked outright too: a block that failed is read again even when the range stays the same.
-                          onRangeChange({ start: 0, end: Math.min(next, source.count) });
-                        }}
-                      >
-                        {strings.showMore}
-                      </Button>
-                    ) : (
-                      strings.narrowToSeeMore
-                    )}
+                    {/* Never a cap: one kind can hold thousands, and a record nobody can reach is purged at 30 days. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => {
+                        const next = shown + PAGE;
+                        setHeld((before) => ({ ...before, view, shown: next }));
+                        // Asked outright too: a block that failed is read again even when the range stays the same.
+                        onRangeChange({ start: 0, end: Math.min(next, source.count) });
+                      }}
+                    >
+                      {strings.showMore}
+                    </Button>
                   </>
                 ),
               }
