@@ -323,6 +323,8 @@ describe('Reservations (checklabs’ one page)', () => {
     await expect.element(page.getByRole('heading', { name: 'Bookings · 5' })).toBeInTheDocument();
     const grace = page.getByRole('row', { name: /Grace Hopper/ });
     await expect.element(grace.getByText('07700 900123')).toBeVisible();
+    // The note too, under the name as checklabs' row has it.
+    await expect.element(grace.getByText(/Window seat, cake at nine/)).toBeVisible();
     await expect.element(grace.getByText('Online', { exact: true })).toBeVisible();
     // Not confirmed yet: Confirm sits beside Seat; a confirmed booking has Seat alone.
     await expect.element(grace.getByRole('button', { name: 'Confirm' })).toBeVisible();

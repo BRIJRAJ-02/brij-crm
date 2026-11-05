@@ -46,7 +46,6 @@ import {
   Table,
   TileGrid,
   TopBar,
-  TruncatedText,
   WeekCalendar,
   type Hue,
   type TableColumn,
@@ -506,9 +505,10 @@ function PlaceDay({
       <Badge dot={LOOK[visit.status].hue} text={strings.status[visit.status]} />
     );
 
-  // A desk's list has checklabs' row in columns: when, who (the phone under the name), guests, table, the source
-  // (checklabs' pill), the note (cut short), the state and the moves. A narrower list keeps when, who (the state, the
-  // party and the phone under the name) and the moves, so the name always has its room.
+  // A desk's list has checklabs' row in columns: when, who (the phone, the occasion and the note under the name, as
+  // checklabs' row has them, cut at the line's end), guests, table, the source (checklabs' pill), the state and the
+  // moves. A narrower list keeps when, who (the state and the party first under the name) and the moves, so the name
+  // always has its room.
   const columns: readonly TableColumn[] = isDesk
     ? [
         { id: 'time', label: strings.time, size: 'fit' },
@@ -516,7 +516,6 @@ function PlaceDay({
         { id: 'party', label: strings.party, size: 'fit', align: 'end' },
         { id: 'table', label: strings.table, size: 'fit' },
         { id: 'source', label: strings.sourceTitle, size: 'fit' },
-        { id: 'note', label: strings.note, size: 'fill' },
         { id: 'status', label: strings.statusTitle, size: 'fit' },
         { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
       ]
@@ -547,6 +546,7 @@ function PlaceDay({
             ]),
         ...(visit.phone === undefined ? [] : [visit.phone]),
         ...(visit.occasion === undefined ? [] : [strings.occasion(visit.occasion)]),
+        ...(visit.note === undefined ? [] : [visit.note]),
       ]}
     />
   );
@@ -571,8 +571,6 @@ function PlaceDay({
             return labelOf(visit.resourceIds);
           case 'source':
             return <Badge text={sourceOf(visit.source)} isWhole />;
-          case 'note':
-            return visit.note === undefined ? '' : <TruncatedText>{visit.note}</TruncatedText>;
           case 'status':
             return statusOf(visit);
           default:
