@@ -192,7 +192,17 @@ export function StructureTab({
           }
         : {}),
       ...(draft.canEdit
-        ? sectionActions({ store, slug, section, index, count: siblings.length, isNarrow, onOpen, said })
+        ? sectionActions({
+            store,
+            slug,
+            section,
+            // Moving waits for the whole menu: a search's positions aren't the menu's.
+            index: kept === undefined ? index : 0,
+            count: kept === undefined ? siblings.length : 1,
+            isNarrow,
+            onOpen,
+            said,
+          })
         : {}),
       content: (
         <SectionBody
@@ -481,12 +491,13 @@ function SectionBody({
                 <MenuItem id="sold" icon={item.soldOut ? 'circle-check' : 'circle-slash'}>
                   {item.soldOut ? strings.markAvailable : strings.markSoldOut}
                 </MenuItem>
-                {index > 0 ? (
+                {/* Moving waits for the whole section: a search's positions aren't the section's. */}
+                {!isSearching && index > 0 ? (
                   <MenuItem id="up" icon="arrow-up">
                     {strings.moveUp}
                   </MenuItem>
                 ) : null}
-                {index < placed.length - 1 ? (
+                {!isSearching && index < placed.length - 1 ? (
                   <MenuItem id="down" icon="arrow-down">
                     {strings.moveDown}
                   </MenuItem>
@@ -544,7 +555,16 @@ function SectionBody({
             title: sub.name,
             description: strings.sectionCount(0, sub.itemIds.length, sub.layout === 'grid'),
             ...(draft.canEdit
-              ? sectionActions({ store, slug, section: sub, index, count: subsections.length, isNarrow, onOpen, said })
+              ? sectionActions({
+                  store,
+                  slug,
+                  section: sub,
+                  index: isSearching ? 0 : index,
+                  count: isSearching ? 1 : subsections.length,
+                  isNarrow,
+                  onOpen,
+                  said,
+                })
               : {}),
             content: (
               <SectionBody

@@ -326,6 +326,31 @@ describe('the Menus editor', () => {
     await userEvent.keyboard('{Escape}');
   });
 
+  it('offers no Move while a search shows only part of the menu, since its positions aren’t the menu’s', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'More for Charred hispi cabbage' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Move down' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.fill(page.getByRole('searchbox', { name: 'Search sections and items' }), 'hispi');
+    await expect
+      .element(page.getByRole('button', { name: 'More for Burrata, blood orange, chilli' }))
+      .not.toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: 'More for Charred hispi cabbage' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Mark sold out' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: /^Move/ }).elements()).toHaveLength(0);
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: 'More for Small plates' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Edit section' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: /^Move/ }).elements()).toHaveLength(0);
+    await userEvent.keyboard('{Escape}');
+  });
+
   it('makes a new option group from an item’s drawer and comes back with it picked', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf(DRAFT);
