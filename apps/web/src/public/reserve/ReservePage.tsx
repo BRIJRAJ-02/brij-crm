@@ -471,6 +471,7 @@ export function ReservePage({
       ) : (
         <MonthTiles
           tone="plain"
+          holdsHeight={!isEmbedded}
           month={month}
           today={page.today}
           openDays={open}

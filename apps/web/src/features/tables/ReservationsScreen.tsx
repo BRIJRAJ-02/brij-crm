@@ -13,7 +13,7 @@
 import type {
   ServiceDayView,
   ServiceFloor,
-  ServicePlace,
+  TablePlace,
   ServiceTable,
   ServiceVisit,
   TablesStore,
@@ -248,8 +248,8 @@ function PlaceDay({
 }: {
   readonly slug: string;
   readonly tables: TablesStore;
-  readonly places: readonly ServicePlace[];
-  readonly place: ServicePlace;
+  readonly places: readonly TablePlace[];
+  readonly place: TablePlace;
   readonly toasts: Toasts;
   readonly date?: string;
   readonly onDate: (date: string | undefined) => void;

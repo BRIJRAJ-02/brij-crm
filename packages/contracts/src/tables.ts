@@ -224,12 +224,12 @@ export const TablePlaceInput = WorkspaceScoped.extend({ placeId: Uuid });
 export type TablePlaceInput = z.infer<typeof TablePlaceInput>;
 
 /** A place as the Reservations page draws it, and no more: its name, its zone and the hours its calendar opens at. */
-export const ServicePlace = Place.pick({ id: true, name: true, timeZone: true, hours: true });
+export const TablePlace = Place.pick({ id: true, name: true, timeZone: true, hours: true });
 /** A place as the Reservations page draws it. */
-export type ServicePlace = z.infer<typeof ServicePlace>;
+export type TablePlace = z.infer<typeof TablePlace>;
 
 /** The places those who run the floor can pick between, in the business's order. */
-export const ServicePlaces = z.object({ places: z.array(ServicePlace) });
+export const ServicePlaces = z.object({ places: z.array(TablePlace) });
 /** The places those who run the floor can pick between. */
 export type ServicePlaces = z.infer<typeof ServicePlaces>;
 
