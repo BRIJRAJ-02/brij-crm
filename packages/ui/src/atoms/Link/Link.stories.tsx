@@ -79,3 +79,21 @@ export const InText: Story = {
     </Stage>
   ),
 };
+
+/** Quiet, on a card's meta line: the text's colour, a faint underline, and a name that says whose. */
+export const Quiet: Story = {
+  render: () => (
+    <Stage>
+      <span>
+        Live ·{' '}
+        <Link href="/forms/1?tab=submissions" tone="quiet" label="12 submissions to Contact us">
+          12 submissions
+        </Link>
+      </span>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: '12 submissions to Contact us' });
+    await expect(link).toHaveAttribute('data-tone', 'quiet');
+  },
+};

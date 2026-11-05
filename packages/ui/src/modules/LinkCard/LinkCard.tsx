@@ -65,15 +65,20 @@ export interface LinkCardProps {
   readonly actions?: ReactNode;
   /**
    * What the link opens, drawn small on a stage across the card's top (5 November 2026, the owner: "make these cards
-   * look much prettier"): a form's first questions (`HostedFormPreview size="thumbnail"`), a booking page's month
+   * look much prettier"): a form's name and first questions as shapes (`FormPicture`), a booking page's month
    * (`BookingPagePicture`). It sits on a sheet that lifts on hover; it is hidden from assistive tech and takes no
    * press of its own, so a press on it opens the card.
    */
   readonly picture?: ReactNode;
   /** The link's state as a dot and a word at the start of the facts line ("Live", "Draft", "Paused"). */
   readonly status?: { readonly label: string; readonly hue: Hue };
-  /** The footer's start, in the address's place: one quiet control of the card's own (a form's "12 submissions"). */
+  /** The footer's start, in the address's place: one quiet control of the card's own (a draft form's Edit). */
   readonly lead?: ReactNode;
+  /**
+   * The facts line's end, after a middle dot: one quiet control of the card's own, above the card's link (a form's
+   * "12 submissions" as a quiet Link, with its New badge), so the foot keeps the address as a booking card's does.
+   */
+  readonly factsEnd?: ReactNode;
 }
 
 /**
@@ -101,6 +106,7 @@ export function LinkCard({
   picture,
   status,
   lead,
+  factsEnd,
 }: LinkCardProps) {
   const titleId = useId();
   const addressRef = useRef<HTMLParagraphElement>(null);
@@ -144,10 +150,11 @@ export function LinkCard({
           </div>
           {toggle !== undefined && <CardSwitch toggle={toggle} isPending={isPending} />}
         </div>
-        {(facts.length > 0 || status !== undefined) && (
+        {(facts.length > 0 || status !== undefined || factsEnd !== undefined) && (
           <p className={styles.facts}>
             {status !== undefined && <StatusDot hue={status.hue}>{status.label}</StatusDot>}
             {facts.length > 0 && <span className={styles.factsText}>{facts.join(' · ')}</span>}
+            {factsEnd !== undefined && <span className={styles.factsEnd}>{factsEnd}</span>}
           </p>
         )}
       </div>

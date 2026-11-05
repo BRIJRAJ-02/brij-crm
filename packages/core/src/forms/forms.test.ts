@@ -221,11 +221,13 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     expect(listed.items.map((form) => [form.name, form.submissionsThisMonth, form.spamCount])).toEqual([
       ['Contact us', 0, 0],
     ]);
-    // The card draws the draft, not the live version (5 November 2026): its headline and first visible questions.
-    expect(listed.items[0]?.picture?.headline).toBe('Talk to us');
-    expect(listed.items[0]?.picture?.questions.length).toBe(
-      Math.min(3, edited.draft.questions.filter((question) => question.answerType !== 'hidden').length),
+    // The card draws the draft, not the live version (5 November 2026): its first visible questions, as their types
+    // only (the card draws shapes, never words).
+    const visible = edited.draft.questions.filter((question) => question.answerType !== 'hidden').slice(0, 2);
+    expect(listed.items[0]?.picture?.questions.map((question) => question.answerType)).toEqual(
+      visible.map((question) => question.answerType),
     );
+    expect(Object.keys(listed.items[0]?.picture ?? {})).toEqual(['questions']);
   });
 
   it('a draft saved back to what is live is the live version again: Discard changes leaves nothing to publish', async () => {

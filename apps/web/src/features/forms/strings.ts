@@ -72,8 +72,8 @@ export const strings = {
   newBadge: 'New',
   /** The count link's name, its visible words first: "12 submissions to Contact us". */
   submissionsOf: (count: string, name: string) => `${count} to ${name}`,
-  /** A card's picture of a form whose row carries none: the hosted form's default button. */
-  sendButton: 'Send',
+  /** A card's picture of a form that asks nothing yet (its count otherwise is `questionCount`). */
+  noQuestionsYet: 'No questions yet',
   /** The card's meta line (lane 3c, Klaviyo's list): "5 questions · edited 2h ago · 4 submissions". */
   editedAgo: (when: string) => `edited ${when}`,
   /** Turning a form off from the list asks first: it ends something (lane 3c). */

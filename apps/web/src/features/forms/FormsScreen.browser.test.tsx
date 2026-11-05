@@ -1,8 +1,9 @@
 import '@crm/ui/styles.css';
-// Captures › Forms in Chromium (5 November 2026, the owner: "make these cards look much prettier"): each card draws
-// its own form small across its top, says its state as a dot and a word, and keeps one control of its own in the
-// foot: a live form's submissions as their count (with New when one came since), a draft's Edit. Copy link is a quiet
-// icon, and the picture never takes focus or a reader's attention.
+// Captures › Forms in Chromium (5 November 2026, the owner, pointing at the booking page cards: "make something like
+// this for forms as well"): each card draws an abstract form in its colour across its top (its name and count, its
+// questions as shapes), says its state as a dot and a word with its submissions as a quiet link (New when one came
+// since), and ends with its address, a quiet Copy, Open and ⋯ as a booking card does. A draft says when it changed
+// and offers Edit. The picture never takes focus or a reader's attention.
 import type { CaptureListState, CaptureListView, DataLayer, FormSummary } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
@@ -11,7 +12,7 @@ import { FormsScreen } from './FormsScreen.tsx';
 
 const NOW = Date.now();
 
-/** A form as the list holds it, with its picture: the draft's headline and first questions. */
+/** A form as the list holds it, with its picture: its first questions' types. */
 function formOf(id: string, name: string, extra: Partial<FormSummary> = {}): FormSummary {
   return {
     id,
@@ -24,14 +25,7 @@ function formOf(id: string, name: string, extra: Partial<FormSummary> = {}): For
     submissionCount: 12,
     questionCount: 3,
     picture: {
-      headline: name,
-      buttonText: 'Send',
-      colour: 'light',
-      corners: 'rounded',
-      questions: [
-        { id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text', required: true },
-        { id: 'q2', key: 'email', label: 'Work email', answerType: 'email', required: true },
-      ],
+      questions: [{ answerType: 'short_text' }, { answerType: 'choice', choiceCount: 3 }, { answerType: 'rating' }],
     },
     updatedAt: new Date(NOW - 3_600_000).toISOString(),
     ...extra,
@@ -78,20 +72,20 @@ async function renderForms(forms: readonly FormSummary[], permissions: readonly 
 }
 
 describe('the forms list (5 November 2026)', () => {
-  it('draws each form small, hidden from readers, with its state as a dot and a word', async () => {
+  it('draws each form as shapes, hidden from readers, with its state as a dot and a word', async () => {
     await renderForms([formOf('f1', 'Contact us'), formOf('f2', 'Feedback', { status: 'paused' })]);
     const contact = page.getByRole('article', { name: 'Contact us' });
     await expect.element(contact.getByText('Live')).toBeVisible();
     await expect.element(page.getByRole('article', { name: 'Feedback' }).getByText('Paused')).toBeVisible();
-    // The picture is the form's own first questions, drawn by the hosted page's component, inert and hidden.
+    // The picture is the form's name and count over its questions as shapes: no question's words, inert and hidden.
     const stage = contact.element().querySelector('[aria-hidden="true"][inert]');
-    expect(stage?.textContent).toContain('Work email');
+    expect(stage?.textContent).toBe('Contact us3 questions');
+    expect(stage?.querySelectorAll('[data-kind]')).toHaveLength(2);
+    expect(stage?.querySelector('[data-kind="choices"]')?.children[1]?.children).toHaveLength(3);
     expect(contact.getByRole('textbox').query()).toBeNull();
-    // The old meta line's question count is gone: the picture says what it asks.
-    expect(contact.getByText(/questions/).query()).toBeNull();
   });
 
-  it('keeps one control of its own in the foot: the submissions as their count, with New, and a quiet Copy link', async () => {
+  it('puts the submissions on the meta line, and the address, Copy, Open and ⋯ in the foot', async () => {
     await renderForms([formOf('f1', 'Contact us', { lastSubmissionAt: new Date(NOW - 600_000).toISOString() })]);
     const contact = page.getByRole('article', { name: 'Contact us' });
     const count = contact.getByRole('link', { name: '12 submissions to Contact us' });
@@ -99,18 +93,34 @@ describe('the forms list (5 November 2026)', () => {
     expect(count.element().getAttribute('href')).toContain('tab=submissions');
     // Never opened, so a submission from this week is new to this reader.
     await expect.element(contact.getByText('New', { exact: true })).toBeVisible();
-    // Copy link is an icon, named, with no words beside it.
+    // The address as a path, as a booking card shows /ada-lovelace/intro-call.
+    await expect.element(contact.getByText('/f/key-f1', { exact: true })).toBeVisible();
+    // Copy link and Open are icons, named, with no words beside them; Pause waits in ⋯.
     const copy = contact.getByRole('button', { name: 'Copy link' });
     await expect.element(copy).toBeVisible();
     expect(copy.element().textContent.trim()).toBe('');
+    await expect.element(contact.getByRole('button', { name: 'Open Contact us in a new tab' })).toBeVisible();
+    await expect.element(contact.getByRole('button', { name: 'More for Contact us' })).toBeVisible();
+    // No switch: pausing from a card asks first, in ⋯ (4 November 2026).
+    expect(contact.getByRole('switch').query()).toBeNull();
   });
 
-  it("offers a draft's Edit in its foot, with nothing to copy", async () => {
+  it('opens nothing from a paused card', async () => {
+    await renderForms([formOf('f2', 'Feedback', { status: 'paused' })]);
+    const paused = page.getByRole('article', { name: 'Feedback' });
+    await expect.element(paused.getByText('/f/key-f2', { exact: true })).toBeVisible();
+    expect(paused.getByRole('button', { name: 'Open Feedback in a new tab' }).query()).toBeNull();
+  });
+
+  it("offers a draft's Edit in its foot, says when it changed, and has no address to copy", async () => {
     await renderForms([formOf('f3', 'Untitled form', { liveVersionNumber: undefined, status: 'draft' })]);
     const draft = page.getByRole('article', { name: 'Untitled form' });
     await expect.element(draft.getByText('Draft')).toBeVisible();
+    await expect.element(draft.getByText(/^edited /)).toBeVisible();
     await expect.element(draft.getByRole('link', { name: 'Edit Untitled form' })).toBeVisible();
     expect(draft.getByRole('button', { name: 'Copy link' }).query()).toBeNull();
+    expect(draft.getByText(/^\/f\//).query()).toBeNull();
+    expect(draft.getByRole('link', { name: /submissions/ }).query()).toBeNull();
   });
 
   it('lists the form changed last first, with no sort control (the owner, 5 November 2026)', async () => {

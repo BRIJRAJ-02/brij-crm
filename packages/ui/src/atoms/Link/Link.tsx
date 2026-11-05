@@ -30,6 +30,13 @@ export interface LinkProps {
   readonly icon?: IconName;
   /** `strong`: the words in the strong weight, for a link that is a page's action rather than a reference. */
   readonly weight?: 'regular' | 'strong';
+  /**
+   * `quiet`: in the text's own colour, its underline faint until hover or focus, for a link that is a fact as much
+   * as a way in (a form card's "12 submissions", 5 November 2026). Default: link-coloured.
+   */
+  readonly tone?: 'quiet';
+  /** Its name for screen readers when its words alone are ambiguous out of context ("12 submissions to Contact us"). */
+  readonly label?: string;
 }
 
 /** Where a checked href goes: inside the app, or out to another site in a new tab. */
@@ -42,11 +49,22 @@ export function linkTarget(href: string) {
  * in a new tab. A link that fails `safeHref` (a `javascript:` URL) renders as
  * plain text (AC-14).
  */
-export function Link({ href, children, onPress, opensInNewTab = false, icon, weight = 'regular' }: LinkProps) {
+export function Link({
+  href,
+  children,
+  onPress,
+  opensInNewTab = false,
+  icon,
+  weight = 'regular',
+  tone,
+  label,
+}: LinkProps) {
   const look = {
     className: styles.root,
     'data-weight': weight === 'strong' ? 'strong' : undefined,
     'data-icon': icon === undefined ? undefined : '',
+    'data-tone': tone,
+    'aria-label': label,
   };
   const words = (
     <>

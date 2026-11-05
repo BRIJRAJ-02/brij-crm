@@ -18,7 +18,8 @@
    duration-move with ease-out, so the card answers the pointer; reduced motion keeps it still; an off card's stage
    loses its colour. The facts line can
    start with the link's status as a StatusDot, a middle dot after it; the footer's start can hold one control of
-   the card's own (`lead`) in the address's place; Copy link can be a quiet ghost icon. */
+   the card's own (`lead`) in the address's place; the facts line can end with one (`factsEnd`), raised above the
+   card's link, a middle dot before it; Copy link can be a quiet ghost icon. */
 @layer components {
   .root {
     position: relative;
@@ -258,17 +259,27 @@
     }
   }
 
-  /* The status, then the facts after a middle dot. */
-  .facts:has(.factsText) {
+  /* The status, then the facts after a middle dot, then the card's own quiet control after another. */
+  .facts:has(.factsText, .factsEnd) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0 var(--space-6);
   }
 
-  .facts > .factsText:not(:first-child)::before {
+  .facts > .factsText:not(:first-child)::before,
+  .facts > .factsEnd:not(:first-child)::before {
     margin-inline-end: var(--space-6);
     content: '·';
+  }
+
+  /* Above the card's link, so its control does its own thing; a badge beside it. */
+  .factsEnd {
+    position: relative;
+    z-index: var(--z-raised);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
   }
 
   /* The footer's own control, in the address's place, pushing Copy link and the actions to the end. A ghost

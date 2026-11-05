@@ -1,12 +1,12 @@
 // Brief
-// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, each a picture of its own form
-// over its name, its state as a dot and a word, when it was edited, and its submissions (spec 0023; 5 November 2026).
+// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links (5 November 2026, the owner: "make
+// something like this for forms as well"): an abstract form in its colour over its name, its state and submissions,
+// and its address with Copy, Open and ⋯ (spec 0023).
 // Main task: open a form, make a new one at once, copy its link, or open its submissions; newest change first.
 // Leaves out: anything inside one form (its builder), archived forms (a later pass), and a one-click off switch:
 // pausing ends something, so it sits in ⋯ and asks first.
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import type { PublicForm } from '@crm/contracts/forms';
 import {
   Badge,
   Button,
@@ -17,11 +17,14 @@ import {
   MenuSeparator,
   MenuTrigger,
   formatRelative,
-  HostedFormPreview,
+  FormPicture,
+  Link,
+  linkHue,
   SpotIllustration,
   Tooltip,
   useFormatSettings,
   useNow,
+  type FormPictureField,
   type LinkGridCard,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -49,27 +52,46 @@ export interface FormsScreenProps {
   readonly slug: string;
 }
 
+/** One question as the card's picture draws it: a shape for its kind, never its words. */
+function fieldOf(question: NonNullable<FormSummary['picture']>['questions'][number]): FormPictureField {
+  switch (question.answerType) {
+    case 'long_text':
+    case 'address':
+    case 'signature':
+      return { kind: 'long' };
+    case 'dropdown':
+    case 'choice':
+    case 'multi_select':
+    case 'ranking':
+      return { kind: 'choices', count: question.choiceCount ?? 2 };
+    case 'yes_no':
+      return { kind: 'choices', count: 2 };
+    case 'rating':
+    case 'scale':
+      return { kind: 'rating' };
+    case 'checkbox':
+    case 'consent':
+      return { kind: 'check' };
+    default:
+      return { kind: 'text' };
+  }
+}
+
 /**
- * The card's picture (5 November 2026, the owner: "make these cards look much prettier"; Flodesk's and Fillout's form
- * grids): the draft's headline and first questions, drawn by the hosted page's own component at a thumbnail's size,
- * in the form's own Light or Dark, so each card shows its own form. A row from an older answer, with no picture,
- * draws its name alone on an empty form.
+ * The card's picture (5 November 2026, the booking page card's sibling): the form's name and question count over its
+ * first questions as shapes and a button, in a colour from its id, as a booking page's month takes one from its id.
+ * A row from an older answer, with no picture, draws its name and button alone.
  */
-function pictureOf(form: FormSummary): PublicForm {
-  const picture = form.picture;
-  return {
-    key: `card-${form.id}`,
-    status: 'live',
-    versionNumber: 1,
-    headline: picture?.headline ?? form.name,
-    ...(picture?.subheading === undefined ? {} : { subheading: picture.subheading }),
-    buttonText: picture?.buttonText ?? strings.sendButton,
-    language: 'en',
-    look: { colour: picture?.colour ?? 'light', corners: picture?.corners ?? 'rounded' },
-    ...(picture?.layout === undefined ? {} : { layout: picture.layout }),
-    questions: [...(picture?.questions ?? [])],
-    offersMeeting: false,
-  };
+function pictureOf(form: FormSummary) {
+  const asked = form.questionCount ?? form.picture?.questions.length ?? 0;
+  return (
+    <FormPicture
+      title={form.name}
+      count={asked === 0 ? strings.noQuestionsYet : strings.questionCount(asked)}
+      fields={(form.picture?.questions ?? []).map(fieldOf)}
+      hue={linkHue(form.id)}
+    />
+  );
 }
 
 /** Its state as a dot and a word: Draft until its first publish, Paused once paused, otherwise Live. */
@@ -141,52 +163,60 @@ export function FormsScreen({ slug }: FormsScreenProps) {
     const isLive = isPublished && form.status === 'live';
     const real = realSubmissions(form);
     const countText = real === 0 ? strings.noSubmissionsYet : strings.submissionCount(real);
+    const hostedUrl = data.forms.hostedUrl(form.publicKey);
     return {
       id: form.id,
       title: form.name,
       href: formHref(slug, form.id),
-      // The form itself, small, across the card's top: what it asks says more than "4 questions" did.
-      picture: <HostedFormPreview form={pictureOf(form)} size="thumbnail" />,
-      // Its state as a dot and a word, then one fact: when it changed. Its submissions are the foot's own link.
+      // What a guest will fill in, abstract and small, across the card's top, as a booking page's month.
+      picture: pictureOf(form),
+      // Its state as a dot and a word; a draft says when it changed, a published form its submissions.
       ...(isPending ? { badge: strings.copying } : { status: statusOf(form) }),
-      facts: [strings.editedAgo(formatRelative(form.updatedAt, now, locale, timeZone, dateFormat))],
+      facts: isPublished ? [] : [strings.editedAgo(formatRelative(form.updatedAt, now, locale, timeZone, dateFormat))],
+      // Its submissions, one press from the list (forms fix a9), as a quiet link on the meta line: "12 submissions",
+      // with New when one came since the reader last looked.
+      ...(isPublished && !isPending
+        ? {
+            factsEnd: (
+              <>
+                <Link
+                  href={formHref(slug, form.id, 'submissions')}
+                  tone="quiet"
+                  label={strings.submissionsOf(countText, form.name)}
+                >
+                  {countText}
+                </Link>
+                {hasNewAnswers(slug, form, now) && <Badge text={strings.newBadge} tone="accent" isWhole />}
+              </>
+            ),
+          }
+        : {}),
       // Only a paused form reads quieter.
       isOff: form.status === 'paused',
       isPending,
-      // Not published, there is nothing to copy or open: its Draft says why. Copy link is a quiet icon.
-      ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey), isCopyQuiet: true } : {}),
-      lead: isPending ? undefined : isPublished ? (
-        // Its submissions, one press from the list (forms fix a9), as their count: "12 submissions", with New when
-        // one came since the reader last looked.
-        <>
-          <ButtonLink
-            variant="ghost"
-            size="lg"
-            icon="inbox"
-            label={strings.submissionsOf(countText, form.name)}
-            href={formHref(slug, form.id, 'submissions')}
-          >
-            {countText}
-          </ButtonLink>
-          {hasNewAnswers(slug, form, now) && <Badge text={strings.newBadge} tone="accent" isWhole />}
-        </>
-      ) : canManage ? (
-        // A draft has no link to copy or open: Edit is the next step (the owner, 31 October 2026: "no idea what to do").
-        <ButtonLink
-          variant="ghost"
-          size="lg"
-          icon="pencil"
-          label={strings.editFormOf(form.name)}
-          href={formHref(slug, form.id)}
-        >
-          {strings.editDraft}
-        </ButtonLink>
-      ) : undefined,
+      // Its address, Copy as a quiet icon, Open and ⋯, as a booking page's foot. A draft has no address yet: its
+      // foot starts with Edit, the next step (the owner, 31 October 2026: "no idea what to do").
+      ...(isPublished
+        ? { address: new URL(hostedUrl).pathname, copyValue: hostedUrl, isCopyQuiet: true }
+        : !isPending && canManage
+          ? {
+              lead: (
+                <ButtonLink
+                  variant="ghost"
+                  size="lg"
+                  icon="pencil"
+                  label={strings.editFormOf(form.name)}
+                  href={formHref(slug, form.id)}
+                >
+                  {strings.editDraft}
+                </ButtonLink>
+              ),
+            }
+          : {}),
       actions: (
         <>
-          {/* Open sits in ⋯ for those who have it, so a phone's card holds Copy link, Submissions and ⋯ on one line
-              (lane 3c); a reader with no menu keeps it here. */}
-          {isLive && !canManage && (
+          {/* Paused or a draft, there is nothing to open: its state says why. */}
+          {isLive && (
             <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
               <Button
                 variant="ghost"
@@ -195,7 +225,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
                 label={strings.openForm(form.name)}
                 isDisabled={isPending}
                 onPress={() => {
-                  globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
+                  globalThis.open(hostedUrl, '_blank', 'noopener');
                 }}
               />
             </Tooltip>
@@ -216,14 +246,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
                   if (key === 'delete') setDeleting(form);
                   if (key === 'pause') setPausing(form);
                   if (key === 'resume') setLive(form, 'live');
-                  if (key === 'open') globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
                 }}
               >
-                {isLive ? (
-                  <MenuItem id="open" icon="external-link">
-                    {strings.openInNewTab}
-                  </MenuItem>
-                ) : null}
                 {/* Pausing ends something, so it asks first; resuming ends nothing and goes at once (lane 3c). */}
                 {isLive ? (
                   <MenuItem id="pause" icon="pause">
