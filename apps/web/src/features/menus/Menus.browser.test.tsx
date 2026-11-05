@@ -289,7 +289,8 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
     );
-    await expect.element(page.getByText('0 sub-sections · 3 items').first()).toBeInTheDocument();
+    // A section with no sub sections counts its items alone.
+    await expect.element(page.getByText('3 items', { exact: true }).first()).toBeInTheDocument();
     // The price, sizes and allergens ride each item's second line.
     await expect.element(page.getByText('Half £14.00').first()).toBeInTheDocument();
     const fold = page.getByRole('button', { name: 'Show Small plates' });
@@ -314,7 +315,7 @@ describe('the Menus editor', () => {
     await expect.element(sheet.getByPlaceholder('e.g. Grilled Salmon')).toBeVisible();
     await expect.element(sheet.getByRole('switch', { name: /Available/ })).toBeChecked();
     await userEvent.click(sheet.getByRole('button', { name: 'New option group' }));
-    const group = page.getByRole('dialog', { name: 'Option group' });
+    const group = page.getByRole('dialog', { name: 'New option group' });
     await userEvent.fill(group.getByLabelText('Name', { exact: true }), 'Milk');
     await userEvent.fill(group.getByRole('textbox', { name: /^Option 1/ }), 'Oat');
     await userEvent.click(group.getByRole('button', { name: 'Save group' }));
@@ -333,7 +334,7 @@ describe('the Menus editor', () => {
     );
     await expect.element(page.getByText('Choices guests can pick. Required groups need a pick.')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'New group' }).first());
-    const drawer = page.getByRole('dialog', { name: 'Option group' });
+    const drawer = page.getByRole('dialog', { name: 'New option group' });
     await expect.element(drawer).toBeVisible();
     // Save with nothing named: the problems show inline, nothing is sent.
     await userEvent.click(drawer.getByRole('button', { name: 'Save group' }));

@@ -22,6 +22,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { GroupDrawer } from './GroupDrawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
+import { flipSoldOut } from './StructureTab.tsx';
 import { strings } from './strings.ts';
 
 interface SizeRow {
@@ -156,20 +157,27 @@ export function ItemDialog({
       })),
       groupIds: [...groupIds],
     };
+    // Busy until every part has gone (the item, its photo, Available), so a second Save sends nothing twice.
     setSaving(true);
     const refused = await store.saveItem(slug, id, fields, item === undefined ? sectionId : undefined);
-    setSaving(false);
     if (refused !== undefined) {
+      setSaving(false);
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
     if (pendingPhoto !== undefined) await upload(pendingPhoto);
-    // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists.
+    // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists, said
+    // with Undo as the Items switch says it.
     if (isAvailable === (item?.soldOut ?? false)) {
-      const soldOut = await store.setSoldOut(slug, id, !isAvailable);
-      if (soldOut !== undefined) toasts.toast({ tone: 'danger', message: soldOut.message });
+      flipSoldOut(store, slug, { id, name: name.trim() }, !isAvailable, toasts, said);
     }
+    setSaving(false);
     onClose();
+  };
+
+  /** A refusal said as a toast (the item's own Undo and Available speak through the same). */
+  const said = (refusedNow: { readonly message: string } | undefined) => {
+    if (refusedNow !== undefined) toasts.toast({ tone: 'danger', message: refusedNow.message });
   };
 
   /** Sends the cropped photo, already at both widths, for the dish `id`, which must exist by now. */
@@ -279,10 +287,13 @@ export function ItemDialog({
           />
           <Switch
             label={strings.availableSwitch}
-            description={strings.availableHint}
+            description={isReadOnly ? strings.availableNow : strings.availableHint}
             isSelected={isAvailable}
-            onChange={setAvailable}
-            isReadOnly={isReadOnly}
+            onChange={(next) => {
+              setAvailable(next);
+              // Run service changes nothing else here, so Available goes live at once for them, with Undo.
+              if (isReadOnly && live !== undefined) flipSoldOut(store, slug, live, !next, toasts, said);
+            }}
           />
         </FormRow>
         {price.trim() === '' && sizes.length === 0 ? (

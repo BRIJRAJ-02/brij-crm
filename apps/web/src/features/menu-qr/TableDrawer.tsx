@@ -139,8 +139,14 @@ export function TableDrawer({
     setBusy(true);
     setRefusals([]);
     try {
-      // A zone typed into the picker is made first, so the table lands in it.
-      const areaId = zone === NEW_ZONE && newZone !== undefined ? await onCreateZone(newZone) : zone;
+      // A zone typed into the picker is made first, so the table lands in it; from then on the drawer holds the
+      // zone made, so a Save tried again after a refusal never makes it twice.
+      let areaId = zone;
+      if (zone === NEW_ZONE && newZone !== undefined) {
+        areaId = await onCreateZone(newZone);
+        setZone(areaId);
+        setNewZone(undefined);
+      }
       if (table !== undefined) {
         await onSave(table, {
           label: label.trim(),
@@ -224,18 +230,25 @@ export function TableDrawer({
           <Button slot="close" isDisabled={isBusy}>
             {strings.cancel}
           </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            isPending={isBusy}
-            isDisabled={isSeveral && run === undefined}
-          >
+          {/* Never off: a run that doesn't hold together says why on its field when pressed. */}
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {!isNew ? strings.saveTable : isSeveral ? strings.createTables(count) : strings.createTable}
           </Button>
         </>
       }
     >
+      {/* One or Several sits above the form, so the form's first field (Label) takes focus as the drawer opens. */}
+      {isNew ? (
+        <SegmentedControl
+          label={strings.how}
+          segments={[
+            { value: 'one', label: strings.one },
+            { value: 'several', label: strings.several },
+          ]}
+          value={mode}
+          onChange={(value) => setMode(value === 'several' ? 'several' : 'one')}
+        />
+      ) : null}
       <Form
         id={formId}
         isBusy={isBusy}
@@ -245,17 +258,6 @@ export function TableDrawer({
         label={isNew ? strings.addTitle : strings.editTitle}
         focusesFirstField
       >
-        {isNew ? (
-          <SegmentedControl
-            label={strings.how}
-            segments={[
-              { value: 'one', label: strings.one },
-              { value: 'several', label: strings.several },
-            ]}
-            value={mode}
-            onChange={(value) => setMode(value === 'several' ? 'several' : 'one')}
-          />
-        ) : null}
         {isSeveral ? (
           <FormRow>
             <Field label={strings.prefix} name="prefix" maxLength={8} value={prefix} onChange={setPrefix} />

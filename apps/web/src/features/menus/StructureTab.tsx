@@ -27,6 +27,7 @@ import {
 } from '@crm/ui';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Open } from './MenusScreen.tsx';
+import { useIsNarrow } from './narrow.ts';
 import { draftPhotoHref } from './photo.ts';
 import { strings } from './strings.ts';
 
@@ -61,7 +62,7 @@ export const dishLeadingLoading = <Skeleton shape="circle" size="sm" />;
 export function flipSoldOut(
   store: MenuStore,
   slug: string,
-  item: Dish,
+  item: Pick<Dish, 'id' | 'name'>,
   soldOut: boolean,
   toasts: Toasts,
   said: Said,
@@ -256,6 +257,8 @@ function SectionHead({
   readonly onOpen: (open: Open) => void;
   readonly said: Said;
 }) {
+  // At a phone's width List or Grid moves into ⋯, so the head keeps its name on one line.
+  const isNarrow = useIsNarrow();
   return (
     <>
       <Button
@@ -264,13 +267,18 @@ function SectionHead({
         label={strings.editNamed(section.name)}
         onPress={() => onOpen({ kind: 'section', menuId: section.menuId, sectionId: section.id })}
       />
-      <LayoutSwitch store={store} slug={slug} section={section} said={said} />
+      {isNarrow ? null : <LayoutSwitch store={store} slug={slug} section={section} said={said} />}
       <SectionMenu
         section={section}
         index={index}
         count={count}
+        hasLayout={isNarrow}
         onAction={(key) => {
-          if (key === 'sub') onOpen({ kind: 'section', menuId: section.menuId, parentId: section.id });
+          if (key === 'layout')
+            void store
+              .saveSection(slug, { ...sectionInput(section), layout: section.layout === 'grid' ? 'list' : 'grid' })
+              .then(said);
+          else if (key === 'sub') onOpen({ kind: 'section', menuId: section.menuId, parentId: section.id });
           else if (key === 'up') void store.move(slug, 'section', section.id, index - 1).then(said);
           else if (key === 'down') void store.move(slug, 'section', section.id, index + 1).then(said);
           else if (key === 'delete') onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name });
@@ -314,17 +322,25 @@ function SectionMenu({
   section,
   index,
   count,
+  hasLayout = false,
   onAction,
 }: {
   readonly section: MenuSection;
   readonly index: number;
   readonly count: number;
+  /** List or Grid as an item (a phone's width, where the head has no room for the switch). */
+  readonly hasLayout?: boolean;
   readonly onAction: (key: string) => void;
 }) {
   return (
     <MenuTrigger>
       <Button variant="ghost" icon="ellipsis" label={strings.moreFor(section.name)} />
       <Menu label={strings.moreFor(section.name)} onAction={(key) => onAction(String(key))}>
+        {hasLayout ? (
+          <MenuItem id="layout" icon={section.layout === 'grid' ? 'list' : 'layout-grid'}>
+            {section.layout === 'grid' ? strings.showAsList : strings.showAsGrid}
+          </MenuItem>
+        ) : null}
         {section.parentId === undefined ? (
           <MenuItem id="sub" icon="plus">
             {strings.addSubsection}
@@ -356,7 +372,10 @@ export function itemChips(item: Dish, currency: string, locale: string, alsoOn: 
   return [
     ...(item.priceMinor === undefined ? [] : [formatPrice(item.priceMinor, currency, locale)]),
     ...item.sizes.map((size) => `${size.name} ${formatPrice(size.priceMinor, currency, locale)}`),
-    ...(item.priceMinor === undefined && item.sizes.length === 0 ? [item.priceNote ?? strings.noPrice] : []),
+    // A price note stands where a price would; No price is the row's own badge, not a fact.
+    ...(item.priceMinor === undefined && item.sizes.length === 0 && item.priceNote !== undefined
+      ? [item.priceNote]
+      : []),
     ...item.allergens.filter((each) => each.level === 'contains').map((each) => strings.allergens[each.code]),
     ...(alsoOn.length === 0 ? [] : [strings.alsoOn(alsoOn.join(', '))]),
   ];
@@ -421,19 +440,11 @@ function SectionBody({
     chips: itemChips(item, draft.currency, locale, menuNames(item.id)),
     // The item's photo; with none, a dashed + that opens its drawer at the photo picker (checklabs' empty slot), or
     // a quiet photo mark for someone who can't change it. Never a letter tile.
-    leading:
-      item.photo === undefined && draft.canEdit ? (
-        // A whole control's size, so it and the row's grip beside it each keep a 24px target (WCAG 2.5.8).
-        <Button
-          variant="dashed"
-          icon="plus"
-          label={strings.addPhotoFor(item.name)}
-          onPress={() => onOpen({ kind: 'item', item })}
-        />
-      ) : (
-        <DishThumb slug={slug} item={item} />
-      ),
-    // Sold out at the row's end; No price is the second line's own first chip.
+    // The item's photo; with none, a dashed "+" slot for someone who can add one (checklabs' empty slot): the row
+    // opens the item, whose drawer holds the photo picker. Never a letter tile.
+    leading: <DishThumb slug={slug} item={item} isSlot={draft.canEdit} />,
+    // No price is what the row is until fixed (Publish refuses it), so it sits by the name; Sold out at the end.
+    ...(isUnpriced(item) ? { titleBadge: strings.noPriceBadge } : {}),
     ...(item.soldOut ? { badge: strings.soldOutBadge, isOff: true } : {}),
     ...(!draft.canEdit
       ? {
@@ -704,11 +715,15 @@ export function DishThumb({
   slug,
   item,
   size = 'sm',
+  isSlot = false,
 }: {
   readonly slug: string;
   readonly item: Dish;
   readonly size?: 'xs' | 'sm';
+  /** With no photo, a dashed "+" slot waiting for one (someone who can add it), rather than the quiet photo mark. */
+  readonly isSlot?: boolean;
 }) {
+  const isEmpty = isSlot && item.photo === undefined;
   return (
     <Avatar
       name={item.name}
@@ -717,7 +732,8 @@ export function DishThumb({
       shape="square"
       hue="gray"
       isDecorative
-      mark={<Icon name="image" size="xs" />}
+      isEmpty={isEmpty}
+      mark={<Icon name={isEmpty ? 'plus' : 'image'} size="xs" />}
       {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
     />
   );

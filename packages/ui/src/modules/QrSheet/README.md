@@ -30,7 +30,7 @@ New. Menu QR prints a code for every table (AC-6543: "a Print page lays out tabl
 - A card's `code` is printed under the table's name (a tent) or after the venue (a tile), in the code type, so staff match a printed card to its table, as checklabs' sheet does.
 - `logoSrc`: the venue's logo, from our own origin (`safeImageSrc`); it sits above the venue's name and in the code's centre. Without one, the venue's initial in a round mark, and a plain code.
 - `colour`: the modules' colour, only while it keeps 4.5 to 1 on white (QrCode's rule); otherwise black.
-- `controls` and `actions`: what sits above the sheets on screen, at the start (a way back, a summary) and at the end (the per page choice, Print); `notice` a line under them (the menu isn't live). None of them prints.
+- `controls` and `actions`: what sits above the sheets on screen, at the start (a way back) and at the end (the per page choice, Print); `summary` a quiet line after the controls saying what prints ("8 tables · scan-ready", checklabs' sheet head, 5 November 2026; a prop so the screen never sets text of its own); `notice` a line under them (the menu isn't live). None of them prints.
 - Each card is two faces with a dashed fold line between them; the back face is drawn upside down, so once folded into a tent both sides read the right way up. The card's own dashed edges are the cut lines.
 
 ## Print

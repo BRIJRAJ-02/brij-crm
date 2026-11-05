@@ -4,6 +4,7 @@
 // Main task: find an item and change it, or switch it off for tonight.
 // Leaves out: where an item sits and in what order (Structure), and option groups (Options).
 import type { MenuDraft, MenuItem as Dish, MenuSection, MenuStore } from '@crm/data';
+import { formatPrice } from '@crm/data/menu';
 import {
   Badge,
   Button,
@@ -21,12 +22,12 @@ import { useMemo } from 'react';
 import type { Open } from './MenusScreen.tsx';
 import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
-import { DishThumb, flipSoldOut, priceLine } from './StructureTab.tsx';
+import { DishThumb, flipSoldOut } from './StructureTab.tsx';
 
 /** The table's columns, after checklabs' Item, Category / Sub-category, Price and Visible. */
 const COLUMNS: readonly TableColumn[] = [
   { id: 'item', label: strings.columnItem, isRowHeader: true, isInline: true, size: 'fill' },
-  { id: 'section', label: strings.columnSection },
+  { id: 'section', label: strings.columnSection, size: 'fit' },
   { id: 'price', label: strings.columnPrice, align: 'end', size: 'fit' },
   { id: 'available', label: strings.columnAvailable, size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
@@ -34,6 +35,24 @@ const COLUMNS: readonly TableColumn[] = [
 
 /** At a phone's width the section gives its room to the name. */
 const NARROW_COLUMNS = COLUMNS.filter((column) => column.id !== 'section');
+
+/** Someone who can't change items (Run service) has no ⋯: the row opens the item to read. */
+const READ_COLUMNS = COLUMNS.filter((column) => column.id !== 'actions');
+const NARROW_READ_COLUMNS = NARROW_COLUMNS.filter((column) => column.id !== 'actions');
+
+/** An item's price in one short cell: its price, its sizes' range (£14.00–£26.00), its note, or No price. */
+function priceCell(item: Dish, currency: string, locale: string): string {
+  if (item.priceMinor !== undefined) return formatPrice(item.priceMinor, currency, locale);
+  const prices = item.sizes.map((size) => size.priceMinor);
+  if (prices.length > 0) {
+    const low = Math.min(...prices);
+    const high = Math.max(...prices);
+    return low === high
+      ? formatPrice(low, currency, locale)
+      : strings.priceRange(formatPrice(low, currency, locale), formatPrice(high, currency, locale));
+  }
+  return item.priceNote ?? strings.noPrice;
+}
 
 /** One row: the item, where it first sits ("Mains · Grill"), and how many more places it sits in. */
 interface ItemRow {
@@ -132,7 +151,7 @@ export function DishesTab({
     >
       <Table
         label={strings.allItems}
-        columns={isNarrow ? NARROW_COLUMNS : COLUMNS}
+        columns={draft.canEdit ? (isNarrow ? NARROW_COLUMNS : COLUMNS) : isNarrow ? NARROW_READ_COLUMNS : READ_COLUMNS}
         rows={rows}
         getRowId={(row) => row.item.id}
         onRowAction={(id) => {
@@ -155,7 +174,7 @@ export function DishesTab({
               : row.more === 0
                 ? row.path
                 : strings.alsoIn(row.path, row.more);
-          if (column === 'price') return priceLine(item, draft.currency, locale);
+          if (column === 'price') return priceCell(item, draft.currency, locale);
           if (column === 'available')
             return (
               <Switch

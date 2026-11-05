@@ -291,50 +291,6 @@
     color: var(--on-accent);
   }
 
-  /* A ToggleButton's dot before its label (dot): a zone's colour on its chip, as Badge draws a state's dot. */
-  .dot {
-    flex: none;
-    inline-size: var(--space-6);
-    block-size: var(--space-6);
-    border-radius: var(--radius-full);
-  }
-
-  .dot[data-hue='gray'] {
-    background: var(--dot-gray);
-  }
-
-  .dot[data-hue='red'] {
-    background: var(--dot-red);
-  }
-
-  .dot[data-hue='orange'] {
-    background: var(--dot-orange);
-  }
-
-  .dot[data-hue='yellow'] {
-    background: var(--dot-yellow);
-  }
-
-  .dot[data-hue='lime'] {
-    background: var(--dot-lime);
-  }
-
-  .dot[data-hue='green'] {
-    background: var(--dot-green);
-  }
-
-  .dot[data-hue='sky'] {
-    background: var(--dot-sky);
-  }
-
-  .dot[data-hue='blue'] {
-    background: var(--dot-blue);
-  }
-
-  .dot[data-hue='purple'] {
-    background: var(--dot-purple);
-  }
-
   /* An open danger disclosure (Cancel booking with its confirm open) keeps its red, on a faint danger tint. */
   .root[data-variant='danger'][data-expanded] {
     background: var(--tag-red-bg);

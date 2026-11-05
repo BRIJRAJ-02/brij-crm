@@ -38,8 +38,10 @@ export interface QrSheetProps {
   readonly colour?: string;
   /** The line under the table's name; "Scan for the menu" unless given. */
   readonly scanLine?: string;
-  /** What sits above the sheets on screen, at the start (a way back, a summary): never printed. */
+  /** What sits above the sheets on screen, at the start (a way back): never printed. */
   readonly controls?: ReactNode;
+  /** A quiet line after the controls on screen, saying what prints ("8 tables · scan-ready"): never printed. */
+  readonly summary?: string;
   /** The sheet's own actions above it on screen, at the end (the per page choice, Print): never printed. */
   readonly actions?: ReactNode;
   /** A notice above the sheets on screen (the menu isn't live yet): never printed. */
@@ -146,6 +148,7 @@ export function QrSheet({
   colour,
   scanLine = strings.scan,
   controls,
+  summary,
   actions,
   notice,
 }: QrSheetProps) {
@@ -154,9 +157,12 @@ export function QrSheet({
   const sheets = sheetsOf(cards, isTiles ? TILES_PER_PAGE : perPage);
   return (
     <div className={styles.root} data-theme="light">
-      {controls === undefined && actions === undefined ? null : (
+      {controls === undefined && summary === undefined && actions === undefined ? null : (
         <div className={styles.controls}>
-          <div className={styles.group}>{controls}</div>
+          <div className={styles.group}>
+            {controls}
+            {summary === undefined ? null : <p className={styles.summary}>{summary}</p>}
+          </div>
           <div className={styles.group}>{actions}</div>
         </div>
       )}

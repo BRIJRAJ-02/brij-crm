@@ -1,7 +1,7 @@
 // The Hospitality store (spec 0065, H0) against a fake API answered by hand: a change shows at once, the server's
 // answer replaces it, a refusal puts it back and comes back to the screen, and an install tells the sidebar.
-import type { AppsView, PlaceFloor } from '@crm/contracts';
-import { describe, expect, it } from 'vitest';
+import type { AppsView, PlaceFloor, PlaceQrCodes } from '@crm/contracts';
+import { describe, expect, it, vi } from 'vitest';
 import { openHospitality, type HospitalityProcedures } from './store.ts';
 
 const PLACE = '01900000-0000-7000-8000-000000000001';
@@ -71,6 +71,44 @@ describe('the floor', () => {
     expect(await moving).toBeDefined();
     const back = store.floor('acme', PLACE).getSnapshot();
     expect(back.status === 'ready' && back.value.resources.map((each) => each.label)).toEqual(['T1', 'T2', 'T3']);
+  });
+
+  it('reads the Tables copy once more when a floor write lands while a read of it is out', async () => {
+    const reads: ReturnType<typeof deferred<PlaceQrCodes>>[] = [];
+    const codes = (labels: readonly string[]): PlaceQrCodes => ({
+      placeId: PLACE,
+      placeName: 'Soho',
+      menuKey: 'AbCdEfGhIjKlMnOp',
+      menuState: 'live',
+      tables: labels.map((label, index) => ({ id: `t${String(index)}`, label, code: `c${String(index)}`, scans: 0 })),
+    });
+    const { store } = setUp({
+      resources: () => Promise.resolve(FLOOR),
+      qrCodes: () => {
+        const read = deferred<PlaceQrCodes>();
+        reads.push(read);
+        return read.promise;
+      },
+      saveArea: () => Promise.resolve(FLOOR),
+      addResources: () => Promise.resolve(FLOOR),
+    });
+    await store.listResources('acme', PLACE);
+    const first = store.readQrCodes('acme', PLACE);
+    reads[0]?.resolve(codes(['T1']));
+    await first;
+    // A new zone's write starts a read; the table's write lands while that read is still out.
+    await store.saveArea('acme', PLACE, 'Patio', undefined, 'zone-1');
+    expect(reads).toHaveLength(2);
+    await store.addResources('acme', PLACE, { kind: 'table', labels: ['T2'], minCapacity: 2, maxCapacity: 4 });
+    expect(reads).toHaveLength(2);
+    // The read out began before the add: once it lands, one more follows, and that one shows T2.
+    reads[1]?.resolve(codes(['T1']));
+    await vi.waitFor(() => expect(reads).toHaveLength(3));
+    reads[2]?.resolve(codes(['T1', 'T2']));
+    await vi.waitFor(() => {
+      const shown = store.qrCodes('acme', PLACE).getSnapshot();
+      expect(shown.status === 'ready' && shown.value.tables.map((each) => each.label)).toEqual(['T1', 'T2']);
+    });
   });
 
   it('archives a table at once, last in the list', async () => {

@@ -20,9 +20,11 @@ export function zoneHue(name: string): Hue {
   return ZONE_HUES[Math.abs(hash) % ZONE_HUES.length] ?? 'gray';
 }
 
-/** Labels in reading order: T2 before T10 (checklabs' numeric aware sort). */
-export const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
-  a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+/** A sorter for labels in reading order, T2 before T10 (checklabs' numeric aware sort), one collator a sort. */
+export function labelOrder(): (a: { readonly label: string }, b: { readonly label: string }) => number {
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  return (a, b) => collator.compare(a.label, b.label);
+}
 
 /** One zone and its tables. */
 export interface ZoneGroup<T> {
@@ -44,6 +46,8 @@ export function zoneGroups<T extends { readonly label: string }>(
   nameOf: (zone: string) => string | undefined,
   unzoned: string,
 ): readonly ZoneGroup<T>[] {
+  const byLabel = labelOrder();
+  const byName = new Intl.Collator(undefined, { sensitivity: 'base' });
   const keyOf = (table: T) => {
     const zone = zoneOf(table);
     return zone === undefined || nameOf(zone) === undefined ? UNZONED : zone;
@@ -58,7 +62,5 @@ export function zoneGroups<T extends { readonly label: string }>(
         tables: tables.filter((table) => keyOf(table) === id).sort(byLabel),
       };
     })
-    .sort((a, b) =>
-      a.id === UNZONED ? 1 : b.id === UNZONED ? -1 : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-    );
+    .sort((a, b) => (a.id === UNZONED ? 1 : b.id === UNZONED ? -1 : byName.compare(a.name, b.name)));
 }

@@ -25,7 +25,8 @@ export function OptionsTab({ draft, onOpen }: { readonly draft: MenuDraft; reado
         {...(draft.canEdit
           ? {
               end: (
-                <Button variant="primary" icon="plus" onPress={() => onOpen({ kind: 'group' })}>
+                // Not primary: the header's Publish is the page's one.
+                <Button icon="plus" onPress={() => onOpen({ kind: 'group' })}>
                   {strings.newGroupShort}
                 </Button>
               ),

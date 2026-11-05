@@ -59,9 +59,9 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
   if (onMove === undefined || sections.length < 2) {
     return (
       <ol className={styles.root} aria-label={label}>
-        {sections.map((section) => (
+        {sections.map((section, index) => (
           <li key={section.id} className={styles.item}>
-            <SectionCard section={section} />
+            <SectionCard section={section} name={nameAt(sections, index)} />
           </li>
         ))}
       </ol>
@@ -81,6 +81,7 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
           <MovableSection
             key={section.id}
             section={section}
+            name={nameAt(sections, index)}
             gripLabel={section.title === undefined ? strings.moveNumbered(index + 1) : strings.move(section.title)}
           />
         ))}
@@ -93,7 +94,16 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
  * One section's Card: its title, then its grip, its actions and (folding) its chevron at the header's end, then what
  * it holds, unless it is folded.
  */
-function SectionCard({ section, grip }: { readonly section: SectionListSection; readonly grip?: ReactNode }) {
+function SectionCard({
+  section,
+  name,
+  grip,
+}: {
+  readonly section: SectionListSection;
+  /** Its name in its chevron's: its title, else its place ("Section 2"). */
+  readonly name: string;
+  readonly grip?: ReactNode;
+}) {
   const bodyId = useId();
   const { onExpandedChange } = section;
   const isFolding = onExpandedChange !== undefined;
@@ -102,7 +112,7 @@ function SectionCard({ section, grip }: { readonly section: SectionListSection; 
     <Button
       variant="ghost"
       icon={isExpanded ? 'chevron-down' : 'chevron-right'}
-      label={strings.fold(section.title ?? strings.numbered(1))}
+      label={strings.fold(name)}
       isExpanded={isExpanded}
       {...(isExpanded ? { controls: bodyId } : {})}
       onPress={() => onExpandedChange(!isExpanded)}
@@ -136,11 +146,19 @@ function SectionCard({ section, grip }: { readonly section: SectionListSection; 
 }
 
 /** A section that moves: its item in the sorting list, lifted while it moves, with its grip in its header. */
-function MovableSection({ section, gripLabel }: { readonly section: SectionListSection; readonly gripLabel: string }) {
+function MovableSection({
+  section,
+  name,
+  gripLabel,
+}: {
+  readonly section: SectionListSection;
+  readonly name: string;
+  readonly gripLabel: string;
+}) {
   const { bind, grip } = useSortableItem(section.id);
   return (
     <li ref={bind} className={styles.item}>
-      <SectionCard section={section} grip={<DragHandle label={gripLabel} drag={grip} />} />
+      <SectionCard section={section} name={name} grip={<DragHandle label={gripLabel} drag={grip} />} />
     </li>
   );
 }

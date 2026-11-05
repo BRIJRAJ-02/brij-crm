@@ -69,11 +69,12 @@ export const LongNames: Story = {
 
 /** Tiles (stickers), six an A4 sheet, each with the venue and the table's code under its name: eight on two sheets. */
 export const Tiles: Story = {
-  args: { cards: coded(8), layout: 'tiles' },
+  args: { cards: coded(8), layout: 'tiles', summary: '8 tables · scan-ready' },
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole('region')).toHaveLength(2);
     await expect(canvas.getAllByRole('article')).toHaveLength(8);
     await expect(canvas.getByText('Somewhere · Q7n2Xc9LmB4vTz8RkP1wY0')).toBeInTheDocument();
+    await expect(canvas.getByText('8 tables · scan-ready')).toBeVisible();
     // A tile is one face: one code a table, nothing upside down.
     await expect(canvas.getAllByRole('img', { name: 'QR code for T1' })).toHaveLength(1);
   },

@@ -147,10 +147,17 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
   let state: HospitalityHeldState<Value> = { status: 'loading' };
   let reading: Promise<Value> | undefined;
   let readAt: number | undefined;
+  // A write landed while a read was out: that read may have started before it, so another follows it.
+  let readAgain = false;
   const listeners = new Set<() => void>();
   const set = (next: HospitalityHeldState<Value>) => {
     state = next;
     for (const listener of listeners) listener();
+  };
+  const followUp = () => {
+    if (!readAgain) return;
+    readAgain = false;
+    void read().catch(() => undefined);
   };
   const read = (): Promise<Value> => {
     reading ??= load().then(
@@ -158,16 +165,23 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
         reading = undefined;
         readAt = now();
         set({ status: 'ready', value, isSaving: false });
+        followUp();
         return value;
       },
       (error: unknown) => {
         reading = undefined;
         const refused = toDataError(error);
         if (state.status !== 'ready') set({ status: 'error', error: refused });
+        followUp();
         throw refused;
       },
     );
     return reading;
+  };
+  /** Reads again after a write elsewhere landed: at once, or once more after a read already out (it may predate it). */
+  const reread = (): void => {
+    if (reading === undefined) void read().catch(() => undefined);
+    else readAgain = true;
   };
   // Changes go out one after another, so the server sees them in the order they were made, and only the latest
   // answer decides what shows; a refusal puts back what was there before that change.
@@ -234,7 +248,7 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
       void read().catch(() => undefined);
     },
   };
-  return { held, read, change, patch };
+  return { held, read, reread, change, patch };
 }
 
 /** `tables` with the live ones in `order` (by id), positions renumbered, archived ones after. */
@@ -330,7 +344,8 @@ export function openHospitality(given: {
       if (qr !== undefined) {
         const live = new Set(floor.resources.filter((each) => !each.archived).map((each) => each.id));
         qr.patch((codes) => ({ ...codes, tables: codes.tables.filter((each) => live.has(each.id)) }));
-        void qr.read().catch(() => undefined);
+        // A read already out (one a new zone's write started) may predate this write: one more follows it.
+        qr.reread();
       }
       return floor;
     });

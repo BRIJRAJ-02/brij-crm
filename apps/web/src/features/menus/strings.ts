@@ -209,7 +209,7 @@ export const strings = {
       .filter((part) => part !== '')
       .join(' · '),
   usedBy: (count: number) => (count === 1 ? 'Used by 1 item' : `Used by ${String(count)} items`),
-  groupTitle: 'Option group',
+  groupTitle: 'New option group',
   required: 'Guests must choose',
   requiredHint: 'Such as a milk for every coffee.',
   maxInvalid: (most: number) => `Use a number from 1 to ${String(most)}.`,
@@ -319,13 +319,21 @@ export const strings = {
   searchPlaceholder: 'Search sections, items…',
   noSearchMatches: 'No matches',
   noSearchLine: (query: string) => `Nothing matches “${query}” in this menu.`,
+  /** A section head's count: its sub sections when it has any, then its items ("2 sub sections · 9 items"). */
   structureCount: (subs: number, items: number) =>
-    `${subs === 1 ? '1 sub-section' : `${String(subs)} sub-sections`} · ${items === 1 ? '1 item' : `${String(items)} items`}`,
+    [
+      ...(subs === 0 ? [] : [subs === 1 ? '1 sub section' : `${String(subs)} sub sections`]),
+      items === 1 ? '1 item' : `${String(items)} items`,
+    ].join(' · '),
+  showAsList: 'Show as a list',
+  priceRange: (low: string, high: string) => `${low}–${high}`,
+  showAsGrid: 'Show as a photo grid',
   addPhotoFor: (name: string) => `Add a photo of ${name}`,
   setUpMenu: 'Set up your menu',
   setUpMenuLine: 'Add a section, such as Starters, then the items in it.',
   availableSwitch: 'Available',
-  availableHint: 'Off, guests see it as sold out at once.',
+  availableHint: 'Applies when you save. No Publish needed.',
+  availableNow: 'Guests see the change at once.',
   newOptionGroup: 'New option group',
   namePlaceholder: 'e.g. Grilled Salmon',
   newGroupShort: 'New group',

@@ -35,6 +35,14 @@
     inline-size: min(100%, var(--size-dialog-wide));
   }
 
+  /* What prints, quiet beside the way back. */
+  .summary {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   /* The cards sit inside a margin most home printers can print to (about 8mm), the page itself having none. */
   .sheet {
     display: grid;

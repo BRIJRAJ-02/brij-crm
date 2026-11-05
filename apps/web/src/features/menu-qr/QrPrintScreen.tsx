@@ -13,7 +13,7 @@ import { tableMenuAddress } from './codes.ts';
 import { printedTables, qrPageHref, type QrLook } from './look.ts';
 import { MenuState } from './QrScreen.tsx';
 import { strings } from './strings.ts';
-import { byLabel } from './zones.ts';
+import { zoneGroups } from './zones.ts';
 
 /** The sheet for one place: its codes as tiles or tents, the layout and Print above, never printed. */
 export function QrPrintScreen({
@@ -60,8 +60,14 @@ export function QrPrintScreen({
   }
   const codes: PlaceQrCodes = state.value;
   const only = printedTables(tables);
-  // The tables asked for, in reading order (the cards' order on the page); a table deleted since is left out.
-  const printed = codes.tables.filter((table) => only === undefined || only.has(table.id)).sort(byLabel);
+  // The tables asked for, in the Tables page's order (zone by zone, Unzoned last, each in reading order); a table
+  // deleted since is left out.
+  const printed = zoneGroups(
+    codes.tables.filter((table) => only === undefined || only.has(table.id)),
+    (table) => table.areaName,
+    (name) => name,
+    strings.unzoned,
+  ).flatMap((group) => group.tables);
   if (printed.length === 0) {
     return (
       <main>
@@ -100,12 +106,8 @@ export function QrPrintScreen({
         {...(look.colour === undefined ? {} : { colour: look.colour })}
         {...(look.logoSrc === undefined ? {} : { logoSrc: look.logoSrc })}
         notice={codes.menuState === 'live' ? undefined : <MenuState slug={slug} codes={codes} />}
-        controls={
-          <>
-            {back}
-            {strings.scanReady(printed.length)}
-          </>
-        }
+        controls={back}
+        summary={strings.scanReady(printed.length)}
         actions={
           <>
             <SegmentedControl

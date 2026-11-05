@@ -10,7 +10,6 @@ import type { BusinessView, HospitalityStore, Place, PlaceFloor, PlaceQrCodes, R
 import { useHospitality } from '@crm/data/react';
 import {
   Button,
-  ButtonGroup,
   ButtonLink,
   Callout,
   Card,
@@ -52,7 +51,7 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'table', label: strings.table, isRowHeader: true, size: 'fill' },
   { id: 'seats', label: strings.seats, align: 'end', size: 'fit' },
   { id: 'code', label: strings.code, size: 'fit' },
-  { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+  { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
 ];
 
 /** At a phone's width a row keeps its name, its whole code (wrapping) and ⋯; the seats are in its drawer. */
@@ -218,6 +217,11 @@ function PlaceCodes({
           body:
             state.status === 'loading' ? (
               <Skeleton shape="block" />
+            ) : state.error.code === 'FORBIDDEN' ? (
+              // Someone who may not set up tables (Run service) is told so, never offered a retry that can't work.
+              <EmptyState tone="locked" title={strings.noAccess}>
+                {strings.noAccessText}
+              </EmptyState>
             ) : (
               <EmptyState tone="error" title={strings.failed} onRetry={held.retry}>
                 {state.error.message}
@@ -241,8 +245,22 @@ function PlaceCodes({
         topBar,
         body: (
           <PageColumn>
-            <SectionBar description={strings.help} />
+            {/* The page's one line of help, under its title (checklabs'); the empty state says it on its own. */}
+            {tables.length === 0 ? null : <SectionBar description={strings.help} />}
             <MenuState slug={slug} codes={value} />
+            {floorState.status === 'error' ? (
+              // Without the floor, Add, Edit, Delete and Seats can't show: say so, with a way to try again.
+              <Callout
+                tone="warning"
+                actions={
+                  <Button icon="refresh-cw" onPress={floorHeld.retry}>
+                    {strings.retry}
+                  </Button>
+                }
+              >
+                {strings.floorFailed}
+              </Callout>
+            ) : null}
             <TablesByZone
               slug={slug}
               placeId={place.id}
@@ -616,11 +634,16 @@ function TablesByZone({
       ),
     [floor, tables],
   );
-  const groups = zoneGroups(
-    tables,
-    (table) => (floor === undefined ? table.areaName : resources.get(table.id)?.areaId),
-    (id) => zoneNames.get(id),
-    strings.unzoned,
+  // Grouped once per answer, not on every tick (a place holds up to 300 tables).
+  const groups = useMemo(
+    () =>
+      zoneGroups(
+        tables,
+        (table) => (floor === undefined ? table.areaName : resources.get(table.id)?.areaId),
+        (id) => zoneNames.get(id),
+        strings.unzoned,
+      ),
+    [tables, floor, resources, zoneNames],
   );
   if (tables.length === 0) {
     return (
@@ -643,10 +666,15 @@ function TablesByZone({
   const chosen = groups.some((group) => group.id === zone) ? zone : ALL_ZONES;
   const shownGroups = chosen === ALL_ZONES ? groups : groups.filter((group) => group.id === chosen);
   const shownIds = shownGroups.flatMap((group) => group.tables.map((table) => table.id));
-  // Only rows still here count as picked (a deleted one leaves the selection).
-  const live = new Set(tables.map((table) => table.id));
-  const pickedIds = tables.filter((table) => picked.has(table.id) && live.has(table.id)).map((table) => table.id);
-  const printing = pickedIds.length > 0 ? pickedIds : chosen === ALL_ZONES ? undefined : shownIds;
+  // Only rows on screen count as picked: a deleted one, or one in another zone, is never printed unseen.
+  const pickedIds = shownIds.filter((id) => picked.has(id));
+  // Print takes the ticked rows, else the zone shown; every table needs no list in the address.
+  const printing =
+    pickedIds.length > 0 && pickedIds.length < tables.length
+      ? pickedIds
+      : chosen === ALL_ZONES || pickedIds.length === tables.length
+        ? undefined
+        : shownIds;
   const named = groups.filter((group) => group.id !== UNZONED);
   const unzoned = groups.find((group) => group.id === UNZONED);
   return (
@@ -664,8 +692,11 @@ function TablesByZone({
           ...(unzoned === undefined ? [] : [{ id: UNZONED, label: strings.unzonedCount(unzoned.tables.length) }]),
         ]}
         selected={[chosen]}
-        // Choosing the chosen zone again shows them all (checklabs').
-        onChange={(next) => onZone(next[0] ?? ALL_ZONES)}
+        // Choosing the chosen zone again shows them all (checklabs'); another zone starts a fresh selection.
+        onChange={(next) => {
+          onZone(next[0] ?? ALL_ZONES);
+          onPicked(new Set());
+        }}
       />
       <SectionBar
         description={strings.shownOf(shownIds.length, tables.length, pickedIds.length)}
@@ -680,7 +711,8 @@ function TablesByZone({
                 label={strings.clearLabel}
                 onPress={() => {
                   onPicked(new Set());
-                  focusLater(() => document.querySelector<HTMLElement>('h1'));
+                  // Clear goes with the selection: focus stays beside it, on Print QR sheet.
+                  focusLater(() => document.querySelector<HTMLElement>('a[href*="/qr/print"]'));
                 }}
               >
                 {strings.clear}
@@ -744,7 +776,11 @@ function ZoneCard({
           const resource = resources.get(table.id);
           if (column === 'table') return table.label;
           if (column === 'seats')
-            return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
+            return resource === undefined ? (
+              <Skeleton width="short" />
+            ) : (
+              strings.seatsRange(resource.minCapacity, resource.maxCapacity)
+            );
           if (column === 'code') return <Code>{table.code}</Code>;
           return <RowActions table={table} resource={resource} codes={codes} isNarrow={isNarrow} onOpen={onOpen} />;
         }}
@@ -811,8 +847,9 @@ function RowActions({
     </MenuTrigger>
   );
   if (isNarrow) return more;
+  // One line in the inline actions cell: QR, Edit, then ⋯ (checklabs' row actions).
   return (
-    <ButtonGroup label={strings.actionsFor(name)} layout="row">
+    <>
       <Button variant="ghost" icon="qr-code" label={strings.showCodeFor(name)} onPress={() => act('qr')}>
         {strings.qr}
       </Button>
@@ -822,6 +859,6 @@ function RowActions({
         </Button>
       )}
       {more}
-    </ButtonGroup>
+    </>
   );
 }

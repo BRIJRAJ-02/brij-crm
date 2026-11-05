@@ -42,8 +42,7 @@ export const strings = {
   zipped: (count: number) => `Downloaded ${String(count)} codes.`,
   downloadFailed: 'The codes couldn’t be saved. Try again.',
   noTables: 'No tables yet',
-  noTablesText:
-    'Add tables here, then download the QR code from each row and stick it on the table. Guests scan it to see the menu.',
+  noTablesText: 'Add your tables, then print their codes. Each table gets its own, and guests scan it to see the menu.',
   addFirstTable: 'Add your first table',
   noneInZone: 'No tables in this zone',
   showAll: 'Show all tables',
@@ -53,6 +52,9 @@ export const strings = {
   noPlace: 'Add your place first',
   addPlace: 'Add your place',
   failed: 'Tables didn’t load',
+  floorFailed: 'Seats and zones didn’t load, so tables can’t be added or changed right now.',
+  noAccess: 'Only people who manage hospitality set up tables',
+  noAccessText: 'Ask an owner or admin to add tables or print their codes.',
   // One table's code (the QR drawer).
   codeTitle: (name: string) => `QR for ${name}`,
   codeLabel: (name: string) => `QR code for ${name}`,

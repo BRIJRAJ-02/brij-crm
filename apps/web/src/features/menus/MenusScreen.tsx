@@ -31,7 +31,7 @@ import {
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { useState } from 'react';
+import { memo, useDeferredValue, useState } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { useIsNarrow } from './narrow.ts';
@@ -98,6 +98,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const [isPublishing, setPublishing] = useState(false);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
+  // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
+  const searched = useDeferredValue(query);
   const isNarrow = useIsNarrow();
   // Put away from its own menu, the setup checklist stays away in this browser (UI state, never the server's).
   const setupKey = `crm.menus.setup-hidden.${slug}`;
@@ -401,12 +403,12 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       <>
         {/* The guests' own look (the Warm preset with the brand's accent), before any Publish. */}
         <link rel="stylesheet" href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}`} precedence="menu" />
-        <MenuList
-          menu={previewMenu(draft, place, {
-            businessName: business.name,
-            ...(placeHours === undefined ? {} : { hours: placeHours }),
-          })}
-          photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
+        <PreviewMenu
+          slug={slug}
+          draft={draft}
+          place={place}
+          businessName={business.name}
+          {...(placeHours === undefined ? {} : { hours: placeHours })}
           {...(at === undefined ? {} : { at: at.getTime() })}
         />
       </>
@@ -568,7 +570,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                       slug={slug}
                       draft={draft}
                       menuId={current.id}
-                      query={isNarrow ? '' : query}
+                      query={isNarrow ? '' : searched}
                       onOpen={setOpen}
                       said={said}
                       toasts={toasts}
@@ -580,7 +582,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                       slug={slug}
                       draft={draft}
                       menuId={current.id}
-                      query={isNarrow ? '' : query}
+                      query={isNarrow ? '' : searched}
                       onOpen={setOpen}
                       said={said}
                       toasts={toasts}
@@ -788,6 +790,34 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     />
   );
 }
+
+/**
+ * The phone preview: the real guest menu drawing the draft. Kept apart and memoised, so typing in the tab bar's
+ * search (or anything else that leaves the draft as it was) never draws the whole guest menu again.
+ */
+const PreviewMenu = memo(function PreviewMenu({
+  slug,
+  draft,
+  place,
+  businessName,
+  hours,
+  at,
+}: {
+  readonly slug: string;
+  readonly draft: MenuDraft;
+  readonly place: MenuDraft['places'][number];
+  readonly businessName: string;
+  readonly hours?: PlaceHours;
+  readonly at?: number;
+}) {
+  return (
+    <MenuList
+      menu={previewMenu(draft, place, { businessName, ...(hours === undefined ? {} : { hours }) })}
+      photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
+      {...(at === undefined ? {} : { at })}
+    />
+  );
+});
 
 /** Whether a refusal is the app gate's, for the route. */
 export const isNotInstalled = (error: unknown): boolean =>

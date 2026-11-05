@@ -26,6 +26,11 @@ const LazyTextSwap = lazy(() => import('../TextSwap/TextSwap.tsx').then((module)
 const LazyNumberPop = lazy(() =>
   import('../NumberPop/NumberPop.tsx').then((module) => ({ default: module.NumberPop })),
 );
+// A toggle's colour dot is StatusDot's own (as SegmentedControl's `hue` draws it), loaded with the first chip that
+// wears one, so the plain buttons every first load draws never carry it.
+const LazyStatusDot = lazy(() =>
+  import('../StatusDot/StatusDot.tsx').then((module) => ({ default: module.StatusDot })),
+);
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
 export type ButtonVariant =
@@ -174,8 +179,9 @@ export type ToggleButtonProps = Omit<ButtonLook, 'kbd'> &
      */
     readonly isSelectionStrong?: boolean;
     /**
-     * A dot before the label in the hue's dot colour, as Badge draws a state's dot: what the choice is coloured by
-     * elsewhere (a zone's colour on its chip, ChoiceChips' `dot`). Decorative; the label names the choice.
+     * A colour dot before the label, drawn by StatusDot in the label's own type and colour (as SegmentedControl's
+     * `hue` draws one): what the choice is coloured by elsewhere (a zone's colour on its chip, ChoiceChips' `dot`).
+     * Decorative; the label names the choice. With a label only.
      */
     readonly dot?: Hue;
   };
@@ -437,8 +443,15 @@ export function ToggleButton(props: ToggleButtonProps) {
       {...lookAttributes(props, face)}
       {...(props.isSelectionStrong === true ? { 'data-selection': 'strong' } : {})}
     >
-      {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
-      <Face face={face} look={props} isPending={false} />
+      {props.dot === undefined || face.children === undefined ? (
+        <Face face={face} look={props} isPending={false} />
+      ) : (
+        <Suspense fallback={face.children}>
+          <LazyStatusDot hue={props.dot} isInherited>
+            {face.children}
+          </LazyStatusDot>
+        </Suspense>
+      )}
     </AriaToggleButton>
   );
 }
