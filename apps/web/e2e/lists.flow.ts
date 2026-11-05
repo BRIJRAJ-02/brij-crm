@@ -324,7 +324,7 @@ test.describe('lists: the view menu, import, bulk Edit and settings (the lists3 
     await expect(page.getByText('No deals in this list yet.')).toBeVisible();
     await page.getByRole('main').getByRole('button', { name: 'Import' }).last().click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/lists/inbound/import$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Import inbound' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Import into Inbound' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Inbound' })).toBeVisible();
   });
 

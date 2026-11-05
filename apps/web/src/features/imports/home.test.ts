@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importHome } from './paths.ts';
+import { importHome } from './home.ts';
 
 const PEOPLE = { apiSlug: 'people', pluralName: 'People', icon: 'user', hue: 'blue' } as const;
 const PIPELINE = { apiSlug: 'q4-pipeline', name: 'Q4 pipeline', icon: 'list', hue: 'green' } as const;

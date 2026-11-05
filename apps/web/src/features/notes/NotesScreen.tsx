@@ -8,10 +8,11 @@ import { useNoteList } from '@crm/data/react';
 import { AttributeEditor, Button, Modal, NoteList, TopBar, type FieldAttribute } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
+import { refOf } from '../duplicates/merge/pair.ts';
 import { editorSearch, useRecordSearch } from '../records/links.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { preloadNoteEditor } from './editor.ts';
-import { findLoaded, logHref, noteHref, pickedRef } from './entries.ts';
+import { findLoaded, logHref, noteHref } from './entries.ts';
 import { useNoteItems } from './useNoteItems.ts';
 import { strings } from './strings.ts';
 
@@ -36,6 +37,9 @@ export function NotesScreen({ slug, list, objects, members }: NotesScreenProps) 
   const state = useNoteList(list);
   const notes = useNoteItems(state.source, members);
   const slugs = useMemo(() => new Map(objects.map((object) => [object.id, object.apiSlug])), [objects]);
+  // New note's picker starts where the newest note was written, else on the first object the person may change.
+  const newest = state.source.count > 0 ? state.source.getItem(0)?.record?.objectId : undefined;
+  const startObjectId = writable.find((object) => object.id === newest)?.id ?? writable[0]?.id ?? '';
   // The editor's chunk starts loading with the page, so a note opened from it is ready to type into at once.
   useEffect(() => {
     preloadNoteEditor();
@@ -69,8 +73,8 @@ export function NotesScreen({ slug, list, objects, members }: NotesScreenProps) 
               notes={notes}
               status={state.status === 'unavailable' ? 'no-access' : state.status}
               onRetry={list.retry}
+              // The title alone: New note above says how to start one, and nobody else can.
               emptyTitle={strings.noNotes}
-              {...(writable.length > 0 ? {} : { emptyBody: strings.noNotesBody })}
               onAction={open}
             />
             <Modal
@@ -83,6 +87,7 @@ export function NotesScreen({ slug, list, objects, members }: NotesScreenProps) 
                 <RecordPick
                   slug={slug}
                   objects={writable}
+                  startObjectId={startObjectId}
                   onPick={(objectSlug, recordId) => {
                     setPicking(false);
                     void navigate({ href: noteHref(slug, objectSlug, recordId, 'new') });
@@ -116,13 +121,16 @@ const RECORD_FIELD: FieldAttribute = {
 function RecordPick({
   slug,
   objects,
+  startObjectId,
   onPick,
 }: {
   readonly slug: string;
   readonly objects: readonly ObjectSummary[];
+  /** The object Search in starts on. */
+  readonly startObjectId: string;
   readonly onPick: (objectSlug: string, recordId: string) => void;
 }) {
-  const [objectId, setObjectId] = useState(objects[0]?.id ?? '');
+  const [objectId, setObjectId] = useState(startObjectId);
   const search = useRecordSearch(slug, objectId);
   const slugs = new Map(objects.map((object) => [object.id, object.apiSlug]));
   return (
@@ -143,7 +151,7 @@ function RecordPick({
         onObjectChange: setObjectId,
       }}
       onCommit={(value) => {
-        const ref = pickedRef(value);
+        const ref = refOf(value);
         const objectSlug = ref === undefined ? undefined : slugs.get(ref.objectId);
         if (ref !== undefined && objectSlug !== undefined) onPick(objectSlug, ref.recordId);
       }}

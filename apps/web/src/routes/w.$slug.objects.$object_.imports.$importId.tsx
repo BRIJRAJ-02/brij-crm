@@ -19,18 +19,15 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importI
       const objects = await context.data.objects.all(params.slug);
       const object = objects.find((each) => each.apiSlug === params.object);
       if (object === undefined) return { screen: undefined };
-      const [initial, page] = await Promise.all([
+      // The live lists come with the import (cached by the workspace's frame, so usually no call): an import into a
+      // list ends on that list (the foolproof pass), with its name, icon and View <list>; one gone, on the object.
+      const [initial, page, lists] = await Promise.all([
         context.data.imports.get(params.slug, params.importId),
         context.data.imports.rows(params.slug, params.importId),
+        context.data.lists.list(params.slug).catch(() => []),
       ]);
       if (initial.objectId !== object.id) return { screen: undefined };
-      // An import into a list ends on that list (the foolproof pass): its name, icon and View <list>.
-      const list =
-        initial.listId === undefined
-          ? undefined
-          : (await context.data.lists.all(params.slug).catch(() => [])).find(
-              (each) => each.id === initial.listId && !each.isArchived,
-            );
+      const list = initial.listId === undefined ? undefined : lists.find((each) => each.id === initial.listId);
       return {
         screen: {
           object,

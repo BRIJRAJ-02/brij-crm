@@ -34,14 +34,16 @@ describe('unmatchedRequired', () => {
 
 describe('columnsBlock and requiredTone (checked at Continue only)', () => {
   const name = attribute('name', 1);
-  it('stops for no matched column first, then for a required field with none', () => {
-    expect(columnsBlock(0, [name], true)).toBe('no-column');
+  it('stops for a required field with no column first, whose Match a column is the way on, then for no column', () => {
+    expect(columnsBlock(0, [name], true)).toBe('required');
     expect(columnsBlock(2, [name], true)).toBe('required');
+    expect(columnsBlock(0, [], true)).toBe('no-column');
     expect(columnsBlock(2, [], true)).toBeUndefined();
   });
 
-  it('lets updating only go on without the required fields', () => {
+  it('lets updating only go on without the required fields, once a column has a field', () => {
     expect(columnsBlock(2, [name], false)).toBeUndefined();
+    expect(columnsBlock(0, [name], false)).toBe('no-column');
   });
 
   it('reads an unmatched required field quietly until Continue was pressed', () => {

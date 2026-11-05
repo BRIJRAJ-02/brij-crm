@@ -105,9 +105,17 @@ export function ActivityTab(props: ActivityTabProps) {
               if (typeof next === 'string') setFilter(next);
             }}
           />
-          {/* The calls and meetings this tab filters are logged from here too (the foolproof pass). */}
+          {/* The calls and meetings this tab filters are logged from here too (the foolproof pass), at the
+              control height the filter beside it has. Logged from under a filter that shows neither, the tab
+              goes back to All, so what was logged shows. */}
           {onLogActivity !== undefined && (
-            <Button size="sm" icon="phone" onPress={onLogActivity}>
+            <Button
+              icon="phone"
+              onPress={() => {
+                if (filter !== 'all' && filter !== 'calls' && filter !== 'meetings') setFilter('all');
+                onLogActivity();
+              }}
+            >
               {noteStrings.logActivity}
             </Button>
           )}

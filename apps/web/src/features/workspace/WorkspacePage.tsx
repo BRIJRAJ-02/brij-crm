@@ -60,6 +60,9 @@ export interface WorkspacePageProps {
   readonly page: FramedPage;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
+  /** The id of the list a page belongs to whose address doesn't name it (an import into it); a list's own pages are
+   * marked by their address. */
+  readonly currentList?: string;
   /** A page of the sidebar's that isn't an object's: Tasks, a Scheduling page or the trash (spec 0034). */
   readonly currentPage?: SidebarPage;
   /** Inside Settings: the settings sidebar in place of the app's (spec 0026). */
@@ -71,6 +74,7 @@ export interface WorkspacePageProps {
 /** What a page tells the frame it sits in about itself: which sidebar entry is current, and Settings' sidebar. */
 interface FrameNav {
   readonly currentObject: string | undefined;
+  readonly currentList: string | undefined;
   readonly currentPage: SidebarPage | undefined;
   readonly settingsCurrent: SettingsSidebar['current'];
   readonly settingsBackHref: string | undefined;
@@ -78,6 +82,7 @@ interface FrameNav {
 
 const NO_NAV: FrameNav = {
   currentObject: undefined,
+  currentList: undefined,
   currentPage: undefined,
   settingsCurrent: undefined,
   settingsBackHref: undefined,
@@ -85,6 +90,7 @@ const NO_NAV: FrameNav = {
 
 const isSameNav = (a: FrameNav, b: FrameNav) =>
   a.currentObject === b.currentObject &&
+  a.currentList === b.currentList &&
   a.currentPage === b.currentPage &&
   a.settingsCurrent === b.settingsCurrent &&
   a.settingsBackHref === b.settingsBackHref;
@@ -129,6 +135,7 @@ function LaidOutPage({
   layout,
   page,
   currentObject,
+  currentList,
   currentPage,
   settings,
 }: WorkspacePageProps & { readonly layout: LayoutFrame }) {
@@ -137,12 +144,12 @@ function LaidOutPage({
   const settingsBackHref = settings?.backHref;
   // Before paint, so the sidebar marks the new page in the same frame the page appears in.
   useLayoutEffect(() => {
-    setNav({ currentObject, currentPage, settingsCurrent, settingsBackHref });
+    setNav({ currentObject, currentList, currentPage, settingsCurrent, settingsBackHref });
     // The next page sets its own in the same commit; a child without a WorkspacePage then marks nothing.
     return () => {
       setNav(NO_NAV);
     };
-  }, [setNav, currentObject, currentPage, settingsCurrent, settingsBackHref]);
+  }, [setNav, currentObject, currentList, currentPage, settingsCurrent, settingsBackHref]);
   return (
     <>
       {layout.topBar !== null && page.topBar !== undefined && createPortal(page.topBar, layout.topBar)}
@@ -196,6 +203,7 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     <Layout value={frame}>
       <FrameWithData
         {...(nav.currentObject === undefined ? {} : { currentObject: nav.currentObject })}
+        {...(nav.currentList === undefined ? {} : { currentList: nav.currentList })}
         {...(nav.currentPage === undefined ? {} : { currentPage: nav.currentPage })}
         {...(settings === undefined ? {} : { settings })}
         topBar={<AppShellSlot ref={setTopBar} />}
@@ -210,10 +218,18 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
 }
 
 /** A page with a frame of its own: the layout's pending and error pages, which render in place of the layout. */
-function FramedWorkspacePage({ page, currentObject, currentPage, settings, isFailed = false }: WorkspacePageProps) {
+function FramedWorkspacePage({
+  page,
+  currentObject,
+  currentList,
+  currentPage,
+  settings,
+  isFailed = false,
+}: WorkspacePageProps) {
   return (
     <FrameWithData
       {...(currentObject === undefined ? {} : { currentObject })}
+      {...(currentList === undefined ? {} : { currentList })}
       {...(currentPage === undefined ? {} : { currentPage })}
       {...(settings === undefined ? {} : { settings })}
       isFailed={isFailed}
@@ -229,6 +245,7 @@ function FramedWorkspacePage({ page, currentObject, currentPage, settings, isFai
 /** Props for FrameWithData: what is open, and the bars and body (or the slots pages portal them into). */
 interface FrameWithDataProps {
   readonly currentObject?: string;
+  readonly currentList?: string;
   readonly currentPage?: SidebarPage;
   readonly settings?: SettingsSidebar;
   readonly isFailed?: boolean;
@@ -242,6 +259,7 @@ interface FrameWithDataProps {
 /** WorkspaceFrame with the frame's data read from the `/w/$slug` match (absent while it loads). */
 function FrameWithData({
   currentObject,
+  currentList,
   currentPage,
   settings,
   isFailed = false,
@@ -282,6 +300,7 @@ function FrameWithData({
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}
       {...(currentObject === undefined ? {} : { currentObject })}
+      {...(currentList === undefined ? {} : { currentList })}
       {...(currentPage === undefined ? {} : { currentPage })}
       {...(settings === undefined ? {} : { settings })}
       {...(workspace?.access === undefined ? {} : { permissions: workspace.access.permissions })}

@@ -9,8 +9,6 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
-  /** The workspace's Notes page can't make one: where notes are written. */
-  noNotesBody: 'Write notes on a record.',
   /** The Notes page's list didn't load. */
   loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',

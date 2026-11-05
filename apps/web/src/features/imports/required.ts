@@ -30,15 +30,17 @@ export type ColumnsBlock = 'no-column' | 'required';
 
 /**
  * What stops the columns step (the foolproof pass, 5 November 2026): checked only when Continue is pressed, so an
- * unfinished match never reads as an error. Updating only (nothing made) needs no required field.
+ * unfinished match never reads as an error. A required field with no column comes first, since its Match a column is
+ * the way on and gives a column a field as well; then no column at all. Updating only (nothing made) needs no
+ * required field.
  */
 export function columnsBlock(
   matched: number,
   required: readonly AttributeDefinition[],
   isCreating: boolean,
 ): ColumnsBlock | undefined {
-  if (matched === 0) return 'no-column';
   if (isCreating && required.length > 0) return 'required';
+  if (matched === 0) return 'no-column';
   return undefined;
 }
 

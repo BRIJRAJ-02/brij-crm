@@ -53,6 +53,20 @@ describe('ActivityTab', () => {
     expect(opened).toBe(1);
   });
 
+  it('goes back to All when logging from under a filter that shows neither calls nor meetings', async () => {
+    let opened = 0;
+    await show(() => {
+      opened += 1;
+    });
+    const filter = page.getByRole('button', { name: /Filter/ });
+    await userEvent.click(filter);
+    await userEvent.click(page.getByRole('option', { name: 'Comments' }));
+    await expect.element(filter).toHaveTextContent('Comments');
+    await userEvent.click(page.getByRole('button', { name: 'Log activity' }));
+    expect(opened).toBe(1);
+    await expect.element(filter).toHaveTextContent('All activity');
+  });
+
   it('offers no Log activity to someone who may only read the record', async () => {
     await show();
     await expect.element(page.getByRole('button', { name: /Filter/ })).toBeVisible();

@@ -11,7 +11,7 @@ Spec 0019, milestones 3 and 4: notes on a record. The side panel's Notes tab wai
 ## The workspace's Notes page (NotesScreen)
 
 - **Purpose**: every note the person may see, across the workspace.
-- **Main task**: find a note and open it over its record, or start one: New note in the top bar (for whoever may change some object) opens a small dialog with one field, the record picker with its Search in switcher, open at once; picking a record opens the note window on that record's Notes tab (`?note=new`), nothing to confirm (the foolproof pass, 5 November 2026, as Attio).
+- **Main task**: find a note and open it over its record, or start one: New note in the top bar (for whoever may change some object) opens a small dialog with one field, the record picker with its Search in switcher, open at once and starting on the object of the newest note; picking a record opens the note window on that record's Notes tab (`?note=new`), nothing to confirm (the foolproof pass, 5 November 2026, as Attio).
 - **Leaves out**: search inside notes (⌘K finds them by title), filters, and a note with no record.
 
 ## The note window (NoteWindow)

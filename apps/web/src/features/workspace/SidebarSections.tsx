@@ -37,6 +37,8 @@ export interface SidebarSectionsProps {
   readonly onNewList?: () => void;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
+  /** The list a page belongs to whose address doesn't name it (an import into it). */
+  readonly currentList?: string;
   readonly currentPage?: SidebarPage;
   /** For Hide from sidebar's toast, whose Undo shows the object again. */
   readonly toasts: Toasts;
@@ -58,6 +60,7 @@ export function SidebarSections({
   lists = [],
   onNewList,
   currentObject,
+  currentList: pageList,
   currentPage,
   toasts,
   onCustomise,
@@ -95,12 +98,15 @@ export function SidebarSections({
       },
     });
   };
-  // The open list (spec 0048): its address names it, as an object's page names its object.
+  // The open list (spec 0048): its address names it, as an object's page names its object; a page of the list's
+  // under another address (an import into it) names it itself.
   const path = useLocation({ select: (location) => location.pathname });
-  const currentList = lists.find((list) => {
-    const href = listHref(slug, list);
-    return path === href || path.startsWith(`${href}/`);
-  })?.id;
+  const currentList =
+    pageList ??
+    lists.find((list) => {
+      const href = listHref(slug, list);
+      return path === href || path.startsWith(`${href}/`);
+    })?.id;
   const context: ItemContext = {
     slug,
     objectOf,

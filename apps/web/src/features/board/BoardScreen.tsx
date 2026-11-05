@@ -12,6 +12,7 @@ import {
   type FiledNotice,
   type MemberSummary,
   type NameState,
+  type NewAttribute,
   type ObjectSummary,
   type RecordRef,
   type RecordRefDisplay,
@@ -39,6 +40,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { useMemberPicker } from '../records/members.ts';
 import { loadRowId, stepsAround, type PeekControl, type PeekLoadStep, type PeekSteps } from '../records/params.ts';
 import { RecordPeek } from '../records/RecordPeek.tsx';
@@ -149,12 +151,15 @@ export function BoardScreen(props: BoardScreenProps) {
     setRestoringId(id);
     data.attributes
       .restore(slug, id)
-      // Pending until the board is back, so the button never shows enabled beside "restored".
-      .then(() => router.invalidate())
+      // Pending until the board is back (`sync`: the route's loaders have run, not only begun), so the button never
+      // shows enabled beside "restored".
+      .then(() => router.invalidate({ sync: true }))
       .then(
         () => {
           setRestoringId(undefined);
           toasts.toast({ tone: 'success', message: strings.restoredGroup(title) });
+          // The button went with the empty state: focus goes to the page's title, never the document.
+          focusTitle();
         },
         (error: unknown) => {
           setRestoringId(undefined);
@@ -167,23 +172,38 @@ export function BoardScreen(props: BoardScreenProps) {
       );
   };
   // Add Stage (the foolproof pass, 5 November 2026): a status field with preset stages in one click, then the board
-  // groups by it. A name already taken (an archived Stage) tries "Stage 2" and on.
+  // groups by it. A name already taken (an archived Stage) tries "Stage 2" and on, each with ids of its own. A press
+  // after a failure sends the last field again with the same ids, so an answer lost on the way back is answered with
+  // the field it made (spec 0012), never a second one.
   const [isAddingStage, setAddingStage] = useState(false);
+  const lastStage = useRef<NewAttribute | undefined>(undefined);
   const addStage = async () => {
     if (isAddingStage) return;
     setAddingStage(true);
     try {
-      for (let attempt = 1; ; attempt += 1) {
+      let attempt = 1;
+      let input =
+        lastStage.current?.objectId === object.id
+          ? lastStage.current
+          : stageField(object.id, data.attributes.newId, attempt);
+      let made = '';
+      for (;;) {
+        lastStage.current = input;
         try {
-          await data.attributes.create(slug, stageField(object.id, data.attributes.newId, attempt));
+          made = (await data.attributes.create(slug, input)).title;
           break;
         } catch (error: unknown) {
           if (!(isDataError(error) && error.code === 'SLUG_TAKEN') || attempt >= 5) throw error;
+          attempt += 1;
+          input = stageField(object.id, data.attributes.newId, attempt);
         }
       }
-      // Pending until the board is back, so the button never shows enabled beside "added".
-      await router.invalidate();
-      toasts.toast({ tone: 'success', message: strings.stageFieldAdded });
+      lastStage.current = undefined;
+      // Pending until the board is back (`sync`: the route's loaders have run), so the button never shows enabled
+      // beside "added"; then focus goes to the page's title, as the button went with the empty state.
+      await router.invalidate({ sync: true });
+      toasts.toast({ tone: 'success', message: strings.stageFieldAdded(made) });
+      focusTitle();
     } catch (error: unknown) {
       toasts.toast({
         tone: 'danger',
@@ -193,13 +213,21 @@ export function BoardScreen(props: BoardScreenProps) {
       setAddingStage(false);
     }
   };
+  // One primary on the page (the owner's rule): the top bar's New <record> where the person may make records, else the
+  // first way on from a board that can't draw.
+  const hasTopPrimary = object.access === 'write';
+  const leads = (isFirst: boolean) => (isFirst && !hasTopPrimary ? { variant: 'primary' as const } : {});
   // Show as table: the way on from every board that can't draw, for everyone (late trap #14).
-  const showAsTable = (isPrimary: boolean) => (
+  const showAsTable = (isFirst: boolean) => (
     <Button
-      {...(isPrimary ? { variant: 'primary' as const } : {})}
+      {...leads(isFirst)}
       icon="table"
       isDisabled={layoutSwitch.isDisabled === true || restoringId !== undefined || isAddingStage}
-      onPress={() => layoutSwitch.onChange('table')}
+      onPress={() => {
+        layoutSwitch.onChange('table');
+        // The table takes the board's place, and this button with it: focus goes to the page's title.
+        focusTitle();
+      }}
     >
       {strings.showAsTable}
     </Button>
@@ -314,7 +342,7 @@ export function BoardScreen(props: BoardScreenProps) {
                     {/* One click makes the board: a Stage field with its stages (Attio's board). Owners and admins
                         only change the schema (spec 0009, AC-136); everyone else still has the table. */}
                     {canChangeSchema && (
-                      <Button variant="primary" icon="plus" isPending={isAddingStage} onPress={() => void addStage()}>
+                      <Button {...leads(true)} icon="plus" isPending={isAddingStage} onPress={() => void addStage()}>
                         {isAddingStage ? strings.addingStageField : strings.addStageField}
                       </Button>
                     )}
@@ -331,7 +359,7 @@ export function BoardScreen(props: BoardScreenProps) {
                     {/* Restored in place, as settings' Archived list does: the board groups by it again. */}
                     {canChangeSchema && (
                       <Button
-                        variant="primary"
+                        {...leads(true)}
                         icon="archive-restore"
                         isPending={restoringId === outcome.id}
                         onPress={() => {
@@ -341,7 +369,7 @@ export function BoardScreen(props: BoardScreenProps) {
                         {restoringId === outcome.id ? strings.restoringGroup : strings.restoreGroup(outcome.title)}
                       </Button>
                     )}
-                    {/* Readers' one way out, so it leads for them. */}
+                    {/* Readers' one way out, so it leads for them (beside no New <record>). */}
                     {showAsTable(!canChangeSchema)}
                   </>
                 }

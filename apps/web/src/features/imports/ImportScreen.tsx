@@ -29,6 +29,7 @@ import {
   EmptyState,
   type FieldAttribute,
   FileDrop,
+  focusLater,
   Icon,
   loadPhoneLibrary,
   Modal,
@@ -722,7 +723,7 @@ export function ImportScreen({
 
   const topBar = (
     <TopBar
-      title={strings.title(into?.list.name ?? object.pluralName)}
+      title={into === undefined ? strings.title(object.pluralName) : strings.listTitle(into.list.name)}
       icon={into?.list.icon ?? object.icon}
       hue={into?.list.hue ?? object.hue}
       crumbs={[
@@ -1243,13 +1244,23 @@ function ColumnsStep({
   onContinue,
 }: ColumnsStepProps) {
   // Checked when Continue is pressed, never before (the foolproof pass): until then an unmatched required field is a
-  // quiet row with its Match a column, and Continue is always there to press.
-  const [isTried, setTried] = useState(false);
+  // quiet row with its Match a column, and Continue is always there to press. Each press that stops counts, so the
+  // rows mount again and are said again, and the press moves focus to the first one's Match a column (from the press,
+  // never as a row mounts: WCAG 3.2.2). Once nothing stops it, or Only update records I have changes, the rows read
+  // quietly again until the next press.
+  const [tries, setTried] = useState(0);
   const block = columnsBlock(matched, required, isCreating);
-  const shownBlock = isTried ? block : undefined;
+  if (block === undefined && tries > 0) setTried(0);
+  const shownBlock = tries > 0 ? block : undefined;
+  // Each required row's Match a column by its attribute, and Continue: where focus goes after a press or a pick.
+  const matchRefs = useRef(new Map<string, HTMLButtonElement>());
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const firstMatch = (among: readonly AttributeDefinition[]) =>
+    among.map((each) => matchRefs.current.get(each.id)).find((each) => each?.isConnected === true);
   const tryContinue = () => {
     if (block !== undefined) {
-      setTried(true);
+      setTried((count) => count + 1);
+      if (block === 'required') focusLater(() => firstMatch(required));
       return;
     }
     onContinue();
@@ -1292,7 +1303,7 @@ function ColumnsStep({
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          <Button variant="primary" isPending={checked !== undefined} onPress={tryContinue}>
+          <Button ref={continueRef} variant="primary" isPending={checked !== undefined} onPress={tryContinue}>
             {strings.continue}
           </Button>
         </>
@@ -1313,9 +1324,10 @@ function ColumnsStep({
       {isCreating &&
         required.map((attribute) => (
           <Callout
-            key={`required-${attribute.id}`}
+            key={`required-${attribute.id}-${shownBlock === 'required' ? String(tries) : 'quiet'}`}
             tone={requiredTone(shownBlock === 'required')}
-            {...(shownBlock === 'required' ? { isAnnounced: true } : {})}
+            // An error the person caused, with focus already on its way on: said politely (Callout's README).
+            {...(shownBlock === 'required' ? { isPolite: true } : {})}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1326,8 +1338,16 @@ function ColumnsStep({
                       size="sm"
                       items={freeColumns}
                       value={null}
+                      triggerRef={(element) => {
+                        if (element === null) matchRefs.current.delete(attribute.id);
+                        else matchRefs.current.set(attribute.id, element);
+                      }}
                       onChange={(id) => {
-                        if (id !== null) onTarget(Number(id), { attributeId: attribute.id });
+                        if (id === null) return;
+                        onTarget(Number(id), { attributeId: attribute.id });
+                        // The row goes with its pick: focus moves on to the next one's Match a column, else Continue.
+                        const rest = required.filter((each) => each.id !== attribute.id);
+                        focusLater(() => firstMatch(rest) ?? continueRef.current);
                       }}
                     />
                   ),
@@ -1339,7 +1359,16 @@ function ColumnsStep({
               : strings.requiredUnmatched(attribute.title)}
           </Callout>
         ))}
-      {required.length > 0 && <Checkbox label={strings.updateOnly} isSelected={!isCreating} onChange={onUpdateOnly} />}
+      {required.length > 0 && (
+        <Checkbox
+          label={strings.updateOnly}
+          isSelected={!isCreating}
+          onChange={(isOnly) => {
+            setTried(0);
+            onUpdateOnly(isOnly);
+          }}
+        />
+      )}
       {checked !== undefined && (
         <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
       )}

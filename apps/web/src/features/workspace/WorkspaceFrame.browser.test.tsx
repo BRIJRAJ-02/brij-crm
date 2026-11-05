@@ -8,7 +8,7 @@
 // their counts as badges. Sign out asks first (the owner, 21 October 2026).
 // The phone tests measure layout, so the library's styles load first, as main.tsx loads them.
 import '@crm/ui/styles.css';
-import type { DataLayer, DueTasksSnapshot, NavOperation, NavSnapshot, NavState } from '@crm/data';
+import type { DataLayer, DueTasksSnapshot, ListView, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
   createMemoryHistory,
@@ -18,7 +18,7 @@ import {
   RouterProvider,
   type AnyRouter,
 } from '@tanstack/react-router';
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
@@ -154,9 +154,14 @@ afterEach(() => {
 });
 
 /** Renders the frame at `/w/acme/start` inside a memory router, with a settings page to go to. */
+/** Sets the list the open page names, as a page under another address does (an import into the list). */
+let markList: ((id: string | undefined) => void) | undefined;
+
 async function renderFrame(
   settings?: SettingsSidebar,
-  more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing' | 'roleLabel' | 'workspaces'>> & {
+  more: Partial<
+    Pick<WorkspaceFrameProps, 'objects' | 'lists' | 'currentPage' | 'isMissing' | 'roleLabel' | 'workspaces'>
+  > & {
     readonly layer?: DataLayer;
     readonly roleLabel?: string;
     /** Where the frame opens (the start page by default); a settings address draws the frame there too. */
@@ -166,40 +171,47 @@ async function renderFrame(
   const layer = more.layer ?? data;
   const toasts = createToasts();
   const rootRoute = createRootRoute();
-  const frame = () => (
-    <WorkspaceFrame
-      data={layer}
-      toasts={toasts}
-      slug="acme"
-      workspaceName="Acme"
-      objects={more.objects ?? []}
-      {...(more.currentPage === undefined ? {} : { currentPage: more.currentPage })}
-      {...(more.isMissing === undefined ? {} : { isMissing: more.isMissing })}
-      {...(more.roleLabel === undefined ? {} : { roleLabel: more.roleLabel })}
-      {...(more.workspaces === undefined ? {} : { workspaces: more.workspaces })}
-      {...(settings === undefined ? {} : { settings })}
-    >
-      <h1 tabIndex={-1}>Page</h1>
-      <input aria-label="Draft" />
-    </WorkspaceFrame>
-  );
-  const start = createRoute({ getParentRoute: () => rootRoute, path: '/w/acme/start', component: frame });
+  const Frame = () => {
+    // What a page says of itself can change while the frame stays mounted.
+    const [currentList, setCurrentList] = useState<string | undefined>(undefined);
+    markList = setCurrentList;
+    return (
+      <WorkspaceFrame
+        data={layer}
+        toasts={toasts}
+        slug="acme"
+        workspaceName="Acme"
+        objects={more.objects ?? []}
+        {...(more.lists === undefined ? {} : { lists: more.lists })}
+        {...(currentList === undefined ? {} : { currentList })}
+        {...(more.currentPage === undefined ? {} : { currentPage: more.currentPage })}
+        {...(more.isMissing === undefined ? {} : { isMissing: more.isMissing })}
+        {...(more.roleLabel === undefined ? {} : { roleLabel: more.roleLabel })}
+        {...(more.workspaces === undefined ? {} : { workspaces: more.workspaces })}
+        {...(settings === undefined ? {} : { settings })}
+      >
+        <h1 tabIndex={-1}>Page</h1>
+        <input aria-label="Draft" />
+      </WorkspaceFrame>
+    );
+  };
+  const start = createRoute({ getParentRoute: () => rootRoute, path: '/w/acme/start', component: Frame });
   // Settings opens on Profile (5 November 2026); inside Settings, its pages draw the frame too.
   const inSettings = settings !== undefined;
   const profile = createRoute({
     getParentRoute: () => rootRoute,
     path: '/w/acme/settings/account/profile',
-    component: inSettings ? frame : () => <p>Profile page</p>,
+    component: inSettings ? Frame : () => <p>Profile page</p>,
   });
   const home = createRoute({
     getParentRoute: () => rootRoute,
     path: '/w/acme/settings',
-    component: inSettings ? frame : () => <p>Settings</p>,
+    component: inSettings ? Frame : () => <p>Settings</p>,
   });
   const teams = createRoute({
     getParentRoute: () => rootRoute,
     path: '/w/acme/settings/teams',
-    component: inSettings ? frame : () => <p>Teams page</p>,
+    component: inSettings ? Frame : () => <p>Teams page</p>,
   });
   const signIn = createRoute({ getParentRoute: () => rootRoute, path: '/sign-in', component: () => <p>Sign in</p> });
   const index = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>Home</p> });
@@ -436,6 +448,29 @@ describe('the app’s sidebar (spec 0034)', () => {
     await renderFrame(undefined, { objects: OBJECTS, currentPage: 'captures' });
     const current = document.querySelectorAll('nav a[aria-current="page"]');
     expect([...current].map((each) => each.textContent.trim())).toEqual(['Captures']);
+  });
+
+  it('marks a list the page names when its address doesn’t, as the frame stays mounted', async () => {
+    const inbound: ListView = {
+      id: 'list-inbound',
+      objectId: 'deals',
+      apiSlug: 'inbound',
+      name: 'Inbound',
+      icon: 'list',
+      hue: 'gray',
+      allowsDuplicates: false,
+      isArchived: false,
+      canWrite: true,
+      canManage: true,
+    };
+    await renderFrame(undefined, { objects: OBJECTS, lists: [inbound] });
+    const current = () =>
+      [...document.querySelectorAll('nav a[aria-current="page"]')].map((each) => each.textContent.trim());
+    expect(current()).toEqual([]);
+    act(() => {
+      markList?.(inbound.id);
+    });
+    expect(current()).toEqual(['Inbound']);
   });
 
   it('draws the member’s section order and folds', async () => {

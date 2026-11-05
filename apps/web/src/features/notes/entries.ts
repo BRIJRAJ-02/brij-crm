@@ -70,11 +70,3 @@ export function findLoaded<Note extends { readonly id: string }>(
   }
   return undefined;
 }
-
-/** The one record a single reference editor hands back, whether as itself or in a list of one. */
-export function pickedRef(value: unknown): { readonly objectId: string; readonly recordId: string } | undefined {
-  const one: unknown = Array.isArray(value) ? value[0] : value;
-  if (typeof one !== 'object' || one === null) return undefined;
-  const { objectId, recordId } = one as { readonly objectId?: unknown; readonly recordId?: unknown };
-  return typeof objectId === 'string' && typeof recordId === 'string' ? { objectId, recordId } : undefined;
-}

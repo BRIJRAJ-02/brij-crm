@@ -35,7 +35,7 @@ import { createView } from '../views/query.ts';
 import { objectHref, viewHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
-import { importHome } from './paths.ts';
+import { importHome } from './home.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for an import's summary: what its route loaded through the data layer. */
@@ -390,6 +390,11 @@ export function ImportSummary({
     </PageColumn>
   );
 
-  // Into a list, the sidebar marks nothing, as on the list's own page.
-  return <WorkspacePage {...(home.id === 'object' ? { currentObject: object.apiSlug } : {})} page={{ topBar, body }} />;
+  // Into a list, the sidebar marks the list, as on the list's own pages; else the object.
+  return (
+    <WorkspacePage
+      {...(list === undefined ? { currentObject: object.apiSlug } : { currentList: list.id })}
+      page={{ topBar, body }}
+    />
+  );
 }
