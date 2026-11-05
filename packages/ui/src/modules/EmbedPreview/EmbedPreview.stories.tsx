@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { EmbedPreview } from './EmbedPreview.tsx';
 
 const meta = {
@@ -43,17 +44,33 @@ export const Floating: Story = { args: { mode: 'floating', colour: '#0f766e' } }
 export const FloatingMarked: Story = {
   args: {
     mode: 'floating',
-    kind: 'booking',
     mark: 'calendar',
     words: 'Book a time',
     label: 'How the booking page sits on your site',
   },
 };
 
-/** A booking page in the page: its headline over a fortnight, the weekdays open. */
+/** A booking page in the page: its own picture (BookingPagePicture) in the box, in place of a form's fields. */
 export const BookingInline: Story = {
-  args: { kind: 'booking', headline: 'Intro call', label: 'How the booking page sits on your site' },
+  args: { headline: 'Intro call', label: 'How the booking page sits on your site' },
+  render: (args) => (
+    <Stage width="dialog">
+      <EmbedPreview
+        {...args}
+        content={
+          <BookingPagePicture
+            title="Intro call"
+            lengths="30 min"
+            openDays={[true, true, true, true, true, false, false]}
+            hue="blue"
+          />
+        }
+      />
+    </Stage>
+  ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('img', { name: 'How the booking page sits on your site' })).toBeInTheDocument();
+    // The picture is the page's: its title is drawn, its fields are not.
+    await expect(canvas.getByText('Intro call')).toBeInTheDocument();
   },
 };

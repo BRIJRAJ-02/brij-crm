@@ -112,6 +112,7 @@ import {
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { EmbedCard } from './EmbedCard.tsx';
+import { pagePicture } from './page-picture.tsx';
 import { OneOffLinksCard } from './OneOffLinksCard.tsx';
 import { RequestsCard } from './RequestsCard.tsx';
 import { SharingPanel } from './SharingPanel.tsx';
@@ -1569,6 +1570,7 @@ export function PageEditor({
                         title={page.title}
                         isLive={page.status === 'live'}
                         quickPicks={BRAND_QUICK_PICKS}
+                        picture={pagePicture(page)}
                       />
                       {/* One-time links (AC-6204). */}
                       <OneOffLinksCard

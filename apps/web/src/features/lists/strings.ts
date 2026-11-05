@@ -33,9 +33,9 @@ export const strings = {
   board: 'Board',
   layout: 'Layout',
   count: (count: string, isOne: boolean) => `${count} ${isOne ? 'entry' : 'entries'}`,
-  /** An empty list's first step (T11): what to do, then what a list is for, in one line. */
-  firstStep: (plural: string) => `Add ${plural.toLowerCase()}`,
-  firstStepText: (plural: string) => `Hand-pick the ${plural.toLowerCase()} this list tracks.`,
+  empty: (plural: string) => `No ${plural.toLowerCase()} in this list yet.`,
+  /** An empty list's first step (T11), for whoever may add to it: what a list is for, beside Add <singular>. */
+  firstStep: (plural: string) => `Hand-pick the ${plural.toLowerCase()} this list tracks.`,
   failed: 'The list didn’t load.',
   notFoundTitle: 'This list isn’t here',
   notFoundText: 'It may be archived, or you don’t have access.',

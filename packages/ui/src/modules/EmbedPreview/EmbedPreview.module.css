@@ -71,22 +71,9 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* A booking page in the page: a fortnight of days under its headline, the open ones in the accent's soft tint, as
-     the page itself marks the days it books. */
-  .month {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: var(--space-4);
-  }
-
-  .day {
-    block-size: var(--size-control);
-    border-radius: var(--radius-sm);
-    background: var(--surface-hover);
-  }
-
-  .day[data-open] {
-    background: var(--accent-soft);
+  /* What `content` draws there (a booking page's picture) brings its own inset: the box is its ground and hairline. */
+  .form[data-content] {
+    padding: 0;
   }
 
   .send {
