@@ -11,7 +11,7 @@ With a `match`, the same small link opens Match with your calendar (MatchCalenda
 ## Use
 
 ```tsx
-<BookingFrame banner={<VisitorBar connectHref={client.connectUrl(key, path)} />} … />
+<BookingFrame bar={<VisitorBar connectHref={client.connectUrl(key, path)} />} … />
 <VisitorBar person={{ name: 'Ada Lovelace', email: 'ada@example.com' }} calendar="on" showAll={showAll} onShowAllChange={setShowAll} onNotYou={forget} />
 ```
 

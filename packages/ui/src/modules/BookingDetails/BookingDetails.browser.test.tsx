@@ -6,6 +6,8 @@
 // the chip that guest came from. Guests are chips (1 November 2026): what is
 // still typed goes with the booking, a pasted list splits, a bad address stays
 // to fix, and every change is said.
+// The library's layers and tokens first, as every page loads them: the width test reads the sizes they set.
+import '../../styles/index.css';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +45,24 @@ function details(outcome: BookingDetailsOutcome, props: Partial<BookingDetailsPr
 }
 
 const form = () => page.getByRole('form', { name: 'Your details' });
+
+describe('the details step’s width', () => {
+  it('runs its fields to the same edges as Back and Confirm', async () => {
+    await page.viewport(1280, 800);
+    render(<BookingDetails onBack={() => undefined} onSubmit={() => Promise.resolve({ kind: 'done' })} />);
+    await expect.element(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    // The field's drawn box, around the input and its inset.
+    const input = page.getByRole('textbox', { name: /Your name/ }).element();
+    const name = (input.parentElement ?? input).getBoundingClientRect();
+    const back = page.getByRole('button', { name: 'Back' }).element().getBoundingClientRect();
+    const confirm = page
+      .getByRole('button', { name: /Confirm/ })
+      .element()
+      .getBoundingClientRect();
+    expect(name.left).toBe(back.left);
+    expect(name.right).toBe(confirm.right);
+  });
+});
 const line = () => form().getByRole('alert');
 const nameBox = () => page.getByRole('textbox', { name: /Your name/ });
 const emailBox = () => page.getByRole('textbox', { name: /^Email/ });

@@ -34,6 +34,11 @@ export interface MonthTilesProps {
    * the pointer, today has a hairline ring, and the chosen day fills with the accent (a restaurant's reservation page).
    */
   readonly tone?: 'tiles' | 'plain';
+  /**
+   * Every month the same height on a wide page: a month's rows share six weeks' height, so paging between a five and
+   * a six week month moves nothing. For a page centred in the window, where a taller month would move everything.
+   */
+  readonly holdsHeight?: boolean;
 }
 
 /**
@@ -67,6 +72,7 @@ export function MonthTiles({
   focusesValue = false,
   isLoading = false,
   tone = 'tiles',
+  holdsHeight = false,
 }: MonthTilesProps) {
   const { locale, weekStart } = useFormatSettings();
   const grid = useRef<HTMLDivElement>(null);
@@ -120,7 +126,11 @@ export function MonthTiles({
   const touch = useRef<number | undefined>(undefined);
   const name = monthParts(month, locale);
   return (
-    <div className={styles.root} data-tone={tone === 'plain' ? 'plain' : undefined}>
+    <div
+      className={styles.root}
+      data-tone={tone === 'plain' ? 'plain' : undefined}
+      data-holds-height={holdsHeight || undefined}
+    >
       <div className={styles.head}>
         <h2 className={styles.title}>
           {/* Keyed by the month, so a new month's name rolls in the way the arrows went, with the days. */}

@@ -640,6 +640,7 @@ export function LoadingBooking({
         onMonthChange={() => undefined}
         canPrevious={false}
         canNext={false}
+        holdsHeight={!isEmbedded()}
         isLoading
       />
     </BookingFrame>
@@ -1384,30 +1385,27 @@ function Booking({
       ? undefined
       : strings.connectResults[connected];
   const banner =
-    showsBar || holdsBar || connectNote !== undefined ? (
-      <>
-        {connectNote !== undefined && (
-          <Callout tone={connected === 'denied' ? 'info' : 'warning'} isAnnounced>
-            {connectNote}
-          </Callout>
+    connectNote === undefined ? undefined : (
+      <Callout tone={connected === 'denied' ? 'info' : 'warning'} isAnnounced>
+        {connectNote}
+      </Callout>
+    );
+  const bar =
+    showsBar || holdsBar ? (
+      <Suspense fallback={null}>
+        {/* The small link's space, held while the page asks who the visitor is (spec 0058, AC-24). */}
+        {holdsBar && <VisitorBar isLoading />}
+        {showsBar && (
+          <VisitorBar
+            {...(person === undefined ? {} : { person: { name: person.name, email: person.email }, onNotYou: forget })}
+            {...(barCalendar === undefined ? {} : { calendar: barCalendar })}
+            {...(connectHref === undefined ? {} : { connectHref })}
+            showAll={showAll}
+            onShowAllChange={setShowAll}
+            {...(match === undefined ? {} : { match })}
+          />
         )}
-        <Suspense fallback={null}>
-          {/* The small link's space, held while the page asks who the visitor is (spec 0058, AC-24). */}
-          {holdsBar && <VisitorBar isLoading />}
-          {showsBar && (
-            <VisitorBar
-              {...(person === undefined
-                ? {}
-                : { person: { name: person.name, email: person.email }, onNotYou: forget })}
-              {...(barCalendar === undefined ? {} : { calendar: barCalendar })}
-              {...(connectHref === undefined ? {} : { connectHref })}
-              showAll={showAll}
-              onShowAllChange={setShowAll}
-              {...(match === undefined ? {} : { match })}
-            />
-          )}
-        </Suspense>
-      </>
+      </Suspense>
     ) : undefined;
   const frame = {
     host: railHost(page),
@@ -1417,6 +1415,7 @@ function Booking({
     claimHref: CLAIM_URL,
     ...railBrand(page),
     ...(banner === undefined ? {} : { banner }),
+    ...(bar === undefined ? {} : { bar }),
   };
 
   // The details step (spec 0025) draws over the whole card, its heading row too: the month stays underneath and
@@ -1451,7 +1450,8 @@ function Booking({
     createElement(LoadedDetails, { key: step.attempt, ...detailsProps })
   );
   // The form says who's booking, with its own Not you: the bar would say it twice.
-  const { banner: _bar, ...withoutBar } = frame;
+  // A note about a calendar that didn't connect stays: it holds a place in the column, and leaving would move the page.
+  const { bar: _bar, ...withoutBar } = frame;
 
   const noTimes = allStarts.length === 0 && loaded.size >= Math.min(chunks, 2);
   // Every open time clashes with the visitor's calendar: say so, with Show all times.
@@ -1706,6 +1706,7 @@ function Booking({
         canPrevious={month > monthOf(today)}
         canNext={month < monthOf(horizon)}
         focusesValue={step.back && view === 'month'}
+        holdsHeight={!isEmbedded()}
       />
     </BookingFrame>
   );

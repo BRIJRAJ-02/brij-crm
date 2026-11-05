@@ -21,10 +21,8 @@
     inline-size: 100%;
   }
 
-  /* The fields stop at a form's width (critic A11): an email box 770px wide read as a document, not a form. */
-  .root > :not(.actions, .confirmNote) {
-    max-inline-size: var(--size-dialog-form);
-  }
+  /* The fields span the card, lining up with Back and Confirm below them (the owner, 5 November 2026, over critic A11's
+     form width: stopping short left a blank band down the card's end). */
 
   /* One of the page's own questions (spec 0057): its control sits in the column as any field does. */
   .question {
