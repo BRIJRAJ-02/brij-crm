@@ -44,6 +44,13 @@ export function shortDay(date: string, locale: string): string {
   );
 }
 
+/** "Monday 9 November" for a place date (`YYYY-MM-DD`): the day the times are on. */
+export function longDate(date: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+    new Date(`${date}T12:00:00.000Z`),
+  );
+}
+
 /** "Monday 9 November" on the place's clock. */
 export function longDay(instant: string, zone: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone }).format(

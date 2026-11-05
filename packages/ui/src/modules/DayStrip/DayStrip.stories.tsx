@@ -28,6 +28,16 @@ export const Default: Story = {
   },
 };
 
+/** `today`: each day's month under its date, and Today on today, so a new month reads as one. */
+export const WithMonths: Story = {
+  args: { days: ['2026-10-08', '2026-10-09', '2026-10-30', '2026-10-31', '2026-11-02'], today: '2026-10-08' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Today')).toBeInTheDocument();
+    await expect(canvas.getByText('Nov')).toBeInTheDocument();
+  },
+};
+
 /** The days before they are known: a day's tile in each place, so the times under them never move. */
 export const Loading: Story = {
   args: { days: [], isLoading: true },

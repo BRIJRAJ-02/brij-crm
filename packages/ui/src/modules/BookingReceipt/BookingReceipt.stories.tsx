@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingReceipt } from './BookingReceipt.tsx';
 
@@ -101,6 +102,20 @@ export const Ended: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'This booking ended' })).toHaveFocus();
     await expect(canvas.queryByText('Who')).toBeNull();
+  },
+};
+
+/** A restaurant's reservation (inside GuestLook, its token fallbacks here): the ink in place of the app's blue. */
+export const MenuLook: Story = {
+  render: (args) => (
+    <GuestLook>
+      <Stage width="fill" height="page">
+        <BookingReceipt {...args} />
+      </Stage>
+    </GuestLook>
+  ),
+  play: async () => {
+    await settleAnimations();
   },
 };
 

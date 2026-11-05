@@ -3,4 +3,5 @@ export const strings = {
   loading: 'Loading days…',
   days: 'Days with times',
   best: 'a best time for you both',
+  today: 'Today',
 } as const;

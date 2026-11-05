@@ -1,10 +1,11 @@
-// The reservation page in Chromium (spec 0066 B7 lite), as checklabs' one page booking form: the day and its times,
-// then Your details on the same page, the button named "Confirm {day} at {time}" once a time is picked, and "Choose a
-// time first" before any field is checked when it is pressed before. A phone shows a strip of days with the full calendar a press away. axe is
-// clean in light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each is photographed.
+// The reservation page in Chromium (spec 0066 B7 lite), in checklabs' order on the booking page's frame: the party, a
+// date and a time ("Choose a date"), the Book bar ("Pick a time", then "Continue · {day}, {time}"), then Your details
+// over the card with Back, its button "Confirm {day} at {time}". Back keeps what was typed. A phone shows a strip of
+// days with the full calendar a press away, and the Book bar only once a time is picked. axe is clean in light and
+// dark at a desktop's and a phone's width, on the times and on the details. With VITE_SHOT_DIR set, each is shot.
 import '@crm/ui/styles.css';
 import type { PublicReserveInput, PublicTablePage, TableClient } from '@crm/data/tables';
-import { BookingProvider } from '@crm/ui/public-booking';
+import { BookingProvider, GuestLook } from '@crm/ui/public-booking';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,11 +28,18 @@ const PAGE: PublicTablePage = {
   changeCutoffMinutes: 120,
   hours: {
     weekly: Object.fromEntries(
-      ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((day) => [day, [{ from: '18:00', to: '22:00' }]]),
+      ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((day) => [
+        day,
+        [
+          { from: '12:00', to: '15:00' },
+          { from: '18:00', to: '22:00' },
+        ],
+      ]),
     ),
     exceptions: [],
   },
   today: TODAY,
+  areas: ['Inside', 'Terrace'],
 };
 
 function clientOf(sent: PublicReserveInput[]): TableClient {
@@ -39,7 +47,9 @@ function clientOf(sent: PublicReserveInput[]): TableClient {
     times: (_key: string, query: { readonly date: string }) =>
       Promise.resolve({
         date: query.date,
-        times: ['18:00', '18:30', '19:00', '19:30', '20:00'].map((at) => `${query.date}T${at}:00.000Z`),
+        times: ['12:00', '12:30', '18:00', '18:30', '19:00', '19:30', '20:00'].map(
+          (at) => `${query.date}T${at}:00.000Z`,
+        ),
       }),
     reserve: (_key: string, input: PublicReserveInput) => {
       sent.push(input);
@@ -78,17 +88,19 @@ async function show(width: number) {
   act(() => {
     made.render(
       <BookingProvider locale="en-GB" timeZone="UTC">
-        <ReservePage
-          client={clientOf(sent)}
-          page={PAGE}
-          locale="en-GB"
-          isEmbedded={false}
-          onReserved={() => undefined}
-        />
+        <GuestLook>
+          <ReservePage
+            client={clientOf(sent)}
+            page={PAGE}
+            locale="en-GB"
+            isEmbedded={false}
+            onReserved={() => undefined}
+          />
+        </GuestLook>
       </BookingProvider>,
     );
   });
-  await expect.element(page.getByRole('heading', { name: 'Your details' })).toBeInTheDocument();
+  await expect.element(page.getByRole('heading', { name: 'Choose a date' })).toBeInTheDocument();
   return sent;
 }
 
@@ -97,45 +109,79 @@ async function shoot(name: string, theme: Theme, width: number) {
   await page.screenshot({ path: `${SHOT_DIR}/${name}-${theme}-${String(width)}.png` });
 }
 
-describe('the reservation page (checklabs’ one page form)', () => {
-  it('asks for a time first, then confirms the day and time on the same page', async () => {
+/** The times draw in (a short fade and stagger): checks read them once they have landed. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 800));
+
+describe('the reservation page (checklabs’ order on the booking frame)', () => {
+  it('picks a time, continues to the details, and confirms the day and time', async () => {
     const sent = await show(1280);
-    // Pressed first, with nothing filled in: the time is asked for before any field.
-    await userEvent.click(page.getByRole('button', { name: 'Choose a time to continue' }));
-    await expect.element(page.getByText('Choose a time first.')).toBeVisible();
-    expect(page.getByText('Give your name.').elements()).toHaveLength(0);
-    await userEvent.fill(page.getByRole('textbox', { name: /name/i }), 'Ada Lovelace');
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Reserve your table' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Pick a time' })).toBeDisabled();
+    await expect.element(page.getByText('Lunch', { exact: true })).toBeVisible();
+    await expect.element(page.getByText('Dinner', { exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: /^19:30/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Continue · Mon 14 Jan, 19:30' }));
+    await expect.element(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
+    // checklabs' order: Full name, Phone, Email, Special requests; Seating when the place has areas.
+    const names = [...document.querySelectorAll('form input[name], form textarea[name]')].map((field) =>
+      field.getAttribute('name'),
+    );
+    expect(names.slice(0, 4)).toEqual(['name', 'phone', 'email', 'note']);
+    await expect.element(page.getByText('Terrace', { exact: true })).toBeVisible();
+    await userEvent.fill(page.getByRole('textbox', { name: /Full name/ }), 'Ada Lovelace');
+    await userEvent.fill(page.getByRole('textbox', { name: /Phone/ }), '07700 900123');
     await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'ada@example.com');
-    await userEvent.fill(page.getByRole('textbox', { name: /Number to call/ }), '07700 900123');
-    await userEvent.click(page.getByRole('button', { name: /^19:30/ }).first());
-    await expect.element(page.getByRole('button', { name: /^Confirm .* at 19:30$/ })).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: /^Confirm / }));
+    await userEvent.click(page.getByRole('button', { name: 'Confirm Mon 14 Jan at 19:30' }));
     await expect.poll(() => sent.length).toBe(1);
-    expect(sent[0]).toMatchObject({ party: 2, name: 'Ada Lovelace', start: '2030-01-14T19:30:00.000Z' });
+    expect(sent[0]).toMatchObject({
+      party: 2,
+      name: 'Ada Lovelace',
+      phone: '07700 900123',
+      start: '2030-01-14T19:30:00.000Z',
+      marketing: false,
+    });
   });
 
-  it('shows a strip of days on a phone, with the full calendar a press away', async () => {
+  it('keeps what was typed through Back', async () => {
+    await show(1280);
+    await userEvent.click(page.getByRole('button', { name: /^18:30/ }));
+    await userEvent.click(page.getByRole('button', { name: /^Continue/ }));
+    await userEvent.fill(page.getByRole('textbox', { name: /Full name/ }), 'Ada Lovelace');
+    await userEvent.fill(page.getByRole('textbox', { name: /Phone/ }), '07700 900123');
+    await userEvent.click(page.getByRole('button', { name: 'Back' }));
+    await userEvent.click(page.getByRole('button', { name: /^20:00/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Continue · Mon 14 Jan, 20:00' }));
+    await expect.element(page.getByRole('textbox', { name: /Full name/ })).toHaveValue('Ada Lovelace');
+    await expect.element(page.getByRole('textbox', { name: /Phone/ })).toHaveValue('07700 900123');
+    expect(page.getByText(/Booking as/).elements()).toHaveLength(0);
+  });
+
+  it('shows a strip of days on a phone, and the Book bar only once a time is picked', async () => {
     await show(390);
-    await expect.element(page.getByRole('button', { name: 'Full calendar' })).toBeVisible();
+    expect(page.getByRole('button', { name: /^Continue|^Pick a time$/ }).elements()).toHaveLength(0);
     await expect.element(page.getByRole('button', { name: 'Full calendar' })).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(page.getByRole('button', { name: 'Full calendar' }));
     await expect.element(page.getByRole('button', { name: 'Full calendar' })).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(page.getByRole('button', { name: /^18:00/ }));
+    await expect.element(page.getByRole('button', { name: 'Continue · Mon 14 Jan, 18:00' })).toBeVisible();
   });
 
   for (const width of [1280, 390]) {
-    it(`passes axe in light and dark at ${String(width)}px`, async () => {
+    it(`passes axe in light and dark at ${String(width)}px, on the times and on the details`, async () => {
       await show(width);
-      await userEvent.click(page.getByRole('button', { name: /^19:00/ }).first());
+      await userEvent.click(page.getByRole('button', { name: /^19:00/ }));
       for (const theme of THEMES) {
         applyTheme(theme);
-        // The day's times draw in (a short fade and stagger): axe reads them once they have landed.
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await settle();
         expect(await axeViolations()).toEqual([]);
         await shoot('reserve', theme, width);
-        // The foot: Your details and the button named for the time.
-        document.querySelector('button[type="submit"]')?.scrollIntoView({ block: 'end' });
-        await shoot('reserve-foot', theme, width);
-        globalThis.scrollTo(0, 0);
+      }
+      await userEvent.click(page.getByRole('button', { name: /^Continue/ }));
+      for (const theme of THEMES) {
+        applyTheme(theme);
+        await settle();
+        expect(await axeViolations()).toEqual([]);
+        await shoot('reserve-details', theme, width);
       }
     });
   }

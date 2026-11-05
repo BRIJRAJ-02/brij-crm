@@ -74,6 +74,14 @@
     padding-inline: var(--space-12);
   }
 
+  /* `guest`: a guest page's field (a reservation's details, after checklabs' 42px inputs): taller, roomier and rounder,
+     its words a step larger, so a guest on a phone types into something sized for a thumb. */
+  .root[data-size='guest'] .box {
+    block-size: calc(var(--size-input) + var(--space-12));
+    padding-inline: var(--space-12);
+    border-radius: var(--radius-lg);
+  }
+
   .root[data-variant='search'] .box {
     background: var(--surface-sunken);
   }
@@ -397,6 +405,18 @@
     }
   }
 
+  .root[data-size='guest'] .input {
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+  }
+
+  /* Still 16px under a finger, so a phone never zooms into the larger field either. */
+  @media (pointer: coarse) {
+    .root[data-size='guest'] .input {
+      font-size: var(--touch-text);
+    }
+  }
+
   .root[data-variant='title'] .input {
     font: var(--text-note-title);
     letter-spacing: var(--tracking-note-title);
@@ -509,5 +529,11 @@
     outline-color: var(--accent-line);
     background: var(--surface-raised);
     box-shadow: var(--shadow-focus);
+  }
+
+  /* `guest`, continued: a note's box and the words in the field (its box is beside the small size, above). */
+  .root[data-size='guest'] .box[data-multiline] {
+    block-size: auto;
+    padding-block: var(--space-12);
   }
 }

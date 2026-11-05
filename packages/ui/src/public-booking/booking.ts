@@ -36,6 +36,7 @@ export { DeferredSelect, type DeferredSelectItem } from '../molecules/Select/Def
 export type { SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
+  type BookingDetailsDraft,
   type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
@@ -100,7 +101,15 @@ export {
   type MapsApp,
 } from '../modules/BusinessPage/BusinessPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
-export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
+/** The guest menu's look around a page (5 November 2026): the reservation page's and the business page's. */
+export { GuestLook, type GuestLookProps } from '../modules/GuestLook/GuestLook.tsx';
+/** The count beside a reservation's times ("12 available"). */
+export { Badge } from '../atoms/Badge/Badge.tsx';
+/** A reservation's party size (spec 0066 B7, after checklabs): the band with − and +, and the way to book bigger. */
+export { PartyBand, type PartyBandProps } from '../modules/PartyBand/PartyBand.tsx';
+export { SlotList, type Slot, type SlotGroup } from '../modules/SlotList/SlotList.tsx';
+/** A reservation's link to the place's menu (spec 0066 B7), opening the guest menu in a tab of its own. */
+export { Link } from '../atoms/Link/Link.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
 export type {
   MatchCalendarDay,

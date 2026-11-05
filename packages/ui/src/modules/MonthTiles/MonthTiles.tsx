@@ -28,6 +28,12 @@ export interface MonthTilesProps {
    * says it has no times, which while the times are still coming would not be true.
    */
   readonly isLoading?: boolean;
+  /**
+   * `tiles` (the default): every day a square tile, open days tinted (the booking page). `plain`: a compact month of
+   * plain numbers in 36px rows, as checklabs' reservation calendar draws it: an open day is plain text that fills under
+   * the pointer, today has a hairline ring, and the chosen day fills with the accent (a restaurant's reservation page).
+   */
+  readonly tone?: 'tiles' | 'plain';
 }
 
 /**
@@ -60,6 +66,7 @@ export function MonthTiles({
   canNext,
   focusesValue = false,
   isLoading = false,
+  tone = 'tiles',
 }: MonthTilesProps) {
   const { locale, weekStart } = useFormatSettings();
   const grid = useRef<HTMLDivElement>(null);
@@ -113,7 +120,7 @@ export function MonthTiles({
   const touch = useRef<number | undefined>(undefined);
   const name = monthParts(month, locale);
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-tone={tone === 'plain' ? 'plain' : undefined}>
       <div className={styles.head}>
         <h2 className={styles.title}>
           {/* Keyed by the month, so a new month's name rolls in the way the arrows went, with the days. */}
@@ -126,6 +133,8 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-left"
             label={strings.previousMonth}
+            // A guest's thumb: the plain month's arrows press across 44px, drawn as before.
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canPrevious}
             onPress={() => onMonthChange(shiftMonth(month, -1))}
           />
@@ -133,6 +142,7 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-right"
             label={strings.nextMonth}
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canNext}
             onPress={() => onMonthChange(shiftMonth(month, 1))}
           />

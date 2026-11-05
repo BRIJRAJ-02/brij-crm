@@ -12,7 +12,7 @@ import { createBusinessClient, directionsLinks, isDataError, type PublicBusiness
 // The page's read, for main.tsx's late check that a handle names a business: one lazy chunk carries the page and
 // its client (a separate dynamic import of the package split every app route into its own first load file).
 export { createBusinessClient };
-import { BookingFoot, BookingMessage, BusinessPage } from '@crm/ui/public-booking';
+import { BookingFoot, BookingMessage, BusinessPage, GuestLook } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { wearStylesheet } from '../stylesheet.ts';
 import { businessStrings, kindWord } from './business-strings.ts';
@@ -80,45 +80,51 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
     if (path !== globalThis.location.pathname) onMoved(path);
     document.title = tabTitle(page.name);
   }, [page, onMoved]);
-  // The workspace's accent, from its brand kit (spec 0060), through our own api.
-  const brandVersion = page?.brand?.version;
+  // The guest look (the guest menu's, with the workspace's accent in it, spec 0060), through our own api.
+  const lookVersion = page?.look;
   useEffect(() => {
     if (page === undefined) return;
     const href =
-      brandVersion !== undefined && VERSION.test(brandVersion)
-        ? `/api/public/business/${encodeURIComponent(page.handle)}/look/brand.css?v=${brandVersion}`
+      lookVersion !== undefined && VERSION.test(lookVersion)
+        ? `/api/public/business/${encodeURIComponent(page.handle)}/look/menu.css?v=${lookVersion}`
         : undefined;
     void wearStylesheet(document, href);
-  }, [page, brandVersion]);
+  }, [page, lookVersion]);
   if (loaded.state === 'loading') return <BusinessPage {...EMPTY} isLoading />;
   if (loaded.state === 'gone') {
     return (
-      <BookingMessage title={strings.notFoundTitle} page="business_page">
-        {strings.notFoundText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage title={strings.notFoundTitle} page="business_page">
+          {strings.notFoundText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   if (loaded.state === 'failed') {
     return (
-      <BookingMessage
-        title={strings.failedTitle}
-        page="business_page"
-        onRetry={() => {
-          setLoaded({ state: 'loading' });
-          load();
-        }}
-      >
-        {strings.failedText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage
+          title={strings.failedTitle}
+          page="business_page"
+          onRetry={() => {
+            setLoaded({ state: 'loading' });
+            load();
+          }}
+        >
+          {strings.failedText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   const shown = loaded.page;
   const place = shown.places.find((each) => each.id === shown.placeId) ?? shown.places[0];
   if (place === undefined) {
     return (
-      <BookingMessage title={strings.notFoundTitle} page="business_page">
-        {strings.notFoundText}
-      </BookingMessage>
+      <GuestLook>
+        <BookingMessage title={strings.notFoundTitle} page="business_page">
+          {strings.notFoundText}
+        </BookingMessage>
+      </GuestLook>
     );
   }
   const logo = shown.brand?.logo;

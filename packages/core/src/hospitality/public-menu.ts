@@ -9,6 +9,7 @@ import {
   brandVariables,
   isMenuKey,
   MENU_FACE,
+  menuPhotoPath,
   MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
   MENU_PRESS,
@@ -39,6 +40,29 @@ async function isHidden(tx: WorkspaceTx, workspaceId: string): Promise<boolean> 
     .from(menuDrafts)
     .where(eq(menuDrafts.workspaceId, workspaceId));
   return state?.hidden === true;
+}
+
+/**
+ * The place's guest menu address (`/m/<menu key>`) while guests can open it: the Menu app installed, the menu not
+ * hidden, and a version published for the place; else undefined. A light read for a page that only links the menu
+ * (the reservation page), in the caller's workspace transaction.
+ */
+export async function guestMenuPathOf(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+): Promise<string | undefined> {
+  if (!(await appInstalled(tx, workspaceId, 'menu')) || (await isHidden(tx, workspaceId))) return undefined;
+  const [place] = await tx
+    .select({
+      menuKey: places.menuKey,
+      published: sql<boolean>`exists (
+        select 1 from menu_versions v where v.workspace_id = ${places.workspaceId} and v.place_id = ${places.id}
+      )`,
+    })
+    .from(places)
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
+  return place !== undefined && place.published && isMenuKey(place.menuKey) ? `/m/${place.menuKey}` : undefined;
 }
 
 /** The nil uuid: a workspace no row has, for the lookup made before the workspace is known. */
@@ -294,6 +318,10 @@ export async function businessMenuOf(
           name: item.name,
           ...(item.description === undefined ? {} : { description: item.description }),
           ...(price === undefined ? {} : { price }),
+          // Its list photo on the guest menu's own route (the live snapshot's version), as the guest menu's rows show it.
+          ...(item.photo === undefined || !isMenuKey(place.menuKey)
+            ? {}
+            : { photo: menuPhotoPath(place.menuKey, item.photo.id, 'small', item.photo.version) }),
         },
       ];
     }),

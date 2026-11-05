@@ -5,6 +5,7 @@
 // and per place like the booking pages, and a reservation passes the same bot checks.
 //
 //   GET  /api/public/tables/:key                       the page's facts
+//   GET  /api/public/tables/:key/look.css?v=           the guest look: the menu's Warm look with the brand's accent
 //   GET  /api/public/tables/:key/times                 ?party&date: the offered starts of one place date
 //   POST /api/public/tables/:key/reserve               a guest's reservation, answering the manage token once
 //   POST /api/public/tables/:key/visit                 { guest }: the reservation, by token or by code with email
@@ -34,6 +35,8 @@ import {
   guestReserve,
   guestTimes,
   guestVisit,
+  menuLookStylesheet,
+  readTableLook,
   readTablePage,
   TABLE_KEY_PATTERN,
   type GuestKey as CoreGuestKey,
@@ -43,6 +46,7 @@ import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
+import { asksFor, nothingHere, stylesheetResponse } from './brand-css.ts';
 import { BOOKING_LIMITS, botReason, type LimitRule, type PublicLimiter } from './limits.ts';
 
 /** The table routes' own limits, beside the booking pages' (AC-6557). */
@@ -203,6 +207,27 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     try {
       const entry = await enterTablePage({ db }, key);
       return ok(await readTablePage(entry, deps));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // The page's guest look (5 November 2026): the menu's look stylesheet with the workspace's accent, at the version the
+  // page's facts name; any other version is the plain not found, so an old or made up one is never cached.
+  app.get('/public/tables/:key/look.css', async (c) => {
+    const key = c.req.param('key');
+    if (!TABLE_KEY_PATTERN.test(key)) return missing();
+    // Buckets of its own, so a stylesheet never spends the reads the page's facts and times need.
+    const refused = limited([
+      [`tables:look:${addressKey(c.get('clientIp'))}`, TABLE_LIMITS.readsPerAddress],
+      [`tables:look-place:${key}`, TABLE_LIMITS.readsPerPlace],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterTablePage({ db }, key);
+      const look = await readTableLook(entry);
+      if (!asksFor(c, look.version)) return nothingHere();
+      return stylesheetResponse(menuLookStylesheet(look.brand));
     } catch (error) {
       return refusalAnswer(error);
     }

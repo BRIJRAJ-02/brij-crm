@@ -191,6 +191,102 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
     expect(await cancelled.json()).toMatchObject({ visit: { status: 'cancelled' } });
   });
 
+  it('wears the guest look at the version its facts name, and nothing at another (5 November 2026)', async () => {
+    const { m, placeId, key, rules } = await somewhere();
+    await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: { ...rules, online: true },
+      mutationId: newId(),
+    });
+    const page = (await (await guest(key)).json()) as { look?: string; areas?: unknown; menuPath?: unknown };
+    expect(page.look).toMatch(/^[0-9a-f]{12}$/);
+    // No Menu app: no menu link. Its one table sits in no area: no seating choice.
+    expect(page.menuPath).toBeUndefined();
+    expect(page.areas).toBeUndefined();
+    const look = await guest(`${key}/look.css?v=${page.look ?? ''}`);
+    expect(look.status).toBe(200);
+    expect(look.headers.get('content-type')).toMatch(/^text\/css/);
+    expect(await look.text()).toMatch(/--menu-accent:#[0-9a-f]{6}/);
+    // Any other version is the plain not found, never cached, so an old or made up one never sticks at the edge.
+    const stale = await guest(`${key}/look.css?v=000000000000`);
+    expect(stale.status).toBe(404);
+    expect(stale.headers.get('cache-control')).toBe('no-store');
+    expect((await guest(`${key}/look.css`)).status).toBe(404);
+  });
+
+  it('offers only areas holding a table taken online, only while taking, and the menu only while guests can open it', async () => {
+    const { m, placeId, key, rules } = await somewhere();
+    const facts = async () => (await (await guest(key)).json()) as { areas?: readonly string[]; menuPath?: string };
+    const area = async (name: string, labels: readonly string[], online: boolean) => {
+      const floor = await m.client.hospitality.saveArea({ workspace: m.slug, placeId, name, mutationId: newId() });
+      const areaId = floor.areas.find((each) => each.name === name)?.id;
+      await m.client.hospitality.addResources({
+        workspace: m.slug,
+        placeId,
+        kind: 'table',
+        labels: [...labels],
+        ...(areaId === undefined ? {} : { areaId }),
+        minCapacity: 1,
+        maxCapacity: 4,
+        online,
+        mutationId: newId(),
+      });
+    };
+    await area('Terrace', ['T2'], true);
+    await area('Back room', ['T3'], false);
+    // Saved after the tables: Publish reads the floor.
+    await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: { ...rules, online: true },
+      mutationId: newId(),
+    });
+    expect((await facts()).areas).toEqual(['Terrace']);
+
+    await m.client.hospitality.install({ workspace: m.slug, app: 'menu', mutationId: newId() });
+    const menuId = newId();
+    const sectionId = newId();
+    await m.client.menu.saveMenu({
+      workspace: m.slug,
+      id: menuId,
+      name: 'Dinner',
+      placeIds: [placeId],
+      mutationId: newId(),
+    });
+    await m.client.menu.saveSection({ workspace: m.slug, id: sectionId, menuId, name: 'Mains', mutationId: newId() });
+    await m.client.menu.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      sectionId,
+      item: {
+        name: 'Soup',
+        priceMinor: 650,
+        diet: [],
+        allergens: [],
+        kcal: null,
+        featured: false,
+        sizes: [],
+        groupIds: [],
+      },
+      mutationId: newId(),
+    });
+    // A draft is no menu yet; published, the page links it; hidden, it doesn't.
+    expect((await facts()).menuPath).toBeUndefined();
+    await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
+    expect((await facts()).menuPath).toMatch(/^\/m\/[A-Za-z0-9_-]{16}$/);
+    await m.client.menu.setHidden({ workspace: m.slug, hidden: true, mutationId: newId() });
+    expect((await facts()).menuPath).toBeUndefined();
+
+    await m.client.tables.saveSetup({
+      workspace: m.slug,
+      placeId,
+      rules: { ...rules, online: false },
+      mutationId: newId(),
+    });
+    expect((await facts()).areas).toBeUndefined();
+  });
+
   it('limits code lookups per address tighter than reads, so codes can’t be swept', async () => {
     const { key } = await somewhere();
     const ip = newIp();

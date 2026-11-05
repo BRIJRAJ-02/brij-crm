@@ -18,6 +18,8 @@ import {
 import { sql } from 'drizzle-orm';
 import type { TableEntry } from '../access/table-door.ts';
 import { inWorkspace } from '../access/run.ts';
+import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
+import { guestMenuPathOf, menuLookVersion } from '../hospitality/public-menu.ts';
 import { buildBookingIcs } from '../booking/ics.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
@@ -73,12 +75,53 @@ async function placeOf(entry: TableEntry) {
   });
 }
 
+/**
+ * What the reservation page wears and offers beyond the place's facts (5 November 2026, after checklabs): the guest
+ * look's version (the menu's look stylesheet with the workspace's accent), the areas a guest may ask to sit in (only
+ * those holding a table taken online, in the floor's order), and the place's guest menu while one is published and
+ * shown. Read in the place's own workspace, names and a path only.
+ */
+async function guestExtrasOf(entry: TableEntry): Promise<{
+  readonly brand: PageBrand;
+  readonly areas: readonly string[];
+  readonly menuPath: string | undefined;
+}> {
+  const workspaceId = entry.scope.workspaceId;
+  return inWorkspace(entry.scope, async (tx) => {
+    const brand = await readMenuBrandIn(tx, workspaceId);
+    const areas = (
+      await tx.execute<{ name: string }>(sql`
+        select a.name from areas a
+        where a.place_id = ${entry.placeId}::uuid
+          and exists (
+            select 1 from resources r
+            where r.workspace_id = a.workspace_id and r.area_id = a.id and r.kind = 'table'
+              and r.archived_at is null and r.online
+          )
+        order by a.position, a.name
+      `)
+    ).rows.map((row) => row.name);
+    const menuPath = await guestMenuPathOf(tx, workspaceId, entry.placeId);
+    return { brand, areas, menuPath };
+  });
+}
+
+/** The reservation page's look (the menu's Warm look, the workspace's accent in it), for its stylesheet route. */
+export async function readTableLook(
+  entry: TableEntry,
+): Promise<{ readonly brand: PageBrand; readonly version: string }> {
+  // The brand alone: a stylesheet's read never reads the areas or the menu.
+  const brand = await inWorkspace(entry.scope, (tx) => readMenuBrandIn(tx, entry.scope.workspaceId));
+  return { brand, version: menuLookVersion(brand) };
+}
+
 /** The reservation page's facts (AC-6550): the place, whether it takes reservations now, the party range, the days. */
 export async function readTablePage(
   entry: TableEntry,
   deps: { readonly now?: () => Date } = {},
 ): Promise<PublicTablePage> {
   const { place, service, parties } = await placeOf(entry);
+  const extras = await guestExtrasOf(entry);
   const now = deps.now?.() ?? new Date();
   const rules = service?.rules;
   return {
@@ -100,6 +143,10 @@ export async function readTablePage(
     changeCutoffMinutes: rules?.changeCutoffMinutes ?? 120,
     hours: { weekly: place.hours.weekly, exceptions: place.hours.exceptions } as PublicTablePage['hours'],
     today: placeDateOf(now.getTime(), place.time_zone),
+    // The areas only while the page takes reservations: an old link to a closed page never reads them.
+    ...(extras.areas.length === 0 || !(entry.installed && rules?.online === true) ? {} : { areas: extras.areas }),
+    ...(extras.menuPath === undefined ? {} : { menuPath: extras.menuPath }),
+    look: menuLookVersion(extras.brand),
   };
 }
 

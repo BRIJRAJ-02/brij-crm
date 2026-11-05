@@ -17,7 +17,16 @@ export interface DayStripProps {
   readonly focusesValue?: boolean;
   /** Draws a day's tile in each place while the days load, so the times under them never move. */
   readonly isLoading?: boolean;
+  /**
+   * Today, `YYYY-MM-DD`: each day then says its month under its date, and today says Today (checklabs' three weeks,
+   * where "Tue 1" follows "Mon 30"). Left out, the weekday over the date alone.
+   */
+  readonly today?: string;
 }
+
+/** "Nov" for a date, in the visitor's language. */
+const monthShort = (key: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }).format(new Date(`${key}T12:00:00.000Z`));
 
 /** How many day tiles the loading strip holds: a week, which is about what fits before it scrolls. */
 const GHOST_DAYS = 7;
@@ -27,7 +36,15 @@ const GHOST_DAYS = 7;
  * sideways, each its weekday over its date. The chosen day slides into view.
  * One day is in the tab order and the arrows move along them.
  */
-export function DayStrip({ days, bestDays, value, onChange, focusesValue = false, isLoading = false }: DayStripProps) {
+export function DayStrip({
+  days,
+  bestDays,
+  value,
+  onChange,
+  focusesValue = false,
+  isLoading = false,
+  today,
+}: DayStripProps) {
   const { locale } = useFormatSettings();
   const strip = useRef<HTMLDivElement>(null);
   const button = (key: string) => strip.current?.querySelector<HTMLButtonElement>(`button[data-day="${key}"]`);
@@ -85,6 +102,12 @@ export function DayStrip({ days, bestDays, value, onChange, focusesValue = false
           >
             <span className={styles.weekday}>{labels.weekday}</span>
             <span className={styles.date}>{labels.day}</span>
+            {today !== undefined && (
+              // The month is in the button's name already: this line is for the eye.
+              <span className={styles.month} aria-hidden="true">
+                {key === today ? strings.today : monthShort(key, locale)}
+              </span>
+            )}
           </button>
         );
       })}

@@ -276,6 +276,69 @@ describe('menu photos (AC-6527)', () => {
   });
 });
 
+describe('the business page’s guest look and dish photos (5 November 2026)', () => {
+  /** The workspace's business page published at a new handle, for what its public routes answer. */
+  async function publishedPage(m: Awaited<ReturnType<typeof menuWorkspace>>['m'], placeId: string) {
+    const range = [{ from: '12:00', to: '22:00' }];
+    await m.client.hospitality.updatePlace({
+      workspace: m.slug,
+      placeId,
+      place: {
+        name: 'Cafe Nowhere',
+        addressLine: '1 Example Street',
+        city: 'London',
+        country: 'GB',
+        timeZone: 'Europe/London',
+        locale: 'en-GB',
+      },
+      hours: { weekly: { mon: range, tue: range, wed: range }, exceptions: [] },
+      mutationId: newId(),
+    });
+    const handle = `cafe-${newId().slice(-12)}`;
+    await m.client.businessPage.claimHandle({ workspace: m.slug, handle, mutationId: newId() });
+    await m.client.businessPage.publish({ workspace: m.slug, mutationId: newId() });
+    return handle;
+  }
+
+  it('names its look, serves only that version, and carries a dish’s list photo', async () => {
+    const { m, place, itemId } = await menuWorkspace();
+    const body = new FormData();
+    const jpeg = (width: number, height: number) => {
+      const plain = jpegWith({ exif: false });
+      const sof = [0xff, 0xc0, 0, 11, 8, height >> 8, height & 255, width >> 8, width & 255, 1, 1, 0x11, 0];
+      return new Uint8Array([...plain.subarray(0, 2), ...sof, ...plain.subarray(2)]);
+    };
+    body.set('large', new Blob([jpeg(1200, 900)], { type: 'image/jpeg' }), 'large.jpg');
+    body.set('small', new Blob([jpeg(400, 300)], { type: 'image/jpeg' }), 'small.jpg');
+    const uploaded = await send(`/api/menu/items/${itemId}/photo`, {
+      method: 'POST',
+      cookie: m.cookie,
+      workspace: m.slug,
+      body,
+    });
+    expect(uploaded.status).toBe(200);
+    const photo = ((await uploaded.json()) as MenuDraft).items[0]?.photo;
+    await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
+    const handle = await publishedPage(m, place.id);
+
+    const page = (await (await send(`/api/public/business/${handle}`)).json()) as {
+      look?: string;
+      menu?: { sections: readonly { items: readonly { photo?: string }[] }[] };
+    };
+    expect(page.menu?.sections[0]?.items[0]?.photo).toBe(
+      `/api/public/menu/${place.menuKey}/photos/${photo?.id ?? ''}/small?v=${photo?.version ?? ''}`,
+    );
+    expect(page.look).toMatch(/^[0-9a-f]{12}$/);
+    const look = await send(`/api/public/business/${handle}/look/menu.css?v=${page.look ?? ''}`);
+    expect(look.status).toBe(200);
+    expect(look.headers.get('content-type')).toContain('text/css');
+    expect(await look.text()).toMatch(/--menu-accent:#[0-9a-f]{6}/);
+    const stale = await send(`/api/public/business/${handle}/look/menu.css?v=000000000000`);
+    expect(stale.status).toBe(404);
+    expect(stale.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
 describe('the editor’s preview look', () => {
   it('serves the guests’ Warm look to a member before any Publish, and nothing to anyone else', async () => {
     const { m } = await menuWorkspace();

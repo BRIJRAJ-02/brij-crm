@@ -29,7 +29,8 @@ export function BusinessHours({ hours, timeZone, locale: given }: BusinessHoursP
           <div key={row.day} className={styles.row} data-today={row.isToday || undefined}>
             <dt className={styles.day}>
               {row.name}
-              {row.isToday && <Badge text={strings.today} tone="accent" />}
+              {/* Neutral: the guest look's accent is the ink, and today is a mark, not a call to act. */}
+              {row.isToday && <Badge text={strings.today} />}
             </dt>
             <dd className={styles.ranges}>
               {row.ranges.length === 0 ? (

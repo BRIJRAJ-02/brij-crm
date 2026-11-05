@@ -215,6 +215,79 @@
     }
   }
 
+  /* `plain` (a restaurant's reservation page, after checklabs' calendar): a compact month of plain numbers. Rows are
+     a row and a step tall (36px) on a two pixel gap, with no square tiles: an open day is the text colour on nothing
+     and fills under the pointer, a closed day stays quiet, today keeps a hairline ring, and the chosen day fills with
+     the accent. What a day does is unchanged. */
+  /* The times arrived: a plain day settles from the loading grey into its text, with no tile's fill. */
+  .root[data-tone='plain'] {
+    --day-settle-fill: transparent;
+  }
+
+  .root[data-tone='plain'] .weekdays {
+    gap: var(--space-2);
+  }
+
+  .root[data-tone='plain'] .grid {
+    grid-auto-rows: calc(var(--size-row) + var(--space-2));
+    gap: var(--space-2);
+  }
+
+  .root[data-tone='plain'] .outside,
+  .root[data-tone='plain'] .day {
+    block-size: 100%;
+    aspect-ratio: auto;
+  }
+
+  /* An open day in the strong weight and a closed one regular and quiet: two cues, not lightness alone (under 3:1). */
+  .root[data-tone='plain'] .day {
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body-strong);
+  }
+
+  .root[data-tone='plain'] .day:disabled {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+  }
+
+  .root[data-tone='plain'] .day[data-today] {
+    font: var(--text-body-strong);
+  }
+
+  /* The plain month's today is checklabs' ring, in place of the tiles' dot. */
+  .root[data-tone='plain'] .day[data-today]::before {
+    content: none;
+  }
+
+  .root[data-tone='plain'] .day[data-today]:not(:focus-visible) {
+    outline: var(--border-width-hairline) solid var(--border-strong);
+    outline-offset: calc(-1 * var(--border-width-hairline));
+  }
+
+  /* Chosen, the fill says it: no second edge around it. */
+  .root[data-tone='plain'] .day[data-today][aria-pressed='true']:not(:focus-visible) {
+    outline-color: transparent;
+  }
+
+  .root[data-tone='plain'] .day[data-loading] {
+    background: transparent;
+    color: var(--text-tertiary);
+  }
+
+  .root[data-tone='plain'] .day[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
+    font: var(--text-body-strong);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-tone='plain'] .day:not(:disabled, [aria-pressed='true']):hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+  }
+
   @media (forced-colors: active) {
     .day:not(:disabled) {
       border: var(--border-width-hairline) solid ButtonText;
@@ -256,7 +329,7 @@
 
   @keyframes day-settle {
     from {
-      background: var(--surface-selected);
+      background: var(--day-settle-fill, var(--surface-selected));
       color: var(--text-tertiary);
     }
   }

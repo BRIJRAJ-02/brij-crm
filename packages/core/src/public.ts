@@ -139,6 +139,7 @@ export { readInsightShare } from './insights/shares.ts';
 export {
   enterMenuPage,
   menuLookStylesheet,
+  menuLookVersion,
   readMenuPhoto,
   readPublicMenu,
   type MenuEntry,
@@ -156,6 +157,7 @@ export {
   guestReserve,
   guestTimes,
   guestVisit,
+  readTableLook,
   readTablePage,
   UPCOMING_PER_EMAIL,
   type GuestKey,

@@ -423,6 +423,7 @@ function FindReservation({
   return (
     <BookingFrame
       {...frameHead(page)}
+
       description={strings.findIntro}
       facts={placeFacts(page)}
       heading={strings.findTitle}

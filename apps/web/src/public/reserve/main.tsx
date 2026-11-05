@@ -4,12 +4,13 @@
 // page's provider. Inside a site's embed (`?embed=1`) it tells the site its height, as the booking page does.
 import '@crm/ui/styles.css';
 import { createTableClient, isDataError, type PublicTablePage } from '@crm/data/tables';
-import { BookingMessage, BookingProvider, createToasts } from '@crm/ui/public-booking';
+import { BookingMessage, BookingProvider, createToasts, GuestLook } from '@crm/ui/public-booking';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
+import { wearStylesheet } from '../stylesheet.ts';
 import { ManageReservation } from './ManageReservation.tsx';
-import { ReservePage } from './ReservePage.tsx';
+import { lookHref, ReservePage } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
 const root = document.getElementById('root');
@@ -65,8 +66,13 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
     client.page(placeKey).then(
       (page) => {
         if (!current) return;
-        setRead({ status: 'ready', page });
-        document.title = strings.tabTitle(page.place.name);
+        // The guest look (the menu's, with the brand's accent) before the page draws, so it never paints in the
+        // fallback first; a slow stylesheet arrives over the drawn page.
+        void wearStylesheet(document, lookHref(page)).then(() => {
+          if (!current) return;
+          setRead({ status: 'ready', page });
+          document.title = strings.tabTitle(page.place.name);
+        });
       },
       (error: unknown) => {
         if (current) setRead({ status: 'error', message: isDataError(error) ? error.message : strings.offline });
@@ -80,7 +86,9 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
   if (read.status === 'error') {
     return (
       <BookingMessage
-        title={strings.notFound}
+        // Offline is not gone: the page says which, and Try again stays.
+        title={read.message === strings.offline ? strings.offlineTitle : strings.notFound}
+
         onRetry={() => {
           setRead({ status: 'loading' });
           setAttempt((count) => count + 1);
@@ -121,11 +129,14 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
 createRoot(root).render(
   <StrictMode>
     <BookingProvider locale={locale} timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone} toasts={toasts}>
-      {path === null ? (
-        <BookingMessage title={strings.notFound} />
-      ) : (
-        <Page placeKey={decodeURIComponent(path[1] ?? '')} isManage={path[2] !== undefined} />
-      )}
+      {/* One look for everything here: loading, closed, the page, the details and the receipt. */}
+      <GuestLook>
+        {path === null ? (
+          <BookingMessage title={strings.notFound} />
+        ) : (
+          <Page placeKey={decodeURIComponent(path[1] ?? '')} isManage={path[2] !== undefined} />
+        )}
+      </GuestLook>
     </BookingProvider>
   </StrictMode>,
 );
