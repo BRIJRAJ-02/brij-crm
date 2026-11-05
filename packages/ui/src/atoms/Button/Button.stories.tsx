@@ -669,3 +669,24 @@ export const WithAmount: Story = {
     await expect(canvas.getByRole('button', { name: /Add to your picks\s*·\s*£9\.50/ })).toBeInTheDocument();
   },
 };
+
+/** Drawn small, pressed across 44px (`isTouchTarget`): the guest menu's 26px and 30px round controls. */
+export const TouchTarget: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Button variant="primary" icon="plus" label="Add one" isRound isTouchTarget />
+      <Button variant="primary" size="lg" icon="plus" label="Add one more" isRound isTouchTarget />
+      <Button variant="secondary" size="xl" icon="plus" label="One more guest" isRound isTouchTarget />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    for (const name of ['Add one', 'Add one more', 'One more guest']) {
+      const button = canvas.getByRole('button', { name });
+      // The area's inset counts from inside the border (the padding box).
+      const area = getComputedStyle(button, '::after');
+      const width = button.clientWidth - Number.parseFloat(area.left) - Number.parseFloat(area.right);
+      await expect(Math.round(width)).toBe(44);
+    }
+  },
+};

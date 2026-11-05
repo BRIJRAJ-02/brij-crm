@@ -223,6 +223,8 @@ export {
   type SpotIllustrationProps,
 } from './molecules/SpotIllustration/SpotIllustration.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
+/** A count changed one at a time, − n + (the guest pages' steppers, after checklabs). */
+export { Stepper, type StepperProps, type StepperSize, type StepperTone } from './molecules/Stepper/Stepper.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
   SuggestionList,

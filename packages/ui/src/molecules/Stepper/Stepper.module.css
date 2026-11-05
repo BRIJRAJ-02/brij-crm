@@ -1,0 +1,68 @@
+/* Stepper (after checklabs' guest steppers): one fewer, the count, one more, in a pill. Sizes: `sm` 30px (26px round
+   ghost buttons, the count in the strong body style), `md` 40px (36px buttons, the heading style), `lg` 48px (30px
+   buttons, the title style). Tones: `default` a hairline pill on the card, `filled` a pill of the chip colour with no
+   line. The count reads the text styles, so a page's look sizes it (the guest menu: 14px medium and 15px semibold).
+   Colours are the surface's own names, so a page's look wears it. A visible label sits over the pill. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .pill {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--border-width-hairline);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+    color: var(--text);
+  }
+
+  .pill[data-tone='filled'] {
+    border-color: transparent;
+    background: var(--surface-sunken);
+  }
+
+  .pill[data-fewer-hidden] {
+    padding-inline-start: var(--space-8);
+  }
+
+  .pill[data-size='md'] {
+    gap: var(--space-4);
+  }
+
+  /* 48px tall: the 30px buttons sit 4px in from either end. */
+  .pill[data-size='lg'] {
+    block-size: calc(var(--size-bar) + var(--space-2));
+    padding: 0 var(--space-4);
+  }
+
+  .value {
+    min-inline-size: var(--space-16);
+    font: var(--text-body-strong);
+    letter-spacing: 0;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill[data-size='md'] .value {
+    min-inline-size: var(--space-24);
+    font: var(--text-heading);
+    letter-spacing: 0;
+  }
+
+  .pill[data-size='lg'] .value {
+    padding-inline: var(--space-4);
+    font: var(--text-title);
+    letter-spacing: 0;
+  }
+
+  .pill[data-disabled] .value {
+    opacity: var(--opacity-disabled);
+  }
+}
