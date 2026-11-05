@@ -23,10 +23,18 @@ interface Screen {
   readonly prepare?: (page: Page) => Promise<void>;
   /** Walked only where the app offers it: the target is looked for once `prepare` has drawn the page, never waited on. */
   readonly isOffered?: (page: Page) => Promise<boolean>;
+  /**
+   * What its skeleton draws for rows this new workspace hasn't got: the screen can't know the list is empty until it
+   * has read it, and its empty state then stands in their place. Everything else is still held.
+   */
+  readonly goesWhenEmpty?: string;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
+/** A segment of a SegmentedControl: its label is what takes a pointer. */
+const segment = (name: string) => (page: Page) =>
+  page.locator('label', { has: page.getByRole('radio', { name, exact: true }) });
 /** A Captures card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 const at =
@@ -66,14 +74,11 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Tasks'),
   },
   { name: 'bookings calendar', start: at('tasks'), target: sidebar('Bookings') },
-  { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
+  // List is a view inside the Meetings tab (5 November 2026), on its switch.
+  { name: 'bookings list', start: at('bookings/calendar'), target: segment('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
   // The Roster, Availability's other view (5 November 2026): its week's bar and the grid's skeleton rows.
-  {
-    name: 'bookings roster',
-    start: at('bookings/availability'),
-    target: (page) => page.getByRole('radio', { name: 'Roster', exact: true }),
-  },
+  { name: 'bookings roster', start: at('bookings/availability'), target: segment('Roster') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
@@ -87,7 +92,12 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'settings members', start: at('settings/account/preferences'), target: sidebar('Members') },
   // Calendars and Round robin have one home in Settings (5 November 2026); Bookings links there for setup.
   { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },
-  { name: 'settings round robin', start: at('settings/account/preferences'), target: sidebar('Round robin') },
+  {
+    name: 'settings round robin',
+    start: at('settings/account/preferences'),
+    target: sidebar('Round robin'),
+    goesWhenEmpty: 'card1',
+  },
   { name: 'settings objects', start: at('settings/account/preferences'), target: sidebar('Objects') },
   {
     name: 'settings object attributes',
@@ -110,7 +120,7 @@ const ALL_SCREENS: readonly Screen[] = [
   },
   // History (spec 0046): the owner's Workspace changes, the table's skeleton rows where the rows land.
   { name: 'settings history', start: at('settings/account/preferences'), target: sidebar('History') },
-  { name: 'trash', start: at('settings/account/preferences'), target: sidebar('Trash') },
+  { name: 'trash', start: at('settings/account/preferences'), target: sidebar('Trash'), goesWhenEmpty: 'toolbar' },
 ];
 
 const ONLY = process.env.FLOW_SCREEN;
@@ -168,7 +178,10 @@ test('every screen’s loading state stands where its loaded page will', async (
         : path.join(SHOTS, `${info.project.name}-shape-${screen.name.replaceAll(' ', '-')}`);
     const { skeleton, loaded } = await loadingAndLoaded(page, () => target.click(), shots);
     if (skeleton === undefined) continue;
-    for (const difference of shapeDifferences(skeleton, loaded)) problems.push(`${screen.name}: ${difference}`);
+    for (const difference of shapeDifferences(skeleton, loaded)) {
+      if (difference !== `${screen.goesWhenEmpty ?? ''} only in the skeleton`)
+        problems.push(`${screen.name}: ${difference}`);
+    }
   }
   await context.close();
   expect(problems).toEqual([]);

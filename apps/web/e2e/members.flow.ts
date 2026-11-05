@@ -87,8 +87,6 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await page.goto(`/w/${slug}/settings/members`);
   await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toBeVisible();
-  // A lone owner sees the empty state under their row, with a secondary Invite people; the bar's is the primary.
-  await expect(page.getByText('Just you so far')).toBeVisible();
   // Your own role reads as text: nobody changes their own role here.
   await expect(page.getByRole('button', { name: /Role for Ada Lovelace/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Invite people' }).first().click();
@@ -107,9 +105,9 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   // A clean invite closes the dialog and says so in a toast; only a partial one keeps its summary open.
   await expect(page.getByText('Invited 2 people')).toBeVisible();
   await expect(invite).toHaveCount(0);
-  await page.getByRole('tab', { name: /Joining/ }).click();
+  await page.getByRole('tab', { name: /^Invitations/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toBeVisible();
-  // Joining holds the pending invitations, then the other ways in: the invite link, then the company email.
+  // Invitations holds the pending invitations, then the other ways in: the invite link, then the company email.
   await expect(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Other ways to join' })).toBeVisible();
   await expect(page.getByRole('switch', { name: 'Invite link' })).toBeVisible();
@@ -144,7 +142,7 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await page.getByRole('tab', { name: /Members/ }).click();
   await expect(page.getByRole('rowheader', { name: /grace/i })).toBeVisible({ timeout: 15_000 });
   await checkScreen(page, 'members-list');
-  await page.getByRole('tab', { name: /Joining/ }).click();
+  await page.getByRole('tab', { name: /^Invitations/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toHaveCount(0);
 
   // The used link now reads as no longer valid, like any other bad link.

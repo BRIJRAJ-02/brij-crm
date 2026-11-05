@@ -1,6 +1,6 @@
 // Moving between pages (the owner, 20 October 2026: "the switch between pages creates issues, like it loads
 // something then it swaps"): through Captures (Links, Forms, a form's editor, a booking page's editor) and Bookings
-// (Calendar, List, Availability) by the sidebar, the tabs and the rows, the way a person does (a pointer resting on
+// (Meetings' Calendar and List, Availability) by the sidebar, the tabs, Meetings' switch and the rows, the way a person does (a pointer resting on
 // each before the click, so the page preloads). Every switch keeps its layout still (layout shift under 0.01, recent
 // input or not), and a page visited before shows its rows at once: no skeleton on a return visit. With
 // FLOW_SCREENSHOTS naming a folder, each switch's painted frames are kept for a strip.
@@ -27,6 +27,9 @@ interface Step {
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
+/** One of Meetings' views, on the switch inside the Meetings tab (5 November 2026): its label is what takes a pointer. */
+const meetingsView = (name: string) => (page: Page) =>
+  page.locator('label', { has: page.getByRole('radio', { name, exact: true }) });
 /** A Captures card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 
@@ -69,12 +72,12 @@ const STEPS: readonly Step[] = [
   { name: 'tab to Forms', section: 'captures', isReturn: false, target: tab('Forms'), ...FORMS },
   { name: 'card to a form', isReturn: false, target: card('Contact us'), ...FORM_EDITOR },
   { name: 'sidebar to Calendar', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab to List', section: 'bookings', isReturn: false, target: tab('List'), ...LIST },
+  { name: 'view to List', section: 'bookings', isReturn: false, target: meetingsView('List'), ...LIST },
   { name: 'tab to Availability', section: 'bookings', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
   { name: 'sidebar back to Links', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
   { name: 'card to a booking page', isReturn: false, target: card('Intro call'), ...PAGE_EDITOR },
   { name: 'sidebar back to Calendar', section: 'bookings', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab back to List', section: 'bookings', isReturn: true, target: tab('List'), ...LIST },
+  { name: 'view back to List', section: 'bookings', isReturn: true, target: meetingsView('List'), ...LIST },
   {
     name: 'tab back to Availability',
     section: 'bookings',
