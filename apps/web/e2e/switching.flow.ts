@@ -35,12 +35,12 @@ const LINKS: Pick<Step, 'ready' | 'probe'> = {
   probe: { css: 'article', text: 'Intro call' },
 };
 const FORMS: Pick<Step, 'ready' | 'probe'> = {
-  ready: (page) => page.getByRole('article', { name: 'Untitled form' }),
-  probe: { css: 'article', text: 'Untitled form' },
+  ready: (page) => page.getByRole('article', { name: 'Contact us' }),
+  probe: { css: 'article', text: 'Contact us' },
 };
 const FORM_EDITOR: Pick<Step, 'ready' | 'probe'> = {
-  ready: (page) => page.locator('main h1', { hasText: 'Untitled form' }),
-  probe: { css: 'main h1', text: 'Untitled form' },
+  ready: (page) => page.locator('main h1', { hasText: 'Contact us' }),
+  probe: { css: 'main h1', text: 'Contact us' },
 };
 const CALENDAR: Pick<Step, 'ready' | 'probe'> = {
   ready: (page) => page.getByRole('region', { name: /^Bookings, / }),
@@ -51,11 +51,11 @@ const LIST: Pick<Step, 'ready' | 'probe'> = {
   probe: { css: '[role="tabpanel"] [role="status"]', text: 'Nothing coming up' },
 };
 // Availability lists the member's schedules (spec 0035): the virtual default, "Working hours", is always there.
-// Availability opens the default schedule in its editor (avail lane): its switcher names it.
+// Availability opens the default schedule in its editor (avail lane): its switcher, one Select, names it.
 // The TopBar's New gives way to New schedule (the screen's one primary, the owner, 22 October 2026): a swap Chrome
 // counts as an unattributed 0.0155 though every frame stands still, so this switch may make up to 0.02.
 const AVAILABILITY: Pick<Step, 'ready' | 'probe' | 'maxShift'> = {
-  ready: (page) => page.getByRole('button', { name: /^Working hours(, default)?, switch schedule$/ }),
+  ready: (page) => page.getByRole('button', { name: /^Working hours( Default)? Schedule$/ }),
   probe: { css: 'main button', text: 'Working hours' },
   maxShift: 0.02,
 };
@@ -67,7 +67,7 @@ const PAGE_EDITOR: Pick<Step, 'ready' | 'probe'> = {
 const STEPS: readonly Step[] = [
   { name: 'sidebar to Links', section: 'captures', isReturn: false, target: sidebar('Captures'), ...LINKS },
   { name: 'tab to Forms', section: 'captures', isReturn: false, target: tab('Forms'), ...FORMS },
-  { name: 'card to a form', isReturn: false, target: card('Untitled form'), ...FORM_EDITOR },
+  { name: 'card to a form', isReturn: false, target: card('Contact us'), ...FORM_EDITOR },
   { name: 'sidebar to Calendar', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
   { name: 'tab to List', section: 'bookings', isReturn: false, target: tab('List'), ...LIST },
   { name: 'tab to Availability', section: 'bookings', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
@@ -84,7 +84,7 @@ const STEPS: readonly Step[] = [
   },
   { name: 'sidebar back to Captures', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
   { name: 'tab back to Forms', section: 'captures', isReturn: true, target: tab('Forms'), ...FORMS },
-  { name: 'card back to the form', isReturn: true, target: card('Untitled form'), ...FORM_EDITOR },
+  { name: 'card back to the form', isReturn: true, target: card('Contact us'), ...FORM_EDITOR },
 ];
 
 test('moving through Captures and Bookings keeps the layout still and shows a visited page at once', async ({

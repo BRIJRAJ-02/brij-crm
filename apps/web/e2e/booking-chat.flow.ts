@@ -72,13 +72,15 @@ test('a visitor books by chat and the host sees the conversation (spec 0042)', a
   if (reading > 0) await chat.waitForTimeout(reading);
   await chat.getByRole('button', { name: 'Yes, book it' }).click();
   await expect(chat).toHaveURL(new RegExp(`/b/${made.publicKey}/manage\\?t=`));
-  await expect(chat.getByRole('heading', { level: 1 })).toContainText(/booked/i);
+  // Booked in place (critic C1): the receipt is the card's last step, its heading under the page's own h1.
+  await expect(chat.getByRole('heading', { name: /booked/i })).toBeVisible();
   await visitor.close();
 
   // The list, not the week: the offered time may fall in a later week, and a 30 minute block hides its guest's name.
   await page.goto(`/w/${slug}/bookings/list`);
   const row = page.getByRole('listitem').filter({ hasText: 'Grace Hopper' });
-  await row.getByRole('button', { name: 'Intro call' }).click();
+  // The list's row opens by who it is with (its Reschedule and Cancel name the page too).
+  await row.getByRole('button', { name: 'Grace Hopper', exact: true }).click();
   await expect(page.getByText('By chat on the booking page')).toBeVisible();
   await page.getByRole('button', { name: /^View chat/ }).click();
   await expect(page.getByText('I’m Grace Hopper, grace@navy.example')).toBeVisible();

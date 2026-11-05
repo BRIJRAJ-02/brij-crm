@@ -265,6 +265,15 @@ export function BookingFrame({
                     <Skeleton shape="text" width="long" />
                   </span>
                 </li>
+                {/* The page's rules under them (how soon, how far ahead), which every page with times shows. */}
+                <li className={styles.fact} data-quiet>
+                  <span className={styles.factIcon}>
+                    <Skeleton shape="tile" />
+                  </span>
+                  <span className={styles.factBody} data-loading="">
+                    <Skeleton shape="text" width="long" />
+                  </span>
+                </li>
               </ul>
             </div>
           ) : (

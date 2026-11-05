@@ -19,9 +19,9 @@ export async function newForm(page: Page, template: string = PLAIN_TEMPLATE): Pr
   await page.getByRole('button', { name: 'New form' }).first().click();
   const gallery = page.getByRole('dialog', { name: 'Start a form' });
   await expect(gallery).toBeVisible({ timeout: 30_000 });
-  // Pick it in the list (its preview shows beside it), then Use it.
+  // Pick it in the list, then Start it (the button is named with the template for a screen reader).
   await gallery.getByRole('radio', { name: template }).click();
-  await gallery.getByRole('button', { name: `Use ${template}` }).click();
+  await gallery.getByRole('button', { name: `Start ${template}` }).click();
   await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
   return page.url().replace(/\?.*$/, '');
 }

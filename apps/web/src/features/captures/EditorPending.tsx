@@ -26,15 +26,21 @@ export interface EditorPendingProps {
   };
   /** The shown tab's own skeleton, in place of the cards and preview (a form's Submissions: its table's rows). */
   readonly content?: ReactNode;
+  /** The loaded editor's own `previewShare`, so the phone's column shows from the same width it will. */
+  readonly previewShare?: 'third' | 'wide';
 }
 
 /**
  * The editor's layout with skeleton content: the TopBar loading, each card titled and busy, and the preview's
  * place, so the editor lands where its skeleton stood.
  */
-export function EditorPending({ title, icon, cards, notices, tabs, content }: EditorPendingProps) {
+export function EditorPending({ title, icon, cards, notices, tabs, content, previewShare }: EditorPendingProps) {
   const layout = content ?? (
-    <PreviewLayout preview={<Skeleton shape="block" />} {...(notices === undefined ? {} : { notices })}>
+    <PreviewLayout
+      preview={<Skeleton shape="block" />}
+      {...(previewShare === undefined ? {} : { previewShare })}
+      {...(notices === undefined ? {} : { notices })}
+    >
       {cards.map((card) => (
         <Card key={card} title={card} isBusy>
           <Skeleton lines={3} />
