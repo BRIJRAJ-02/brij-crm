@@ -43,9 +43,12 @@ import {
   PreviewFooter,
   RelativeTime,
   Select,
+  SettingsRow,
   SettingsSection,
   SettingsStack,
   sharedStrings,
+  Skeleton,
+  Switch,
   Table,
   type DescriptionItem,
   type TableColumn,
@@ -1132,8 +1135,9 @@ export function MembersScreen({
  * Settings › Members while it loads: the bar, the tab strip with the search, and the table's skeleton rows under its
  * columns, so nothing moves when the page arrives.
  */
-export function MembersPending() {
+export function MembersPending({ isSearching = false }: { readonly isSearching?: boolean }) {
   const canInvite = useCan('members.invite');
+  const canManageWorkspace = useCan('workspace.manage');
   return (
     <SettingsPage
       title={strings.title}
@@ -1171,6 +1175,25 @@ export function MembersPending() {
         phoneLayout="rows"
         isLoading
       />
+      {/* Other ways to join, as the page will draw them under its list (and, as it does, not among a search's matches). */}
+      {canInvite && !isSearching && (
+        <SettingsStack>
+          <SettingsSection title={strings.otherWaysSection}>
+            <Card isBusy>
+              <SettingsRow title={strings.linkTitle} description={<Skeleton width="long" />}>
+                <Switch label={strings.linkTitle} isLabelHidden isDisabled />
+              </SettingsRow>
+            </Card>
+            {canManageWorkspace && (
+              <Card isBusy>
+                <SettingsRow title={strings.domainTitle} description={<Skeleton width="long" />}>
+                  <Switch label={strings.domainTitle} isLabelHidden isDisabled />
+                </SettingsRow>
+              </Card>
+            )}
+          </SettingsSection>
+        </SettingsStack>
+      )}
     </SettingsPage>
   );
 }
