@@ -291,7 +291,7 @@ export async function getPublicBookingPage(
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
-      // The notice its times keep, so the page can say it plainly ("Can't be booked within 4 hours"): a page
+      // The notice its times keep, so the page can say it plainly ("4 hours’ notice"): a page
       // setting, the same number the slots read uses, never anything about a visitor. None, nothing sent.
       ...(noticeMinutesOf(page) > 0 ? { minNoticeMinutes: noticeMinutesOf(page) } : {}),
       // The view the host chose, beside the rest of the facts, so the page's first paint is already that view. Book by

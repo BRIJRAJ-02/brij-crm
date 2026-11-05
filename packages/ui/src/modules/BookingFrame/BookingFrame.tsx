@@ -24,7 +24,7 @@ export interface BookingFact {
    * reads the same on every step (critic C4); or a quiet line of its own (`isQuiet`).
    */
   readonly aside?: string;
-  /** The whole line is quiet: a rule the page states plainly ("Can't be booked within 4 hours"). */
+  /** The whole line is quiet: a rule the page states plainly ("4 hours’ notice · Up to 60 days ahead"). */
   readonly isQuiet?: boolean;
 }
 
@@ -264,12 +264,15 @@ export function BookingFrame({
                 <Skeleton shape="text" lines={2} />
               </p>
               <ul className={styles.facts}>
+                {/* The meeting's line, as most pages draw it (one length, "30 min · Video call"): a line of text in
+                    the row, so the rows under it and the card under the rail on a phone stand where they will. A
+                    page with several lengths draws its switch here, a few pixels taller. */}
                 <li className={styles.fact}>
                   <span className={styles.factIcon}>
                     <Skeleton shape="tile" />
                   </span>
                   <span className={styles.factBody} data-loading="">
-                    <Skeleton shape="field" width="medium" />
+                    <Skeleton shape="text" width="medium" />
                   </span>
                 </li>
                 <li className={styles.fact}>

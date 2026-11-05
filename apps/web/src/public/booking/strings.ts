@@ -33,13 +33,24 @@ export const strings = {
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
   /** The Book band's quiet line while no time is picked (critic A10): a wide page only, a phone shows no band. */
   pickTime: 'Pick a time',
-  /** The page's rules, stated plainly in the rail (bookings critics, 4 Nov 2026). */
+  /**
+   * The page's rules, stated plainly in the rail (bookings critics, 4 Nov 2026). Short enough that a page's usual
+   * rules ("4 hours’ notice · Up to 60 days ahead") hold one line on a 320px phone: "Can’t be booked within 4 hours"
+   * filled a 390px phone's row to the pixel and wrapped wherever the font drew a little wider (Linux), moving the
+   * card under the rail as the page's facts arrived.
+   */
   noticeRule: (minutes: number) =>
     minutes % 1440 === 0 && minutes >= 1440
-      ? `Can’t be booked within ${String(minutes / 1440)} ${minutes === 1440 ? 'day' : 'days'}`
+      ? minutes === 1440
+        ? '1 day’s notice'
+        : `${String(minutes / 1440)} days’ notice`
       : minutes % 60 === 0
-        ? `Can’t be booked within ${String(minutes / 60)} ${minutes === 60 ? 'hour' : 'hours'}`
-        : `Can’t be booked within ${String(minutes)} minutes`,
+        ? minutes === 60
+          ? '1 hour’s notice'
+          : `${String(minutes / 60)} hours’ notice`
+        : minutes === 1
+          ? '1 minute’s notice'
+          : `${String(minutes)} minutes’ notice`,
   windowRule: (days: number) => `Up to ${String(days)} days ahead`,
   /** A page that confirms each booking first (spec 0062, AC-6203). */
   request: 'Request',

@@ -59,7 +59,7 @@ function heightOf(selector: string): number {
 const FACTS: readonly BookingFact[] = [
   { id: 'meeting', icon: 'video', children: '30 min · Video call' },
   { id: 'zone', icon: 'globe', children: 'London time GMT+1' },
-  { id: 'rules', icon: 'clock', isQuiet: true, children: 'Up to 60 days ahead' },
+  { id: 'rules', icon: 'clock', isQuiet: true, children: '4 hours’ notice · Up to 60 days ahead' },
 ];
 
 describe('a booking page before its facts arrive', () => {

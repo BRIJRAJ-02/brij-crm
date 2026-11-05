@@ -91,7 +91,7 @@ export const WaitingForATime: Story = {
     facts: [
       { id: 'where', icon: 'video', children: '30 min · Video call' },
       { id: 'zone', icon: 'globe', children: 'London time', aside: 'GMT+1 · 14:30' },
-      { id: 'rules', icon: 'clock', isQuiet: true, children: 'Can’t be booked within 4 hours · Up to 60 days ahead' },
+      { id: 'rules', icon: 'clock', isQuiet: true, children: '4 hours’ notice · Up to 60 days ahead' },
     ],
   },
   render: (args) => (
