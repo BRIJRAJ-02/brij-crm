@@ -233,6 +233,22 @@ describe('Settings › Apps', () => {
     await expect.poll(() => calls).toEqual(['install:menu_qr:false']);
   });
 
+  it('offers no Install on an app still on its way', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf();
+    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/apps',
+      at: '/w/acme/settings/apps',
+    });
+    await expect.element(page.getByRole('heading', { name: 'Events' })).toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: 'Install Events', exact: true })).not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole('button', { name: 'Install Appointments', exact: true }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByText('On its way').first()).toBeVisible();
+  });
+
   it('asks for Menu when Menu QR is installed alone', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf();

@@ -28,7 +28,6 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 - An inline card's title is an `h3`, under a page's `h2`. Inside a `SettingsLayout` whose title is the page's `h1` (`titleLevel={1}`, spec 0026) it is an `h2`, set by the layout through `CardTitleLevel`, so headings never skip a level. Inside a `SettingsSection` it is one level under the section's heading (an `h3` under an `h2` section, an `h4` under an `h3` one). Why: the settings pages lost the TopBar's h1 when the settings sidebar arrived, and their Cards would otherwise jump from h1 to h3.
 - Use it to group, not to decorate: a single list or form on a page needs no card, except with `placement="page"`, where the card is the page.
 - What the card holds stacks 16px apart. A Select or a Table can come first with no wrapper: the hidden template and markers React Aria puts before them don't count as the first child. So the first child must be a library component or carry a class: an empty element with no class there (an `hr`, an `img`) would be taken for one of those markers.
-- With no body (a title, a line and a footer: an app on Settings › Apps, spec 0065) the header keeps 12px of air below it, so its line never meets the footer's hairline or the card's edge.
 
 ## States
 
