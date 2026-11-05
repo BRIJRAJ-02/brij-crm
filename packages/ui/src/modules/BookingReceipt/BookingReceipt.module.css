@@ -194,6 +194,14 @@
     max-inline-size: none;
   }
 
+  /* In the frame the head starts where the card's rows do, so the page reads down one edge (the owner, 5 November
+     2026: "align all from start"). */
+  .root[data-placement='card'] .head {
+    align-items: flex-start;
+    padding-inline: var(--space-20);
+    text-align: start;
+  }
+
   .root[data-placement='card'] .card {
     border: none;
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
