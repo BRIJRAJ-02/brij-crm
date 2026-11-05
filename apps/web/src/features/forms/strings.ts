@@ -186,11 +186,8 @@ export const strings = {
   theme: 'Brand',
   themeBrand: 'Workspace brand',
   themePlain: 'Plain',
-  /** The editor's Appearance tab (T21, 5 November 2026): the look of the form in a tab of its own. */
-  tabAppearance: 'Appearance',
-  appearanceTitle: 'Look',
-  /** The Brand card's one choice: the workspace's logo and colour, or Plain. */
-  themeWear: 'Use',
+  /** Said under Brand colours while the workspace has neither a colour nor a logo saved. */
+  themeBrandEmpty: 'Add your logo and colour in Settings › Brand.',
   /** The workspace logo over the form reads as nothing: the headline beside it already names the form. */
   brandLogoAlt: '',
 

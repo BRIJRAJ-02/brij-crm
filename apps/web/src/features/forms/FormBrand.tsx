@@ -1,22 +1,18 @@
 // Brief
-// Purpose: the form's look (spec 0063, AC-6327): Brand, Mode and Corners on the editor's Appearance tab (T21, 5 November
-// 2026: the look of a page in a tab of its own, as the booking page's editor has), beside the preview they change, and
-// the preview wearing the workspace's kit, from the same colours the hosted page's stylesheet holds.
+// Purpose: the form's look (spec 0063, AC-6327): Mode, Corners and Brand over the preview, in view without a click
+// (forms fixes 3, the owner: "this upfront as it was earlier was better"), and the preview wearing the workspace's kit,
+// from the same colours the hosted page's stylesheet holds.
 // Main task: change the look and see the form take it at once, before publishing.
-// Leaves out: editing the kit (its logo and colour), which is Settings › Brand, one press away.
+// Leaves out: editing the kit, which is Settings › Brand.
 import type { BrandKit, BrandStore, FormDocument, PublicForm } from '@crm/data';
 import { useBrand } from '@crm/data/react';
 import {
-  Card,
   HostedFormPreview,
-  SegmentedControl,
-  SettingsRow,
-  SettingsStack,
+  Select,
   type HostedFormPreviewProps,
   type PageBrand,
   type PreviewTextChange,
 } from '@crm/ui';
-import { BrandCard } from '../captures/BrandCard.tsx';
 import { strings } from './strings.ts';
 
 /** The kit as the picker and the preview read it, or undefined while it loads. One held per workspace, so the
@@ -29,77 +25,103 @@ function useKit(brand: BrandStore, slug: string): BrandKit | undefined {
 /** A form's look, as the controls over the preview change it. */
 export type FormLook = FormDocument['look'];
 
-/** Props for the Appearance tab's look. */
-export interface FormAppearanceProps {
+/** Props for the look's controls. */
+export interface LookControlsProps {
   readonly look: FormLook;
   readonly isReadOnly: boolean;
   readonly onChange: (look: FormLook) => void;
-  /** The brand store the route loaded; absent when it couldn't load, and the Brand card says so. */
+  /** The brand store the route loaded, to say where to add a kit the workspace hasn't saved yet. */
   readonly brand?: BrandStore;
   readonly slug: string;
-  /** Settings › Brand, where the workspace's logo and colour are edited. */
-  readonly brandHref: string;
 }
 
 /**
- * The Appearance tab (T21): Look (Mode and Corners, compact SegmentedControls, as the booking page's Opens in), then
- * the Brand card both editors share (`BrandCard`): whether the form wears the workspace's logo and colour (Workspace
- * brand or Plain), then the kit itself, read only, with Edit brand for whoever may change it.
+ * The look, over the preview it changes (forms fixes 3: builder2's Design popover hid it behind a click, and its Brand
+ * row wrapped under its label): three compact Selects of one height, side by side in the preview's head, each named
+ * for its axis: Mode (Light or Dark), Corners (Rounded or Square) and Brand (Workspace brand or Plain, AC-6327). Each
+ * change shows on the preview at once and goes live with the next publish.
  */
-export function FormAppearance({ look, isReadOnly, onChange, brand, slug, brandHref }: FormAppearanceProps) {
+export function LookControls({ brand, slug, ...rest }: LookControlsProps) {
+  return brand === undefined ? <LookSelects {...rest} /> : <LookSelectsWithKit brand={brand} slug={slug} {...rest} />;
+}
+
+/** The three Selects, with where to add a kit under Workspace brand while the workspace has none. */
+function LookSelects({
+  look,
+  isReadOnly,
+  onChange,
+  hint,
+}: Pick<LookControlsProps, 'look' | 'isReadOnly' | 'onChange'> & { readonly hint?: string }) {
   return (
-    <SettingsStack width="readable" rows="inline">
-      <Card title={strings.appearanceTitle}>
-        <SettingsRow title={strings.colour}>
-          <SegmentedControl
-            label={strings.colour}
-            size="compact"
-            isReadOnly={isReadOnly}
-            segments={[
-              { value: 'light', label: strings.light, icon: 'sun' },
-              { value: 'dark', label: strings.dark, icon: 'moon' },
-            ]}
-            value={look.colour}
-            onChange={(colour) => {
-              if (colour === 'light' || colour === 'dark') onChange({ ...look, colour });
-            }}
-          />
-        </SettingsRow>
-        <SettingsRow title={strings.corners}>
-          <SegmentedControl
-            label={strings.corners}
-            size="compact"
-            isReadOnly={isReadOnly}
-            segments={[
-              { value: 'rounded', label: strings.rounded },
-              { value: 'square', label: strings.square },
-            ]}
-            value={look.corners}
-            onChange={(corners) => {
-              if (corners === 'rounded' || corners === 'square') onChange({ ...look, corners });
-            }}
-          />
-        </SettingsRow>
-      </Card>
-      <BrandCard store={brand} failed={brand === undefined} slug={slug} brandHref={brandHref}>
-        <SettingsRow title={strings.themeWear}>
-          <SegmentedControl
-            label={strings.themeWear}
-            size="compact"
-            isReadOnly={isReadOnly}
-            segments={[
-              { value: 'brand', label: strings.themeBrand, icon: 'palette' },
-              { value: 'plain', label: strings.themePlain },
-            ]}
-            value={look.theme ?? 'plain'}
-            onChange={(theme) => {
-              if (theme === 'brand' || theme === 'plain') onChange({ ...look, theme });
-            }}
-          />
-        </SettingsRow>
-      </BrandCard>
-    </SettingsStack>
+    <>
+      <Select
+        label={strings.colour}
+        isLabelHidden
+        size="sm"
+        isReadOnly={isReadOnly}
+        items={[
+          { id: 'light', label: strings.light, icon: 'sun' },
+          { id: 'dark', label: strings.dark, icon: 'moon' },
+        ]}
+        value={look.colour}
+        onChange={(colour) => {
+          if (colour === 'light' || colour === 'dark') onChange({ ...look, colour });
+        }}
+      />
+      <Select
+        label={strings.corners}
+        isLabelHidden
+        size="sm"
+        isReadOnly={isReadOnly}
+        items={[
+          { id: 'rounded', label: strings.rounded },
+          { id: 'square', label: strings.square },
+        ]}
+        value={look.corners}
+        onChange={(corners) => {
+          if (corners === 'rounded' || corners === 'square') onChange({ ...look, corners });
+        }}
+      />
+      <Select
+        label={strings.theme}
+        isLabelHidden
+        size="sm"
+        isReadOnly={isReadOnly}
+        // Where to add a kit, in view while Workspace brand is picked and there is none to wear.
+        {...(hint === undefined || look.theme !== 'brand' ? {} : { hint })}
+        items={[
+          {
+            id: 'brand',
+            label: strings.themeBrand,
+            icon: 'palette',
+            ...(hint === undefined ? {} : { description: hint }),
+          },
+          { id: 'plain', label: strings.themePlain },
+        ]}
+        value={look.theme ?? 'plain'}
+        onChange={(theme) => {
+          if (theme === 'brand' || theme === 'plain') onChange({ ...look, theme });
+        }}
+      />
+    </>
   );
+}
+
+/**
+ * The Selects where the workspace's kit is known (the Form tab): Workspace brand says where to put a kit that is
+ * empty. The kit is read through the store, so the Selects and the preview never show different states of it.
+ */
+function LookSelectsWithKit({
+  brand,
+  slug,
+  ...rest
+}: Pick<LookControlsProps, 'look' | 'isReadOnly' | 'onChange'> & {
+  readonly brand: BrandStore;
+  readonly slug: string;
+}) {
+  const kit = useKit(brand, slug);
+  const isEmpty = kit !== undefined && kit.accent === undefined && kit.logo === undefined;
+  return <LookSelects {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
 }
 
 /** Props for the branded preview. */

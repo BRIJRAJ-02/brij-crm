@@ -1,10 +1,9 @@
 // Brief
-// Purpose: the Brand card both Captures editors' Appearance tabs share (T21, 5 November 2026): the workspace's logo,
-// colour and template as a booking page or a form wears them, read through the brand store as Settings › Brand reads
-// them, so the three never disagree.
+// Purpose: the Brand card on a Captures editor's Appearance tab (T21, 5 November 2026; the booking page's): the
+// workspace's logo, colour and template as the page wears them, read through the brand store as Settings › Brand
+// reads them, so the two never disagree. A form keeps its look upfront over its preview (forms fixes 3), not here.
 // Main task: see the brand the page wears, and go to Settings › Brand to change it (Edit brand, for whoever may).
-// Leaves out: editing the kit here (one kit for every booking page and form), and a form's choice to wear it or not
-// (the form's own row, passed in as `children`, first in the card).
+// Leaves out: editing the kit here (one kit for every booking page and form); an editor's own rows come as `children`.
 import type { BrandStore } from '@crm/data';
 import { useBrand } from '@crm/data/react';
 import { AccentPicker, ButtonLink, Card, EmptyState, FileDrop, SettingsRow, Skeleton } from '@crm/ui';
@@ -30,7 +29,7 @@ export interface BrandCardProps {
   readonly slug: string;
   /** Settings › Brand. */
   readonly brandHref: string;
-  /** Rows of the editor's own before the kit's (a form's Logo and colour: Workspace brand or Plain). */
+  /** Rows of the editor's own before the kit's, if any. */
   readonly children?: ReactNode;
 }
 

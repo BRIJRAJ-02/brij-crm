@@ -1,6 +1,6 @@
 // Brief
-// Purpose: a booking page's Appearance tab (T21, 5 November 2026: the look of a page in a tab of its own, as a form's
-// editor has it): how the page opens (Month, List or Chat), and the brand it wears, which is the workspace's logo and
+// Purpose: a booking page's Appearance tab (T21, 5 November 2026: the look of a page in a tab of its own): how the
+// page opens (Month, List or Chat), and the brand it wears, which is the workspace's logo and
 // colour (Settings › Brand: Logo, Colour, Template), shown as they are with one way to change them.
 // Main task: pick how the page opens and see it in the phone beside; see the brand the page wears, and go and change it.
 // Leaves out: editing the brand here (one kit for every booking page and form, kept in Settings › Brand), and a look
