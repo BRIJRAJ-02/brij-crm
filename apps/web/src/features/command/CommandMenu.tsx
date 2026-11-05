@@ -13,6 +13,7 @@ import type {
   TaskHit,
   ViewHit,
 } from '@crm/data';
+import { useCalendar } from '@crm/data/react';
 import { Avatar, CommandPalette, type PaletteItem, type PaletteSection } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { useLocation, useMatch, useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
@@ -28,6 +29,7 @@ import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import {
   actionCommands,
   addToListCommands,
+  canConnectCalendar,
   createNamedCommand,
   createTaskCommand,
   matchCommands,
@@ -80,10 +82,13 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
 
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   const isGuest = loaded?.access?.role === 'guest';
+  // The member's calendar accounts, as the frame's calendar banner already holds them (no read of its own once that
+  // has): Connect a calendar only where the Calendars page could carry it out.
+  const canConnect = canConnectCalendar(useCalendar(data.calendar.view(slug)));
   // The sidebar's destinations, a guest's without scheduling or the link page, as their sidebar.
   const pages = useMemo(
-    () => pageCommands(slug, objects, permissions, lists, isGuest),
-    [slug, objects, permissions, lists, isGuest],
+    () => pageCommands(slug, objects, permissions, lists, isGuest, canConnect),
+    [slug, objects, permissions, lists, isGuest, canConnect],
   );
   const settings = useMemo(() => settingsCommands(slug, permissions, isGuest), [slug, permissions, isGuest]);
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).

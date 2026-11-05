@@ -5,7 +5,7 @@
 // tests cover it, the address walk of AC-1104 among them. Records, views,
 // notes and tasks come from the server through the data layer; nothing here
 // reads data.
-import type { ListView, ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
+import type { CalendarState, ListView, ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
@@ -64,6 +64,8 @@ export type CommandMode = 'commands' | 'search';
  * Insights, each live object's page in the workspace's order and each list, Bookings with its tabs (Availability,
  * Calendars, Round robin, Booking pages, Forms), then the member's own pages (Link page, Inbox, Tasks, Notes), and
  * Reports, Trash and Settings. A guest's sidebar has no scheduling and no link page, so neither has theirs.
+ * Connect a calendar is listed only while `offersConnect` (calendar sync on here, a provider offered and room for
+ * one more account): an action the Calendars page couldn't carry out never shows.
  */
 export function pageCommands(
   slug: string,
@@ -71,6 +73,7 @@ export function pageCommands(
   permissions?: readonly Permission[],
   lists: readonly ListView[] = [],
   isGuest = false,
+  offersConnect = false,
 ): readonly Command[] {
   const plural = new Map(objects.map((object) => [object.id, object.pluralName]));
   // Scheduling (spec 0031, slice 9: guests can't take bookings), as the sidebar's Scheduling section.
@@ -93,14 +96,20 @@ export function pageCommands(
         },
         // Connecting a calendar is the one thing every Bookings tab needs (critic B, 5 November 2026: "calendar" in
         // the menu found nothing to do): an action, opening Settings › Account › Calendars. Round robin and the
-        // Calendars page itself are Settings entries now, so the menu lists them under Settings.
-        {
-          id: 'page:calendars',
-          name: strings.connectCalendar,
-          icon: 'calendar-plus',
-          terms: strings.calendarsTerms,
-          run: go(calendarsHref(slug)),
-        },
+        // Calendars page itself are Settings entries now, so the menu lists them under Settings. Only where the
+        // page can connect one (5 November 2026): with sync off here, or every account slot taken, "calendar" finds
+        // Settings › Calendars alone.
+        ...(offersConnect
+          ? [
+              {
+                id: 'page:calendars',
+                name: strings.connectCalendar,
+                icon: 'calendar-plus',
+                terms: strings.calendarsTerms,
+                run: go(calendarsHref(slug)),
+              } satisfies Command,
+            ]
+          : []),
         {
           id: 'page:booking-pages',
           name: strings.bookingPages,
@@ -182,6 +191,17 @@ export function pageCommands(
       kbd: '⌘,',
     },
   ];
+}
+
+/**
+ * Whether Settings › Account › Calendars could connect an account now (its own Connect's rule): calendar sync on here
+ * (`enabled`), a provider offered, and fewer accounts than the most a member may hold. Unknown (still loading, or a
+ * failed read) counts as no, so the menu never offers a dead end.
+ */
+export function canConnectCalendar(state: CalendarState): boolean {
+  return (
+    state.status === 'ready' && state.enabled && state.providers.length > 0 && state.connections.length < state.max
+  );
 }
 
 /** Each Settings page's other words (AC-1082). */

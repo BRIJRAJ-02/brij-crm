@@ -3,11 +3,12 @@
 // and that every address it lists is a route the app has (AC-1104).
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ListView, ObjectSummary, Permission, RecordHit } from '@crm/data';
+import type { CalendarState, ListView, ObjectSummary, Permission, RecordHit } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   actionCommands,
   addToListCommands,
+  canConnectCalendar,
   createHref,
   createNamedCommand,
   createTaskCommand,
@@ -42,7 +43,7 @@ const OBJECTS = [
 
 describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
   it('mirrors the sidebar: Home, Insights, each object, Bookings and its tabs, the member’s own pages, then Reports, Trash and Settings', () => {
-    expect(pageCommands('acme', OBJECTS).map((command) => command.name)).toEqual([
+    expect(pageCommands('acme', OBJECTS, undefined, [], false, true).map((command) => command.name)).toEqual([
       'Home',
       'Insights',
       'Companies',
@@ -100,15 +101,44 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
 
   // Critic B (5 November 2026): "calendar" in the menu found nothing to do.
   it('connects a calendar from the menu, in Settings › Account › Calendars', () => {
-    const connect = pageCommands('acme', OBJECTS).find((command) => command.id === 'page:calendars');
+    const connect = pageCommands('acme', OBJECTS, undefined, [], false, true).find(
+      (command) => command.id === 'page:calendars',
+    );
     expect(connect?.name).toBe('Connect a calendar');
     expect(connect?.run).toEqual({ kind: 'go', href: '/w/acme/settings/account/calendars' });
-    const all = [...pageCommands('acme', OBJECTS), ...settingsCommands('acme', [])];
+    const all = [...pageCommands('acme', OBJECTS, undefined, [], false, true), ...settingsCommands('acme', [])];
     expect(
       matchCommands(all, 'calendar')
         .map((command) => command.name)
         .slice(0, 2),
     ).toEqual(['Connect a calendar', 'Settings › Calendars']);
+  });
+
+  // 5 November 2026: the menu offered Connect a calendar where the Calendars page has no Connect at all.
+  it('leaves Connect a calendar out where it couldn’t connect, so "calendar" finds Settings › Calendars alone', () => {
+    const all = [...pageCommands('acme', OBJECTS), ...settingsCommands('acme', [])];
+    expect(all.map((command) => command.name)).not.toContain('Connect a calendar');
+    expect(matchCommands(all, 'calendar').map((command) => command.name)[0]).toBe('Settings › Calendars');
+    expect(
+      pageCommands('acme', OBJECTS, ['booking.manage'], [], true, true).map((command) => command.name),
+    ).not.toContain('Connect a calendar');
+  });
+
+  it('can connect only with sync on, a provider offered and an account slot free', () => {
+    const ready = {
+      status: 'ready',
+      enabled: true,
+      providers: ['google'],
+      connections: [],
+      max: 2,
+    } as const satisfies CalendarState;
+    expect(canConnectCalendar(ready)).toBe(true);
+    expect(canConnectCalendar({ ...ready, enabled: false })).toBe(false);
+    expect(canConnectCalendar({ ...ready, providers: [] })).toBe(false);
+    // Every account slot taken (none left of the most a member may hold).
+    expect(canConnectCalendar({ ...ready, max: 0 })).toBe(false);
+    expect(canConnectCalendar({ status: 'loading' })).toBe(false);
+    expect(canConnectCalendar({ status: 'error', message: 'Can’t reach the CRM' })).toBe(false);
   });
 
   it('creates a record only of objects the member may write, then the three themes', () => {
@@ -408,7 +438,8 @@ describe('every address the menu lists is a route (AC-1104)', () => {
 
   it('resolves every page, Settings page and action', () => {
     const hrefs = [
-      ...pageCommands('acme', OBJECTS),
+      // Connect a calendar too, which shows where the Calendars page can connect one.
+      ...pageCommands('acme', OBJECTS, undefined, [], false, true),
       ...settingsCommands('acme', []),
       ...actionCommands('acme', OBJECTS, { object: OBJECTS[0], viewId: '0199a6f2-0000-7000-8000-000000000001' }),
       ...pageCommands('acme', OBJECTS, [], [LIST]),
