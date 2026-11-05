@@ -375,6 +375,12 @@ export interface MenuItemProps {
   readonly isDanger?: boolean;
   /** A link in the app or out; it passes `safeHref`. */
   readonly href?: string;
+  /**
+   * With `href`, opens the address in a new tab (`noopener noreferrer`): a public page's other map app (Directions'
+   * menu on a business page). The item's label is its name (React Aria names it by the label), so a label that
+   * leaves the page should say where it goes ("Open in Apple Maps").
+   */
+  readonly isExternal?: boolean;
   readonly onAction?: () => void;
   readonly isDisabled?: boolean;
   /**
@@ -455,6 +461,7 @@ function itemProps({
   children,
   isDanger = false,
   href,
+  isExternal = false,
   onAction,
   isDisabled,
   isPending = false,
@@ -474,6 +481,7 @@ function itemProps({
     className: styles.item,
     'data-danger': isDanger || undefined,
     ...(safe === undefined ? {} : { href: safe }),
+    ...(safe !== undefined && isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}),
     ...(onAction === undefined ? {} : { onAction }),
     ...(isDisabled === undefined ? {} : { isDisabled }),
     ...(isPending ? { isDisabled: true, 'data-loading': '', 'data-pending': '' } : {}),

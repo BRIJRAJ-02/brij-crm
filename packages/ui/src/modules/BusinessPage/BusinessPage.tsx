@@ -21,16 +21,21 @@ import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import { BusinessGallery, type BusinessPhotoItem } from './BusinessGallery.tsx';
 import { BusinessHours } from './BusinessHours.tsx';
-import { BusinessLocation } from './BusinessLocation.tsx';
+import { BusinessLocation, mapsAppName, type DirectionsLinks, type MapsApp } from './BusinessLocation.tsx';
 import { BusinessMenu, type BusinessMenuSection } from './BusinessMenu.tsx';
 import styles from './BusinessPage.module.css';
-import { businessAction, BusinessReserve, type BusinessReserveState } from './BusinessReserve.tsx';
+import { businessAction, BusinessReserve, telOf, type BusinessReserveState } from './BusinessReserve.tsx';
 import { currentSection, openStatus, placeLocale } from './hours.ts';
 import { strings } from './strings.ts';
 
 export { BusinessGallery, type BusinessGalleryProps, type BusinessPhotoItem } from './BusinessGallery.tsx';
 export { BusinessHours, type BusinessHoursProps } from './BusinessHours.tsx';
-export { BusinessLocation, type BusinessLocationProps } from './BusinessLocation.tsx';
+export {
+  BusinessLocation,
+  type BusinessLocationProps,
+  type DirectionsLinks,
+  type MapsApp,
+} from './BusinessLocation.tsx';
 export { BusinessMenu, type BusinessMenuProps, type BusinessMenuSection } from './BusinessMenu.tsx';
 export {
   businessAction,
@@ -91,7 +96,9 @@ export interface BusinessPageProps {
   readonly menuHref?: string | undefined;
   /** Reserve a table (Table seating); absent without the app. */
   readonly reserve?: BusinessReserveState | undefined;
-  readonly directions?: { readonly google: string; readonly apple: string } | undefined;
+  readonly directions?: DirectionsLinks | undefined;
+  /** The visitor's own map app (the page reads the device): Directions opens it first. Google Maps when absent. */
+  readonly mapsApp?: MapsApp | undefined;
   readonly website?: string | undefined;
   /** The foot: the public page passes BookingFoot. */
   readonly foot?: ReactNode;
@@ -175,6 +182,25 @@ function useCurrentSection(
       globalThis.removeEventListener('scroll', pick);
     };
   }, [key, barHeight]);
+  // An address with a section's hash (`/<handle>#hours`, shared or typed) opens on that section: its tab current and
+  // the page scrolled to it once the sections are drawn, and again when the hash changes later.
+  useEffect(() => {
+    const ids = new Set(key.split(' '));
+    const follow = () => {
+      const id = decodeURIComponent(globalThis.location.hash.slice(1));
+      if (!ids.has(id)) return;
+      chosenAt.current = performance.now();
+      setCurrent(id);
+      document
+        .getElementById(id)
+        ?.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    };
+    follow();
+    globalThis.addEventListener('hashchange', follow);
+    return () => {
+      globalThis.removeEventListener('hashchange', follow);
+    };
+  }, [key]);
   const choose = (id: string) => {
     chosenAt.current = performance.now();
     setCurrent(id);
@@ -287,6 +313,7 @@ function LoadingPage() {
 /** The business page (AC-6640 to AC-6643). */
 export function BusinessPage(props: BusinessPageProps) {
   const { name, kind, description, about, photos, amenities, place, places = [], menu, reserve, directions } = props;
+  const mapsApp = props.mapsApp ?? 'google';
   const { locale: visitorLocale } = useFormatSettings();
   if (props.isLoading === true) return <LoadingPage />;
   const locale = placeLocale(visitorLocale, place.country);
@@ -303,16 +330,18 @@ export function BusinessPage(props: BusinessPageProps) {
   ];
   const address = shortAddress(place);
   const others = places.length > 1 ? places.filter((other) => !other.isCurrent) : [];
-  const action = businessAction(reserve, place.phone, directions?.google);
+  const action = businessAction(reserve, place.phone, directions?.[mapsApp], mapsAppName(mapsApp));
+  // The panel's second way, when its action is Reserve: the phone, which nothing above the fold shows.
+  const phone = action?.kind === 'reserve' ? place.phone : undefined;
   return (
     <div className={styles.root}>
       <div className={styles.frame}>
         <BusinessGallery photos={photos} name={name} />
         <header className={styles.head}>
-          {/* The logo, or the name's initials on the brand's own tile: the name beside it says whose it is. */}
+          {/* The logo, or the name's initials on the brand's colour: the name beside it says whose it is. */}
           <Avatar
             name={name}
-            {...(logo === undefined ? { hue: 'ink' as const } : { src: logo, fit: 'contain' as const })}
+            {...(logo === undefined ? { hue: 'accent' as const } : { src: logo, fit: 'contain' as const })}
             shape="square"
             size="title"
             isDecorative
@@ -333,7 +362,7 @@ export function BusinessPage(props: BusinessPageProps) {
               <Icon name="map-pin" />
               <span>{address}</span>
               {directions !== undefined && (
-                <Link href={directions.google} weight="strong" opensInNewTab>
+                <Link href={directions[mapsApp]} weight="strong" opensInNewTab>
                   {strings.directions}
                 </Link>
               )}
@@ -393,6 +422,7 @@ export function BusinessPage(props: BusinessPageProps) {
                 lines={addressLines(place)}
                 phone={place.phone}
                 directions={directions}
+                mapsApp={mapsApp}
                 website={website}
               />
             </section>
@@ -413,17 +443,18 @@ export function BusinessPage(props: BusinessPageProps) {
               </section>
             )}
           </main>
-          {/* A wide screen: the panel that stays beside the page as it scrolls, while it has an action to carry. */}
+          {/* A wide screen: the panel that stays beside the page as it scrolls, while it has an action to carry. It
+              says nothing the header beside it already says (the name, whether it is open, Directions): the action,
+              and the phone under Reserve. */}
           {action !== undefined && (
             <aside className={styles.panel} aria-label={name}>
               <div className={styles.panelCard}>
-                <p className={styles.panelName}>{name}</p>
-                <OpenLine place={place} locale={locale} />
                 <BusinessReserve action={action} />
-                {directions !== undefined && action.kind !== 'directions' && (
+                {phone !== undefined && phone !== '' && (
                   <p className={styles.panelLink}>
-                    <Link href={directions.google} icon="map-pin" weight="strong" opensInNewTab>
-                      {strings.directions}
+                    <span>{strings.orCall}</span>{' '}
+                    <Link href={telOf(phone)} weight="strong">
+                      {phone}
                     </Link>
                   </p>
                 )}

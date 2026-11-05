@@ -1,4 +1,4 @@
-/* The business page's opening hours (spec 0066, AC-6641): a day per row, its ranges at the end in tabular figures so
+/* The business page's opening hours (spec 0066, AC-6641): a line a day from today on, its ranges at the end in tabular figures so
    the times line up, today in the strong weight with a quiet "Today" beside it. */
 @layer components {
   .root {
@@ -36,16 +36,26 @@
 
   .day {
     display: inline-flex;
+    flex: none;
     align-items: center;
     gap: var(--space-8);
+    white-space: nowrap;
   }
 
+  /* A day's ranges on its one line, comma between, each kept whole: a narrow phone wraps between ranges, never inside
+     one. */
   .ranges {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0 var(--space-4);
     margin: 0;
     font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+
+  .range {
+    white-space: nowrap;
   }
 
   .closed {

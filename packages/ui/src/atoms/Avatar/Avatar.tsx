@@ -20,8 +20,11 @@ export interface AvatarProps {
   readonly id?: string;
   /** A picture on our origin, `data:image` or `blob:`. Anything else, or a picture that fails, shows the initials. */
   readonly src?: string;
-  /** The tile's hue, or `ink` for the workspace's own mark. Defaults to a stable hash of `id` (or `name`). */
-  readonly hue?: Hue | 'ink';
+  /**
+   * The tile's hue, `ink` for the workspace's own mark, or `accent` for a public page's brand colour (a business
+   * page with no logo). Defaults to a stable hash of `id` (or `name`).
+   */
+  readonly hue?: Hue | 'ink' | 'accent';
   readonly size?: AvatarSize;
   /** `circle` for people (the default), `square` for companies and other records. */
   readonly shape?: 'circle' | 'square';

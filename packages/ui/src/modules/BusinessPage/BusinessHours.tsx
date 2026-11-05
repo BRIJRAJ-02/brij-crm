@@ -1,10 +1,10 @@
-// The business page's opening hours (spec 0066, AC-6641): the week from Monday, each day's ranges in the visitor's
+// The business page's opening hours (spec 0066, AC-6641): the week from today on, a line a day, each day's ranges in the visitor's
 // language, today marked, closed days said so. Times are the place's own; a visitor in another zone is told whose.
 import type { PlaceHoursShape } from '@crm/contracts/hospitality';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import styles from './BusinessHours.module.css';
-import { weekRows, zoneCity } from './hours.ts';
+import { fromToday, weekRows, zoneCity } from './hours.ts';
 import { strings } from './strings.ts';
 
 /** Props for BusinessHours. */
@@ -16,12 +16,12 @@ export interface BusinessHoursProps {
   readonly locale?: string;
 }
 
-/** The week's hours as a description list, today first in weight and marked "Today". */
+/** The week's hours as a description list, a line a day from today on, today in weight and marked "Today". */
 export function BusinessHours({ hours, timeZone, locale: given }: BusinessHoursProps) {
   const { locale: visitorLocale, timeZone: visitorZone } = useFormatSettings();
   const locale = given ?? visitorLocale;
   const now = useNow();
-  const rows = weekRows(hours, now, timeZone, locale);
+  const rows = fromToday(weekRows(hours, now, timeZone, locale));
   return (
     <div className={styles.root}>
       <dl className={styles.list}>
@@ -35,9 +35,9 @@ export function BusinessHours({ hours, timeZone, locale: given }: BusinessHoursP
               {row.ranges.length === 0 ? (
                 <span className={styles.closed}>{strings.closedAllDay}</span>
               ) : (
-                row.ranges.map((range) => (
+                row.ranges.map((range, index) => (
                   <span key={range} className={styles.range}>
-                    {range}
+                    {index < row.ranges.length - 1 ? `${range},` : range}
                   </span>
                 ))
               )}

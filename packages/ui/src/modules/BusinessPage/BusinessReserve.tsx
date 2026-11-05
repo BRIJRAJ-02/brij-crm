@@ -16,6 +16,8 @@ export interface BusinessAction {
   readonly icon: IconName;
   /** Opens in a new tab (Directions, in the visitor's map app). */
   readonly isExternal: boolean;
+  /** The fuller name an outward action is heard by ("Directions in Apple Maps (opens in a new tab)"). */
+  readonly fullName?: string;
 }
 
 /** A phone number as a `tel:` address: its digits and a leading plus only. */
@@ -29,6 +31,8 @@ export function businessAction(
   reserve: BusinessReserveState | undefined,
   phone: string | undefined,
   directions: string | undefined,
+  /** The map app `directions` opens, by name; Google Maps when absent. */
+  mapsName: string = strings.googleMaps,
 ): BusinessAction | undefined {
   if (reserve === undefined) return undefined;
   if (reserve.kind === 'open') {
@@ -39,7 +43,14 @@ export function businessAction(
     return { kind: 'call', label: strings.callToBook, href: telOf(phone), icon: 'phone', isExternal: false };
   }
   if (directions !== undefined) {
-    return { kind: 'directions', label: strings.directions, href: directions, icon: 'map', isExternal: true };
+    return {
+      kind: 'directions',
+      label: strings.directions,
+      href: directions,
+      icon: 'map',
+      isExternal: true,
+      fullName: strings.directionsNewTab(mapsName),
+    };
   }
   return undefined;
 }
@@ -58,7 +69,8 @@ export function BusinessReserve({ action }: BusinessReserveProps) {
       icon={action.icon}
       href={action.href}
       isFullWidth="center"
-      {...(action.isExternal ? { isExternal: true, label: strings.directionsNewTab(strings.googleMaps) } : {})}
+      {...(action.isExternal ? { isExternal: true } : {})}
+      {...(action.fullName === undefined ? {} : { label: action.fullName })}
     >
       {action.label}
     </ButtonLink>
