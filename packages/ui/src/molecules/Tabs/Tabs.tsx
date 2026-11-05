@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, type ReactNode } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import {
   SelectionIndicator,
@@ -231,8 +231,22 @@ export interface TabPanelProps {
 
 /** The content of one tab. */
 export function TabPanel({ id, variant = 'default', children }: TabPanelProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  // One panel whose id follows the chosen tab keeps its content mounted (an editor's preview), but React Aria holds on
+  // to the id it first made, so the chosen tab's aria-controls named nothing (axe, 6 November 2026). The panel takes
+  // the id its tab names; React never writes it back, since the prop it holds doesn't change.
+  useLayoutEffect(() => {
+    const panel = ref.current;
+    if (panel === null) return;
+    const tab = (panel.getAttribute('aria-labelledby') ?? '')
+      .split(/\s+/u)
+      .map((each) => panel.ownerDocument.getElementById(each))
+      .find((each) => each?.getAttribute('role') === 'tab');
+    const controls = tab?.getAttribute('aria-controls');
+    if (typeof controls === 'string' && controls !== panel.id) panel.id = controls;
+  }, [id]);
   return (
-    <AriaTabPanel id={id} className={styles.panel} data-variant={variant === 'default' ? undefined : variant}>
+    <AriaTabPanel ref={ref} id={id} className={styles.panel} data-variant={variant === 'default' ? undefined : variant}>
       {children}
     </AriaTabPanel>
   );

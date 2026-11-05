@@ -106,6 +106,7 @@ async function renderLinks(
   const data = {
     bookingPages: { view: () => held.view, remove: held.remove, update },
     managedPages: { view: () => noTemplates, remove: vi.fn() },
+    rotations: { view: () => noTemplates },
   } as unknown as DataLayer;
   shown = await renderInApp(
     () => (

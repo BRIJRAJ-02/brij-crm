@@ -319,7 +319,7 @@ describe('rotations (AC-728, AC-729, AC-751, AC-752, AC-758)', () => {
     const { rotation } = await roundRobin(w, [sam.id, kim.id]);
     expect(await refusalOf(deleteRotation(w.owner, { rotationId: rotation.id }))).toEqual({
       code: 'IN_USE',
-      message: 'Used by 1 page. Move them to another rotation first.',
+      message: 'Used by 1 page. Move them to another group first.',
     });
     const spare = await createRotation(w.owner, {
       id: newId(),
@@ -364,7 +364,7 @@ describe('rotations (AC-728, AC-729, AC-751, AC-752, AC-758)', () => {
     ).toMatchObject({
       code: 'HOSTS_INVALID',
       message:
-        'Nobody is switched on in Sales, so this page would offer no times. Switch someone on there, or pick another rotation.',
+        'Nobody is switched on in Sales, so this page would offer no times. Switch someone on there, or pick another group.',
     });
     expect(
       (

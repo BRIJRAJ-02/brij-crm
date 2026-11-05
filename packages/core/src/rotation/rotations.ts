@@ -691,7 +691,7 @@ export async function deleteRotation(
         ...(pages > 0 ? [`${String(pages)} ${pages === 1 ? 'page' : 'pages'}`] : []),
         ...(formCount > 0 ? [`${String(formCount)} ${formCount === 1 ? 'form' : 'forms'}`] : []),
       ];
-      throw refuse('IN_USE', `Used by ${named.join(' and ')}. Move them to another rotation first.`);
+      throw refuse('IN_USE', `Used by ${named.join(' and ')}. Move them to another group first.`);
     }
     await tx
       .update(rotations)

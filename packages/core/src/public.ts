@@ -8,6 +8,7 @@ export {
   enterBookingAddress,
   enterBookingByToken,
   enterBookingPage,
+  mayPreviewDraft,
   countItemPress,
   countProfileBooking,
   countProfileView,

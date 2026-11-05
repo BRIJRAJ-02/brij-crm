@@ -138,6 +138,7 @@ import { BOOKING_LIMITS, botReason, limitAddress, limitEmail, type LimitRule, ty
 import { pictureResponse, PRIVATE_PICTURE_CACHE_CONTROL, type PictureLoad } from './picture.ts';
 import { iconResponse, type FaviconFetch } from './favicon.ts';
 import { shareImageResponse } from './share-image.ts';
+import type { AuthSession } from '../auth/auth.ts';
 import { bookingBrandAnswer } from './brand-css.ts';
 import { handleLookAnswer } from './look.ts';
 import {
@@ -187,6 +188,8 @@ export interface PublicBookingServices {
   readonly pictures: { readonly pictureOf: AccountPictureReader; readonly load: PictureLoad };
   /** A link block's own site icon (26 Oct 2026): the site's favicon, fetched and answered from our origin. */
   readonly favicons: FaviconFetch;
+  /** Whether this session may see this draft, in its editor's preview. Absent, a draft is no page to anyone. */
+  readonly draftPreview?: (session: AuthSession, entry: BookingEntry) => Promise<boolean>;
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
   readonly visitor?: VisitorDeps & {
     /** Signs a guest connect's state (derived from the calendar token key). */
@@ -604,6 +607,23 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return (await auth.session(c.req.raw.headers, c.get('clientIp')))?.user.id;
     } catch {
       return undefined;
+    }
+  };
+
+  /**
+   * The editor's preview of a draft (`?draft=1`), honoured only for someone signed in who may see that draft. Anyone
+   * else gets what a guest gets: a draft answers as no page. The answers are never cached (`ok` sends no-store).
+   */
+  const previewsDraft = async (c: Context<{ Variables: Variables }>, entry: BookingEntry): Promise<boolean> => {
+    const auth = services.visitor?.auth;
+    const door = services.draftPreview;
+    if (c.req.query('draft') !== '1' || auth === undefined || door === undefined) return false;
+    if ((c.req.header('cookie') ?? '') === '') return false;
+    try {
+      const session = await auth.session(c.req.raw.headers, c.get('clientIp'));
+      return session !== undefined && (await door(session, entry));
+    } catch {
+      return false;
     }
   };
 
@@ -1194,6 +1214,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
+      const asDraft = await previewsDraft(c, entry);
       // A form's hand off (spec 0037, AC-1388): a page that books only through a form opens only with one. The facts
       // and the brand they wear (spec 0060, AC-4) side by side; a brand that won't read is none.
       // Its logo links the company page while one is published and live (spec 0066, AC-6646), as a link page's
@@ -1206,6 +1227,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           // A one off link's state (spec 0062, AC-6204), asked by the token's hash: the token itself stays in the
           // address's fragment and the booking's body, never a query a log keeps.
           oneOffHashOf(c.req.query('o')),
+          asDraft,
         ),
         bookingBrandAnswer(entry),
         bookingCompanyOf(entry).catch((error: unknown) => {
@@ -1290,6 +1312,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           routedLink(entry, handoffTokenOf(c)),
           // An invitation only page's times only beside an open one off link (B-10), asked by the token's hash.
           query.data.o === undefined ? undefined : { hash: query.data.o },
+          await previewsDraft(c, entry),
         ),
         found,
         busy,

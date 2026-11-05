@@ -46,6 +46,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
   'enterWithKey',
+  // A page's editor previewing its draft (spec 0068): the door's own check on a session, which takes no scope.
+  'mayPreviewDraft',
   // A key's throttled last used touch (parity #34): the key's own row, after the door let it in.
   'noteKeyUse',
   // A key's shape, pure (parity 34).

@@ -8,6 +8,7 @@ import {
   createBusyCache,
   createHomeMetricsCache,
   enterWorkspace,
+  mayPreviewDraft,
   jobKinds,
   NO_CALENDAR,
   createSlotCache,
@@ -717,6 +718,7 @@ export function createApp({
   mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountPublicBooking(app, {
     db,
+    draftPreview: (session, entry) => mayPreviewDraft({ db, rules }, entry, session.user.id, doorSession(session)),
     handoffKey: formsHandoffKey,
     publicOrigins,
     calendar: {

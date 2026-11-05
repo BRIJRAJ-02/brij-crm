@@ -5,6 +5,7 @@
 import { isDataError, type BookingRequestView, type DataLayer } from '@crm/data';
 import {
   Button,
+  Callout,
   Card,
   EmptyState,
   Field,
@@ -29,8 +30,6 @@ export interface RequestsCardProps {
   readonly pageId: string;
   /** A locked page (a managed member page): the requests show, Confirm and Decline don't. */
   readonly isReadOnly: boolean;
-  /** Drawn even with nothing waiting (the page confirms first); otherwise only while requests wait. */
-  readonly isAlwaysShown: boolean;
 }
 
 type Loaded =
@@ -39,7 +38,7 @@ type Loaded =
   | { readonly status: 'ready'; readonly requests: readonly BookingRequestView[] };
 
 /** The card: the page's requests, soonest first, each with Confirm and Decline. */
-export function RequestsCard({ data, slug, pageId, isReadOnly, isAlwaysShown }: RequestsCardProps) {
+export function RequestsCard({ data, slug, pageId, isReadOnly }: RequestsCardProps) {
   const { locale, timeZone } = useFormatSettings();
   const [loaded, setLoaded] = useState<Loaded>({ status: 'loading' });
   const [busy, setBusy] = useState<string | undefined>(undefined);
@@ -75,55 +74,53 @@ export function RequestsCard({ data, slug, pageId, isReadOnly, isAlwaysShown }: 
       },
     );
   };
-  // Confirm-first turned off with requests still waiting: the card stays until they are answered.
-  if (!isAlwaysShown && (loaded.status !== 'ready' || loaded.requests.length === 0)) return null;
+  // Only while something waits (the owner, 6 November 2026: "Nothing waiting" was a card with nothing to do); a read
+  // that failed still says so, since a request may be waiting behind it.
+  if (loaded.status === 'loading' || (loaded.status === 'ready' && loaded.requests.length === 0)) return null;
   return (
-    <Card title={strings.requests} {...(failure === undefined ? {} : { footerNote: failure })}>
-      {loaded.status === 'loading' && <EmptyState layout="row" isLoading title={strings.requests} />}
+    <Card title={strings.requests}>
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {loaded.status === 'error' && (
         <EmptyState layout="row" tone="error" title={strings.requestsFailed} onRetry={read} />
       )}
-      {loaded.status === 'ready' &&
-        (loaded.requests.length === 0 ? (
-          <EmptyState layout="row" title={strings.noRequests} />
-        ) : (
-          <Table
-            label={strings.requests}
-            columns={isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS}
-            rows={loaded.requests}
-            isHeaderHidden
-            getRowId={(request) => request.bookingId}
-            renderCell={(request, column) =>
-              column === 'who' ? (
-                // Two lines at most at any width: who and when, then when it expires.
-                <PersonLine
-                  id={request.bookingId}
-                  name={request.visitorName}
-                  size="sm"
-                  isMetaWrapped
-                  meta={[at(request.start), strings.answerBy(at(request.expiresAt))]}
-                />
-              ) : (
-                <>
-                  <Button
-                    isDisabled={busy !== undefined && busy !== request.bookingId}
-                    onPress={() => setDeclining(request)}
-                  >
-                    {strings.decline}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    isPending={busy === request.bookingId}
-                    isDisabled={busy !== undefined && busy !== request.bookingId}
-                    onPress={() => confirm(request)}
-                  >
-                    {strings.confirm}
-                  </Button>
-                </>
-              )
-            }
-          />
-        ))}
+      {loaded.status === 'ready' && (
+        <Table
+          label={strings.requests}
+          columns={isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS}
+          rows={loaded.requests}
+          isHeaderHidden
+          getRowId={(request) => request.bookingId}
+          renderCell={(request, column) =>
+            column === 'who' ? (
+              // Two lines at most at any width: who and when, then when it expires.
+              <PersonLine
+                id={request.bookingId}
+                name={request.visitorName}
+                size="sm"
+                isMetaWrapped
+                meta={[at(request.start), strings.answerBy(at(request.expiresAt))]}
+              />
+            ) : (
+              <>
+                <Button
+                  isDisabled={busy !== undefined && busy !== request.bookingId}
+                  onPress={() => setDeclining(request)}
+                >
+                  {strings.decline}
+                </Button>
+                <Button
+                  variant="primary"
+                  isPending={busy === request.bookingId}
+                  isDisabled={busy !== undefined && busy !== request.bookingId}
+                  onPress={() => confirm(request)}
+                >
+                  {strings.confirm}
+                </Button>
+              </>
+            )
+          }
+        />
+      )}
       <DeclineRequest
         request={declining}
         onClose={() => setDeclining(undefined)}

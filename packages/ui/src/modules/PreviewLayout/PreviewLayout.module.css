@@ -84,6 +84,13 @@
     container-type: inline-size;
   }
 
+  /* `snug`: the notices over the form and the phone, as wide as the pair, so they start where it starts. */
+  .inner[data-snug] > :not(.measure) {
+    inline-size: 100%;
+    max-inline-size: calc(var(--size-dialog-wide) + var(--space-32) + var(--size-panel));
+    margin-inline: auto;
+  }
+
   /* A form's groups: a readable column centred in the body's column; the footer still spans it. */
   .main[data-width='form'] > :not(.footer) {
     inline-size: 100%;
@@ -329,6 +336,15 @@
 
     .measure[data-share='wide'] > .body[data-preview] {
       grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    }
+
+    /* `snug`: the form's readable column and the phone beside it, the pair centred, so on a wide screen no band opens
+       between what is edited and what it looks like. Under that width, as `wide`. */
+    .measure[data-share='wide'] > .body[data-preview][data-snug] {
+      grid-template-columns:
+        minmax(0, min(calc((100% - var(--space-32)) * 3 / 5), var(--size-dialog-wide)))
+        minmax(0, min(calc((100% - var(--space-32)) * 2 / 5), var(--size-panel)));
+      justify-content: center;
     }
 
     .side {

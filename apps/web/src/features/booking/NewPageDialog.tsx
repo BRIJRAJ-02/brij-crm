@@ -4,11 +4,13 @@
 // Main task: name it and press Create page, which makes it as a draft and opens its editor, where Publish puts it live.
 // The header's Team links opens this same dialog as New workspace link or New team link (`kind`), with only what that
 // one asks: a title (and a length for the workspace link). A managed page ("A page each") waits under More types.
+// Round robin with no group yet asks who is on it right here (6 November 2026, the Calendly way): the people, and the
+// group is made from them under the page's name, so the first team page never leaves this dialog.
 // Leaves out: the schedule (the page follows the default; another is picked on the editor's Hours tab, as Calendly and
 // Cal.com do), everything else a page has (its editor), its web address (the server makes one from the title), the
 // workspace and team links as types (they are links, not page types: the header's Team links), and Collective (the
 // server can't make one yet). No choice is ever shown turned off: one that can't apply is left out.
-import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
+import { isDataError, type BookingPageView, type DataLayer, type MemberSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import { Button, Callout, Disclosure, Field, Link, Modal, SegmentedControl, Select, TileGrid } from '@crm/ui';
 import { useEffect, useState } from 'react';
@@ -17,11 +19,20 @@ import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
 import { strings } from './strings.ts';
 import { managedStrings } from './managed-strings.ts';
-import { roundRobinHref } from './links.ts';
+import { membersSettingsHref } from '../settings/nav.ts';
 
 /** The lengths offered as segments; any other the server allows goes through Custom. */
 const SEGMENTS = [15, 30, 45, 60] as const;
 const CUSTOM = 'custom';
+
+/** A group made here starts as Round robin's own New group does: fair, over 30 days, returning guests to their owner. */
+const NEW_GROUP_RULES = { strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' } as const;
+const GROUP_NAME_MAX = 80;
+const NEW_GROUP_MEMBER = { weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: true } as const;
+
+/** The workspace's people, for a first group. */
+type PeopleRead =
+  { readonly status: 'loading' | 'failed' } | { readonly status: 'ready'; readonly people: readonly MemberSummary[] };
 
 /** What the dialog makes: a page (the default), the workspace's own link, or a Team link (a form). */
 export type NewPageKind = 'page' | 'workspace' | 'team-link';
@@ -105,13 +116,34 @@ export function NewPageDialog({
   // The group the page books: the one picked, else the workspace's only group, so a team with one needn't pick it.
   const onlyRotation = rotationItems.length === 1 ? rotationItems[0]?.id : undefined;
   const pickedRotation = rotationId ?? onlyRotation ?? null;
-  // No group yet: Manage round robin opens in a new tab, so what is typed here stays (flow walks B8), and the
-  // groups are read again when this tab is back in front.
-  const isWaitingForGroup = isOpen && isTeam && rotations.status === 'ready' && rotationItems.length === 0;
+  // No group yet: who is on it is asked here, and the group is made from them with the page.
+  const needsPeople = isOpen && isTeam && rotations.status === 'ready' && rotationItems.length === 0;
+  const [people, setPeople] = useState<PeopleRead>({ status: 'loading' });
+  const [peopleAsked, setPeopleAsked] = useState(0);
+  const [picked, setPicked] = useState<readonly string[]>([]);
   useEffect(() => {
-    if (!isWaitingForGroup) return;
+    if (!needsPeople) return;
+    let isCurrent = true;
+    data.members.list(slug).then(
+      (found) => {
+        if (isCurrent) setPeople({ status: 'ready', people: found });
+      },
+      () => {
+        if (isCurrent) setPeople({ status: 'failed' });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [needsPeople, peopleAsked, data, slug]);
+  // Invite teammates opens beside this dialog (flow walks B8), so someone who joined, or a group made there, arrives
+  // when this tab is back in front.
+  useEffect(() => {
+    if (!needsPeople) return;
     const reread = () => {
-      if (document.visibilityState === 'visible') data.rotations.view(slug).reload();
+      if (document.visibilityState !== 'visible') return;
+      data.rotations.view(slug).reload();
+      setPeopleAsked((count) => count + 1);
     };
     window.addEventListener('focus', reread);
     document.addEventListener('visibilitychange', reread);
@@ -119,17 +151,8 @@ export function NewPageDialog({
       window.removeEventListener('focus', reread);
       document.removeEventListener('visibilitychange', reread);
     };
-  }, [isWaitingForGroup, data, slug]);
-  // The group made there arrives: the only one is picked, and focus goes to the picker that replaced the link.
-  const [wasWaiting, setWasWaiting] = useState(false);
-  const [focusGroups, setFocusGroups] = useState(false);
-  if (isWaitingForGroup !== wasWaiting) {
-    setWasWaiting(isWaitingForGroup);
-    if (!isWaitingForGroup && isTeam && rotationItems.length > 0) {
-      if (rotationItems.length === 1) setRotationId(rotationItems[0]?.id ?? null);
-      setFocusGroups(true);
-    }
-  }
+  }, [needsPeople, data, slug]);
+  const [newGroupId, setNewGroupId] = useState(() => data.rotations.newId());
   const [id, setId] = useState(() => data.bookingPages.newId());
   // The Team link's form id, minted at its first Create and kept for a retry, so a retry makes one form.
   const [formId, setFormId] = useState<string | undefined>(undefined);
@@ -146,6 +169,9 @@ export function NewPageDialog({
     setMoreOpen(false);
     setRotationId(askedRotation ?? null);
     setRotationError(undefined);
+    setPicked([]);
+    setPeople({ status: 'loading' });
+    setNewGroupId(data.rotations.newId());
     setErrors({});
     setFailure(undefined);
     setId(data.bookingPages.newId());
@@ -211,33 +237,49 @@ export function NewPageDialog({
       ...(minutes === undefined ? { custom: strings.customMinutesInvalid } : {}),
     };
     setErrors(found);
-    const missingRotation = isTeam && pickedRotation === null;
-    setRotationError(missingRotation ? rotationStrings.rotationRequired : undefined);
+    const makesGroup = isTeam && needsPeople;
+    const missingRotation = isTeam && (makesGroup ? picked.length < 2 : pickedRotation === null);
+    setRotationError(
+      missingRotation ? (makesGroup ? rotationStrings.needTwo : rotationStrings.rotationRequired) : undefined,
+    );
     if (minutes === undefined || Object.keys(found).length > 0 || missingRotation) return;
     setBusy(true);
     setFailure(undefined);
-    data.bookingPages
-      .create(slug, {
-        id,
-        title: title.trim(),
-        timeZone: memberZone(data, slug),
-        // A draft until its first Publish, as a form is (the bookings area, 4 November 2026).
-        isDraft: true,
-        // A one on one page follows the default schedule (AC-17); a round robin page books by each host's own hours.
-        settings: {
-          ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),
-          ...(isLinkOnly && !isWorkspace ? { isPrivate: true } : {}),
-        },
-        ...(isTeam && pickedRotation !== null
-          ? // A team's page gets the workspace's address (owner, 5 November 2026); pages made before keep theirs.
-            {
-              kind: 'round_robin' as const,
-              scope: 'workspace' as const,
-              hosts: { fixed: [], rotations: [pickedRotation] },
-            }
-          : {}),
-        ...(isWorkspace ? { kind: 'round_robin' as const, scope: 'workspace' as const } : {}),
-      })
+    // The group first, from the people picked and the page's name; a retry reuses its id, so one group is made.
+    const groupFirst = makesGroup
+      ? data.rotations
+          .create(slug, {
+            id: newGroupId,
+            // A title may run longer than a group's name.
+            settings: { ...NEW_GROUP_RULES, name: title.trim().slice(0, GROUP_NAME_MAX) },
+            members: picked.map((memberId) => ({ memberId, ...NEW_GROUP_MEMBER })),
+          })
+          .then((group) => group.id)
+      : Promise.resolve(pickedRotation);
+    groupFirst
+      .then((groupId) =>
+        data.bookingPages.create(slug, {
+          id,
+          title: title.trim(),
+          timeZone: memberZone(data, slug),
+          // A draft until its first Publish, as a form is (the bookings area, 4 November 2026).
+          isDraft: true,
+          // A one on one page follows the default schedule (AC-17); a round robin page books by each host's own hours.
+          settings: {
+            ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),
+            ...(isLinkOnly && !isWorkspace ? { isPrivate: true } : {}),
+          },
+          ...(isTeam && groupId !== null
+            ? // A team's page gets the workspace's address (owner, 5 November 2026); pages made before keep theirs.
+              {
+                kind: 'round_robin' as const,
+                scope: 'workspace' as const,
+                hosts: { fixed: [], rotations: [groupId] },
+              }
+            : {}),
+          ...(isWorkspace ? { kind: 'round_robin' as const, scope: 'workspace' as const } : {}),
+        }),
+      )
       .then(
         (page) => {
           setBusy(false);
@@ -370,6 +412,66 @@ export function NewPageDialog({
           )}
         </>
       )}
+      {/* Who it books, straight after the type: the choice that makes it a team page. */}
+      {isTeam &&
+        (needsPeople ? (
+          people.status === 'failed' ? (
+            <Callout
+              tone="danger"
+              isAnnounced
+              actions={<Button onPress={() => setPeopleAsked((count) => count + 1)}>{strings.retryPeople}</Button>}
+            >
+              {strings.peopleFailed}
+            </Callout>
+          ) : people.status === 'ready' && people.people.length < 2 ? (
+            // Pressing Create page here says the same, louder: it can't go until there is someone to share with.
+            <Callout
+              tone={rotationError === undefined ? 'info' : 'danger'}
+              isAnnounced
+              // Opens beside the dialog, so what is typed here stays (flow walks B8).
+              actions={
+                <Link href={membersSettingsHref(slug)} opensInNewTab>
+                  {strings.inviteTeammates}
+                </Link>
+              }
+            >
+              {strings.needsTeammates}
+            </Callout>
+          ) : (
+            <Select
+              label={rotationStrings.people}
+              selectionMode="multiple"
+              placeholder={rotationStrings.peoplePlaceholder}
+              items={(people.status === 'ready' ? people.people : []).map((member) => ({
+                id: member.id,
+                label: member.name,
+                description: member.email,
+              }))}
+              isSearchable
+              searchLabel={rotationStrings.addMemberPlaceholder}
+              values={[...picked]}
+              hint={strings.peopleLine}
+              onValuesChange={(ids) => {
+                setPicked(ids);
+                setRotationError(undefined);
+              }}
+              isRequired
+              isDisabled={isBusy || people.status === 'loading'}
+              {...(rotationError === undefined ? {} : { error: rotationError })}
+            />
+          )
+        ) : (
+          <Select
+            label={rotationStrings.rotation}
+            placeholder={rotationStrings.pickRotation}
+            items={rotationItems}
+            value={pickedRotation}
+            onChange={setRotationId}
+            isRequired
+            isDisabled={isBusy}
+            {...(rotationError === undefined ? {} : { error: rotationError })}
+          />
+        ))}
       {/* A length for anything that books; a Team link and a managed page take theirs in their editors. */}
       {!isTeamLink && !isManaged && (
         <>
@@ -408,33 +510,6 @@ export function NewPageDialog({
           )}
         </>
       )}
-      {isTeam &&
-        (rotationItems.length === 0 && rotations.status === 'ready' ? (
-          <Callout
-            tone="info"
-            actions={
-              <Link href={roundRobinHref(slug)} opensInNewTab>
-                {rotationStrings.manageRotations}
-              </Link>
-            }
-          >
-            {strings.noGroupsYet}
-          </Callout>
-        ) : (
-          <Select
-            label={rotationStrings.rotation}
-            placeholder={rotationStrings.pickRotation}
-            // Only when the group made in the other tab replaced the focused link, so focus isn't dropped.
-            // eslint-disable-next-line jsx-a11y-x/no-autofocus
-            autoFocus={focusGroups}
-            items={rotationItems}
-            value={pickedRotation}
-            onChange={setRotationId}
-            isRequired
-            isDisabled={isBusy}
-            {...(rotationError === undefined ? {} : { error: rotationError })}
-          />
-        ))}
     </Modal>
   );
 }

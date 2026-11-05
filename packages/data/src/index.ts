@@ -4605,6 +4605,19 @@ export function createDataLayer({
         const answer = await createBookingClient({ origin, fetch }).slots(publicKey, query, signal);
         return answer.slots.map((slot) => slot.start);
       },
+      /**
+       * Whether a range holds an open time, through the same read a guest's page makes: undefined when a calendar
+       * couldn't be read, so its answer proves nothing.
+       */
+      hasOpenTimes: async (
+        publicKey: string,
+        query: { readonly from: string; readonly to: string; readonly duration: number; readonly tz: string },
+        signal?: AbortSignal,
+      ): Promise<boolean | undefined> => {
+        const { createBookingClient } = await import('./booking/public.ts');
+        const answer = await createBookingClient({ origin, fetch }).slots(publicKey, query, signal);
+        return answer.slots.length > 0 ? true : answer.calendar === 'unreachable' ? undefined : false;
+      },
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,

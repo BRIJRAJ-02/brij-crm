@@ -31,7 +31,7 @@ export interface BookingFact {
 
 /** Who is booked, as the rail heads it. */
 export interface BookingHost {
-  /** The host: the line above the meeting. A team page's is the workspace, named in its title instead. */
+  /** The host: the line above the meeting. A team page shows faces instead, over the page's own title. */
   readonly name: string;
   readonly image?: string;
   /** The host's job title, under their name, when they show it (3 Nov 2026); never on a team page. */
@@ -369,7 +369,7 @@ export function BookingFrame({
                   isDecorative
                   {...(host.image === undefined ? {} : { src: host.image })}
                 />
-              ) : (
+              ) : host.team.people.length === 0 ? null : (
                 <AvatarStack
                   people={host.team.people}
                   total={host.team.total}
@@ -387,7 +387,7 @@ export function BookingFrame({
                     : undefined
                 }
               >
-                {/* A team page's title already names the workspace ("Intro call with Acme"). */}
+                {/* A team page names nobody before booking: its faces and the page's own title. */}
                 {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
                 {!isTile &&
                   host.team === undefined &&

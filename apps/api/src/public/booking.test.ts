@@ -129,6 +129,42 @@ function nameOf(item: object): string {
   return 'author' in item && typeof item.author === 'string' ? item.author : '';
 }
 
+describe('a draft through the public routes (6 November 2026)', () => {
+  it('answers ?draft=1 only to the page’s editor: no cookie, a junk one and a stranger get what a guest gets', async () => {
+    const m = await memberWithWorkspace(app);
+    const stranger = await memberWithWorkspace(app);
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Draft call',
+      timeZone: 'UTC',
+      isDraft: true,
+      mutationId: newId(),
+    });
+    const from = new Date(Date.now() + 86_400_000).toISOString();
+    const to = new Date(Date.now() + 8 * 86_400_000).toISOString();
+    const slots = `slots?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&tz=UTC&draft=1`;
+    const read = (path: string, cookie?: string) =>
+      app.request(`/api/public/booking/${page.publicKey}${path}`, {
+        headers: { ...(cookie === undefined ? {} : { cookie }), 'x-forwarded-for': '203.0.113.50' },
+      });
+    for (const cookie of [undefined, 'better-auth.session_token=junk', stranger.cookie]) {
+      for (const path of ['?draft=1', `/${slots}`]) {
+        const answer = await read(path, cookie);
+        expect(answer.status).toBe(404);
+        expect(answer.headers.get('cache-control')).toContain('no-store');
+      }
+    }
+    // Without asking, its own editor gets no page either.
+    expect((await read('', m.cookie)).status).toBe(404);
+    const facts = await read('?draft=1', m.cookie);
+    expect(facts.status).toBe(200);
+    expect(facts.headers.get('cache-control')).toContain('no-store');
+    expect(await facts.json()).toMatchObject({ title: 'Draft call' });
+    expect((await read(`/${slots}`, m.cookie)).status).toBe(200);
+  });
+});
+
 describe('the member procedures (AC-623, AC-645)', () => {
   it('makes, changes, lists and deletes a page; another member’s page is absent', async () => {
     const m = await memberWithWorkspace(app);

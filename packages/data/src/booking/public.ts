@@ -57,9 +57,10 @@ export { isDataError, type DataError } from '../errors.ts';
 export interface BookingClient {
   /**
    * The page's facts; `handoff`, a form's signed hand off, opens a page that books only through a form (spec 0037);
-   * `linkHash`, a one off link's token hashed (spec 0062, AC-6204), says whether that link has anything left.
+   * `linkHash`, a one off link's token hashed (spec 0062, AC-6204), says whether that link has anything left;
+   * `asDraft`, from the editor's own preview, asks for a page not yet published (answered only to someone who may).
    */
-  page(publicKey: string, handoff?: string, linkHash?: string): Promise<PublicBookingPage>;
+  page(publicKey: string, handoff?: string, linkHash?: string, asDraft?: boolean): Promise<PublicBookingPage>;
   slots(
     publicKey: string,
     query: {
@@ -72,6 +73,8 @@ export interface BookingClient {
       readonly p?: string;
       /** A one off link's token hashed (spec 0062, B-10): an invitation only page offers times only beside one. */
       readonly o?: string;
+      /** The editor's own preview of a page not yet published. */
+      readonly asDraft?: boolean;
     },
     signal?: AbortSignal,
   ): Promise<PublicSlots>;
@@ -187,10 +190,15 @@ const handoffHeaders = (handoff: string | undefined): Record<string, string> =>
 export function createBookingClient(options: PublicClientOptions): BookingClient {
   const { base, call } = publicCaller(options);
   return {
-    page: (publicKey, handoff, linkHash) => {
-      const query = new URLSearchParams(linkHash === undefined ? {} : { o: linkHash }).toString();
+    page: (publicKey, handoff, linkHash, asDraft = false) => {
+      const query = new URLSearchParams({
+        ...(linkHash === undefined ? {} : { o: linkHash }),
+        ...(asDraft ? { draft: '1' } : {}),
+      }).toString();
       return call<PublicBookingPage>(`${encodeURIComponent(publicKey)}${query === '' ? '' : `?${query}`}`, {
         headers: handoffHeaders(handoff),
+        // Only a draft's read says who is asking: every other page read stays free of cookies.
+        ...(asDraft ? { credentials: 'same-origin' as const } : {}),
       });
     },
     slots: (publicKey, query, signal) =>
@@ -202,6 +210,7 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
           ...(query.duration === undefined ? {} : { duration: String(query.duration) }),
           tz: query.tz,
           ...(query.o === undefined ? {} : { o: query.o }),
+          ...(query.asDraft === true ? { draft: '1' } : {}),
         }).toString()}`,
         {
           credentials: 'same-origin',

@@ -1,6 +1,6 @@
 // Brief
-// Purpose: a round robin page's Hosts (spec 0029, AC-732; spec 0037, AC-1319, AC-1323): fixed hosts who attend every meeting, and the rotations it books one host from.
-// Main task: add, order and remove fixed hosts, pick up to 3 rotations, and choose where a reschedule goes; each host change saves at once.
+// Purpose: a round robin page's Hosts (spec 0029, AC-732; spec 0037, AC-1319, AC-1323): the groups it books one host from, who is in them, and fixed hosts who attend every meeting.
+// Main task: see who can be booked and whose calendar is missing; pick up to 3 groups, add a fixed host, and choose where a reschedule goes; each host change saves at once.
 // A workspace link (30 Oct 2026) leads with one switch, "Everyone in the workspace, including people who join later"
 // (Cal.com's "Add all team members"): on, it books "Everyone on the roster" and nothing else shows; off, the pickers.
 // Leaves out: a rotation's own members and rules (Settings › Rotations, linked here), and each member's hours (their schedules).
@@ -22,8 +22,10 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
+import { CalendarHealthChip, useCalendarHealth, useSchedulingStore } from './CalendarHealth.tsx';
 import { strings } from './rotation-strings.ts';
 import { roundRobinHref } from './links.ts';
+import { teamOnPage } from './team-readiness.ts';
 
 /** The most fixed hosts, rotations, and hosts in all (spec 0037's numbers; the server checks them too). */
 const LIMITS = { fixed: 7, rotations: 3, hosts: 8 } as const;
@@ -49,6 +51,14 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'name', label: strings.fixedHosts, isRowHeader: true },
   { id: 'actions', label: strings.hostActions, isLabelHidden: true, align: 'end' },
 ];
+
+const WHO_COLUMNS: readonly TableColumn[] = [
+  { id: 'name', label: strings.columns.member, isRowHeader: true },
+  { id: 'on', label: strings.columns.on, align: 'end' },
+];
+
+/** The most people listed before "and N more": a roster can hold the whole workspace. */
+const WHO_SHOWN = 8;
 
 /** The card. */
 export function HostsCard({
@@ -79,6 +89,24 @@ export function HostsCard({
   const followsEveryone = roster !== undefined && fixed.length === 0 && linked.length === 1 && linked[0] === roster.id;
   const [isPicking, setPicking] = useState(false);
   const isEveryone = isWorkspace && followsEveryone && !isPicking;
+  // Who the page's groups hold, each once, with their calendars through the reader's See reach (as Round robin shows).
+  const { groups } = teamOnPage(page, rotations);
+  const everyRow = groups.flatMap((group) => group.members);
+  const groupPeople = everyRow
+    .filter((member, at) => everyRow.findIndex((each) => each.memberId === member.memberId) === at)
+    // On in any of the page's groups is on: the same count the page's own readiness takes.
+    .map((member) => ({
+      ...member,
+      isOn: everyRow.some((each) => each.memberId === member.memberId && each.isOn),
+    }));
+  const healthStore = useSchedulingStore(data);
+  const health = useCalendarHealth(
+    healthStore,
+    slug,
+    groupPeople.map((member) => member.memberId),
+  );
+  // Nothing else to add: the Add a group picker would open on an empty list.
+  const hasOtherGroups = rotations.some((each) => !linked.includes(each.id));
 
   /** Saves the hosts; true once the server has them. */
   const save = (next: {
@@ -145,7 +173,9 @@ export function HostsCard({
     >
       <SettingsStack>
         {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        {isWorkspace && roster !== undefined && (
+        {/* Only on the page that books everyone (or was just switched off it): every team page shares the workspace's
+            scope, and on one that books a group, one press would drop its group and its fixed hosts unasked. */}
+        {isWorkspace && roster !== undefined && (followsEveryone || isPicking) && (
           <Switch
             label={strings.everyoneSwitch}
             {...(isEveryone
@@ -167,6 +197,72 @@ export function HostsCard({
         )}
         {!isEveryone && (
           <>
+            {linked.map((rotationId, index) => (
+              <SettingsStack key={rotationId}>
+                <Select
+                  savesOnPick
+                  label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
+                  items={rotationItems(rotationId)}
+                  value={rotationId}
+                  isReadOnly={isLocked}
+                  isDisabled={isSaving}
+                  onChange={(next) => {
+                    if (next === null || next === rotationId) return;
+                    void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
+                  }}
+                />
+                {!isLocked && linked.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    isDisabled={isSaving}
+                    onPress={() => {
+                      setConfirming({ kind: 'rotation', id: rotationId });
+                    }}
+                  >
+                    {strings.removeRotation(rotationName(rotationId))}
+                  </Button>
+                )}
+              </SettingsStack>
+            ))}
+            {/* Who those groups hold: the page's people, in the one place that shows them. */}
+            {groupPeople.length > 0 && (
+              <Table
+                label={strings.whoIsOn}
+                isScrollable
+                columns={WHO_COLUMNS}
+                rows={groupPeople.slice(0, WHO_SHOWN)}
+                getRowId={(row) => row.memberId}
+                {...(groupPeople.length > WHO_SHOWN ? { footer: strings.andMore(groupPeople.length - WHO_SHOWN) } : {})}
+                renderCell={(row, column) =>
+                  column === 'name' ? (
+                    <>
+                      <RecordChip display={{ type: 'member', id: row.memberId, name: row.name }} isFlat />
+                      <CalendarHealthChip state={health.get(row.memberId)} name={row.name} isQuiet showsHidden />
+                    </>
+                  ) : row.isOn ? (
+                    strings.isOn
+                  ) : (
+                    strings.isOff
+                  )
+                }
+              />
+            )}
+            {linked.length < LIMITS.rotations && (linked.length === 0 || hasOtherGroups) && (
+              <Select
+                savesOnPick
+                label={linked.length === 0 ? strings.rotation : strings.addRotation}
+                {...(isFull ? { hint: strings.hostsFull(LIMITS.hosts) } : {})}
+                placeholder={strings.pickRotation}
+                items={rotationItems()}
+                value={null}
+                isReadOnly={isLocked}
+                isDisabled={isSaving || isFull}
+                onChange={(next) => {
+                  if (next !== null) void save({ fixed, rotations: [...linked, next] });
+                }}
+              />
+            )}
             <Select
               savesOnPick
               label={strings.addFixed}
@@ -175,9 +271,7 @@ export function HostsCard({
                   ? strings.hostsFull(LIMITS.hosts)
                   : fixed.length >= LIMITS.fixed
                     ? strings.fixedFull(LIMITS.fixed)
-                    : fixed.length === 0
-                      ? strings.noFixed
-                      : strings.fixedHint
+                    : strings.fixedHint
               }
               placeholder={strings.addMemberPlaceholder}
               items={peopleLeft}
@@ -237,49 +331,6 @@ export function HostsCard({
                       />
                     </>
                   );
-                }}
-              />
-            )}
-            {linked.map((rotationId, index) => (
-              <SettingsStack key={rotationId}>
-                <Select
-                  savesOnPick
-                  label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
-                  items={rotationItems(rotationId)}
-                  value={rotationId}
-                  isReadOnly={isLocked}
-                  isDisabled={isSaving}
-                  onChange={(next) => {
-                    if (next === null || next === rotationId) return;
-                    void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
-                  }}
-                />
-                {!isLocked && linked.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    isDisabled={isSaving}
-                    onPress={() => {
-                      setConfirming({ kind: 'rotation', id: rotationId });
-                    }}
-                  >
-                    {strings.removeRotation(rotationName(rotationId))}
-                  </Button>
-                )}
-              </SettingsStack>
-            ))}
-            {linked.length < LIMITS.rotations && (
-              <Select
-                savesOnPick
-                label={linked.length === 0 ? strings.rotation : strings.addRotation}
-                hint={isFull ? strings.hostsFull(LIMITS.hosts) : strings.rotationsHint}
-                placeholder={strings.pickRotation}
-                items={rotationItems()}
-                value={null}
-                isReadOnly={isLocked}
-                isDisabled={isSaving || isFull}
-                onChange={(next) => {
-                  if (next !== null) void save({ fixed, rotations: [...linked, next] });
                 }}
               />
             )}

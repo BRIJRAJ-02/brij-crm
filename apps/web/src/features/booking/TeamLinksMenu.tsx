@@ -10,6 +10,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { linksHref, pageEditorHref, publicBookingUrl } from './links.ts';
 import { strings } from './strings.ts';
+import { followsEveryone } from './team-readiness.ts';
 
 /** Props for TeamLinksMenu. */
 export interface TeamLinksMenuProps {
@@ -23,9 +24,10 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
   const canBookTeams = useCan('booking.admin');
   const canManageForms = useCan('forms.manage');
   const list = useCaptureList(data.bookingPages.view(slug));
+  const rotations = useCaptureList(data.rotations.view(slug));
   // While the pages load, the button holds its place (turned off) for anyone who may have something in it, so New
   // never shifts when it arrives (design review, 5 November 2026).
-  if (list.status === 'loading') {
+  if (list.status === 'loading' || rotations.status === 'loading') {
     return canBookTeams || canManageForms ? (
       <Button icon="users" label={strings.teamLinks} isLabelCollapsible isPending>
         {strings.teamLinks}
@@ -34,12 +36,17 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
   }
   // A failed read offers nothing rather than a dead button; the list below says it failed, with Try again.
   if (list.status !== 'ready') return null;
-  const workspace = list.items.find((page) => page.scope === 'workspace');
+  // The workspace's own link: the page that books everyone. A team page on one group isn't it, though it shares the
+  // workspace's address.
+  const rotationItems = rotations.status === 'ready' ? rotations.items : [];
+  const workspace = list.items.find((page) => followsEveryone(page, rotationItems));
   // A Team link sends people on to a live team page: with none, there is nothing to make it in front of.
   const hasTeamPage = list.items.some((page) => page.kind === 'round_robin' && page.status === 'live');
   const canMakeTeamLink = canManageForms && hasTeamPage;
   const canCopy = workspace !== undefined && workspace.status === 'live';
-  const hasWorkspaceItems = canCopy || workspace?.canChange === true || (workspace === undefined && canBookTeams);
+  // Never New while the groups couldn't be read: one may exist, and it would make a second.
+  const canMake = workspace === undefined && canBookTeams && rotations.status === 'ready';
+  const hasWorkspaceItems = canCopy || workspace?.canChange === true || canMake;
   if (!hasWorkspaceItems && !canMakeTeamLink) return null;
   const copy = (link: string) => {
     // No clipboard outside a secure context: said, rather than failing without a word.
@@ -78,7 +85,7 @@ export function TeamLinksMenu({ slug }: TeamLinksMenuProps) {
                 {strings.editWorkspaceLink}
               </MenuItem>
             )}
-            {workspace === undefined && canBookTeams && (
+            {canMake && (
               <MenuItem id="new-workspace" icon="building" description={strings.workspaceLinkLine}>
                 {strings.addWorkspaceLink}
               </MenuItem>

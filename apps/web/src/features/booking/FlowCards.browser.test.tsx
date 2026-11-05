@@ -63,7 +63,7 @@ async function show(bookingFlow: ReturnType<typeof flow>, bookingPages = pages()
   shown = await renderInApp(
     () => (
       <PageColumn>
-        <RequestsCard data={data} slug="acme" pageId="page" isReadOnly={false} isAlwaysShown />
+        <RequestsCard data={data} slug="acme" pageId="page" isReadOnly={false} />
         <OneOffLinksCard
           data={data}
           slug="acme"

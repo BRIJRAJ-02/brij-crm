@@ -66,9 +66,11 @@ export interface PreviewLayoutProps {
   readonly bodyWidth?: 'full' | 'form';
   /**
    * How much of the width the phone's column takes: `third` (the default) or `wide`, two fifths, for an editor that
-   * sits beside a sidebar (Settings › Account › Link page), whose layout would otherwise hide the phone on a laptop.
+   * sits beside a sidebar (Settings › Account › Link page), whose layout would otherwise hide the phone on a laptop;
+   * `snug`, the same on a laptop, and on a wide screen a readable form and the phone side by side, the pair centred,
+   * so no band opens between what is edited and what it looks like (the booking page editor).
    */
-  readonly previewShare?: 'third' | 'wide';
+  readonly previewShare?: 'third' | 'wide' | 'snug';
   /**
    * `canvas` sets the preview on a sunken canvas (forms fixes 3, the design critic: a full height white slab in dark
    * mode): the frame takes the height of what it shows, at most the room there is, centred on the canvas, and the
@@ -84,16 +86,16 @@ export interface PreviewLayoutProps {
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
-export type EditorStatusTone = 'live' | 'changed' | 'draft' | 'paused';
+export type EditorStatusTone = 'live' | 'changed' | 'blocked' | 'draft' | 'paused';
 
-/** Each tone's dot: live green, changed orange, the rest gray. */
-const TONE_HUES = { live: 'green', changed: 'orange', draft: 'gray', paused: 'gray' } as const;
+/** Each tone's dot: live green, changed and blocked (live, and nobody can use it) orange, the rest gray. */
+const TONE_HUES = { live: 'green', changed: 'orange', blocked: 'orange', draft: 'gray', paused: 'gray' } as const;
 
 /**
  * The editor's status for the TopBar's meta, beside the name: a StatusDot,
  * green when live, orange when changed since it was published, gray when not
- * published or paused. The words say it too: in full from 480px, as one word on a phone's bar (Live, Edited,
- * Draft, Paused), and in full to screen readers always.
+ * published or paused. The words say it too: in full from 480px, as a word or two on a phone's bar (Live, Edited,
+ * Can't book, Draft, Paused), and in full to screen readers always.
  */
 export function EditorStatus({ tone, text }: { readonly tone: EditorStatusTone; readonly text: string }) {
   // An editor's own state, not an attribute value, so StatusDot draws it here.
@@ -651,9 +653,9 @@ export function PreviewLayout({
   const headingId = useId();
   return (
     <div className={styles.root}>
-      <div className={styles.inner}>
+      <div className={styles.inner} data-snug={(previewShare === 'snug' && hasPreview) || undefined}>
         {notices}
-        <div className={styles.measure} data-share={previewShare === 'wide' ? 'wide' : undefined}>
+        <div className={styles.measure} data-share={previewShare === 'third' ? undefined : 'wide'}>
           {hasPreview && (
             <div className={styles.bar}>
               <Button icon="smartphone" onPress={() => setOpen(true)}>
@@ -661,7 +663,11 @@ export function PreviewLayout({
               </Button>
             </div>
           )}
-          <div className={styles.body} data-preview={hasPreview || undefined}>
+          <div
+            className={styles.body}
+            data-preview={hasPreview || undefined}
+            data-snug={previewShare === 'snug' || undefined}
+          >
             <div
               className={styles.main}
               data-layout={bodyLayout}

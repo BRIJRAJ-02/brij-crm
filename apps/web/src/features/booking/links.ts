@@ -17,14 +17,15 @@ export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}
 export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
 
 /**
- * The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. Appearance (T21, 5
- * November 2026) holds the page's look in a tab of its own, as a form's editor does.
+ * The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only, straight after Page,
+ * since a team page's hosts are what make it bookable (6 November 2026). Appearance (T21, 5 November 2026) holds the
+ * page's look in a tab of its own, as a form's editor does.
  */
 export const PAGE_TABS = [
   'page',
+  'hosts',
   'meeting',
   'questions',
-  'hosts',
   'hours',
   'appearance',
   'share',

@@ -201,7 +201,7 @@
     overflow-wrap: anywhere;
   }
 
-  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight; so does a title
+  /* A team page has no host line: its title takes the host line's weight; so does a title
      that is the host's own name (a restaurant's one place), shown once. */
   .names[data-team] > .title,
   .names[data-alone] > .title {
