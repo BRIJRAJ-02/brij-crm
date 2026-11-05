@@ -41,7 +41,14 @@ type Asking =
 
 const installed = (view: AppsView, app: HospitalityApp) => view.apps.some((each) => each.app === app && each.installed);
 
-/** Settings › Apps: one card per app, Install or Installed with Remove. */
+/**
+ * The apps still being built: their cards say so and offer no Install, since an installed one would only open an
+ * "on its way" page. One already installed keeps its Remove.
+ */
+// Appointments has its pages since spec 0066 B1 (Services, Staff), so only Events is still on its way.
+const ON_ITS_WAY: ReadonlySet<HospitalityApp> = new Set(['events']);
+
+/** Settings › Apps: one card per app, Install or Installed with Remove, or On its way. */
 export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) {
   const state = useHospitality(store.apps(slug));
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
@@ -127,8 +134,8 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
               key={app}
               eyebrow={<Icon name={strings.appIcons[app]} tile="blue" />}
               title={strings.appNames[app]}
-              description={strings.appPurposes[app]}
               isBusy={view === undefined}
+              {...(view !== undefined && !isOn && ON_ITS_WAY.has(app) ? { footerNote: strings.appOnItsWay } : {})}
               footer={
                 view === undefined ? (
                   <Skeleton width="short" />
@@ -149,7 +156,7 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
                       {strings.remove}
                     </Button>
                   )
-                ) : (
+                ) : ON_ITS_WAY.has(app) ? null : (
                   view.canManage && (
                     <Button
                       variant="primary"
@@ -163,7 +170,10 @@ export function AppsScreen({ store, slug, workspace, toasts }: AppsScreenProps) 
                   )
                 )
               }
-            />
+            >
+              {/* The app's purpose in the card's body: a card's header keeps no air of its own below it. */}
+              {strings.appPurposes[app]}
+            </Card>
           );
         })}
       </TileGrid>

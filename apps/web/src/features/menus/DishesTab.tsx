@@ -3,13 +3,12 @@
 // Main task: find a dish and change it, or mark it sold out for tonight.
 // Leaves out: where a dish sits and in what order (Structure), and option groups (Options).
 import type { MenuDraft, MenuItem as Dish, MenuStore } from '@crm/data';
-import { Avatar, Button, EmptyState, LinkList, type LinkRow, type Toasts } from '@crm/ui';
+import { Button, EmptyState, LinkList, type LinkRow, type Toasts } from '@crm/ui';
 import { useState } from 'react';
 import type { Open } from './MenusScreen.tsx';
-import { draftPhotoHref } from './photo.ts';
 import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
-import { dishLeadingLoading, flipSoldOut, isUnpriced, priceLine } from './StructureTab.tsx';
+import { DishThumb, dishLeadingLoading, flipSoldOut, isUnpriced, priceLine } from './StructureTab.tsx';
 
 /** All the workspace's dishes. */
 export function DishesTab({
@@ -41,17 +40,7 @@ export function DishesTab({
       title: item.name,
       address: priceLine(item, draft.currency, locale),
       chips: [strings.inSections(placements(item))],
-      leading: (
-        <Avatar
-          name={item.name}
-          id={item.id}
-          size="sm"
-          isDecorative
-          {...(item.photo === undefined
-            ? {}
-            : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
-        />
-      ),
+      leading: <DishThumb slug={slug} item={item} />,
       ...(item.soldOut
         ? { ...(isNarrow ? {} : { badge: strings.soldOutBadge }), isOff: true }
         : isUnpriced(item)

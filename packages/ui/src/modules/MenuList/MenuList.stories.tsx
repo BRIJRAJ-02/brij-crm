@@ -50,7 +50,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Dinner serving now, Brunch a tap away; a sold out dish stays in place, dimmed. */
+/** Dinner serving now, Brunch a tap away; the sections as pills, one at a time; a sold out dish stays in place. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -60,12 +60,16 @@ export const Default: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('heading', { name: 'Somewhere Nowhere', level: 1 })).toBeVisible();
+    await expect(canvas.getByRole('heading', { name: 'Dinner', level: 1 })).toBeVisible();
     await expect(canvas.getByRole('button', { name: /^Oysters/ })).toHaveTextContent('Sold out');
     // A dish with no choices adds from its row; its + turns into a stepper and the picks bar rises.
-    await userEvent.click(canvas.getByRole('button', { name: 'Add Burrata, blood orange, chilli to your picks' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Add Burrata, blood orange, chilli to your selection' }));
     await expect(canvas.getByRole('group', { name: 'How many Burrata, blood orange, chilli' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /View your picks/ })).toHaveTextContent('£12.94');
+    // Focus follows to the stepper's + that took the lone +'s place.
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: 'Add another Burrata, blood orange, chilli' })).toHaveFocus(),
+    );
+    await expect(canvas.getByRole('button', { name: /View selection/ })).toHaveTextContent('£12.94');
   },
 };
 
@@ -92,13 +96,39 @@ export const PicksOpen: Story = {
   ),
   play: async () => {
     await settleAnimations();
-    const dialog = await screen.findByRole('dialog', { name: 'Your picks' });
+    const dialog = await screen.findByRole('dialog', { name: 'Your selection' });
     await expect(within(dialog).getByText('Includes 20% tax')).toBeVisible();
     await expect(within(dialog).getByText('Service 12.5%')).toBeVisible();
     // Taking the last of a line away says so, with Undo.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove Burrata, blood orange, chilli' }));
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Undo' }));
     await expect(within(dialog).getByText('Burrata, blood orange, chilli')).toBeInTheDocument();
+  },
+};
+
+/**
+ * Counts and words: a plain dish's stepper says each add politely, and a dish with choices (the wine, by the glass or
+ * bottle) shows how many are in the selection beside its +.
+ */
+export const CountsAndAnnouncements: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone" height="page">
+      <WithPicks initial={SOME_PICKS} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add another Burrata, blood orange, chilli' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent('Added Burrata, blood orange, chilli. 2 in your selection.'),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove one Burrata, blood orange, chilli' }));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Removed one Burrata'));
+    await userEvent.click(canvas.getByRole('tab', { name: 'Wine' }));
+    const wine = await canvas.findByRole('group', { name: /^How many / });
+    await expect(wine).toHaveTextContent('1');
+    await expect(within(wine).queryByRole('button', { name: /^Remove one/ })).toBeNull();
   },
 };
 
@@ -116,31 +146,34 @@ export const DemoPickASize: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await beat(600);
+    await userEvent.click(canvas.getByRole('tab', { name: 'Wine' }));
     await userEvent.click(canvas.getByRole('button', { name: /^Etna Rosso/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Etna Rosso, Benanti 2022' });
     await beat(700);
     await userEvent.click(within(dialog).getByRole('radio', { name: /Bottle/ }));
-    await expect(within(dialog).getByRole('button', { name: /Add to your picks · £38.00/ })).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: /Add to your selection · £38.00/ })).toBeInTheDocument();
     await beat(900);
-    await userEvent.click(within(dialog).getByRole('button', { name: /Add to your picks/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: /Add to your selection/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await expect(canvas.getByRole('button', { name: /View your picks/ })).toHaveTextContent('£42.75');
+    await expect(canvas.getByRole('button', { name: /View selection/ })).toHaveTextContent('£42.75');
   },
 };
 
-/** Vegan filtered: only the dishes marked vegan stay. */
-export const Filtered: Story = {
+/** The sections as pills: one at a time, the arrow keys move between them (checklabs' categories). */
+export const Sections: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
-    <Stage width="fill" height="page">
+    <Stage width="phone" height="page">
       <WithPicks />
     </Stage>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Vegan' }));
+    await expect(canvas.getByRole('tab', { name: 'Small plates' })).toHaveAttribute('aria-selected', 'true');
+    await expect(canvas.queryByRole('button', { name: /^Flat white/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('tab', { name: 'Coffee' }));
+    await expect(canvas.getByRole('button', { name: /^Flat white/ })).toBeVisible();
     await expect(canvas.queryByRole('button', { name: /^Burrata/ })).toBeNull();
-    await expect(canvas.getByRole('button', { name: /^Charred hispi/ })).toBeVisible();
   },
 };
 

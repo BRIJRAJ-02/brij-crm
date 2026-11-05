@@ -62,6 +62,19 @@ export const WithError: Story = {
   },
 };
 
+/** A strong selection: the held chip filled with the accent, as a reservation's selected day and time are. */
+export const SelectionStrong: Story = {
+  args: { selected: ['30'], isSingle: true, isSelectionStrong: true },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips {...args} choices={lengths()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: /30/ })).toHaveAttribute('data-selection', 'strong');
+  },
+};
+
 /** A control after the last chip, outside the group: a booking page's "+ Custom" length. */
 export const WithEnd: Story = {
   args: { selected: ['30'] },

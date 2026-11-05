@@ -29,6 +29,11 @@ export const strings = {
   googleMaps: 'Google Maps',
   appleMaps: 'Apple Maps',
   directionsNewTab: (app: string) => `Directions in ${app} (opens in a new tab)`,
+  /** The menu beside Directions holding the other map app. */
+  otherMapApps: 'Other map apps',
+  openIn: (app: string) => `Open in ${app}`,
+  /** The panel's way to call when its action is Reserve. */
+  orCall: 'Or call',
   website: 'Website',
   /** Reserve a table. */
   reserve: 'Reserve a table',

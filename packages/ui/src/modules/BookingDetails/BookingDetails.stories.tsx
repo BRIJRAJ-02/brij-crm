@@ -136,6 +136,32 @@ function WithOccasion(args: Parameters<typeof BookingDetails>[0]) {
   );
 }
 
+/** One page (a table reservation after checklabs): no Back, the send button the form's width, named for the time. */
+export const OnePage: Story = {
+  render: (args) => <WithOccasion {...args} />,
+  play: async ({ canvas }) => {
+    // Nothing arrives on a one page form: no field takes focus, and there is no Back.
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).not.toHaveFocus();
+    await expect(canvas.queryByRole('button', { name: 'Back' })).toBeNull();
+    // What the page still needs is said before any field is checked.
+    await userEvent.click(canvas.getByRole('button', { name: 'Confirm Fri 26 Jun at 19:30' }));
+    await expect(canvas.getByText('Choose a time first.')).toBeInTheDocument();
+    await expect(canvas.queryByText('Give your name.')).toBeNull();
+  },
+  args: {
+    needsPhone: true,
+    maxGuests: 0,
+    onBack: undefined,
+    labels: {
+      heading: 'Your details',
+      confirm: 'Confirm Fri 26 Jun at 19:30',
+      confirming: 'Confirming',
+      done: 'Confirmed',
+    },
+    blocked: () => 'Choose a time first.',
+  },
+};
+
 /** The server refused: its message in the line above the buttons. */
 export const Failed: Story = {
   args: {

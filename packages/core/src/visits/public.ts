@@ -24,7 +24,7 @@ import type { AfterWrite } from '../engine/write.ts';
 import { placeDateOf } from '../hospitality/hours.ts';
 import { offerVisitTimes, placeVisit, type BookedVisit, type VisitDeps } from './book.ts';
 import { cancelVisit, moveVisit } from './move.ts';
-import { readTableService } from './table-service.ts';
+import { guestPartyRange, placeTables, readTableService } from './table-service.ts';
 
 /** At most this many upcoming reservations per email per place (0065's limits). */
 export const UPCOMING_PER_EMAIL = 3;
@@ -67,7 +67,9 @@ async function placeOf(entry: TableEntry) {
     ).rows;
     if (place === undefined) throw refuse('NOT_FOUND', 'This page is no longer available.');
     const service = await readTableService(tx, entry.placeId);
-    return { place, service };
+    const parties =
+      service === undefined ? undefined : guestPartyRange(await placeTables(tx, entry.placeId), service.rules);
+    return { place, service, parties };
   });
 }
 
@@ -76,7 +78,7 @@ export async function readTablePage(
   entry: TableEntry,
   deps: { readonly now?: () => Date } = {},
 ): Promise<PublicTablePage> {
-  const { place, service } = await placeOf(entry);
+  const { place, service, parties } = await placeOf(entry);
   const now = deps.now?.() ?? new Date();
   const rules = service?.rules;
   return {
@@ -91,8 +93,8 @@ export async function readTablePage(
       timeZone: place.time_zone,
     },
     taking: entry.installed && rules?.online === true,
-    partyMin: rules?.partyMin ?? 1,
-    partyMax: rules?.partyMax ?? 8,
+    partyMin: parties?.min ?? rules?.partyMin ?? 1,
+    partyMax: parties?.max ?? rules?.partyMax ?? 8,
     windowDays: rules?.windowDays ?? 60,
     cancelCutoffMinutes: rules?.cancelCutoffMinutes ?? 120,
     changeCutoffMinutes: rules?.changeCutoffMinutes ?? 120,

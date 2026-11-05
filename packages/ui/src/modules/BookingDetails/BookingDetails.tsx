@@ -98,7 +98,16 @@ export interface BookingDetailsProps {
   readonly prefillAnswers?: Readonly<Record<string, string>>;
   /** The visitor's country, guessed: a phone question's code and a country question's start. */
   readonly countryGuess?: string;
-  readonly onBack: () => void;
+  /**
+   * Back to the times. Left out on a page that keeps the times and the details on one page (a table reservation,
+   * after checklabs' one page booking form): the send button stands alone, the width of the form.
+   */
+  readonly onBack?: () => void;
+  /**
+   * What the page still needs before anything is checked (a one page form's time not picked yet): words for the line
+   * above the button, the page moving focus itself; undefined lets the form check and send.
+   */
+  readonly blocked?: () => string | undefined;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
 
@@ -170,6 +179,7 @@ export function BookingDetails({
   prefillAnswers,
   countryGuess,
   onBack,
+  blocked,
   onSubmit,
 }: BookingDetailsProps) {
   const [name, setName] = useState(prefill?.name ?? '');
@@ -244,14 +254,17 @@ export function BookingDetails({
   // The first empty field takes focus as the step arrives, so a visitor at a keyboard just types (the owner,
   // 2 November 2026); under a finger the heading takes it instead, so a phone keeps its keyboard down until a field is
   // tapped.
+  // On a one page form (no Back) nothing arrives: the page keeps its own focus, at its top.
+  const isStep = onBack !== undefined;
   useEffect(() => {
+    if (!isStep) return;
     const first = globalThis.matchMedia('(pointer: fine)').matches
       ? [...(form.current?.querySelectorAll<HTMLInputElement>('input[name="name"], input[name="email"]') ?? [])].find(
           (input) => input.value === '',
         )
       : undefined;
     (first ?? heading.current)?.focus();
-  }, []);
+  }, [isStep]);
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
 
@@ -353,6 +366,11 @@ export function BookingDetails({
   const submit = () => {
     if (isBusy) return;
     setLine('');
+    const missing = blocked?.();
+    if (missing !== undefined) {
+      setLine(missing);
+      return;
+    }
     // An address still in the guests field goes with the booking: taken now, never dropped.
     const pending = guestDraft.trim() === '' ? { taken: guests, left: '' } : takeGuests(guestDraft);
     const found = {
@@ -614,10 +632,13 @@ export function BookingDetails({
         {line}
       </p>
       <div className={styles.actions} data-shake={shakeOf('actions')}>
-        {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar. */}
-        <Button size="lg" isDisabled={isBusy} onPress={onBack}>
-          {strings.back}
-        </Button>
+        {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar; a one
+            page form (a reservation's) has no Back. */}
+        {onBack !== undefined && (
+          <Button size="lg" isDisabled={isBusy} onPress={onBack}>
+            {strings.back}
+          </Button>
+        )}
         <Button
           variant="primary"
           size="lg"

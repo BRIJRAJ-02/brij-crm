@@ -17,7 +17,9 @@ import { checkId, newId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
-import { newLookupCode, type SlotCache } from './book.ts';
+import { NO_CALENDAR } from '../booking/calendar.ts';
+import type { ManageLinkKey } from '../booking/tokens.ts';
+import { newLookupCode, placeVisit, type SlotCache } from './book.ts';
 import { loadVisitInputs, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { partyGroups, type PlannerResource } from './planner.ts';
@@ -243,6 +245,68 @@ export async function seatWalkIn(
     if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', WALK_IN_TAKEN);
     throw error;
   }
+}
+
+/**
+ * A reservation the host takes (Run service; checklabs' New booking): the day's time, the party, the guest and how to
+ * reach them, and the tables the host picked or the engine's best fit. Through the visit engine with source `desk`, so
+ * the place lock, the tables' other holds, opening hours and pacing apply as for a guest, but not the online rules
+ * (party range, notice, the online switch). SLOT_TAKEN when the time no longer holds at those tables. With an email
+ * the guest gets the confirmation and reminders an online guest gets, their manage link derived from `linkKey`.
+ */
+export async function reserveForGuest(
+  scope: EngineScope,
+  input: {
+    readonly placeId: string;
+    readonly start: string;
+    readonly party: number;
+    readonly name: string;
+    readonly phone?: string | undefined;
+    readonly email?: string | undefined;
+    readonly note?: string | undefined;
+    readonly resourceIds?: readonly string[] | undefined;
+    readonly idempotencyKey: string;
+  },
+  deps: { readonly now?: () => Date; readonly slotCache?: SlotCache; readonly linkKey?: ManageLinkKey } = {},
+  hooks: readonly AfterWrite[] = [],
+): Promise<{ readonly id: string; readonly status: 'booked' }> {
+  requirePermission(scope, 'hospitality.service');
+  const placeId = checkId(input.placeId, 'That place doesn’t exist.');
+  const party = checkParty(input.party);
+  if (input.resourceIds !== undefined && (input.resourceIds.length === 0 || input.resourceIds.length > 3)) {
+    throw inputInvalid('resourceIds', 'Pick one table, or up to 3 joined.');
+  }
+  const service = await inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'table_seating');
+    return tableServiceAt(tx, placeId);
+  });
+  const booked = await placeVisit(
+    scope,
+    {
+      // Tables have no staff, so no calendar is ever read.
+      busy: NO_CALENDAR.busy,
+      ...(deps.now === undefined ? {} : { now: deps.now }),
+      ...(deps.slotCache === undefined ? {} : { slotCache: deps.slotCache }),
+      ...(deps.linkKey === undefined ? {} : { linkKey: deps.linkKey }),
+    },
+    {
+      placeId,
+      items: [{ serviceId: service.serviceId, variantId: service.variantId }],
+      party,
+      start: input.start,
+      client: {
+        name: input.name,
+        ...(input.email === undefined ? {} : { email: input.email }),
+        ...(input.phone === undefined || input.phone === '' ? {} : { phone: input.phone }),
+        ...(input.note === undefined || input.note === '' ? {} : { note: input.note }),
+      },
+      source: 'desk',
+      idempotencyKey: input.idempotencyKey,
+      ...(input.resourceIds === undefined ? {} : { resourceIds: input.resourceIds }),
+    },
+    hooks,
+  );
+  return { id: booked.appointmentId, status: 'booked' };
 }
 
 /** A lookup code no visit of the workspace has. */

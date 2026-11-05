@@ -13,6 +13,8 @@ export interface SectionListSection {
    * section with none, which then draws no header unless it moves or has actions.
    */
   readonly title?: string;
+  /** A line under its title: what it holds ("5 items", a menu section's count). */
+  readonly description?: string;
   /** What it holds: its rows, a LinkList (`density="compact" placement="card"`). */
   readonly content: ReactNode;
   /** At its header's end, after its grip: the section's menu (Move up and Move down, for a pointer that can't drag). */
@@ -92,6 +94,7 @@ function SectionCard({ section, grip }: { readonly section: SectionListSection; 
   return (
     <Card
       {...(section.title === undefined ? {} : { title: section.title })}
+      {...(section.description === undefined ? {} : { description: section.description })}
       {...(actions === undefined ? {} : { actions })}
     >
       {section.content}

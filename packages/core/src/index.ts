@@ -1059,7 +1059,14 @@ export {
   type TableRules,
   type TableSetup,
 } from './visits/table-service.ts';
-export { freeTables, seatWalkIn, WALK_IN_TAKEN, type FreeTable, type FreeTables } from './visits/walk-in.ts';
+export {
+  freeTables,
+  reserveForGuest,
+  seatWalkIn,
+  WALK_IN_TAKEN,
+  type FreeTable,
+  type FreeTables,
+} from './visits/walk-in.ts';
 /** The business page's editor (spec 0066, B4 lite): its address, draft, places' slugs, photos and Publish. */
 export {
   addBusinessPhoto,

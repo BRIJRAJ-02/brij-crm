@@ -319,6 +319,8 @@ export interface VisitBookInput {
   };
   readonly source: AppointmentSource;
   readonly idempotencyKey: string;
+  /** The tables the desk picked for a table visit: the plan keeps to them (else the engine's best fit). */
+  readonly resourceIds?: readonly string[] | undefined;
   /**
    * A consent the client ticked (news and offers), kept on their Person with the words they were shown and this visit
    * as its source. A grant never overrides a withdrawal the Person already has for the purpose: an email typed on a
@@ -543,7 +545,15 @@ export async function placeVisit(
     new Date(to.getTime() + DAY),
   );
   const options = { party: input.party, now, from, to, onlineOnly };
-  const before = planVisit({ ...planInputOf(withCalendarBusy(first.inputs, calendars), options), at: start });
+  const picked =
+    input.resourceIds === undefined
+      ? undefined
+      : input.resourceIds.map((id) => checkId(id, 'That table doesn’t exist.'));
+  const before = planVisit({
+    ...planInputOf(withCalendarBusy(first.inputs, calendars), options),
+    at: start,
+    ...(picked === undefined ? {} : { narrow: items.map(() => ({ resourceIds: picked })) }),
+  });
   const offeredStart = before.starts[0];
   if (offeredStart === undefined) throw await taken(scope, deps, input, first.inputs, calendars, options);
   const people = [

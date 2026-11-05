@@ -373,7 +373,7 @@ import type { HospitalityStore } from './hospitality/store.ts';
 import type { MenuStore } from './menu/store.ts';
 import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
-export type { TablesStore, WalkIn } from './tables/store.ts';
+export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
 import type { BusinessPageStore } from './business-page/store.ts';
 import type { ServicesStore } from './services/store.ts';
 export type { NewBlock, NewTimeOff, ServicesStore, TeamCopy } from './services/store.ts';

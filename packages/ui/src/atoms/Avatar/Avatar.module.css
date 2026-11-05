@@ -127,6 +127,12 @@
     color: var(--surface);
   }
 
+  /* A public page's brand colour (its brand stylesheet sets the accent): a business with no logo reads as its own. */
+  .root[data-hue='accent'] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
   /* A loaded picture's plate, after every hue so it wins: the near white `on-accent` in both themes, as logo lists
      draw them, so a favicon's clear parts and a dark logo (GitHub's) read in dark mode too, where the page's own
      surface swallowed them (1 November 2026); a hairline edge holds it on a light page. The initials and the hue

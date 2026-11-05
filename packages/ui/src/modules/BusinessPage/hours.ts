@@ -107,6 +107,12 @@ export function weekRows(hours: PlaceHoursShape, now: number, zone: string, loca
   });
 }
 
+/** The week's rows from today on (today, tomorrow, … yesterday last), as a guest reads them: today first. */
+export function fromToday(rows: readonly HoursRow[]): readonly HoursRow[] {
+  const today = rows.findIndex((row) => row.isToday);
+  return today <= 0 ? rows : [...rows.slice(today), ...rows.slice(0, today)];
+}
+
 /** The place's city from its zone ("Asia/Kolkata" reads "Kolkata"), for "Times in Kolkata time". */
 export function zoneCity(zone: string): string {
   return (zone.split('/').at(-1) ?? zone).replaceAll('_', ' ');

@@ -47,6 +47,8 @@ export const strings = {
     appointments: 'calendar-clock',
     events: 'calendar-days',
   } as const,
+  /** An app still being built, on its card in place of Install. */
+  appOnItsWay: 'On its way',
   hospitalityGroup: 'Hospitality',
   install: 'Install',
   // Each card's button names its app, so five Installs read apart to a screen reader (walk, 4 Nov 2026).

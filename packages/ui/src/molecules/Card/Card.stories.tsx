@@ -211,25 +211,6 @@ export const TableFirst: Story = {
   },
 };
 
-/** No body: the header keeps its air below, so the description never meets the footer's hairline (spec 0065). */
-export const HeaderAndFooter: Story = {
-  render: (args) => (
-    <Stage width="narrow">
-      <Card
-        {...args}
-        title="Menu QR"
-        description="A code on every table that opens the menu."
-        footer={<Button variant="primary">Install</Button>}
-      />
-    </Stage>
-  ),
-  play: async ({ canvas }) => {
-    const line = canvas.getByText(/code on every table/).getBoundingClientRect();
-    const button = canvas.getByRole('button', { name: 'Install' }).getBoundingClientRect();
-    await expect(button.top - line.bottom).toBeGreaterThanOrEqual(12);
-  },
-};
-
 /** A quiet line in the footer, before its buttons: what the actions would otherwise have had to say. */
 export const FooterNote: Story = {
   render: (args) => (

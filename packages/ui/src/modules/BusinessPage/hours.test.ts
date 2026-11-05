@@ -1,7 +1,7 @@
 // The business page's hours in words (spec 0066, AC-6641): open now and until when, when it opens next, and the
 // week's rows with today marked, all on the place's own clock.
 import { describe, expect, it } from 'vitest';
-import { currentSection, openStatus, placeLocale, wallTime, weekRows, zoneCity } from './hours.ts';
+import { currentSection, fromToday, openStatus, placeLocale, wallTime, weekRows, zoneCity } from './hours.ts';
 
 const HOURS = {
   weekly: {
@@ -72,6 +72,14 @@ describe('weekRows', () => {
     const monday = Date.parse('2026-10-12T03:30:00Z');
     const today = weekRows(HOURS, monday, 'Asia/Kolkata', 'en-GB').find((row) => row.isToday);
     expect(today).toMatchObject({ day: 'mon', ranges: [] });
+  });
+});
+
+describe('fromToday', () => {
+  it('starts the week at today and ends it yesterday', () => {
+    const rows = fromToday(weekRows(HOURS, THURSDAY, 'Europe/London', 'en-GB'));
+    expect(rows.map((row) => row.day)).toEqual(['thu', 'fri', 'sat', 'sun', 'mon', 'tue', 'wed']);
+    expect(rows[0]?.isToday).toBe(true);
   });
 });
 

@@ -109,6 +109,8 @@ function Profile({
   const sections: SectionListSection[] = shown.map((group, at) => ({
     id: group.id,
     ...(group.title === undefined ? {} : { title: group.title }),
+    // The line under a title (a menu section's "2 items").
+    description: group.rows.length === 1 ? '1 page' : `${String(group.rows.length)} pages`,
     ...(isReadOnly || shown.length < 2 || group.title === undefined
       ? {}
       : { actions: sectionMenu(group.title, at, shown.length, (to) => moveSection(group.id, to)) }),

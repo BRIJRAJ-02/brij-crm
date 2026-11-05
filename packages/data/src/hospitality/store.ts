@@ -322,8 +322,16 @@ export function openHospitality(given: {
     send: (mutationId: string, options: Options) => Promise<PlaceFloor>,
   ): Promise<DataError | undefined> =>
     floorOf(workspace, placeId).change(show, async () => {
+      // The Tables page lists the QR copy: once a floor write lands, a table gone from the floor leaves it, and the
+      // copy is read again for added and renamed tables and their codes.
+      const qr = qrHeld.get(`${workspace}:${placeId}`);
       const floor = await call((options) => send(mintId(), options));
       countTables(workspace, placeId, floor);
+      if (qr !== undefined) {
+        const live = new Set(floor.resources.filter((each) => !each.archived).map((each) => each.id));
+        qr.patch((codes) => ({ ...codes, tables: codes.tables.filter((each) => live.has(each.id)) }));
+        void qr.read().catch(() => undefined);
+      }
       return floor;
     });
 

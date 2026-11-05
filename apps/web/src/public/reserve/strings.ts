@@ -2,6 +2,15 @@
 export const strings = {
   tabTitle: (place: string) => `Reserve a table · ${place}`,
   reserveTable: 'Reserve a table',
+  reserveYourTable: 'Reserve your table',
+  yourDetails: 'Your details',
+  confirmAt: (day: string, time: string) => `Confirm ${day} at ${time}`,
+  chooseToContinue: 'Choose a time to continue',
+  pickTime: 'Choose a time first.',
+  noTimesPickDay: 'No times left this day. Choose another day.',
+  timesLoading: 'The times are still loading.',
+  takenShort: 'That time was just taken. Choose another above.',
+  fullCalendar: 'Full calendar',
   guests: 'Guests',
   guestsCount: (party: number) => (party === 1 ? '1 guest' : `${String(party)} guests`),
   largerParty: (max: number, phone: string | undefined) =>
@@ -33,8 +42,8 @@ export const strings = {
   } as const,
   // The details step's own words (BookingDetails' labels).
   detailsConfirm: 'Reserve',
-  detailsConfirming: 'Reserving',
-  detailsDone: 'Reserved',
+  detailsConfirming: 'Confirming',
+  detailsDone: 'Confirmed',
   detailsNote: 'Anything the restaurant should know?',
   marketing: (business: string) => `Send me news and offers from ${business}.`,
   goodToKnow: (cutoffHours: number) =>

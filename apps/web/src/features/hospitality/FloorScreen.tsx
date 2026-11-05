@@ -466,7 +466,7 @@ const areaItems = (floor: PlaceFloor) => [
  * Add resources: their kind (first what the place mostly uses), a label and a run of numbers, how many people each
  * takes, an area; the To field's hint says what it will add.
  */
-function AddTablesDialog({
+export function AddTablesDialog({
   startKind,
   isOpen,
   onOpenChange,
@@ -604,7 +604,7 @@ function AddTablesDialog({
 }
 
 /** One table's label, seats, area and joins, saved together. */
-function TableDialog({
+export function TableDialog({
   table,
   floor,
   onClose,

@@ -16,6 +16,7 @@ import { BookingFoot, BookingMessage, BusinessPage } from '@crm/ui/public-bookin
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { wearStylesheet } from '../stylesheet.ts';
 import { businessStrings, kindWord } from './business-strings.ts';
+import { mapsAppFor } from './maps-app.ts';
 import { strings, tabTitle } from './strings.ts';
 
 /** Props for the business page. */
@@ -152,6 +153,7 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
                 : { kind: 'soon' as const },
           })}
       directions={directions}
+      mapsApp={mapsAppFor(globalThis.navigator.userAgent)}
       website={shown.website}
       foot={<BookingFoot page="business_page" newTabLabel={businessStrings.poweredByNewTab} />}
     />

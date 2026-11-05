@@ -1,6 +1,6 @@
 // A dish's sheet and Your picks (spec 0065, H1, AC-6529, AC-6530, AC-6533), after the checklabs guest app's flow: what
 // a guest sees when they tap a dish (its photo, name, price, words, sizes and option groups as cards with their price,
-// allergens in words, calories, then a foot that stays in view with the quantity and "Add to your picks" carrying the
+// allergens in words, calories, then a foot that stays in view with the quantity and "Add to your selection" carrying the
 // live price) and the list of their picks (each line with its choices, price and stepper, Undo after a removal, the
 // total with any tax inside it and service on top). Both are the body of a `Modal` (`sheet-card`, `sheet-side`), which
 // holds focus and closes on Escape; data comes in through props, and picks are the caller's to keep.
@@ -16,6 +16,7 @@ import {
 } from '@crm/contracts/menu';
 import type { OptionGroup, PublicMenu, SnapshotItem, SnapshotMenu } from '@crm/contracts';
 import { useId, useState } from 'react';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
@@ -137,8 +138,8 @@ export function ItemSheet({
       {item.diet.length === 0 ? null : (
         <ul className={styles.dietList} aria-label={strings.dietary}>
           {item.diet.map((mark) => (
-            <li key={mark} className={styles.dietMark}>
-              {strings.diet[mark]}
+            <li key={mark}>
+              <Badge text={strings.diet[mark]} size="chip" isWhole />
             </li>
           ))}
         </ul>
@@ -197,16 +198,26 @@ export function ItemSheet({
           </fieldset>
         );
       })}
-      <p className={styles.allergens}>
-        {contains.length === 0 && may.length === 0
-          ? strings.noAllergens
-          : [
-              contains.length === 0 ? '' : strings.allergensLine(contains),
-              may.length === 0 ? '' : strings.mayContainLine(may),
-            ]
-              .filter((part) => part !== '')
-              .join(' ')}
-      </p>
+      {/* ALLERGENS, then each as a chip (checklabs' dish sheet); "may contain" ones say so on their chip. */}
+      <div className={styles.allergenBlock}>
+        <h3 className={styles.groupName}>{strings.allergens}</h3>
+        {contains.length === 0 && may.length === 0 ? (
+          <p className={styles.allergens}>{strings.noAllergens}</p>
+        ) : (
+          <ul className={styles.dietList}>
+            {contains.map((name) => (
+              <li key={name}>
+                <Badge text={name} size="chip" isWhole />
+              </li>
+            ))}
+            {may.map((name) => (
+              <li key={name}>
+                <Badge text={strings.mayContainChip(name)} size="chip" isWhole />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {canPick ? (
         <div className={styles.sheetActions}>
           {waiting === undefined ? null : (
@@ -274,6 +285,7 @@ function Stepper({
     <span className={styles.stepper} role="group" aria-label={label}>
       <Button
         variant="ghost"
+        size="touch"
         icon={fewerIcon}
         label={fewerLabel}
         isRound
@@ -285,6 +297,7 @@ function Stepper({
       </output>
       <Button
         variant="ghost"
+        size="touch"
         icon="plus"
         label={strings.more}
         isRound

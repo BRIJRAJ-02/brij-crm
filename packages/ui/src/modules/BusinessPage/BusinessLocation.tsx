@@ -1,11 +1,22 @@
-// The business page's location (spec 0066, AC-6641, AC-6645): the full address, the phone, and Directions to the
-// visitor's own map app (Google or Apple Maps), in a new tab. No embedded map: it would add a tracking origin and a
-// hole in the page's policy.
-import { ButtonLink } from '../../atoms/Button/Button.tsx';
+// The business page's location card (spec 0066, AC-6641, AC-6645): the full address beside its pin, the phone and
+// site, then one Directions button to the visitor's own map app (Apple Maps on an Apple device, Google Maps
+// elsewhere, the page tells it which) with the other app a press away in a small menu, both in a new tab. No
+// embedded map: it would add a tracking origin and a hole in the page's policy.
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './BusinessLocation.module.css';
 import { strings } from './strings.ts';
+
+/** Which map app Directions opens first: Apple Maps on an Apple device, Google Maps everywhere else. */
+export type MapsApp = 'apple' | 'google';
+
+/** The two map apps' addresses for a place. */
+export interface DirectionsLinks {
+  readonly google: string;
+  readonly apple: string;
+}
 
 /** Props for BusinessLocation. */
 export interface BusinessLocationProps {
@@ -13,7 +24,9 @@ export interface BusinessLocationProps {
   readonly lines: readonly string[];
   readonly phone?: string | undefined;
   /** The two map apps' addresses; absent with no address to go to. */
-  readonly directions?: { readonly google: string; readonly apple: string } | undefined;
+  readonly directions?: DirectionsLinks | undefined;
+  /** The visitor's own map app, first; the other goes in the menu. Google Maps when absent. */
+  readonly mapsApp?: MapsApp | undefined;
   /** The business's own site. */
   readonly website?: string | undefined;
 }
@@ -21,16 +34,24 @@ export interface BusinessLocationProps {
 /** A phone number as a `tel:` address: its digits and a leading plus only. */
 const telOf = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
-/** The address, the phone and the two Directions buttons. */
-export function BusinessLocation({ lines, phone, directions, website }: BusinessLocationProps) {
+/** A map app's name. */
+export const mapsAppName = (app: MapsApp) => (app === 'apple' ? strings.appleMaps : strings.googleMaps);
+
+/** The address, the phone and site, and Directions with the other map app in a menu. */
+export function BusinessLocation({ lines, phone, directions, mapsApp = 'google', website }: BusinessLocationProps) {
+  const other: MapsApp = mapsApp === 'apple' ? 'google' : 'apple';
   return (
     <div className={styles.root}>
       {lines.length > 0 && (
         <address className={styles.address}>
-          <Icon name="map-pin" />
+          <span className={styles.pin}>
+            <Icon name="map-pin" />
+          </span>
           <span className={styles.lines}>
-            {lines.map((line) => (
-              <span key={line}>{line}</span>
+            {lines.map((line, index) => (
+              <span key={line} className={index === 0 ? styles.first : undefined}>
+                {line}
+              </span>
             ))}
           </span>
         </address>
@@ -59,22 +80,21 @@ export function BusinessLocation({ lines, phone, directions, website }: Business
             variant="secondary"
             size="touch"
             icon="map"
-            href={directions.google}
+            href={directions[mapsApp]}
             isExternal
-            label={strings.directionsNewTab(strings.googleMaps)}
+            isFullWidth="center"
+            label={strings.directionsNewTab(mapsAppName(mapsApp))}
           >
-            {strings.googleMaps}
+            {strings.directions}
           </ButtonLink>
-          <ButtonLink
-            variant="secondary"
-            size="touch"
-            icon="map"
-            href={directions.apple}
-            isExternal
-            label={strings.directionsNewTab(strings.appleMaps)}
-          >
-            {strings.appleMaps}
-          </ButtonLink>
+          <MenuTrigger>
+            <Button variant="secondary" size="touch" icon="chevron-down" label={strings.otherMapApps} />
+            <Menu label={strings.otherMapApps} placement="bottom end">
+              <MenuItem href={directions[other]} icon="map" isExternal>
+                {strings.openIn(mapsAppName(other))}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
         </div>
       )}
     </div>

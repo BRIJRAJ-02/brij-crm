@@ -14,6 +14,7 @@ import { addResource, addService, addStaff, visitWorkspace, waiterScope } from '
 import { bookVisit, visitTimes } from './book.ts';
 import {
   getTableSetup,
+  guestPartyRange,
   listServiceDay,
   saveTableSetup,
   setupSteps,
@@ -52,7 +53,7 @@ describe('setup (B7 lite)', () => {
     await w.sql(sql`update places set hours = '{"weekly":{},"exceptions":[]}'::jsonb`);
     const first = await getTableSetup(w.owner, { placeId: w.placeId });
     expect(first.saved).toBe(false);
-    expect(first.rules).toMatchObject({ partyMin: 1, partyMax: 8, minutes: 90, stepMinutes: 15, noticeMinutes: 120 });
+    expect(first.rules).toMatchObject({ partyMin: 1, partyMax: 8, minutes: 90, stepMinutes: 30, noticeMinutes: 120 });
     expect(first.steps).toEqual([
       { step: 'hours', done: false, fix: 'Set your opening hours, so guests see times.' },
       { step: 'tables', done: false, fix: 'Add a table guests can book online.' },
@@ -116,6 +117,29 @@ describe('setup (B7 lite)', () => {
       fix: 'Open at least as long as a table is held, or shorten the hold.',
     });
   });
+
+  it('offers guests only the party sizes a table seats', () => {
+    const table = (id: string, min: number, max: number, extra: { joins?: string[]; online?: boolean } = {}) => ({
+      id,
+      kind: 'table' as const,
+      minCapacity: min,
+      maxCapacity: max,
+      joins: extra.joins ?? [],
+      order: 0,
+      busy: [],
+      ...(extra.online === undefined ? {} : { online: extra.online }),
+    });
+    // The smallest table seats two: no party of one.
+    expect(guestPartyRange([table('a', 2, 4)], { partyMin: 1, partyMax: 8 })).toEqual({ min: 2, max: 4 });
+    // Two joined tables seat six; a table kept off line doesn't count.
+    expect(
+      guestPartyRange([table('a', 2, 4, { joins: ['b'] }), table('b', 2, 2), table('c', 1, 1, { online: false })], {
+        partyMin: 1,
+        partyMax: 8,
+      }),
+    ).toEqual({ min: 2, max: 6 });
+    expect(guestPartyRange([table('a', 6, 8)], { partyMin: 1, partyMax: 4 })).toBeUndefined();
+  });
 });
 
 describe('the Service list and status moves (AC-6560, AC-6561)', () => {
@@ -125,7 +149,7 @@ describe('the Service list and status moves (AC-6560, AC-6561)', () => {
     const setup = await getTableSetup(w.owner, { placeId: w.placeId });
     const saved = await saveTableSetup(w.owner, {
       placeId: w.placeId,
-      rules: { ...setup.rules, noticeMinutes: 0, partyMax: 4, online: true },
+      rules: { ...setup.rules, stepMinutes: 15, noticeMinutes: 0, partyMax: 4, online: true },
     });
     const variantId = (
       await w.sql<{ id: string }>(

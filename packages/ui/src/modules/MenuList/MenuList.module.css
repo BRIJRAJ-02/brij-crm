@@ -1,7 +1,8 @@
-/* The guest menu (spec 0065, H1), after the checklabs guest app's layout: a glass bar stuck to the top with the brand
-   mark and the section pills, the header's words, search and dietary chips, then each section's dishes as rows
-   (words, then a rounded photo at the end with a + on its corner) or a two column photo grid, and Your picks in a
-   pill bar at the foot.
+/* The guest menu (spec 0065, H1), after the checklabs guest app's layout: one centred column at every width; a glass
+   bar stuck to the top with the brand mark alone; the brand block (place and table, the menu's name, its line); the
+   sections as outlined pills, one at a time; each section's dishes as rows (words, the price under them, then a rounded
+   photo at the end with a round + on its corner) or a two column photo grid; the allergens foot; and the selection in
+   a pill bar at the foot.
 
    The look (AC-6570): the root reads the `--menu-*` custom properties the menu's look stylesheet sets (the Warm preset
    and the brand), each falling back to a token, as `--look-*`. One level in, `.look` points the library's own names
@@ -23,7 +24,7 @@
     --scale-press: var(--scale-enter);
     --label-swap: var(--duration-popover);
 
-    min-block-size: 100%;
+    min-block-size: 100dvh;
     background: var(--look-ground);
     color: var(--look-text);
     font-family: var(--menu-face, var(--font-sans));
@@ -51,24 +52,24 @@
     --on-accent: var(--look-on-accent);
     --link: var(--look-accent);
     --focus-ring: var(--look-accent);
-    --shadow-focus: 0 0 0 var(--border-width-thick) color-mix(in oklab, var(--look-accent) 40%, transparent);
+    /* The ring in the full ink (the Warm accent is the ink, so a 40% mix fell under 3:1 on the near white ground). */
+    --shadow-focus: 0 0 0 var(--border-width-thick) var(--look-accent);
 
     padding-block-end: calc(var(--size-bar) * 2);
   }
 
   .barTop,
-  .barTabs,
   .head,
   .body,
   .foot {
     box-sizing: border-box;
     inline-size: 100%;
-    max-inline-size: var(--size-column-max);
+    max-inline-size: var(--size-dialog);
     margin-inline: auto;
     padding-inline: var(--space-16);
   }
 
-  /* The glass bar: the brand mark, the name once the heading has scrolled away, the table, then the pills. */
+  /* The glass bar: the brand mark alone (checklabs'). */
   .bar {
     position: sticky;
     inset-block-start: 0;
@@ -93,12 +94,12 @@
     border-radius: var(--radius-lg);
   }
 
-  /* No logo: a squircle in the menu's ink with the name's first letter. */
+  /* No logo: a tile in the brand's colour (the menu's ink when the brand has none) with the name's first letter. */
   .mark {
     display: grid;
     place-items: center;
-    background: var(--look-text);
-    color: var(--look-card);
+    background: var(--look-accent);
+    color: var(--look-on-accent);
     font: var(--text-body-strong);
   }
 
@@ -107,54 +108,12 @@
     background: var(--look-card);
   }
 
-  .barName {
-    flex: 1;
-    min-inline-size: 0;
-    margin: 0;
-    overflow: hidden;
-    font: var(--text-body-strong);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    opacity: 0;
-    translate: 0 var(--space-4);
-    transition:
-      opacity var(--duration-popover) var(--ease-out),
-      translate var(--duration-popover) var(--ease-out);
-  }
-
-  .barName[data-shown] {
-    opacity: 1;
-    translate: 0 0;
-  }
-
-  .table {
-    flex: none;
-    margin-inline-start: auto;
-    padding: var(--space-2) var(--space-8);
-    border-radius: var(--radius-full);
-    background: var(--look-chip);
-    font: var(--text-label-strong);
-  }
-
-  .barTabs {
-    padding-block-end: var(--space-4);
-  }
-
-  /* The header: the cover, the place over the business's name and line, the facts, the menus, search, chips. */
+  /* The header: the place (and table) as an eyebrow, the menu's name and its line, the menus when there are several. */
   .head {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
     padding-block: var(--space-24) var(--space-8);
-  }
-
-  .cover {
-    inline-size: 100%;
-    block-size: auto;
-    aspect-ratio: 3 / 1;
-    border-radius: var(--radius-xl);
-    object-fit: cover;
-    background: var(--look-chip);
   }
 
   .titles {
@@ -164,10 +123,15 @@
   }
 
   .eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
     margin: 0;
     color: var(--look-quiet);
     font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
   }
 
   .name {
@@ -258,21 +222,39 @@
     gap: var(--space-4);
   }
 
+  /* A link's target (a sub section's heading) lands clear of the glass bar. */
   .heading {
     margin: 0;
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
     font: var(--text-heading);
     font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
     letter-spacing: var(--tracking-heading);
   }
 
-  /* A sub section's name: a small pill, as checklabs' sub category. */
-  .heading[data-level='3'] {
-    align-self: flex-start;
-    padding: var(--space-2) var(--space-12);
-    border-radius: var(--radius-full);
-    background: var(--look-chip);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label);
+  /* Under the pills the pill shows the section's name: the heading stays for screen readers only. */
+  .heading[data-hidden] {
+    position: absolute;
+    inline-size: var(--border-width-hairline);
+    block-size: var(--border-width-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .heading:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The pills' row, a hash link's target: it lands clear of the glass bar. */
+  .pills {
+    scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
+  }
+
+  /* A sub section's name: a heading of its own over a hairline, as checklabs' sub category. */
+  .sub {
+    padding-block-start: var(--space-24);
+    border-block-start: var(--border-width-hairline) solid var(--look-line);
   }
 
   .sectionAbout,
@@ -310,13 +292,6 @@
     padding-block-start: var(--space-12);
   }
 
-  /* A wide column (a laptop) fits three photo cards a row. */
-  @container (width >= 480px) {
-    .items[data-layout='grid'] {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
   .cell {
     min-inline-size: 0;
   }
@@ -337,7 +312,7 @@
   }
 
   .item[data-layout='list']:not([data-has-photo]) {
-    padding-block-end: var(--space-16);
+    align-items: center;
   }
 
   .item[data-layout='grid'] {
@@ -379,10 +354,6 @@
     padding: 0;
   }
 
-  .item[data-layout='list']:not([data-has-photo]) .press {
-    padding-block-end: 0;
-  }
-
   .thumb {
     flex: none;
     order: 1;
@@ -397,7 +368,8 @@
     order: 0;
     inline-size: 100%;
     block-size: auto;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 1;
+    border-radius: var(--radius-xl);
   }
 
   .item[data-sold-out] .thumb {
@@ -417,7 +389,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
-    font: var(--text-body-strong);
+    font: var(--text-title);
   }
 
   .itemAbout {
@@ -431,39 +403,46 @@
 
   .price {
     font: var(--text-body-strong);
+    color: var(--look-text);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+  /* Sold out reads as such on the words too, not only the photo. */
+  .item[data-sold-out] .itemName,
+  .item[data-sold-out] .price {
+    color: var(--look-quiet);
+  }
 
   .marks {
-    color: var(--look-quiet);
-    font: var(--text-label);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
   }
 
-  .badge,
-  .soldOut {
-    padding: 0 var(--space-6);
-    border-radius: var(--radius-full);
-    background: var(--look-chip);
-    color: var(--look-text);
-    font: var(--text-label-strong);
-  }
-
-  /* The + (or the stepper once picked): a raised pill on the photo's corner, or at the row's end. */
+  /* The + : a round button in the ink with a ring of the card round it, on the photo's corner or at the row's end.
+     Once picked, a white hairline pill stepper (− n +) takes its place. Each is Button's `touch` size, a thumb's 44px,
+     since a guest presses them on a phone. */
   .add {
+    --add-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+
     z-index: var(--z-raised);
     display: inline-flex;
     flex: none;
     align-items: center;
-    gap: var(--space-2);
     border-radius: var(--radius-full);
+    box-shadow: 0 0 0 var(--border-width-thick) var(--look-card);
+  }
+
+  .add[data-stepper] {
+    gap: 0;
+    border: var(--border-width-hairline) solid var(--look-line);
     background: var(--look-card);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-xs);
   }
 
   .item[data-has-photo] .add {
     position: absolute;
-    inset-block-start: calc(var(--space-16) + var(--thumb) - var(--size-control) - var(--space-6));
+    inset-block-start: calc(var(--space-16) + var(--thumb) - var(--add-size) - var(--space-6));
     inset-inline-end: var(--space-6);
   }
 
@@ -471,6 +450,12 @@
     position: absolute;
     inset-block-start: var(--space-8);
     inset-inline-end: var(--space-8);
+  }
+
+  /* A dish with choices, once in the selection: its count before the + (no −, since which pick to take away is the
+     selection's call), with room on the pill's start. */
+  .addCount[data-alone] {
+    padding-inline-start: var(--space-12);
   }
 
   .addCount {
@@ -491,6 +476,25 @@
 
   .foot {
     padding-block: var(--space-16);
+  }
+
+  /* The allergens this menu names: a small caps label and the list (checklabs' allergen foot). */
+  .allergenFoot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding-block-start: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--look-line);
+    color: var(--look-quiet);
+    font: var(--text-label);
+  }
+
+  .allergenLabel {
+    color: var(--look-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
   }
 
   /* A hidden menu (Live or Hidden): the menu's own look and header, one quiet card saying so, and the ways open. */
@@ -550,9 +554,9 @@
     flex: 1;
     align-items: center;
     gap: var(--space-12);
-    max-inline-size: calc(var(--size-column-max) - var(--space-32));
+    max-inline-size: calc(var(--size-dialog) - var(--space-32));
     min-block-size: var(--size-bar);
-    padding-inline: var(--space-8) var(--space-20);
+    padding-inline: var(--space-20);
     border: 0;
     border-radius: var(--radius-full);
     background: var(--look-accent);
@@ -576,16 +580,6 @@
     outline-offset: var(--border-width-thick);
   }
 
-  .picksCount {
-    display: inline-grid;
-    place-items: center;
-    min-inline-size: var(--size-input);
-    block-size: var(--size-input);
-    border-radius: var(--radius-full);
-    background: var(--look-on-accent);
-    color: var(--look-accent);
-  }
-
   .picksLabel {
     flex: 1;
     text-align: start;
@@ -602,8 +596,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .press,
-    .barName {
+    .press {
       transition: none;
     }
 

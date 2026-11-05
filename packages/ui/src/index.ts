@@ -126,7 +126,7 @@ export {
   type StoredSocialLink,
 } from './modules/SocialLinksEditor/draft.ts';
 export { FloatingBar, type FloatingBarProps } from './molecules/FloatingBar/FloatingBar.tsx';
-export { Card, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
+export { Card, CardTitleLevel, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
 export { CodeInput, type CodeInputProps, type CodeInputSize } from './molecules/CodeInput/CodeInput.tsx';
 export {
   DatePicker,

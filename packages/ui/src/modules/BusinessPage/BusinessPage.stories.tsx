@@ -122,7 +122,7 @@ type Story = StoryObj<typeof meta>;
 /**
  * A restaurant: the gallery, the open status, the menu, About, hours and location. Online reservations aren't open, so
  * the page's one action is Call to book, in the panel and the phone's bar, never a disabled button. No logo: the
- * name's initials stand in.
+ * name's initials stand in, on the brand's accent.
  */
 export const Restaurant: Story = {
   // Shot at a phone's width: the desktop page with its photos is over the 200 KB baseline limit, and Plain shows the
@@ -280,13 +280,18 @@ export const Gallery: Story = {
   },
 };
 
-/** The week's hours, today (Thursday) marked, two ranges on one day, Sunday closed. */
+/** The week's hours from today (Thursday) on, a line a day, two ranges on one line, Sunday closed. */
 export const Hours: Story = {
   render: () => (
     <Stage width="fill">
       <BusinessHours hours={PLACE.hours} timeZone="Asia/Kolkata" />
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    const days = [...canvasElement.querySelectorAll('dt')].map((day) => day.textContent);
+    await expect(days[0]).toContain('Thursday');
+    await expect(days.at(-1)).toContain('Wednesday');
+  },
 };
 
 /** The location: the address, the phone, the site, and Directions to either map app. */
@@ -301,6 +306,65 @@ export const Location: Story = {
       />
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: 'Directions in Google Maps (opens in a new tab)' })).toHaveAttribute(
+      'href',
+      DIRECTIONS.google,
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Other map apps' }));
+    const apple = await within(document.body).findByRole('menuitem', {
+      name: 'Open in Apple Maps',
+    });
+    await expect(apple).toHaveAttribute('href', DIRECTIONS.apple);
+    await expect(apple).toHaveAttribute('target', '_blank');
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** On an Apple device the page asks for Apple Maps first; Google Maps waits in the menu. */
+export const LocationOnApple: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <BusinessLocation lines={['12, 100 Feet Road, Indiranagar']} directions={DIRECTIONS} mapsApp="apple" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: 'Directions in Apple Maps (opens in a new tab)' })).toHaveAttribute(
+      'href',
+      DIRECTIONS.apple,
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Other map apps' }));
+    await expect(await within(document.body).findByRole('menuitem', { name: 'Open in Google Maps' })).toHaveAttribute(
+      'href',
+      DIRECTIONS.google,
+    );
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** An address with a section's hash opens on it: the tab current and the section scrolled to. */
+export const SectionFromHash: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <BusinessPage {...args} />
+    </Stage>
+  ),
+  beforeEach: () => {
+    globalThis.history.replaceState(null, '', '#location');
+    return () => {
+      globalThis.history.replaceState(null, '', globalThis.location.pathname + globalThis.location.search);
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const tabs = within(within(canvasElement).getByRole('navigation', { name: 'Sections' }));
+    await waitFor(() =>
+      expect(tabs.getByRole('link', { name: 'Location' })).toHaveAttribute('aria-current', 'location'),
+    );
+  },
 };
 
 /** The menu's sections, names and prices on one line. */

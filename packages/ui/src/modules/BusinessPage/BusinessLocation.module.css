@@ -1,24 +1,46 @@
-/* The business page's location (spec 0066, AC-6641): the address beside its pin, the phone and site as quiet links,
-   then the two Directions buttons side by side, each a thumb's height. */
+/* The business page's location card (spec 0066, AC-6641): the address beside its pin on a sunken tile, the phone and
+   site as quiet links, then Directions at a thumb's height with the other map app's menu beside it. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
+    padding: var(--space-16);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
   }
 
   .address {
     display: flex;
-    gap: var(--space-8);
+    align-items: flex-start;
+    gap: var(--space-12);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     font-style: normal;
+    color: var(--text-secondary);
+  }
+
+  .pin {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
     color: var(--text);
   }
 
   .lines {
     display: flex;
     flex-direction: column;
+  }
+
+  .first {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    color: var(--text);
   }
 
   .contact {
@@ -32,7 +54,7 @@
 
   .directions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-8);
   }
 }

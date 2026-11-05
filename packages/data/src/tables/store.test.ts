@@ -143,6 +143,40 @@ describe('walk ins and new reservation emails (spec 0066 B7 lite)', () => {
     release();
   });
 
+  it('takes a reservation with blanks left out, then reads the held day again; a refusal comes back', async () => {
+    let reads = 0;
+    let booked = false;
+    const store = setUp({
+      day: () => {
+        reads += 1;
+        return Promise.resolve(DAY);
+      },
+      book: (input) => {
+        if (booked) return Promise.reject(dataError('SLOT_TAKEN', 'That time was just taken. Pick another.'));
+        booked = true;
+        expect(input).toMatchObject({ party: 4, name: 'Ada', phone: '07700 900123', resourceIds: ['t1'] });
+        expect(input).not.toHaveProperty('email');
+        return Promise.resolve({ id: VISIT, status: 'booked' as const });
+      },
+    });
+    const release = store.day('ws', PLACE, DAY.date).retain();
+    await flush();
+    const before = reads;
+    const booking = {
+      start: '2026-11-05T19:00:00.000Z',
+      party: 4,
+      name: ' Ada ',
+      phone: '07700 900123',
+      email: ' ',
+      resourceIds: ['t1'],
+    };
+    expect(await store.book('ws', PLACE, DAY.date, booking)).toBeUndefined();
+    expect(reads).toBe(before + 1);
+    expect((await store.book('ws', PLACE, DAY.date, booking))?.code).toBe('SLOT_TAKEN');
+    expect(reads).toBe(before + 1);
+    release();
+  });
+
   it('shows the new reservation email switch at once, and puts it back when refused', async () => {
     const setup = {
       placeId: PLACE,

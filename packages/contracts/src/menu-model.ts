@@ -422,23 +422,24 @@ export function choicesAllowed(
 
 /**
  * The Warm preset (spec 0065, AC-6570; H1 builds it alone, H5 adds Clean and Night): after the checklabs guest look,
- * a warm off white ground, near black text, soft chips and a glass bar, light and dark. Every pair passes AA (text on
+ * a near white ground, near black text and ink (checklabs' monochrome: black pills, black + and selection bar), cream
+ * chips and a glass bar, light and dark. Every pair passes AA (text on
  * ground and chip at 4.5:1 or more). The look stylesheet writes these as `--menu-*` custom properties; the brand's
  * accent, when it has one, takes `accent` and `onAccent`.
  */
 export const WARM_PRESET = {
   light: {
-    ground: '#f6f1ea',
-    card: '#fffdf9',
-    chip: '#ece4d9',
-    line: '#e2d8cb',
-    glass: '#f6f1eae0',
+    ground: '#fffdfa',
+    card: '#ffffff',
+    chip: '#f3ede4',
+    line: '#ebe4da',
+    glass: '#fffdfae0',
     text: '#1c1915',
     quiet: '#655b50',
     ink: '#1c1915',
     onInk: '#fffdf9',
-    accent: '#a8492a',
-    onAccent: '#ffffff',
+    accent: '#1c1915',
+    onAccent: '#fffdf9',
     bar: '#1c1915',
     onBar: '#f6f1ea',
     onBarQuiet: '#cbbfb1',
@@ -454,7 +455,7 @@ export const WARM_PRESET = {
     quiet: '#b9ad9f',
     ink: '#f4eee6',
     onInk: '#171411',
-    accent: '#e3946b',
+    accent: '#f4eee6',
     onAccent: '#171411',
     bar: '#0e0c0a',
     onBar: '#f4eee6',

@@ -184,7 +184,11 @@ describe('Settings › Business › Page', () => {
       draft: { ...BASE.draft, gallery: [PHOTO(1), PHOTO(2), PHOTO(3)] },
     });
     const { toasts, said } = recordingToasts();
-    await show(store, toasts);
+    // Each photo drawn from a picture the test holds: in CI nothing answers /api, and Avatar falls back to its initials
+    // on a picture that fails, so the thumbnail would never be an <img> there.
+    const drawn = (photoId: string) =>
+      `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" id="p${photoId}"><rect width="8" height="8" fill="#c9704f"/></svg>`)}`;
+    await show({ ...store, photoSrc: (_slug: string, photoId: string) => drawn(photoId) }, toasts);
     await expect.element(page.getByRole('textbox', { name: 'Photo 3 description' })).toBeInTheDocument();
     // Every row has both arrows, the end ones disabled, so the rows line up.
     await expect.element(page.getByRole('button', { name: 'Move photo 1 earlier' })).toBeDisabled();
@@ -192,7 +196,7 @@ describe('Settings › Business › Page', () => {
     await expect.element(page.getByRole('button', { name: 'Move photo 2 later' })).toBeEnabled();
     // A thumbnail in each photo's row.
     await expect
-      .poll(() => document.querySelectorAll(`img[src*="/api/business/page/photos/${PHOTO(2).id}"]`).length)
+      .poll(() => document.querySelectorAll(`img[src*="${encodeURIComponent(`id="p${PHOTO(2).id}"`)}"]`).length)
       .toBeGreaterThan(0);
     await userEvent.click(page.getByRole('button', { name: 'Remove photo 2' }));
     await expect.poll(() => calls.at(-1)?.draft?.gallery.map((photo) => photo.id)).toEqual([PHOTO(1).id, PHOTO(3).id]);
