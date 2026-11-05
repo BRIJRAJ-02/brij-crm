@@ -170,7 +170,7 @@
     padding-inline: 0;
   }
 
-  /* The one action at a guest sheet's foot (the guest menu's Add to your selection, after checklabs' 48px pill): 48px,
+  /* The one action at a guest sheet's foot (the guest menu's Add to selection, after checklabs' 48px pill): 48px,
      the title's 15px semibold label. Inside the app, nothing is this size. */
   .root[data-size='sheet'] {
     gap: var(--space-8);

@@ -45,7 +45,7 @@ export type ButtonVariant =
   | 'warning'
   | 'field';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. `sheet` is the one action at a guest sheet's foot (the guest menu's Add to your selection), 48px with a title sized label, after checklabs. */
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. `sheet` is the one action at a guest sheet's foot (the guest menu's Add to selection), 48px with a title sized label, after checklabs. */
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public' | 'sheet';
 
 interface ButtonLook {

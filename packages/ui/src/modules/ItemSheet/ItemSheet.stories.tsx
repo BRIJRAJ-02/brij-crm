@@ -94,7 +94,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A coffee: its milk as option cards, priced, then the quantity and Add to your selection with the live total. */
+/** A coffee: its milk as option cards, priced, then the quantity and Add to selection with the live total. */
 export const Options: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -108,11 +108,11 @@ export const Options: Story = {
     await expect(within(dialog).getByRole('heading', { name: 'Allergens' })).toBeVisible();
     await expect(within(dialog).getByText('milk')).toBeVisible();
     await userEvent.click(within(dialog).getByRole('radio', { name: /Oat/ }));
-    await expect(within(dialog).getByRole('button', { name: /Add to your selection · £4.30/ })).toBeVisible();
+    await expect(within(dialog).getByRole('button', { name: /Add to selection · £4.30/ })).toBeVisible();
     // Two of them: the quantity pill's minus is off at one, and the price follows the count.
     await expect(within(dialog).getByRole('button', { name: 'One fewer' })).toBeDisabled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'One more' }));
-    await expect(within(dialog).getByRole('button', { name: /Add to your selection · £8.60/ })).toBeVisible();
+    await expect(within(dialog).getByRole('button', { name: /Add to selection · £8.60/ })).toBeVisible();
   },
 };
 
@@ -126,11 +126,11 @@ export const Required: Story = {
   play: async () => {
     await settleAnimations();
     const dialog = await screen.findByRole('dialog');
-    const add = within(dialog).getByRole('button', { name: /Add to your selection/ });
+    const add = within(dialog).getByRole('button', { name: /Add to selection/ });
     await expect(add).toBeDisabled();
     await expect(within(dialog).getByText('Choose your sides to add this.')).toBeVisible();
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /Truffle fries/ }));
-    await expect(within(dialog).getByRole('button', { name: /Add to your selection · £16.50/ })).toBeEnabled();
+    await expect(within(dialog).getByRole('button', { name: /Add to selection · £16.50/ })).toBeEnabled();
   },
 };
 

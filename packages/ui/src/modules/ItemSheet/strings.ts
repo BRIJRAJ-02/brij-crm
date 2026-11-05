@@ -34,7 +34,7 @@ export const strings = {
   quantityOf: (name: string) => `How many ${name}`,
   allergens: 'Allergens',
   kcal: (kcal: number) => `${String(kcal)} kcal`,
-  addToPicks: 'Add to your selection',
+  addToPicks: 'Add to selection',
   required: 'Required',
   chooseFrom: (group: string) => `Choose your ${group.toLowerCase()} to add this.`,
   chooseAtLeast: (count: number, group: string) =>

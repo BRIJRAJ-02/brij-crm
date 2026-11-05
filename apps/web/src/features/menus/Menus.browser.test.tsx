@@ -411,7 +411,7 @@ describe('the guest menu', () => {
         // By keyboard, as a guest using one would: the size group holds Half, and the arrow moves to Whole.
         (sheet.getByRole('radio', { name: /Half/ }).element() as HTMLElement).focus();
         await userEvent.keyboard('{ArrowDown}');
-        await expect.element(sheet.getByRole('button', { name: /Add to your selection · £26.00/ })).toBeVisible();
+        await expect.element(sheet.getByRole('button', { name: /Add to selection · £26.00/ })).toBeVisible();
         expect(await axeViolations()).toEqual([]);
         await shoot('guest-sheet', theme, width);
         await userEvent.keyboard('{Escape}');

@@ -151,9 +151,9 @@ export const DemoPickASize: Story = {
     const dialog = await screen.findByRole('dialog', { name: 'Etna Rosso, Benanti 2022' });
     await beat(700);
     await userEvent.click(within(dialog).getByRole('radio', { name: /Bottle/ }));
-    await expect(within(dialog).getByRole('button', { name: /Add to your selection · £38.00/ })).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: /Add to selection · £38.00/ })).toBeInTheDocument();
     await beat(900);
-    await userEvent.click(within(dialog).getByRole('button', { name: /Add to your selection/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: /Add to selection/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await expect(canvas.getByRole('button', { name: /View selection/ })).toHaveTextContent('£42.75');
   },
