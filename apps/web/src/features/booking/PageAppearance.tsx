@@ -6,19 +6,9 @@
 // Leaves out: editing the brand here (one kit for every booking page and form, kept in Settings › Brand), and a look
 // of the page's own (a booking page wears the workspace's template; only a link page picks its own).
 import type { BrandStore, DataLayer } from '@crm/data';
-import { useBrand } from '@crm/data/react';
-import {
-  AccentPicker,
-  ButtonLink,
-  Card,
-  FileDrop,
-  SegmentedControl,
-  SettingsRow,
-  SettingsStack,
-  Skeleton,
-} from '@crm/ui';
+import { Card, SegmentedControl, SettingsRow, SettingsStack } from '@crm/ui';
 import { useEffect, useState, type ReactNode } from 'react';
-import { strings as brandStrings } from '../settings/brand-strings.ts';
+import { BrandCard } from '../captures/BrandCard.tsx';
 import { strings } from './strings.ts';
 
 /** How the page opens: its month, its list of times, or its chat. */
@@ -38,14 +28,6 @@ export interface PageAppearanceProps {
   readonly opensInMeta?: ReactNode;
 }
 
-/** The template names, as Settings › Brand words them. */
-const TEMPLATE_NAMES = {
-  classic: brandStrings.templateClassic,
-  studio: brandStrings.templateStudio,
-  night: brandStrings.templateNight,
-  split: brandStrings.templateSplit,
-} as const;
-
 /** The Appearance tab: Layout (Opens in), then Brand (logo, colour and template, as the page wears them). */
 export function PageAppearance({
   data,
@@ -59,6 +41,8 @@ export function PageAppearance({
   // The brand store is its own chunk, loaded when this tab first opens (as Settings › Brand loads it).
   const [store, setStore] = useState<BrandStore | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  // Try again after a failed load reads it once more.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let isLive = true;
     data.brand.load().then(
@@ -72,9 +56,9 @@ export function PageAppearance({
     return () => {
       isLive = false;
     };
-  }, [data]);
+  }, [data, attempt]);
   return (
-    <SettingsStack>
+    <SettingsStack width="readable" rows="inline">
       <Card title={strings.layoutSection}>
         {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a visitor's own remembered
             choice still wins over; the phone beside this switches to it at once. */}
@@ -95,72 +79,16 @@ export function PageAppearance({
           />
         </SettingsRow>
       </Card>
-      {store === undefined ? (
-        <Card title={strings.brandSection} description={failed ? strings.brandFailed : strings.brandText}>
-          {!failed && <Skeleton shape="field" />}
-        </Card>
-      ) : (
-        <BrandCard store={store} slug={slug} brandHref={brandHref} />
-      )}
+      <BrandCard
+        store={store}
+        failed={failed}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((before) => before + 1);
+        }}
+        slug={slug}
+        brandHref={brandHref}
+      />
     </SettingsStack>
-  );
-}
-
-/** The brand the page wears, read through the store as Settings › Brand reads it, so the two never disagree. */
-function BrandCard({
-  store,
-  slug,
-  brandHref,
-}: {
-  readonly store: BrandStore;
-  readonly slug: string;
-  readonly brandHref: string;
-}) {
-  const state = useBrand(store.kit(slug));
-  const kit = state.status === 'ready' ? state.value : undefined;
-  const logoSrc = kit?.logo === undefined ? undefined : store.logoSrc(slug, kit.logo.version);
-  return (
-    <Card
-      title={strings.brandSection}
-      description={strings.brandText}
-      actions={
-        <ButtonLink variant="ghost" icon="palette" href={brandHref}>
-          {strings.editBrand}
-        </ButtonLink>
-      }
-    >
-      <SettingsRow title={brandStrings.logo} control="field">
-        {kit === undefined ? (
-          <Skeleton shape="field" />
-        ) : logoSrc === undefined ? (
-          brandStrings.noLogo
-        ) : (
-          <FileDrop
-            label={brandStrings.logo}
-            isReadOnly
-            preview={{ src: logoSrc, alt: brandStrings.logoAlt }}
-            onFiles={() => undefined}
-          />
-        )}
-      </SettingsRow>
-      <SettingsRow title={brandStrings.colour} control="field">
-        {kit === undefined ? (
-          <Skeleton shape="field" />
-        ) : (
-          <AccentPicker
-            label={brandStrings.colour}
-            isLabelHidden
-            defaultName={brandStrings.colourDefault}
-            {...(kit.accent === undefined ? {} : { value: kit.accent })}
-            quickPicks={store.quickPicks}
-            isReadOnly
-            onChange={() => undefined}
-          />
-        )}
-      </SettingsRow>
-      <SettingsRow title={brandStrings.template}>
-        {kit === undefined ? <Skeleton shape="text" /> : TEMPLATE_NAMES[kit.template]}
-      </SettingsRow>
-    </Card>
   );
 }

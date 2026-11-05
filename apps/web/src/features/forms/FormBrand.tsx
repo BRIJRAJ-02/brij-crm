@@ -7,16 +7,16 @@
 import type { BrandKit, BrandStore, FormDocument, PublicForm } from '@crm/data';
 import { useBrand } from '@crm/data/react';
 import {
-  ButtonLink,
   Card,
   HostedFormPreview,
-  Select,
+  SegmentedControl,
   SettingsRow,
   SettingsStack,
   type HostedFormPreviewProps,
   type PageBrand,
   type PreviewTextChange,
 } from '@crm/ui';
+import { BrandCard } from '../captures/BrandCard.tsx';
 import { strings } from './strings.ts';
 
 /** The kit as the picker and the preview read it, or undefined while it loads. One held per workspace, so the
@@ -29,68 +29,35 @@ function useKit(brand: BrandStore, slug: string): BrandKit | undefined {
 /** A form's look, as the controls over the preview change it. */
 export type FormLook = FormDocument['look'];
 
-/** Props for the look's controls. */
-interface LookControlsProps {
+/** Props for the Appearance tab's look. */
+export interface FormAppearanceProps {
   readonly look: FormLook;
   readonly isReadOnly: boolean;
   readonly onChange: (look: FormLook) => void;
-  /** The brand store the route loaded, to say where to add a kit the workspace hasn't saved yet. */
+  /** The brand store the route loaded; absent when it couldn't load, and the Brand card says so. */
   readonly brand?: BrandStore;
   readonly slug: string;
-}
-
-/** Props for the Appearance tab's look. */
-export interface FormAppearanceProps extends LookControlsProps {
   /** Settings › Brand, where the workspace's logo and colour are edited. */
   readonly brandHref: string;
 }
 
 /**
- * The Appearance tab (T21): Look (Mode and Corners), then Brand (the workspace's logo and colour, or Plain), one
- * labelled row each, the Selects one size. Brand's Edit brand takes you to Settings › Brand, where the kit itself is
- * edited, as the booking page's Appearance does, so a form and a page wear the brand the same way.
+ * The Appearance tab (T21): Look (Mode and Corners, compact SegmentedControls, as the booking page's Opens in), then
+ * the Brand card both editors share (`BrandCard`): whether the form wears the workspace's logo and colour (Workspace
+ * brand or Plain), then the kit itself, read only, with Edit brand for whoever may change it.
  */
-export function FormAppearance({ brand, slug, brandHref, ...rest }: FormAppearanceProps) {
-  return brand === undefined ? (
-    <AppearanceRows {...rest} brandHref={brandHref} />
-  ) : (
-    <AppearanceRowsWithKit brand={brand} slug={slug} brandHref={brandHref} {...rest} />
-  );
-}
-
-/** The kit read through the store, for the hint while the workspace has none saved. */
-function AppearanceRowsWithKit({
-  brand,
-  slug,
-  ...rest
-}: Pick<FormAppearanceProps, 'look' | 'isReadOnly' | 'onChange' | 'brandHref'> & {
-  readonly brand: BrandStore;
-  readonly slug: string;
-}) {
-  const kit = useKit(brand, slug);
-  const isEmpty = kit !== undefined && kit.accent === undefined && kit.logo === undefined;
-  return <AppearanceRows {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
-}
-
-/** The three rows. */
-function AppearanceRows({
-  look,
-  isReadOnly,
-  onChange,
-  brandHref,
-  hint,
-}: Pick<FormAppearanceProps, 'look' | 'isReadOnly' | 'onChange' | 'brandHref'> & { readonly hint?: string }) {
+export function FormAppearance({ look, isReadOnly, onChange, brand, slug, brandHref }: FormAppearanceProps) {
   return (
-    <SettingsStack>
+    <SettingsStack width="readable" rows="inline">
       <Card title={strings.appearanceTitle}>
-        <SettingsRow title={strings.colour} control="field">
-          <Select
+        <SettingsRow title={strings.colour}>
+          <SegmentedControl
             label={strings.colour}
-            isLabelHidden
+            size="compact"
             isReadOnly={isReadOnly}
-            items={[
-              { id: 'light', label: strings.light, icon: 'sun' },
-              { id: 'dark', label: strings.dark, icon: 'moon' },
+            segments={[
+              { value: 'light', label: strings.light, icon: 'sun' },
+              { value: 'dark', label: strings.dark, icon: 'moon' },
             ]}
             value={look.colour}
             onChange={(colour) => {
@@ -98,14 +65,14 @@ function AppearanceRows({
             }}
           />
         </SettingsRow>
-        <SettingsRow title={strings.corners} control="field">
-          <Select
+        <SettingsRow title={strings.corners}>
+          <SegmentedControl
             label={strings.corners}
-            isLabelHidden
+            size="compact"
             isReadOnly={isReadOnly}
-            items={[
-              { id: 'rounded', label: strings.rounded },
-              { id: 'square', label: strings.square },
+            segments={[
+              { value: 'rounded', label: strings.rounded },
+              { value: 'square', label: strings.square },
             ]}
             value={look.corners}
             onChange={(corners) => {
@@ -114,29 +81,15 @@ function AppearanceRows({
           />
         </SettingsRow>
       </Card>
-      {/* The brand as the booking page's Appearance shows it: its own card, Edit brand at its head. */}
-      <Card
-        title={strings.theme}
-        description={strings.themeText}
-        actions={
-          <ButtonLink variant="ghost" icon="palette" href={brandHref}>
-            {strings.editBrand}
-          </ButtonLink>
-        }
-      >
-        <SettingsRow
-          title={strings.themeWear}
-          // Where to add a kit, in view while Workspace brand is picked and there is none to wear.
-          {...(hint === undefined || look.theme !== 'brand' ? {} : { description: hint })}
-          control="field"
-        >
-          <Select
+      <BrandCard store={brand} failed={brand === undefined} slug={slug} brandHref={brandHref}>
+        <SettingsRow title={strings.themeWear}>
+          <SegmentedControl
             label={strings.themeWear}
-            isLabelHidden
+            size="compact"
             isReadOnly={isReadOnly}
-            items={[
-              { id: 'brand', label: strings.themeBrand, icon: 'palette' },
-              { id: 'plain', label: strings.themePlain },
+            segments={[
+              { value: 'brand', label: strings.themeBrand, icon: 'palette' },
+              { value: 'plain', label: strings.themePlain },
             ]}
             value={look.theme ?? 'plain'}
             onChange={(theme) => {
@@ -144,7 +97,7 @@ function AppearanceRows({
             }}
           />
         </SettingsRow>
-      </Card>
+      </BrandCard>
     </SettingsStack>
   );
 }

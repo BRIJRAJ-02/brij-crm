@@ -62,6 +62,7 @@ function storeOf(kit: BrandKit): BrandStore {
             adjusted: false,
           },
     logoSrc: (_workspace: string, version: string) => `/api/public/forms/contact-us/logo?v=${version}`,
+    quickPicks: [],
   } as unknown as BrandStore;
 }
 
@@ -83,29 +84,40 @@ function Picker({ kit }: { readonly kit: BrandKit }) {
   );
 }
 
-/** Picks `option` from the Select named `name`. */
-async function pick(name: RegExp, option: string) {
-  await userEvent.click(page.getByRole('button', { name }));
-  await userEvent.click(page.getByRole('option', { name: option }));
+/** Picks `option` in the SegmentedControl named `name`. */
+async function pick(name: string, option: string) {
+  await userEvent.click(page.getByRole('radiogroup', { name }).getByText(option, { exact: true }));
 }
 
 it('shows the look on Appearance: Mode, Corners, and Workspace brand or Plain (AC-6327, T21)', async () => {
   app = await renderInApp(() => <Picker kit={KIT} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
-  await expect.element(page.getByRole('button', { name: /Logo and colour/ })).toHaveTextContent('Workspace brand');
   await expect
-    .element(page.getByRole('link', { name: 'Edit brand' }))
-    .toHaveAttribute('href', '/w/acme/settings/brand');
-  await expect.element(page.getByRole('button', { name: /Mode/ })).toHaveTextContent('Light');
-  await expect.element(page.getByRole('button', { name: /Corners/ })).toHaveTextContent('Rounded');
-  await pick(/Logo and colour/, 'Plain');
-  await pick(/Mode/, 'Dark');
-  await pick(/Corners/, 'Square');
+    .element(page.getByRole('radiogroup', { name: 'Use' }).getByRole('radio', { name: 'Workspace brand' }))
+    .toBeChecked();
+  await expect.element(page.getByRole('radio', { name: 'Light' })).toBeChecked();
+  await expect.element(page.getByRole('radio', { name: 'Rounded' })).toBeChecked();
+  await pick('Use', 'Plain');
+  await pick('Mode', 'Dark');
+  await pick('Corners', 'Square');
   await expect.element(page.getByText('Look: dark square plain')).toBeVisible();
 });
 
-it('says where to add a kit the workspace hasn’t saved yet, while Workspace brand is picked (AC-6327)', async () => {
-  app = await renderInApp(() => <Picker kit={EMPTY} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
-  await expect.element(page.getByText('Add your logo and colour in Settings › Brand.')).toBeVisible();
+it('shows the kit the form wears, with Edit brand for whoever may change it (T21)', async () => {
+  app = await renderInApp(() => <Picker kit={KIT} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
+  await expect
+    .element(page.getByRole('link', { name: 'Edit brand' }))
+    .toHaveAttribute('href', '/w/acme/settings/brand');
+  await expect.element(page.getByText('Classic')).toBeVisible();
+});
+
+it('has no Edit brand for a reader who may not change the kit, and says there is no logo (T21)', async () => {
+  app = await renderInApp(() => <Picker kit={{ ...EMPTY, canEdit: false }} />, {
+    data: {},
+    pattern: '/w/$slug/forms',
+    at: '/w/acme/forms',
+  });
+  await expect.element(page.getByText('No logo')).toBeVisible();
+  await expect.element(page.getByRole('link', { name: 'Edit brand' })).not.toBeInTheDocument();
 });
 
 it('wears the workspace logo in the preview while the look is Brand (AC-6327)', async () => {
@@ -137,7 +149,7 @@ for (const [theme, width] of [
       ),
       { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' },
     );
-    await expect.element(page.getByRole('button', { name: /Corners/ })).toBeVisible();
+    await expect.element(page.getByRole('radiogroup', { name: 'Corners' })).toBeVisible();
     // After the page settles, so the shot is not caught mid theme change.
     await new Promise((resolve) => globalThis.setTimeout(resolve, 400));
     await page.screenshot({ path: `../../.vitest/shots/look-controls-${theme}-${String(width)}.png` });

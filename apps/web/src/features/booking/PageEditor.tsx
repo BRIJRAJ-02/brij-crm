@@ -2276,7 +2276,7 @@ const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
   questions: [questionStrings.questions],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
-  appearance: [strings.layoutSection, strings.brandSection],
+  appearance: [strings.layoutSection, capturesStrings.brandTitle],
   share: [strings.shareLinkSection, socialsStrings.title],
   bookings: [activityStrings.upcoming],
   insights: [activityStrings.insightsTab],

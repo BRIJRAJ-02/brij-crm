@@ -3,8 +3,15 @@ import { createFileRoute, Outlet, useLocation, useRouteContext } from '@tanstack
 import { useMemo, useState } from 'react';
 import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
-import { rosterIsShown } from '../features/booking/links.ts';
-import { BOOKINGS_TABS, bookingsViewOf, tabOfView, type BookingsView } from '../features/bookings/tabs.ts';
+import { calendarsHref, rosterIsShown, roundRobinHref } from '../features/booking/links.ts';
+import { strings } from '../features/bookings/strings.ts';
+import {
+  BOOKINGS_TABS,
+  bookingsTabHref,
+  bookingsViewOf,
+  tabOfView,
+  type BookingsView,
+} from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import {
   BookingsActionSlot,
@@ -80,6 +87,20 @@ function BookingsRoute() {
   const tabs = useMemo(() => BOOKINGS_TABS.filter((each) => each !== 'routing' || canRoute), [canRoute]);
   // My hours · Roster only for someone who sees a colleague's scheduling (spec 0037, AC-1447).
   const hasRoster = access !== undefined && rosterIsShown(access);
+  // The views with no tab of their own, one quiet link away (the bookings IA review): Calendars from Meetings, while
+  // there is calendar sync to manage; Round robin groups from Pages, for whoever makes booking pages
+  // (`booking.manage`, as the groups' page asks); and from each, back to its tab's first view.
+  const canBook = useCan('booking.manage');
+  const aside =
+    view === 'calendars'
+      ? { label: strings.asideLinks.meetings, href: bookingsTabHref(slug, 'calendar'), icon: 'arrow-left' as const }
+      : view === 'round-robin'
+        ? { label: strings.asideLinks.pages, href: bookingsTabHref(slug, 'pages'), icon: 'arrow-left' as const }
+        : view === 'pages' && canBook
+          ? { label: strings.asideLinks.roundRobin, href: roundRobinHref(slug), icon: 'users-round' as const }
+          : (view === 'calendar' || view === 'list') && canConnectCalendar && !isTeamDay
+            ? { label: strings.asideLinks.calendars, href: calendarsHref(slug), icon: 'calendar' as const }
+            : undefined;
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);
   return (
@@ -108,6 +129,7 @@ function BookingsRoute() {
                     view={view}
                     tabs={tabs}
                     hasRoster={hasRoster}
+                    aside={aside}
                     hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
                   >
                     <Outlet />

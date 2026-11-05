@@ -14,6 +14,13 @@ export const strings = {
   /** Availability's two views, on the strip's end for whoever sees a colleague's scheduling (as Cal.com's toggle). */
   availabilityViewsLabel: 'Whose hours',
   availabilityViews: { availability: 'My hours', roster: 'Roster' },
+  /** The views a tab keeps without a tab of their own, a quiet link at the strip's end, and the way back. */
+  asideLinks: {
+    calendars: 'Calendars',
+    roundRobin: 'Round robin groups',
+    meetings: 'Meetings',
+    pages: 'All pages',
+  },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },

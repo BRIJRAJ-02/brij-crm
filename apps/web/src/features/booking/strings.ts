@@ -132,10 +132,6 @@ export const strings = {
   /** The look of the page in a tab of its own (T21): how it opens, and the brand it wears. */
   appearanceTab: 'Appearance',
   layoutSection: 'Layout',
-  brandSection: 'Brand',
-  brandText: 'Every booking page and form wears your workspace’s logo, colour and template.',
-  brandFailed: 'Couldn’t load your brand. Open Settings › Brand to see it.',
-  editBrand: 'Edit brand',
   shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */

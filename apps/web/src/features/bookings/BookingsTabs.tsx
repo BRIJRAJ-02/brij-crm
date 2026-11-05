@@ -2,7 +2,7 @@
 // Purpose: the Meetings · Pages · Availability · Routing bar under Bookings' TopBar (as Calendly and Cal.com lay theirs out), in the row People's ViewBar takes, with the tab's tools at its end, as Captures has.
 // Main task: switch between the meetings, the booking pages, the hours and routing; each tab opens on its first view, and its views (Day, Week, Team, List; My hours, Roster) switch inside it.
 // Leaves out: what each view shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
-import { SegmentedControl, TabPanel, Tabs, usePhoneWidth } from '@crm/ui';
+import { ButtonLink, SegmentedControl, TabPanel, Tabs, usePhoneWidth } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -28,6 +28,13 @@ export interface BookingsTabsProps {
   readonly hosts?: HostsChoice | undefined;
   /** My hours · Roster at the strip's end on Availability, for whoever sees a colleague's scheduling; else absent. */
   readonly hasRoster?: boolean;
+  /**
+   * The tab's one way to the view it keeps without a tab of its own, a quiet link at the strip's start of tools:
+   * Meetings' Calendars and Pages' Round robin groups, and from each of those back to the tab's first view.
+   */
+  readonly aside?:
+    | { readonly label: string; readonly href: string; readonly icon: 'calendar' | 'users-round' | 'arrow-left' }
+    | undefined;
 }
 
 /**
@@ -42,6 +49,7 @@ export function BookingsTabs({
   children,
   hosts,
   hasRoster = false,
+  aside,
 }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -52,6 +60,11 @@ export function BookingsTabs({
         variant="bar"
         end={
           <>
+            {aside !== undefined && (
+              <ButtonLink variant="ghost" icon={aside.icon} href={aside.href}>
+                {aside.label}
+              </ButtonLink>
+            )}
             <div ref={setSlot} />
             {/* On a phone Meetings' View menu holds Mine · Everyone with its views (A14), so it leaves the strip. */}
             {hosts !== undefined && !(isPhone && (view === 'calendar' || view === 'list')) && (

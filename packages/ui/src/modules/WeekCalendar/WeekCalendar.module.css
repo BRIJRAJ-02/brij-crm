@@ -12,7 +12,8 @@
   .root {
     /* An hour a third taller than a toolbar (the owner, 22 October 2026: "the grid cells were bigger"), so half an
        hour holds its title over its time. */
-    --hour: calc(var(--size-toolbar) + var(--space-16));
+    --hour-base: calc(var(--size-toolbar) + var(--space-16));
+    --hour: var(--hour-base);
     --axis: var(--size-control);
     --start: 0;
     --length: 30;
@@ -843,6 +844,6 @@
   }
 
   .root[data-fill][data-fits] .body {
-    --hour: max(calc(var(--size-toolbar) + var(--space-16)), calc(100cqb / var(--hours)));
+    --hour: max(var(--hour-base), calc(100cqb / var(--hours)));
   }
 }
