@@ -48,9 +48,25 @@
     --track-caps: calc(var(--tracking-kbd) * 2);
     --track-caps-wide: calc(var(--tracking-kbd) * 3);
 
-    /* A public page's motion (as BookingFrame's): presses ease down and a changed Button label resolves in. */
-    --scale-press: var(--scale-enter);
+    --look-type-11: calc(var(--space-12) - var(--border-width-hairline));
+
+    /* The press feel (checklabs'), from the look stylesheet's `--menu-press-*`: its overshoot, and how far each part
+       eases down while held. Without the look nothing shrinks but the buttons, which press as every public page's do
+       (0.97); under reduced motion the look sets every scale to 1. The library's parts read the page's own names:
+       Buttons --scale-press, the option rows --scale-press-sm, and --ease-press for the curve. */
+    --look-press-ease: var(--menu-press-ease, var(--ease-out));
+    --look-press-row: var(--menu-press-row, 1);
+    --look-press-bar: var(--menu-press-bar, 1);
+    --look-press-card: var(--menu-press-card, var(--scale-enter));
+    --look-press-pill: var(--menu-press-pill, 1);
+    --look-press-add: var(--menu-press-add, 1);
+    --ease-press: var(--look-press-ease);
+    --scale-press: var(--look-press-card);
+    --scale-press-sm: var(--look-press-row);
+    /* A changed Button label resolves in (as BookingFrame's). */
     --label-swap: var(--duration-popover);
+    /* Checklabs' bold glyph (its 2.25 stroke to the library's 1.5), for the + (the steppers draw their own). */
+    --look-stroke-bold: calc(var(--icon-stroke) * 1.5);
 
     min-block-size: 100dvh;
     background: var(--look-ground);
@@ -82,6 +98,10 @@
     --link: var(--look-accent);
     --focus-ring: var(--look-accent);
     --scrim: var(--look-scrim);
+    /* A filled button's drop is the page's neutral one, not the app's blue tinted one, under the ink. */
+    --shadow-primary: var(--shadow-control);
+    /* Radios' and checkboxes' edges are the ink, as checklabs' option rows draw them. */
+    --control-border: var(--look-text);
     /* Two rings, the ground then the full ink, so focus shows on the ink's own controls (the +, the chosen pill) as
        well as on the ground (a 40% mix of the ink fell under 3:1 on the white ground). */
     --shadow-focus:
@@ -97,6 +117,7 @@
     --text-title-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
     --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--look-face);
     --tracking-body-strong: var(--track-tight);
+    --tracking-label-strong: var(--track-snug);
     --tracking-title: var(--track-snug);
     --tracking-heading: var(--track-tight);
     /* A chip's height inside the menu (a dish's marks and allergens, checklabs' 24px tags): Badge, Tag and the chip
@@ -175,7 +196,12 @@
     gap: var(--space-4);
   }
 
+  /* The place, then the table as a pill of the ink: the eyebrow sets the pill's words (a `fit` Badge), 11px semibold
+     capitals on one line's height, so it stands 19px tall, 8px in at the sides (checklabs' table chip). */
   .eyebrow {
+    --text-label-strong: 600 var(--look-type-11) / 1 var(--look-face);
+    --tracking-label-strong: var(--track-caps);
+
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -316,13 +342,17 @@
      a hash link's target lands clear of the glass bar. */
   .pills {
     --pills-inset: var(--look-gutter);
+    --scale-press: var(--look-press-pill);
 
     margin-inline: calc(var(--look-gutter) * -1);
     padding-block-start: calc(var(--space-8) + var(--space-2));
     scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
   }
 
+  /* A section's dishes press as the page's buttons do, not as its pills. */
   .panel {
+    --scale-press: var(--look-press-card);
+
     padding-block-start: calc(var(--space-8) + var(--space-2));
     padding-inline: var(--look-gutter);
   }
@@ -384,6 +414,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
+    transition:
+      scale calc(var(--duration-press) * 1.5) var(--look-press-ease),
+      background-color var(--duration-press) var(--ease-out);
   }
 
   .item[data-layout='grid'] {
@@ -403,9 +436,6 @@
     color: inherit;
     font: inherit;
     text-align: start;
-    transition:
-      scale var(--duration-press) var(--ease-out),
-      background-color var(--duration-press) var(--ease-out);
   }
 
   .press:focus-visible {
@@ -420,19 +450,24 @@
     padding: 0;
   }
 
-  /* Pressed, a row takes the cream and eases down a little (0.985); a grid card eases down more. Reduced motion
+  /* Pressed (the dish or its +, as checklabs' whole row is), a row takes the cream and eases down a little (0.985) and
+     a grid card more (0.97), its photo a little more inside it, on the look's overshoot over 240ms. Reduced motion
      keeps the fill and drops the movement. */
-  .item[data-layout='list'] .press:active {
+  .item[data-layout='list']:active {
     background: var(--look-chip);
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .item[data-layout='list'] .press:active {
-      scale: calc(1 - (1 - var(--scale-enter)) / 2);
+    .item[data-layout='list']:active {
+      scale: var(--look-press-row);
     }
 
-    .item[data-layout='grid'] .press:active {
-      scale: var(--scale-press);
+    .item[data-layout='grid']:active {
+      scale: var(--look-press-card);
+    }
+
+    .item[data-layout='grid']:active .thumb {
+      scale: var(--look-press-row);
     }
   }
 
@@ -452,6 +487,7 @@
     block-size: auto;
     aspect-ratio: 1;
     border-radius: var(--look-card-radius);
+    transition: scale calc(var(--duration-press) * 1.5) var(--ease-out);
   }
 
   .item[data-sold-out] .thumb {
@@ -536,16 +572,35 @@
     order: 2;
   }
 
-  /* The + (each pressed across 44px). On a row photo: a 26px disc of the ink in a 2px ring of the ground, 30px
-     across, 6px over the photo's corner. Without a photo: a 32px disc of the ink at the row's end (a 30px Button in a
-     hairline of its own colour). On a grid photo: a 32px disc of the card with the ink's glyph, 8px in from its top
-     corner. Once picked, a Stepper takes its place, keeping its corner. */
+  /* The + (each pressed across 44px), its glyph 16px and bold (checklabs'). On a row photo: a 26px disc of the ink in
+     a 2px ring of the ground, 30px across, 6px over the photo's corner. Without a photo: a 32px disc of the ink at the
+     row's end (a 30px Button in a hairline of its own colour). On a grid photo: a 32px disc of the card with the ink's
+     glyph, 8px in from its top corner. Held, the whole disc, ring and all, eases down to 0.82, so the button inside
+     it keeps still. Once picked, a row Stepper takes its place, keeping its corner, its buttons easing down on their
+     own. */
   .add {
     z-index: var(--z-raised);
     display: inline-flex;
     flex: none;
     align-items: center;
     border-radius: var(--radius-full);
+    transition: scale var(--duration-press) var(--look-press-ease);
+  }
+
+  .add:not([data-stepper]) {
+    --size-icon-sm: var(--size-icon);
+    --icon-stroke: var(--look-stroke-bold);
+    --scale-press: 1;
+  }
+
+  .add[data-stepper] {
+    --scale-press: var(--look-press-add);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .add:not([data-stepper]):has([data-pressed]) {
+      scale: var(--look-press-add);
+    }
   }
 
   .add[data-placement='photo'] {
@@ -557,8 +612,19 @@
       var(--shadow-md);
   }
 
+  /* On the photo the stepper's edge is the ground, not the hairline: its 1px edge and a 1px ring make checklabs' 2px
+     white rim, the rim's outside 6px over the photo's corner as the +'s is. */
   .add[data-placement='photo'][data-stepper] {
-    inset-block-start: calc(var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) - var(--size-input));
+    --border: var(--look-ground);
+
+    inset-block-start: calc(
+      var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) + var(--border-width-hairline) -
+        var(--size-input)
+    );
+    inset-inline-end: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
+    box-shadow:
+      0 0 0 var(--border-width-hairline) var(--look-ground),
+      var(--shadow-md);
   }
 
   .add[data-placement='row']:not([data-stepper]) {
@@ -663,7 +729,8 @@
   }
 
   /* The selection bar: a pill in the ink 16px from the sides and the foot, as wide as the column, 14px over and under
-     its 15px semibold words; it rises in with the first pick over checklabs' 320ms (twice duration-press). */
+     its 15px semibold words; it rises in with the first pick over checklabs' 320ms (twice duration-press), and held it
+     eases down to 0.98 on the look's overshoot. */
   .picksDock {
     position: fixed;
     inset-inline: 0;
@@ -693,7 +760,7 @@
     line-height: normal;
     pointer-events: auto;
     transition:
-      scale var(--duration-press) var(--ease-out),
+      scale var(--duration-press) var(--look-press-ease),
       translate calc(var(--duration-press) * 2) var(--ease-out),
       opacity calc(var(--duration-press) * 2) var(--ease-out);
 
@@ -720,12 +787,12 @@
 
   @media (prefers-reduced-motion: no-preference) {
     .picksBar:active {
-      scale: calc(1 - (1 - var(--scale-enter)) * 2 / 3);
+      scale: var(--look-press-bar);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .press {
+    .item {
       transition: background-color var(--duration-press) var(--ease-out);
     }
 

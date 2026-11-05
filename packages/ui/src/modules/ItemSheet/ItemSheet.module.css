@@ -88,14 +88,6 @@
     font-family: inherit;
   }
 
-  .soldOut {
-    padding: 0 var(--space-6);
-    border-radius: var(--radius-full);
-    background: var(--surface-sunken);
-    font: var(--text-label-strong);
-    font-family: inherit;
-  }
-
   .sheetAbout {
     margin: calc(var(--space-12) + var(--space-2)) 0 0;
     color: var(--text-secondary);
@@ -175,7 +167,10 @@
     text-align: center;
   }
 
+  /* The quantity's buttons ease down to 0.88 while held, Add to 0.97 (checklabs'), from the menu's look. */
   .actionRow {
+    --scale-press: var(--menu-press-close, var(--scale-enter));
+
     display: flex;
     align-items: center;
     gap: calc(var(--space-8) + var(--space-2));
@@ -183,6 +178,8 @@
 
   /* Add takes the rest of the row beside the quantity pill. */
   .addSlot {
+    --scale-press: var(--menu-press-card, var(--scale-enter));
+
     display: flex;
     flex: 1;
     min-inline-size: 0;
@@ -246,7 +243,10 @@
     list-style: none;
   }
 
+  /* A line's stepper buttons ease down to 0.82 while held (checklabs'), from the menu's look. */
   .pick {
+    --scale-press: var(--menu-press-add, var(--scale-enter));
+
     display: flex;
     align-items: center;
     gap: var(--space-12);

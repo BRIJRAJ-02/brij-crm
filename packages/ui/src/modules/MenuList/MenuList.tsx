@@ -415,7 +415,7 @@ export function MenuList({
                 {table === undefined ? null : (
                   <>
                     <span aria-hidden="true">·</span>
-                    <Badge text={table} tone="accent" isWhole />
+                    <Badge text={table} tone="accent" size="fit" isRound isWhole />
                   </>
                 )}
               </p>
@@ -620,7 +620,10 @@ function AddControl({
   onRemove,
 }: {
   readonly item: SnapshotItem;
-  /** On a row's photo (a 26px disc in a ring), at a row's end (32px), or on a grid card's photo (32px, the card's). */
+  /**
+   * On a row's photo (a 26px disc in a 2px ring), at a row's end (32px), or on a grid card's photo (32px, the card's);
+   * its + is 16px and bold, a stepper's − and + 14px (checklabs').
+   */
   readonly placement: 'photo' | 'row' | 'grid';
   readonly count: number;
   /** A dish with choices: how many are in the selection, shown beside its + (which opens the sheet again). */
@@ -637,6 +640,7 @@ function AddControl({
     <span ref={setHost} className={styles.add} data-placement={placement} data-stepper={isPlain ? undefined : ''}>
       {chosenCount > 0 ? (
         <Stepper
+          size="row"
           label={strings.quantityOf(item.name)}
           isLabelHidden
           value={chosenCount}
@@ -660,6 +664,7 @@ function AddControl({
         />
       ) : (
         <Stepper
+          size="row"
           label={strings.quantityOf(item.name)}
           isLabelHidden
           value={count}
@@ -722,15 +727,15 @@ function ItemCard({
         <span className={styles.itemText}>
           <span className={styles.itemName}>
             {item.name}
-            {item.featured ? <Badge text={strings.featured} size="chip" isWhole /> : null}
-            {isSoldOut ? <Badge text={strings.soldOut} size="chip" dot="red" isWhole /> : null}
+            {item.featured ? <Badge text={strings.featured} tone="strong" size="chip" isRound isWhole /> : null}
+            {isSoldOut ? <Badge text={strings.soldOut} tone="strong" size="chip" dot="red" isRound isWhole /> : null}
           </span>
           {item.description === undefined ? null : <span className={styles.itemAbout}>{item.description}</span>}
           {price === undefined ? null : <span className={styles.price}>{price}</span>}
           {marks.length === 0 ? null : (
             <span className={styles.marks}>
               {marks.map((mark) => (
-                <Badge key={mark} text={mark} size="chip" isWhole />
+                <Badge key={mark} text={mark} tone="strong" size="chip" isRound isWhole />
               ))}
             </span>
           )}
