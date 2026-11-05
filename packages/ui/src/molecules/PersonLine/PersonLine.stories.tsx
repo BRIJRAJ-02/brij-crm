@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -77,5 +77,29 @@ export const DayTones: Story = {
   ),
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText('Free')).toBeVisible();
+  },
+};
+
+/** A small blue square on our origin, as Avatar's Picture story draws. */
+const PICTURE =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"%3E%3Crect width="2" height="2" fill="%23266df0"/%3E%3C/svg%3E';
+
+/**
+ * A member's row in Settings › Members (5 November 2026): their own picture, the name, their email as the quiet line
+ * and "You" at the end. The picture waits behind the initials until it has loaded, as Avatar's does.
+ */
+export const MemberRow: Story = {
+  args: { name: 'Ada Lovelace', meta: ['ada@example.com'], src: PICTURE },
+  render: (args) => (
+    <Stage width="narrow">
+      <PersonLine {...args} size="md" end={<Badge text="You" isWhole />} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (canvasElement.querySelector('img[data-fade="waiting"]') !== null) throw new Error('Still loading.');
+    });
+    await expect(canvasElement.querySelector('img')).not.toBeNull();
+    await expect(within(canvasElement).getByText('ada@example.com')).toBeVisible();
   },
 };

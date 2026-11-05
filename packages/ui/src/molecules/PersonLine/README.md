@@ -16,12 +16,13 @@ New, lifted out of TeamWeek's person cell when the Team day (spec 0030) needed t
 - `tone="away"` draws the first part in the Away colour, strong (time off): the one state that changes what can be done with the person. On a calendar's head the day's state has a colour too: `free` the success colour, `off` tertiary (the owner asked for colour on the Team day, 31 October 2026; each holds 4.5:1 on the raised surface in both themes). Booked stays `quiet`: the link colour on words nobody can press would read as a link.
 - `hint` is a Tooltip (the Tooltip atom, `isTextTrigger`) over the name and line, for what a short line leaves out (the Team day keeps the job title there unless the columns are ordered by it), the name first, so it stands in for the name's own tooltip when that is cut. Screen readers get it from what the line heads.
 - `size` is the picture's: `sm` in a calendar column's head, `md` in a table row.
+- `src` is the person's own picture (a member's photo in Settings › Members' rows, 5 November 2026), passed to Avatar, whose initials hold the tile while it loads and stay if it fails. Why a variant: the Members table's person cell needed the name over its email with the member's photo, and the line drew initials only.
 - `end` sits after the name, never cut: a health chip, a view only mark, a row's menu.
 - `isDecorative` hides it from screen readers where the thing it heads already names the person in full (TeamDay's columns carry the whole name, status and offset in their label).
 
 ## States
 
-Quiet, away, free, off, with and without `end`, with a `hint`, truncated name and line. Below 320px of its container an `md` line gives its picture's room to the name. Every text colour is a token that meets 4.5:1 in both themes.
+Quiet, away, free, off, with and without `end`, with a `hint`, with a picture (`MemberRow`), truncated name and line. Below 320px of its container an `md` line gives its picture's room to the name. Every text colour is a token that meets 4.5:1 in both themes.
 
 ## Keyboard
 
