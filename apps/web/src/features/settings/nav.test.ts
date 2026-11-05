@@ -8,8 +8,10 @@ import {
   preferencesHref,
   profileHref,
   searchSettings,
+  settingsEntryAt,
   settingsEntryOf,
   settingsGroupOf,
+  settingsNameAt,
   settingsNav,
   settingsPageOf,
   visibleSettingsNav,
@@ -264,5 +266,39 @@ describe('settingsPageOf', () => {
     // Background jobs is parked: its page has no place in the navigation.
     expect(settingsGroupOf(groups, 'jobs')).toBeUndefined();
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
+  });
+});
+
+// 5 November 2026: Settings › Business › Places read "Business › Business": its page titled itself after the group,
+// and a place's way back said "Business" again. The navigation now names both.
+describe('a settings page’s name and its trail’s places', () => {
+  /**
+   * A group shaped like Business on the hospitality branch: its first entry, Places, at /settings/business. Its ids
+   * and icon are that branch's, which this one's types don't list yet, hence the cast.
+   */
+  const business = {
+    id: 'business',
+    label: 'Business',
+    entries: [{ id: 'business', label: 'Places', href: '/w/acme/settings/business', icon: 'store' }],
+  } as unknown as SettingsNavGroup;
+  const groups = [...settingsNav('acme'), business];
+
+  it('calls an entry’s own address what the sidebar calls it, query and trailing slash aside', () => {
+    expect(settingsEntryAt(groups, '/w/acme/settings/business')?.label).toBe('Places');
+    expect(settingsEntryAt(groups, '/w/acme/settings/business/')?.label).toBe('Places');
+    expect(settingsEntryAt(groups, '/w/acme/settings/account/profile')?.label).toBe('Profile');
+    // A page under an entry (a place, a role, an object) keeps its own title.
+    expect(settingsEntryAt(groups, '/w/acme/settings/business/places/p1')).toBeUndefined();
+    expect(settingsEntryAt(groups, '/w/acme/settings/roles/admin')).toBeUndefined();
+    // A tab's own address isn't an entry's (the tab bar names the page there).
+    expect(settingsEntryAt(groups, '/w/acme/settings/teams')).toBeUndefined();
+  });
+
+  it('names a trail’s place as the navigation does: a tab by its own name, else its entry’s', () => {
+    expect(settingsNameAt(groups, '/w/acme/settings/business')).toBe('Places');
+    expect(settingsNameAt(groups, '/w/acme/settings/roles')).toBe('Roles');
+    expect(settingsNameAt(groups, '/w/acme/settings/objects')).toBe('Objects');
+    expect(settingsNameAt(groups, '/w/acme/settings/teams?x=1')).toBe('Teams');
+    expect(settingsNameAt(groups, '/w/acme/settings/nowhere')).toBeUndefined();
   });
 });

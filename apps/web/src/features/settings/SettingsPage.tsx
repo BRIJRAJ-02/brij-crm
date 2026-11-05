@@ -21,10 +21,13 @@ import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   objectsSettingsHref,
   profileHref,
+  settingsEntryAt,
   settingsEntryOf,
   settingsGroupOf,
+  settingsNameAt,
   settingsNav,
   settingsPageOf,
+  settingsPathOf,
   visibleSettingsNav,
   type SettingsNavEntry,
 } from './nav.ts';
@@ -60,6 +63,11 @@ interface SettingsPageBase {
   readonly tabBar?: SettingsTabBar;
   /** Under the tab bar, the body's sections a breath below it (the default), or a Table flush on its hairline. */
   readonly tabBody?: 'sections' | 'table';
+  /**
+   * The title is the page's own even on an entry's address (a page that isn't there says so), rather than the name
+   * the sidebar gives that address. Off by default: the navigation names every settings page (5 November 2026).
+   */
+  readonly keepsTitle?: boolean;
   readonly children: ReactNode;
 }
 
@@ -128,6 +136,7 @@ export function SettingsPage({
   inFrame = false,
   tabBar,
   tabBody = 'sections',
+  keepsTitle = false,
   children: body,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
@@ -136,17 +145,14 @@ export function SettingsPage({
   const group = settingsGroupOf(settingsNav(slug), page);
   const access = useMyAccess();
   const navigate = useNavigate();
+  // The navigation as this member sees it: the one source of a settings page's name and its trail's places.
+  const visible = visibleSettingsNav(settingsNav(slug), access?.permissions, false, access?.role === 'guest');
   // The entry this page is a tab of, as this member sees it, and only on the tab's own address (a role's page, under
   // Roles and access, has its trail instead).
-  const entry = inFrame
-    ? undefined
-    : tabbedEntry(
-        settingsEntryOf(
-          visibleSettingsNav(settingsNav(slug), access?.permissions, false, access?.role === 'guest'),
-          page,
-        ),
-        pathname,
-      );
+  const entry = inFrame ? undefined : tabbedEntry(settingsEntryOf(visible, page), pathname);
+  // On an entry's own address the page is called what the sidebar calls it (5 November 2026: Settings › Business ›
+  // Places read "Business › Business", its page titling itself after the group).
+  const home = inFrame || keepsTitle ? undefined : settingsEntryAt(visible, pathname);
   const children =
     entry === undefined ? (
       // With no tab bar to hold them, the page's tools open its body (Members' search, for a guest).
@@ -159,14 +165,18 @@ export function SettingsPage({
         {body}
       </EntryTabs>
     );
-  const shownTitle = entry === undefined ? title : entry.label;
+  const shownTitle = entry?.label ?? home?.label ?? title;
   const shownHasTabs = hasTabs || entry !== undefined;
   // Settings heads the trail, so the page says where it is even on a phone, where the sidebar is a rail of icons.
-  // TopBar ends it with the title, as the current place.
+  // TopBar ends it with the title, as the current place. A place the navigation lists reads as the navigation names
+  // it (a place's way back to Places, never "Business" again after the group).
   const trail: readonly Crumb[] = [
     { id: 'settings', label: strings.settings },
     ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
-    ...crumbs,
+    ...crumbs.map((crumb) => {
+      const name = crumb.href === undefined ? undefined : settingsNameAt(visible, crumb.href);
+      return name === undefined ? crumb : { ...crumb, label: name };
+    }),
   ];
   const slot = useSettingsTopBarSlot();
   // Inside somebody else's frame the body is the whole of it. `header="bar"` is already the layout with no header
@@ -235,14 +245,11 @@ export function SettingsPage({
   );
 }
 
-/** The trailing slashes and query an address may carry, gone, so a tab's address compares with the one shown. */
-const pathOf = (href: string) => (href.split('?')[0] ?? href).replace(/\/+$/, '');
-
 /** `entry` when it holds more than one tab and `pathname` is one of those tabs' own address; else undefined. */
 function tabbedEntry(entry: SettingsNavEntry | undefined, pathname: string): SettingsNavEntry | undefined {
   const tabs = entry?.tabs;
   if (tabs === undefined || tabs.length < 2) return undefined;
-  return tabs.some((tab) => pathOf(tab.href) === pathOf(pathname)) ? entry : undefined;
+  return tabs.some((tab) => settingsPathOf(tab.href) === settingsPathOf(pathname)) ? entry : undefined;
 }
 
 /**
@@ -320,7 +327,7 @@ export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'obj
   const { slug = '' } = useParams({ strict: false });
   const isObject = backTo === 'objects';
   return (
-    <SettingsPage title={strings.missingTitle} {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
+    <SettingsPage title={strings.missingTitle} keepsTitle {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
       <EmptyState
         icon="search"
         title={strings.missingText}

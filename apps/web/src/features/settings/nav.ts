@@ -514,6 +514,30 @@ export function searchSettings(groups: readonly SettingsNavGroup[], query: strin
     .map(({ hit }) => hit);
 }
 
+/** An address without its query or trailing slashes, so a link's address compares with the one shown. */
+export const settingsPathOf = (href: string) => (href.split('?')[0] ?? href).replace(/\/+$/, '');
+
+/**
+ * The entry whose own address `pathname` is (Settings › Business › Places at `/settings/business`), so the page is
+ * called what the sidebar calls it; undefined anywhere else (one of its tabs, a page under it, an unknown address).
+ */
+export function settingsEntryAt(groups: readonly SettingsNavGroup[], pathname: string): SettingsNavEntry | undefined {
+  const path = settingsPathOf(pathname);
+  return groups.flatMap((group) => group.entries).find((entry) => settingsPathOf(entry.href) === path);
+}
+
+/**
+ * What the navigation calls an address: a tab's name on its own address (Roles, under Roles and access), else its
+ * entry's (Places); undefined for an address it doesn't list. A settings trail names its places with it, so a page's
+ * own words for the way back (a place's "Business") never disagree with the sidebar (5 November 2026).
+ */
+export function settingsNameAt(groups: readonly SettingsNavGroup[], href: string): string | undefined {
+  const path = settingsPathOf(href);
+  const entries = groups.flatMap((group) => group.entries);
+  const tab = entries.flatMap((entry) => entry.tabs ?? []).find((each) => settingsPathOf(each.href) === path);
+  return tab?.label ?? entries.find((entry) => settingsPathOf(entry.href) === path)?.label;
+}
+
 /** The navigation entry that holds `page`: the page's own, or the one it is a tab of (Teams is in Members). */
 export function settingsEntryOf(
   groups: readonly SettingsNavGroup[],
