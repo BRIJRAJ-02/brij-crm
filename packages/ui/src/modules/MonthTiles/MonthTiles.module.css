@@ -89,6 +89,24 @@
     animation-name: month-back;
   }
 
+  /* Six weeks' height whatever the month needs, its rows sharing it (`holdsHeight`): six square tiles down, each capped
+     as a tile is, and the tiles fill their rows rather than leave a blank row under most months (critic B-21). */
+  @media (width >= 1024px) {
+    .root[data-holds-height] {
+      container-type: inline-size;
+    }
+
+    .root[data-holds-height] .grid {
+      min-block-size: calc(6 * min((100cqi - 6 * var(--space-4)) / 7, var(--month-tile-max)) + 5 * var(--space-4));
+    }
+
+    .root[data-holds-height] .day,
+    .root[data-holds-height] .outside {
+      aspect-ratio: auto;
+      max-block-size: none;
+    }
+  }
+
   /* A neighbouring month's date in the six weeks: a closed day's size, but drawn in the strong border's grey, plainly
      behind the month's own days (a closed day keeps text-tertiary), so a run of them never reads as closed days. It is
      decoration, never a control: the number is generated content from data-date rather than text, so it is no text

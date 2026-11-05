@@ -70,6 +70,7 @@ export function BookingPagePreview({ name, title, minutes, image }: BookingPageP
     // `main` of its own and the page already has one.
     <div inert aria-hidden="true">
       <BookingFrame
+        isAnchored
         host={{ name, ...(image === undefined ? {} : { image }) }}
         title={shown}
         facts={[{ id: 'length', icon: 'clock', children: strings.bookingLengthLabel(minutes) }]}

@@ -350,10 +350,11 @@
     flex-direction: column;
   }
 
-  /* A step that takes the whole card (the details, the receipt) is the card's height, hugging its content (critics
-     C14, A11; first in a site's embed, 3 November 2026): kept at the month's height it left a screen of empty card
+  /* Stacked or in a site's embed, a step that takes the whole card (the details, the receipt) is the card's height,
+     hugging its content (critics C14, A11; 3 November 2026): kept at the month's height it left a screen of empty card
      above Confirm. What the step covers leaves the layout at once (the 8 px slide is the move), instead of only going
-     out of sight; the month keeps its state and comes back with Back. */
+     out of sight; the month keeps its state and comes back with Back. A wide page holds the month's height instead,
+     below. */
   .card[data-place='card'] > .head[inert],
   .stage[data-place='card'] > .under[inert] {
     display: none;
@@ -680,11 +681,60 @@
      narrow that is not a frame of its own, so a media query would read the window and lay out two columns in a
      phone. First run's preview of a page that doesn't exist yet, and so can't be shown in a PreviewFrame. */
   @media (width >= 1024px) {
-    /* From the top, not centred: the card now hugs each step (the details, the receipt), and centred it jumped up and
-       down the page between steps with the rail beside it (review, 5 November 2026). */
+    /* A profile or a message starts from the top: its length isn't known until it arrives. */
     .root {
       align-items: flex-start;
       padding-block: var(--space-32);
+    }
+
+    /* A booking page sits in the middle of the window (the owner, 5 November 2026), its padding even above and below,
+       with room for the visitor's bar over the card. Taller than the window, the root grows with it, so it starts at
+       its padding and scrolls and nothing clips. A site's embed is sized to the page and stays as it was, as does an anchored sketch of the page. */
+    .root:not([data-compact], [data-embedded], [data-anchored]):has(> .layout) {
+      align-items: center;
+      padding-block: calc(var(--space-32) + var(--space-16));
+    }
+
+    /* The visitor's bar stands over the card's corner in that room rather than in the column: the rail and the card
+       start on one line, and the bar coming, going or leaving with the details step moves nothing. */
+    .root:not([data-compact], [data-embedded]) .main {
+      position: relative;
+    }
+
+    .root:not([data-compact], [data-embedded]) .bar {
+      position: absolute;
+      inset-block-end: 100%;
+      inset-inline-end: 0;
+      margin-block-end: var(--space-8);
+    }
+
+    /* The whole block is centred, so a card that changed height would move everything. A step that takes the whole
+       card (the details, the receipt) holds the card at the month's height: the card's heading row and the month stay
+       in the layout, out of sight, and the step lies over both. The step's actions keep their place at the foot, where
+       Book sat, and a step taller than the month still grows the card. */
+    .card[data-hold] {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .card[data-hold] > .head[inert] {
+      display: flex;
+      grid-area: 1 / 1;
+    }
+
+    .stage[data-hold] {
+      display: contents;
+    }
+
+    .stage[data-hold] > .under[inert] {
+      display: flex;
+      grid-area: 2 / 1;
+      transition: none;
+    }
+
+    .stage[data-hold] > .cover {
+      grid-area: 1 / 1 / -1 / -1;
     }
 
     .root[data-compact] {
