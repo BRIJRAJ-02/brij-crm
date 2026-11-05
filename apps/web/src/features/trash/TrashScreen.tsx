@@ -85,8 +85,9 @@ const COLUMNS: readonly TableColumn[] = [
   { id: TRASH_COLUMNS.object, label: strings.columns.kind },
   { id: TRASH_COLUMNS.deletedBy, label: strings.columns.deletedBy },
   { id: TRASH_COLUMNS.deletedAt, label: strings.columns.deletedAt },
-  // The day the daily cleanup takes it, in the workspace's zone: what someone weighing Restore needs to know.
-  { id: TRASH_COLUMNS.expiresAt, label: strings.columns.expiresAt },
+  // The day the daily cleanup takes it, in the workspace's zone: what someone weighing Restore needs to know. Not on a
+  // phone's two lines, whose columns have no headers: a second bare date beside Deleted would say nothing.
+  { id: TRASH_COLUMNS.expiresAt, label: strings.columns.expiresAt, phone: 'hidden' },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
