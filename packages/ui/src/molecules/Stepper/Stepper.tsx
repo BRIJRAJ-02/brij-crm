@@ -106,46 +106,43 @@ export function Stepper({
       role="group"
       {...(isLabelHidden ? { 'aria-label': label } : { 'aria-labelledby': labelId })}
     >
-      {/* Draws nothing of its own (display: contents): it carries `row` and `sheet`'s bolder glyph to the buttons. */}
-      <span className={styles.track}>
-        {isFewerHidden ? null : (
-          <Button
-            ref={fewerRef}
-            variant="ghost"
-            size={BUTTON_SIZE[size]}
-            icon="minus"
-            label={fewerLabel}
-            isRound
-            isTouchTarget
-            isDisabled={isFewerOff}
-            onPress={() => {
-              pressed.current = document.activeElement === fewerRef.current ? 'fewer' : undefined;
-              onChange?.(Math.max(min, value - 1));
-            }}
-          />
-        )}
-        {isCountAnnounced ? (
-          <output className={styles.value} aria-live="polite">
-            {count}
-          </output>
-        ) : (
-          <span className={styles.value}>{count}</span>
-        )}
+      {isFewerHidden ? null : (
         <Button
-          ref={moreRef}
+          ref={fewerRef}
           variant="ghost"
           size={BUTTON_SIZE[size]}
-          icon="plus"
-          label={moreLabel}
+          icon="minus"
+          label={fewerLabel}
           isRound
           isTouchTarget
-          isDisabled={isMoreOff}
+          isDisabled={isFewerOff}
           onPress={() => {
-            pressed.current = document.activeElement === moreRef.current ? 'more' : undefined;
-            onChange?.(Math.min(max, value + 1));
+            pressed.current = document.activeElement === fewerRef.current ? 'fewer' : undefined;
+            onChange?.(Math.max(min, value - 1));
           }}
         />
-      </span>
+      )}
+      {isCountAnnounced ? (
+        <output className={styles.value} aria-live="polite">
+          {count}
+        </output>
+      ) : (
+        <span className={styles.value}>{count}</span>
+      )}
+      <Button
+        ref={moreRef}
+        variant="ghost"
+        size={BUTTON_SIZE[size]}
+        icon="plus"
+        label={moreLabel}
+        isRound
+        isTouchTarget
+        isDisabled={isMoreOff}
+        onPress={() => {
+          pressed.current = document.activeElement === moreRef.current ? 'more' : undefined;
+          onChange?.(Math.min(max, value + 1));
+        }}
+      />
     </span>
   );
   if (isLabelHidden) return pill;

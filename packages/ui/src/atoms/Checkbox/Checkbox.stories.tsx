@@ -52,7 +52,9 @@ export const Rows: Story = {
     <Stage width="dialog" direction="column">
       <Checkbox variant="row" label="Soft egg" description="+£1.50" />
       <Checkbox variant="row" label="Extra chashu" description="+£3.00" defaultSelected />
-      <Checkbox variant="row" label="Bamboo shoots" isDisabled />
+      <Checkbox variant="row" label="Bamboo shoots" description="+£1.00" isDisabled />
+      <Checkbox variant="row" label="Spring onion" description="Free" defaultSelected isReadOnly />
+      <Checkbox variant="row" label="Chilli oil" error="Choose chilli oil to add this." />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

@@ -68,23 +68,12 @@
     opacity: var(--opacity-disabled);
   }
 
-  /* The buttons and the count sit straight in the pill: this wrapper only carries custom properties to them. */
-  .track {
-    display: contents;
-  }
-
   /* `row` and `sheet`, checklabs' own steppers: the − and + in the text colour rather than the quiet one, drawn half as
-     bold again (its 2.25 stroke to the library's 1.5). The stroke rides the track, a step in from the pill, so it
-     builds on the stroke the pill inherits rather than on itself. */
+     bold again (its 2.25 stroke to the library's 1.5). */
   .pill[data-size='row'],
   .pill[data-size='sheet'] {
-    --stepper-stroke: calc(var(--icon-stroke) * 1.5);
+    --icon-stroke: var(--icon-stroke-bold);
     --text-secondary: var(--text);
-  }
-
-  .pill[data-size='row'] .track,
-  .pill[data-size='sheet'] .track {
-    --icon-stroke: var(--stepper-stroke);
   }
 
   /* `row`: 30px, 2px in, 24px buttons (its md Buttons drawn at 24px) 2px apart, the count 13px semibold. */
@@ -92,6 +81,11 @@
     --size-control: var(--space-24);
 
     padding: var(--space-2);
+  }
+
+  /* The count and one more only: the count stands clear of the pill's round end. */
+  .pill[data-size='row'][data-fewer-hidden] {
+    padding-inline-start: var(--space-8);
   }
 
   .pill[data-size='row'] .value {
@@ -108,7 +102,7 @@
     padding: 0 var(--space-4);
   }
 
-  /* Filled, it draws no edge at all, so it takes checklabs' 94px and leaves Add its room. */
+  /* Filled, it draws no edge at all: checklabs' 94px, which leaves Add its whole label at 390px. */
   .pill[data-size='sheet'][data-tone='filled'] {
     border: 0;
   }

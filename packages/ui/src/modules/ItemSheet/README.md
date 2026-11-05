@@ -46,7 +46,7 @@ ChoiceChips can't carry a price beside each choice.
   is sent from this page." and Clear all. No picks: an EmptyState.
 - Presses are the menu's (checklabs'): an option's row eases down to 0.985, the quantity's buttons to 0.88, Add to
   0.97 and a line's stepper buttons to 0.82, on its overshoot; the values come from the menu's look (`--menu-press-*`),
-  and without it the buttons press at a public page's 0.97.
+  and without it only Add presses, at a public page's 0.97.
 - Deviations from checklabs: no Order now (we send no orders; the note says so); Clear all and the bill's tax and
   service lines are ours; the overline is drawn beside a hidden RadioGroup label and carries the group's rule
   ("EXTRAS · CHOOSE ANY", where checklabs says ADD-ONS); the price reads "from £14.00" for a dish with sizes, where

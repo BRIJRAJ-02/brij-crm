@@ -17,8 +17,8 @@
      --scale-press-sm (1 in the app, where nothing shrinks; a guest page sets its own) on --ease-press. */
   .field[data-variant='row'] {
     --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
-    --row-tick: calc(var(--icon-stroke) * 1.5);
     --check-hover-edge: var(--control-border);
+    --check-focus: none;
 
     position: relative;
     display: flex;
@@ -37,9 +37,20 @@
       scale var(--duration-press) var(--ease-press, var(--ease-out));
   }
 
+  .field[data-variant='row']:has(.root[data-focus-visible]) {
+    box-shadow: var(--shadow-focus);
+  }
+
   .field[data-variant='row'][data-selected] {
     border-color: var(--accent-line);
     background: var(--accent-soft);
+  }
+
+  /* A row that is off drops its chosen fill and line, so it never reads as live, while its box and label fade and its
+     price stays readable (a faded price would fall under 4.5:1). */
+  .field[data-variant='row'][data-disabled] {
+    border-color: var(--border);
+    background: transparent;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -86,7 +97,7 @@
 
   /* A row's box: 20px at 6px corners, a 1.75px edge, no drop, its tick half as bold again. */
   .field[data-variant='row'] .box {
-    --icon-stroke: var(--row-tick);
+    --icon-stroke: var(--icon-stroke-bold);
 
     inline-size: var(--space-20);
     block-size: var(--space-20);
@@ -112,7 +123,7 @@
 
   .root[data-focus-visible] .box {
     border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
+    box-shadow: var(--check-focus, var(--shadow-focus));
   }
 
   .root[data-invalid] .box {

@@ -65,8 +65,6 @@
     --scale-press-sm: var(--look-press-row);
     /* A changed Button label resolves in (as BookingFrame's). */
     --label-swap: var(--duration-popover);
-    /* Checklabs' bold glyph (its 2.25 stroke to the library's 1.5), for the + (the steppers draw their own). */
-    --look-stroke-bold: calc(var(--icon-stroke) * 1.5);
 
     min-block-size: 100dvh;
     background: var(--look-ground);
@@ -589,7 +587,7 @@
 
   .add:not([data-stepper]) {
     --size-icon-sm: var(--size-icon);
-    --icon-stroke: var(--look-stroke-bold);
+    --icon-stroke: var(--icon-stroke-bold);
     --scale-press: 1;
   }
 

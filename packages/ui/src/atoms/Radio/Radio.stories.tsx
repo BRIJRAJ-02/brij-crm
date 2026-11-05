@@ -182,6 +182,12 @@ export const Rows: Story = {
           Kids
         </Radio>
       </RadioGroup>
+      <RadioGroup label="Broth" isLabelHidden variant="rows" defaultValue="pork" isReadOnly>
+        <Radio value="pork">Pork</Radio>
+        <Radio value="miso" description="+£0.50">
+          Miso
+        </Radio>
+      </RadioGroup>
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

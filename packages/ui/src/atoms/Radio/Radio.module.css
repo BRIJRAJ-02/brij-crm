@@ -52,6 +52,7 @@
   .choices[data-variant='rows'] .field {
     --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
     --radio-hover-edge: var(--control-border);
+    --radio-focus: none;
 
     position: relative;
     flex-direction: row;
@@ -70,6 +71,10 @@
   .choices[data-variant='rows'] .field[data-selected] {
     border-color: var(--accent-line);
     background: var(--accent-soft);
+  }
+
+  .choices[data-variant='rows'] .field:has(.radio[data-focus-visible]) {
+    box-shadow: var(--shadow-focus);
   }
 
   .choices[data-variant='cards'] .field:has(.radio[data-selected]) {
@@ -205,7 +210,7 @@
 
   .radio[data-focus-visible] .circle {
     border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
+    box-shadow: var(--radio-focus, var(--shadow-focus));
   }
 
   .radio[data-invalid] .circle {
@@ -221,6 +226,13 @@
   /* The control and its label fade; a description under it stays readable. */
   .radio[data-disabled] {
     opacity: var(--opacity-disabled);
+  }
+
+  /* A row that is off drops its chosen fill and line, so it never reads as live, while its circle and label fade and
+     its price stays readable (a faded price would fall under 4.5:1). */
+  .choices[data-variant='rows'] .field[data-disabled] {
+    border-color: var(--border);
+    background: transparent;
   }
 
   /* A card's label line: its glyph, then its words. */

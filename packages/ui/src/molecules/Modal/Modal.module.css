@@ -393,11 +393,6 @@
   .root[data-variant='sheet-side'] {
     --sheet-radius: calc(var(--radius-lg) * 2);
     --sheet-motion: calc(var(--duration-press) * 2);
-    /* Close's glyph line (checklabs' 1.75 stroke on its 18px X), and how far its disc eases down while held: four
-       times the page's own press, so 0.88 where a guest page presses at 0.97, and 1 in the app. Taken here, a step
-       out from Close, which sets the page's press to 1 for the button inside it. */
-    --close-stroke: calc(var(--icon-stroke) * 7 / 6);
-    --close-press: calc(1 - (1 - var(--scale-press)) * 4);
 
     position: relative;
     inline-size: 100%;
@@ -427,12 +422,13 @@
 
   /* Close: a 36px round of glass (the card, a little clear, blurred) over a dish's photo; of the chip colour on the
      selection's title row. Its X is 18px in the text colour, a little bolder (checklabs'), and the whole disc eases
-     down while held, so the button inside it keeps still. */
+     down while held, to the guest menu's look's --menu-press-close (it stays still without the look), so the button
+     inside it keeps still. */
   .root[data-variant='sheet-card'] .close,
   .root[data-variant='sheet-side'] .close {
     --size-icon-sm: calc(var(--size-icon) + var(--space-2));
     --text-secondary: var(--text);
-    --icon-stroke: var(--close-stroke);
+    --icon-stroke: var(--icon-stroke-medium);
     --scale-press: 1;
 
     display: grid;
@@ -447,7 +443,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .root[data-variant='sheet-card'] .close:has([data-pressed]),
     .root[data-variant='sheet-side'] .close:has([data-pressed]) {
-      scale: var(--close-press);
+      scale: var(--menu-press-close, 1);
     }
   }
 
@@ -466,6 +462,11 @@
     gap: 0;
     padding: 0;
     overscroll-behavior: contain;
+  }
+
+  /* A choice reached by Tab lands clear of a dish's foot, which stays in view over the body. */
+  .root[data-variant='sheet-card'] .body {
+    scroll-padding-block-end: calc(var(--size-bar) * 2);
   }
 
   .root[data-variant='sheet-card'][data-entering],

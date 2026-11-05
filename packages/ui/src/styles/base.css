@@ -64,6 +64,10 @@
     /* Only toasts take part in same document view transitions (below), never the page; a public page takes part
        whole in the cross document crossfade between public pages. */
     view-transition-name: none;
+    /* The glyph weights a guest page's controls draw at, built from the icon stroke in one place: checklabs' 1.75 on
+       its Close and 2.25 on its + and − and on a check row's tick. */
+    --icon-stroke-medium: calc(var(--icon-stroke) * 7 / 6);
+    --icon-stroke-bold: calc(var(--icon-stroke) * 1.5);
     --overlay-inset: var(--space-16);
     --popover-inset: var(--space-4);
     --popover-item-block: var(--space-4);

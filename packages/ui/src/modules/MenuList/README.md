@@ -89,7 +89,7 @@ through the same component.
   and the sheet's quantity buttons 0.88, an option's row 0.985, Add and the other buttons 0.97, the selection bar 0.98.
   The values come from the look stylesheet as `--menu-press-*` (CSS here takes curves and scales only from tokens),
   and the root hands them to the library's parts under their own names (`--scale-press`, `--scale-press-sm`,
-  `--ease-press`); without the look nothing shrinks but the buttons, at every public page's 0.97. Reduced motion keeps
+  `--ease-press`); without the look nothing shrinks but the plain buttons, at every public page's 0.97. Reduced motion keeps
   fades and drops movement (the look sets every scale to 1 there, and every part checks it too).
 - Without `onPicksChange` the menu has no selection and no + (the editor's preview). Picks are the caller's to keep.
 
