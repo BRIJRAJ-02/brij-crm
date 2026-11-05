@@ -4,10 +4,12 @@
 // Main task: change the rules in checklabs' order and with its defaults (Accept online bookings, time zone, service
 //   hours, slot interval and turn time, min lead and booking window, min and max party, max covers per slot), then
 //   ours (turn time by party size, the guests' change and cancel cutoffs, new reservation emails), and keep them with
-//   the one Save settings at the sheet's foot; with Accept online bookings on, saving publishes the page, whose link
-//   then leads the sheet. Until it is live, the setup checklist leads it instead.
+//   the one Save settings at the sheet's foot; with Accept online bookings on, saving publishes the page and the
+//   sheet stays, its top now the page's link to copy or open. Until it is live, its top says what stands in the way
+//   (the place's hours or tables, with Fix it) or how to publish.
 // Leaves out: deposits, areas offered to guests and request only parties (later). Saving refuses a broken page and
-//   says the one thing to fix, with the link to it; turning online booking off asks first.
+//   says the one thing to fix, with the link to it; taking the page offline asks first. Save sends only what the
+//   person changed over the latest copy, so it never undoes another manager's change.
 import type { Place, TableRules, TableSetupView, TablesStore } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { WEEK_DAYS } from '@crm/data/hospitality';
@@ -15,8 +17,6 @@ import {
   Button,
   ButtonLink,
   Callout,
-  Card,
-  CopyButton,
   DescriptionList,
   EmptyState,
   Field,
@@ -25,10 +25,8 @@ import {
   FormRow,
   Modal,
   Select,
-  SetupChecklist,
   Skeleton,
   Switch,
-  TruncatedText,
   type Toasts,
 } from '@crm/ui';
 import { useState } from 'react';
@@ -174,9 +172,19 @@ const sameRules = (a: Draft, b: Draft) =>
   (Object.keys(DRAFT_ORDER) as (keyof Numbers)[]).every((key) => a[key].trim() === b[key].trim()) &&
   a.online === b.online;
 
+/** Whether two drafts are the same form, the reader's emails too. */
+const sameDraft = (a: Draft, b: Draft) => sameRules(a, b) && a.notify === b.notify;
+
+/** What the person changed: the fields of `draft` that differ from the copy it started from. */
+const changesOf = (draft: Draft, base: Draft): Partial<Draft> =>
+  Object.fromEntries(
+    (Object.keys(draft) as (keyof Draft)[]).flatMap((key) => (draft[key] === base[key] ? [] : [[key, draft[key]]])),
+  );
+
 /**
- * The page's one line while guests can't reserve online (setup's way in, now that the settings sit in a sheet):
- * shown to those who set the apps up, with Set up online booking. Nothing while it loads, fails or is live.
+ * The page's one line while guests can't reserve online and online booking was never set up (setup's way in, now
+ * that the settings sit in a sheet): shown to those who set the apps up, with Set up online booking. Nothing while it
+ * loads or fails, once it is live, or once its settings were saved (a place that takes bookings by phone only).
  */
 export function OnlineBookingNotice({
   slug,
@@ -190,7 +198,7 @@ export function OnlineBookingNotice({
   readonly onOpen: () => void;
 }) {
   const setup = useHospitality(tables.setup(slug, placeId));
-  if (setup.status !== 'ready' || setup.value.rules.online) return null;
+  if (setup.status !== 'ready' || setup.value.rules.online || setup.value.saved) return null;
   return (
     <Callout
       tone="info"
@@ -207,12 +215,15 @@ export function OnlineBookingNotice({
 
 /** The sheet: checklabs' "Online booking", one form and one Save settings at its foot. */
 export function OnlineBookingDrawer({
+  isOpen = true,
   slug,
   tables,
   place,
   toasts,
   onClose,
 }: {
+  /** Open; the screen keeps the sheet mounted while it closes, so it slides out. */
+  readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
   readonly place: Place;
@@ -222,18 +233,26 @@ export function OnlineBookingDrawer({
   const setupHeld = tables.setup(slug, place.id);
   const setup = useHospitality(setupHeld);
   const ready = setup.status === 'ready' ? setup.value : undefined;
-  // The form starts from the setup as it first arrives; a later change elsewhere doesn't overwrite what is typed.
+  // The form and the copy it started from. Until the person changes something, it follows the latest copy (the read
+  // the sheet starts, another manager's save); once they have, what they typed stays, and Save lays only their
+  // changes over the latest copy, so it never sends back a value someone else changed meanwhile (Accept online
+  // bookings above all).
+  const [base, setBase] = useState<TableSetupView | undefined>(ready);
   const [draft, setDraft] = useState<Draft | undefined>(ready === undefined ? undefined : () => draftOf(ready));
-  if (ready !== undefined && draft === undefined) setDraft(draftOf(ready));
+  if (ready !== undefined && ready !== base) {
+    const latest = draftOf(ready);
+    if (base === undefined || draft === undefined || sameDraft(draft, draftOf(base)) || sameDraft(draft, latest)) {
+      setBase(ready);
+      setDraft(latest);
+    }
+  }
   const [errors, setErrors] = useState<Readonly<Partial<Record<keyof Numbers, string>>>>({});
   const [problem, setProblem] = useState<{ readonly message: string; readonly href?: string } | undefined>();
   const [isSaving, setSaving] = useState(false);
   const [isStopping, setStopping] = useState(false);
   // The zone's name reads its offset as of opening the sheet.
   const [openedAt] = useState(() => Date.now());
-  const saved = ready === undefined ? undefined : draftOf(ready);
-  const isDirty =
-    draft !== undefined && saved !== undefined && (!sameRules(draft, saved) || draft.notify !== saved.notify);
+  const isDirty = draft !== undefined && base !== undefined && !sameDraft(draft, draftOf(base));
 
   const set = (key: keyof Numbers) => (value: string) => {
     setDraft((now) => (now === undefined ? now : { ...now, [key]: value }));
@@ -247,10 +266,11 @@ export function OnlineBookingDrawer({
   const fixHref = (id: string | undefined) =>
     id === 'hours' || id === 'tables' ? placeTablesHref(slug, place.id) : undefined;
 
-  /** Saves the form; `online` overrides Accept online bookings (the checklist's Publish), `isAsked` once stopping is confirmed. */
-  const save = async (options: { readonly online?: boolean; readonly isAsked?: boolean } = {}) => {
-    if (ready === undefined || draft === undefined || saved === undefined || isSaving) return;
-    const form = options.online === undefined ? draft : { ...draft, online: options.online };
+  /** Saves the form: the person's changes over the latest copy. `isAsked` once taking the page offline is confirmed. */
+  const save = async (options: { readonly isAsked?: boolean } = {}) => {
+    if (ready === undefined || draft === undefined || base === undefined || isSaving) return;
+    const saved = draftOf(ready);
+    const form: Draft = { ...saved, ...changesOf(draft, draftOf(base)) };
     setProblem(undefined);
     const read = rulesOf(form);
     if ('errors' in read) {
@@ -264,7 +284,7 @@ export function OnlineBookingDrawer({
       return;
     }
     setErrors({});
-    // Stopping takes guests' way in away: it asks first, then saves.
+    // Taking the page offline takes guests' way in away: it asks first, then saves.
     if (saved.online && !form.online && options.isAsked !== true) {
       setStopping(true);
       return;
@@ -278,31 +298,33 @@ export function OnlineBookingDrawer({
       const missing = ready.steps.find((step) => !step.done);
       const href = fixHref(missing?.step);
       setProblem({ message: refused.message, ...(href === undefined ? {} : { href }) });
+      // Said where the person is too: the line at the sheet's top may be out of sight.
+      toasts.toast({ tone: 'danger', message: strings.couldntSave(refused.message) });
       return;
     }
     const emailRefused = form.notify === saved.notify ? undefined : await tables.setNotify(slug, place.id, form.notify);
     setSaving(false);
     if (emailRefused !== undefined) {
       setProblem({ message: emailRefused.message });
+      toasts.toast({ tone: 'danger', message: strings.couldntSave(emailRefused.message) });
       return;
     }
+    const isPublished = form.online && !saved.online;
     toasts.toast({
       tone: 'success',
-      message:
-        form.online && !saved.online
-          ? strings.published
-          : !form.online && saved.online
-            ? strings.unpublished
-            : strings.saved,
+      message: isPublished ? strings.published : !form.online && saved.online ? strings.unpublished : strings.saved,
     });
+    // Just published, the sheet stays, its top now the page's link to share; any other save is done.
+    if (isPublished) {
+      setBase(undefined);
+      return;
+    }
     onClose();
   };
 
   const live = ready?.rules.online === true;
   const link = ready === undefined ? '' : reservePageUrl(ready.publicKey);
-  const stepOf = (id: 'hours' | 'tables' | 'rules') => ready?.steps.find((step) => step.step === id);
-  const hours = stepOf('hours');
-  const tablesStep = stepOf('tables');
+  const missing = ready?.steps.find((step) => !step.done && (step.step === 'hours' || step.step === 'tables'));
   const intervals =
     draft === undefined
       ? [15, 30, 45, 60]
@@ -312,69 +334,33 @@ export function OnlineBookingDrawer({
   // 2 January 2023 was a Monday: each week day's name in the reader's language.
   const dayName = (index: number) => day.format(new Date(Date.UTC(2023, 0, 2 + index)));
 
+  // The sheet's top: live, the page's link to copy or open; not yet, what stands in the way (the place's hours or
+  // tables, with the way to them), else how to publish. Never a card: a dialog's body holds its pieces directly.
   const head =
     ready === undefined ? null : live ? (
-      // Live: where guests reserve, to share or open (the old page's bar held these).
-      <Card
-        title={strings.pageLive}
-        description={strings.liveText}
-        footer={
-          <>
-            <CopyButton value={link} label={strings.copyLink} />
-            <ButtonLink href={link} icon="external-link" isExternal>
-              {strings.openPage}
-            </ButtonLink>
-          </>
+      <FieldGroup
+        label={strings.pageLive}
+        action={
+          <ButtonLink href={link} variant="ghost" size="sm" icon="external-link" isExternal>
+            {strings.openPage}
+          </ButtonLink>
         }
       >
-        {/* The address on its own line, cut short with its end kept readable. */}
-        <TruncatedText>{link}</TruncatedText>
-      </Card>
+        <Field
+          variant="copy"
+          label={strings.pageLink}
+          isLabelHidden
+          value={link}
+          copyLabel={strings.copyLink}
+          hint={strings.liveText}
+        />
+      </FieldGroup>
+    ) : missing?.fix !== undefined ? (
+      <Callout tone="warning" actions={<ButtonLink href={placeTablesHref(slug, place.id)}>{strings.fixIt}</ButtonLink>}>
+        {missing.fix}
+      </Callout>
     ) : (
-      <SetupChecklist
-        title={strings.finishSetup}
-        defaultDoneExpanded={false}
-        steps={[
-          {
-            id: 'hours',
-            title: strings.stepHours,
-            isDone: hours?.done === true,
-            ...(hours?.fix === undefined ? {} : { detail: hours.fix }),
-            action: strings.open,
-          },
-          {
-            id: 'tables',
-            title: strings.stepTables,
-            isDone: tablesStep?.done === true,
-            ...(tablesStep?.fix === undefined ? {} : { detail: tablesStep.fix }),
-            action: strings.open,
-          },
-          {
-            id: 'rules',
-            title: strings.stepRules,
-            isDone: ready.saved && stepOf('rules')?.done === true,
-            detail: ready.saved ? strings.rulesSaved : strings.rulesDefault,
-            action: strings.review,
-          },
-          {
-            id: 'publish',
-            title: strings.stepPublish,
-            isDone: false,
-            detail: strings.notLive,
-            action: strings.publish,
-          },
-        ]}
-        onAction={(id) => {
-          if (id === 'hours' || id === 'tables') globalThis.location.assign(placeTablesHref(slug, place.id));
-          else if (id === 'rules')
-            globalThis.document.querySelector<HTMLInputElement>('input[name="minutes"]')?.focus();
-          // Publish is the form's own save with Accept online bookings on.
-          else if (id === 'publish') {
-            setDraft((now) => (now === undefined ? now : { ...now, online: true }));
-            void save({ online: true });
-          }
-        }}
-      />
+      <Callout tone="info">{strings.notLiveYet}</Callout>
     );
 
   const fields =
@@ -395,11 +381,7 @@ export function OnlineBookingDrawer({
             {...(problem.href === undefined
               ? {}
               : {
-                  actions: (
-                    <ButtonLink href={problem.href} size="sm">
-                      {strings.fixIt}
-                    </ButtonLink>
-                  ),
+                  actions: <ButtonLink href={problem.href}>{strings.fixIt}</ButtonLink>,
                 })}
           >
             {problem.message}
@@ -586,6 +568,7 @@ export function OnlineBookingDrawer({
   return (
     <>
       <DrawerForm
+        isOpen={isOpen}
         title={strings.onlineBooking}
         isDirty={isDirty}
         isBusy={isSaving}
@@ -619,12 +602,11 @@ export function OnlineBookingDrawer({
         onOpenChange={setStopping}
         title={strings.stopTitle}
         variant="confirm"
-        tone="danger"
         actions={
           <>
             <Button slot="close">{strings.keepTaking}</Button>
             <Button
-              variant="danger"
+              variant="primary"
               onPress={() => {
                 setStopping(false);
                 void save({ isAsked: true });

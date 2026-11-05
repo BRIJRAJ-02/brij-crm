@@ -7,6 +7,7 @@ import { strings } from './strings.ts';
 
 /** The drawer, its footer and the ask before throwing changes away. */
 export function DrawerForm({
+  isOpen = true,
   title,
   isDirty,
   isBusy = false,
@@ -15,6 +16,8 @@ export function DrawerForm({
   footerStart,
   children,
 }: {
+  /** Open; a screen that keeps the drawer mounted while it closes passes false, so it slides out. */
+  readonly isOpen?: boolean;
   readonly title: string;
   readonly isDirty: boolean;
   readonly isBusy?: boolean;
@@ -29,11 +32,11 @@ export function DrawerForm({
       <Modal
         variant="drawer"
         title={title}
-        isOpen
+        isOpen={isOpen}
         isDismissable={false}
         isBusy={isBusy}
-        onOpenChange={(isOpen) => {
-          if (isOpen) return;
+        onOpenChange={(open) => {
+          if (open) return;
           if (isDirty) setAsking(true);
           else onClose();
         }}
@@ -47,8 +50,8 @@ export function DrawerForm({
         tone="danger"
         title={strings.unsavedQuestion}
         isOpen={isAsking}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setAsking(false);
+        onOpenChange={(open) => {
+          if (!open) setAsking(false);
         }}
         actions={
           <>
@@ -67,7 +70,7 @@ export function DrawerForm({
       >
         {strings.unsavedLine}
       </Modal>
-      <LeaveGuard isDirty={isDirty} searchStays />
+      <LeaveGuard isDirty={isOpen && isDirty} searchStays />
     </>
   );
 }

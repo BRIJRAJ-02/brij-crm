@@ -23,6 +23,7 @@ const WALK_IN_MAX = 12;
  * table taken meanwhile says so and the free tables read again.
  */
 export function WalkInDrawer({
+  isOpen = true,
   slug,
   tables,
   place,
@@ -31,6 +32,8 @@ export function WalkInDrawer({
   onClose,
   onSeated,
 }: {
+  /** Open; the screen keeps the sheet mounted while it closes, so it slides out. */
+  readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
   readonly place: Place;
@@ -107,13 +110,15 @@ export function WalkInDrawer({
 
   return (
     <Modal
-      isOpen
+      isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !isSeating) onClose();
       }}
       title={strings.walkInTitle}
       icon="user-plus"
       variant="drawer"
+      // A name typed in is never thrown away by a click outside: only Cancel or Esc leave it.
+      isDismissable={name.trim() === ''}
       isBusy={isSeating}
       actions={
         <>

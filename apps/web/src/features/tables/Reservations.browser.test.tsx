@@ -26,6 +26,7 @@ import { applyTheme, axeViolations, resetTheme, THEMES, type Theme } from '../..
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { addDays, instantAt } from '../bookings/week.ts';
 import { ReservationsScreen } from './ReservationsScreen.tsx';
+import type { ReservationsSearch } from './search.ts';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
 const ZONE = 'Europe/London';
@@ -249,15 +250,15 @@ async function shoot(name: string, theme: Theme, width: number) {
 
 /** The page as the route draws it: the day in its own state, as `?date=` holds it. */
 function Page({ tables, hospitality }: { readonly tables: TablesStore; readonly hospitality: HospitalityStore }) {
-  const [date, setDate] = useState<string | undefined>();
+  const [search, setSearch] = useState<ReservationsSearch>({});
   return (
     <ReservationsScreen
       slug="acme"
       tables={tables}
       hospitality={hospitality}
       toasts={toasts}
-      {...(date === undefined ? {} : { date })}
-      onDate={setDate}
+      search={search}
+      onSearch={setSearch}
     />
   );
 }
@@ -299,11 +300,11 @@ describe('Reservations (checklabs’ one page)', () => {
     await show(1280);
     await expect.element(page.getByRole('heading', { level: 1, name: 'Reservations' })).toBeInTheDocument();
     await expect
-      .element(page.getByText('4 bookings · 14 covers · 2 seated · 12 to come · pick a time to add a booking'))
+      .element(page.getByText('4 on the calendar · 14 covers · 2 seated · 12 to come · pick a time to add a booking'))
       .toBeInTheDocument();
     const calendar = page.getByRole('region', { name: /^Day calendar, / });
-    // One day's head, not the week's seven.
-    expect(calendar.element().querySelectorAll('button[aria-pressed]')).toHaveLength(1);
+    // One day, named by the bar: no head of days to pick from.
+    expect(calendar.element().querySelectorAll('button[aria-pressed]')).toHaveLength(0);
     // The hours start at 10:00 and run to midnight: nine o'clock isn't drawn.
     const hours = [
       ...calendar.element().querySelectorAll<HTMLElement>('[aria-hidden="true"] > span[class*="hour"]'),
@@ -352,6 +353,34 @@ describe('Reservations (checklabs’ one page)', () => {
     }).format(new Date(`${addDays(TODAY, 1)}T12:00:00.000Z`));
     await expect.element(page.getByRole('button', { name: `${tomorrow}, pick a day` })).toBeVisible();
     await expect.element(page.getByText(/^No bookings on .+\.$/)).toBeVisible();
+  });
+
+  it('keeps the day’s arrows still: Next twice from today shows the day after tomorrow', async () => {
+    await show(1280);
+    await userEvent.click(page.getByRole('button', { name: 'Next day' }));
+    await userEvent.click(page.getByRole('button', { name: 'Next day' }));
+    const label = new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }).format(new Date(`${addDays(TODAY, 2)}T12:00:00.000Z`));
+    await expect.element(page.getByRole('button', { name: `${label}, pick a day` })).toBeVisible();
+  });
+
+  it('reads a past day only: no moves on its rows', async () => {
+    await show(1280);
+    await userEvent.click(page.getByRole('button', { name: 'Previous day' }));
+    await expect.element(page.getByText(/^No bookings on .+\.$/)).toBeVisible();
+    expect(page.getByRole('button', { name: 'New booking' }).elements()).toHaveLength(0);
+  });
+
+  it('puts Walk in by the list on a phone, where the host works', async () => {
+    const { walkIns } = await show(390);
+    await userEvent.click(page.getByRole('button', { name: 'Walk in' }));
+    const sheet = page.getByRole('dialog', { name: 'Seat a walk in' });
+    await userEvent.click(sheet.getByRole('button', { name: 'Seat now' }));
+    await expect.poll(() => walkIns.length).toBe(1);
   });
 
   it('shows the details of a booking opened from its row', async () => {
@@ -409,7 +438,7 @@ describe('Reservations (checklabs’ one page)', () => {
     const sheet = page.getByRole('dialog', { name: 'Seat a walk in' });
     await expect.element(sheet.getByRole('textbox', { name: /Guest name/ })).toBeVisible();
     await expect.element(sheet.getByRole('radio', { name: '2', exact: true })).toBeChecked();
-    await expect.element(sheet.getByRole('radio', { name: 'T2 · 4' })).toBeChecked();
+    await expect.element(sheet.getByRole('radio', { name: 'T2 · 4 seats' })).toBeChecked();
     await userEvent.click(sheet.getByRole('button', { name: 'Seat now' }));
     await expect.poll(() => walkIns.length).toBe(1);
     expect(walkIns[0]).toMatchObject({ party: 2, resourceIds: [id(12)] });

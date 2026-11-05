@@ -53,6 +53,7 @@ const BEST = 'best';
  * and Notes (optional). Cancel, then Create booking; a refusal (the time or table taken) says so and keeps the sheet.
  */
 export function NewBookingDialog({
+  isOpen = true,
   slug,
   tables,
   placeId,
@@ -65,6 +66,8 @@ export function NewBookingDialog({
   onClose,
   onBooked,
 }: {
+  /** Open; the screen keeps the sheet mounted while it closes, so it slides out. */
+  readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
   readonly placeId: string;
@@ -139,7 +142,7 @@ export function NewBookingDialog({
 
   return (
     <Modal
-      isOpen
+      isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !isSaving) onClose();
       }}

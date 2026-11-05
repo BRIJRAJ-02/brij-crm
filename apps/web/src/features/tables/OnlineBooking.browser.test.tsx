@@ -21,6 +21,7 @@ import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES, type Theme } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { ReservationsScreen } from './ReservationsScreen.tsx';
+import type { ReservationsSearch } from './search.ts';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
 const PLACE = '01900000-0000-7000-8000-000000000001';
@@ -111,13 +112,33 @@ function heldOf<Value>(value: Value): HospitalityHeld<Value> {
   };
 }
 
+/** A held copy that can change under the sheet, as another manager's save changes it. */
+function changingHeld<Value>(value: Value) {
+  let state: HospitalityHeldState<Value> = { status: 'ready', value, isSaving: false };
+  const listeners = new Set<() => void>();
+  const held: HospitalityHeld<Value> = {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => state,
+    retain: () => () => undefined,
+    retry: () => undefined,
+  };
+  const change = (next: Value) => {
+    state = { status: 'ready', value: next, isSaving: false };
+    for (const listener of listeners) listener();
+  };
+  return { held, change };
+}
+
 function storesOf(online: boolean) {
   const saved: TableRules[] = [];
   const notified: boolean[] = [];
   const business = heldOf(BUSINESS);
   const floor = heldOf(FLOOR);
   const day = heldOf(DAY);
-  const setup = heldOf(setupOf(online));
+  const { held: setup, change: changeSetup } = changingHeld(setupOf(online));
   const hospitality = { business: () => business, floor: () => floor } as unknown as HospitalityStore;
   const tables = {
     day: () => day,
@@ -131,7 +152,7 @@ function storesOf(online: boolean) {
       return Promise.resolve(undefined);
     },
   } as unknown as TablesStore;
-  return { hospitality, tables, saved, notified };
+  return { hospitality, tables, saved, notified, changeSetup };
 }
 
 const toasts = { toast: () => '', dismiss: () => undefined } as never;
@@ -161,15 +182,15 @@ async function shoot(name: string, theme: Theme, width: number) {
 }
 
 function Page({ tables, hospitality }: { readonly tables: TablesStore; readonly hospitality: HospitalityStore }) {
-  const [date, setDate] = useState<string | undefined>();
+  const [search, setSearch] = useState<ReservationsSearch>({});
   return (
     <ReservationsScreen
       slug="acme"
       tables={tables}
       hospitality={hospitality}
       toasts={toasts}
-      {...(date === undefined ? {} : { date })}
-      onDate={setDate}
+      search={search}
+      onSearch={setSearch}
     />
   );
 }
@@ -216,8 +237,8 @@ describe('Online booking (checklabs’ sheet)', () => {
     await expect.element(page.getByRole('dialog', { name: 'Online booking' })).not.toBeInTheDocument();
   });
 
-  it('publishes with Accept online bookings on, in the same save', async () => {
-    const { saved, sheet } = await open(1280);
+  it('publishes with Accept online bookings on, in the same save, and stays open on the page’s link', async () => {
+    const { saved, sheet, changeSetup } = await open(1280);
     await userEvent.click(sheet.getByText('Accept online bookings', { exact: true }));
     await expect.element(sheet.getByRole('switch', { name: /Accept online bookings/ })).toBeChecked();
     // Nothing is sent until Save settings.
@@ -225,15 +246,30 @@ describe('Online booking (checklabs’ sheet)', () => {
     await userEvent.click(sheet.getByRole('button', { name: 'Save settings' }));
     await expect.poll(() => saved.length).toBe(1);
     expect(saved[0]).toMatchObject({ online: true });
+    changeSetup(setupOf(true));
+    await expect.element(sheet.getByText('Your page is live')).toBeVisible();
+    const field = sheet.getByRole('textbox', { name: 'Your page' });
+    await expect.element(field).toBeVisible();
+    expect((field.element() as HTMLInputElement).value).toMatch(/\/r\/AbCdEfGhIjKlMnOp$/);
+  });
+
+  it('never sends back what another manager changed meanwhile, only what was changed here', async () => {
+    const { saved, sheet, changeSetup } = await open(1280, true);
+    await userEvent.fill(sheet.getByRole('textbox', { name: 'Max covers per slot' }), '20');
+    // Meanwhile another manager takes the page offline.
+    changeSetup(setupOf(false));
+    await userEvent.click(sheet.getByRole('button', { name: 'Save settings' }));
+    await expect.poll(() => saved.length).toBe(1);
+    expect(saved[0]).toMatchObject({ coversCap: 20, online: false });
   });
 
   it('asks before turning online booking off, and saves only once asked', async () => {
     const { saved, sheet } = await open(1280, true);
     // Live: the page's link leads the sheet.
-    await expect.element(sheet.getByRole('heading', { name: 'Your page is live' })).toBeVisible();
+    await expect.element(sheet.getByText('Your page is live')).toBeVisible();
     await userEvent.click(sheet.getByText('Accept online bookings', { exact: true }));
     await userEvent.click(sheet.getByRole('button', { name: 'Save settings' }));
-    const ask = page.getByRole('alertdialog', { name: 'Stop taking reservations online?' });
+    const ask = page.getByRole('dialog', { name: 'Stop taking reservations online?' });
     await expect.element(ask).toBeVisible();
     expect(saved).toHaveLength(0);
     await userEvent.click(ask.getByRole('button', { name: 'Stop taking reservations' }));

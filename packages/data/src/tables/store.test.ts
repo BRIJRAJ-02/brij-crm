@@ -94,7 +94,23 @@ describe('the Service day', () => {
     release();
   });
 
-  it('reads the held days of a place again on a visits event, and no other place’s', async () => {
+  it('hands a screen the same held day for the same day, so a render never lets go and reads again', async () => {
+    let reads = 0;
+    const store = setUp({
+      day: () => {
+        reads += 1;
+        return Promise.resolve(DAY);
+      },
+    });
+    const day = store.day('acme', PLACE, DAY.date);
+    expect(store.day('acme', PLACE, DAY.date)).toBe(day);
+    const release = day.retain();
+    await flush();
+    expect(reads).toBe(1);
+    release();
+  });
+
+  it('reads the shown days of a place again on a visits event, and no other place’s', async () => {
     let reads = 0;
     const store = setUp({
       day: () => {

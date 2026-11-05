@@ -45,6 +45,9 @@ export const strings = {
   acceptOnlineText: 'Guests can book this place from the web. Saving with this on publishes your page.',
   notLiveNotice: 'Guests can’t reserve online yet.',
   setUpOnline: 'Set up online booking',
+  notLiveYet: 'Not live yet. Turn on Accept online bookings and save to publish your page.',
+  pageLink: 'Your page',
+  couldntSave: (message: string) => `Couldn’t save: ${message}`,
   timeZone: 'Time zone',
   serviceHours: 'Service hours',
   serviceHoursHint: 'Days and times bookings are accepted.',
@@ -129,7 +132,7 @@ export const strings = {
   seating: 'Seating',
   seatedWalkIn: (label: string, party: number) =>
     `Walk in seated at ${label}, ${party === 1 ? '1 guest' : `${String(party)} guests`}`,
-  freeTable: (label: string, seats: number) => `${label} · ${String(seats)}`,
+  freeTable: (label: string, seats: number) => `${label} · ${seats === 1 ? '1 seat' : `${String(seats)} seats`}`,
   noArea: 'Tables',
   freeOf: (free: number, total: number) => `${String(free)} of ${String(total)} free`,
   keepReservation: 'Keep reservation',
@@ -191,7 +194,8 @@ export const strings = {
     canBook: boolean,
   ) =>
     [
-      count === 0 ? 'Nothing booked' : `${String(count)} ${count === 1 ? 'booking' : 'bookings'}`,
+      // Cancelled bookings and no shows stay off the calendar (checklabs'), so the line counts what is on it.
+      count === 0 ? 'Nothing on the calendar' : `${String(count)} on the calendar`,
       ...(count === 0
         ? []
         : [

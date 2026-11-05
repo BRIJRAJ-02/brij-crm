@@ -277,10 +277,15 @@ export interface WeekCalendarProps {
   /**
    * The stretch of each day the grid draws, rounded out to whole hours: Reservations' day calendar draws 10:00 to
    * midnight, as checklabs' does (from the place's first service when that is earlier). Left out, the whole day.
-   * Time outside it isn't drawn, and a drawn span stays inside it, so the screen widens it to hold every block it
-   * shows. Not for a grid whose blocks move (`move` keeps a block inside the whole day).
+   * Time outside it isn't drawn (closed hours, a band and the now line are cut to it), and a span drawn or a block
+   * moved stays inside it, so the screen widens it to hold every block it shows.
    */
-  readonly hours?: WeekCalendarRange;
+  readonly drawnHours?: WeekCalendarRange;
+  /**
+   * How many hours show before the grid scrolls (default 12): Reservations' day calendar shows 8, about checklabs'
+   * 560px, so the bookings list under it starts on the first screen. Ignored with `isFill`.
+   */
+  readonly visibleHours?: number;
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -386,15 +391,30 @@ export function WeekCalendar({
   emptyAction,
   view = 'week',
   move,
-  hours,
+  drawnHours,
+  visibleHours,
 }: WeekCalendarProps) {
   // The hours drawn, whole ones: the grid's top is `dayFrom` and its foot `dayTo`, minutes from midnight.
-  const firstHour = Math.max(0, Math.min(23, Math.floor((hours?.startMinute ?? 0) / 60)));
-  const lastHour = Math.max(firstHour + 1, Math.min(24, Math.ceil((hours?.endMinute ?? 1440) / 60)));
+  const firstHour = Math.max(0, Math.min(23, Math.floor((drawnHours?.startMinute ?? 0) / 60)));
+  const lastHour = Math.max(firstHour + 1, Math.min(24, Math.ceil((drawnHours?.endMinute ?? 1440) / 60)));
   const dayFrom = firstHour * 60;
   const dayTo = lastHour * 60;
   /** A minute of the day as the grid places it, from the top of its first hour. */
   const placed = (minute: number) => String(minute - dayFrom);
+  /** A stretch cut to the hours drawn, or nothing when none of it is drawn. */
+  const cut = (range: WeekCalendarRange): WeekCalendarRange | undefined => {
+    const startMinute = Math.max(range.startMinute, dayFrom);
+    const endMinute = Math.min(range.endMinute, dayTo);
+    return endMinute > startMinute ? { startMinute, endMinute } : undefined;
+  };
+  /** A span moved or resized by hand, kept inside the hours drawn, its length kept where it fits. */
+  const keepInHours = (span: WeekCalendarSpan): WeekCalendarSpan => {
+    const length = Math.min(span.endMinute - span.startMinute, dayTo - dayFrom);
+    const startMinute = Math.max(dayFrom, Math.min(span.startMinute, dayTo - length));
+    return { ...span, startMinute, endMinute: startMinute + length };
+  };
+  /** Whether the time now falls on the hours drawn (the now line and its label show only then). */
+  const isNowDrawn = now !== undefined && now.minute >= dayFrom && now.minute <= dayTo;
   const scroller = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const isTeam = view === 'team';
@@ -602,10 +622,12 @@ export function WeekCalendar({
       return null;
     }
     const steps = stepsFor(current.id);
-    const to =
+    // Kept inside the hours drawn: a block never lands where the grid draws nothing.
+    const to = keepInHours(
       grabbed.part === 'resize'
         ? resizedBy(current.from, by.y, columnsNow, steps)
-        : movedBy(current.from, by, columnsNow, steps);
+        : movedBy(current.from, by, columnsNow, steps),
+    );
     return { ...current, to };
   };
   /** Alt and the arrows on a focused block move it a step, with Shift change its length; they land a moment after the last. */
@@ -632,7 +654,9 @@ export function WeekCalendar({
     const columnsNow = measure();
     if (from === undefined || columnsNow === null) return;
     shape.current = columnsNow;
-    const to = keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id));
+    const to = keepInHours(
+      keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id)),
+    );
     if (sameSpan(to, current?.to ?? from)) return;
     setHeld({ id: block.id, from, to, source: 'keys', geometry: columnsNow });
     setSaid(move.canLand(block.id, to) === false ? strings.moveRefused(whereOf(to)) : strings.moveTo(whereOf(to)));
@@ -802,18 +826,18 @@ export function WeekCalendar({
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
       data-view={view}
-      {...(isTeam || view === 'day' || hours !== undefined
+      {...(isTeam || drawnHours !== undefined || visibleHours !== undefined
         ? {
             style: {
               ...(isTeam ? { '--columns': String(Math.max(days.length, 1)) } : {}),
-              // The day view's head holds the days it is given: the week's to pick from, or the one day alone.
-              ...(view === 'day' ? { '--days': String(Math.max(days.length, 1)) } : {}),
-              ...(hours === undefined ? {} : { '--hours': String(lastHour - firstHour) }),
+              ...(drawnHours === undefined ? {} : { '--hours': String(lastHour - firstHour) }),
+              ...(visibleHours === undefined ? {} : { '--visible-hours': String(Math.max(1, visibleHours)) }),
             },
           }
         : {})}
     >
-      {!isTeam && headRow}
+      {/* The day view given one day alone has no head: the page's own bar names the day and picks another. */}
+      {!isTeam && !(view === 'day' && days.length === 1) && headRow}
       <div ref={scroller} className={styles.scroller}>
         {isTeam && headRow}
         <div ref={bodyRef} className={styles.body}>
@@ -827,6 +851,7 @@ export function WeekCalendar({
             ))}
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
+              isNowDrawn &&
               (now.label !== undefined || minuteLabel !== undefined) &&
               (isTeam || days.some((day) => day.key === now.dayKey)) && (
                 <span
@@ -935,32 +960,46 @@ export function WeekCalendar({
                   const open = openHours?.(day.key);
                   return open === undefined
                     ? null
-                    : closedRanges(open).map((range) => (
-                        <span
-                          key={range.startMinute}
-                          className={styles.offHours}
-                          data-off-hours=""
-                          aria-hidden="true"
-                          style={{
-                            '--start': placed(range.startMinute),
-                            '--length': String(range.endMinute - range.startMinute),
-                          }}
-                        />
-                      ));
+                    : closedRanges(open)
+                        .flatMap((whole) => {
+                          const range = cut(whole);
+                          return range === undefined ? [] : [range];
+                        })
+                        .map((range) => (
+                          <span
+                            key={range.startMinute}
+                            className={styles.offHours}
+                            data-off-hours=""
+                            aria-hidden="true"
+                            style={{
+                              '--start': placed(range.startMinute),
+                              '--length': String(range.endMinute - range.startMinute),
+                            }}
+                          />
+                        ));
                 })()}
                 {/* A band across the column (time off), under everything drawn on it; the column's name says it. */}
-                {day.band !== undefined && (
-                  <span
-                    className={styles.band}
-                    aria-hidden="true"
-                    style={{
-                      '--start': placed(day.band.startMinute),
-                      '--length': String(Math.max(day.band.endMinute - day.band.startMinute, 15)),
-                    }}
-                  >
-                    <span className={styles.bandLabel}>{day.band.label}</span>
-                  </span>
-                )}
+                {(() => {
+                  const band =
+                    day.band === undefined
+                      ? undefined
+                      : cut({
+                          startMinute: day.band.startMinute,
+                          endMinute: Math.max(day.band.endMinute, day.band.startMinute + 15),
+                        });
+                  return day.band === undefined || band === undefined ? null : (
+                    <span
+                      className={styles.band}
+                      aria-hidden="true"
+                      style={{
+                        '--start': placed(band.startMinute),
+                        '--length': String(band.endMinute - band.startMinute),
+                      }}
+                    >
+                      <span className={styles.bandLabel}>{day.band.label}</span>
+                    </span>
+                  );
+                })()}
                 {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
                 {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
                   undefined && (
@@ -1122,7 +1161,7 @@ export function WeekCalendar({
                     }
                   />
                 ))}
-                {now !== undefined && (isTeam || now.dayKey === day.key) && (
+                {now !== undefined && isNowDrawn && (isTeam || now.dayKey === day.key) && (
                   <span className={styles.now} style={{ '--start': placed(now.minute) }} aria-hidden="true" />
                 )}
               </div>

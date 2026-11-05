@@ -9,7 +9,7 @@
 // Leaves out: checklabs' waitlist (a later phase: Walk in seats at once), its marketplace listing and deposits; moving
 //   tables by drag and joining tables by hand (later slices). The no show hint (15 minutes past) is checklabs' alert,
 //   never an automatic change. A row's action stays pending until the server answers, so a second tap never lands on
-//   the next action (Seat, then Finish) under the finger.
+//   the next action (Seat, then Finish) under the finger. A past day reads only.
 import type {
   HospitalityStore,
   Place,
@@ -23,11 +23,14 @@ import type {
 import { useHospitality } from '@crm/data/react';
 import {
   Badge,
+  breakpointToken,
   Button,
   ButtonLink,
   Callout,
   Card,
+  CardTitleLevel,
   EmptyState,
+  focusLater,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -57,6 +60,7 @@ import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarStart } from './day-hours.ts';
 import { DEFAULT_BOOKING_MINUTE, NewBookingDialog, OFF_CALENDAR, sourceOf, VisitSheet } from './NewBooking.tsx';
 import { OnlineBookingDrawer, OnlineBookingNotice } from './OnlineBooking.tsx';
+import type { ReservationsSearch } from './search.ts';
 import { strings } from './strings.ts';
 import { WalkInDrawer } from './WalkIn.tsx';
 
@@ -74,17 +78,21 @@ const LOOK: Readonly<Record<VisitStatus, { readonly hue: Hue; readonly next?: Vi
 /** Rows that are over for the night: they sort after everything still to happen. */
 const OVER: ReadonlySet<VisitStatus> = new Set(['completed', 'no_show', 'cancelled']);
 
+/** Still to happen: what can be confirmed, seated, marked a no show or cancelled. */
+const OPEN: ReadonlySet<VisitStatus> = new Set(['booked', 'confirmed', 'arrived']);
+
 /** Minutes a booked guest may be late before the stand is told (checklabs' no show alert). */
 const LATE_MINUTES = 15;
 
-/** Wide enough for every action in the bar with its words (checklabs' header: the day, Online booking, Walk in, New). */
-const WIDE = '(min-width: 72rem)';
+/** The hours the day calendar shows before it scrolls: about checklabs' 560px, so the list starts on the first screen. */
+const CALENDAR_HOURS = 8;
 
-/** Wide enough for the day's arrows, Walk in and New booking beside the date; the rest wait in More. */
-const ROOMY = '(min-width: 48rem)';
-
-/** Wide enough for the list's Guests, Table, Source and Note columns. */
-const LIST_WIDE = '(min-width: 40rem)';
+/**
+ * A desk's window (the shell keeps its sidebar open from here, `bp-page-compact`): the bar holds the day's arrows and
+ * every action, and the list every column. Under it the bar keeps the date, More and New booking, and the list what
+ * the stand acts on.
+ */
+const DESK = `(width >= ${String(breakpointToken('bp-page-compact'))}px)`;
 
 /** The place date today on its own clock. */
 const todayIn = (zone: string) =>
@@ -133,23 +141,29 @@ const since = (from: string, now: number) => {
   return minutes < 60 ? strings.minutes(minutes) : strings.hoursMinutes(Math.floor(minutes / 60), minutes % 60);
 };
 
+/** Whether focus fell to the page (its control went with a change), so the screen hands it on. */
+const focusFell = () => {
+  const active = globalThis.document.activeElement;
+  return active === null || active === globalThis.document.body || active.closest('[inert]') !== null;
+};
+
 /** Props for ReservationsScreen. */
 export interface ReservationsScreenProps {
   readonly slug: string;
   readonly tables: TablesStore;
   readonly hospitality: HospitalityStore;
   readonly toasts: Toasts;
-  /** The day shown (`?date=`), `YYYY-MM-DD`; left out, today on the place's clock. */
-  readonly date?: string;
-  /** A day picked: today is passed as undefined, so the address stays plain. */
-  readonly onDate: (date: string | undefined) => void;
+  /** What the address names: the day (`?date=`, today when left out) and the place (`?place=`, the first). */
+  readonly search: ReservationsSearch;
+  /** Another day or place picked: today and the first place are left out, so the address stays plain. */
+  readonly onSearch: (search: ReservationsSearch) => void;
 }
 
 /** The page: the place, then its day. */
-export function ReservationsScreen({ slug, tables, hospitality, toasts, date, onDate }: ReservationsScreenProps) {
+export function ReservationsScreen({ slug, tables, hospitality, toasts, search, onSearch }: ReservationsScreenProps) {
   const held = hospitality.business(slug);
   const business = useHospitality(held);
-  const [placeId, setPlaceId] = useState<string | undefined>();
+  const canManage = useCan('hospitality.manage');
   const topBar = <TopBar title={strings.reservations} icon="calendar-check" />;
   if (business.status !== 'ready') {
     return (
@@ -167,7 +181,8 @@ export function ReservationsScreen({ slug, tables, hospitality, toasts, date, on
       />
     );
   }
-  const place = business.value.places.find((each) => each.id === placeId) ?? business.value.places[0];
+  const places = business.value.places;
+  const place = places.find((each) => each.id === search.place) ?? places[0];
   if (place === undefined) {
     return (
       <WorkspacePage
@@ -178,29 +193,42 @@ export function ReservationsScreen({ slug, tables, hospitality, toasts, date, on
             <EmptyState
               icon="store"
               title={strings.noPlace}
-              actions={
-                <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
-                  {strings.addPlace}
-                </ButtonLink>
-              }
+              // Only those who set the apps up can open Business; floor staff see the page alone.
+              {...(canManage
+                ? {
+                    actions: (
+                      <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
+                        {strings.addPlace}
+                      </ButtonLink>
+                    ),
+                  }
+                : {})}
             />
           ),
         }}
       />
     );
   }
+  const first = places[0]?.id;
   return (
     <PlaceDay
       key={place.id}
       slug={slug}
       tables={tables}
       hospitality={hospitality}
-      places={business.value.places}
+      places={places}
       place={place}
-      onPlace={setPlaceId}
       toasts={toasts}
-      {...(date === undefined ? {} : { date })}
-      onDate={onDate}
+      {...(search.date === undefined ? {} : { date: search.date })}
+      onDate={(date) =>
+        onSearch({ ...(date === undefined ? {} : { date }), ...(place.id === first ? {} : { place: place.id }) })
+      }
+      onPlace={(next) =>
+        onSearch({
+          ...(search.date === undefined ? {} : { date: search.date }),
+          ...(next === first ? {} : { place: next }),
+        })
+      }
     />
   );
 }
@@ -208,7 +236,7 @@ export function ReservationsScreen({ slug, tables, hospitality, toasts, date, on
 /** A move in flight on a row: which status it asked for, so the row keeps showing that action, pending. */
 type Pending = ReadonlyMap<string, VisitStatus>;
 
-/** A bar action: shown in the bar where it has room, else in More. */
+/** A bar action: in the bar on a desk's window, else in More. */
 type BarAction = 'today' | 'walk-in' | 'view' | 'online';
 
 function PlaceDay({
@@ -217,38 +245,48 @@ function PlaceDay({
   hospitality,
   places,
   place,
-  onPlace,
   toasts,
   date: asked,
   onDate,
+  onPlace,
 }: {
   readonly slug: string;
   readonly tables: TablesStore;
   readonly hospitality: HospitalityStore;
   readonly places: readonly Place[];
   readonly place: Place;
-  readonly onPlace: (placeId: string) => void;
   readonly toasts: Toasts;
   readonly date?: string;
   readonly onDate: (date: string | undefined) => void;
+  readonly onPlace: (placeId: string) => void;
 }) {
   const zone = place.timeZone;
   const today = todayIn(zone);
   const date = asked ?? today;
   const setDate = (next: string) => onDate(next === today ? undefined : next);
   const isToday = date === today;
+  const isPast = date < today;
   const canManage = useCan('hospitality.manage');
   const [view, setView] = useState<'list' | 'floor'>('list');
   const [asking, setAsking] = useState<
     { readonly visit: ServiceVisit; readonly status: 'no_show' | 'cancelled' } | undefined
   >();
   const [openTable, setOpenTable] = useState<string | undefined>();
-  const [walkIn, setWalkIn] = useState<{ readonly tableId?: string } | undefined>();
-  const [isSettingsOpen, setSettingsOpen] = useState(false);
+  // The sheets stay mounted once opened, so each slides out as it closes; a new opening is a new sheet (`key`).
+  const [walkIn, setWalkIn] = useState<{ readonly key: number; readonly tableId?: string; readonly isOpen: boolean }>();
+  const [booking, setBooking] = useState<{
+    readonly key: number;
+    readonly date: string;
+    readonly minute: number;
+    readonly isOpen: boolean;
+  }>();
+  const [settings, setSettings] = useState<{ readonly key: number; readonly isOpen: boolean }>();
+  const opened = useRef(0);
   const [isJumpOpen, setJumpOpen] = useState(false);
   const jumpRef = useRef<HTMLButtonElement>(null);
-  // New booking, at the time picked on the calendar or 19:00; and the booking whose detail is open.
-  const [booking, setBooking] = useState<{ readonly date: string; readonly minute: number } | undefined>();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Each row's next move, so focus can land on it once the button pressed has gone (Confirm, once confirmed).
+  const nextRefs = useRef(new Map<string, HTMLButtonElement>());
   const [openVisit, setOpenVisit] = useState<string | undefined>();
   // Where focus goes back on the calendar once a sheet closes (its block, or its day when the block has gone).
   const [focusBlock, setFocusBlock] = useState<{ readonly dayKey: string; readonly blockId?: string } | undefined>();
@@ -260,9 +298,7 @@ function PlaceDay({
   const floorHeld = hospitality.floor(slug, place.id);
   const floor = useHospitality(floorHeld);
   const now = useNow();
-  const isWide = useMatches(WIDE);
-  const isRoomy = useMatches(ROOMY);
-  const isListWide = useMatches(LIST_WIDE);
+  const isDesk = useMatches(DESK);
   const time = (instant: string) =>
     new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: zone }).format(
       new Date(instant),
@@ -288,6 +324,9 @@ function PlaceDay({
       .filter((label) => label !== '')
       .join(' + ');
 
+  /** Once a sheet has closed and focus fell to the page (what opened it went), the page's title takes it. */
+  const handFocusOn = () => focusLater(() => (focusFell() ? titleRef.current : undefined));
+
   const settle = (id: string) => {
     inFlight.current.delete(id);
     setPending((current) => {
@@ -312,6 +351,9 @@ function PlaceDay({
     }
     const refused = await tables.setStatus(slug, place.id, date, visit.id, status);
     settle(visit.id);
+    // The button pressed may have gone with the move (Confirm once confirmed, Finish once finished): focus moves to
+    // the row's next move, else the page's title, never the page.
+    focusLater(() => (focusFell() ? (nextRefs.current.get(visit.id) ?? titleRef.current) : undefined));
     if (refused !== undefined) {
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
@@ -349,37 +391,44 @@ function PlaceDay({
     now - Date.parse(visit.start) > LATE_MINUTES * 60_000;
 
   /**
-   * The row's moves, as checklabs' row has them: Confirm for a booking not yet confirmed, then the next move (Seat,
-   * Finish); while a move is in flight, that move's button, pending, in its place. No show and Cancel ask first
-   * (AC-6565), so they sit one step away, in the row's menu.
+   * The row's moves, as checklabs' row has them: on a desk's window, Confirm for a booking not yet confirmed, then
+   * the next move (Seat, Finish, today only); No show (today) and Cancel ask first (AC-6565), so they sit one step
+   * away in the row's menu, with Confirm there too on a narrow list. A move in flight keeps its own button, pending,
+   * and the others wait. A past day reads only.
    */
   const actionsOf = (visit: ServiceVisit) => {
+    if (isPast) return null;
     const asked = pending.get(visit.id);
-    const next = asked ?? LOOK[visit.status].next;
-    const canFree =
-      asked === undefined && (visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived');
-    const canConfirm = asked === undefined && visit.status === 'booked';
+    const isConfirming = asked === 'confirmed';
+    const canConfirm = visit.status === 'booked' && (asked === undefined || isConfirming);
+    const next = isToday ? (asked !== undefined && !isConfirming ? asked : LOOK[visit.status].next) : undefined;
+    const canFree = asked === undefined && OPEN.has(visit.status);
     const words: Partial<Record<VisitStatus, string>> = {
       started: strings.seat,
       completed: strings.finish,
       no_show: strings.noShow,
       cancelled: strings.cancel,
-      confirmed: strings.confirm,
     };
     return (
       <>
-        {canConfirm &&
-          (isListWide ? (
-            <Button icon="check" onPress={() => void move(visit, 'confirmed')}>
-              {strings.confirm}
-            </Button>
-          ) : (
-            <Button icon="check" label={strings.confirm} onPress={() => void move(visit, 'confirmed')} />
-          ))}
+        {canConfirm && isDesk && (
+          <Button
+            icon="check"
+            isPending={isConfirming}
+            isDisabled={asked !== undefined && !isConfirming}
+            onPress={() => void move(visit, 'confirmed')}
+          >
+            {strings.confirm}
+          </Button>
+        )}
         {next !== undefined && (asked !== undefined || LOOK[visit.status].next !== undefined) && (
           <Button
-            variant={next === 'started' ? 'primary' : 'secondary'}
-            isPending={asked !== undefined}
+            ref={(element) => {
+              if (element === null) nextRefs.current.delete(visit.id);
+              else nextRefs.current.set(visit.id, element);
+            }}
+            isPending={asked !== undefined && !isConfirming}
+            isDisabled={isConfirming}
             onPress={() => void move(visit, next)}
           >
             {words[next] ?? strings.status[next]}
@@ -391,14 +440,22 @@ function PlaceDay({
             <Menu
               label={strings.moreFor(visit.name)}
               onAction={(key) => {
+                if (key === 'confirmed') void move(visit, 'confirmed');
                 if (key === 'no_show' || key === 'cancelled') setAsking({ visit, status: key });
               }}
             >
-              <MenuItem id="no_show" icon="user-x">
-                {strings.noShow}
-              </MenuItem>
+              {!isDesk && visit.status === 'booked' && (
+                <MenuItem id="confirmed" icon="check">
+                  {strings.confirm}
+                </MenuItem>
+              )}
+              {isToday && (
+                <MenuItem id="no_show" icon="user-x">
+                  {strings.noShow}
+                </MenuItem>
+              )}
               <MenuItem id="cancelled" icon="circle-x" isDanger>
-                {strings.cancel}
+                {strings.cancelReservation}
               </MenuItem>
             </Menu>
           </MenuTrigger>
@@ -408,25 +465,25 @@ function PlaceDay({
   };
 
   /**
-   * The detail sheet's moves (checklabs' footer): No show and Cancel (each asking first), Confirm for a booked guest,
-   * then the next move (Seat, Finish) as the primary; each a button, never the row's menu.
+   * The detail sheet's moves (checklabs' footer): No show (today) and Cancel reservation (each asking first), Confirm
+   * for a booked guest, then the next move (Seat, Finish, today only) as the primary; a past day reads only.
    */
   const sheetActions = (visit: ServiceVisit) => {
+    if (isPast) return null;
     const asked = pending.get(visit.id);
     const next = asked ?? LOOK[visit.status].next;
-    const open =
-      asked === undefined && (visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived');
+    const open = asked === undefined && OPEN.has(visit.status);
     return (
       <>
+        {open && isToday && (
+          <Button icon="user-x" onPress={() => setAsking({ visit, status: 'no_show' })}>
+            {strings.noShow}
+          </Button>
+        )}
         {open && (
-          <>
-            <Button icon="user-x" onPress={() => setAsking({ visit, status: 'no_show' })}>
-              {strings.noShow}
-            </Button>
-            <Button icon="circle-x" onPress={() => setAsking({ visit, status: 'cancelled' })}>
-              {strings.cancel}
-            </Button>
-          </>
+          <Button icon="circle-x" onPress={() => setAsking({ visit, status: 'cancelled' })}>
+            {strings.cancelReservation}
+          </Button>
         )}
         {asked === undefined && visit.status === 'booked' && (
           <Button icon="check" onPress={() => void move(visit, 'confirmed')}>
@@ -449,24 +506,23 @@ function PlaceDay({
       <Badge dot={LOOK[visit.status].hue} text={strings.status[visit.status]} />
     );
 
-  // A phone keeps what the stand acts on: when, who (the party and the phone under the name), the state and the
-  // moves; a wider screen adds Guests, Table, Source (checklabs' pill) and the note (truncated, the guest's column
-  // takes the room).
-  const columns: readonly TableColumn[] = isListWide
+  // A desk's list has checklabs' row in columns: when, who (the phone under the name), guests, table, the source
+  // (checklabs' pill), the note (cut short), the state and the moves. A narrower list keeps when, who (the state, the
+  // party and the phone under the name) and the moves, so the name always has its room.
+  const columns: readonly TableColumn[] = isDesk
     ? [
         { id: 'time', label: strings.time, size: 'fit' },
         { id: 'guest', label: strings.guest, isRowHeader: true, size: 'fill' },
         { id: 'party', label: strings.party, size: 'fit', align: 'end' },
         { id: 'table', label: strings.table, size: 'fit' },
         { id: 'source', label: strings.sourceTitle, size: 'fit' },
-        { id: 'note', label: strings.note },
+        { id: 'note', label: strings.note, size: 'fill' },
         { id: 'status', label: strings.statusTitle, size: 'fit' },
         { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
       ]
     : [
         { id: 'time', label: strings.time, size: 'fit' },
         { id: 'guest', label: strings.guest, isRowHeader: true, size: 'fill' },
-        { id: 'status', label: strings.statusTitle, size: 'fit' },
         { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
       ];
 
@@ -476,14 +532,19 @@ function PlaceDay({
       (a, b) => Number(OVER.has(a.status)) - Number(OVER.has(b.status)) || Date.parse(a.start) - Date.parse(b.start),
     );
 
-  /** The guest as checklabs' row has them: the name, and under it the phone (and on a phone, the party first). */
+  /** The guest as checklabs' row has them: the name, and under it the phone (on a narrow list, the state first). */
   const guestOf = (visit: ServiceVisit) => (
     <PersonLine
       id={visit.id}
       name={visit.name}
-      size="sm"
+      {...(!isDesk && isLate(visit) ? { tone: 'away' as const } : {})}
       meta={[
-        ...(isListWide ? [] : [strings.guestsCount(visit.party)]),
+        ...(isDesk
+          ? []
+          : [
+              isLate(visit) ? strings.late(since(visit.start, now)) : strings.status[visit.status],
+              strings.guestsCount(visit.party),
+            ]),
         ...(visit.phone === undefined ? [] : [visit.phone]),
         ...(visit.occasion === undefined ? [] : [strings.occasion(visit.occasion)]),
       ]}
@@ -528,26 +589,28 @@ function PlaceDay({
       new Date(2000, 0, 1, Math.floor(minute / 60), minute % 60),
     );
   // Bookings are taken from today on: a past day reads only.
-  const canBook = date >= today;
+  const canBook = !isPast;
   const nowMinute = minuteOfDay(new Date(now), zone);
-  const theDay = (() => {
-    const at = new Date(`${date}T12:00:00.000Z`);
-    const format = (options: Intl.DateTimeFormatOptions) =>
-      new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' }).format(at);
-    return {
-      key: date,
-      weekday: format({ weekday: 'short' }),
-      dayNumber: format({ day: 'numeric' }),
-      label: dayLabel,
-      isToday,
-      isPast: date < today,
-    };
-  })();
+  // The time now on the hour axis, without its day period so it fits the axis ("11:51", not "11:51 AM").
+  const nowLabel = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: zone })
+    .formatToParts(new Date(now))
+    .filter((part) => part.type !== 'dayPeriod')
+    .map((part) => part.value)
+    .join('')
+    .trim();
+  const theDay = {
+    key: date,
+    weekday: '',
+    dayNumber: '',
+    label: dayLabel,
+    isToday,
+    isPast,
+  };
 
   /**
-   * Checklabs' day calendar: the chosen day alone, 10:00 to midnight (from the day's first service or booking when
-   * sooner), its bookings by time (cancelled and no shows left out); a picked time books. Its line counts the
-   * bookings and the day's covers, as the Stats row did.
+   * Checklabs' day calendar: the chosen day alone (the bar names it), 10:00 to midnight (from the day's first service
+   * or booking when sooner), eight hours at a time, its bookings by time (cancelled and no shows left out); a picked
+   * time books. Its line counts what is on it and the day's covers, as the Stats row did.
    */
   const calendar = (value: ServiceDayView | undefined) => {
     const shown = (value?.visits ?? []).filter((visit) => !OFF_CALENDAR.has(visit.status));
@@ -586,7 +649,8 @@ function PlaceDay({
           label={strings.calendarLabel(dayLabel)}
           view="day"
           days={[theDay]}
-          hours={{ startMinute: from, endMinute: 24 * 60 }}
+          drawnHours={{ startMinute: from, endMinute: 24 * 60 }}
+          visibleHours={CALENDAR_HOURS}
           blocks={blocks}
           {...(value === undefined ? { isLoading: true } : {})}
           {...(openVisit === undefined ? {} : { openId: openVisit })}
@@ -595,14 +659,14 @@ function PlaceDay({
           onSelectDay={setDate}
           hourLabel={hourLabel}
           minuteLabel={minuteLabel}
-          {...(isToday ? { now: { dayKey: today, minute: nowMinute, label: minuteLabel(nowMinute) } } : {})}
+          {...(isToday ? { now: { dayKey: today, minute: nowMinute, label: nowLabel } } : {})}
           scrollToMinute={isToday ? Math.max(from, (Math.floor(nowMinute / 60) - 1) * 60) : from}
           onOpen={setOpenVisit}
           onClose={() => setOpenVisit(undefined)}
           // A picked time opens New booking at its start; the table's hold sets the length (checklabs' click a slot).
           drawMinutes={30}
           drawStartMinute={() => DEFAULT_BOOKING_MINUTE}
-          {...(canBook ? { onDraw: (span) => setBooking({ date: span.dayKey, minute: span.startMinute }) } : {})}
+          {...(canBook ? { onDraw: (span) => openBooking(span.dayKey, span.startMinute) } : {})}
         />
       </>
     );
@@ -613,7 +677,7 @@ function PlaceDay({
     const holding = value.visits.filter((visit) => visit.resourceIds.includes(table.id));
     const seated = holding.find((visit) => visit.status === 'started');
     const coming = holding
-      .filter((visit) => visit.status === 'booked' || visit.status === 'confirmed' || visit.status === 'arrived')
+      .filter((visit) => OPEN.has(visit.status))
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0];
     const late = coming !== undefined && isLate(coming);
     const soon = isToday && coming !== undefined && Date.parse(coming.start) - now < 30 * 60_000;
@@ -668,44 +732,64 @@ function PlaceDay({
     ].filter((group) => group.tables.length > 0);
     return groups.map((group) => {
       const free = group.tables.filter((table) => tableState(table, value).state === 'free').length;
+      const hasBar = groups.length > 1 || group.id !== 'none';
+      const grid = <TileGrid columns="dense">{group.tables.map((table) => tile(table, value))}</TileGrid>;
       return (
         <Fragment key={group.id}>
-          {groups.length > 1 || group.id !== 'none' ? (
+          {hasBar ? (
             <SectionBar title={group.name} isTitleQuiet description={strings.freeOf(free, group.tables.length)} />
           ) : null}
-          <TileGrid columns="dense">{group.tables.map((table) => tile(table, value))}</TileGrid>
+          {/* With no area's bar (an h2) over them, the tiles' names are the page's next heading level. */}
+          {hasBar ? grid : <CardTitleLevel value={2}>{grid}</CardTitleLevel>}
         </Fragment>
       );
     });
   };
 
-  const openBooking = () => setBooking({ date, minute: DEFAULT_BOOKING_MINUTE });
+  const openBooking = (onDay: string, minute: number) => {
+    opened.current += 1;
+    setBooking({ key: opened.current, date: onDay, minute, isOpen: true });
+  };
+  const openWalkIn = (tableId?: string) => {
+    opened.current += 1;
+    setWalkIn({ key: opened.current, ...(tableId === undefined ? {} : { tableId }), isOpen: true });
+  };
+  const openSettings = () => {
+    opened.current += 1;
+    setSettings({ key: opened.current, isOpen: true });
+  };
   const run = (action: BarAction) => {
     if (action === 'today') setDate(today);
-    else if (action === 'walk-in') setWalkIn({});
+    else if (action === 'walk-in') openWalkIn();
     else if (action === 'view') setView(view === 'list' ? 'floor' : 'list');
-    else setSettingsOpen(true);
+    else openSettings();
   };
-  // The bar's actions in checklabs' order (the day, Online booking, Walk in, New booking); a narrower bar keeps the
-  // ones it has room for and gives the rest to More. Walk in seats now, so it shows on today only.
-  const inBar: readonly BarAction[] = isWide
-    ? ['today', 'view', 'online', 'walk-in']
-    : isRoomy
-      ? ['today', 'walk-in']
-      : [];
-  const offered: readonly BarAction[] = [
-    ...(isToday ? [] : (['today'] as const)),
-    'view',
-    ...(canManage ? (['online'] as const) : []),
-    ...(isToday ? (['walk-in'] as const) : []),
-  ];
-  const inMore = offered.filter((action) => !inBar.includes(action));
+  // Narrower than a desk's window, the bar keeps the date, More and New booking; More holds, in checklabs' order,
+  // the rest (Walk in sits by the bookings list there, where the host works).
+  const inMore: readonly BarAction[] = isDesk
+    ? []
+    : [...(isToday ? [] : (['today'] as const)), 'view', ...(canManage ? (['online'] as const) : [])];
+
+  const placeSwitch =
+    places.length > 1 ? (
+      <Select
+        label={strings.place}
+        isLabelHidden={isDesk}
+        items={places.map((each) => ({ id: each.id, label: each.name }))}
+        value={place.id}
+        onChange={(next) => {
+          if (typeof next === 'string') onPlace(next);
+        }}
+      />
+    ) : null;
 
   const topBar = (
     <TopBar
       title={strings.reservations}
       icon="calendar-check"
-      // The day, always in the bar (a phone too), and the way to any other: checklabs' date field.
+      titleRef={titleRef}
+      // The day, always in the bar (a phone too), and the way to any other: checklabs' date field. On a desk's window
+      // the day's arrows sit beside it, where nothing that comes and goes in the bar can move them.
       meta={
         <>
           <Button
@@ -737,53 +821,47 @@ function PlaceDay({
               }}
             />
           </Popover>
+          {isDesk && (
+            <>
+              <Button
+                variant="ghost"
+                icon="chevron-left"
+                label={strings.previousDay}
+                onPress={() => setDate(shift(date, -1))}
+              />
+              <Button
+                variant="ghost"
+                icon="chevron-right"
+                label={strings.nextDay}
+                onPress={() => setDate(shift(date, 1))}
+              />
+              {/* Today only away from today, after the arrows, so they never move. */}
+              {!isToday && <Button onPress={() => setDate(today)}>{strings.today}</Button>}
+            </>
+          )}
         </>
       }
     >
-      {places.length > 1 && (
-        <Select
-          label={strings.place}
-          isLabelHidden
-          items={places.map((each) => ({ id: each.id, label: each.name }))}
-          value={place.id}
-          onChange={(next) => {
-            if (typeof next === 'string') onPlace(next);
-          }}
-        />
-      )}
-      {isRoomy && (
-        <>
-          <Button
-            variant="ghost"
-            icon="chevron-left"
-            label={strings.previousDay}
-            onPress={() => setDate(shift(date, -1))}
-          />
-          <Button isDisabled={isToday} onPress={() => setDate(today)}>
-            {strings.today}
-          </Button>
-          <Button
-            variant="ghost"
-            icon="chevron-right"
-            label={strings.nextDay}
-            onPress={() => setDate(shift(date, 1))}
-          />
-        </>
-      )}
-      {inBar.includes('view') && (
+      {isDesk && placeSwitch}
+      {isDesk && (
         <SegmentedControl
           label={strings.view}
           value={view}
           onChange={(next) => setView(next === 'floor' ? 'floor' : 'list')}
           segments={[
-            { value: 'list', label: strings.list, icon: 'list' },
-            { value: 'floor', label: strings.floor, icon: 'layout-grid' },
+            { value: 'list', label: strings.list, icon: 'list', isIconOnly: true },
+            { value: 'floor', label: strings.floor, icon: 'layout-grid', isIconOnly: true },
           ]}
         />
       )}
-      {inBar.includes('online') && canManage && (
-        <Button icon="globe" onPress={() => setSettingsOpen(true)}>
+      {isDesk && canManage && (
+        <Button icon="globe" onPress={openSettings}>
           {strings.onlineBooking}
+        </Button>
+      )}
+      {isDesk && isToday && (
+        <Button icon="user-plus" onPress={() => openWalkIn()}>
+          {strings.walkIn}
         </Button>
       )}
       {inMore.length > 0 && (
@@ -800,10 +878,6 @@ function PlaceDay({
                 <MenuItem key={action} id={action} icon="calendar">
                   {strings.today}
                 </MenuItem>
-              ) : action === 'walk-in' ? (
-                <MenuItem key={action} id={action} icon="user-plus">
-                  {strings.walkIn}
-                </MenuItem>
               ) : action === 'view' ? (
                 <MenuItem key={action} id={action} icon={view === 'list' ? 'layout-grid' : 'list'}>
                   {view === 'list' ? strings.showFloor : strings.showList}
@@ -817,13 +891,14 @@ function PlaceDay({
           </Menu>
         </MenuTrigger>
       )}
-      {inBar.includes('walk-in') && isToday && (
-        <Button icon="user-plus" onPress={() => setWalkIn({})}>
-          {strings.walkIn}
-        </Button>
-      )}
       {canBook && (
-        <Button variant="primary" icon="plus" isLabelCollapsible label={strings.newBooking} onPress={openBooking}>
+        <Button
+          variant="primary"
+          icon="plus"
+          isLabelCollapsible
+          label={strings.newBooking}
+          onPress={() => openBooking(date, DEFAULT_BOOKING_MINUTE)}
+        >
           {strings.newBooking}
         </Button>
       )}
@@ -831,9 +906,21 @@ function PlaceDay({
   );
 
   const bookingsBar = (count: number | undefined) => (
-    <SectionBar title={count === undefined ? strings.bookingsTitle : strings.bookings(count)} />
+    <SectionBar
+      title={count === undefined ? strings.bookingsTitle : strings.bookings(count)}
+      // Narrower than a desk's window, Walk in sits by the list (as checklabs' waitlist sits by its bookings).
+      {...(!isDesk && isToday
+        ? {
+            end: (
+              <Button icon="user-plus" onPress={() => openWalkIn()}>
+                {strings.walkIn}
+              </Button>
+            ),
+          }
+        : {})}
+    />
   );
-  // Checklabs' order is the calendar over the list; a phone puts the list (where the host works) first.
+  // Checklabs' order is the calendar over the list; a narrower window puts the list (where the host works) first.
   const listView = (value: ServiceDayView | undefined) => {
     const rows = (
       <>
@@ -841,7 +928,7 @@ function PlaceDay({
         {value === undefined ? <Skeleton shape="text" lines={4} /> : list(value)}
       </>
     );
-    return isListWide ? (
+    return isDesk ? (
       <>
         {calendar(value)}
         {rows}
@@ -854,42 +941,34 @@ function PlaceDay({
     );
   };
 
-  // Guests can't reserve online yet: the one line that says so, with the way to Online booking (setup's own).
-  const notice = canManage ? (
-    <OnlineBookingNotice slug={slug} tables={tables} placeId={place.id} onOpen={() => setSettingsOpen(true)} />
-  ) : null;
-
+  const ready = day.status === 'ready' ? day.value : undefined;
+  // One column whatever loads, its slots fixed, so a day loading never remounts the notice, the list or the calendar.
   const body =
-    day.status === 'loading' ? (
-      view === 'list' ? (
-        <PageColumn>
-          {notice}
-          {listView(undefined)}
-        </PageColumn>
-      ) : (
-        <Skeleton shape="block" />
-      )
-    ) : day.status === 'error' ? (
+    day.status === 'error' ? (
       <EmptyState icon="circle-alert" title={day.error.message} onRetry={dayHeld.retry} />
     ) : (
       <PageColumn>
-        {notice}
-        {day.value.truncated && <Callout tone="info">{strings.truncated}</Callout>}
+        {!isDesk && placeSwitch}
+        {/* Guests can't reserve online yet: the one line that says so, with the way in (setup's own). */}
+        {canManage ? (
+          <OnlineBookingNotice slug={slug} tables={tables} placeId={place.id} onOpen={openSettings} />
+        ) : null}
+        {ready?.truncated === true ? <Callout tone="info">{strings.truncated}</Callout> : null}
         {view === 'list' ? (
-          listView(day.value)
+          listView(ready)
         ) : floor.status === 'error' ? (
           <EmptyState icon="circle-alert" title={floor.error.message} onRetry={floorHeld.retry} />
-        ) : floor.status === 'loading' ? (
+        ) : floor.status === 'loading' || ready === undefined ? (
           <Skeleton shape="block" />
         ) : (
-          tiles(day.value, floor.value)
+          tiles(ready, floor.value)
         )}
       </PageColumn>
     );
 
-  const shownVisit = day.status === 'ready' ? day.value.visits.find((visit) => visit.id === openVisit) : undefined;
+  const shownVisit = ready?.visits.find((visit) => visit.id === openVisit);
   const detailTable = tableList.find((table) => table.id === openTable);
-  const detail = detailTable === undefined || day.status !== 'ready' ? undefined : tableState(detailTable, day.value);
+  const detail = detailTable === undefined || ready === undefined ? undefined : tableState(detailTable, ready);
 
   return (
     <>
@@ -909,7 +988,7 @@ function PlaceDay({
                 variant="primary"
                 icon="user-plus"
                 onPress={() => {
-                  setWalkIn({ tableId: detailTable.id });
+                  openWalkIn(detailTable.id);
                   setOpenTable(undefined);
                 }}
               >
@@ -981,6 +1060,8 @@ function PlaceDay({
       />
       {booking !== undefined && (
         <NewBookingDialog
+          key={booking.key}
+          isOpen={booking.isOpen}
           slug={slug}
           tables={tables}
           placeId={place.id}
@@ -990,9 +1071,13 @@ function PlaceDay({
           now={now}
           floorTables={tableList}
           areas={floor.status === 'ready' ? floor.value.areas : []}
-          onClose={() => setBooking(undefined)}
+          onClose={() => {
+            setBooking({ ...booking, isOpen: false });
+            handFocusOn();
+          }}
           onBooked={(name, bookedDay) => {
-            setBooking(undefined);
+            setBooking({ ...booking, isOpen: false });
+            handFocusOn();
             if (bookedDay !== date) setDate(bookedDay);
             toasts.toast({ tone: 'success', message: strings.booked(name) });
           }}
@@ -1000,25 +1085,36 @@ function PlaceDay({
       )}
       {walkIn !== undefined && (
         <WalkInDrawer
+          key={walkIn.key}
+          isOpen={walkIn.isOpen}
           slug={slug}
           tables={tables}
           place={place}
           date={today}
           {...(walkIn.tableId === undefined ? {} : { tableId: walkIn.tableId })}
-          onClose={() => setWalkIn(undefined)}
+          onClose={() => {
+            setWalkIn({ ...walkIn, isOpen: false });
+            handFocusOn();
+          }}
           onSeated={(label, party) => {
-            setWalkIn(undefined);
+            setWalkIn({ ...walkIn, isOpen: false });
+            handFocusOn();
             toasts.toast({ tone: 'success', message: strings.seatedWalkIn(label, party) });
           }}
         />
       )}
-      {isSettingsOpen && canManage && (
+      {settings !== undefined && canManage && (
         <OnlineBookingDrawer
+          key={settings.key}
+          isOpen={settings.isOpen}
           slug={slug}
           tables={tables}
           place={place}
           toasts={toasts}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettings({ ...settings, isOpen: false });
+            handFocusOn();
+          }}
         />
       )}
       <Modal
@@ -1037,7 +1133,7 @@ function PlaceDay({
           <>
             <Button slot="close">{strings.keepReservation}</Button>
             <Button
-              variant="danger"
+              variant="danger-solid"
               onPress={() => {
                 if (asking !== undefined) void move(asking.visit, asking.status);
                 setAsking(undefined);

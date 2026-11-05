@@ -807,11 +807,11 @@ export const DayView: Story = {
 };
 
 /**
- * `hours`: the day view given one day, drawn from 10:00 to midnight (Reservations' day calendar, after checklabs'):
- * one day's head, the first hour labelled under the top line, and nothing before it.
+ * `drawnHours` and `visibleHours`: the day view given one day, drawn from 10:00 to midnight, eight hours at a time
+ * (Reservations' day calendar, after checklabs'): no head, the first hour labelled under the top line, nothing before.
  */
 export const DayHours: Story = {
-  args: { label: 'Day calendar, Thursday 8 October', scrollToMinute: 10 * 60 },
+  args: { label: 'Day calendar, Thursday 8 October', scrollToMinute: 10 * 60, visibleHours: 8 },
   render: (args) => (
     <Stage width="fill">
       <WeekCalendar
@@ -819,12 +819,12 @@ export const DayHours: Story = {
         view="day"
         days={days().filter((day) => day.key === '2026-10-08')}
         blocks={blocks().filter((block) => block.dayKey === '2026-10-08')}
-        hours={{ startMinute: 10 * 60, endMinute: 24 * 60 }}
+        drawnHours={{ startMinute: 10 * 60, endMinute: 24 * 60 }}
       />
     </Stage>
   ),
   play: async ({ canvas, canvasElement }) => {
-    await expect(canvasElement.querySelectorAll('button[aria-pressed]')).toHaveLength(1);
+    await expect(canvasElement.querySelectorAll('button[aria-pressed]')).toHaveLength(0);
     await expect(canvas.getByText('10 AM')).toBeVisible();
     await expect(canvas.queryByText('9 AM')).toBeNull();
     await expect(canvas.getByRole('button', { name: /^Grace Hopper, / })).toBeVisible();

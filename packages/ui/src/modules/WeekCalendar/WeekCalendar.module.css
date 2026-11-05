@@ -23,9 +23,9 @@
     --lanes: 1;
     --span: 1;
     --nest: var(--space-12);
-    /* The hours the grid draws (its `hours`, the whole day by default), and the day view's head's days. */
+    /* The hours the grid draws (its `hours`, the whole day by default), and how many show before it scrolls. */
     --hours: 24;
-    --days: 7;
+    --visible-hours: 12;
 
     position: relative;
     display: flex;
@@ -174,7 +174,8 @@
 
   .scroller {
     overflow-y: auto;
-    block-size: calc(var(--hour) * 12);
+    /* Never taller than the hours drawn: a short stretch leaves no empty strip under the grid. */
+    block-size: calc(var(--hour) * min(var(--visible-hours), var(--hours)));
   }
 
   .body {
@@ -193,7 +194,7 @@
   .root[data-fill] .scroller {
     flex: 1;
     block-size: auto;
-    min-block-size: calc(var(--hour) * 6);
+    min-block-size: calc(var(--hour) * min(6, var(--hours)));
   }
 
   .axis {
@@ -678,12 +679,7 @@
     scroll-snap-align: start;
   }
 
-  /* The day view: the selected day across the width, as the narrow week below; the head holds the days it is given,
-     the week's to pick from, or the one day alone (Reservations' day calendar). */
-  .root[data-view='day'] .head {
-    grid-template-columns: calc(var(--axis) * 2) repeat(var(--days), minmax(0, 1fr));
-  }
-
+  /* The day view: the selected day across the width, as the narrow week below, the head still the week's days. */
   .root[data-view='day'] .body {
     grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
   }

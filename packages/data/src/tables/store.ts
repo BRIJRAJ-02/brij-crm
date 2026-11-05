@@ -128,6 +128,9 @@ export function openTables(given: {
   const setups = new Map<string, ReturnType<typeof holder<TableSetupView>>>();
   const days = new Map<string, ReturnType<typeof holder<ServiceDayView>>>();
   const shown = new Map<string, number>();
+  // Each day's held view as screens get it, made once: a new object each call made a screen let go and hold again on
+  // every render, reading the day each time and racing its own row moves (review of 5 November 2026).
+  const shownDays = new Map<string, HospitalityHeld<ServiceDayView>>();
 
   const setupOf = (workspace: string, placeId: string) => {
     const key = `${workspace}:${placeId}`;
@@ -149,11 +152,13 @@ export function openTables(given: {
     return found;
   };
 
-  /** A held day that reads again while shown: every minute without live updates. */
+  /** A held day that reads again while shown: every minute without live updates. The same object for the same day. */
   const shownDay = (workspace: string, placeId: string, date: string): HospitalityHeld<ServiceDayView> => {
-    const made = dayOf(workspace, placeId, date);
     const key = dayKey(workspace, placeId, date);
-    return {
+    const known = shownDays.get(key);
+    if (known !== undefined) return known;
+    const made = dayOf(workspace, placeId, date);
+    const view: HospitalityHeld<ServiceDayView> = {
       ...made.held,
       retain() {
         const release = made.held.retain();
@@ -170,6 +175,8 @@ export function openTables(given: {
         };
       },
     };
+    shownDays.set(key, view);
+    return view;
   };
 
   return {
@@ -299,11 +306,14 @@ export function openTables(given: {
         .catch(() => undefined);
       return undefined;
     },
-    /** A `visits` change event: every held day of these places reads again (each read is permission checked). */
+    /**
+     * A `visits` change event: every day of these places a screen shows reads again (each read is permission
+     * checked); a day held but not shown reads when it is shown again.
+     */
     placesChanged(workspace: string, placeIds: readonly string[]) {
       for (const [key, held] of days) {
         const [ws, placeId] = key.split(':');
-        if (ws === workspace && placeId !== undefined && placeIds.includes(placeId)) {
+        if (ws === workspace && placeId !== undefined && placeIds.includes(placeId) && shown.has(key)) {
           void held.read().catch(() => undefined);
         }
       }
@@ -313,6 +323,7 @@ export function openTables(given: {
       setups.clear();
       days.clear();
       shown.clear();
+      shownDays.clear();
     },
   };
 }

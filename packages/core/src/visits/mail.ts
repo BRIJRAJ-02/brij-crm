@@ -241,7 +241,7 @@ const OCCASIONS: Readonly<Record<string, string>> = {
 
 /**
  * The staff's email of a new online reservation: who, when, how many, and a button to the Reservations page on the
- * reservation's own day (`?date=`, the place's calendar date).
+ * reservation's own place and day (`?date=`, the place's calendar date, and `?place=`).
  */
 function staffMail(row: MailRow, to: string, when: string, appOrigin: string): BookingMail {
   const party = `${String(row.party_size)} ${row.party_size === 1 ? 'guest' : 'guests'}`;
@@ -263,7 +263,7 @@ function staffMail(row: MailRow, to: string, when: string, appOrigin: string): B
     ],
     button: {
       label: 'Open reservations',
-      url: `${appOrigin}/w/${encodeURIComponent(row.slug)}/reservations${day === '' ? '' : `?date=${day}`}`,
+      url: `${appOrigin}/w/${encodeURIComponent(row.slug)}/reservations?${day === '' ? '' : `date=${day}&`}place=${row.place_id}`,
     },
     why: `You get this because new reservation emails are on for you at ${row.place_name}. Turn them off in Reservations, Online booking.`,
   };
