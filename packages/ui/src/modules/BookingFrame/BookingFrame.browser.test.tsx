@@ -13,6 +13,7 @@ import { page } from 'vitest/browser';
 import { createToasts } from '../../provider/toasts.tsx';
 import { UiProvider } from '../../provider/UiProvider.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { BookingDetails, type BookingDetailsProps } from '../BookingDetails/BookingDetails.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { BookingFrame, BookingProfile, type BookingFact } from './BookingFrame.tsx';
 
@@ -305,6 +306,67 @@ describe('a wide booking page in the window', () => {
     );
     expect(gaps().above).toBe(above);
     expect(rect('section')?.height ?? Infinity).toBeLessThan(atMonth?.height ?? 0);
+  });
+});
+
+describe('the details step on a wide page', () => {
+  const month = { aside: <p>Times</p>, footer: <button type="button">Book</button> };
+  // A month with height to spare under the fields, as the real one has.
+  const tall = <div ref={(element) => element?.style.setProperty('block-size', 'calc(var(--size-sidebar) * 2.5)')} />;
+  const answers = { onBack: () => undefined, onSubmit: () => Promise.resolve({ kind: 'done' as const }) };
+  const long = (key: string) => ({ id: key, key, label: key, answerType: 'long_text' as const, required: false });
+  const rect = (selector: string) => host.querySelector(selector)?.getBoundingClientRect();
+  const heightOf = (name: string) => rect(`textarea[name="${name}"]`)?.height ?? 0;
+  const details = (props: Partial<BookingDetailsProps> = {}) => (
+    <BookingFrame
+      heading="Choose a time"
+      view="details"
+      coverPlace="card"
+      {...month}
+      cover={<BookingDetails {...answers} {...props} />}
+    >
+      {tall}
+    </BookingFrame>
+  );
+
+  afterEach(async () => {
+    await page.viewport(414, 896);
+  });
+
+  it('runs the note down to the buttons, and the card keeps the month’s size', async () => {
+    await page.viewport(1280, 1000);
+    draw(
+      <BookingFrame heading="Choose a time" view="month" {...month}>
+        {tall}
+      </BookingFrame>,
+    );
+    const atMonth = rect('section');
+    draw(details());
+    expect(rect('section')?.height).toBe(atMonth?.height);
+    expect(heightOf('note')).toBeGreaterThan(80);
+    const box = host.querySelector('textarea[name="note"]')?.parentElement?.getBoundingClientRect();
+    // The two gaps of the form's column, around the empty line above the buttons.
+    expect((rect('form > :last-child')?.top ?? 0) - (box?.bottom ?? 0)).toBeLessThanOrEqual(32);
+  });
+
+  it('gives the spare height to the last long text question, not the note', async () => {
+    await page.viewport(1280, 1000);
+    draw(details({ questions: [long('first'), long('last')] }));
+    expect(heightOf('last')).toBeGreaterThan(heightOf('first'));
+    expect(heightOf('first')).toBe(heightOf('note'));
+  });
+
+  it('leaves the note its own size where the step hugs: a phone', async () => {
+    await page.viewport(390, 844);
+    draw(details());
+    expect(heightOf('note')).toBeLessThanOrEqual(72);
+  });
+
+  it('grows the card for a form taller than the month, every box at its usual size', async () => {
+    await page.viewport(1280, 1000);
+    draw(details({ questions: Array.from({ length: 12 }, (_, at) => long(`q${String(at)}`)) }));
+    expect(heightOf('q11')).toBe(heightOf('q0'));
+    expect(rect('.ws-booking-frame-cover')?.bottom ?? Infinity).toBeLessThanOrEqual(rect('section')?.bottom ?? 0);
   });
 });
 

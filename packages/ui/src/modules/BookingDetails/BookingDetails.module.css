@@ -29,6 +29,20 @@
     display: contents;
   }
 
+  /* The last long text box: on the wide page's held card (BookingFrame's breakpoint) it takes the height the fields
+     leave, so the form runs down to Back and Confirm. A taller form has none to give, and grows the card as ever. */
+  .filling {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  @media (width >= 1024px) {
+    .filling {
+      flex: 1;
+    }
+  }
+
   .heading {
     margin: 0;
     color: var(--text);

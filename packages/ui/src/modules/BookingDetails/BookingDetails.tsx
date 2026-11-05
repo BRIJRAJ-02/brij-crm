@@ -179,6 +179,8 @@ export function BookingDetails({
   const given = Object.fromEntries(questions.map((question) => [question.key, answerOf(question, held[question.key])]));
   const shown = questions.length === 0 ? new Set<string>() : visibleQuestions(questions, given);
   const showing = questions.filter((question) => shown.has(question.key));
+  // The last long text box showing runs the form down to its buttons on a wide page: the note, unless a question follows.
+  const fillingKey = showing.findLast((question) => question.answerType === 'long_text')?.key;
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   // Each refused Confirm shakes the fields it found wrong once (transitions.dev's error state shake). The round flips
   // between two names so the same field shakes again on the next refusal.
@@ -540,21 +542,29 @@ export function BookingDetails({
           />
         </div>
       )}
-      <Field
-        // Optional in its own words, in the label where it is read first (critics C14, A11).
-        label={strings.note}
-        name="note"
-        isMultiline
-        maxLength={2000}
-        value={note}
-        onChange={setNote}
-      />
+      <div className={fillingKey === undefined ? styles.filling : styles.shaker}>
+        <Field
+          // Optional in its own words, in the label where it is read first (critics C14, A11).
+          label={strings.note}
+          name="note"
+          isMultiline
+          isFilling={fillingKey === undefined}
+          maxLength={2000}
+          value={note}
+          onChange={setNote}
+        />
+      </div>
       {showing.map((question) => {
         const field = `${ANSWER_FIELD}${question.key}`;
         return (
-          <div key={question.key} className={styles.question} data-question={question.key}>
+          <div
+            key={question.key}
+            className={question.key === fillingKey ? styles.filling : styles.question}
+            data-question={question.key}
+          >
             <Question
               question={question}
+              isFilling={question.key === fillingKey}
               words={WORDS}
               value={held[question.key]}
               error={errors[field]}
