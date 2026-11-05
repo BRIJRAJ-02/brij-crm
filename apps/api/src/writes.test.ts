@@ -136,6 +136,8 @@ const READS: ReadonlySet<string> = new Set([
   'menu.draft',
   // Table seating's reads (spec 0066 B7 lite).
   'tables.setup',
+  'tables.places',
+  'tables.floor',
   'tables.day',
   // A walk in's free tables now (spec 0066 B7 lite).
   'tables.freeTables',

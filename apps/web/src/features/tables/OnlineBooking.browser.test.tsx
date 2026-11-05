@@ -8,7 +8,6 @@ import type {
   BusinessView,
   HospitalityHeld,
   HospitalityHeldState,
-  HospitalityStore,
   PlaceFloor,
   ServiceDayView,
   TableRules,
@@ -139,8 +138,9 @@ function storesOf(online: boolean) {
   const floor = heldOf(FLOOR);
   const day = heldOf(DAY);
   const { held: setup, change: changeSetup } = changingHeld(setupOf(online));
-  const hospitality = { business: () => business, floor: () => floor } as unknown as HospitalityStore;
   const tables = {
+    places: () => business,
+    floor: () => floor,
     day: () => day,
     setup: () => setup,
     saveSetup: (_slug: string, _place: string, rules: TableRules) => {
@@ -152,7 +152,7 @@ function storesOf(online: boolean) {
       return Promise.resolve(undefined);
     },
   } as unknown as TablesStore;
-  return { hospitality, tables, saved, notified, changeSetup };
+  return { tables, saved, notified, changeSetup };
 }
 
 const toasts = { toast: () => '', dismiss: () => undefined } as never;
@@ -181,25 +181,16 @@ async function shoot(name: string, theme: Theme, width: number) {
   await page.screenshot({ path: `${SHOT_DIR}/${name}-${theme}-${String(width)}.png` });
 }
 
-function Page({ tables, hospitality }: { readonly tables: TablesStore; readonly hospitality: HospitalityStore }) {
+function Page({ tables }: { readonly tables: TablesStore }) {
   const [search, setSearch] = useState<ReservationsSearch>({});
-  return (
-    <ReservationsScreen
-      slug="acme"
-      tables={tables}
-      hospitality={hospitality}
-      toasts={toasts}
-      search={search}
-      onSearch={setSearch}
-    />
-  );
+  return <ReservationsScreen slug="acme" tables={tables} toasts={toasts} search={search} onSearch={setSearch} />;
 }
 
 /** The page at `width`, with Online booking open from the bar (from More on a narrow one). */
 async function open(width: number, online = false) {
   await page.viewport(width, width < 600 ? 844 : 900);
   const stores = storesOf(online);
-  shown = await renderInApp(() => <Page tables={stores.tables} hospitality={stores.hospitality} />, {
+  shown = await renderInApp(() => <Page tables={stores.tables} />, {
     data: {},
     pattern: '/w/$slug/reservations',
     at: '/w/acme/reservations',

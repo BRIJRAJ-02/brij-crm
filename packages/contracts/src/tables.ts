@@ -3,7 +3,7 @@
 // One schema per shape, the type beside it under the same name.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { PlaceHours } from './hospitality.ts';
+import { Area, Place, PlaceHours, Resource } from './hospitality.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 import { APPOINTMENT_STATUSES, LOOKUP_PATTERN, VISIT_LIMITS } from './visits-model.ts';
@@ -223,6 +223,32 @@ export const TablePlaceInput = WorkspaceScoped.extend({ placeId: Uuid });
 /** One place's input. */
 export type TablePlaceInput = z.infer<typeof TablePlaceInput>;
 
+/** A place as the Reservations page draws it, and no more: its name, its zone and the hours its calendar opens at. */
+export const ServicePlace = Place.pick({ id: true, name: true, timeZone: true, hours: true });
+/** A place as the Reservations page draws it. */
+export type ServicePlace = z.infer<typeof ServicePlace>;
+
+/** The places those who run the floor can pick between, in the business's order. */
+export const ServicePlaces = z.object({ places: z.array(ServicePlace) });
+/** The places those who run the floor can pick between. */
+export type ServicePlaces = z.infer<typeof ServicePlaces>;
+
+/** A live table as the Reservations page draws it: none of the setup on it (online, joins, order). */
+export const ServiceTable = Resource.pick({
+  id: true,
+  label: true,
+  areaId: true,
+  minCapacity: true,
+  maxCapacity: true,
+});
+/** A live table as the Reservations page draws it. */
+export type ServiceTable = z.infer<typeof ServiceTable>;
+
+/** A place's areas and live tables, as the Reservations page draws them. */
+export const ServiceFloor = z.object({ placeId: Uuid, areas: z.array(Area), resources: z.array(ServiceTable) });
+/** A place's areas and live tables, as the Reservations page draws them. */
+export type ServiceFloor = z.infer<typeof ServiceFloor>;
+
 /** Saving the rules; `online: true` is Publish, refused with the one line fix while a step isn't done. */
 export const SaveTableSetupInput = WorkspaceScoped.extend({ placeId: Uuid, rules: TableRules, mutationId: Uuid });
 /** Saving the rules. */
@@ -346,7 +372,8 @@ export const StaffBookInput = WorkspaceScoped.extend({
 export type StaffBookInput = z.infer<typeof StaffBookInput>;
 
 /**
- * Table seating's staff side. `setup` and `saveSetup` are `hospitality.manage`'s; `day` and `setStatus` are Run
+ * Table seating's staff side. `setup` and `saveSetup` are `hospitality.manage`'s; `places` and `floor` (the page's
+ * places and tables, only the fields it draws) answer whoever opens Reservations; `day` and `setStatus` are Run
  * service's (`hospitality.service`), which reaches table reservations only, as do `setNotify` (the reader's own new
  * reservation emails), `freeTables`, `walkIn` (seat a party that walked in, now) and `book` (a reservation
  * the host takes). Each refuses `APP_NOT_INSTALLED` without
@@ -355,6 +382,8 @@ export type StaffBookInput = z.infer<typeof StaffBookInput>;
 export const tablesContract = {
   setup: oc.input(TablePlaceInput).output(TableSetupView),
   saveSetup: oc.input(SaveTableSetupInput).output(TableSetupView),
+  places: oc.input(WorkspaceScoped).output(ServicePlaces),
+  floor: oc.input(TablePlaceInput).output(ServiceFloor),
   day: oc.input(ServiceDayInput).output(ServiceDayView),
   setStatus: oc.input(SetVisitStatusInput).output(VisitStatusMoved),
   setNotify: oc.input(SetTableNotifyInput).output(TableNotifySet),

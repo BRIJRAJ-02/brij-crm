@@ -5,7 +5,7 @@
 //   email, notes) and read or move one booking without leaving the day.
 // Leaves out: checklabs' "Unassigned (host picks at arrival)": our engine holds a table for every booking, so the
 //   choice is "Best free table" (the engine's best fit) or a table that seats the party. No waitlist (no model yet).
-import type { Area, Resource, ServiceVisit, TablesStore, VisitStatus } from '@crm/data';
+import type { Area, ServiceTable, ServiceVisit, TablesStore, VisitStatus } from '@crm/data';
 import {
   Badge,
   Button,
@@ -41,8 +41,8 @@ export const DEFAULT_BOOKING_MINUTE = 19 * 60;
 const STEP = 15;
 
 /** The tables that seat a party alone (checklabs offers only tables that fit), in floor order. */
-export const tablesFor = (tables: readonly Resource[], party: number) =>
-  tables.filter((table) => !table.archived && table.minCapacity <= party && table.maxCapacity >= party);
+export const tablesFor = (tables: readonly ServiceTable[], party: number) =>
+  tables.filter((table) => table.minCapacity <= party && table.maxCapacity >= party);
 
 /** Which id the table Select uses for the engine's pick. */
 const BEST = 'best';
@@ -76,7 +76,7 @@ export function NewBookingDialog({
   readonly minute: number;
   /** The clock now, so a time already gone is refused before it is sent. */
   readonly now: number;
-  readonly floorTables: readonly Resource[];
+  readonly floorTables: readonly ServiceTable[];
   readonly areas: readonly Area[];
   readonly onClose: () => void;
   readonly onBooked: (name: string, day: string) => void;

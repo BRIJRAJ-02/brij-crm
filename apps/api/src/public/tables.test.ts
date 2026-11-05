@@ -374,6 +374,16 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
 });
 
 describe('walk ins and new reservation emails on the staff side (spec 0066 B7 lite)', () => {
+  it('answers the Reservations page’s places and tables with only the fields it draws', async () => {
+    const { m, placeId } = await somewhere();
+    const { places } = await m.client.tables.places({ workspace: m.slug });
+    expect(places.map((place) => place.id)).toEqual([placeId]);
+    expect(Object.keys(places[0] ?? {}).sort()).toEqual(['hours', 'id', 'name', 'timeZone']);
+    const floor = await m.client.tables.floor({ workspace: m.slug, placeId });
+    expect(floor.resources.map((table) => table.label)).toEqual(['T1']);
+    expect(Object.keys(floor.resources[0] ?? {}).sort()).toEqual(['id', 'label', 'maxCapacity', 'minCapacity']);
+  });
+
   it('lists the free tables for a party, seats a walk in now, and refuses the same table twice', async () => {
     const { m, placeId, rules } = await somewhere();
     await m.client.tables.saveSetup({ workspace: m.slug, placeId, rules, mutationId: newId() });

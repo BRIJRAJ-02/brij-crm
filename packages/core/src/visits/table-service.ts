@@ -15,7 +15,10 @@ import {
   WEEK_DAYS,
   type AppointmentStatus,
   type HoldBySize,
+  type PlaceHours,
   type PlaceHoursShape,
+  type ServiceFloor,
+  type ServicePlaces,
 } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
@@ -474,10 +477,118 @@ export interface ServiceDay {
   readonly truncated: boolean;
 }
 
-/** The day's reservations at a place (AC-6560), by time, every status, and the day's covers. Run service. */
+const HOUR = 3_600_000;
+/**
+ * How long past its planned hold a seated party keeps its table with nobody pressing Finish. Long enough for no real
+ * party to outstay it, short enough that a forgotten Finish last night never closes a table at this morning's opening.
+ */
+export const SEATED_OVERSTAY_HOURS = 6;
+/** The longest a hold runs (`appointment_holds_during`), which bounds how far back a still seated party's can start. */
+const HOLD_MAX_HOURS = 24;
+
+/**
+ * The tables a seated party sits at now, whatever its hold's range says (spec 0065 "Late, overstay, early"): `during`
+ * is the plan, so a party past it, or seated before it, is invisible to the planner's busy and to the exclusion
+ * constraint. What guards these is the check, under the place lock every visit write takes first. Table reservations
+ * at tables only, the ones Run service's day shows and can Finish: a salon's room isn't a seat, and a staffed visit's
+ * plan stays the plan. Online times keep using the plan, as the spec says.
+ */
+export async function seatedTables(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+  now: Date,
+  except?: string,
+): Promise<ReadonlySet<string>> {
+  const stale = new Date(now.getTime() - SEATED_OVERSTAY_HOURS * HOUR).toISOString();
+  const oldest = new Date(now.getTime() - (SEATED_OVERSTAY_HOURS + HOLD_MAX_HOURS) * HOUR).toISOString();
+  const rows = (
+    await tx.execute<{ resource_id: string }>(sql`
+      select distinct h.resource_id::text as resource_id
+      from appointment_holds h
+      join appointments a on a.workspace_id = h.workspace_id and a.id = h.appointment_id
+      join resources r on r.workspace_id = h.workspace_id and r.id = h.resource_id
+      where h.workspace_id = ${workspaceId}::uuid and h.place_id = ${placeId}::uuid and h.live
+        and h.starts_at > ${oldest}::timestamptz and h.ends_at > ${stale}::timestamptz
+        and a.status = 'started' and r.kind = 'table' and ${TABLE_ONLY}
+        ${except === undefined ? sql`` : sql`and a.id <> ${except}::uuid`}
+    `)
+  ).rows;
+  return new Set(rows.map((row) => row.resource_id));
+}
+
+/** Refuses a reader who opens Reservations for neither reason: Run service, or Online booking's `hospitality.manage`. */
+function requireFloorReader(scope: EngineScope): void {
+  if (!can(scope.access, 'hospitality.manage')) requirePermission(scope, 'hospitality.service');
+}
+
+/** The places the Reservations page picks between: only what it draws (AC-6560). Whoever opens the page. */
+export async function listServicePlaces(scope: EngineScope): Promise<ServicePlaces> {
+  requireFloorReader(scope);
+  return inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'table_seating');
+    const rows = (
+      await tx.execute<{ id: string; name: string; time_zone: string; hours: PlaceHours }>(sql`
+        select id::text as id, name, time_zone, hours from places
+        where workspace_id = ${scope.workspaceId}::uuid order by position, id
+      `)
+    ).rows;
+    return {
+      places: rows.map((row) => ({ id: row.id, name: row.name, timeZone: row.time_zone, hours: row.hours })),
+    };
+  });
+}
+
+/** One place's areas and live tables for the Reservations page: only what it draws (AC-6560). Whoever opens the page. */
+export async function readServiceFloor(scope: EngineScope, input: { readonly placeId: string }): Promise<ServiceFloor> {
+  requireFloorReader(scope);
+  const placeId = checkId(input.placeId, 'That place doesn’t exist.');
+  return inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'table_seating');
+    await placeFacts(tx, placeId);
+    const areas = (
+      await tx.execute<{ id: string; name: string; position: number }>(sql`
+        select id::text as id, name, position from areas
+        where workspace_id = ${scope.workspaceId}::uuid and place_id = ${placeId}::uuid order by position, id
+      `)
+    ).rows;
+    const tables = (
+      await tx.execute<{
+        id: string;
+        label: string;
+        area_id: string | null;
+        min_capacity: number;
+        max_capacity: number;
+      }>(sql`
+        select id::text as id, label, area_id::text as area_id, min_capacity, max_capacity from resources
+        where workspace_id = ${scope.workspaceId}::uuid and place_id = ${placeId}::uuid and kind = 'table'
+          and archived_at is null
+        order by position, id
+      `)
+    ).rows;
+    return {
+      placeId,
+      areas: areas.map((row) => ({ id: row.id, name: row.name, position: row.position })),
+      resources: tables.map((row) => ({
+        id: row.id,
+        label: row.label,
+        ...(row.area_id === null ? {} : { areaId: row.area_id }),
+        minCapacity: row.min_capacity,
+        maxCapacity: row.max_capacity,
+      })),
+    };
+  });
+}
+
+/**
+ * The day's reservations at a place (AC-6560), by time, every status, and the day's covers. Run service. Today's also
+ * leads with a party still seated from an earlier day and still holding its table (`seatedTables`), the one way the
+ * host can Finish it: a past day reads only.
+ */
 export async function listServiceDay(
   scope: EngineScope,
   input: { readonly placeId: string; readonly date: string },
+  deps: { readonly now?: () => Date } = {},
 ): Promise<ServiceDay> {
   requirePermission(scope, 'hospitality.service');
   const placeId = checkId(input.placeId, 'That place doesn’t exist.');
@@ -487,6 +598,11 @@ export async function listServiceDay(
     const { zone } = await placeFacts(tx, placeId);
     const from = wallToInstant(input.date, 0, zone);
     const to = wallToInstant(addDays(input.date, 1), 0, zone);
+    const now = deps.now?.() ?? new Date();
+    const isToday = from.getTime() <= now.getTime() && now.getTime() < to.getTime();
+    // Today reaches back as far as a hold still seated can start, so the place and time index still bounds the read.
+    const back = isToday ? new Date(from.getTime() - (SEATED_OVERSTAY_HOURS + HOLD_MAX_HOURS) * HOUR) : from;
+    const stale = new Date(now.getTime() - SEATED_OVERSTAY_HOURS * HOUR);
     const rows = (
       await tx.execute<{
         id: string;
@@ -509,8 +625,13 @@ export async function listServiceDay(
           (select array_agg(distinct h.resource_id::text) from appointment_holds h
             where h.workspace_id = a.workspace_id and h.appointment_id = a.id and h.resource_id is not null) as resource_ids
         from appointments a
-        where a.place_id = ${placeId}::uuid and a.starts_at >= ${from.toISOString()}::timestamptz
+        where a.place_id = ${placeId}::uuid and a.starts_at >= ${back.toISOString()}::timestamptz
           and a.starts_at < ${to.toISOString()}::timestamptz and ${TABLE_ONLY}
+          and (a.starts_at >= ${from.toISOString()}::timestamptz or (a.status = 'started' and exists (
+            select 1 from appointment_holds h
+            where h.workspace_id = a.workspace_id and h.appointment_id = a.id and h.live
+              and h.resource_id is not null and h.ends_at > ${stale.toISOString()}::timestamptz
+          )))
         order by a.starts_at, a.id
         limit ${SERVICE_DAY_CAP + 1}
       `)
@@ -547,6 +668,9 @@ export async function listServiceDay(
     };
   });
 }
+
+/** The words when a reservation is seated at a table someone still sits at. */
+export const STILL_SEATED = 'Someone is still seated at that table. Finish them first.';
 
 /** The moves a host may make from each status (AC-6561); a move back undoes the last one (Undo, AC-6565). */
 const MOVES: Readonly<Record<AppointmentStatus, readonly AppointmentStatus[]>> = {
@@ -680,6 +804,19 @@ export async function setVisitStatus(
       const rehold = live && !HOLDING.includes(row.status) && row.status !== 'completed';
       if (rehold && !(await stillFree(tx, scope.workspaceId, id, row.place_id))) {
         throw refuse('SLOT_TAKEN', 'That time was given to someone else meanwhile.');
+      }
+      if (status === 'started') {
+        // Seating, or the Undo of a Finish: under the place lock, its tables must have nobody seated at them now.
+        const seated = await seatedTables(tx, scope.workspaceId, row.place_id, new Date(now), id);
+        if (seated.size > 0) {
+          const own = (
+            await tx.execute<{ resource_id: string }>(sql`
+              select resource_id::text as resource_id from appointment_holds
+              where appointment_id = ${id}::uuid and resource_id is not null
+            `)
+          ).rows;
+          if (own.some((hold) => seated.has(hold.resource_id))) throw refuse('SLOT_TAKEN', STILL_SEATED);
+        }
       }
       try {
         if (status === 'completed') {

@@ -465,6 +465,10 @@ export type {
 export type {
   FreeTable,
   FreeTablesView,
+  ServiceFloor,
+  ServicePlace,
+  ServicePlaces,
+  ServiceTable,
   ServiceDayView,
   ServiceVisit,
   TableRules,

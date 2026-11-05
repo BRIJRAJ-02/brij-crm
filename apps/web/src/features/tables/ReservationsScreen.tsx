@@ -11,11 +11,10 @@
 //   never an automatic change. A row's action stays pending until the server answers, so a second tap never lands on
 //   the next action (Seat, then Finish) under the finger. A past day reads only.
 import type {
-  HospitalityStore,
-  Place,
-  PlaceFloor,
-  Resource,
   ServiceDayView,
+  ServiceFloor,
+  ServicePlace,
+  ServiceTable,
   ServiceVisit,
   TablesStore,
   VisitStatus,
@@ -93,11 +92,12 @@ const CALENDAR_HOURS = 8;
  */
 const DESK = `(width >= ${String(breakpointToken('bp-page-compact'))}px)`;
 
+/** An instant's date on the place's clock. */
+const dateIn = (at: Date, zone: string) =>
+  new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone }).format(at);
+
 /** The place date today on its own clock. */
-const todayIn = (zone: string) =>
-  new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: zone }).format(
-    new Date(),
-  );
+const todayIn = (zone: string) => dateIn(new Date(), zone);
 
 const shift = (date: string, days: number) => {
   const at = new Date(`${date}T12:00:00.000Z`);
@@ -150,7 +150,6 @@ const focusFell = () => {
 export interface ReservationsScreenProps {
   readonly slug: string;
   readonly tables: TablesStore;
-  readonly hospitality: HospitalityStore;
   readonly toasts: Toasts;
   /** What the address names: the day (`?date=`, today when left out) and the place (`?place=`, the first). */
   readonly search: ReservationsSearch;
@@ -159,28 +158,28 @@ export interface ReservationsScreenProps {
 }
 
 /** The page: the place, then its day. */
-export function ReservationsScreen({ slug, tables, hospitality, toasts, search, onSearch }: ReservationsScreenProps) {
-  const held = hospitality.business(slug);
-  const business = useHospitality(held);
+export function ReservationsScreen({ slug, tables, toasts, search, onSearch }: ReservationsScreenProps) {
+  const held = tables.places(slug);
+  const loaded = useHospitality(held);
   const canManage = useCan('hospitality.manage');
   const topBar = <TopBar title={strings.reservations} icon="calendar-check" />;
-  if (business.status !== 'ready') {
+  if (loaded.status !== 'ready') {
     return (
       <WorkspacePage
         currentPage="reservations"
         page={{
           topBar,
           body:
-            business.status === 'loading' ? (
+            loaded.status === 'loading' ? (
               <Skeleton shape="block" />
             ) : (
-              <EmptyState icon="circle-alert" title={business.error.message} onRetry={held.retry} />
+              <EmptyState icon="circle-alert" title={loaded.error.message} onRetry={held.retry} />
             ),
         }}
       />
     );
   }
-  const places = business.value.places;
+  const places = loaded.value.places;
   const place = places.find((each) => each.id === search.place) ?? places[0];
   if (place === undefined) {
     return (
@@ -214,7 +213,6 @@ export function ReservationsScreen({ slug, tables, hospitality, toasts, search, 
       key={place.id}
       slug={slug}
       tables={tables}
-      hospitality={hospitality}
       places={places}
       place={place}
       toasts={toasts}
@@ -241,7 +239,6 @@ type BarAction = 'today' | 'walk-in' | 'view' | 'online';
 function PlaceDay({
   slug,
   tables,
-  hospitality,
   places,
   place,
   toasts,
@@ -251,9 +248,8 @@ function PlaceDay({
 }: {
   readonly slug: string;
   readonly tables: TablesStore;
-  readonly hospitality: HospitalityStore;
-  readonly places: readonly Place[];
-  readonly place: Place;
+  readonly places: readonly ServicePlace[];
+  readonly place: ServicePlace;
   readonly toasts: Toasts;
   readonly date?: string;
   readonly onDate: (date: string | undefined) => void;
@@ -294,7 +290,7 @@ function PlaceDay({
   const inFlight = useRef(new Set<string>());
   const dayHeld = tables.day(slug, place.id, date);
   const day = useHospitality(dayHeld);
-  const floorHeld = hospitality.floor(slug, place.id);
+  const floorHeld = tables.floor(slug, place.id);
   const floor = useHospitality(floorHeld);
   const now = useNow();
   const isDesk = useMatches(DESK);
@@ -315,8 +311,7 @@ function PlaceDay({
     month: 'short',
     timeZone: 'UTC',
   }).format(new Date(`${date}T12:00:00.000Z`));
-  const tableList: readonly Resource[] =
-    floor.status === 'ready' ? floor.value.resources.filter((each) => !each.archived) : [];
+  const tableList: readonly ServiceTable[] = floor.status === 'ready' ? floor.value.resources : [];
   const labelOf = (ids: readonly string[]) =>
     ids
       .map((id) => tableList.find((each) => each.id === id)?.label ?? '')
@@ -612,7 +607,10 @@ function PlaceDay({
    * time books. Its line counts what is on it and the day's covers, as the Stats row did.
    */
   const calendar = (value: ServiceDayView | undefined) => {
-    const shown = (value?.visits ?? []).filter((visit) => !OFF_CALENDAR.has(visit.status));
+    // A party still seated from before midnight is on the list and the floor, to Finish; the calendar draws this day.
+    const shown = (value?.visits ?? []).filter(
+      (visit) => !OFF_CALENDAR.has(visit.status) && dateIn(new Date(visit.start), zone) === date,
+    );
     const blocks: readonly WeekCalendarBlock[] = shown.map((visit) => {
       const startMinute = minuteOfDay(new Date(visit.start), zone);
       const length = (Date.parse(visit.end) - Date.parse(visit.start)) / 60_000;
@@ -672,7 +670,7 @@ function PlaceDay({
   };
 
   /** A table's state tonight: who sits there, who comes next, and how it reads. */
-  const tableState = (table: Resource, value: ServiceDayView) => {
+  const tableState = (table: ServiceTable, value: ServiceDayView) => {
     const holding = value.visits.filter((visit) => visit.resourceIds.includes(table.id));
     const seated = holding.find((visit) => visit.status === 'started');
     const coming = holding
@@ -687,7 +685,7 @@ function PlaceDay({
     return { holding, seated, coming, late, state, hue };
   };
 
-  const tile = (table: Resource, value: ServiceDayView) => {
+  const tile = (table: ServiceTable, value: ServiceDayView) => {
     const { seated, coming, late, state, hue } = tableState(table, value);
     return (
       <Card
@@ -715,7 +713,7 @@ function PlaceDay({
   };
 
   /** The floor, one group per area in the place's order (tables without one last), each a dense grid of tiles. */
-  const tiles = (value: ServiceDayView, plan: PlaceFloor | undefined) => {
+  const tiles = (value: ServiceDayView, plan: ServiceFloor | undefined) => {
     const areas = [...(plan?.areas ?? [])].sort((a, b) => a.position - b.position);
     const groups = [
       ...areas.map((area) => ({

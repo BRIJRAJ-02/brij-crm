@@ -11,7 +11,6 @@ import type {
   FreeTablesView,
   HospitalityHeld,
   HospitalityHeldState,
-  HospitalityStore,
   PlaceFloor,
   ServiceDayView,
   StaffBooking,
@@ -41,6 +40,8 @@ const TODAY = new Intl.DateTimeFormat('en-CA', {
   timeZone: ZONE,
 }).format(new Date());
 const at = (hour: number, minute = 0) => instantAt(TODAY, hour * 60 + minute, ZONE).toISOString();
+const shift = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T12:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 const BUSINESS: BusinessView = {
   canEdit: true,
@@ -197,8 +198,9 @@ function storesOf() {
   const business = heldOf(BUSINESS);
   const floor = heldOf(FLOOR);
   const setup = heldOf(SETUP);
-  const hospitality = { business: () => business, floor: () => floor } as unknown as HospitalityStore;
   const tables = {
+    places: () => business,
+    floor: () => floor,
     day: (_slug: string, _place: string, date: string) => dayOf(date),
     setup: () => setup,
     setStatus: () => Promise.resolve(undefined),
@@ -212,7 +214,7 @@ function storesOf() {
       return Promise.resolve(undefined);
     },
   } as unknown as TablesStore;
-  return { hospitality, tables, booked, walkIns };
+  return { tables, booked, walkIns };
 }
 
 const toasts = { toast: () => '', dismiss: () => undefined } as never;
@@ -249,24 +251,15 @@ async function shoot(name: string, theme: Theme, width: number) {
 }
 
 /** The page as the route draws it: the day in its own state, as `?date=` holds it. */
-function Page({ tables, hospitality }: { readonly tables: TablesStore; readonly hospitality: HospitalityStore }) {
+function Page({ tables }: { readonly tables: TablesStore }) {
   const [search, setSearch] = useState<ReservationsSearch>({});
-  return (
-    <ReservationsScreen
-      slug="acme"
-      tables={tables}
-      hospitality={hospitality}
-      toasts={toasts}
-      search={search}
-      onSearch={setSearch}
-    />
-  );
+  return <ReservationsScreen slug="acme" tables={tables} toasts={toasts} search={search} onSearch={setSearch} />;
 }
 
 async function show(width: number, permissions: readonly string[] = ['hospitality.manage', 'hospitality.service']) {
   await page.viewport(width, width < 600 ? 844 : 900);
   const stores = storesOf();
-  shown = await renderInApp(() => <Page tables={stores.tables} hospitality={stores.hospitality} />, {
+  shown = await renderInApp(() => <Page tables={stores.tables} />, {
     data: {},
     pattern: '/w/$slug/reservations',
     at: '/w/acme/reservations',
@@ -456,6 +449,21 @@ describe('Reservations (checklabs’ one page)', () => {
     await show(1280, ['hospitality.service']);
     expect(page.getByRole('button', { name: 'Online booking' }).elements()).toHaveLength(0);
     expect(page.getByText('Guests can’t reserve online yet.').elements()).toHaveLength(0);
+  });
+
+  it('lists a party still seated from before midnight, to Finish, and leaves it off this day’s calendar', async () => {
+    const yesterday = instantAt(shift(TODAY, -1), 23 * 60, ZONE).toISOString();
+    const carried = visit(9, 'Noor Khan', yesterday, at(0, 30), 2, { status: 'started', seatedAt: yesterday });
+    days.set(TODAY, heldOf<ServiceDayView>({ ...DAY, visits: [carried, ...DAY.visits] }));
+    try {
+      await show(1280, ['hospitality.service']);
+      await expect.element(page.getByRole('rowheader', { name: /Noor Khan/ })).toBeVisible();
+      expect(page.getByRole('button', { name: /Noor Khan/ }).elements()).toHaveLength(0);
+      // A booking of today is on it, so the leaving out is the date's and not the calendar's.
+      expect(page.getByRole('button', { name: /Ada Lovelace/ }).elements().length).toBeGreaterThan(0);
+    } finally {
+      days.delete(TODAY);
+    }
   });
 
   for (const width of [1280, 390]) {

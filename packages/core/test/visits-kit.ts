@@ -165,14 +165,18 @@ export async function addMember(w: VisitWorkspace, name: string): Promise<string
  * A waiter: a member holding the seeded "Floor staff" custom role's one permission, Run service
  * (`hospitality.service`), and no calendar or setup permission.
  */
-export async function waiterScope(db: Database, w: VisitWorkspace): Promise<EngineScope> {
+export async function waiterScope(
+  db: Database,
+  w: VisitWorkspace,
+  permissions: readonly string[] = ['hospitality.service'],
+): Promise<EngineScope> {
   const memberId = await addMember(w, 'Wes');
   return mintScope({
     db,
     workspaceId: w.workspaceId,
     actor: { type: 'member', id: memberId },
     access: roleAccess({ kind: 'member', memberId, role: 'member', customRoleId: newId(), teamIds: [] }, NO_RULES, {
-      permissions: ['hospitality.service'],
+      permissions: [...permissions],
       defaultObjectLevel: 'read',
     }),
   });

@@ -2,7 +2,8 @@
 // seated now. `freeTables` answers which tables (alone, or joined as the planner joins them) are free from now for the
 // party's whole hold, best fit first; `seatWalkIn` seats the party at the tables the host picked, under the place lock
 // (the same lock every visit write takes first), checking again that they are still free and still seat the party,
-// and the resource exclusion constraint stays the last guard (a `23P01` is SLOT_TAKEN). Both are Run service's
+// and the resource exclusion constraint stays the last guard (a `23P01` is SLOT_TAKEN). A table with a party seated
+// at it isn't free, past their planned hold too: it stays theirs until Finish (`seatedTables`). Both are Run service's
 // (`hospitality.service`), behind the Table seating gate.
 //
 // A walk in is the host's call, so opening hours, notice, the online flag and pacing don't apply: the party is
@@ -23,7 +24,7 @@ import { newLookupCode, placeVisit, type SlotCache } from './book.ts';
 import { loadVisitInputs, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { partyGroups, type PlannerResource } from './planner.ts';
-import { readTableService } from './table-service.ts';
+import { readTableService, seatedTables } from './table-service.ts';
 
 /** The words when the tables went between the pick and the seat. */
 export const WALK_IN_TAKEN = 'That table was just taken. Pick another.';
@@ -83,9 +84,13 @@ async function walkInputs(
   return { inputs, end: new Date(end.getTime() + after), holdMinutes };
 }
 
-/** The tables free over [from, to), and the groups of them that seat the party, best fit first (the planner's order). */
+/**
+ * The tables free over [from, to), none with a party seated at it, and the groups of them that seat the party, best
+ * fit first (the planner's order).
+ */
 function freeGroups(
   resources: readonly PlannerResource[],
+  seated: ReadonlySet<string>,
   party: number,
   from: Date,
   to: Date,
@@ -93,6 +98,7 @@ function freeGroups(
   const free = resources.filter(
     (resource) =>
       resource.kind === 'table' &&
+      !seated.has(resource.id) &&
       !resource.busy.some((busy) => busy.start < to.getTime() && from.getTime() < busy.end),
   );
   return partyGroups(free, 'table', party).map((group) =>
@@ -128,9 +134,10 @@ export async function freeTables(
     await requireApp(tx, scope.workspaceId, 'table_seating');
     const { inputs, end, holdMinutes } = await walkInputs(tx, scope.workspaceId, placeId, party, now);
     const labels = await labelsOf(tx, placeId);
+    const seated = await seatedTables(tx, scope.workspaceId, placeId, now);
     return {
       holdMinutes,
-      tables: freeGroups(inputs.resources, party, now, end).map((group) => ({
+      tables: freeGroups(inputs.resources, seated, party, now, end).map((group) => ({
         resourceIds: group.map((table) => table.id),
         label: group.map((table) => labels.get(table.id) ?? '').join(' + '),
         seats: group.reduce((sum, table) => sum + table.maxCapacity, 0),
@@ -185,7 +192,8 @@ export async function seatWalkIn(
         if (again !== undefined) return { id: again.id, status: 'started' as const, placeId };
         const service = await tableServiceAt(tx, placeId);
         const { inputs, end } = await walkInputs(tx, scope.workspaceId, placeId, party, now);
-        const free = freeGroups(inputs.resources, party, now, end);
+        const seated = await seatedTables(tx, scope.workspaceId, placeId, now);
+        const free = freeGroups(inputs.resources, seated, party, now, end);
         if (
           !free.some((group) =>
             sameTables(

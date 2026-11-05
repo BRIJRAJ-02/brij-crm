@@ -347,12 +347,18 @@ export const ACCESS_TABLE = {
   // Table seating on the engine (spec 0066 B7 lite): setup is Manage hospitality's, the Service list Run service's.
   getTableSetup: { permission: 'hospitality.manage' },
   saveTableSetup: { permission: 'hospitality.manage' },
+  // The Reservations page's places and tables, only the fields it draws: Run service's. `hospitality.manage` reads
+  // more than this in Settings already, and gets them too for the page's Online booking; the day itself, with its
+  // guests' phones and emails, stays Run service's.
+  listServicePlaces: { permission: 'hospitality.service' },
+  readServiceFloor: { permission: 'hospitality.service' },
   listServiceDay: { permission: 'hospitality.service' },
   setVisitStatus: { permission: 'hospitality.service' },
   // The reader's own new reservation emails, and walk ins seated now: whoever runs the floor.
   setReservationAlert: { permission: 'hospitality.service' },
   freeTables: { permission: 'hospitality.service' },
   seatWalkIn: { permission: 'hospitality.service' },
+  reserveForGuest: { permission: 'hospitality.service' },
   // The business page's editor (spec 0066, B4 lite): all `hospitality.manage`'s, as the business it shows.
   getBusinessPage: { permission: 'hospitality.manage' },
   claimBusinessHandle: { permission: 'hospitality.manage' },

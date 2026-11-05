@@ -10,7 +10,7 @@
 // Leaves out: deposits, areas offered to guests and request only parties (later). Saving refuses a broken page and
 //   says the one thing to fix, with the link to it; taking the page offline asks first. Save sends only what the
 //   person changed over the latest copy, so it never undoes another manager's change.
-import type { Place, TableRules, TableSetupView, TablesStore } from '@crm/data';
+import type { ServicePlace, TableRules, TableSetupView, TablesStore } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { WEEK_DAYS } from '@crm/data/hospitality';
 import {
@@ -226,7 +226,7 @@ export function OnlineBookingDrawer({
   readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
-  readonly place: Place;
+  readonly place: ServicePlace;
   readonly toasts: Toasts;
   readonly onClose: () => void;
 }) {

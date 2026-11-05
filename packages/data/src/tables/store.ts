@@ -1,5 +1,6 @@
 // Table seating's staff side (spec 0066 B7 lite), as the setup screen, the Service list and the floor hold it: a
-// place's setup (rules, checklist, Publish) and a place's day. Loaded on first use (`data.tables.load()`), never in
+// place's setup (rules, checklist, Publish), the page's places and tables (read again each time the page is opened,
+// so Settings' changes show), and a place's day. Loaded on first use (`data.tables.load()`), never in
 // the first load. Each is one held copy per workspace and place (and day). A status move shows at once (seated,
 // finished, no show, cancelled, or Undo back), is sent, and the server's answer settles it; refused, the row goes back
 // and the refusal comes back to the screen. Every write at a place (a guest's reservation, change or cancel too)
@@ -8,6 +9,8 @@
 import type {
   FreeTablesView,
   ServiceDayView,
+  ServiceFloor,
+  ServicePlaces,
   ServiceVisit,
   TableNotifySet,
   TableRules,
@@ -27,6 +30,8 @@ export interface TablesProcedures {
     input: Scoped & { placeId: string; rules: TableRules; mutationId: string },
     options: Options,
   ) => Promise<TableSetupView>;
+  readonly places: (input: Scoped, options: Options) => Promise<ServicePlaces>;
+  readonly floor: (input: Scoped & { placeId: string }, options: Options) => Promise<ServiceFloor>;
   readonly day: (input: Scoped & { placeId: string; date: string }, options: Options) => Promise<ServiceDayView>;
   readonly setStatus: (
     input: Scoped & { appointmentId: string; status: VisitStatus; mutationId: string },
@@ -126,6 +131,8 @@ export function openTables(given: {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
   const setups = new Map<string, ReturnType<typeof holder<TableSetupView>>>();
+  const placesHeld = new Map<string, ReturnType<typeof holder<ServicePlaces>>>();
+  const floors = new Map<string, ReturnType<typeof holder<ServiceFloor>>>();
   const days = new Map<string, ReturnType<typeof holder<ServiceDayView>>>();
   const shown = new Map<string, number>();
   // Each day's held view as screens get it, made once: a new object each call made a screen let go and hold again on
@@ -138,6 +145,23 @@ export function openTables(given: {
     if (found === undefined) {
       found = holder(() => call((options) => api.setup({ workspace, placeId }, options)), now);
       setups.set(key, found);
+    }
+    return found;
+  };
+  const placesOf = (workspace: string) => {
+    let found = placesHeld.get(workspace);
+    if (found === undefined) {
+      found = holder(() => call((options) => api.places({ workspace }, options)), now);
+      placesHeld.set(workspace, found);
+    }
+    return found;
+  };
+  const floorOf = (workspace: string, placeId: string) => {
+    const key = `${workspace}:${placeId}`;
+    let found = floors.get(key);
+    if (found === undefined) {
+      found = holder(() => call((options) => api.floor({ workspace, placeId }, options)), now);
+      floors.set(key, found);
     }
     return found;
   };
@@ -191,6 +215,10 @@ export function openTables(given: {
         (view) => ({ ...view, rules }),
         () => call((options) => api.saveSetup({ workspace, placeId, rules, mutationId: mintId() }, options)),
       ),
+    /** The places the Reservations page picks between, for whoever opens it. */
+    places: (workspace: string): HospitalityHeld<ServicePlaces> => placesOf(workspace).held,
+    /** A place's areas and live tables for the Reservations page, for whoever opens it. */
+    floor: (workspace: string, placeId: string): HospitalityHeld<ServiceFloor> => floorOf(workspace, placeId).held,
     /** A place's day for the Service list and floor (`date` on the place's wall clock). */
     day: shownDay,
     /**
@@ -321,6 +349,8 @@ export function openTables(given: {
     /** Sign out: every held copy goes. */
     clear() {
       setups.clear();
+      placesHeld.clear();
+      floors.clear();
       days.clear();
       shown.clear();
       shownDays.clear();

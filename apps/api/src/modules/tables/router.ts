@@ -4,6 +4,8 @@ import {
   freeTables,
   getTableSetup,
   listServiceDay,
+  listServicePlaces,
+  readServiceFloor,
   reserveForGuest,
   saveTableSetup,
   seatWalkIn,
@@ -36,6 +38,8 @@ export const tablesRouter = t.router({
     ]);
     return saved;
   }),
+  places: t.places.handler(({ context }) => listServicePlaces(context.scope)),
+  floor: t.floor.handler(({ context, input }) => readServiceFloor(context.scope, { placeId: input.placeId })),
   day: t.day.handler(({ context, input }) =>
     listServiceDay(context.scope, { placeId: input.placeId, date: input.date }),
   ),

@@ -5,7 +5,7 @@
 //   picked (or the table it was opened from), and the name optional.
 // Leaves out: checklabs' waitlist (quoted wait, Notify, Left): a walk in seats at once until the waitlist arrives in a
 //   later phase.
-import type { FreeTablesView, Place, TablesStore } from '@crm/data';
+import type { FreeTablesView, ServicePlace, TablesStore } from '@crm/data';
 import { isDataError } from '@crm/data';
 import { Button, Callout, ChoiceChips, EmptyState, Field, Modal, Skeleton } from '@crm/ui';
 import { useEffect, useState } from 'react';
@@ -36,7 +36,7 @@ export function WalkInDrawer({
   readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
-  readonly place: Place;
+  readonly place: ServicePlace;
   readonly date: string;
   /** The table it was opened from, picked when it fits. */
   readonly tableId?: string;

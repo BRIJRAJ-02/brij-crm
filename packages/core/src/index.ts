@@ -1048,6 +1048,8 @@ export {
   getTableSetup,
   saveTableSetup,
   listServiceDay,
+  listServicePlaces,
+  readServiceFloor,
   setReservationAlert,
   setVisitStatus,
   setupSteps,
