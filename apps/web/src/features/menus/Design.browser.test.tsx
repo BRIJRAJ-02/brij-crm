@@ -60,10 +60,22 @@ afterEach(() => {
   resetTheme();
 });
 
+/** Every animation that ends has ended, so a contrast check never reads a bar on its way in. */
+async function settled() {
+  await expect
+    .poll(() =>
+      document
+        .getAnimations()
+        .every((each) => each.playState !== 'running' || each.effect?.getTiming().iterations === Infinity),
+    )
+    .toBe(true);
+}
+
 async function open(draft: MenuDraft = DRAFT, refusal?: string) {
+  await page.viewport(1280, 900);
   const made = storeOf(draft, refusal);
   app = await renderInApp(
-    <DesignScreen store={made.store} slug="somewhere" toasts={toasts} businessName="Somewhere Nowhere" />,
+    () => <DesignScreen store={made.store} slug="somewhere" toasts={toasts} businessName="Somewhere Nowhere" />,
     {
       data: {},
       pattern: '/w/$slug/menus/design',
@@ -99,7 +111,7 @@ describe('the Design page', () => {
   it('shows the Light and Dark switch only for a look that follows the guest', async () => {
     await open();
     await expect.element(page.getByRole('radiogroup', { name: 'Guest’s light or dark' })).toBeVisible();
-    await page.getByRole('radio', { name: 'Dark', exact: true }).click();
+    await page.getByText('Dark', { exact: true }).click();
     await expect.poll(() => menuVariable('--menu-ground')).toBe('#141414');
     await page.getByRole('radio', { name: 'Noir' }).click();
     await expect.element(page.getByRole('radiogroup', { name: 'Guest’s light or dark' })).not.toBeInTheDocument();
@@ -108,8 +120,8 @@ describe('the Design page', () => {
   it('says a colour fails AA, and still draws words a guest can read', async () => {
     await open();
     await expect.element(page.getByText('Some colours are hard to read')).not.toBeInTheDocument();
-    const text = page.getByRole('group', { name: 'Text' }).getByRole('textbox', { name: 'Hex' });
-    await text.fill('#eeeeee');
+    // The hex fields in the page's order: Page, Text, Buttons, Prices.
+    await page.getByRole('textbox', { name: 'Hex' }).nth(1).fill('#eeeeee');
     await userEvent.keyboard('{Enter}');
     await expect.element(page.getByText('Some colours are hard to read')).toBeVisible();
     await expect.element(page.getByText(/^Fails AA/)).toBeVisible();
@@ -120,8 +132,7 @@ describe('the Design page', () => {
 
   it('gives a yellow button a readable label', async () => {
     await open();
-    const buttons = page.getByRole('group', { name: 'Buttons' }).getByRole('textbox', { name: 'Hex' });
-    await buttons.fill('#ffff00');
+    await page.getByRole('textbox', { name: 'Hex' }).nth(2).fill('#ffff00');
     await userEvent.keyboard('{Enter}');
     await expect
       .poll(() => contrastRatio(menuVariable('--menu-on-accent'), menuVariable('--menu-accent')))
@@ -146,12 +157,14 @@ describe('the Design page', () => {
 
   it.each(THEMES)('has no axe violations in %s at a desktop’s and a phone’s width', async (theme) => {
     applyTheme(theme);
-    await page.viewport(1280, 900);
     await open();
+    await settled();
     expect(await axeViolations()).toEqual([]);
     await page.getByRole('radio', { name: 'Ronin' }).click();
+    await settled();
     expect(await axeViolations()).toEqual([]);
     await page.viewport(390, 844);
+    await settled();
     expect(await axeViolations()).toEqual([]);
   });
 });

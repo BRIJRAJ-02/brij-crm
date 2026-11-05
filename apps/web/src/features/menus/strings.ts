@@ -12,11 +12,9 @@ export const strings = {
   roleLines: {
     surface: 'Behind everything',
     ink: 'Names and words',
-    brand: 'Add, pills and the selection bar',
+    brand: 'Add and the selection bar',
     highlight: 'Each item’s price',
   },
-  contrastPasses: (ratio: number) => `AA ${ratio.toFixed(1)}:1`,
-  contrastFails: (ratio: number) => `Fails AA ${ratio.toFixed(1)}:1`,
   contrastWarningTitle: 'Some colours are hard to read',
   contrastWarning: 'Guests see a stronger version of them, so the menu stays readable.',
   headingFont: 'Headings',

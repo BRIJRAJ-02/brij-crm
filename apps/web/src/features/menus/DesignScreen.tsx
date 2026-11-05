@@ -28,6 +28,7 @@ import {
   ButtonLink,
   Callout,
   Card,
+  ContrastBadge,
   EmptyState,
   FileDrop,
   MenuList,
@@ -37,7 +38,6 @@ import {
   SegmentedControl,
   Select,
   SettingsRow,
-  StatusDot,
   TileGrid,
   TopBar,
   usePhotoCrop,
@@ -152,13 +152,7 @@ export function DesignScreen({ store, slug, toasts, businessName }: DesignScreen
 }
 
 /** The page, once the draft is here. */
-function DesignBody({
-  store,
-  slug,
-  toasts,
-  businessName,
-  draft,
-}: DesignScreenProps & { readonly draft: MenuDraft }) {
+function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenProps & { readonly draft: MenuDraft }) {
   // The look on screen: what was saved until something changes. UI state until Save, as a half made look is nobody's.
   const [edited, setEdited] = useState<MenuLook | undefined>();
   const [pending, setPending] = useState<PendingCover | undefined>();
@@ -376,13 +370,7 @@ function DesignBody({
                       description={strings.roleLines[role]}
                       {...(check === undefined
                         ? {}
-                        : {
-                            meta: (
-                              <StatusDot hue={check.passes ? 'green' : 'red'}>
-                                {check.passes ? strings.contrastPasses(check.ratio) : strings.contrastFails(check.ratio)}
-                              </StatusDot>
-                            ),
-                          })}
+                        : { meta: <ContrastBadge ratio={check.ratio} passes={check.passes} /> })}
                     >
                       <AccentPicker
                         label={strings.roleNames[role]}
@@ -391,6 +379,7 @@ function DesignBody({
                         quickPicks={[]}
                         defaultName={strings.presetNames[look.preset]}
                         defaultValue={presetColour(role)}
+                        hexPlaceholder={presetColour(role)}
                         isReadOnly={!canEdit}
                         {...(look.palette?.[role] === undefined ? {} : { value: look.palette[role] })}
                         onChange={(value) => change(withColour(look, role, value))}

@@ -174,6 +174,7 @@ export {
 export { HuePicker, type HuePickerProps } from './molecules/HuePicker/HuePicker.tsx';
 /** Any colour, picked by sight: a brand kit's or a link page's accent (spec 0060). */
 export { AccentPicker, type AccentPickerProps, type AccentQuickPick } from './molecules/AccentPicker/AccentPicker.tsx';
+export { ContrastBadge, type ContrastBadgeProps } from './molecules/AccentPicker/ContrastBadge.tsx';
 export { IconPicker, type IconPickerProps } from './molecules/IconPicker/IconPicker.tsx';
 export {
   ContextMenu,

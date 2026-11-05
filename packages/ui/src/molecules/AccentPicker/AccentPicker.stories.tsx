@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { AccentPicker, type AccentPickerProps, type AccentQuickPick } from './AccentPicker.tsx';
+import { ContrastBadge } from './ContrastBadge.tsx';
 
 /** The nine quick picks, the dot colours of the library's hues, as the data layer hands them in. */
 const PICKS: readonly AccentQuickPick[] = [
@@ -57,6 +58,17 @@ export const Default: Story = {
 };
 
 /** A brand's exact colour typed as a hex: Any colour wears it, and Enter keeps it. */
+/** ContrastBadge, passing and failing: the words say it, not the dot alone. */
+export const Contrast: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <ContrastBadge ratio={12.12} passes />
+      <ContrastBadge ratio={2.14} passes={false} />
+    </Stage>
+  ),
+};
+
 export const TypedHex: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, args }) => {

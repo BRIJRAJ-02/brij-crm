@@ -63,6 +63,19 @@ describe('the guest menu shell', () => {
     expect(menuKeyOf(`/m/${KEY}/more`)).toBeUndefined();
   });
 
+  it('says a pinned look’s side on the document, and nothing for one that follows the guest', async () => {
+    const pinned = await menuShellFor(`/m/${KEY}`, {
+      shell: SHELL.replace('<head>', '<html lang="en"><head>'),
+      readMenu: () => Promise.resolve({ ...MENU, scheme: 'dark' }),
+    });
+    expect(pinned.body).toContain('<html data-theme="dark" lang="en">');
+    const following = await menuShellFor(`/m/${KEY}`, {
+      shell: SHELL.replace('<head>', '<html lang="en"><head>'),
+      readMenu: () => Promise.resolve(MENU),
+    });
+    expect(following.body).not.toContain('data-theme');
+  });
+
   it('writes the menu into #root, escaped, with its look and the boot block in the head', async () => {
     const answer = await menuShellFor(`/m/${KEY}`, {
       shell: SHELL,
