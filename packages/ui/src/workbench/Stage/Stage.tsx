@@ -10,10 +10,12 @@ export interface StageProps {
    * across the stage, for modules that take their container's width (a container query root has none of its own).
    * `narrow-fill` does both: one piece stretched to the sidebar's width, a container query root in a phone's column.
    * `phone` is a phone's width (the side panel's) and a size container itself, so the pieces' container queries
-   * see a phone, as the app's view is one (a floating bar spanning it, a bar note wrapping). `dialog` stretches one
-   * piece to a dialog body's width (`size-dialog` less its insets), for content laid out inside a Modal.
+   * see a phone, as the app's view is one (a floating bar spanning it, a bar note wrapping). `phone-fill` is `phone`
+   * with one piece stretched across it, for a module that is its own inline-size container (BookingList's columns),
+   * which as a shrink to fit item of the phone's row measures 0 wide. `dialog` stretches one piece to a dialog body's
+   * width (`size-dialog` less its insets), for content laid out inside a Modal.
    */
-  readonly width?: 'auto' | 'narrow' | 'fill' | 'narrow-fill' | 'phone' | 'dialog';
+  readonly width?: 'auto' | 'narrow' | 'fill' | 'narrow-fill' | 'phone' | 'phone-fill' | 'dialog';
   /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. `page` is an app window's height, for the shell, with no padding. */
   readonly height?: 'auto' | 'grid' | 'page';
   readonly children: ReactNode;
