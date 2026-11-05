@@ -251,7 +251,7 @@ describe('Everyone on the roster: its dialog', () => {
           onSaved={() => undefined}
         />
       ),
-      { data, pattern: '/w/$slug/bookings/round-robin', at: '/w/acme/bookings/round-robin' },
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
     );
     await expect.element(page.getByText(rotationStrings.rosterNote(4, 5))).toBeVisible();
     expect(page.getByRole('button', { name: new RegExp(rotationStrings.addMember) }).elements()).toHaveLength(0);

@@ -29,9 +29,11 @@ import {
   resizedBy,
   sameSpan,
   shiftOf,
+  type MinuteBounds,
   type MoveGeometry,
   type MoveSteps,
 } from './blockMove.ts';
+import { isOnHours, visibleHours, WHOLE_DAY, type HourRange } from './visibleHours.ts';
 import { MovableBlock, type BlockWire } from './MovableBlock.tsx';
 import { liftClosed, NEST_AFTER, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
@@ -274,6 +276,13 @@ export interface WeekCalendarProps {
   readonly view?: 'week' | 'day' | 'team';
   /** Lets blocks the screen names move by hand (see `WeekCalendarMove`). Absent, no block moves. */
   readonly move?: WeekCalendarMove;
+  /**
+   * Draws only the working day (T13, 5 November 2026, as Cal.com's calendar view keeps to its hours): the hours from
+   * the earliest `openHours` start to the latest end across the columns shown, an hour either side, widened to take
+   * in every block and the drawn span, never fewer than eight (`visibleHours.ts`). Without `openHours` known for any
+   * column it draws the whole day. Drawing, moving and the keys stay inside the hours drawn.
+   */
+  readonly fitsHours?: boolean;
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -338,6 +347,9 @@ const WHOLE: Slot = { left: 0, width: 1, indent: 0, lane: 0, lanes: 1, span: 1 }
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
+/** The day's minutes the week may draw on: the hours drawn, as minutes. */
+const boundsOf = (hours: HourRange): MinuteBounds => ({ start: hours.from * 60, end: hours.to * 60 });
+
 /**
  * A week of days as columns of hours (the Bookings page's calendar, spec
  * 0025): bookings and the member's other calendar events as blocks placed by
@@ -379,8 +391,21 @@ export function WeekCalendar({
   emptyAction,
   view = 'week',
   move,
+  fitsHours = false,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
+  // The hours drawn: the working day across every column shown, with what is on the grid (T13); else all 24.
+  const hours = useMemo(
+    () =>
+      fitsHours && openHours !== undefined
+        ? visibleHours(
+            days.map((day) => openHours(day.key)),
+            draft === undefined ? blocks : [...blocks, draft],
+          )
+        : WHOLE_DAY,
+    [fitsHours, openHours, days, blocks, draft],
+  );
+  const bounds = boundsOf(hours);
   const bodyRef = useRef<HTMLDivElement>(null);
   const isTeam = view === 'team';
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -528,6 +553,7 @@ export function WeekCalendar({
       dayKeys: shown.map((each) => each.key),
       dayWidth: shown.length > 1 ? first.width : 0,
       pxPerMinute: first.height / 1440,
+      bounds,
     };
   };
   const stepsFor = (id: string): MoveSteps => {
@@ -617,7 +643,14 @@ export function WeekCalendar({
     const columnsNow = measure();
     if (from === undefined || columnsNow === null) return;
     shape.current = columnsNow;
-    const to = keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id));
+    const to = keyedFrom(
+      current?.to ?? from,
+      event.key,
+      event.shiftKey,
+      columnsNow.dayKeys,
+      stepsFor(block.id),
+      bounds,
+    );
     if (sameSpan(to, current?.to ?? from)) return;
     setHeld({ id: block.id, from, to, source: 'keys', geometry: columnsNow });
     setSaid(move.canLand(block.id, to) === false ? strings.moveRefused(whereOf(to)) : strings.moveTo(whereOf(to)));
@@ -632,12 +665,12 @@ export function WeekCalendar({
   const minuteAt = (column: HTMLElement, clientY: number): number => {
     const box = column.getBoundingClientRect();
     const raw = ((clientY - box.top) / box.height) * 1440;
-    return Math.min(1440, Math.max(0, Math.round(raw / SNAP) * SNAP));
+    return Math.min(bounds.end, Math.max(bounds.start, Math.round(raw / SNAP) * SNAP));
   };
   /** A span of the default length from `start`, kept inside the day. */
   const defaultSpan = (dayKey: string, start: number): WeekCalendarSpan => {
-    const startMinute = Math.min(start, 1440 - SNAP);
-    return { dayKey, startMinute, endMinute: Math.min(startMinute + drawMinutes, 1440) };
+    const startMinute = Math.min(Math.max(start, bounds.start), bounds.end - SNAP);
+    return { dayKey, startMinute, endMinute: Math.min(startMinute + drawMinutes, bounds.end) };
   };
 
   // Opens with the minute asked for at its top, once laid out (it tries again next frame when not yet).
@@ -647,18 +680,18 @@ export function WeekCalendar({
       const box = scroller.current;
       if (box === null) return;
       // The body's own height: in the team view the head scrolls inside too, over it.
-      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / 24;
+      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / (hours.to - hours.from);
       if (box.scrollHeight <= box.clientHeight && tries < 2) {
         frame = requestAnimationFrame(() => place(tries + 1));
         return;
       }
       // A quarter hour above the minute, so its hour's label shows whole.
-      const top = (scrollToMinute / 60) * hour - hour / 4;
+      const top = ((scrollToMinute - hours.from * 60) / 60) * hour - hour / 4;
       box.scrollTop = Math.max(0, Math.min(top, box.scrollHeight - box.clientHeight));
     };
     place(0);
     return () => cancelAnimationFrame(frame);
-  }, [scrollToMinute]);
+  }, [scrollToMinute, hours.from, hours.to]);
 
   /** Left and Right: the day before or after `from` (the one the key was pressed on), selected and focused. */
   const moveDay = (from: string, delta: number) => {
@@ -786,8 +819,15 @@ export function WeekCalendar({
       {...(zone === undefined ? {} : { 'aria-describedby': zoneId })}
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
+      data-fits={fitsHours || undefined}
       data-view={view}
-      {...(isTeam ? { style: { '--columns': String(Math.max(days.length, 1)) } } : {})}
+      // The hours drawn (T13): the body is that many hours tall, its days and axis lifted by the hours before them.
+      // `--columns` is read by the team view only.
+      style={{
+        '--columns': String(Math.max(days.length, 1)),
+        '--from': String(hours.from),
+        '--hours': String(hours.to - hours.from),
+      }}
     >
       {!isTeam && headRow}
       <div ref={scroller} className={styles.scroller}>
@@ -796,13 +836,14 @@ export function WeekCalendar({
           <div className={styles.axis} aria-hidden="true">
             {HOURS.map((hour) => (
               <span key={hour} className={styles.hour}>
-                {hour === 0 ? '' : hourLabel(hour)}
+                {hour <= hours.from || hour >= hours.to ? '' : hourLabel(hour)}
               </span>
             ))}
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
               (now.label !== undefined || minuteLabel !== undefined) &&
-              (isTeam || days.some((day) => day.key === now.dayKey)) && (
+              (isTeam || days.some((day) => day.key === now.dayKey)) &&
+              isOnHours(now.minute, hours) && (
                 <span
                   className={styles.nowLabel}
                   // One day across (a phone), it shows only on today, where its line is; every column is today in
@@ -1094,7 +1135,7 @@ export function WeekCalendar({
                     }
                   />
                 ))}
-                {now !== undefined && (isTeam || now.dayKey === day.key) && (
+                {now !== undefined && (isTeam || now.dayKey === day.key) && isOnHours(now.minute, hours) && (
                   <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
                 )}
               </div>

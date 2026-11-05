@@ -72,7 +72,8 @@ import { questionsProblem } from '@crm/data/forms';
 import { archiveMadeAttributes, createPlannedAttributes, type MadeAttribute } from '../questions/attributes.ts';
 import { strings as questionStrings } from '../questions/strings.ts';
 import { linkPageHref } from '../link-page/nav-strings.ts';
-import { objectSettingsHref, profileHref } from '../settings/nav.ts';
+import { brandSettingsHref, objectSettingsHref, profileHref } from '../settings/nav.ts';
+import { PageAppearance } from './PageAppearance.tsx';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { managedStrings } from './managed-strings.ts';
 import { ShareBlock } from '../forms/ShareBlock.tsx';
@@ -220,7 +221,7 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   description: 'page',
   isPrivate: 'page',
   showSocials: 'share',
-  defaultView: 'page',
+  defaultView: 'appearance',
   questions: 'questions',
   answersObjectId: 'questions',
   fileToCrm: 'meeting',
@@ -930,6 +931,7 @@ export function PageEditor({
     questions: refusedTab === 'questions' || shownProblem !== undefined,
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
+    appearance: refusedTab === 'appearance',
     share: refusedTab === 'share',
     bookings: false,
     insights: false,
@@ -940,6 +942,7 @@ export function PageEditor({
     questions: questionStrings.questions,
     hosts: strings.hostsTab,
     hours: strings.availabilityTab,
+    appearance: strings.appearanceTab,
     share: strings.shareTab,
     bookings: activityStrings.bookingsTab,
     insights: activityStrings.insightsTab,
@@ -1401,26 +1404,6 @@ export function PageEditor({
                             showCounter
                             isReadOnly={readOnly('details')}
                             onChange={(description) => change({ description })}
-                          />
-                        </SettingsRow>
-                        {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a visitor's
-                            own remembered choice still wins over; the phone beside this switches to it at once. */}
-                        <SettingsRow title={strings.opensIn} meta={tip(strings.opensIn, strings.opensInHelp)}>
-                          <SegmentedControl
-                            label={strings.opensIn}
-                            size="compact"
-                            segments={[
-                              { value: 'month', label: strings.opensInViews.month },
-                              { value: 'list', label: strings.opensInViews.list },
-                              { value: 'chat', label: strings.opensInViews.chat },
-                            ]}
-                            value={draft.defaultView}
-                            isReadOnly={isLocked}
-                            onChange={(value) => {
-                              if (value === 'month' || value === 'list' || value === 'chat') {
-                                change({ defaultView: value });
-                              }
-                            }}
                           />
                         </SettingsRow>
                       </Card>
@@ -2041,6 +2024,18 @@ export function PageEditor({
                       />
                     </SettingsStack>
                   )}
+                  {shown === 'appearance' && (
+                    // The look in a tab of its own (T21): how the page opens, and the brand it wears.
+                    <PageAppearance
+                      data={data}
+                      slug={slug}
+                      opensIn={draft.defaultView}
+                      isLocked={isLocked}
+                      onOpensIn={(defaultView) => change({ defaultView })}
+                      brandHref={brandSettingsHref(slug)}
+                      opensInMeta={tip(strings.opensIn, strings.opensInHelp)}
+                    />
+                  )}
                   {shown === 'hours' && (
                     // Hours and Limits as one Availability tab (critic A6, 4 Nov 2026), the forms Settings width.
                     <SettingsStack width="readable" rows="inline">
@@ -2281,6 +2276,7 @@ const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
   questions: [questionStrings.questions],
   hosts: [rotationStrings.hosts, routingStrings.routing],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
+  appearance: [strings.layoutSection, capturesStrings.brandTitle],
   share: [strings.shareLinkSection, socialsStrings.title],
   bookings: [activityStrings.upcoming],
   insights: [activityStrings.insightsTab],
@@ -2300,6 +2296,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
     questions: questionStrings.questions,
     hosts: strings.hostsTab,
     hours: strings.availabilityTab,
+    appearance: strings.appearanceTab,
     share: strings.shareTab,
     bookings: activityStrings.bookingsTab,
     insights: activityStrings.insightsTab,

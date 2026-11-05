@@ -24,4 +24,9 @@ export const strings = {
   /** The status beside an editor's name: Live (green) or Paused (grey). */
   live: 'Live',
   paused: 'Paused',
+  /** The editors' Appearance tab's Brand card (T21): the workspace's kit, as every page wears it. */
+  brandTitle: 'Brand',
+  brandText: 'Every booking page and form wears these.',
+  brandFailed: 'Couldn’t load your brand',
+  editBrand: 'Edit brand',
 } as const;

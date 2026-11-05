@@ -9,6 +9,7 @@ import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
+import { useCan } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
 // or Cancelled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
@@ -23,13 +24,18 @@ export const Route = createFileRoute('/w/$slug/bookings/list')({
     const { data } = context;
     // The list reads by tab and link, never by week; the week start and zone only fill the defaults.
     const search = bookingsSearchOf(parseBookingsSearch(location.search), new Date(), 1, memberZone(data, params.slug));
-    const [objects, pages] = await Promise.all([
+    const [objects, pages, visible] = await Promise.all([
       data.objects.list(params.slug),
       data.bookingPages.held(params.slug).catch(() => []),
+      // Everyone the reader may see (the calendar reads the same), for whether Meetings' switch offers Team.
+      data.scheduling
+        .open()
+        .then((scheduling) => scheduling.visible(params.slug))
+        .catch(() => []),
       // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for).
       data.bookings.meetings(params.slug, queryOf(search)).ready(),
     ]);
-    return { objects, pages };
+    return { objects, pages, seesTeam: visible.length >= 2 };
   },
   pendingComponent: ListPending,
   errorComponent: ListError,
@@ -49,6 +55,8 @@ function queryOf(search: BookingsSearch): MeetingsQuery {
 interface ListLoaded {
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
+  /** The reader sees a colleague's day, so Meetings' switch offers Team (as the calendar's does). */
+  readonly seesTeam: boolean;
 }
 
 function ListRoute() {
@@ -62,12 +70,12 @@ function ListRoute() {
 function ListPending() {
   return (
     <LoadingNow>
-      <List objects={[]} pages={[]} />
+      <List objects={[]} pages={[]} seesTeam={false} />
     </LoadingNow>
   );
 }
 
-function List({ objects, pages }: ListLoaded) {
+function List({ objects, pages, seesTeam }: ListLoaded) {
   const { slug } = Route.useParams();
   const { timeZone } = useFormatSettings();
   const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
@@ -77,6 +85,8 @@ function List({ objects, pages }: ListLoaded) {
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
   // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
   const choice = useBookingsHosts();
+  // Team where the calendar offers it: a colleague to see, or someone the reader could invite.
+  const canInvite = useCan('members.invite');
   // An email's, the Inbox's or the arrival toast's link to one booking (B-20) opens its card, then leaves the
   // address, so a reload or Back doesn't open it again after it was closed.
   const asked = Route.useSearch().open;
@@ -99,6 +109,14 @@ function List({ objects, pages }: ListLoaded) {
       locale={navigator.languages[0] ?? 'en-GB'}
       actions={actions}
       openFirst={asked}
+      calendarViews={seesTeam || canInvite ? ['day', 'week', 'team'] : ['day', 'week']}
+      onCalendarView={(view) =>
+        void navigate({
+          to: '/w/$slug/bookings/calendar',
+          params: { slug },
+          search: rawOf('calendar', { ...search, view }),
+        })
+      }
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/list',

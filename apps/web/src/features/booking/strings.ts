@@ -129,6 +129,9 @@ export const strings = {
   fixedEmail: 'Your email',
   fixedNotes: 'Anything else the host should know',
   availabilityTab: 'Availability',
+  /** The look of the page in a tab of its own (T21): how it opens, and the brand it wears. */
+  appearanceTab: 'Appearance',
+  layoutSection: 'Layout',
   shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */

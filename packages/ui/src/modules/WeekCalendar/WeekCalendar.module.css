@@ -12,7 +12,8 @@
   .root {
     /* An hour a third taller than a toolbar (the owner, 22 October 2026: "the grid cells were bigger"), so half an
        hour holds its title over its time. */
-    --hour: calc(var(--size-toolbar) + var(--space-16));
+    --hour-base: calc(var(--size-toolbar) + var(--space-16));
+    --hour: var(--hour-base);
     --axis: var(--size-control);
     --start: 0;
     --length: 30;
@@ -23,6 +24,8 @@
     --lanes: 1;
     --span: 1;
     --nest: var(--space-12);
+    --from: 0;
+    --hours: 24;
 
     position: relative;
     display: flex;
@@ -174,8 +177,16 @@
     block-size: calc(var(--hour) * 12);
   }
 
+  /* The hours drawn (T13): `--hours` tall from `--from`. Its axis and days stay a whole day tall, lifted by the
+     hours before `--from`, so every block keeps its place by minutes from midnight; the hours either side are clipped. */
   .body {
+    block-size: calc(var(--hour) * var(--hours));
+    overflow: clip;
+  }
+
+  .body > * {
     block-size: calc(var(--hour) * 24);
+    margin-block-start: calc(var(--from) * var(--hour) * -1);
   }
 
   /* Filling its parent: the grid takes the height it is given and the hours scroll inside, never fewer than six. */
@@ -824,5 +835,15 @@
     .dayButton[data-busy]::after {
       background: var(--text-tertiary);
     }
+  }
+
+  /* Fitted to the working day and filling its parent (T13): an hour grows to share the height out, so the whole
+     working day shows without scrolling where there is room; never shorter than the usual hour. */
+  .root[data-fill][data-fits] .scroller {
+    container-type: size;
+  }
+
+  .root[data-fill][data-fits] .body {
+    --hour: max(var(--hour-base), calc(100cqb / var(--hours)));
   }
 }

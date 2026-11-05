@@ -16,8 +16,21 @@ export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}
 /** Captures › Links with the New dialog open on Managed page (New › Managed page). */
 export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
 
-/** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
-export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'share', 'bookings', 'insights'] as const;
+/**
+ * The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. Appearance (T21, 5
+ * November 2026) holds the page's look in a tab of its own, as a form's editor does.
+ */
+export const PAGE_TABS = [
+  'page',
+  'meeting',
+  'questions',
+  'hosts',
+  'hours',
+  'appearance',
+  'share',
+  'bookings',
+  'insights',
+] as const;
 /** One of the editor's tabs, as `?tab=` holds it. */
 export type PageTab = (typeof PAGE_TABS)[number];
 
@@ -47,19 +60,19 @@ const availabilityQuery = (member: string | undefined, schedule?: string) => {
 export const availabilityHref = (slug: string, member?: string) =>
   `/w/${slug}/bookings/availability${availabilityQuery(member)}`;
 
-// Calendars and Round robin came up out of Settings into Bookings (25 October 2026). Their addresses sit here
-// beside Availability's rather than in `bookings/tabs.ts`, because the command menu and the screens that link to
-// them are in the first load and that module is not: one import of it would put the whole tab strip's model
+// Calendars and Round robin live in Settings (5 November 2026), and Bookings links there for setup. Their addresses
+// sit here beside Availability's rather than in `bookings/tabs.ts`, because the command menu and the screens that
+// link to them are in the first load and that module is not: one import of it would put the whole tab strip's model
 // there, in a chunk of its own, for two strings (`build.test.ts` counts the files).
 
-/** Settings › Account › Calendars: where a member connects a calendar (specs 0024 and 0026; Bookings › Calendars shows the same screen). */
+/** Settings › Account › Calendars: the one place a member connects a calendar (specs 0024 and 0026). */
 export const calendarsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
 
 /** Bookings' own tab (its week or list, as the member left it). */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 
-/** Bookings › Round robin: the groups a booking is shared out between (spec 0029). */
-export const roundRobinHref = (slug: string) => `/w/${slug}/bookings/round-robin`;
+/** Settings › Scheduling › Round robin: the groups a booking is shared out between (spec 0029), their one home. */
+export const roundRobinHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
 
 /**
  * One schedule open in the Availability tab (spec 0035, the Calendly way: the tab is the editor); `default` opens

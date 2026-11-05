@@ -344,12 +344,51 @@ function FilterMenu({
 /** A calendar view: the picked day, the week, or the team's day. */
 type CalendarViewName = 'day' | 'week' | 'team';
 
+/** One of Meetings' views (the IA brief, 5 November 2026): the calendar's three, then the list, on one switch. */
+export type MeetingsViewName = CalendarViewName | 'list';
+
 /** Each view's name, on the switch and in the View menu. */
-const VIEW_LABEL: Record<CalendarViewName, string> = {
+const VIEW_LABEL: Record<MeetingsViewName, string> = {
   day: strings.dayView,
   week: strings.weekView,
   team: strings.teamView,
+  list: strings.listView,
 };
+
+/** Whether a value names one of Meetings' views. */
+const isMeetingsView = (value: unknown): value is MeetingsViewName =>
+  value === 'day' || value === 'week' || value === 'team' || value === 'list';
+
+/**
+ * Day · Week · Team · List, Meetings' one switch (as Cal.com's bookings swap List and Calendar in place): the same
+ * compact SegmentedControl on the calendar's bar and the list's, so the views read as one place. D and W teach
+ * their keys. On a phone it is the View menu instead.
+ */
+function MeetingsViewSwitch({
+  view,
+  views,
+  onView,
+}: {
+  readonly view: MeetingsViewName;
+  readonly views: readonly MeetingsViewName[];
+  readonly onView: (next: MeetingsViewName) => void;
+}) {
+  return (
+    <SegmentedControl
+      label={strings.calendarView}
+      size="compact"
+      value={view}
+      onChange={(next) => {
+        if (isMeetingsView(next) && next !== view) onView(next);
+      }}
+      segments={views.map((each) => ({
+        value: each,
+        label: VIEW_LABEL[each],
+        ...(each === 'day' || each === 'week' ? { kbd: WEEK_KEYS[each] } : {}),
+      }))}
+    />
+  );
+}
 
 /**
  * Day · Week · Team, and an admin's Mine · Everyone, as one View menu on a phone (the bookings critique, A14): two
@@ -361,9 +400,9 @@ function ViewMenu({
   onView,
   hosts,
 }: {
-  readonly view: CalendarViewName;
-  readonly views: readonly CalendarViewName[];
-  readonly onView: (next: CalendarViewName) => void;
+  readonly view: MeetingsViewName;
+  readonly views: readonly MeetingsViewName[];
+  readonly onView: (next: MeetingsViewName) => void;
   readonly hosts: HostsChoice | undefined;
 }) {
   const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
@@ -1270,6 +1309,8 @@ const NO_BOOKINGS: readonly BookingListItem[] = [];
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
+  /** Opens Meetings' list (its address is the route's): the switch's List. Absent leaves List off the switch. */
+  readonly onList?: () => void;
   /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
@@ -1534,10 +1575,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const isPhone = usePhoneWidth();
   const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? (isPhone ? 'day' : 'week'));
   // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
-  const views: readonly CalendarViewName[] =
+  const calendarViews: readonly CalendarViewName[] =
     props.team === undefined || (props.team.members.length < 2 && !canInvite)
       ? ['day', 'week']
       : ['day', 'week', 'team'];
+  // The list beside them (Meetings, 5 November 2026), where the route can open it.
+  const views: readonly MeetingsViewName[] = props.onList === undefined ? calendarViews : [...calendarViews, 'list'];
   // Mine or Everyone, which the strip's switch holds on a wider page and the View menu on a phone.
   const hostsChoice = useBookingsHosts();
   // The layout's New booking page, for the empty Calendar's one action; and whether Connect calendar may show.
@@ -1545,8 +1588,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const canConnectCalendar = useCanConnectCalendar();
   // Where the Team day's issue counts sit in the bar (AC-1436), drawn by the day itself.
   const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
-  const setView = (next: 'week' | 'day' | 'team') => {
-    onSearch({ view: next });
+  const setView = (next: MeetingsViewName) => {
+    if (next === 'list') props.onList?.();
+    else onSearch({ view: next });
   };
   const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
   const range =
@@ -1709,19 +1753,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           {isPhone ? (
             <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
           ) : (
-            <SegmentedControl
-              label={strings.calendarView}
-              size="compact"
-              value={view}
-              onChange={(next) => {
-                if (next === 'day' || next === 'week' || next === 'team') setView(next);
-              }}
-              segments={views.map((each) => ({
-                value: each,
-                label: VIEW_LABEL[each],
-                ...(each === 'team' ? {} : { kbd: WEEK_KEYS[each] }),
-              }))}
-            />
+            <MeetingsViewSwitch view={view} views={views} onView={setView} />
           )}
           {view === 'team' && props.team !== undefined ? (
             <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
@@ -1792,6 +1824,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
             blocks={[]}
             isLoading
             isFill
+            // The member's working day, not all 24 hours (T13).
+            fitsHours
             view={view}
             move={move}
             selectedDay={shownDay}
@@ -2040,6 +2074,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                 : (switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars),
             )}
             isFill
+            fitsHours
             selectedDay={shownDay}
             onSelectDay={(day) => onSearch({ day })}
             zone={zone}
@@ -2514,15 +2549,28 @@ function ListBar({
   panel,
   hasNoCalendar,
   onSearch,
+  calendarViews,
+  onCalendarView,
+  hosts,
 }: {
   readonly slug: string;
+  /** Mine or Everyone, which the View menu holds on a phone (the strip's switch steps aside there). */
+  readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly panel: CalendarsPanel;
   /** The calendars read and none is connected: Connect calendar in the toggle's place. */
   readonly hasNoCalendar: boolean;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** Meetings' views to offer beside List, and how one opens; absent leaves the switch off. */
+  readonly calendarViews?: readonly CalendarViewName[];
+  readonly onCalendarView?: ((view: CalendarViewName) => void) | undefined;
 }) {
+  const isPhone = usePhoneWidth();
+  const onView = (next: MeetingsViewName) => {
+    if (next !== 'list') onCalendarView?.(next);
+  };
+  const views: readonly MeetingsViewName[] = [...(calendarViews ?? []), 'list'];
   return (
     <SectionBar
       start={
@@ -2545,6 +2593,12 @@ function ListBar({
           )}
           {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
               "Calendar events only" could only show an empty list (Q71). */}
+          {onCalendarView !== undefined &&
+            (isPhone ? (
+              <ViewMenu view="list" views={views} onView={onView} hosts={hosts} />
+            ) : (
+              <MeetingsViewSwitch view="list" views={views} onView={onView} />
+            ))}
           <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
         </>
       }
@@ -2576,6 +2630,10 @@ export interface BookingsListScreenProps {
   readonly openFirst?: string | undefined;
   /** Whether Connect a calendar may be offered: false when calendar sync is off for the deployment. */
   readonly canConnectCalendar?: boolean;
+  /** Meetings' calendar views beside List on its switch (Day, Week, and Team where there is a team). */
+  readonly calendarViews?: readonly ('day' | 'week' | 'team')[];
+  /** Opens one of them (its address is the route's); absent leaves the switch off. */
+  readonly onCalendarView?: (view: 'day' | 'week' | 'team') => void;
 }
 
 /**
@@ -2626,6 +2684,8 @@ export function BookingsListScreen({
   hosts,
   openFirst,
   canConnectCalendar: canConnectProp = true,
+  calendarViews,
+  onCalendarView,
 }: BookingsListScreenProps) {
   // Off with calendar sync off for the deployment, as the layout knows (the bookings critique, A2).
   const canConnectCalendar = useCanConnectCalendar() && canConnectProp;
@@ -2737,6 +2797,9 @@ export function BookingsListScreen({
       panel={panel}
       hasNoCalendar={hasNoCalendar}
       onSearch={onSearch}
+      calendarViews={calendarViews}
+      onCalendarView={onCalendarView}
+      hosts={hosts}
     />
   );
   const body =

@@ -290,6 +290,16 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* On a phone a page's tools wrap to a row of their own, and a tab's own tools (a slot of several) may wrap to two
+     lines inside it: what sits beside them lines up with their first line, not between the two (Bookings ›
+     Availability's My hours · Roster beside Working hours and My schedules, 5 November 2026). */
+  @media (width < 700px) {
+    .bar[data-variant='bar'] .end {
+      align-items: start;
+      padding-block: var(--space-6);
+    }
+  }
+
   /* Under the page's compact breakpoint (a phone or a tablet): a row that scrolls, as the strip does, each tab as
      wide as its tile and label on one line, no description, the line still along the top. A page query, as
      Modal's: a column's own width at 1440 is under the 320px container step. */

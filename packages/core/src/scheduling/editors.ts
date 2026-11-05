@@ -202,7 +202,7 @@ async function tellChanged(
   if (place === undefined || by === undefined) return;
   const path =
     resourceType === 'rotation'
-      ? `/w/${place.slug}/bookings/round-robin`
+      ? `/w/${place.slug}/settings/scheduling/round-robin`
       : `/w/${place.slug}/captures/links/${resource.id}`;
   for (const each of told) {
     await queueEmail(tx, {
