@@ -251,6 +251,13 @@
     gap: var(--space-2);
   }
 
+  /* `holdsHeight` on a plain month: six of its own rows, not six square tiles, which would stretch the card. */
+  @media (width >= 1024px) {
+    .root[data-tone='plain'][data-holds-height] .grid {
+      min-block-size: calc(6 * (var(--size-row) + var(--space-2)) + 5 * var(--space-2));
+    }
+  }
+
   .root[data-tone='plain'] .outside,
   .root[data-tone='plain'] .day {
     block-size: 100%;
