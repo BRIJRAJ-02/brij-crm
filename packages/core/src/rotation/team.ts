@@ -25,6 +25,7 @@ import type { BusyReader } from '../booking/calendar.ts';
 import type { BookedSpan, Span } from '../booking/engine.ts';
 import {
   alignedBusyRange,
+  busyWindows,
   memberBookings,
   membersOf,
   pageSlots,
@@ -275,20 +276,23 @@ export async function memberBusy(
 ): Promise<ReadonlyMap<string, MembersBusy>> {
   // Whole quarter hours, as membersBusy reads, so the api's busy cache answers reads made minutes apart.
   const range = alignedBusyRange(from, to);
+  // A page's 62 day chunk plus its margins can run past what one read takes (any read made before 06:00 in the
+  // visitor's zone), so a longer range is read in pieces, as membersBusy reads.
+  const windows = busyWindows(range.from, range.to);
   const readOne = async (memberId: string) => {
-    const answer = await read({
-      workspaceId,
-      memberId,
-      from: range.from.toISOString(),
-      to: range.to.toISOString(),
-    });
+    const pieces = await Promise.all(
+      windows.map((window) =>
+        read({ workspaceId, memberId, from: window.from.toISOString(), to: window.to.toISOString() }),
+      ),
+    );
     const busy: MembersBusy = {
-      busy:
+      busy: pieces.flatMap((answer) =>
         answer.status === 'read'
           ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
           : [],
-      blocked: answer.status === 'blocked',
-      noCalendar: answer.status === 'none',
+      ),
+      blocked: pieces.some((answer) => answer.status === 'blocked'),
+      noCalendar: pieces.every((answer) => answer.status === 'none'),
     };
     return [memberId, busy] as const;
   };
