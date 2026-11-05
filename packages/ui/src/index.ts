@@ -262,6 +262,7 @@ export {
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
 export { BookingPagePicture, type BookingPagePictureProps } from './modules/BookingPagePicture/BookingPagePicture.tsx';
+export { FormPicture, type FormPictureField, type FormPictureProps } from './modules/FormPicture/FormPicture.tsx';
 export { LinkCard, LinkCardSkeleton, type LinkCardProps, type LinkCardToggle } from './modules/LinkCard/LinkCard.tsx';
 export { LinkGrid, type LinkGridCard, type LinkGridGroup, type LinkGridProps } from './modules/LinkGrid/LinkGrid.tsx';
 export {

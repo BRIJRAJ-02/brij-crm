@@ -1,4 +1,4 @@
-/* Link: link-coloured text, underlined on hover and while focused. */
+/* Link: link-coloured text, underlined on hover and while focused; quiet, in the text's own colour. */
 @layer components {
   /* Underlined at rest, so a link in a sentence never relies on colour alone. */
   .root {
@@ -8,6 +8,12 @@
     text-decoration-color: var(--accent-border);
     text-underline-offset: var(--space-2);
     outline: none;
+  }
+
+  /* Quiet: the text's own colour, its underline faint (border-strong) until hover or focus. */
+  .root[data-tone='quiet'] {
+    color: inherit;
+    text-decoration-color: var(--border-strong);
   }
 
   @media (hover: hover) and (pointer: fine) {

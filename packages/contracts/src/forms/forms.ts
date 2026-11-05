@@ -12,8 +12,7 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { SubmissionContext } from './context.ts';
 import { CLOSED_MESSAGE_MAX } from './confirmation.ts';
 import { FormConfirmation, FormDocument } from './document.ts';
-import { PublicForm, PublicQuestion } from './public.ts';
-import { FORM_LAYOUTS } from './path.ts';
+import { PublicForm } from './public.ts';
 import { FormAnalytics, FormAnalyticsInput } from './visits.ts';
 import { FormTemplateSummary, OfferedFormTemplateId } from './templates.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
@@ -56,17 +55,22 @@ export const FormOrigin = z
   });
 
 /**
- * A form's picture on its list card (5 November 2026): the draft's headline, line, button, look and first visible
- * questions, so the card draws its own form at a thumbnail's size. `formPictureOf` (`@crm/contracts/forms`) makes it.
+ * One question as a form card's picture draws it (5 November 2026, the booking card's sibling): its type, and how many
+ * choices it offers when it is answered by a pick. Never its words: the card draws shapes.
+ */
+export const FormPictureQuestion = z.object({
+  answerType: z.enum(ANSWER_TYPES),
+  choiceCount: z.number().int().min(0).optional(),
+});
+/** One question as a form card's picture draws it. */
+export type FormPictureQuestion = z.infer<typeof FormPictureQuestion>;
+
+/**
+ * A form's picture on its list card (5 November 2026): its first visible questions as shapes, under its name and
+ * question count, which the summary carries already. `formPictureOf` (`@crm/contracts/forms`) makes it.
  */
 export const FormPicture = z.object({
-  headline: z.string(),
-  subheading: z.string().optional(),
-  buttonText: z.string(),
-  layout: z.enum(FORM_LAYOUTS).optional(),
-  colour: z.enum(['light', 'dark']),
-  corners: z.enum(['rounded', 'square']),
-  questions: z.array(PublicQuestion).max(3),
+  questions: z.array(FormPictureQuestion).max(3),
 });
 /** A form's picture on its list card. */
 export type FormPicture = z.infer<typeof FormPicture>;

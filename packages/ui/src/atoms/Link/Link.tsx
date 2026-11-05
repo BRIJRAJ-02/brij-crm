@@ -21,6 +21,13 @@ export interface LinkProps {
    * half filled dialog waits here (a round robin group a new booking page needs), so what they typed stays.
    */
   readonly opensInNewTab?: boolean;
+  /**
+   * `quiet`: in the text's own colour, its underline faint until hover or focus, for a link that is a fact as much
+   * as a way in (a form card's "12 submissions", 5 November 2026). Default: link-coloured.
+   */
+  readonly tone?: 'quiet';
+  /** Its name for screen readers when its words alone are ambiguous out of context ("12 submissions to Contact us"). */
+  readonly label?: string;
 }
 
 /** Where a checked href goes: inside the app, or out to another site in a new tab. */
@@ -33,10 +40,11 @@ export function linkTarget(href: string) {
  * in a new tab. A link that fails `safeHref` (a `javascript:` URL) renders as
  * plain text (AC-14).
  */
-export function Link({ href, children, onPress, opensInNewTab = false }: LinkProps) {
+export function Link({ href, children, onPress, opensInNewTab = false, tone, label }: LinkProps) {
+  const look = { className: styles.root, 'data-tone': tone, 'aria-label': label } as const;
   if (onPress !== undefined) {
     return (
-      <AriaLink className={styles.root} onPress={onPress}>
+      <AriaLink {...look} onPress={onPress}>
         {children}
       </AriaLink>
     );
@@ -45,14 +53,14 @@ export function Link({ href, children, onPress, opensInNewTab = false }: LinkPro
   if (safe === undefined) return <span className={styles.text}>{children}</span>;
   if (opensInNewTab) {
     return (
-      <AriaLink className={styles.root} href={safe} target="_blank" rel="noopener noreferrer">
+      <AriaLink {...look} href={safe} target="_blank" rel="noopener noreferrer">
         {children}
         <VisuallyHidden> {strings.newTab}</VisuallyHidden>
       </AriaLink>
     );
   }
   return (
-    <AriaLink className={styles.root} href={safe} {...linkTarget(safe)}>
+    <AriaLink {...look} href={safe} {...linkTarget(safe)}>
       {children}
     </AriaLink>
   );

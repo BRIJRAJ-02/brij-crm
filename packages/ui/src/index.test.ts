@@ -89,6 +89,7 @@ describe('@crm/ui', () => {
       'FloatingBar',
       'Form',
       'FormLayoutThumbnail',
+      'FormPicture',
       'FormRow',
       'FormatScope',
       'FormulaEditor',

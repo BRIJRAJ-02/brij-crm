@@ -1,0 +1,201 @@
+/* FormPicture: a form in miniature on LinkCard's sheet, BookingPagePicture's sibling. A space-12 inset; a head of
+   the form's mark (a space-16 circle in its dot colour) beside its name (text-label-strong, one line, cut) over its
+   question count (text-label, text-tertiary); then its first questions as shapes, space-6 apart: a label bar
+   (space-4 tall, text-tertiary faded into the sheet) over a field (space-12 tall, hairline border-strong, radius-xs;
+   space-20 when long), pills (radius-full, the first tinted with the colour, picked), dots (space-8, three lit in
+   the colour) or a box and a line; then a button bar solid in the colour. Tokens only; it never moves. */
+@layer components {
+  .root {
+    --picture-hue: var(--dot-gray);
+    --picture-ink: color-mix(in oklab, var(--text-tertiary) 40%, var(--surface-raised));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    box-sizing: border-box;
+    padding: var(--space-12);
+    color: var(--text);
+  }
+
+  .root[data-hue='red'] {
+    --picture-hue: var(--dot-red);
+  }
+
+  .root[data-hue='orange'] {
+    --picture-hue: var(--dot-orange);
+  }
+
+  .root[data-hue='yellow'] {
+    --picture-hue: var(--dot-yellow);
+  }
+
+  .root[data-hue='lime'] {
+    --picture-hue: var(--dot-lime);
+  }
+
+  .root[data-hue='green'] {
+    --picture-hue: var(--dot-green);
+  }
+
+  .root[data-hue='sky'] {
+    --picture-hue: var(--dot-sky);
+  }
+
+  .root[data-hue='blue'] {
+    --picture-hue: var(--dot-blue);
+  }
+
+  .root[data-hue='purple'] {
+    --picture-hue: var(--dot-purple);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .mark {
+    flex: none;
+    inline-size: var(--space-16);
+    block-size: var(--space-16);
+    border-radius: var(--radius-full);
+    background: var(--picture-hue);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .title,
+  .count {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .count {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .label {
+    inline-size: 40%;
+    block-size: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--picture-ink);
+  }
+
+  .field:nth-child(2) .label {
+    inline-size: 55%;
+  }
+
+  .field:nth-child(3) .label {
+    inline-size: 30%;
+  }
+
+  .input {
+    box-sizing: border-box;
+    block-size: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-strong);
+    border-radius: var(--radius-xs);
+  }
+
+  .input[data-long] {
+    block-size: var(--space-20);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .pill {
+    box-sizing: border-box;
+    inline-size: 26%;
+    block-size: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-strong);
+    border-radius: var(--radius-full);
+  }
+
+  .pill[data-picked] {
+    border-color: var(--picture-hue);
+    background: color-mix(in oklab, var(--picture-hue) 30%, var(--surface-raised));
+  }
+
+  .star {
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--border-subtle);
+  }
+
+  .star[data-lit] {
+    background: var(--picture-hue);
+  }
+
+  .box {
+    flex: none;
+    box-sizing: border-box;
+    inline-size: var(--space-12);
+    block-size: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-strong);
+    border-radius: var(--radius-xs);
+  }
+
+  .line {
+    inline-size: 60%;
+    block-size: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--picture-ink);
+  }
+
+  .button {
+    inline-size: 36%;
+    block-size: var(--space-16);
+    border-radius: var(--radius-xs);
+    background: var(--picture-hue);
+  }
+
+  @media (forced-colors: active) {
+    .mark,
+    .label,
+    .line,
+    .star[data-lit],
+    .button {
+      background: CanvasText;
+    }
+
+    .input,
+    .pill,
+    .box {
+      border-color: CanvasText;
+    }
+
+    .pill[data-picked] {
+      background: CanvasText;
+    }
+  }
+}
