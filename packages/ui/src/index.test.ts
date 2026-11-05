@@ -13,7 +13,6 @@ describe('@crm/ui', () => {
   it('exports exactly the components, the provider, the toast factory and the shared helpers', () => {
     expect(Object.keys(ui).sort()).toEqual([
       'AccentPicker',
-      'ContrastBadge',
       'ActivityFeed',
       'AppShell',
       'AppShellContext',
@@ -62,6 +61,7 @@ describe('@crm/ui', () => {
       'ConditionChip',
       'ConditionRow',
       'ContextMenu',
+      'ContrastBadge',
       'CopyButton',
       'CountryPicker',
       'Currency',

@@ -7,6 +7,13 @@ export const strings = {
   designColours: 'Colours',
   designType: 'Fonts and corners',
   designCover: 'Cover',
+  coverDrop: 'Add a cover',
+  designViewOnly: 'Only people who manage the business can change this.',
+  designNeedsBusiness: 'Add your business first',
+  designNeedsBusinessLine: 'A look belongs to a business and its place, so there’s nothing to save it on yet.',
+  designAddBusiness: 'Add your business',
+  presetChosen: (name: string) => `Now ${name}. Your own colours and fonts were replaced.`,
+  sampleNote: 'Sample dishes until your menu has its own.',
   presetNames: { warm: 'Warm', clean: 'Clean', night: 'Night', linen: 'Linen', noir: 'Noir', ronin: 'Ronin' },
   roleNames: { surface: 'Page', ink: 'Text', brand: 'Buttons', highlight: 'Prices' },
   roleLines: {

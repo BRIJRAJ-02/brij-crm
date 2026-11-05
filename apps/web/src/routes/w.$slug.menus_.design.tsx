@@ -13,6 +13,7 @@ interface DesignData {
   readonly isInstalled: boolean;
   readonly store?: MenuStore;
   readonly businessName: string;
+  readonly hasBusiness?: boolean;
 }
 
 // The Design page (spec 0065, AC-6570 as amended): shown only while Menu is installed, else not found. The loader reads
@@ -24,7 +25,13 @@ export const Route = createFileRoute('/w/$slug/menus_/design')({
     const [store, hospitality] = await Promise.all([context.data.menu.load(), context.data.hospitality.load()]);
     await store.readDraft(params.slug);
     const view = await hospitality.readBusiness(params.slug).catch(() => undefined);
-    return { isInstalled, store, businessName: view?.profile?.name ?? '' };
+    return {
+      isInstalled,
+      store,
+      businessName: view?.profile?.name ?? '',
+      // A reader who can't read the business answers nothing here, and can't save anyway.
+      ...(view === undefined ? {} : { hasBusiness: view.profile !== undefined }),
+    };
   },
   pendingComponent: () => <WorkspacePage currentPage="menus" page={pendingPage()} />,
   errorComponent: DesignError,
@@ -32,11 +39,19 @@ export const Route = createFileRoute('/w/$slug/menus_/design')({
 });
 
 function PageRoute() {
-  const { isInstalled, store, businessName } = Route.useLoaderData();
+  const { isInstalled, store, businessName, hasBusiness } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { toasts } = Route.useRouteContext();
   if (!isInstalled || store === undefined) return <ComingScreen slug={slug} page="menus" isInstalled={false} />;
-  return <DesignScreen store={store} slug={slug} toasts={toasts} businessName={businessName} />;
+  return (
+    <DesignScreen
+      store={store}
+      slug={slug}
+      toasts={toasts}
+      businessName={businessName}
+      {...(hasBusiness === undefined ? {} : { hasBusiness })}
+    />
+  );
 }
 
 function DesignError({ error }: ErrorComponentProps) {

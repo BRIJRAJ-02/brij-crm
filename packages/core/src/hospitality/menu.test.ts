@@ -259,7 +259,9 @@ describe('the guest look (AC-6570 as amended)', () => {
     expect(await refusalOf(saveMenuLook(w.member, { look: NOIR }))).toBe('FORBIDDEN');
     expect(
       await refusalOf(
-        addMenuCover(w.member, { photo: { largePath: 'x', smallPath: 'y', type: 'image/webp', version: 'abcdefabcdef' } }),
+        addMenuCover(w.member, {
+          photo: { largePath: 'x', smallPath: 'y', type: 'image/webp', version: 'abcdefabcdef' },
+        }),
       ),
     ).toBe('FORBIDDEN');
     expect((await readMenuDraft(w.owner)).look).toEqual(DEFAULT_MENU_LOOK);
@@ -296,9 +298,25 @@ describe('the guest look (AC-6570 as amended)', () => {
     expect((await readPublicMenu({ db }, entry))?.menu.cover).toBeUndefined();
     expect(await readMenuPhoto({ db }, entry, cover.id, 'large', cover.version)).toBeUndefined();
     await setMenuHidden(w.owner, { hidden: false });
-    // Taken off, the next Publish lets it go.
-    await saveMenuLook(w.owner, { look: NOIR });
-    expect((await publishMenus(w.owner)).removedPaths).toEqual(expect.arrayContaining(['l', 's']));
+    // Saving the same cover again keeps it; a new one lets the old one go at once, with no Publish.
+    expect((await saveMenuLook(w.owner, { look: { ...NOIR, cover } })).removedPaths).toEqual([]);
+    const next = await addMenuCover(w.owner, { photo: { ...photo, largePath: 'l2', smallPath: 's2' } });
+    expect((await saveMenuLook(w.owner, { look: { ...NOIR, cover: next } })).removedPaths).toEqual(['l', 's']);
+    // Taken off, it goes too.
+    expect((await saveMenuLook(w.owner, { look: NOIR })).removedPaths).toEqual(['l2', 's2']);
+  });
+
+  it('never deletes a cover a row still names because the row no longer parses', async () => {
+    const w = await menuWorkspace();
+    const { sectionId } = await dinner(w);
+    await saveItem(w.owner, { id: newId(), sectionId, item: dish('Soup', 650) });
+    const photo = { largePath: 'l', smallPath: 's', type: 'image/webp', version: 'abcdefabcdef' } as const;
+    const cover = await addMenuCover(w.owner, { photo });
+    const unknown = { ...NOIR, preset: 'retired-preset', cover };
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update business_profiles set look = ${JSON.stringify(unknown)}::jsonb`),
+    );
+    expect((await publishMenus(w.owner)).removedPaths).not.toContain('l');
   });
 });
 

@@ -57,7 +57,6 @@ export const Default: Story = {
   },
 };
 
-/** A brand's exact colour typed as a hex: Any colour wears it, and Enter keeps it. */
 /** ContrastBadge, passing and failing: the words say it, not the dot alone. */
 export const Contrast: Story = {
   parameters: { crm: { screenshot: false } },
@@ -69,6 +68,16 @@ export const Contrast: Story = {
   ),
 };
 
+/** An empty hex field naming the colour the default draws, as the Design page's four do. */
+export const HexPlaceholder: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { hexPlacement: 'inline', quickPicks: [], defaultValue: '#0a0a0a', hexPlaceholder: '#0a0a0a' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Hex' })).toHaveAttribute('placeholder', '#0a0a0a');
+  },
+};
+
+/** A brand's exact colour typed as a hex: Any colour wears it, and Enter keeps it. */
 export const TypedHex: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, args }) => {

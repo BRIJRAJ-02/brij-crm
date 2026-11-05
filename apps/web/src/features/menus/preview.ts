@@ -90,6 +90,17 @@ export function previewMenu(
   };
 }
 
+/**
+ * A short stamp of the saved look and the brand's accents, for the preview stylesheet's address: a look saved on the
+ * Design page is a new address, so the browser doesn't keep showing the old one when the editor comes back.
+ */
+export function lookStamp(draft: MenuDraft): string {
+  const text = JSON.stringify([draft.look, draft.lookAccents]);
+  let hash = 5381;
+  for (let at = 0; at < text.length; at += 1) hash = (hash * 33 + text.charCodeAt(at)) % 2147483647;
+  return hash.toString(36);
+}
+
 /** A few made up dishes, for the Design page's phone before a menu has any: never saved, never shown to a guest. */
 export function sampleMenu(draft: MenuDraft, place: MenuPlace, businessName: string): PublicMenu {
   const dish = (id: string, name: string, description: string, priceMinor: number): SnapshotItem => ({

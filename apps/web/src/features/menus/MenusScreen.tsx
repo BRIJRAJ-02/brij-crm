@@ -5,7 +5,7 @@
 // (sections, sub sections and their items in order), Items, Options and Settings, a search in the tab bar over
 // Structure and Items, with the guest menu's phone beside it.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
-// Leaves out: the guest look's presets (H5), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
+// Leaves out: the guest look (the Design page), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
 import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
 import { menuLookScheme } from '@crm/data/menu';
 import { useHospitality } from '@crm/data/react';
@@ -51,7 +51,7 @@ import {
   PREVIEW_TIMES,
   type PreviewAt,
 } from './preview-at.ts';
-import { previewMenu, publishBlocker, unpricedDishes } from './preview.ts';
+import { lookStamp, previewMenu, publishBlocker, unpricedDishes } from './preview.ts';
 import { PublishDialog } from './PublishDialog.tsx';
 import { SectionDrawer } from './SectionDrawer.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
@@ -431,7 +431,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     place === undefined || !showsPreview || current === undefined ? undefined : (
       <>
         {/* The guests' own look (the Warm preset with the brand's accent), before any Publish. */}
-        <link rel="stylesheet" href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}`} precedence="menu" />
+        <link
+          rel="stylesheet"
+          href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}&v=${lookStamp(draft)}`}
+          precedence="menu"
+        />
         <PreviewMenu
           slug={slug}
           draft={draft}

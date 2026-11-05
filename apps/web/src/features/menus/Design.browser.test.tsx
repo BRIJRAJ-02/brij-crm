@@ -149,6 +149,55 @@ describe('the Design page', () => {
     expect(menuVariable('--menu-ground')).toBe('#f8f6f1');
   });
 
+  it('names the colour each empty hex field stands for', async () => {
+    await open();
+    await expect.element(page.getByRole('textbox', { name: 'Hex' }).nth(0)).toHaveAttribute('placeholder', '#ffffff');
+    await page.getByRole('radio', { name: 'Noir' }).click();
+    await expect.element(page.getByRole('textbox', { name: 'Hex' }).nth(2)).toHaveAttribute('placeholder', '#d4af37');
+  });
+
+  it('warns on the dark side too, for a look that follows the guest', async () => {
+    await open();
+    // Navy passes on Warm's white and fails on its near black.
+    await page.getByRole('textbox', { name: 'Hex' }).nth(2).fill('#000033');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText('Some colours are hard to read')).toBeVisible();
+  });
+
+  it('offers Undo when a preset replaces colours picked by hand', async () => {
+    const said: { action?: { onAction: () => void } }[] = [];
+    const made = storeOf(DRAFT);
+    app = await renderInApp(
+      () => (
+        <DesignScreen
+          store={made.store}
+          slug="somewhere"
+          toasts={{ toast: (each: (typeof said)[number]) => said.push(each) } as never}
+          businessName="Somewhere Nowhere"
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/menus/design', at: '/w/somewhere/menus/design' },
+    );
+    await page.viewport(1280, 900);
+    await page.getByRole('textbox', { name: 'Hex' }).nth(3).fill('#c2410c');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(() => menuVariable('--menu-highlight')).toBe('#c2410c');
+    await page.getByRole('radio', { name: 'Noir' }).click();
+    await expect.poll(() => said.length).toBe(1);
+    await expect.poll(() => menuVariable('--menu-ground')).toBe('#0a0a0a');
+    said[0]?.action?.onAction();
+    await expect.poll(() => menuVariable('--menu-highlight')).toBe('#c2410c');
+  });
+
+  it('says what’s missing before an owner with no business does any work', async () => {
+    const made = storeOf(DRAFT);
+    app = await renderInApp(
+      () => <DesignScreen store={made.store} slug="somewhere" toasts={toasts} businessName="" hasBusiness={false} />,
+      { data: {}, pattern: '/w/$slug/menus/design', at: '/w/somewhere/menus/design' },
+    );
+    await expect.element(page.getByText('Add your business first').first()).toBeVisible();
+  });
+
   it('is read only to someone who can’t edit', async () => {
     await open({ ...DRAFT, canEdit: false });
     await expect.element(page.getByRole('radio', { name: 'Noir' })).toBeDisabled();

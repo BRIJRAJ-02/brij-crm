@@ -146,7 +146,7 @@ export const menuRouter = m.router({
   // The guest look (spec 0065, AC-6570 as amended): live at once, so every guest page's edge copy goes once it has
   // committed: the menus' answers and shells, the business page's, and anything filed under the brand.
   saveLook: m.saveLook.handler(async ({ context, input }) => {
-    const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
+    const { draft, placeIds, removedPaths } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveMenuLook(context.scope, { look: input.look }),
     );
     await forgetAfterCommit(context.edgeCache, [
@@ -154,6 +154,7 @@ export const menuRouter = m.router({
       ...businessCacheTags(context.scope.workspaceId, placeIds),
       ...brandCacheTags(context.scope.workspaceId),
     ]);
+    await removeFiles(context, removedPaths);
     return draft;
   }),
   publish: m.publish.handler(async ({ context, input }) => {

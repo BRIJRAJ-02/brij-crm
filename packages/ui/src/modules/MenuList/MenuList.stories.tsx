@@ -63,6 +63,7 @@ export const NoirLook: Story = {
           menu={sampleMenu()}
           photoHref={samplePhotoHref}
           scheme="dark"
+          coverHref={samplePhotoHref(id(1))}
           lookVariables={[...menuLookShape(look), ...menuLookColours(look, {}, 'dark')]}
         />
       </Stage>

@@ -7,11 +7,11 @@ import { isDataError, type MenuDraft, type MenuLook, type MenuStore } from '@crm
 import { useHospitality } from '@crm/data/react';
 import {
   MENU_FONTS,
+  MENU_LIMITS,
   MENU_PALETTE_ROLES,
   MENU_PRESET_LOOKS,
   MENU_PRESETS,
   MENU_RADII,
-  MENU_LIMITS,
   menuLookColours,
   menuLookContrast,
   menuLookPalette,
@@ -38,14 +38,19 @@ import {
   SegmentedControl,
   Select,
   SettingsRow,
+  SettingsSection,
   TileGrid,
   TopBar,
   usePhotoCrop,
+  ViewOnlyTag,
+  type GuestPick,
   type Toasts,
 } from '@crm/ui';
 import { memo, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { publicMenuUrl } from '../booking/links.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
+import { pageHeading } from '../navigation/focus.ts';
+import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { draftPhotoHref, prepareMenuCover } from './photo.ts';
 import { previewMenu, sampleMenu } from './preview.ts';
@@ -57,6 +62,8 @@ export interface DesignScreenProps {
   readonly slug: string;
   readonly toasts: Toasts;
   readonly businessName: string;
+  /** Whether the workspace has a business to save a look on; left out for a reader who can't tell, and can't save. */
+  readonly hasBusiness?: boolean;
 }
 
 /** A cover chosen and cropped, waiting for Save: both widths, and a local picture of it. */
@@ -77,7 +84,18 @@ function withColour(look: MenuLook, role: MenuPaletteRole, value: string | undef
   return Object.keys(palette).length === 0 ? others : { ...others, palette };
 }
 
-/** The real guest menu in the phone, drawn again only when what it shows changes. */
+/** Two looks with the same choices read the same here, whatever order their keys were written in. */
+const stampOf = (look: MenuLook): string =>
+  JSON.stringify([
+    look.preset,
+    look.heading,
+    look.body,
+    look.radius,
+    MENU_PALETTE_ROLES.map((role) => look.palette?.[role] ?? ''),
+    look.cover?.id ?? '',
+  ]);
+
+/** The real guest menu in the phone, drawn again only when what it shows changes. Its picks are this phone's alone. */
 const DesignPreview = memo(function DesignPreview({
   draft,
   businessName,
@@ -94,6 +112,7 @@ const DesignPreview = memo(function DesignPreview({
   readonly slug: string;
 }) {
   const place = draft.places[0];
+  const [picks, setPicks] = useState<readonly GuestPick[]>([]);
   const menu = useMemo(() => {
     if (place === undefined) return undefined;
     const real = previewMenu(draft, place, { businessName });
@@ -109,6 +128,8 @@ const DesignPreview = memo(function DesignPreview({
       menu={menu}
       scheme={scheme}
       lookVariables={variables}
+      picks={picks}
+      onPicksChange={setPicks}
       photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
       {...(coverHref === undefined ? {} : { coverHref })}
     />
@@ -116,7 +137,7 @@ const DesignPreview = memo(function DesignPreview({
 });
 
 /** The Design page. */
-export function DesignScreen({ store, slug, toasts, businessName }: DesignScreenProps) {
+export function DesignScreen({ store, slug, toasts, businessName, hasBusiness }: DesignScreenProps) {
   const state = useHospitality(store.draft(slug));
   const topBar = (isLoading: boolean) => (
     <TopBar
@@ -148,11 +169,27 @@ export function DesignScreen({ store, slug, toasts, businessName }: DesignScreen
       />
     );
   }
-  return <DesignBody store={store} slug={slug} toasts={toasts} businessName={businessName} draft={state.value} />;
+  return (
+    <DesignBody
+      store={store}
+      slug={slug}
+      toasts={toasts}
+      businessName={businessName}
+      {...(hasBusiness === undefined ? {} : { hasBusiness })}
+      draft={state.value}
+    />
+  );
 }
 
 /** The page, once the draft is here. */
-function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenProps & { readonly draft: MenuDraft }) {
+function DesignBody({
+  store,
+  slug,
+  toasts,
+  businessName,
+  hasBusiness = true,
+  draft,
+}: DesignScreenProps & { readonly draft: MenuDraft }) {
   // The look on screen: what was saved until something changes. UI state until Save, as a half made look is nobody's.
   const [edited, setEdited] = useState<MenuLook | undefined>();
   const [pending, setPending] = useState<PendingCover | undefined>();
@@ -166,7 +203,7 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
   // The phone follows a beat behind the pointer, so dragging a colour never holds it back.
   const shown = useDeferredValue(look);
   const canEdit = draft.canEdit;
-  const isDirty = pending !== undefined || (edited !== undefined && JSON.stringify(edited) !== JSON.stringify(saved));
+  const isDirty = pending !== undefined || (edited !== undefined && stampOf(edited) !== stampOf(saved));
 
   useEffect(() => {
     if (pending === undefined) return undefined;
@@ -188,43 +225,60 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
   const side = scheme === 'follow' ? previewSide : scheme;
   const preset = MENU_PRESET_LOOKS[look.preset];
   const accents = draft.lookAccents;
-  const palette = menuLookPalette(look, 'light');
-  // The buttons' colour as a guest sees it: the owner's, else the brand kit's on a preset that takes it.
-  const kitAccent = preset.takesBrandAccent ? accents.accent : undefined;
-  const asPicked = { ...palette, brand: look.palette?.brand ?? kitAccent ?? palette.brand };
-  const contrast = menuLookContrast(asPicked);
-  const fails = Object.values(contrast).some((each) => !each.passes);
-  const presetColour = (role: MenuPaletteRole) =>
-    role === 'brand' && kitAccent !== undefined ? kitAccent : preset.palette[role];
+  // The buttons' colour on one side, as picked: the owner's, else the brand kit's on a preset that takes it.
+  const kitAccent = (mode: 'light' | 'dark') =>
+    !preset.takesBrandAccent ? undefined : mode === 'light' ? accents.accent : accents.accentDark;
+  const pickedOn = (mode: 'light' | 'dark') => {
+    const palette = menuLookPalette(look, mode);
+    return { ...palette, brand: look.palette?.brand ?? kitAccent(mode) ?? palette.brand };
+  };
+  // A look that follows the guest is read on both sides, and a role shows the worse of the two.
+  const contrasts = (scheme === 'follow' ? (['light', 'dark'] as const) : [side]).map((mode) =>
+    menuLookContrast(pickedOn(mode)),
+  );
+  const contrastOf = (role: Exclude<MenuPaletteRole, 'surface'>) =>
+    contrasts
+      .map((each) => each[role])
+      .reduce((worse, each) => (!each.passes && worse.passes ? each : each.ratio < worse.ratio ? each : worse));
+  const fails = contrasts.some((each) => Object.values(each).some((check) => !check.passes));
+  const presetColour = (role: MenuPaletteRole) => {
+    const own = menuLookPalette(presetLook(look.preset), side)[role];
+    return role === 'brand' ? (kitAccent(side) ?? own) : own;
+  };
 
   const place = draft.places[0];
   const coverHref =
     pending?.src ??
     (look.cover === undefined ? undefined : draftPhotoHref(slug, look.cover.id, 'large', look.cover.version));
+  const hasSampleDishes = draft.sections.every((section) => section.itemIds.length === 0);
 
   const save = async () => {
     setSaving(true);
     setFailure(undefined);
+    // What this save sends. A change made while it was on its way stays on screen, still to be saved.
+    const sentLook = look;
+    const sentCover = pending;
     try {
-      let next = look;
-      if (pending !== undefined) {
-        const cover = await store.uploadCover(slug, { large: pending.large, small: pending.small });
+      let next = sentLook;
+      if (sentCover !== undefined) {
+        const cover = await store.uploadCover(slug, { large: sentCover.large, small: sentCover.small });
         if (isDataError(cover)) {
           setFailure(cover.message);
           return;
         }
-        next = { ...look, cover };
+        next = { ...sentLook, cover };
+        // Kept already: a save tried again never sends the picture twice.
+        setEdited((now) => (now === undefined || now === sentLook ? next : { ...now, cover }));
+        setPending((now) => (now === sentCover ? undefined : now));
       }
       const refused = await store.saveLook(slug, next);
       if (refused !== undefined) {
         // The store has put its copy back; what's on screen stays, so Save can try again.
-        setEdited(next);
-        setPending(undefined);
+        setEdited((now) => now ?? next);
         setFailure(refused.message);
         return;
       }
-      setEdited(undefined);
-      setPending(undefined);
+      setEdited((now) => (now === undefined || now === sentLook || now === next ? undefined : now));
       setJustSaved(true);
     } finally {
       setSaving(false);
@@ -237,6 +291,20 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
     setFailure(undefined);
   };
 
+  const choosePreset = (id: MenuPreset) => {
+    const before = look;
+    const next = presetLook(id, look.cover);
+    change(next);
+    // A preset replaces what was changed by hand, which Discard alone can't bring back when it was never saved.
+    if (stampOf(before) !== stampOf(presetLook(before.preset, before.cover))) {
+      toasts.toast({
+        tone: 'info',
+        message: strings.presetChosen(strings.presetNames[id]),
+        action: { label: strings.undo, onAction: () => change(before) },
+      });
+    }
+  };
+
   const cropCover = (source: File | string) => {
     void cropping.crop(source, 'cover').then(async (crop) => {
       if (crop === undefined) return;
@@ -245,7 +313,7 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
         toasts.toast({ tone: 'danger', message: strings.photoFailed });
         return;
       }
-      setPending({ ...photo, src: URL.createObjectURL(photo.small) });
+      setPending({ ...photo, src: URL.createObjectURL(photo.large) });
       setFailure(undefined);
       setJustSaved(false);
     });
@@ -267,6 +335,8 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
         ? 'saved'
         : 'hidden';
 
+  const needsBusiness = canEdit && (!hasBusiness || place === undefined);
+
   return (
     <WorkspacePage
       currentPage="menus"
@@ -275,6 +345,7 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
           <TopBar
             title={strings.designTitle}
             crumbs={[{ id: 'menus', label: strings.title, href: `/w/${slug}/menus` }]}
+            {...(canEdit ? {} : { meta: <ViewOnlyTag reason={strings.designViewOnly} /> })}
           >
             {draft.publishedAt === undefined || place === undefined ? null : (
               <ButtonLink href={publicMenuUrl(place.menuKey)} isExternal icon="external-link">
@@ -288,9 +359,13 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
             <PreviewLayout
               previewShare="wide"
               notices={
-                fails ? (
-                  <Callout tone="warning" title={strings.contrastWarningTitle}>
-                    {strings.contrastWarning}
+                needsBusiness ? (
+                  <Callout
+                    tone="warning"
+                    title={strings.designNeedsBusiness}
+                    actions={<ButtonLink href={businessSettingsHref(slug)}>{strings.designAddBusiness}</ButtonLink>}
+                  >
+                    {strings.designNeedsBusinessLine}
                   </Callout>
                 ) : undefined
               }
@@ -308,6 +383,7 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
                   />
                 ) : undefined
               }
+              previewNote={hasSampleDishes ? <Callout tone="info">{strings.sampleNote}</Callout> : undefined}
               preview={
                 place === undefined ? undefined : (
                   <DesignPreview
@@ -325,131 +401,144 @@ function DesignBody({ store, slug, toasts, businessName, draft }: DesignScreenPr
                   <SaveBar
                     status={status}
                     {...(failure === undefined ? {} : { error: failure })}
+                    {...(needsBusiness ? { blockedReason: strings.designNeedsBusiness } : {})}
                     onSave={() => void save()}
                     onDiscard={discard}
+                    onFocusAway={() => pageHeading(document)?.focus()}
                   />
                 ) : undefined
               }
             >
-              <Card title={strings.designLook} description={strings.designLookLine}>
-                <TileGrid
-                  variant="choice"
-                  label={strings.designLook}
-                  keepsPicture
-                  value={look.preset}
-                  tiles={MENU_PRESETS.map((id) => {
-                    const own = presetLook(id);
-                    const ownScheme = MENU_PRESET_LOOKS[id].scheme;
-                    const drawnOn = ownScheme === 'follow' ? 'light' : ownScheme;
-                    return {
-                      id,
-                      name: strings.presetNames[id],
-                      isDisabled: !canEdit,
-                      thumbnail: (
-                        <MenuLookThumbnail
-                          scheme={drawnOn}
-                          variables={[...menuLookShape(own), ...menuLookColours(own, accents, drawnOn)]}
+              <SettingsSection title={strings.designLook} description={strings.designLookLine}>
+                <Card>
+                  <TileGrid
+                    variant="choice"
+                    label={strings.designLook}
+                    keepsPicture
+                    value={look.preset}
+                    tiles={MENU_PRESETS.map((id) => {
+                      const own = presetLook(id);
+                      const ownScheme = MENU_PRESET_LOOKS[id].scheme;
+                      const drawnOn = ownScheme === 'follow' ? 'light' : ownScheme;
+                      return {
+                        id,
+                        name: strings.presetNames[id],
+                        isDisabled: !canEdit,
+                        ...(canEdit ? {} : { disabledReason: strings.designViewOnly }),
+                        thumbnail: (
+                          <MenuLookThumbnail
+                            scheme={drawnOn}
+                            variables={[...menuLookShape(own), ...menuLookColours(own, accents, drawnOn)]}
+                          />
+                        ),
+                      };
+                    })}
+                    onChange={(id) => {
+                      if ((MENU_PRESETS as readonly string[]).includes(id)) choosePreset(id as MenuPreset);
+                    }}
+                  />
+                </Card>
+              </SettingsSection>
+              <SettingsSection title={strings.designColours}>
+                <Card>
+                  {MENU_PALETTE_ROLES.map((role) => {
+                    const check = role === 'surface' ? undefined : contrastOf(role);
+                    return (
+                      <SettingsRow
+                        key={role}
+                        title={strings.roleNames[role]}
+                        description={strings.roleLines[role]}
+                        {...(check === undefined
+                          ? {}
+                          : { meta: <ContrastBadge ratio={check.ratio} passes={check.passes} /> })}
+                      >
+                        <AccentPicker
+                          label={strings.roleNames[role]}
+                          isLabelHidden
+                          hexPlacement="inline"
+                          quickPicks={[]}
+                          defaultName={strings.presetNames[look.preset]}
+                          defaultValue={presetColour(role)}
+                          hexPlaceholder={presetColour(role)}
+                          isReadOnly={!canEdit}
+                          {...(look.palette?.[role] === undefined ? {} : { value: look.palette[role] })}
+                          onChange={(value) => change(withColour(look, role, value))}
+                          onPreview={(value) => change(withColour(look, role, value))}
                         />
-                      ),
-                    };
+                      </SettingsRow>
+                    );
                   })}
-                  onChange={(id) => {
-                    if ((MENU_PRESETS as readonly string[]).includes(id)) {
-                      change(presetLook(id as MenuPreset, look.cover));
-                    }
-                  }}
-                />
-              </Card>
-              <Card title={strings.designColours}>
-                {MENU_PALETTE_ROLES.map((role) => {
-                  const check = role === 'surface' ? undefined : contrast[role];
-                  return (
-                    <SettingsRow
-                      key={role}
-                      title={strings.roleNames[role]}
-                      description={strings.roleLines[role]}
-                      {...(check === undefined
+                  {fails ? (
+                    <Callout tone="warning" title={strings.contrastWarningTitle} isAnnounced>
+                      {strings.contrastWarning}
+                    </Callout>
+                  ) : null}
+                </Card>
+              </SettingsSection>
+              <SettingsSection title={strings.designType}>
+                <Card>
+                  <SettingsRow title={strings.headingFont} control="compact">
+                    <Select
+                      label={strings.headingFont}
+                      isLabelHidden
+                      isReadOnly={!canEdit}
+                      items={MENU_FONTS.map((font) => ({ id: font, label: strings.fontNames[font] }))}
+                      value={look.heading}
+                      onChange={(font) => {
+                        if (font !== null) change({ ...look, heading: font as MenuFont });
+                      }}
+                    />
+                  </SettingsRow>
+                  <SettingsRow title={strings.bodyFont} control="compact">
+                    <Select
+                      label={strings.bodyFont}
+                      isLabelHidden
+                      isReadOnly={!canEdit}
+                      items={MENU_FONTS.map((font) => ({ id: font, label: strings.fontNames[font] }))}
+                      value={look.body}
+                      onChange={(font) => {
+                        if (font !== null) change({ ...look, body: font as MenuFont });
+                      }}
+                    />
+                  </SettingsRow>
+                  <SettingsRow title={strings.corners}>
+                    <SegmentedControl
+                      label={strings.corners}
+                      isReadOnly={!canEdit}
+                      value={look.radius}
+                      onChange={(radius) => change({ ...look, radius: radius as MenuRadius })}
+                      segments={MENU_RADII.map((radius) => ({ value: radius, label: strings.cornerNames[radius] }))}
+                    />
+                  </SettingsRow>
+                </Card>
+              </SettingsSection>
+              {canEdit || coverHref !== undefined ? (
+                <SettingsSection title={strings.designCover}>
+                  <Card>
+                    <FileDrop
+                      label={coverHref === undefined ? strings.coverDrop : strings.designCover}
+                      acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
+                      typesText={strings.photoTypes}
+                      maxSize={MENU_LIMITS.photoMaxBytes}
+                      isReadOnly={!canEdit}
+                      isPending={isSaving && pending !== undefined}
+                      onFiles={(files) => {
+                        const [file] = files;
+                        if (file !== undefined) cropCover(file);
+                      }}
+                      // With a cover, the row: its picture, Change, Adjust crop and the × that takes it off.
+                      {...(coverHref === undefined
                         ? {}
-                        : { meta: <ContrastBadge ratio={check.ratio} passes={check.passes} /> })}
-                    >
-                      <AccentPicker
-                        label={strings.roleNames[role]}
-                        isLabelHidden
-                        hexPlacement="inline"
-                        quickPicks={[]}
-                        defaultName={strings.presetNames[look.preset]}
-                        defaultValue={presetColour(role)}
-                        hexPlaceholder={presetColour(role)}
-                        isReadOnly={!canEdit}
-                        {...(look.palette?.[role] === undefined ? {} : { value: look.palette[role] })}
-                        onChange={(value) => change(withColour(look, role, value))}
-                        onPreview={(value) => change(withColour(look, role, value))}
-                      />
-                    </SettingsRow>
-                  );
-                })}
-              </Card>
-              <Card title={strings.designType}>
-                <SettingsRow title={strings.headingFont} control="field">
-                  <Select
-                    label={strings.headingFont}
-                    isLabelHidden
-                    isDisabled={!canEdit}
-                    items={MENU_FONTS.map((font) => ({ id: font, label: strings.fontNames[font] }))}
-                    value={look.heading}
-                    onChange={(font) => {
-                      if (font !== null) change({ ...look, heading: font as MenuFont });
-                    }}
-                  />
-                </SettingsRow>
-                <SettingsRow title={strings.bodyFont} control="field">
-                  <Select
-                    label={strings.bodyFont}
-                    isLabelHidden
-                    isDisabled={!canEdit}
-                    items={MENU_FONTS.map((font) => ({ id: font, label: strings.fontNames[font] }))}
-                    value={look.body}
-                    onChange={(font) => {
-                      if (font !== null) change({ ...look, body: font as MenuFont });
-                    }}
-                  />
-                </SettingsRow>
-                <SettingsRow title={strings.corners}>
-                  <SegmentedControl
-                    label={strings.corners}
-                    isDisabled={!canEdit}
-                    value={look.radius}
-                    onChange={(radius) => change({ ...look, radius: radius as MenuRadius })}
-                    segments={MENU_RADII.map((radius) => ({ value: radius, label: strings.cornerNames[radius] }))}
-                  />
-                </SettingsRow>
-              </Card>
-              <Card title={strings.designCover}>
-                <FileDrop
-                  label={strings.designCover}
-                  acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
-                  typesText={strings.photoTypes}
-                  maxSize={MENU_LIMITS.photoMaxBytes}
-                  isDisabled={!canEdit}
-                  isPending={isSaving && pending !== undefined}
-                  onFiles={(files) => {
-                    const [file] = files;
-                    if (file !== undefined) cropCover(file);
-                  }}
-                  {...(coverHref === undefined
-                    ? {}
-                    : {
-                        preview: { src: coverHref, alt: strings.designCover },
-                        ...(canEdit
-                          ? {
-                              onRemove: removeCover,
-                              onAdjust: () => cropCover(coverHref),
-                            }
-                          : {}),
-                      })}
-                />
-                {cropping.cropper}
-              </Card>
+                        : {
+                            variant: 'row' as const,
+                            preview: { src: coverHref, alt: strings.designCover },
+                            ...(canEdit ? { onRemove: removeCover, onAdjust: () => cropCover(coverHref) } : {}),
+                          })}
+                    />
+                    {cropping.cropper}
+                  </Card>
+                </SettingsSection>
+              ) : null}
             </PreviewLayout>
             <LeaveGuard isDirty={isDirty} />
           </>

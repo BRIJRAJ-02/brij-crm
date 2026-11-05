@@ -753,7 +753,12 @@ export async function setMenuHidden(
 export async function saveMenuLook(
   scope: EngineScope,
   input: { readonly look: unknown },
-): Promise<{ readonly draft: MenuDraft; readonly placeIds: readonly string[] }> {
+): Promise<{
+  readonly draft: MenuDraft;
+  readonly placeIds: readonly string[];
+  /** A cover this save let go of: its stored files, for the api to remove. */
+  readonly removedPaths: readonly string[];
+}> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   const parsed = MenuLook.safeParse(input.look);
@@ -776,15 +781,52 @@ export async function saveMenuLook(
         );
       if (photo === undefined) throw refuse('NOT_FOUND', 'That cover photo doesn’t exist.');
     }
+    const wasCover = await savedCoverId(tx, ws);
     const changed = await tx
       .update(businessProfiles)
       .set({ look, updatedAt: sql`now()`, updatedByMemberId: by })
       .where(eq(businessProfiles.workspaceId, ws))
       .returning({ workspaceId: businessProfiles.workspaceId });
     if (changed.length === 0) throw refuse('CONFLICT', 'Add your business first, then you can design its menu.');
-    await auditSetup(tx, scope, 'menu.look_saved');
-    return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
+    // A cover has a photo row of its own and is live with no Publish, so one replaced or taken off goes as this saves:
+    // a look can change many times between Publishes, and each row counts towards the workspace's photos.
+    const removedPaths =
+      wasCover === undefined || wasCover === look.cover?.id
+        ? []
+        : (
+            await tx
+              .delete(menuPhotos)
+              .where(
+                and(
+                  eq(menuPhotos.workspaceId, ws),
+                  eq(menuPhotos.id, wasCover),
+                  sql`not exists (select 1 from ${menuItems} where ${menuItems.workspaceId} = ${ws} and ${menuItems.photoId} = ${wasCover}::uuid)`,
+                ),
+              )
+              .returning({ largePath: menuPhotos.largePath, smallPath: menuPhotos.smallPath })
+          ).flatMap((row) => [row.largePath, row.smallPath]);
+    await auditSetup(tx, scope, 'menu.look_saved', look.cover === undefined ? {} : { photoId: look.cover.id });
+    return {
+      draft: await readDraft(tx, scope),
+      placeIds: (await placesOf(tx, ws)).map((place) => place.id),
+      removedPaths,
+    };
   });
+}
+
+/**
+ * The cover the look's row names, read from the raw document rather than through its schema: a row the schema no longer
+ * takes wears the default look, but still names a photo, which nothing may delete for that.
+ */
+async function savedCoverId(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ id: sql<string | null>`${businessProfiles.look} -> 'cover' ->> 'id'` })
+    .from(businessProfiles)
+    .where(eq(businessProfiles.workspaceId, workspaceId));
+  const id = row?.id ?? undefined;
+  return id !== undefined && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    ? id
+    : undefined;
 }
 
 /**
@@ -910,7 +952,7 @@ async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string): Promise<r
     .select({ id: menuItems.photoId })
     .from(menuItems)
     .where(and(eq(menuItems.workspaceId, workspaceId), sql`${menuItems.photoId} is not null`));
-  const coverId = (await readMenuBrandIn(tx, workspaceId)).menuLook?.cover?.id;
+  const coverId = await savedCoverId(tx, workspaceId);
   const gone = await tx
     .delete(menuPhotos)
     .where(

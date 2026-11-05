@@ -217,7 +217,7 @@ export function AccentPicker({
     </div>
   );
   return (
-    <div className={styles.root} data-hex={hexPlacement}>
+    <div className={styles.root} data-hex={hexPlacement} role="group" aria-labelledby={labelId}>
       {isLabelHidden ? (
         <VisuallyHidden>
           <span id={labelId}>{label}</span>
