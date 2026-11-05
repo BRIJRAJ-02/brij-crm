@@ -3,7 +3,8 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { HostedFormPreview, type HostedFormPreviewProps } from '../HostedFormPreview/HostedFormPreview.tsx';
+import { FormPicture } from '../FormPicture/FormPicture.tsx';
+import { Link } from '../../atoms/Link/Link.tsx';
 import { LinkCard, LinkCardSkeleton } from './LinkCard.tsx';
 
 /** Open (only while it is on: there is nothing to open on an off link) and the ··· menu. */
@@ -251,26 +252,10 @@ export const Loading: Story = {
   ),
 };
 
-/** The picture's form: its headline and first questions, as the forms list's card reads them. */
-const PICTURED_FORM: HostedFormPreviewProps['form'] = {
-  key: 'card-contact',
-  status: 'live',
-  versionNumber: 1,
-  headline: 'Get in touch',
-  subheading: 'We answer within a day.',
-  buttonText: 'Send',
-  language: 'en',
-  look: { colour: 'light', corners: 'rounded' },
-  questions: [
-    { id: 'n', key: 'name', label: 'Your name', answerType: 'short_text', required: true },
-    { id: 'e', key: 'email', label: 'Work email', answerType: 'email', required: true },
-  ],
-  offersMeeting: false,
-};
-
 /**
- * A pictured form (5 November 2026): the form small across the top, hidden and inert; its state as a dot and a word
- * before its one fact; its submissions as the foot's own link; Copy link a quiet icon; and the ··· menu.
+ * A pictured form (5 November 2026): its name and first questions as shapes across the top, hidden and inert; its
+ * state as a dot and a word, then its submissions as a quiet link at the facts line's end; its address in the foot
+ * with Copy link a quiet icon and the ··· menu, as a booking page's card.
  */
 export const Pictured: Story = {
   parameters: { crm: { preview: true } },
@@ -278,16 +263,23 @@ export const Pictured: Story = {
     title: 'Contact us',
     href: '/w/acme/captures/forms/contact',
     hue: undefined,
-    facts: ['edited 2 minutes ago'],
-    address: undefined,
+    facts: [],
+    address: '/f/contact-us',
     toggle: undefined,
     isCopyQuiet: true,
     status: { label: 'Live', hue: 'green' },
-    picture: <HostedFormPreview form={PICTURED_FORM} size="thumbnail" />,
-    lead: (
-      <Button variant="ghost" size="lg" icon="inbox">
+    picture: (
+      <FormPicture
+        title="Contact us"
+        count="4 questions"
+        fields={[{ kind: 'text' }, { kind: 'text' }, { kind: 'choices', count: 3 }]}
+        hue="blue"
+      />
+    ),
+    factsEnd: (
+      <Link href="/w/acme/captures/forms/contact?tab=submissions" tone="quiet" label="24 submissions to Contact us">
         24 submissions
-      </Button>
+      </Link>
     ),
   },
   render: (args) => (
@@ -297,10 +289,13 @@ export const Pictured: Story = {
   ),
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('Live')).toBeInTheDocument();
-    // The picture is shown, never read or reached: hidden, inert, its fields no textboxes.
+    // The picture is shown, never read or reached: hidden and inert, its name its only words.
     const stage = canvasElement.querySelector('[aria-hidden="true"][inert]');
-    await expect(stage?.textContent).toContain('Work email');
-    await expect(canvas.queryByRole('textbox')).toBeNull();
+    await expect(stage?.textContent).toBe('Contact us4 questions');
+    // The count is its own link on the facts line, above the card's.
+    const count = canvas.getByRole('link', { name: '24 submissions to Contact us' });
+    const spot = count.getBoundingClientRect();
+    await expect(document.elementFromPoint(spot.left + spot.width / 2, spot.top + spot.height / 2)).toBe(count);
     // Copy link is an icon with its name, no words.
     const copy = canvas.getByRole('button', { name: 'Copy link' });
     await expect(copy.textContent.trim()).toBe('');
