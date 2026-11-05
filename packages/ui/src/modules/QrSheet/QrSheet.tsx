@@ -4,12 +4,20 @@ import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import styles from './QrSheet.module.css';
 import { strings } from './strings.ts';
 
-/** One card on the sheet: a table's name as guests read it ("Table 4") and the address its code opens. */
+/** One card on the sheet: a table's name as guests read it ("T4") and the address its code opens. */
 export interface QrSheetCard {
   readonly id: string;
   readonly name: string;
   readonly value: string;
+  /** The table's code as printed under its name, so staff can match a card to its table (checklabs prints it). */
+  readonly code?: string;
 }
+
+/** How the sheet lays its cards out: `tents` fold to stand on a table, `tiles` (stickers) are cut out flat. */
+export type QrSheetLayout = 'tents' | 'tiles';
+
+/** How many tiles an A4 sheet holds: two across, three down (the spec's stickers, six an A4). */
+const TILES_PER_PAGE = 6;
 
 /** Props for QrSheet. */
 export interface QrSheetProps {
@@ -19,7 +27,12 @@ export interface QrSheetProps {
   readonly logoSrc?: string;
   /** The cards in order, one per table. */
   readonly cards: readonly QrSheetCard[];
-  /** How many tent cards an A4 sheet holds: two (each half the sheet) or four (each a quarter). */
+  /**
+   * `tents` (the default) fold in half to stand on a table, two or four a sheet (`perPage`); `tiles` are flat
+   * stickers to cut out and stick on, six a sheet: the name, the venue and code, the code and the scan line.
+   */
+  readonly layout?: QrSheetLayout;
+  /** How many tent cards an A4 sheet holds: two (each half the sheet) or four (each a quarter). Tents only. */
   readonly perPage: 2 | 4;
   /** The modules' colour (`#rrggbb`), drawn only while it keeps its contrast on white (QrCode's own rule). */
   readonly colour?: string;
@@ -78,9 +91,43 @@ function Face({
         )}
         <p className={styles.venue}>{venue}</p>
         <p className={styles.table}>{card.name}</p>
+        {card.code === undefined ? null : <p className={styles.key}>{card.code}</p>}
         <p className={styles.scan}>{scanLine}</p>
       </div>
     </div>
+  );
+}
+
+/** One flat tile (a sticker): the table's name, the venue and code, the code, then the scan line, centred. */
+function Tile({
+  card,
+  venue,
+  logo,
+  colour,
+  scanLine,
+}: {
+  readonly card: QrSheetCard;
+  readonly venue: string;
+  readonly logo: string | undefined;
+  readonly colour: string | undefined;
+  readonly scanLine: string;
+}) {
+  return (
+    <article className={styles.tile} aria-label={card.name}>
+      <p className={styles.table}>{card.name}</p>
+      <p className={styles.meta}>{strings.meta(venue, card.code)}</p>
+      <div className={styles.code}>
+        <QrCode
+          value={card.value}
+          label={strings.code(card.name)}
+          size="fill"
+          ground="paper"
+          {...(colour === undefined ? {} : { colour })}
+          {...(logo === undefined ? {} : { picture: logo })}
+        />
+      </div>
+      <p className={styles.scan}>{scanLine}</p>
+    </article>
   );
 }
 
@@ -94,6 +141,7 @@ export function QrSheet({
   venue,
   logoSrc,
   cards,
+  layout = 'tents',
   perPage,
   colour,
   scanLine = strings.scan,
@@ -102,7 +150,8 @@ export function QrSheet({
   notice,
 }: QrSheetProps) {
   const logo = safeImageSrc(logoSrc);
-  const sheets = sheetsOf(cards, perPage);
+  const isTiles = layout === 'tiles';
+  const sheets = sheetsOf(cards, isTiles ? TILES_PER_PAGE : perPage);
   return (
     <div className={styles.root} data-theme="light">
       {controls === undefined && actions === undefined ? null : (
@@ -116,15 +165,20 @@ export function QrSheet({
         <section
           key={sheet[0]?.id ?? index}
           className={styles.sheet}
-          data-per-page={perPage}
+          data-layout={isTiles ? 'tiles' : undefined}
+          data-per-page={isTiles ? undefined : perPage}
           aria-label={strings.page(index + 1, sheets.length)}
         >
-          {sheet.map((card) => (
-            <article key={card.id} className={styles.card} aria-label={card.name}>
-              <Face card={card} venue={venue} logo={logo} colour={colour} scanLine={scanLine} isBack />
-              <Face card={card} venue={venue} logo={logo} colour={colour} scanLine={scanLine} isBack={false} />
-            </article>
-          ))}
+          {sheet.map((card) =>
+            isTiles ? (
+              <Tile key={card.id} card={card} venue={venue} logo={logo} colour={colour} scanLine={scanLine} />
+            ) : (
+              <article key={card.id} className={styles.card} aria-label={card.name}>
+                <Face card={card} venue={venue} logo={logo} colour={colour} scanLine={scanLine} isBack />
+                <Face card={card} venue={venue} logo={logo} colour={colour} scanLine={scanLine} isBack={false} />
+              </article>
+            ),
+          )}
         </section>
       ))}
     </div>

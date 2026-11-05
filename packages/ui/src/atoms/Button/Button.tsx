@@ -5,6 +5,7 @@ import {
   ToggleButton as AriaToggleButton,
   type PressEvent,
 } from 'react-aria-components';
+import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
@@ -172,6 +173,11 @@ export type ToggleButtonProps = Omit<ButtonLook, 'kbd'> &
      * beside picks drawn that way (a reservation's party size beside its selected day and time).
      */
     readonly isSelectionStrong?: boolean;
+    /**
+     * A dot before the label in the hue's dot colour, as Badge draws a state's dot: what the choice is coloured by
+     * elsewhere (a zone's colour on its chip, ChoiceChips' `dot`). Decorative; the label names the choice.
+     */
+    readonly dot?: Hue;
   };
 
 /** The data attributes that pick a look from the CSS module. */
@@ -431,6 +437,7 @@ export function ToggleButton(props: ToggleButtonProps) {
       {...lookAttributes(props, face)}
       {...(props.isSelectionStrong === true ? { 'data-selection': 'strong' } : {})}
     >
+      {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
       <Face face={face} look={props} isPending={false} />
     </AriaToggleButton>
   );

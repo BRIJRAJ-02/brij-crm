@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
@@ -19,6 +20,12 @@ export interface SectionListSection {
   readonly content: ReactNode;
   /** At its header's end, after its grip: the section's menu (Move up and Move down, for a pointer that can't drag). */
   readonly actions?: ReactNode;
+  /**
+   * Folds the section to its header (a menu's section, after checklabs' category chevron): with `onExpandedChange`,
+   * a chevron at the header's end opens and closes what it holds, and a folded section draws its header alone.
+   */
+  readonly isExpanded?: boolean;
+  readonly onExpandedChange?: (isExpanded: boolean) => void;
 }
 
 /** Props for SectionList. */
@@ -82,13 +89,31 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
   );
 }
 
-/** One section's Card: its title, then its grip and its actions at the header's end, then what it holds. */
+/**
+ * One section's Card: its title, then its grip, its actions and (folding) its chevron at the header's end, then what
+ * it holds, unless it is folded.
+ */
 function SectionCard({ section, grip }: { readonly section: SectionListSection; readonly grip?: ReactNode }) {
+  const bodyId = useId();
+  const { onExpandedChange } = section;
+  const isFolding = onExpandedChange !== undefined;
+  const isExpanded = !isFolding || section.isExpanded !== false;
+  const fold = isFolding ? (
+    <Button
+      variant="ghost"
+      icon={isExpanded ? 'chevron-down' : 'chevron-right'}
+      label={strings.fold(section.title ?? strings.numbered(1))}
+      isExpanded={isExpanded}
+      {...(isExpanded ? { controls: bodyId } : {})}
+      onPress={() => onExpandedChange(!isExpanded)}
+    />
+  ) : undefined;
   const actions =
-    grip === undefined && section.actions === undefined ? undefined : (
+    grip === undefined && section.actions === undefined && fold === undefined ? undefined : (
       <>
         {grip}
         {section.actions}
+        {fold}
       </>
     );
   return (
@@ -97,7 +122,15 @@ function SectionCard({ section, grip }: { readonly section: SectionListSection; 
       {...(section.description === undefined ? {} : { description: section.description })}
       {...(actions === undefined ? {} : { actions })}
     >
-      {section.content}
+      {isExpanded ? (
+        isFolding ? (
+          <div id={bodyId} className={styles.body}>
+            {section.content}
+          </div>
+        ) : (
+          section.content
+        )
+      ) : undefined}
     </Card>
   );
 }

@@ -133,3 +133,25 @@ export const WithDescription: Story = {
     await expect(canvas.getByText('Thursday, 8 October')).toBeInTheDocument();
   },
 };
+
+/** A quiet line with no heading, then the list's actions at the end (Menu QR's "12 of 20 tables", Print). */
+export const DescriptionOnly: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SectionBar
+        description="12 of 20 tables"
+        end={
+          <>
+            <Button icon="printer">Print QR sheet</Button>
+            <Button variant="ghost">Clear</Button>
+          </>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('12 of 20 tables')).toBeInTheDocument();
+    // No heading: the line says something about the list, it doesn't name a section.
+    await expect(canvas.queryByRole('heading')).not.toBeInTheDocument();
+  },
+};

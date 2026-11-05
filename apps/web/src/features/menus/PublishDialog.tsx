@@ -1,6 +1,7 @@
 // Brief
 // Purpose: Review and publish (checklabs' first publish sheet and its "You're live" QR dialog, in one): what still
-// keeps the menu from guests, each with Fix, then Publish; once live, the link and its QR code to share.
+// keeps the menu from guests, each with Fix, then Publish & go live; once live, the link and its QR code to share
+// (also what the split Publish's Show QR code opens).
 // Main task: publish a menu guests can use, then share it.
 // Leaves out: a QR code per table (H2, the Menu QR app) and choosing only some changes (everything publishes at once).
 import type { MenuDraft, MenuPlace, MenuStore } from '@crm/data';
@@ -25,8 +26,8 @@ export function PublishDialog({
   place,
   hasHours,
   blocker,
+  startsOn = 'review',
   onClose,
-  onPublished,
   onFix,
 }: {
   readonly store: MenuStore;
@@ -35,13 +36,16 @@ export function PublishDialog({
   readonly place?: MenuPlace;
   readonly hasHours: boolean;
   readonly blocker: ReturnType<typeof publishBlocker>;
+  /** `live` opens on the link and its code (Show QR code); `review` (the default) on the checks. */
+  readonly startsOn?: 'review' | 'live';
   readonly onClose: () => void;
-  readonly onPublished: () => void;
   readonly onFix: (fix: PublishFix) => void;
 }) {
   const isLive = draft.publishedAt !== undefined;
-  // Opened on a live menu with nothing new (Show QR code), it opens on the link.
-  const [stage, setStage] = useState<'review' | 'live'>(isLive && draft.changes === 0 ? 'live' : 'review');
+  // Show QR code, or a live menu with nothing new, opens on the link.
+  const [stage, setStage] = useState<'review' | 'live'>(
+    (startsOn === 'live' && isLive) || (isLive && draft.changes === 0) ? 'live' : 'review',
+  );
   const [isPublishing, setPublishing] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const placed = draft.sections.some((section) => section.itemIds.length > 0);
@@ -89,7 +93,6 @@ export function PublishDialog({
       setRefusal(refused.message);
       return;
     }
-    onPublished();
     setStage('live');
   };
 
@@ -125,7 +128,7 @@ export function PublishDialog({
               isDisabled={blocker !== undefined || (isLive && draft.changes === 0)}
               onPress={() => void publish()}
             >
-              {strings.publishNow}
+              {isLive ? strings.publishNow : strings.publishGoLive}
             </Button>
           </>
         )

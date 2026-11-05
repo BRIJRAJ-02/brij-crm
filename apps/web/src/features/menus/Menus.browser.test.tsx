@@ -148,6 +148,8 @@ function storeOf(draft: MenuDraft) {
     saveMenu: done('saveMenu'),
     saveSection: done('saveSection'),
     placeItem: done('placeItem'),
+    saveGroup: done('saveGroup'),
+    saveItem: done('saveItem'),
   } as unknown as MenuStore;
   return { store, calls };
 }
@@ -216,14 +218,109 @@ describe('the Menus editor', () => {
     // With the hours, a menu and dishes in, the checklist folds to its one step left, Publish, with Review.
     await expect.element(page.getByText('One setup step left: Publish it')).toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: /Review/ }).first()).toBeInTheDocument();
-    // The dish Publish would refuse says so on its row, and on the Dishes tab, before Publish is pressed.
+    // The item Publish would refuse says so on its row, and on the Items tab, before Publish is pressed.
     await expect.element(page.getByText('No price').first()).toBeVisible();
-    // Sold out is in a dish's ⋯ on Structure (checklabs' rows have no switch); the Items tab keeps the switch.
+    // Sold out is in an item's ⋯ on Structure (checklabs' rows have no switch); the Items tab keeps the switch.
     await expect.element(page.getByRole('button', { name: 'More for Oysters' }).first()).toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: 'Review and publish' }));
+    // The first publish is checklabs' "Publish & go live", through the review.
+    await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
     await expect.element(review.getByText(/Give Oysters a price or a price note/)).toBeVisible();
-    await expect.element(review.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
+    await expect.element(review.getByRole('button', { name: 'Publish & go live' })).toBeDisabled();
+  });
+
+  it('publishes drafts from the split button at once, its chevron sharing, and keeps Discard and Delete in ⋯', async () => {
+    await page.viewport(1280, 900);
+    const live: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z' };
+    const { store, calls } = storeOf(live);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'Publish · 3 drafts' }));
+    await expect.poll(() => calls.includes('publish')).toBe(true);
+    await userEvent.click(page.getByRole('button', { name: 'Share menu' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Open in new tab' })).toBeVisible();
+    await expect.element(page.getByRole('menuitem', { name: 'Show QR code' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: 'More', exact: true }));
+    await expect.element(page.getByRole('menuitem', { name: 'Discard changes' })).toBeVisible();
+    await expect.element(page.getByRole('menuitem', { name: 'Delete menu' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    // Nothing left to publish: the main half is View.
+    shown.unmount();
+    shown = await renderInApp(
+      () => (
+        <MenusScreen
+          view={{}}
+          store={storeOf({ ...live, changes: 0 }).store}
+          slug="acme"
+          toasts={toasts}
+          business={BUSINESS}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await expect.element(page.getByRole('button', { name: 'View', exact: true })).toBeInTheDocument();
+  });
+
+  it('lists every item in the menu’s order with Available, folds a section, and searches both', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{ tab: 'dishes' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+    );
+    await expect.element(page.getByRole('heading', { name: 'All items' })).toBeInTheDocument();
+    await expect.element(page.getByText('5 available')).toBeInTheDocument();
+    await expect.element(page.getByRole('columnheader', { name: 'Available' })).toBeVisible();
+    const names = page
+      .getByRole('rowheader')
+      .elements()
+      .map((cell) => cell.textContent);
+    expect(names.slice(0, 2)).toEqual(['Burrata, blood orange, chilli', 'Charred hispi cabbage']);
+    await expect.element(page.getByRole('row', { name: /Wood fired bream/ }).getByText('Mains')).toBeVisible();
+    await userEvent.fill(page.getByRole('searchbox', { name: 'Search sections and items' }), 'bream');
+    await expect.element(page.getByRole('rowheader', { name: /Burrata/ })).not.toBeInTheDocument();
+    shown.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    await expect.element(page.getByText('0 sub-sections · 3 items').first()).toBeInTheDocument();
+    // The price, sizes and allergens ride each item's second line.
+    await expect.element(page.getByText('Half £14.00').first()).toBeInTheDocument();
+    const fold = page.getByRole('button', { name: 'Show Small plates' });
+    await expect.element(fold).toHaveAttribute('aria-expanded', 'true');
+    await expect.element(page.getByLabelText('Items in Small plates')).toBeInTheDocument();
+    await userEvent.click(fold);
+    // Folded, the section draws its head alone (the phone preview beside it still reads the whole menu).
+    await expect.element(page.getByLabelText('Items in Small plates')).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: 'Edit Mains' })).toBeInTheDocument();
+  });
+
+  it('makes a new option group from an item’s drawer and comes back with it picked', async () => {
+    await page.viewport(1280, 900);
+    const { store, calls } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{ tab: 'dishes' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'New item' }).first());
+    const sheet = page.getByRole('dialog', { name: 'Item' });
+    await expect.element(sheet.getByPlaceholder('e.g. Grilled Salmon')).toBeVisible();
+    await expect.element(sheet.getByRole('switch', { name: /Available/ })).toBeChecked();
+    await userEvent.click(sheet.getByRole('button', { name: 'New option group' }));
+    const group = page.getByRole('dialog', { name: 'Option group' });
+    await userEvent.fill(group.getByLabelText('Name', { exact: true }), 'Milk');
+    await userEvent.fill(group.getByRole('textbox', { name: /^Option 1/ }), 'Oat');
+    await userEvent.click(group.getByRole('button', { name: 'Save group' }));
+    await expect.poll(() => calls.includes('saveGroup')).toBe(true);
+    await expect.element(group).not.toBeInTheDocument();
+    await expect.element(sheet).toBeVisible();
   });
 
   it('asks before a drawer with changes closes, and keeps what was typed on Keep editing', async () => {
@@ -234,7 +331,8 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{ tab: 'options' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=options' },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Add option group' }).first());
+    await expect.element(page.getByText('Choices guests can pick. Required groups need a pick.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'New group' }).first());
     const drawer = page.getByRole('dialog', { name: 'Option group' });
     await expect.element(drawer).toBeVisible();
     // Save with nothing named: the problems show inline, nothing is sent.

@@ -1,13 +1,13 @@
 // Brief
-// Purpose: the Tables page (spec 0065, H2, after checklabs' Tables page): every table of a place with its own code,
-// grouped by area under area pills, each row's seats, code and scans, its QR in a dialog, Edit and Delete; Add tables;
-// the whole place's codes as a print sheet or a zip.
+// Purpose: the Tables page (spec 0065, H2), in checklabs' Tables page's order: a line of help, the zones as chips
+// (All, each zone with its colour, Unzoned last), "12 of 20 tables" with Print QR sheet (the picked tables, else the
+// zone shown) and Clear, then a card per zone of its tables (Table, Seats, Code; QR and Edit, the rest in ⋯); one
+// drawer adds or edits a table, another holds its QR code; the whole place's codes download as a zip.
 // Main task: set up the tables and get a printed code onto every one.
-// Leaves out: the floor plan editor and per table menus (not ours), areas' own editing (the place's page), and the
-// fuller scan picture (spec 0067's Insights).
+// Leaves out: the floor plan editor and per table menus (not ours), joins and online booking (the place's page), and
+// the fuller scan picture (spec 0067's Insights): a table's scans sit in its ⋯ as Analytics.
 import type { BusinessView, HospitalityStore, Place, PlaceFloor, PlaceQrCodes, Resource, TableQr } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { tableDisplayName } from '@crm/contracts/menu';
 import {
   Button,
   ButtonGroup,
@@ -15,17 +15,19 @@ import {
   Callout,
   Card,
   CardTitleLevel,
-  Code,
   ChoiceChips,
-  CopyButton,
+  Code,
+  DescriptionList,
   EmptyState,
   focusLater,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   Modal,
   PageColumn,
   QrCode,
+  SectionBar,
   Select,
   Skeleton,
   Table,
@@ -36,34 +38,40 @@ import {
 } from '@crm/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { saveFile } from '../link-page/qr-png.ts';
-import { AddTablesDialog, TableDialog } from '../hospitality/FloorScreen.tsx';
 import { useIsNarrow } from '../menus/narrow.ts';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { qrPrintHref, type QrLook } from './look.ts';
 import { codeFile, codeFileName, tableMenuAddress, zipCodes, type DrawnCode } from './codes.ts';
 import { strings } from './strings.ts';
+import { TableDrawer } from './TableDrawer.tsx';
+import { ALL_ZONES, UNZONED, zoneGroups, type ZoneGroup } from './zones.ts';
 
-/** An area card's columns, after checklabs' Label, Cap. and Code (its Menu and Venue are one per place here). */
+/** A zone card's columns, after checklabs' Label, Cap. and Code (its Venue and Menu are one per place here). */
 const COLUMNS: readonly TableColumn[] = [
   { id: 'table', label: strings.table, isRowHeader: true, size: 'fill' },
   { id: 'seats', label: strings.seats, align: 'end', size: 'fit' },
   { id: 'code', label: strings.code, size: 'fit' },
-  { id: 'scans', label: strings.scans, align: 'end', size: 'fit' },
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
-/** At a phone's width a row keeps its name, seats and actions; the code and scans are in its QR dialog. */
-const NARROW_COLUMNS = COLUMNS.filter((column) => column.id !== 'code' && column.id !== 'scans');
+/** At a phone's width a row keeps its name, its whole code (wrapping) and ⋯; the seats are in its drawer. */
+const NARROW_COLUMNS: readonly TableColumn[] = [
+  { id: 'table', label: strings.table, isRowHeader: true, size: 'fit' },
+  { id: 'code', label: strings.code, size: 'fill' },
+  { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+];
 
-/** Labels in reading order: T2 before T10 (checklabs' numeric aware sort). */
-const byLabel = (a: { readonly label: string }, b: { readonly label: string }) =>
-  a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+/** What a drawer or dialog is open for. */
+type Open =
+  | { readonly kind: 'add' }
+  | { readonly kind: 'edit'; readonly table: Resource }
+  | { readonly kind: 'delete'; readonly table: Resource }
+  | { readonly kind: 'code'; readonly id: string }
+  | { readonly kind: 'analytics'; readonly id: string }
+  | { readonly kind: 'renew'; readonly table: TableQr };
 
-/** The pill for tables in no area. */
-const NO_AREA = 'none';
-
-/** The page: the place switcher, then the place's codes. */
+/** The page: the place switcher, then the place's tables. */
 export function QrScreen({
   slug,
   hospitality,
@@ -126,7 +134,7 @@ export function QrScreen({
   );
 }
 
-/** One place's codes: the bar's switcher, Print sheet and Download all, then the list. */
+/** One place's tables: the bar's switcher, Download all and Add table, then the zones, the count and the cards. */
 function PlaceCodes({
   slug,
   hospitality,
@@ -147,26 +155,24 @@ function PlaceCodes({
   const held = hospitality.qrCodes(slug, place.id);
   const state = useHospitality(held);
   useEffect(() => held.retain(), [held]);
-  // The place's floor (seats, areas, and Add, Edit and Delete), read while the page is open.
+  // The place's floor (seats, zones, and Add, Edit and Delete), read while the page is open.
   const floorHeld = hospitality.floor(slug, place.id);
   const floorState = useHospitality(floorHeld);
   useEffect(() => floorHeld.retain(), [floorHeld]);
   const floor = floorState.status === 'ready' ? floorState.value : undefined;
-  const [shown, setShown] = useState<string | undefined>();
-  const [editing, setEditing] = useState<
-    { readonly kind: 'add' } | { readonly kind: 'edit' | 'delete'; readonly table: Resource } | undefined
-  >();
-  const [area, setArea] = useState<string>('all');
-  // The table a Delete asks about, kept while its dialog closes, so the title never reads "Delete ?".
-  const [lastDeleting, setLastDeleting] = useState<Resource | undefined>();
-  if (editing?.kind === 'delete' && editing.table !== lastDeleting) setLastDeleting(editing.table);
+  const [open, setOpen] = useState<Open | undefined>();
+  // Kept while a dialog closes, so its title never reads "Delete ?" on the way out.
+  const [lastOpen, setLastOpen] = useState<Open | undefined>();
+  if (open !== undefined && open !== lastOpen) setLastOpen(open);
+  const [zone, setZone] = useState<string>(ALL_ZONES);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const isNarrow = useIsNarrow();
-  const [renewing, setRenewing] = useState<TableQr | undefined>();
-  const [zipping, setZipping] = useState<'png' | 'svg' | undefined>();
+  const [zipping, setZipping] = useState(false);
   const codes = state.status === 'ready' ? state.value : undefined;
-  const tables = codes?.tables ?? [];
+  const tables = useMemo(() => codes?.tables ?? [], [codes]);
   const hasTables = tables.length > 0;
   const venue = business.profile?.name ?? place.name;
+  const close = () => setOpen(undefined);
 
   const placeSwitch =
     business.places.length > 1 ? (
@@ -184,27 +190,20 @@ function PlaceCodes({
     <TopBar title={strings.title} icon="qr-code">
       {placeSwitch}
       {hasTables && (
-        <>
-          {/* One click with the preset: every table, PNG at 512 pixels, one zip. SVG is in each code's dialog. */}
-          <Button
-            icon="download"
-            label={strings.downloadAll}
-            isPending={zipping !== undefined}
-            onPress={() => setZipping('png')}
-          />
-          <ButtonLink
-            href={qrPrintHref(slug, place.id)}
-            icon="printer"
-            {...(isNarrow ? { label: strings.print } : { children: strings.print })}
-          />
-        </>
+        // One click with the preset: every table, PNG at 512 pixels, one zip. SVG is in each table's QR drawer.
+        <Button
+          icon="download"
+          {...(isNarrow ? { label: strings.downloadAllLabel } : { children: strings.downloadAll })}
+          isPending={zipping}
+          onPress={() => setZipping(true)}
+        />
       )}
       {floor === undefined ? null : (
         <Button
           variant="primary"
           icon="plus"
           {...(isNarrow ? { label: strings.addTable } : { children: strings.addTable })}
-          onPress={() => setEditing({ kind: 'add' })}
+          onPress={() => setOpen({ kind: 'add' })}
         />
       )}
     </TopBar>
@@ -229,7 +228,12 @@ function PlaceCodes({
     );
   }
   const value = state.value;
-  const open = tables.find((table) => table.id === shown);
+  const shown = (id: string) => tables.find((table) => table.id === id);
+  const showing = open ?? lastOpen;
+  const codeTable = showing?.kind === 'code' || showing?.kind === 'analytics' ? shown(showing.id) : undefined;
+  const editing = showing?.kind === 'edit' ? showing.table : undefined;
+  const editingCode = editing === undefined ? undefined : shown(editing.id);
+
   return (
     <WorkspacePage
       currentPage="qr"
@@ -237,50 +241,57 @@ function PlaceCodes({
         topBar,
         body: (
           <PageColumn>
+            <SectionBar description={strings.help} />
             <MenuState slug={slug} codes={value} />
-            <TablesByArea
-              tables={tables}
+            <TablesByZone
+              slug={slug}
+              placeId={place.id}
+              codes={value}
               floor={floor}
-              area={area}
-              onArea={setArea}
-              onShow={setShown}
-              onEdit={(table) => setEditing({ kind: 'edit', table })}
-              onDelete={(table) => setEditing({ kind: 'delete', table })}
-              onRenew={setRenewing}
-              onAdd={() => setEditing({ kind: 'add' })}
+              zone={zone}
+              onZone={setZone}
+              picked={picked}
+              onPicked={setPicked}
+              onOpen={setOpen}
             />
-            {floor === undefined ? null : (
-              <>
-                <AddTablesDialog
-                  startKind="table"
-                  key={editing?.kind === 'add' ? 'add:open' : 'add:closed'}
-                  isOpen={editing?.kind === 'add'}
-                  onOpenChange={(isOpen) => {
-                    if (!isOpen) setEditing(undefined);
-                  }}
-                  floor={floor}
-                  onAdd={async (input) => {
-                    const refused = await hospitality.addResources(slug, place.id, input);
-                    if (refused !== undefined) throw refused;
-                  }}
-                />
-                <TableDialog
-                  table={editing?.kind === 'edit' ? editing.table : undefined}
-                  floor={floor}
-                  onClose={() => setEditing(undefined)}
-                  onSave={async (table, change) => {
-                    const refused = await hospitality.updateResource(slug, place.id, table.id, change);
-                    if (refused !== undefined) throw refused;
-                  }}
-                />
-              </>
+            {floor === undefined || (open?.kind !== 'add' && open?.kind !== 'edit') ? null : (
+              <TableDrawer
+                key={open.kind === 'edit' ? open.table.id : 'add'}
+                floor={floor}
+                {...(open.kind === 'edit' ? { table: open.table } : {})}
+                {...(editingCode === undefined
+                  ? {}
+                  : {
+                      code: {
+                        code: editingCode.code,
+                        address: tableMenuAddress(value.menuKey, editingCode.code),
+                      },
+                    })}
+                {...(zone === ALL_ZONES || zone === UNZONED ? {} : { startZone: zone })}
+                onCreateZone={async (name) => {
+                  const id = hospitality.newId();
+                  const refused = await hospitality.saveArea(slug, place.id, name, undefined, id);
+                  if (refused !== undefined) throw refused;
+                  return id;
+                }}
+                onAdd={async (input) => {
+                  const refused = await hospitality.addResources(slug, place.id, { kind: 'table', ...input });
+                  if (refused !== undefined) throw refused;
+                }}
+                onSave={async (table, change) => {
+                  const refused = await hospitality.updateResource(slug, place.id, table.id, change);
+                  if (refused !== undefined) throw refused;
+                }}
+                onClose={close}
+                toasts={toasts}
+              />
             )}
             <Modal
-              isOpen={editing?.kind === 'delete'}
+              isOpen={open?.kind === 'delete'}
               onOpenChange={(isOpen) => {
-                if (!isOpen) setEditing(undefined);
+                if (!isOpen) close();
               }}
-              title={strings.deleteTitle(lastDeleting === undefined ? '' : tableDisplayName(lastDeleting.label))}
+              title={strings.deleteTitle(showing?.kind === 'delete' ? showing.table.label : '')}
               variant="confirm"
               tone="danger"
               actions={
@@ -289,16 +300,17 @@ function PlaceCodes({
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (editing?.kind !== 'delete') return;
-                      const name = tableDisplayName(editing.table.label);
-                      void hospitality.deleteResource(slug, place.id, editing.table.id).then((refused) => {
+                      if (open?.kind !== 'delete') return;
+                      const { table } = open;
+                      void hospitality.deleteResource(slug, place.id, table.id).then((refused) => {
                         toasts.toast(
                           refused === undefined
-                            ? { tone: 'success', message: strings.deleted(name) }
+                            ? { tone: 'success', message: strings.deleted(table.label) }
                             : { tone: 'danger', message: refused.message },
                         );
                       });
-                      setEditing(undefined);
+                      setPicked((was) => new Set([...was].filter((id) => id !== table.id)));
+                      close();
                       // The row's ⋯ goes with the row: focus moves to the page's heading.
                       focusLater(() => document.querySelector<HTMLElement>('h1'));
                     }}
@@ -310,14 +322,13 @@ function PlaceCodes({
             >
               {strings.deleteText}
             </Modal>
-            {zipping === undefined ? null : (
+            {zipping ? (
               <ZipAll
                 codes={value}
                 venue={venue}
                 look={look}
-                format={zipping}
                 onDone={(failed) => {
-                  setZipping(undefined);
+                  setZipping(false);
                   toasts.toast(
                     failed
                       ? { tone: 'danger', message: strings.downloadFailed }
@@ -325,26 +336,45 @@ function PlaceCodes({
                   );
                 }}
               />
-            )}
-            <TableCodeModal
-              table={open}
+            ) : null}
+            <TableCodeDrawer
+              table={showing?.kind === 'code' ? codeTable : undefined}
               codes={value}
               look={look}
-              isOpen={open !== undefined}
-              onClose={() => setShown(undefined)}
-              onRenew={(table) => {
-                // One dialog at a time: the code's closes, then the question opens.
-                setShown(undefined);
-                setRenewing(table);
-              }}
+              isOpen={open?.kind === 'code' && codeTable !== undefined}
+              onClose={close}
               toasts={toasts}
             />
             <Modal
-              isOpen={renewing !== undefined}
+              isOpen={open?.kind === 'analytics' && codeTable !== undefined}
               onOpenChange={(isOpen) => {
-                if (!isOpen) setRenewing(undefined);
+                if (!isOpen) close();
               }}
-              title={strings.newCodeTitle(renewing === undefined ? '' : tableDisplayName(renewing.label))}
+              title={strings.analyticsTitle(showing?.kind === 'analytics' ? (codeTable?.label ?? '') : '')}
+              actions={
+                <Button variant="primary" slot="close">
+                  {strings.close}
+                </Button>
+              }
+            >
+              {codeTable === undefined ? null : (
+                <>
+                  <DescriptionList
+                    items={[
+                      { term: strings.scans, description: String(codeTable.scans) },
+                      { term: strings.code, description: <Code>{codeTable.code}</Code> },
+                    ]}
+                  />
+                  {strings.scansLine}
+                </>
+              )}
+            </Modal>
+            <Modal
+              isOpen={open?.kind === 'renew'}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) close();
+              }}
+              title={strings.newCodeTitle(showing?.kind === 'renew' ? showing.table.label : '')}
               variant="confirm"
               tone="danger"
               actions={
@@ -353,13 +383,13 @@ function PlaceCodes({
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (renewing === undefined) return;
-                      const name = tableDisplayName(renewing.label);
-                      setRenewing(undefined);
-                      void hospitality.regenerateTableCode(slug, place.id, renewing.id).then((refused) => {
+                      if (open?.kind !== 'renew') return;
+                      const { table } = open;
+                      close();
+                      void hospitality.regenerateTableCode(slug, place.id, table.id).then((refused) => {
                         toasts.toast(
                           refused === undefined
-                            ? { tone: 'success', message: strings.newCodeDone(name) }
+                            ? { tone: 'success', message: strings.newCodeDone(table.label) }
                             : { tone: 'danger', message: refused.message },
                         );
                       });
@@ -396,14 +426,16 @@ export function MenuState({ slug, codes }: { readonly slug: string; readonly cod
   );
 }
 
-/** One table's code, large: its link to copy or open, PNG and SVG at 512 pixels, and New code. */
-function TableCodeModal({
+/**
+ * One table's QR in a drawer (checklabs' QR sheet): the code large, its Code and Link to read and copy, then Open
+ * menu, SVG and PNG at 512 pixels. A new code is the row's ⋯, never here.
+ */
+function TableCodeDrawer({
   table,
   codes,
   look,
   isOpen,
   onClose,
-  onRenew,
   toasts,
 }: {
   readonly table: TableQr | undefined;
@@ -411,17 +443,16 @@ function TableCodeModal({
   readonly look: QrLook;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onRenew: (table: TableQr) => void;
   readonly toasts: Toasts;
 }) {
   const codeRef = useRef<SVGSVGElement>(null);
   const [saving, setSaving] = useState<'png' | 'svg' | undefined>();
-  // Kept while the dialog closes, so its exit shows the code it had.
+  // Kept while the drawer closes, so its exit shows the code it had.
   const [last, setLast] = useState(table);
   if (table !== undefined && table !== last) setLast(table);
   const showing = table ?? last;
   if (showing === undefined) return null;
-  const name = tableDisplayName(showing.label);
+  const name = showing.label;
   const address = tableMenuAddress(codes.menuKey, showing.code);
   const save = (format: 'png' | 'svg') => {
     const svg = codeRef.current;
@@ -434,6 +465,7 @@ function TableCodeModal({
   };
   return (
     <Modal
+      variant="drawer"
       title={strings.codeTitle(name)}
       isOpen={isOpen}
       isBusy={saving !== undefined}
@@ -441,9 +473,9 @@ function TableCodeModal({
         if (!open) onClose();
       }}
       footerStart={
-        <Button variant="danger" icon="refresh-cw" onPress={() => onRenew(showing)}>
-          {strings.newCode}
-        </Button>
+        <ButtonLink href={address} isExternal icon="external-link">
+          {strings.openMenu}
+        </ButtonLink>
       }
       actions={
         <>
@@ -475,12 +507,16 @@ function TableCodeModal({
         {...(look.colour === undefined ? {} : { colour: look.colour })}
         {...(look.logoSrc === undefined ? {} : { picture: look.logoSrc })}
       />
-      <ButtonGroup label={strings.link}>
-        <CopyButton value={address} label={strings.copyLink} />
-        <ButtonLink href={address} isExternal icon="external-link">
-          {strings.openMenu}
-        </ButtonLink>
-      </ButtonGroup>
+      <DescriptionList
+        items={[
+          {
+            term: strings.code,
+            description: <Code>{showing.code}</Code>,
+            copy: { value: showing.code, label: strings.copyCode },
+          },
+          { term: strings.link, description: address, copy: { value: address, label: strings.copyLink } },
+        ]}
+      />
     </Modal>
   );
 }
@@ -493,13 +529,11 @@ function ZipAll({
   codes,
   venue,
   look,
-  format,
   onDone,
 }: {
   readonly codes: PlaceQrCodes;
   readonly venue: string;
   readonly look: QrLook;
-  readonly format: 'png' | 'svg';
   readonly onDone: (failed: boolean) => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -513,7 +547,7 @@ function ZipAll({
       const svg = holder.current?.querySelector<SVGSVGElement>(`svg[aria-label="${CSS.escape(table.code)}"]`);
       return svg === null || svg === undefined ? [] : [{ label: table.label, svg }];
     });
-    zipCodes(codes.placeName, drawn, format)
+    zipCodes(codes.placeName, drawn, 'png')
       .then((zip) => {
         if (cancelled) return;
         saveFile(zip, codeFileName(venue, codes.placeName, 'zip'));
@@ -525,7 +559,7 @@ function ZipAll({
     return () => {
       cancelled = true;
     };
-  }, [codes, format, venue]);
+  }, [codes, venue]);
   return (
     <VisuallyHidden>
       <div ref={holder} aria-hidden="true">
@@ -544,146 +578,250 @@ function ZipAll({
 }
 
 /**
- * The tables after checklabs' Tables page: the area pills (All, each area, No area, with counts) over one card per
- * area (A to Z, No area last), each a table of its tables in reading order: name, seats, code, scans, then QR and ⋯.
+ * The tables after checklabs' Tables page: the zone chips (All, each zone with its colour, Unzoned last, with
+ * counts), the count with Print QR sheet and Clear, then one card per zone of its tables in reading order: Table,
+ * Seats, Code, then QR, Edit and ⋯. Rows tick for printing; Print takes the ticked rows, else the zone shown.
  */
-function TablesByArea({
-  tables,
+function TablesByZone({
+  slug,
+  placeId,
+  codes,
   floor,
-  area,
-  onArea,
-  onShow,
-  onEdit,
-  onDelete,
-  onRenew,
-  onAdd,
+  zone,
+  onZone,
+  picked,
+  onPicked,
+  onOpen,
 }: {
-  readonly tables: readonly TableQr[];
+  readonly slug: string;
+  readonly placeId: string;
+  readonly codes: PlaceQrCodes;
   readonly floor: PlaceFloor | undefined;
-  readonly area: string;
-  readonly onArea: (area: string) => void;
-  readonly onShow: (id: string) => void;
-  readonly onEdit: (table: Resource) => void;
-  readonly onDelete: (table: Resource) => void;
-  readonly onRenew: (table: TableQr) => void;
-  readonly onAdd: () => void;
+  readonly zone: string;
+  readonly onZone: (zone: string) => void;
+  readonly picked: ReadonlySet<string>;
+  readonly onPicked: (picked: ReadonlySet<string>) => void;
+  readonly onOpen: (open: Open) => void;
 }) {
   const isNarrow = useIsNarrow();
+  const tables = codes.tables;
   const resources = useMemo(() => new Map(floor?.resources.map((each) => [each.id, each]) ?? []), [floor]);
-  // By the floor's area once it has come; until then by the area name the codes carry.
-  const areaOf = (table: TableQr) =>
-    floor === undefined ? (table.areaName ?? NO_AREA) : (resources.get(table.id)?.areaId ?? NO_AREA);
-  const areaNames = new Map(
-    floor === undefined
-      ? tables.flatMap((table) => (table.areaName === undefined ? [] : [[table.areaName, table.areaName] as const]))
-      : floor.areas.map((each) => [each.id, each.name] as const),
+  // By the floor's zone once it has come; until then by the zone name the codes carry.
+  const zoneNames = useMemo(
+    () =>
+      new Map(
+        floor === undefined
+          ? tables.flatMap((table) => (table.areaName === undefined ? [] : [[table.areaName, table.areaName] as const]))
+          : floor.areas.map((each) => [each.id, each.name] as const),
+      ),
+    [floor, tables],
   );
-  const groups = [...new Set(tables.map(areaOf))]
-    .map((id) => ({
-      id,
-      name: id === NO_AREA ? strings.noArea : (areaNames.get(id) ?? strings.noArea),
-      tables: tables.filter((table) => areaOf(table) === id).sort(byLabel),
-    }))
-    .sort((a, b) => (a.id === NO_AREA ? 1 : b.id === NO_AREA ? -1 : a.name.localeCompare(b.name)));
+  const groups = zoneGroups(
+    tables,
+    (table) => (floor === undefined ? table.areaName : resources.get(table.id)?.areaId),
+    (id) => zoneNames.get(id),
+    strings.unzoned,
+  );
   if (tables.length === 0) {
     return (
       <EmptyState
         icon="qr-code"
         title={strings.noTables}
         actions={
-          <Button variant="primary" icon="plus" onPress={onAdd}>
-            {strings.addTables}
-          </Button>
+          floor === undefined ? undefined : (
+            <Button variant="primary" icon="plus" onPress={() => onOpen({ kind: 'add' })}>
+              {strings.addFirstTable}
+            </Button>
+          )
         }
       >
         {strings.noTablesText}
       </EmptyState>
     );
   }
-  // An area that has gone (its last table deleted) shows them all again.
-  const chosen = groups.some((group) => group.id === area) ? area : 'all';
-  const shown = chosen === 'all' ? groups : groups.filter((group) => group.id === chosen);
+  // A zone that has gone (its last table deleted) shows them all again.
+  const chosen = groups.some((group) => group.id === zone) ? zone : ALL_ZONES;
+  const shownGroups = chosen === ALL_ZONES ? groups : groups.filter((group) => group.id === chosen);
+  const shownIds = shownGroups.flatMap((group) => group.tables.map((table) => table.id));
+  // Only rows still here count as picked (a deleted one leaves the selection).
+  const live = new Set(tables.map((table) => table.id));
+  const pickedIds = tables.filter((table) => picked.has(table.id) && live.has(table.id)).map((table) => table.id);
+  const printing = pickedIds.length > 0 ? pickedIds : chosen === ALL_ZONES ? undefined : shownIds;
+  const named = groups.filter((group) => group.id !== UNZONED);
+  const unzoned = groups.find((group) => group.id === UNZONED);
   return (
     <>
-      {groups.length < 2 ? null : (
-        <ChoiceChips
-          label={strings.areas}
-          isLabelHidden
-          isSingle
-          choices={[
-            { id: 'all', label: strings.allAreas(tables.length) },
-            ...groups.map((group) => ({
-              id: group.id,
-              label:
-                group.id === NO_AREA
-                  ? strings.noAreaCount(group.tables.length)
-                  : strings.areaCount(group.name, group.tables.length),
-            })),
-          ]}
-          selected={[chosen]}
-          // Choosing the chosen area again shows them all (checklabs').
-          onChange={(next) => onArea(next[0] ?? 'all')}
-        />
-      )}
-      {/* The area cards sit straight under the TopBar's h1, so their titles are h2s. */}
+      <ChoiceChips
+        label={strings.zones}
+        isSingle
+        choices={[
+          { id: ALL_ZONES, label: strings.allZones(tables.length) },
+          ...named.map((group) => ({
+            id: group.id,
+            label: strings.zoneCount(group.name, group.tables.length),
+            ...(group.hue === undefined ? {} : { dot: group.hue }),
+          })),
+          ...(unzoned === undefined ? [] : [{ id: UNZONED, label: strings.unzonedCount(unzoned.tables.length) }]),
+        ]}
+        selected={[chosen]}
+        // Choosing the chosen zone again shows them all (checklabs').
+        onChange={(next) => onZone(next[0] ?? ALL_ZONES)}
+      />
+      <SectionBar
+        description={strings.shownOf(shownIds.length, tables.length, pickedIds.length)}
+        end={
+          <>
+            <ButtonLink href={qrPrintHref(slug, placeId, printing)} icon="printer">
+              {strings.printSheet}
+            </ButtonLink>
+            {pickedIds.length === 0 ? null : (
+              <Button
+                variant="ghost"
+                label={strings.clearLabel}
+                onPress={() => {
+                  onPicked(new Set());
+                  focusLater(() => document.querySelector<HTMLElement>('h1'));
+                }}
+              >
+                {strings.clear}
+              </Button>
+            )}
+          </>
+        }
+      />
+      {/* The zone cards sit straight under the TopBar's h1, so their titles are h2s. */}
       <CardTitleLevel value={2}>
-        {shown.map((group) => (
-          <Card key={group.id} title={group.name} description={strings.tablesCount(group.tables.length)}>
-            <Table
-              label={group.name}
-              columns={isNarrow ? NARROW_COLUMNS : COLUMNS}
-              rows={group.tables}
-              getRowId={(table) => table.id}
-              onRowAction={onShow}
-              renderCell={(table, column) => {
-                const resource = resources.get(table.id);
-                if (column === 'table') return tableDisplayName(table.label);
-                if (column === 'seats')
-                  return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
-                if (column === 'code') return <Code>{table.code.slice(0, 6)}</Code>;
-                if (column === 'scans') return String(table.scans);
-                const name = tableDisplayName(table.label);
-                return (
-                  <ButtonGroup label={strings.actionsFor(name)}>
-                    <Button
-                      variant="ghost"
-                      icon="qr-code"
-                      onPress={() => onShow(table.id)}
-                      label={strings.showCodeFor(name)}
-                    />
-                    <MenuTrigger>
-                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
-                      <Menu
-                        label={strings.actionsFor(name)}
-                        onAction={(key) => {
-                          if (key === 'renew') onRenew(table);
-                          else if (resource === undefined) return;
-                          else if (key === 'edit') onEdit(resource);
-                          else if (key === 'delete') onDelete(resource);
-                        }}
-                      >
-                        {resource === undefined ? null : (
-                          <MenuItem id="edit" icon="pencil">
-                            {strings.edit}
-                          </MenuItem>
-                        )}
-                        <MenuItem id="renew" icon="refresh-cw" isDanger>
-                          {strings.newCode}
-                        </MenuItem>
-                        {resource === undefined ? null : (
-                          <MenuItem id="delete" icon="trash" isDanger>
-                            {strings.delete}
-                          </MenuItem>
-                        )}
-                      </Menu>
-                    </MenuTrigger>
-                  </ButtonGroup>
-                );
-              }}
-            />
-          </Card>
+        {shownGroups.map((group) => (
+          <ZoneCard
+            key={group.id}
+            group={group}
+            codes={codes}
+            resources={resources}
+            isNarrow={isNarrow}
+            picked={picked}
+            onPicked={onPicked}
+            onOpen={onOpen}
+          />
         ))}
       </CardTitleLevel>
     </>
+  );
+}
+
+/** One zone's card: its tables, each Table, Seats, Code, then QR, Edit and ⋯ (View menu, Analytics, New code, Delete). */
+function ZoneCard({
+  group,
+  codes,
+  resources,
+  isNarrow,
+  picked,
+  onPicked,
+  onOpen,
+}: {
+  readonly group: ZoneGroup<TableQr>;
+  readonly codes: PlaceQrCodes;
+  readonly resources: ReadonlyMap<string, Resource>;
+  readonly isNarrow: boolean;
+  readonly picked: ReadonlySet<string>;
+  readonly onPicked: (picked: ReadonlySet<string>) => void;
+  readonly onOpen: (open: Open) => void;
+}) {
+  const ids = new Set(group.tables.map((table) => table.id));
+  // Each card ticks its own rows; the page keeps every card's together.
+  const mine = new Set([...picked].filter((id) => ids.has(id)));
+  return (
+    <Card title={group.name} description={strings.tablesCount(group.tables.length)}>
+      <Table
+        label={group.name}
+        columns={isNarrow ? NARROW_COLUMNS : COLUMNS}
+        rows={group.tables}
+        getRowId={(table) => table.id}
+        selected={mine}
+        onSelectedChange={(next) => onPicked(new Set([...[...picked].filter((id) => !ids.has(id)), ...next]))}
+        getSelectLabel={(table) => strings.selectTable(table.label)}
+        onRowAction={(id) => onOpen({ kind: 'code', id })}
+        renderCell={(table, column) => {
+          const resource = resources.get(table.id);
+          if (column === 'table') return table.label;
+          if (column === 'seats')
+            return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
+          if (column === 'code') return <Code>{table.code}</Code>;
+          return <RowActions table={table} resource={resource} codes={codes} isNarrow={isNarrow} onOpen={onOpen} />;
+        }}
+      />
+    </Card>
+  );
+}
+
+/** A row's QR and Edit, then ⋯ with the rest; at a phone's width all of them in ⋯. */
+function RowActions({
+  table,
+  resource,
+  codes,
+  isNarrow,
+  onOpen,
+}: {
+  readonly table: TableQr;
+  readonly resource: Resource | undefined;
+  readonly codes: PlaceQrCodes;
+  readonly isNarrow: boolean;
+  readonly onOpen: (open: Open) => void;
+}) {
+  const name = table.label;
+  const address = tableMenuAddress(codes.menuKey, table.code);
+  const act = (key: string) => {
+    if (key === 'qr') onOpen({ kind: 'code', id: table.id });
+    else if (key === 'view') globalThis.open(address, '_blank', 'noopener');
+    else if (key === 'analytics') onOpen({ kind: 'analytics', id: table.id });
+    else if (key === 'renew') onOpen({ kind: 'renew', table });
+    else if (resource === undefined) return;
+    else if (key === 'edit') onOpen({ kind: 'edit', table: resource });
+    else if (key === 'delete') onOpen({ kind: 'delete', table: resource });
+  };
+  const more = (
+    <MenuTrigger>
+      <Button variant="ghost" icon="ellipsis" label={strings.moreFor(name)} />
+      <Menu label={strings.moreFor(name)} onAction={(key) => act(String(key))}>
+        {isNarrow ? (
+          <MenuItem id="qr" icon="qr-code">
+            {strings.qr}
+          </MenuItem>
+        ) : null}
+        {isNarrow && resource !== undefined ? (
+          <MenuItem id="edit" icon="pencil">
+            {strings.edit}
+          </MenuItem>
+        ) : null}
+        <MenuItem id="view" icon="external-link">
+          {strings.viewMenu}
+        </MenuItem>
+        <MenuItem id="analytics" icon="chart-line">
+          {strings.analytics}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem id="renew" icon="refresh-cw" isDanger>
+          {strings.newCode}
+        </MenuItem>
+        {resource === undefined ? null : (
+          <MenuItem id="delete" icon="trash" isDanger>
+            {strings.delete}
+          </MenuItem>
+        )}
+      </Menu>
+    </MenuTrigger>
+  );
+  if (isNarrow) return more;
+  return (
+    <ButtonGroup label={strings.actionsFor(name)} layout="row">
+      <Button variant="ghost" icon="qr-code" label={strings.showCodeFor(name)} onPress={() => act('qr')}>
+        {strings.qr}
+      </Button>
+      {resource === undefined ? null : (
+        <Button variant="ghost" icon="pencil" label={strings.editFor(name)} onPress={() => act('edit')}>
+          {strings.edit}
+        </Button>
+      )}
+      {more}
+    </ButtonGroup>
   );
 }

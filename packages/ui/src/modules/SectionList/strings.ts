@@ -6,4 +6,6 @@ export const strings = {
   moveNumbered: (position: number) => `Move section ${String(position)}`,
   /** An untitled section in what a move says, by its place: "Section 2". */
   numbered: (position: number) => `Section ${String(position)}`,
+  /** A folding section's chevron, read with whether it is open: "Show Mains, expanded". */
+  fold: (title: string) => `Show ${title}`,
 } as const;

@@ -354,7 +354,7 @@ describe('axe and the pictures', () => {
           ['business', 'Places', () => <BusinessScreen store={store} slug="acme" toasts={toasts} />],
           [
             'tables',
-            'Areas',
+            'Zones',
             () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
           ],
         ] as const;
@@ -384,7 +384,7 @@ describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with so
           () => <FloorScreen store={store} slug="acme" place={BUSINESS.places[0] as never} toasts={toasts} />,
           { data: {}, pattern: '/w/$slug/settings/x', at: '/w/acme/settings/x' },
         );
-        await expect.element(page.getByRole('heading', { name: 'Areas' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'Zones' })).toBeInTheDocument();
         await shoot('place', theme, width);
         await userEvent.click(page.getByRole('button', { name: 'Add tables' }).first());
         await expect.element(page.getByRole('dialog')).toBeVisible();
@@ -413,7 +413,7 @@ describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with so
 });
 
 describe('Tables, after checklabs’ Tables page', () => {
-  it('groups the tables by area under the area pills, each with its seats, code and scans', async () => {
+  it('groups the tables by zone under the zone chips, each with its seats and whole code', async () => {
     for (const theme of THEMES) {
       for (const width of [1280, 390]) {
         await page.viewport(width, 1100);
@@ -426,15 +426,64 @@ describe('Tables, after checklabs’ Tables page', () => {
         });
         applyTheme(theme);
         await expect.element(page.getByRole('heading', { name: 'Tables', level: 1 })).toBeInTheDocument();
+        await expect.element(page.getByRole('radiogroup', { name: 'Zones' })).toBeInTheDocument();
         await expect.element(page.getByRole('radio', { name: 'All (6)' })).toBeInTheDocument();
         await expect.element(page.getByRole('heading', { name: 'Terrace', level: 2 })).toBeInTheDocument();
-        await expect.element(page.getByRole('heading', { name: 'No area' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'Unzoned' })).toBeInTheDocument();
+        await expect.element(page.getByText('6 of 6 tables')).toBeInTheDocument();
+        // The whole code, and the label as the table has it (never "Table 1").
+        await expect.element(page.getByText('C0DE0abcdefghijklmnopq')).toBeInTheDocument();
+        await expect.element(page.getByRole('rowheader', { name: 'T1', exact: true })).toBeInTheDocument();
         expect(await axeViolations()).toEqual([]);
         await shoot('tables', theme, width);
       }
     }
-    // An area pill shows that area alone.
+    // A zone chip shows that zone alone, and Print takes it.
     await userEvent.click(page.getByRole('radio', { name: 'Terrace (2)' }));
-    await expect.element(page.getByRole('heading', { name: 'No area' })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('heading', { name: 'Unzoned' })).not.toBeInTheDocument();
+    await expect.element(page.getByText('2 of 6 tables')).toBeInTheDocument();
+    const terrace = [FLOOR.resources[0]?.id, FLOOR.resources[1]?.id].join('%2C');
+    await expect
+      .element(page.getByRole('link', { name: 'Print QR sheet' }))
+      .toHaveAttribute('href', expect.stringContaining(`tables=${terrace}`));
+    // A ticked row is what Print takes, and Clear lets it go.
+    await userEvent.click(page.getByRole('checkbox', { name: 'Select T2' }), { force: true });
+    await expect.element(page.getByText('2 of 6 tables · 1 selected')).toBeInTheDocument();
+    await expect
+      .element(page.getByRole('link', { name: 'Print QR sheet' }))
+      .toHaveAttribute('href', expect.stringContaining(`tables=${FLOOR.resources[1]?.id ?? ''}`));
+    await userEvent.click(page.getByRole('button', { name: 'Clear the selection' }));
+    await expect.element(page.getByText('2 of 6 tables')).toBeInTheDocument();
+  });
+
+  it('adds one table in the drawer, or several, and edits one with its code to read', async () => {
+    await page.viewport(1280, 1100);
+    const { store, calls } = storeOf();
+    shown = await renderInApp(() => <QrScreen slug="acme" hospitality={store} look={{}} toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/qr',
+      at: '/w/acme/qr',
+    });
+    await userEvent.click(page.getByRole('button', { name: 'Add table' }));
+    const drawer = page.getByRole('dialog', { name: 'Add table' });
+    await expect.element(drawer.getByPlaceholder('e.g. T12, Bar 3, Patio A')).toBeVisible();
+    await userEvent.fill(drawer.getByLabelText('Label'), 'T12');
+    await userEvent.click(drawer.getByRole('button', { name: 'Create table' }));
+    await expect.poll(() => calls.at(-1)).toBe('add:T12');
+    await expect.element(drawer).not.toBeInTheDocument();
+    // Several: today's run in the same drawer.
+    await userEvent.click(page.getByRole('button', { name: 'Add table' }));
+    const again = page.getByRole('dialog', { name: 'Add table' });
+    await expect.element(again.getByText('Several', { exact: true })).toBeVisible();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await userEvent.click(again.getByText('Several', { exact: true }));
+    await expect.element(again.getByRole('button', { name: /^Create 10 tables$/ })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect.element(again).not.toBeInTheDocument();
+    // Edit: the label, seats and zone, with the code and link read only.
+    await userEvent.click(page.getByRole('button', { name: 'Edit T1' }));
+    const edit = page.getByRole('dialog', { name: 'Edit table' });
+    await expect.element(edit.getByText('C0DE0abcdefghijklmnopq')).toBeVisible();
+    await expect.element(edit.getByRole('button', { name: 'Save table' })).toBeVisible();
   });
 });

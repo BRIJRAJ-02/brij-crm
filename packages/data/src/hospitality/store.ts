@@ -485,8 +485,17 @@ export function openHospitality(given: {
     floor: (workspace: string, placeId: string): HospitalityHeld<PlaceFloor> => floorOf(workspace, placeId).held,
     /** Reads a floor now; rejects with the refusal. */
     listResources: (workspace: string, placeId: string): Promise<PlaceFloor> => floorOf(workspace, placeId).read(),
-    /** Adds an area (`areaId` absent) or renames one. */
-    saveArea: (workspace: string, placeId: string, name: string, areaId?: string): Promise<DataError | undefined> =>
+    /**
+     * Adds an area (`areaId` absent) or renames one. A new area takes `newId` when the screen minted one (`newId()`)
+     * to use at once, such as a table drawer's new zone the table is saved into; it shows once the server made it.
+     */
+    saveArea: (
+      workspace: string,
+      placeId: string,
+      name: string,
+      areaId?: string,
+      newId?: string,
+    ): Promise<DataError | undefined> =>
       onFloor(
         workspace,
         placeId,
@@ -496,7 +505,13 @@ export function openHospitality(given: {
             : { ...floor, areas: floor.areas.map((area) => (area.id === areaId ? { ...area, name } : area)) },
         (mutationId, options) =>
           api.saveArea(
-            { workspace, placeId, name, ...(areaId === undefined ? { id: mintId() } : { areaId }), mutationId },
+            {
+              workspace,
+              placeId,
+              name,
+              ...(areaId === undefined ? { id: newId ?? mintId() } : { areaId }),
+              mutationId,
+            },
             options,
           ),
       ),

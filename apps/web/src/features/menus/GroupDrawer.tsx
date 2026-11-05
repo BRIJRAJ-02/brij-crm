@@ -33,6 +33,7 @@ export function GroupDrawer({
   draft,
   groupId,
   toasts,
+  onSaved,
   onClose,
 }: {
   readonly store: MenuStore;
@@ -40,6 +41,8 @@ export function GroupDrawer({
   readonly draft: MenuDraft;
   readonly groupId?: string;
   readonly toasts: Toasts;
+  /** Told the group's id once it saved: an item's drawer that opened this one picks the new group. */
+  readonly onSaved?: (groupId: string) => void;
   readonly onClose: () => void;
 }) {
   const formId = useId();
@@ -113,6 +116,7 @@ export function GroupDrawer({
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
+    onSaved?.(id);
     onClose();
   };
 
