@@ -89,7 +89,7 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
         ? `/api/public/business/${encodeURIComponent(page.handle)}/look/menu.css?v=${lookVersion}`
         : undefined;
     void wearStylesheet(document, href);
-    wearGuestScheme(document.documentElement, page?.scheme);
+    wearGuestScheme(document.documentElement, page.scheme);
   }, [page, lookVersion]);
   if (loaded.state === 'loading') return <BusinessPage {...EMPTY} isLoading />;
   if (loaded.state === 'gone') {

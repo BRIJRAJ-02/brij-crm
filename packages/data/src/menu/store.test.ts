@@ -98,7 +98,7 @@ describe('the guest look', () => {
   it('answers a refused cover as a DataError', async () => {
     const store = setUp({});
     const answer = await store.uploadCover('w', { large: new Blob(['l']), small: new Blob(['s']) });
-    expect(answer).toMatchObject({ code: expect.any(String) });
+    expect('code' in answer).toBe(true);
   });
 });
 

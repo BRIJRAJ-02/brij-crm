@@ -268,10 +268,7 @@ export function menuLookStylesheet(brand: PageBrand, options: { readonly inApp?:
   const look = lookOf(brand);
   const accents = brand.accents;
   const ownBody = options.inApp === true || look.body === 'device' || look.body === 'sans';
-  const shape = [
-    ...menuLookShape(look),
-    ...(ownBody ? [] : ([['--font-sans', MENU_FONT_FACES[look.body]]] as const)),
-  ]
+  const shape = [...menuLookShape(look), ...(ownBody ? [] : ([['--font-sans', MENU_FONT_FACES[look.body]]] as const))]
     .map(([name, value]) => `${name}:${value}`)
     .join(';');
   const block = (mode: 'light' | 'dark') =>

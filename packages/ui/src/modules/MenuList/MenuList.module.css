@@ -125,8 +125,7 @@
     --text-label-strong: 500 var(--look-type-12) / var(--space-16) var(--look-face);
     --text-title: 600 var(--look-type-15) / var(--space-20) var(--look-face);
     --text-title-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
-    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2)
-      var(--menu-display-face, var(--look-face));
+    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--menu-display-face, var(--look-face));
     --tracking-body-strong: var(--track-tight);
     --tracking-label-strong: var(--track-snug);
     --tracking-title: var(--track-snug);

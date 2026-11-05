@@ -4,7 +4,15 @@
 // screen. Publish, Discard and Sold out wait for nothing either: Sold out flips at once (it is live for guests, AC-6526),
 // Publish shows "0 changes" when the server answers. Only managers edit, one at a time, so no change event carries
 // the draft: another tab sees a change when it holds the draft again.
-import type { ItemFields, MenuDraft, MenuItem, MenuLook, MenuLookCover, MenuServing, SectionLayout } from '@crm/contracts';
+import type {
+  ItemFields,
+  MenuDraft,
+  MenuItem,
+  MenuLook,
+  MenuLookCover,
+  MenuServing,
+  SectionLayout,
+} from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import { holder, type HospitalityHeld } from '../hospitality/store.ts';
 

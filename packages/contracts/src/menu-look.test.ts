@@ -69,7 +69,10 @@ describe('presets', () => {
 });
 
 describe('a picked palette', () => {
-  const custom = (palette: NonNullable<MenuLookChoice['palette']>): MenuLookChoice => ({ ...DEFAULT_MENU_LOOK, palette });
+  const custom = (palette: NonNullable<MenuLookChoice['palette']>): MenuLookChoice => ({
+    ...DEFAULT_MENU_LOOK,
+    palette,
+  });
 
   it('draws readable words on a page and words of one colour', () => {
     expectReadable(menuLookRoles(custom({ surface: '#777777', ink: '#777777' }), {}, 'light'));
@@ -132,7 +135,10 @@ describe('what can reach CSS', () => {
     ['a key of its own', { css: 'body{display:none}' }],
     ['a cover with a path', { cover: { id: '../x', version: 'abcdefabcdef' } }],
     ['a cover with a url', { cover: { id: '0190f000-0000-7000-8000-000000000000', version: 'https://x' } }],
-    ['a cover with a key of its own', { cover: { id: '0190f000-0000-7000-8000-000000000000', version: 'abcdefabcdef', href: 'x' } }],
+    [
+      'a cover with a key of its own',
+      { cover: { id: '0190f000-0000-7000-8000-000000000000', version: 'abcdefabcdef', href: 'x' } },
+    ],
   ])('refuses %s', (_name, change) => {
     expect(MenuLook.safeParse({ ...DEFAULT_MENU_LOOK, ...change }).success).toBe(false);
   });
