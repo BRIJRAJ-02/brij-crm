@@ -1,7 +1,12 @@
 // Brief
 // Purpose: make a list (spec 0048, AC-4801): a working set of one object's records, such as a Sales pipeline.
-// Main task: name it, pick its object (the page open, by default), Blank or Pipeline, then Create list; it opens.
+// Main task: name it, pick its object (the page open, by default), Pipeline or Blank, then Create list; it opens.
 // Leaves out: its icon and hue (the list tile and the next hue), "Each record once" (on), and fields (the list's "+").
+//
+// T11 (the owner, 5 November 2026: "not sure what this feature is, it's the same as objects"): one line under the
+// title says what a list is, in the words of the object picked (a hand-picked set of people, with its own stages
+// and columns, as Attio's lists are); it starts as a Pipeline, the kind a list is mostly for; and the name's example
+// is named by what it tracks.
 import { isDataError, type DataLayer, type ListTemplate, type ListView, type ObjectSummary } from '@crm/data';
 import { Button, Field, Form, Modal, SegmentedControl, Select, type FormRefusal } from '@crm/ui';
 import { useEffect, useId, useState } from 'react';
@@ -33,9 +38,18 @@ export function NewListModal({ isOpen, onClose, ...rest }: NewListModalProps) {
   const [isBusy, setBusy] = useState(false);
   // The workspace holds 500 lists, archived ones included (AC-4805): the dialog says so and Create stays off.
   const isFull = useIsFull(rest.data, rest.slug, isOpen);
+  // The object picked, held here so the line under the title names its records as it changes; each opening starts
+  // again from the page's object.
+  const [object, setObject] = useState<string | undefined>(undefined);
+  if (!isOpen && object !== undefined) setObject(undefined);
+  const shown =
+    rest.objects.find((each) => each.id === object) ??
+    rest.objects.find((each) => each.id === rest.objectId) ??
+    rest.objects[0];
   return (
     <Modal
       title={strings.newList}
+      {...(shown === undefined ? {} : { description: strings.newListLine(shown.pluralName) })}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !isBusy) onClose();
@@ -57,7 +71,16 @@ export function NewListModal({ isOpen, onClose, ...rest }: NewListModalProps) {
         </>
       }
     >
-      {isOpen && <NewListForm formId={formId} isBusy={isBusy} onBusyChange={setBusy} isFull={isFull} {...rest} />}
+      {isOpen && (
+        <NewListForm
+          formId={formId}
+          isBusy={isBusy}
+          onBusyChange={setBusy}
+          isFull={isFull}
+          onObjectChange={setObject}
+          {...rest}
+        />
+      )}
     </Modal>
   );
 }
@@ -91,17 +114,21 @@ function NewListForm({
   isBusy,
   isFull,
   onBusyChange,
+  onObjectChange,
   onMade,
 }: Omit<NewListModalProps, 'isOpen' | 'onClose'> & {
   readonly formId: string;
   readonly isBusy: boolean;
   readonly isFull: boolean;
   readonly onBusyChange: (isBusy: boolean) => void;
+  /** The object picked, for the line under the title. */
+  readonly onObjectChange: (objectId: string) => void;
 }) {
   const [id] = useState(() => data.lists.newId());
   const [object, setObject] = useState(() => objects.find((each) => each.id === objectId)?.id ?? objects[0]?.id ?? '');
   const [name, setName] = useState('');
-  const [template, setTemplate] = useState<ListTemplate>('blank');
+  // A Pipeline first (T11): stages to move the records through are what a list is mostly for; Blank is a click away.
+  const [template, setTemplate] = useState<ListTemplate>('pipeline');
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>(
     objects.length === 0 ? [{ code: 'FORBIDDEN', message: strings.noWritableObjects }] : [],
   );
@@ -160,14 +187,18 @@ function NewListForm({
         items={objects.map((each) => ({ id: each.id, label: each.pluralName, icon: each.icon, hue: each.hue }))}
         value={object === '' ? null : object}
         onChange={(next) => {
-          if (next !== null) setObject(next);
+          if (next === null) return;
+          setObject(next);
+          onObjectChange(next);
         }}
       />
       <SegmentedControl
         label={strings.startWith}
+        // Named on screen as Name and List of are, so the three read down one rhythm.
+        isLabelVisible
         segments={[
-          { value: 'blank', label: strings.blank, icon: 'table' },
           { value: 'pipeline', label: strings.pipeline, icon: 'kanban' },
+          { value: 'blank', label: strings.blank, icon: 'table' },
         ]}
         value={template}
         onChange={(next) => {

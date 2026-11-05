@@ -58,7 +58,7 @@ test.describe('lists and pipelines', () => {
 
     await newList(page, 'Hot deals', 'Deals', 'Blank');
     const grid = page.getByRole('grid', { name: 'Hot deals' });
-    await expect(page.getByText('No deals in this list yet.')).toBeVisible();
+    await expect(page.getByText('Hand-pick the deals this list tracks.')).toBeVisible();
 
     // Added: the row shows first, marked new, with its toast.
     await addEntry(page, 'Add deal', 'Apollo');
@@ -121,9 +121,13 @@ test.describe('lists and pipelines', () => {
     for (const stage of ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost']) {
       await expect(board.getByRole('heading', { name: new RegExp(`^${stage}`) })).toBeVisible();
     }
+    // Empty, it opens on its first step over the stages (T11), which goes with the first card.
+    const firstStep = page.getByText('Hand-pick the deals this list tracks.');
+    await expect(firstStep).toBeVisible();
     // A new entry lands in Lead (the Stage default).
     await addEntry(page, 'Add deal', 'Apollo');
     await expect(board.getByRole('gridcell', { name: /Apollo/ })).toBeVisible();
+    await expect(firstStep).toBeHidden();
 
     // The Qualified column's "+" sets Qualified.
     await board.getByRole('button', { name: 'Add to Qualified' }).click();
@@ -321,7 +325,7 @@ test.describe('lists: the view menu, import, bulk Edit and settings (the lists3 
     await page.goto(`/w/${slug}/objects/deals`);
     await newList(page, 'Inbound', 'Deals', 'Pipeline');
     await page.getByRole('radio', { name: 'Table' }).click();
-    await expect(page.getByText('No deals in this list yet.')).toBeVisible();
+    await expect(page.getByText('Hand-pick the deals this list tracks.')).toBeVisible();
     await page.getByRole('main').getByRole('button', { name: 'Import' }).last().click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/lists/inbound/import$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Import inbound' })).toBeVisible();

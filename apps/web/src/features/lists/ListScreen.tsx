@@ -51,7 +51,7 @@ import {
   type GridSelection,
 } from '@crm/ui/grid';
 import { useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { refsOf } from '../records/details.ts';
 import { useMemberPicker } from '../records/members.ts';
 import { copyName } from '../views/edits.ts';
@@ -114,6 +114,9 @@ export function ListScreen(given: ListScreenProps) {
   const navigate = useNavigate();
   const [adding, setAdding] = useState<{ readonly preset?: Readonly<Record<string, unknown>> } | undefined>();
   const [isAddingField, setAddingField] = useState(false);
+  // Whether the board shows no card at all, unfiltered: its first step then sits under the bars (T11), the stages
+  // staying in view below it.
+  const [isBoardEmpty, setBoardEmpty] = useState(false);
   const listFields = fields.filter((field) => !field.isArchived);
   const ownIds = new Set(listFields.map((field) => field.id));
   const groupFields = [...listFields.filter(groupable), ...attributes.filter(groupable)];
@@ -258,28 +261,42 @@ export function ListScreen(given: ListScreenProps) {
           </TopBar>
         ),
         toolbar: (
-          <ViewToolbar
-            query={query}
-            filter={query.filter}
-            attributes={queryFields}
-            objectKey={object.standardKey ?? object.apiSlug}
-            sortable={sortable}
-            members={memberDisplays}
-            me={me}
-            isDraft={isDraft}
-            canSave={!view.isLocked || list.canManage}
-            isSaving={isSaving}
-            onChange={(next) => {
-              setDrafted(next);
-            }}
-            onDiscard={() => {
-              setDrafted(undefined);
-            }}
-            onSave={save}
-            onSaveAsNew={() => {
-              setCreateMode('save-as');
-            }}
-          />
+          <>
+            <ViewToolbar
+              query={query}
+              filter={query.filter}
+              attributes={queryFields}
+              objectKey={object.standardKey ?? object.apiSlug}
+              sortable={sortable}
+              members={memberDisplays}
+              me={me}
+              isDraft={isDraft}
+              canSave={!view.isLocked || list.canManage}
+              isSaving={isSaving}
+              onChange={(next) => {
+                setDrafted(next);
+              }}
+              onDiscard={() => {
+                setDrafted(undefined);
+              }}
+              onSave={save}
+              onSaveAsNew={() => {
+                setCreateMode('save-as');
+              }}
+            />
+            {/* An empty board's first step (T11), under the bars as a state of the whole view, as a view's banners
+              are: add the records it tracks (Add <singular> opens the record picker). The stages stay in view under
+              it, and it goes with the first card. */}
+            {kind === 'board' && isBoardEmpty && canWrite && (
+              <FirstStepBanner
+                plural={object.pluralName}
+                addLabel={addLabel}
+                onAdd={() => {
+                  setAdding({});
+                }}
+              />
+            )}
+          </>
         ),
         viewBar: (
           <ViewBar
@@ -319,6 +336,7 @@ export function ListScreen(given: ListScreenProps) {
                 onAddField={() => {
                   setAddingField(true);
                 }}
+                onEmptyChange={setBoardEmpty}
               />
             ) : (
               <ListTable
@@ -640,9 +658,12 @@ function ListTable(
         }}
         {...(list.canWrite ? { addRow: { label: strings.add(object.singularName), onAdd } } : {})}
         emptyState={
+          // Empty and unfiltered, a list opens on its first step (T11): add the records it tracks, with Add <singular>
+          // opening the record picker, and Import beside it.
           <EmptyState
             icon={list.icon}
-            title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.empty(object.pluralName)}
+            title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.firstStep(object.pluralName)}
+            {...(hasFilter ? {} : { children: strings.firstStepText(object.pluralName) })}
             {...(hasFilter
               ? {
                   actions: (
@@ -838,12 +859,42 @@ function ListTable(
   );
 }
 
+/**
+ * An empty board's first step (T11): what to do, and what the list is for, as a banner under the view's bars, with
+ * Add <singular> opening the record picker.
+ */
+function FirstStepBanner({
+  plural,
+  addLabel,
+  onAdd,
+}: {
+  readonly plural: string;
+  readonly addLabel: string;
+  readonly onAdd: () => void;
+}) {
+  return (
+    <Callout
+      placement="banner"
+      title={strings.firstStep(plural)}
+      actions={
+        <Button icon="plus" onPress={onAdd}>
+          {addLabel}
+        </Button>
+      }
+    >
+      {strings.firstStepText(plural)}
+    </Callout>
+  );
+}
+
 /** The board (AC-4815, AC-4820, AC-4821): a column per option of the grouping field, cards moved between them. */
 function ListBoardBody(
   props: BodyProps & {
     readonly groupFields: readonly AttributeDefinition[];
     readonly groupBy: string | undefined;
     readonly onAdd: (preset: Readonly<Record<string, unknown>>) => void;
+    /** Says whether the board shows no card at all, unfiltered, for the first step over it (T11). */
+    readonly onEmptyChange: (isEmpty: boolean) => void;
   },
 ) {
   const { list, groupFields, groupBy, onAddField } = props;
@@ -873,9 +924,10 @@ function ListBoardColumns(
   props: BodyProps & {
     readonly field: AttributeDefinition;
     readonly onAdd: (preset: Readonly<Record<string, unknown>>) => void;
+    readonly onEmptyChange: (isEmpty: boolean) => void;
   },
 ) {
-  const { slug, list, object, entries, field, view, fields, attributes, onAdd, query } = props;
+  const { slug, list, object, entries, field, view, fields, attributes, onAdd, query, onEmptyChange } = props;
   const navigate = useNavigate();
   const options = useMemo(() => (field.options ?? []).filter((option) => !option.isArchived), [field.options]);
   const groupIds = useMemo(() => [...options.map((option) => option.id), null], [options]);
@@ -904,6 +956,21 @@ function ListBoardColumns(
     readonly to: ReadonlyMap<string, string>;
   }>({ on: state.columns, to: new Map() });
   const moved = moves.on === state.columns ? moves.to : new Map<string, string>();
+  // No card anywhere and no filter narrowing it: the screen shows the first step over the board (T11). Said to the
+  // screen, which holds the bars; leaving the board (the Table, another grouping) takes the step away with it.
+  const isEmpty =
+    state.status === 'ready' &&
+    (query.filter?.conditions.length ?? 0) === 0 &&
+    state.columns.every((column) => column.count === 0);
+  useEffect(() => {
+    onEmptyChange(isEmpty);
+  }, [isEmpty, onEmptyChange]);
+  useEffect(
+    () => () => {
+      onEmptyChange(false);
+    },
+    [onEmptyChange],
+  );
   const definitions = new Map([...fields, ...attributes].map((each) => [each.id, each] as const));
   const cardFields = cardIds.flatMap((id) => {
     const definition = definitions.get(id);

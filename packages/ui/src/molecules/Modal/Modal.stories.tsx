@@ -631,6 +631,39 @@ export const HoldsInput: Story = {
   },
 };
 
+/**
+ * `description`: one quiet line under the title saying what the dialog makes (New list), read as the dialog's
+ * description.
+ */
+export const Description: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        title="New list"
+        description="A hand-picked set of people, with its own stages and columns."
+        isOpen
+        isDismissable={false}
+        actions={
+          <>
+            <Button slot="close">Cancel</Button>
+            <Button variant="primary" type="submit" form="new-list">
+              Create list
+            </Button>
+          </>
+        }
+      >
+        <Form id="new-list" label="New list" onSubmit={() => undefined}>
+          <Field label="Name" placeholder="e.g. Hiring pipeline" />
+        </Form>
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleDescription('A hand-picked set of people, with its own stages and columns.');
+  },
+};
+
 /** `form`: a 560px dialog for several fields, as New record's. */
 export const FormWide: Story = {
   render: () => (

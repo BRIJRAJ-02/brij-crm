@@ -113,6 +113,13 @@
     color: var(--text-secondary);
   }
 
+  /* The line under the title (`description`): what the dialog makes, quiet, opening the body. */
+  .description {
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
   .context {
     display: inline-flex;
     align-items: center;
