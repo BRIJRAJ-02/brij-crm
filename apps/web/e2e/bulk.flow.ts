@@ -17,6 +17,10 @@ const table = (page: Page) => page.getByRole('grid', { name: 'People' });
 const tick = (page: Page, name: string, grid = 'People') =>
   page.getByRole('grid', { name: grid }).getByRole('gridcell', { name: new RegExp(`^Select ${name}`) });
 
+/** A row's checkbox in Settings › Trash, a settings Table since 5 November 2026 (the grid's look was clipped there). */
+const tickTrash = (page: Page, name: string) =>
+  page.getByRole('grid', { name: 'Trash' }).getByRole('checkbox', { name: new RegExp(`^Select ${name}`) });
+
 /** Whether the second browser's live checks run (Centrifugo allows only localhost:5173). */
 const LIVE = process.env.FLOW_NO_LIVE === undefined;
 
@@ -100,12 +104,12 @@ test.describe('bulk', () => {
     await openTrash(page);
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveCount(3);
-    await tick(page, 'Cy Lane', 'Trash').click();
+    await tickTrash(page, 'Cy Lane').click();
     await bar(page).getByRole('button', { name: 'Restore' }).click();
     await expect(page.getByText('Restored Cy Lane.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveCount(2);
     if (LIVE) await expect(table(reader).getByRole('rowheader', { name: /Cy Lane/ })).toBeVisible({ timeout: 15_000 });
-    await tick(page, 'Ada Byron', 'Trash').click();
+    await tickTrash(page, 'Ada Byron').click();
     await bar(page).getByRole('button', { name: 'Delete forever' }).click();
     const forever = dialog(page, 'Delete 1 record forever?');
     await expect(forever.getByText('This can’t be undone.')).toBeVisible();

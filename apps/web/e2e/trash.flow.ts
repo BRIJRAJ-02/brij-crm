@@ -4,8 +4,8 @@
 // the toast's Undo brings them back on both. One person deleted alone goes at
 // once; the Trash, in Settings (A120) and at its old address with the
 // object filter kept, lists them and Restore brings them back. A person whose
-// email another record took meanwhile stays in the trash, the reason on its
-// Name cell. ⌘Z after a create moves the record to the trash (AC-522 to
+// email another record took meanwhile stays in the trash, its row saying it
+// wasn't restored and why. ⌘Z after a create moves the record to the trash (AC-522 to
 // AC-527, AC-533, AC-534, AC-541, AC-542).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
@@ -17,6 +17,10 @@ const table = (page: Page) => page.getByRole('grid', { name: 'People' });
 /** The row checkbox of a person, by name. */
 const tick = (page: Page, name: string, grid = 'People') =>
   page.getByRole('grid', { name: grid }).getByRole('gridcell', { name: new RegExp(`^Select ${name}`) });
+
+/** A row's checkbox in Settings › Trash, a settings Table since 5 November 2026 (the grid's look was clipped there). */
+const tickTrash = (page: Page, name: string) =>
+  page.getByRole('grid', { name: 'Trash' }).getByRole('checkbox', { name: new RegExp(`^Select ${name}`) });
 
 /**
  * Whether the second browser's live checks run: Centrifugo allows only
@@ -108,7 +112,7 @@ test.describe('trash', () => {
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
     await checkScreen(page, 'trash-list');
     // The old address lands here too, keeping its object filter.
-    await page.getByRole('button', { name: /All objects/ }).click();
+    await page.getByRole('button', { name: /All kinds/ }).click();
     await page.getByRole('option', { name: 'People' }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash\\?object=[0-9a-f-]{36}$`));
     const object = new URL(page.url()).searchParams.get('object') ?? '';
@@ -117,12 +121,13 @@ test.describe('trash', () => {
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
 
     // Restore both: Cy comes back, Ada stays with the reason on her Name cell (AC-534).
-    await tick(page, 'Ada Byron', 'Trash').click();
-    await tick(page, 'Cy Lane', 'Trash').click();
+    await tickTrash(page, 'Ada Byron').click();
+    await tickTrash(page, 'Cy Lane').click();
     await bar(page).getByRole('button', { name: 'Restore' }).click();
     await expect(page.getByText('Restored 1 record. 1 couldn’t be restored; its row says why.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/]);
-    await expect(trash.getByRole('rowheader', { name: /Ada Byron/ })).toHaveAttribute('aria-invalid', 'true');
+    // Her row says she wasn't restored, the reason in its tip (5 November 2026: a settings Table, no grid cell errors).
+    await expect(trash.getByRole('row', { name: /Ada Byron/ }).getByText('Not restored')).toBeVisible();
     await checkScreen(page, 'trash-refused');
 
     // Back on People (Settings' way back returns to where it was opened from), Cy is there; the other browser saw

@@ -5,6 +5,11 @@ export const strings = {
   countLabel: (count: number) => (count === 1 ? 'record' : 'records'),
   objectFilter: 'Object',
   allObjects: 'All objects',
+  /** The table's filter (5 November 2026): by the kind of record, every kind first. */
+  kindFilter: 'Kind',
+  allKinds: 'All kinds',
+  /** A record of an archived object, in the Kind column. */
+  archivedKind: (singularName: string) => `${singularName} (archived)`,
   archived: (pluralName: string) => `${pluralName} (archived)`,
   filterLabel: 'Trash filter',
   columns: {
@@ -12,6 +17,9 @@ export const strings = {
     object: 'Object',
     deletedBy: 'Deleted by',
     deletedAt: 'Deleted',
+    /** The record's kind: its object's name for one record ("Person"). */
+    kind: 'Kind',
+    actions: 'Actions',
     /** The day the record is deleted for good, 30 days after it was deleted. */
     expiresAt: 'Deleted forever on',
   },
@@ -25,6 +33,23 @@ export const strings = {
   showAll: 'Show all objects',
   retry: 'Retry',
   restore: 'Restore',
+  /** A row's Restore, named for its record. */
+  restoreFor: (name: string) => `Restore ${name}`,
+  rowActions: (name: string) => `More for ${name}`,
+  /** A restore the server refused (its email taken by another record since): the row says so, its reason in a tip. */
+  notRestored: 'Not restored',
+  whyNotRestored: (name: string) => `Why ${name} wasn’t restored`,
+  /** A record of an object the person may only read: no Restore on its row. */
+  viewOnlyBadge: 'View only',
+  /** The table's foot: how many show of how many, and the next block. */
+  shownOf: (shown: number, total: number, isAtLeast: boolean) => {
+    const format = new Intl.NumberFormat();
+    const all = `${format.format(total)}${isAtLeast ? '+' : ''}`;
+    return shown >= total
+      ? `${all} ${total === 1 ? 'record' : 'records'}`
+      : `${format.format(shown)} of ${all} records`;
+  },
+  showMore: 'Show more',
   /** No selected record's object is one the person may change (AC-534), or restore or delete (AC-538). */
   viewOnly: 'View only.',
   /** Over the 500 a restore or Delete forever sends at once; Select all runs more as a background change. */

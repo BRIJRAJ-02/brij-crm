@@ -1,10 +1,10 @@
 // Brief
-// Purpose: Settings › Workspace › Trash: each record deleted in the last 30 days that the person may see, newest first.
-// Main task: find a record deleted by mistake and restore it (several at once), seeing why one can't come back.
+// Purpose: Settings › Data › Trash: each record deleted in the last 30 days that the person may see, newest first.
+// Main task: find a record deleted by mistake and restore it from its row (several at once from the bar), seeing why
+// one can't come back.
 // Leaves out: opening or editing trashed records; Delete forever and Empty trash show only to owners and admins.
 import {
   refusalSummary,
-  TRASH_NAME_COLUMN,
   type BulkAction,
   type BulkTarget,
   type MemberSummary,
@@ -14,35 +14,31 @@ import {
 } from '@crm/data';
 import { useTrash } from '@crm/data/react';
 import {
+  AttributeDisplay,
   Badge,
   BulkActionBar,
   Button,
   Callout,
   EmptyState,
+  InfoTip,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
   Select,
   sharedStrings,
-  Skeleton,
-  Toolbar,
+  Table,
   useFormatSettings,
   VisuallyHidden,
+  type TableColumn,
 } from '@crm/ui';
-import {
-  allMatching,
-  columnWidthFor,
-  DataGrid,
-  noRows,
-  selectedCount,
-  type GridColumn,
-  type GridSelection,
-  type RowSource,
-} from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import { BULK_EXCEPT_MAX, BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
-import { isFocusLost, useBulkJob, type NotesIn } from '../workspace/useBulkJob.ts';
+import { BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
+import { useBulkJob, type NotesIn } from '../workspace/useBulkJob.ts';
 import { strings } from './strings.ts';
 import {
   canRestore,
@@ -59,7 +55,7 @@ import {
 /** Props for the Trash screen: what its route loaded through the data layer. */
 export interface TrashScreenProps {
   readonly slug: string;
-  /** Every object the person may see, archived ones too (for the filter and the Object column). */
+  /** Every object the person may see, archived ones too (for the filter and the Kind column). */
   readonly objects: readonly ObjectSummary[];
   readonly members: readonly MemberSummary[];
   /** The trash of the object in the filter, or of every object. */
@@ -71,49 +67,75 @@ export interface TrashScreenProps {
 /** The trash's records, named for a count ("48 records"). */
 const RECORDS = { singularName: 'Record', pluralName: 'Records' } as const;
 
-/** The value meaning "every object" in the filter. */
+/** The value meaning "every kind" in the filter. */
 const ALL = 'all';
 
-/** A text column's width: the narrower tiers (a time, a day) cut their header short beside its read only lock. */
-const objectColumn = TRASH_ATTRIBUTES.find((attribute) => attribute.id === TRASH_COLUMNS.object);
-const TEXT_WIDTH = objectColumn === undefined ? 0 : columnWidthFor(objectColumn);
-
-const COLUMNS: readonly GridColumn[] = TRASH_ATTRIBUTES.map((attribute) => ({
-  id: attribute.id,
-  attribute,
-  width: Math.max(columnWidthFor(attribute), TEXT_WIDTH),
-}));
-
-/** No rows yet: the grid draws its loading rows at the columns' widths. */
-const NO_ROWS: RowSource<TrashRow> = { count: 0, getItem: () => undefined, getKey: (row) => row.id };
+/** Rows a Show more adds: the trash store's block, so each press reads one block. */
+const PAGE = 100;
 
 /**
- * The trash while its route loads, in Settings: the bar with its trail and title, the filter row and the grid's
- * loading rows, each where the loaded page draws it, so nothing moves when the rows arrive.
+ * The trash as a settings table (5 November 2026: the records grid's look was clipped in Settings): the record, its
+ * kind, who deleted it and when, then Restore. On a phone each row reads as two lines.
+ */
+const COLUMNS: readonly TableColumn[] = [
+  { id: TRASH_COLUMNS.name, label: strings.columns.name, isRowHeader: true, phone: 'title' },
+  { id: TRASH_COLUMNS.object, label: strings.columns.kind },
+  { id: TRASH_COLUMNS.deletedBy, label: strings.columns.deletedBy },
+  { id: TRASH_COLUMNS.deletedAt, label: strings.columns.deletedAt },
+  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit' },
+];
+
+/** Each column's attribute, so its value draws through its type's one display, as the grid drew it. */
+const ATTRIBUTES = new Map(TRASH_ATTRIBUTES.map((attribute) => [attribute.id, attribute]));
+
+/**
+ * What is ticked: some loaded rows, or every record matching the filter less those unticked (a background change),
+ * from the time it was chosen.
+ */
+type Picked =
+  | { readonly kind: 'some'; readonly ids: ReadonlySet<string> }
+  | { readonly kind: 'all-matching'; readonly except: ReadonlySet<string>; readonly asOf: string };
+
+const NONE: Picked = { kind: 'some', ids: new Set() };
+
+/**
+ * The trash while its route loads, in Settings: the bar with its trail and title, the filter's place and the table's
+ * loading rows under its columns, so nothing moves when the rows arrive.
  */
 export function TrashPending() {
   return (
-    <SettingsPage title={strings.title} fillsView>
-      <Toolbar label={strings.filterLabel}>
-        <Skeleton width="short" />
-      </Toolbar>
-      <DataGrid
+    <SettingsPage
+      title={strings.title}
+      // The kind filter's place, as the loaded page draws it (every kind), so the table never moves under it.
+      tabBar={{
+        end: (
+          <Select
+            label={strings.kindFilter}
+            isLabelHidden
+            variant="inline"
+            items={[{ id: ALL, label: strings.allKinds }]}
+            value={ALL}
+            isDisabled
+          />
+        ),
+      }}
+    >
+      <Table
         label={strings.title}
         columns={COLUMNS}
-        pinnedCount={1}
-        rows={NO_ROWS}
-        getValue={() => undefined}
-        rowHeader={TRASH_NAME_COLUMN}
-        hideColumnLocks
-        status="loading"
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        phoneLayout="rows"
+        isLoading
       />
     </SettingsPage>
   );
 }
 
 /**
- * The trash, inside Settings (A120): the bar with its trail, the count and Empty trash, the object filter, the read
- * only grid filling the view, and Restore in the bulk bar.
+ * The trash, inside Settings (A120): the bar with its trail, the count and Empty trash, the kind filter, then a
+ * settings Table of the deleted records, a block at a time, each with Restore; several restore from the bar.
  */
 export function TrashScreen({ slug, objects, members, view, objectId }: TrashScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -122,44 +144,46 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const byId = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   // The member's own zone (Settings › Account › Preferences), else the browser's.
   const { timeZone } = useFormatSettings();
-  // The rows ticked, for this view only: another object filter starts with none.
-  const [held, setHeld] = useState<{
-    readonly view: TrashView;
-    readonly selection: GridSelection;
-    readonly asOf?: string;
-  }>(() => ({ view, selection: noRows() }));
-  const selection = held.view === view ? held.selection : noRows();
-  const asOf = held.view === view ? held.asOf : undefined;
   // Owners and admins delete forever (records.purge, AC-535); the server refuses anyone else anyway.
   const canPurge = useCan('records.purge');
   const filtered = objectId === undefined ? undefined : byId.get(objectId);
   // The records counted in the filtered object's words when the filter names one ("12 deals"), else "records".
   const names = filtered ?? RECORDS;
-  const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
-  const count = selectedCount(selection, state.count.count);
-  // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
-  const ids = useMemo(() => (selection.kind === 'some' ? [...selection.ids] : []), [selection]);
-  const path = bulkPath(selection, count);
-  /** The grid takes focus back at the first of these rows (or the first row), as the bar that held it goes. */
-  const focusBackAt = (recordIds: readonly string[], leaving: boolean) => {
-    const rows = recordIds.flatMap((id) => {
-      const at = view.indexOf(id);
-      return at === undefined ? [] : [at];
-    });
-    const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
-    setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
+  // The rows ticked and how many rows show, for this view only: another filter starts afresh.
+  const [held, setHeld] = useState<{ readonly view: TrashView; readonly picked: Picked; readonly shown: number }>(
+    () => ({ view, picked: NONE, shown: PAGE }),
+  );
+  const picked = held.view === view ? held.picked : NONE;
+  const shown = held.view === view ? held.shown : PAGE;
+  const setPicked = (next: Picked) => {
+    setHeld((before) => ({ view, picked: next, shown: before.view === view ? before.shown : PAGE }));
   };
-  /** Clears the ticks, focus back to the grid where the first of them was. */
+  const { source } = state;
+  // The rows shown are the first `shown` of the view's windows; the store reads the blocks they need. Its
+  // onRangeChange is one function for the view's life, so a new snapshot alone asks for nothing.
+  const end = Math.min(shown, source.count);
+  const { onRangeChange } = source;
+  useEffect(() => {
+    onRangeChange({ start: 0, end });
+  }, [onRangeChange, end]);
+  const rows = Array.from({ length: end }, (_, index) => source.getItem(index)).filter(
+    (row): row is TrashRow => row !== undefined,
+  );
+  const total = state.count.count;
+  const loadedIds = rows.map((row) => row.id);
+  const ticked: ReadonlySet<string> =
+    picked.kind === 'some'
+      ? new Set(loadedIds.filter((id) => picked.ids.has(id)))
+      : new Set(loadedIds.filter((id) => !picked.except.has(id)));
+  const count = picked.kind === 'some' ? ticked.size : Math.max(0, total - picked.except.size);
+  const ids = picked.kind === 'some' ? [...ticked] : [];
+  const path = bulkPath(picked, count);
+  /** Clears the ticks. */
   const untick = () => {
-    focusBackAt(ids, false);
-    setHeld({ view, selection: noRows() });
+    setPicked(NONE);
   };
-  // A change this bar (or Empty trash) started, followed until it ends. A count of zero clears the ticks it was
-  // for; focus that went with the bar's Cancel comes back to the grid, and stays anywhere else.
-  const bulkJob = useBulkJob(slug, names, () => {
-    if (isFocusLost()) untick();
-    else setHeld({ view, selection: noRows() });
-  });
+  // A change this bar (or Empty trash) started, followed until it ends; a count of zero clears the ticks it was for.
+  const bulkJob = useBulkJob(slug, names, untick);
   const clear = () => {
     bulkJob.forget();
     untick();
@@ -168,8 +192,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const keepTicked = (recordIds: readonly string[]) => {
     if (recordIds.length === 0) return;
     setHeld((before) => {
-      if (before.view !== view || before.selection.kind === 'all-matching') return before;
-      return { view, selection: { kind: 'some', ids: new Set([...before.selection.ids, ...recordIds]) } };
+      if (before.view !== view || before.picked.kind === 'all-matching') return before;
+      return { ...before, picked: { kind: 'some', ids: new Set([...before.picked.ids, ...recordIds]) } };
     });
   };
   // Delete forever of picked records waiting for its confirm, and the last one asked, so it closes with its words.
@@ -185,32 +209,28 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const [barFocus, setBarFocus] = useState<object | undefined>(undefined);
   const waitId = useId();
 
-  /** Sets the rows ticked, within the limits (AC-523); "all matching" counts from when it was first chosen. */
-  const select = (next: GridSelection) => {
-    if (next.kind === 'some' && next.ids.size > BULK_IDS_MAX) {
+  /** Sets the rows ticked from the table, within the limits (AC-523); all matching keeps what is left out. */
+  const pick = (next: ReadonlySet<string>) => {
+    if (picked.kind === 'all-matching') {
+      const except = new Set([...picked.except, ...loadedIds.filter((id) => !next.has(id))]);
+      for (const id of next) except.delete(id);
+      setPicked(except.size >= total ? NONE : { ...picked, except });
+      return;
+    }
+    if (next.size > BULK_IDS_MAX) {
       toasts.toast({ tone: 'danger', message: bulkStrings.tooManyIds });
       return;
     }
-    if (next.kind === 'all-matching' && next.except.size > BULK_EXCEPT_MAX) {
-      toasts.toast({ tone: 'danger', message: bulkStrings.tooManyExcept });
-      return;
-    }
-    if (next.kind === 'some') setHeld({ view, selection: next });
-    else
-      setHeld({
-        view,
-        selection: next,
-        asOf: selection.kind === 'all-matching' ? (asOf ?? new Date().toISOString()) : new Date().toISOString(),
-      });
+    setPicked({ kind: 'some', ids: next });
   };
   /** The selection as a job's target: the ids, or the trash of the filter less those left out. */
   const target = (): BulkTarget =>
-    selection.kind === 'all-matching'
+    picked.kind === 'all-matching'
       ? {
           kind: 'trash',
           ...(objectId === undefined ? {} : { objectId }),
-          except: [...selection.except],
-          asOf: asOf ?? new Date().toISOString(),
+          except: [...picked.except],
+          asOf: picked.asOf,
         }
       : { kind: 'ids', recordIds: ids };
   /** Starts a job; a refusal to start says why where it was asked: in the bar, or (Empty trash) in a toast. */
@@ -226,6 +246,26 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const deleters = useMemo(() => deletedByOf(members), [members]);
   const dayOf = useMemo(() => dayFormatter(timeZone), [timeZone]);
 
+  /** Restores these records; the toast says what came back, with Retry when the failure passes on its own. */
+  const restoreIds = (recordIds: readonly string[], onlyName: string | undefined) => {
+    data.trash.restore(slug, recordIds).then(
+      (summary) => {
+        // The ones kept in the trash stay ticked, each with its reason on its row.
+        if (summary.kind === 'done') keepTicked(summary.refusedIds);
+        const toast = restoreToast(summary, onlyName, () => {
+          restoreIds(recordIds, onlyName);
+        });
+        if (toast !== undefined) toasts.toast(toast);
+        // The row that held the control went with it: focus to the page's title.
+        if (summary.kind === 'done' && summary.restored > 0) focusTitle();
+      },
+      () => {
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
+      },
+    );
+  };
+
+  /** Restores what is ticked: at once up to 500, else as a background change. */
   const restore = () => {
     if (path === 'job') {
       setEmptying(false);
@@ -234,33 +274,13 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     }
     const [only] = ids.length === 1 ? ids : [];
     const onlyName = only === undefined ? undefined : view.row(only)?.item.display.name;
-    // The grid takes focus back where the first restored row was, so the keyboard carries on there.
-    focusBackAt(ids, true);
-    setHeld({ view, selection: noRows() });
+    setPicked(NONE);
     restoreIds(ids, onlyName);
-  };
-
-  /** Restores these records; the toast says what came back, with Retry when the failure passes on its own. */
-  const restoreIds = (recordIds: readonly string[], onlyName: string | undefined) => {
-    data.trash.restore(slug, recordIds).then(
-      (summary) => {
-        // The ones kept in the trash stay ticked, each with its reason on its Name cell.
-        if (summary.kind === 'done') keepTicked(summary.refusedIds);
-        const toast = restoreToast(summary, onlyName, () => {
-          restoreIds(recordIds, onlyName);
-        });
-        if (toast !== undefined) toasts.toast(toast);
-      },
-      () => {
-        toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
-      },
-    );
   };
 
   /** Deletes these records forever; the toast says how many went, and the refused ones stay ticked with why. */
   const purgeIds = (recordIds: readonly string[]) => {
-    focusBackAt(recordIds, true);
-    setHeld({ view, selection: noRows() });
+    setPicked(NONE);
     data.trash.deleteForever(slug, recordIds).then(
       (summary) => {
         if (summary.kind === 'done') keepTicked(summary.refusedIds);
@@ -268,6 +288,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
           purgeIds(recordIds);
         });
         if (toast !== undefined) toasts.toast(toast);
+        if (summary.kind === 'done' && summary.purged > 0) focusTitle();
       },
       () => {
         toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
@@ -303,16 +324,11 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   };
 
   // Restore (and Delete forever, which fails closed alike) may act when a ticked row's object may be changed; for
-  // all matching, when an object in the list's scope may be (AC-534). Worked out once per selection and rows.
+  // all matching, when an object in the list's scope may be (AC-534).
   const canRestoreHere = useMemo(() => canRestoreAll(objectId, objects), [objectId, objects]);
-  const isAllowed = useMemo(
-    () => (selection.kind === 'all-matching' ? canRestoreHere : canRestore(ids, (id) => view.row(id), byId)),
-    // The rows loaded (the source) decide what a ticked id's object is.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selection.kind, canRestoreHere, ids, view, byId, state.source],
-  );
+  const isAllowed = picked.kind === 'all-matching' ? canRestoreHere : canRestore(ids, (id) => view.row(id), byId);
   const { job, note, progress, isRunning } = bulkJob;
-  // Up while rows are ticked, a change runs or a note shows; then it plays its exit before the grid gives back its room.
+  // Up while rows are ticked, a change runs or a note shows; then it plays its exit.
   const isWanted = count > 0 || isRunning || note !== undefined;
   const [isBarShown, setBarShown] = useState(isWanted);
   if (isWanted && !isBarShown) setBarShown(true);
@@ -352,21 +368,20 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     );
   const bar = isBarShown ? (
     <BulkActionBar
-      placement="floating"
       isOpen={isWanted}
       onLeft={() => {
         setBarShown(false);
       }}
       count={count}
-      total={state.count.count}
+      total={total}
       isTotalAtLeast={state.count.atLeast}
-      isAllMatching={selection.kind === 'all-matching'}
+      isAllMatching={picked.kind === 'all-matching'}
       // No action could follow when nothing in the list's scope may be restored, so the offer stays away.
       {...(isRunning || !canRestoreHere
         ? {}
         : {
             onSelectAllMatching: () => {
-              setHeld({ view, selection: allMatching(), asOf: new Date().toISOString() });
+              setPicked({ kind: 'all-matching', except: new Set(), asOf: new Date().toISOString() });
             },
           })}
       onClear={clear}
@@ -385,6 +400,73 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       {actions}
     </BulkActionBar>
   ) : undefined;
+
+  /** One record's Restore, or why it can't come back (a refused restore's reason, kept while the page shows). */
+  const rowActions = (row: TrashRow): ReactNode => {
+    const name = row.item.display.name;
+    const reason = state.cellErrors.get(`${row.id}:${TRASH_COLUMNS.name}`);
+    // Only an object the person may change restores (AC-534); otherwise the row says so and offers nothing.
+    const mayChange = byId.get(row.item.objectId)?.access === 'write';
+    return (
+      <>
+        {reason !== undefined && (
+          <>
+            <Badge text={strings.notRestored} dot="red" isWhole />
+            <InfoTip label={strings.whyNotRestored(name)}>{reason}</InfoTip>
+          </>
+        )}
+        {mayChange ? (
+          <Button
+            size="sm"
+            icon="archive-restore"
+            label={strings.restoreFor(name)}
+            onPress={() => restoreIds([row.id], name)}
+          >
+            {strings.restore}
+          </Button>
+        ) : (
+          <Badge text={strings.viewOnlyBadge} isWhole />
+        )}
+        {canPurge && mayChange && (
+          <MenuTrigger>
+            <Button variant="ghost" icon="ellipsis" label={strings.rowActions(name)} />
+            <Menu
+              label={strings.rowActions(name)}
+              onAction={(key) => {
+                if (key === 'purge') setAsking([row.id]);
+              }}
+            >
+              <MenuItem id="purge" icon="trash" isDanger>
+                {strings.deleteForever}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
+        )}
+      </>
+    );
+  };
+
+  const cell = (row: TrashRow, column: string): ReactNode => {
+    if (column === 'actions') return rowActions(row);
+    if (column === TRASH_COLUMNS.object) {
+      // Its kind: the object's one name for one record ("Person"), archived ones said so.
+      const object = byId.get(row.item.objectId);
+      if (object === undefined) return null;
+      return object.isArchived ? strings.archivedKind(object.singularName) : object.singularName;
+    }
+    const attribute = ATTRIBUTES.get(column);
+    if (attribute === undefined) return null;
+    const by = column === TRASH_COLUMNS.deletedBy ? deleters(row) : undefined;
+    const display = column === TRASH_COLUMNS.name ? row.item.display : by === undefined ? undefined : [by];
+    return (
+      <AttributeDisplay
+        attribute={attribute}
+        value={cellValue(row, column, byId, dayOf) as never}
+        {...(display === undefined ? {} : { display })}
+        surface="cell"
+      />
+    );
+  };
 
   // The counted change's words, kept while its confirm closes; in the filtered object's names when there is one.
   const counted = job?.total ?? 0;
@@ -406,16 +488,17 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         undefined
       : strings.confirmPurgeText;
   const purgeWords = recordsWord(lastAsked.length, names);
-  // Nothing in the trash (or in this object's): one block EmptyState on the page, as every settings page's empty
-  // state reads, rather than an empty grid's header with a line in its first row (critic A, 5 November 2026).
-  const isEmpty = state.status === 'ready' && state.count.count === 0;
+  // Nothing in the trash (or in this kind's): one block EmptyState on the page, as every settings page's empty
+  // state reads.
+  const isEmpty = state.status === 'ready' && total === 0;
   const empty =
     filtered === undefined ? (
-      <EmptyState title={strings.emptyTitle} icon="trash">
+      <EmptyState layout="block" title={strings.emptyTitle} icon="trash">
         {strings.emptyText}
       </EmptyState>
     ) : (
       <EmptyState
+        layout="block"
         title={strings.emptyObject(filtered.pluralName)}
         icon={filtered.icon}
         actions={
@@ -431,20 +514,43 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         {strings.emptyObjectText(filtered.pluralName)}
       </EmptyState>
     );
+  // The kind filter, at the body's top, only while there is something to narrow, or a narrowed list to widen again:
+  // the kind as text with its chevron, over the table's first column, rather than a box the body's whole width.
+  const filter =
+    !isEmpty || filtered !== undefined ? (
+      <Select
+        label={strings.kindFilter}
+        isLabelHidden
+        variant="inline"
+        items={[
+          { id: ALL, label: strings.allKinds },
+          ...objects.map((object) => ({
+            id: object.id,
+            label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
+            icon: object.icon,
+            hue: object.hue,
+          })),
+        ]}
+        value={objectId ?? ALL}
+        onChange={(id) => {
+          void navigate({
+            to: '/w/$slug/settings/trash',
+            params: { slug },
+            search: id === null || id === ALL ? {} : { object: id },
+          });
+        }}
+      />
+    ) : undefined;
   return (
     <SettingsPage
       title={strings.title}
-      fillsView
+      // The page's tools open its body (no tab bar here): the kind filter.
+      {...(filter === undefined ? {} : { tabBar: { end: filter } })}
       // The count only while something is in the trash: the empty state already says there is nothing.
-      {...(state.status === 'ready' && state.count.count > 0
+      {...(state.status === 'ready' && total > 0
         ? {
             meta: (
-              <Badge
-                count={state.count.count}
-                max={Infinity}
-                isAtLeast={state.count.atLeast}
-                label={strings.countLabel(state.count.count)}
-              />
+              <Badge count={total} max={Infinity} isAtLeast={state.count.atLeast} label={strings.countLabel(total)} />
             ),
           }
         : {})}
@@ -452,7 +558,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         // Owners and admins only (AC-535); always a job, counted and reviewed first. Quiet: the danger is its confirm's.
         canPurge &&
         state.status === 'ready' &&
-        state.count.count > 0 && (
+        total > 0 && (
           <>
             <Button
               variant="ghost"
@@ -470,62 +576,49 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         )
       }
     >
-      {/* The filter only while there is something to narrow, or a narrowed list to widen again. */}
-      {(!isEmpty || filtered !== undefined) && (
-        <Toolbar label={strings.filterLabel}>
-          <Select
-            label={strings.objectFilter}
-            isLabelHidden
-            size="sm"
-            items={[
-              { id: ALL, label: strings.allObjects },
-              ...objects.map((object) => ({
-                id: object.id,
-                label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
-                icon: object.icon,
-                hue: object.hue,
-              })),
-            ]}
-            value={objectId ?? ALL}
-            onChange={(id) => {
-              void navigate({
-                to: '/w/$slug/settings/trash',
-                params: { slug },
-                search: id === null || id === ALL ? {} : { object: id },
-              });
-            }}
-          />
-        </Toolbar>
-      )}
       {isEmpty ? (
         empty
+      ) : state.status === 'error' ? (
+        <EmptyState layout="block" tone="error" title={strings.failedTitle} onRetry={view.retry}>
+          {state.error?.message ?? sharedStrings.couldntDoThat}
+        </EmptyState>
       ) : (
-        <DataGrid
+        <Table
           label={strings.title}
           columns={COLUMNS}
-          pinnedCount={1}
-          rows={state.source}
-          getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
-          getDisplay={(row, columnId) => {
-            if (columnId === TRASH_COLUMNS.name) return row.item.display;
-            if (columnId === TRASH_COLUMNS.deletedBy) {
-              const by = deleters(row);
-              return by === undefined ? undefined : [by];
-            }
-            return undefined;
-          }}
-          rowHeader={TRASH_NAME_COLUMN}
-          hideColumnLocks
-          selection={selection}
-          onSelectionChange={select}
-          cellErrors={state.cellErrors}
-          status={state.status}
-          onRetry={view.retry}
-          {...(state.error === undefined ? {} : { errorText: state.error.message })}
-          {...(focusRow === undefined ? {} : { focusRow })}
-          {...(bar === undefined ? {} : { floatingBar: bar })}
+          rows={rows}
+          getRowId={(row) => row.id}
+          renderCell={cell}
+          isLoading={state.status === 'loading'}
+          // On a phone each row reads as two lines: the record, then its kind, who and when, and Restore.
+          phoneLayout="rows"
+          selected={ticked}
+          onSelectedChange={pick}
+          getSelectLabel={(row) => row.item.display.name}
+          // How many there are, and the next block while more wait.
+          footer={
+            <>
+              {strings.shownOf(rows.length, total, state.count.atLeast)}
+              {end < total && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => {
+                    setHeld((before) => ({
+                      ...before,
+                      view,
+                      shown: (before.view === view ? before.shown : PAGE) + PAGE,
+                    }));
+                  }}
+                >
+                  {strings.showMore}
+                </Button>
+              )}
+            </>
+          }
         />
       )}
+      {bar}
       {/* Delete forever of up to 500 picked records asks first (AC-535). */}
       <Modal
         title={strings.confirmPurgeTitle(purgeWords)}
@@ -555,9 +648,9 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         {strings.confirmPurgeText}
       </Modal>
       {/*
-              A counted change (a restore or Delete forever past 500, all matching, or Empty trash), opened by Review:
-              the exact number. Declining cancels it; either way focus goes on to the bar, which keeps it.
-            */}
+        A counted change (a restore or Delete forever past 500, all matching, or Empty trash), opened by Review: the
+        exact number. Declining cancels it; either way focus goes on to the bar, which keeps it.
+      */}
       <Modal
         title={jobTitle}
         variant="confirm"
@@ -576,7 +669,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
               icon={isRestoreJob ? 'archive-restore' : 'trash'}
               onPress={() => {
                 setReviewing(false);
-                setHeld({ view, selection: noRows() });
+                setPicked(NONE);
                 bulkJob.confirm();
               }}
             >
