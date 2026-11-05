@@ -383,6 +383,8 @@ export {
   type BookingChatLine,
   type BookingChatProps,
 } from './modules/BookingChat/BookingChat.tsx';
+/** Book by chat's loading shape: the chat's own places while a page's times load, small enough for the page's first load. */
+export { BookingChatGhost } from './modules/BookingChat/BookingChatGhost.tsx';
 export {
   BookingChanges,
   type BookingChangesProps,

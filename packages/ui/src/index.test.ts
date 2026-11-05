@@ -30,6 +30,7 @@ describe('@crm/ui', () => {
       'Board',
       'BookingChanges',
       'BookingChat',
+      'BookingChatGhost',
       'BookingDetails',
       'BookingFoot',
       'BookingFrame',
