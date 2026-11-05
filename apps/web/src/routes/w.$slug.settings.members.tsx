@@ -50,14 +50,19 @@ export const Route = createFileRoute('/w/$slug/settings/members')({
       throw error;
     }
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <MembersPending />
-    </LoadingNow>
-  ),
+  pendingComponent: MembersLoading,
   errorComponent: MembersError,
   component: MembersRoute,
 });
+
+function MembersLoading() {
+  const { q = '' } = Route.useSearch();
+  return (
+    <LoadingNow>
+      <MembersPending isSearching={q !== ''} />
+    </LoadingNow>
+  );
+}
 
 function MembersRoute() {
   const { screen } = Route.useLoaderData();
