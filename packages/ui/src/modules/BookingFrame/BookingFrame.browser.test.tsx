@@ -53,9 +53,11 @@ function heightOf(selector: string): number {
   return host.querySelector(selector)?.getBoundingClientRect().height ?? 0;
 }
 
+/** What a booking page's rail says while its times show: the meeting, the zone, then its rules, quietly. */
 const FACTS: readonly BookingFact[] = [
   { id: 'meeting', icon: 'video', children: '30 min · Video call' },
   { id: 'zone', icon: 'globe', children: 'London time GMT+1' },
+  { id: 'rules', icon: 'clock', isQuiet: true, children: 'Up to 60 days ahead' },
 ];
 
 describe('a booking page before its facts arrive', () => {
