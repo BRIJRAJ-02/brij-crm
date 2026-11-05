@@ -20,17 +20,21 @@ export function checkedPageVariables(variables: PageVariables | undefined): Page
 
 /**
  * A ref for a page's root that sets `variables` on it, and takes them off again when they change or the root goes.
- * Keyed by the values, not the array, so a caller building the list each render sets nothing twice.
+ * Keyed by the values, not the array, so a caller building the list each render sets nothing twice. `check` is what
+ * passes: a brand's and a look's pairs by default, or a guest look's own (`checkedLookVariables`).
  */
-export function usePageVariables(variables: PageVariables | undefined): RefCallback<HTMLElement> {
-  const key = checkedPageVariables(variables)
-    .map(([name, value]) => `${name}=${value}`)
+export function usePageVariables(
+  variables: PageVariables | undefined,
+  check: (variables: PageVariables | undefined) => PageVariables = checkedPageVariables,
+): RefCallback<HTMLElement> {
+  const key = check(variables)
+    .map(([name, value]) => `${name}\u0000${value}`)
     .join('\n');
   return useCallback(
     (element: HTMLElement | null) => {
       if (element === null || key === '') return undefined;
       const pairs = key.split('\n').map((pair) => {
-        const at = pair.indexOf('=');
+        const at = pair.indexOf('\u0000');
         return [pair.slice(0, at), pair.slice(at + 1)] as const;
       });
       for (const [name, value] of pairs) element.style.setProperty(name, value);

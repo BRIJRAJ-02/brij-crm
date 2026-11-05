@@ -8,7 +8,7 @@ import { BookingMessage, BookingProvider, createToasts, GuestLook } from '@crm/u
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
-import { wearStylesheet } from '../stylesheet.ts';
+import { wearGuestScheme, wearStylesheet } from '../stylesheet.ts';
 import { ManageReservation } from './ManageReservation.tsx';
 import { lookHref, ReservePage } from './ReservePage.tsx';
 import { strings } from './strings.ts';
@@ -68,6 +68,7 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
         if (!current) return;
         // The guest look (the menu's, with the brand's accent) before the page draws, so it never paints in the
         // fallback first; a slow stylesheet arrives over the drawn page.
+        wearGuestScheme(document.documentElement, page.scheme);
         void wearStylesheet(document, lookHref(page)).then(() => {
           if (!current) return;
           setRead({ status: 'ready', page });

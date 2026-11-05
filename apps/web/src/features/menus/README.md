@@ -15,7 +15,7 @@ the address (`?menu=&tab=&at=&preview=off`). Every string says "item", never "di
 - **MenusScreen**: Purpose: build menus and publish them. Main task: build a menu and publish it, watching the guest
   menu take shape in the phone beside it (the real `MenuList` drawing the draft, `preview.ts`, memoised so typing
   elsewhere never draws it again, in the guests' own look from `/api/menu/look.css`, read at Preview at's day and time,
-  `preview-at.ts`). Leaves out: presets (H5), QR codes per table (H2), import (H6), analytics (spec 0066), Duplicate
+  `preview-at.ts`). Leaves out: the guest look (DesignScreen), QR codes per table (H2), import (H6), analytics (spec 0066), Duplicate
   menu (no write for it yet). Until the first Publish it opens on a SetupChecklist (hours, which opens the place's own
   week, first menu, first items, then Publish, whose Review opens the review); Hide setup puts it away in this browser.
   A first menu comes with a first section.
@@ -53,4 +53,13 @@ the address (`?menu=&tab=&at=&preview=off`). Every string says "item", never "di
   shown somewhere, the last also refused by the server); with every check passed, a success line naming what goes live
   ("Guests will see 2 items on Dinner.") under the count of changes; Publish & go live (Publish once live), then the
   live link with Copy and its QR code, which Show QR code opens straight onto.
+- **DesignScreen** (`/w/<slug>/menus/design`, Design in the Menus header, spec 0065, AC-6570 as amended): Purpose: how
+  the business's guest menu, reservation page and business page look. Main task: pick a preset, change its colours,
+  fonts, corners or cover if wanted, see it at once in the phone (the real `MenuList`, with made up dishes before a menu
+  has any), and Save (`SaveBar`, with the data layer's optimistic write and rollback; live at once, no Publish). Leaves
+  out: per part colours, importing a look from an address, and anything about a menu's contents. Presets as TileGrid
+  `choice` tiles with `MenuLookThumbnail`; each colour an AccentPicker, its default the preset's own, with a StatusDot
+  saying AA as picked and one warning Callout when any fails (guests still read words at 4.5:1, `menuLookRoles`); Light
+  and Dark above the phone only for a look that follows the guest; the cover through the shared cropper, 3:1, held until
+  Save. Run service sees it read only.
 - **drawer.tsx**: every drawer asks before throwing typed changes away, and so does leaving the page.

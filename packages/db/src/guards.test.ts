@@ -171,7 +171,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
-      // The business branch of the handle lookup (spec 0066, B4, migration 0179).
+      // The business branch of the handle lookup (spec 0066, B4, migration 0186).
       { name: 'crm_business_handle_owner', owner: 'crm_handle' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       // The calendar health sweep's read across workspaces, ids and counts only (spec 0037, migration 0134).
@@ -688,13 +688,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_discard_link_draft',
         'crm_profile_identity_public',
         'crm_profile_look_public',
-        // The business page (spec 0066, B4, migration 0179): the business branch of the handle lookup, its claim, its
+        // The business page (spec 0066, B4, migration 0186): the business branch of the handle lookup, its claim, its
         // listing for search engines and the sitemap's read of the listings.
         'crm_business_handle_owner',
         'crm_claim_business_handle',
         'crm_list_business',
         'crm_sitemap_businesses',
-        // Bento cards (spec 0068, migration 0182): the one line rule the block check reads, run only inside it.
+        // Bento cards (spec 0068, migration 0189): the one line rule the block check reads, run only inside it.
         'crm_profile_text_ok',
       ],
       [
@@ -754,17 +754,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_claim_business_handle(uuid, text)',
         'crm_list_business(uuid, text, text[], boolean)',
         'crm_sitemap_businesses(text, integer)',
-        // The six that run only inside the others: crm_handle's own to call, never the app's or the worker's.
+        // The seven that run only inside the others: crm_handle's own to call, never the app's or the worker's.
         'crm_check_profile_item(text, jsonb, uuid, uuid, uuid)',
         'crm_pack_profile_items(uuid, uuid)',
         'crm_make_handle_room(uuid)',
         'crm_profile_kind_cap(text)',
         'crm_profile_item_images(jsonb)',
+        'crm_profile_text_ok(jsonb, integer, integer)',
         'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: the first 56 crm_app's to call and nobody else's, the last six crm_handle's alone.
+      // One per signature: the first 56 crm_app's to call and nobody else's, the last seven crm_handle's alone.
       // Counted rather than written out, since a signature added without the count moved read as unreachable.
-      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 6 }, () => 'definers')],
+      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',

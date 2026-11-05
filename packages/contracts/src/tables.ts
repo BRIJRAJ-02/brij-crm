@@ -92,6 +92,8 @@ export const PublicTablePage = z.object({
    * `/api/public/tables/<key>/look.css?v=<look>`. Absent, the page wears the look's token fallbacks.
    */
   look: z.string().optional(),
+  /** Which side the look pins the page to; absent, it follows the visitor. */
+  scheme: z.enum(['light', 'dark']).optional(),
 });
 /** A reservation page's facts. */
 export type PublicTablePage = z.infer<typeof PublicTablePage>;

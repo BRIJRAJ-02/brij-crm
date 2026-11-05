@@ -20,6 +20,7 @@ import {
 } from '@crm/ui/public-menu';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { wearGuestScheme } from '../stylesheet.ts';
 import { picksStore, readMenuBoot, tableCodeOf } from './boot.ts';
 import { strings } from './strings.ts';
 
@@ -38,14 +39,22 @@ const picks = picksStore(key, () => {
   }
 });
 
-/** Wears the menu's look stylesheet, once (the shell may have linked it already). */
+/**
+ * Wears the menu's look stylesheet (the shell may have linked it already), the newest version the read names, so a look
+ * saved while the tab was open arrives on the next read. A pinned look says its side on the document.
+ */
 function wearLook(menu: PublicMenu): void {
-  if (menu.look === undefined || document.getElementById('crm-menu-look') !== null) return;
+  wearGuestScheme(document.documentElement, menu.scheme);
+  if (menu.look === undefined) return;
+  const href = menuLookPath(key, menu.look);
+  const worn = document.getElementById('crm-menu-look');
+  if (worn?.getAttribute('href') === href) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.id = 'crm-menu-look';
-  link.href = menuLookPath(key, menu.look);
-  document.head.append(link);
+  link.href = href;
+  if (worn === null) document.head.append(link);
+  else worn.replaceWith(link);
 }
 
 /** The picks the menu still offers, writing the trimmed list back when any went. */
@@ -134,6 +143,9 @@ function MenuPage() {
       }}
       foot={<BookingFoot page="menu" claimHref={claimPageHref('menu')} />}
       hasEntrance
+      {...(menu.cover === undefined
+        ? {}
+        : { coverHref: menuPhotoPath(key, menu.cover.id, 'large', menu.cover.version) })}
     />
   );
 }

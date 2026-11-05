@@ -12,6 +12,7 @@ import {
   type MenuItem,
   type MenuPlace,
   type MenuSection,
+  type MenuLook,
   type MenuServing,
   type MenuSnapshot,
   type OptionGroup,
@@ -274,6 +275,10 @@ function groupsOf(rows: MenuRows): OptionGroup[] {
 /** What the editor shows beside the rows: the places, the currency, the draft's state and the reader's power. */
 export interface DraftContext {
   readonly currency: string;
+  /** The saved guest look (the default, Warm, when none is). */
+  readonly look: MenuLook;
+  /** The brand kit's accent pair, for the Design page's preview. */
+  readonly lookAccents: MenuDraft['lookAccents'];
   readonly places: readonly MenuPlace[];
   readonly changes: number;
   readonly publishedAt?: string;
@@ -338,6 +343,8 @@ export function draftOf(rows: MenuRows, context: DraftContext): MenuDraft {
   });
   return {
     currency: context.currency,
+    look: context.look,
+    lookAccents: context.lookAccents,
     places: [...context.places],
     menus: menuList,
     sections,

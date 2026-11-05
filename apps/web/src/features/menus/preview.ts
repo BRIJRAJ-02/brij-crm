@@ -2,6 +2,7 @@
 // way Publish builds a place's snapshot (the menus shown there, each section with its sub sections, every placed item
 // once, only the option groups those items use), so the preview draws the real MenuList with the draft. Pure.
 import type { MenuDraft, MenuPlace, PlaceHours, PublicMenu, SnapshotItem, SnapshotSection } from '@crm/data';
+import { strings } from './strings.ts';
 
 /** The draft's menus at `place`, as `GET /api/public/menu/:key` would answer them after Publish. */
 export function previewMenu(
@@ -86,6 +87,65 @@ export function previewMenu(
       ),
     },
     soldOut: draft.items.filter((item) => item.soldOut && used.has(item.id)).map((item) => item.id),
+  };
+}
+
+/**
+ * A short stamp of the saved look and the brand's accents, for the preview stylesheet's address: a look saved on the
+ * Design page is a new address, so the browser doesn't keep showing the old one when the editor comes back.
+ */
+export function lookStamp(draft: MenuDraft): string {
+  const text = JSON.stringify([draft.look, draft.lookAccents]);
+  let hash = 5381;
+  for (let at = 0; at < text.length; at += 1) hash = (hash * 33 + text.charCodeAt(at)) % 2147483647;
+  return hash.toString(36);
+}
+
+/** A few made up dishes, for the Design page's phone before a menu has any: never saved, never shown to a guest. */
+export function sampleMenu(draft: MenuDraft, place: MenuPlace, businessName: string): PublicMenu {
+  const dish = (id: string, name: string, description: string, priceMinor: number): SnapshotItem => ({
+    id,
+    name,
+    description,
+    priceMinor,
+    diet: [],
+    allergens: [],
+    featured: false,
+    sizes: [],
+    groupIds: [],
+  });
+  const items = [
+    dish('sample-1', strings.sampleDishes[0].name, strings.sampleDishes[0].line, 1250),
+    dish('sample-2', strings.sampleDishes[1].name, strings.sampleDishes[1].line, 1800),
+    dish('sample-3', strings.sampleDishes[2].name, strings.sampleDishes[2].line, 950),
+  ];
+  return {
+    placeId: place.id,
+    cacheId: '00000000000000000000000000000000',
+    version: 0,
+    business: { name: businessName },
+    place: { name: place.name, timeZone: place.timeZone, locale: place.locale, hours: { weekly: {}, exceptions: [] } },
+    menu: {
+      currency: draft.currency,
+      menus: [
+        {
+          id: 'sample-menu',
+          name: strings.sampleMenuName,
+          sections: [
+            {
+              id: 'sample-section',
+              name: strings.sampleSectionName,
+              layout: 'list',
+              itemIds: items.map((item) => item.id),
+              sections: [],
+            },
+          ],
+        },
+      ],
+      items: Object.fromEntries(items.map((item) => [item.id, item])),
+      groups: {},
+    },
+    soldOut: [],
   };
 }
 

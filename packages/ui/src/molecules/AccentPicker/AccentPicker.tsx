@@ -69,6 +69,11 @@ export interface AccentPickerProps {
    * button colour, the owner, 5 November 2026: the hex alone under the row read as orphaned).
    */
   readonly hexPlacement?: 'below' | 'inline';
+  /**
+   * What the empty hex field shows, in place of the example: the default's own hex, where the default is a colour the
+   * page is drawing now (a guest look's palette, whose four fields would otherwise all show the same blue).
+   */
+  readonly hexPlaceholder?: string;
 }
 
 /** The radio value of the default swatch, beside the picks' own hexes. */
@@ -94,6 +99,7 @@ export function AccentPicker({
   isDisabled = false,
   children,
   hexPlacement = 'below',
+  hexPlaceholder,
 }: AccentPickerProps) {
   const picks = quickPicks.filter((pick) => HEX.test(pick.value));
   const picked = value !== undefined && HEX.test(value) ? value : undefined;
@@ -197,7 +203,7 @@ export function AccentPicker({
         isLabelHidden
         {...(hexPlacement === 'inline' ? { size: 'sm' as const } : {})}
         value={typed ?? picked ?? ''}
-        placeholder={strings.hexPlaceholder}
+        placeholder={hexPlaceholder ?? strings.hexPlaceholder}
         maxLength={7}
         isDisabled={isDisabled}
         {...(refused ? { error: strings.hexRefusal } : {})}
@@ -211,7 +217,7 @@ export function AccentPicker({
     </div>
   );
   return (
-    <div className={styles.root} data-hex={hexPlacement}>
+    <div className={styles.root} data-hex={hexPlacement} role="group" aria-labelledby={labelId}>
       {isLabelHidden ? (
         <VisuallyHidden>
           <span id={labelId}>{label}</span>

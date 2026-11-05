@@ -808,6 +808,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deleteGroup: os.menu.deleteGroup.handler(notServed),
       setSoldOut: os.menu.setSoldOut.handler(notServed),
       setHidden: os.menu.setHidden.handler(notServed),
+      saveLook: os.menu.saveLook.handler(notServed),
       publish: os.menu.publish.handler(notServed),
       discard: os.menu.discard.handler(notServed),
     },

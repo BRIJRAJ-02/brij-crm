@@ -138,6 +138,7 @@ export { readInsightShare } from './insights/shares.ts';
 // snapshot with Sold out over it, and its photos, only those the snapshot shows.
 export {
   enterMenuPage,
+  menuLookPin,
   menuLookStylesheet,
   menuLookVersion,
   readMenuPhoto,

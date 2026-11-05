@@ -67,6 +67,8 @@ export const businessProfiles = pgTable(
     links: jsonb('links')
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /** The guest look (AC-6570 as amended): one checked `MenuLook` document; null is the default, Warm. */
+    look: jsonb('look'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     createdByMemberId: uuid('created_by_member_id'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
@@ -74,6 +76,10 @@ export const businessProfiles = pgTable(
   },
   (t) => [
     primaryKey({ name: 'business_profiles_pkey', columns: [t.workspaceId] }),
+    check(
+      'business_profiles_look',
+      sql`${t.look} is null or (jsonb_typeof(${t.look}) = 'object' and octet_length(${t.look}::text) <= 2000)`,
+    ),
     foreignKey({
       name: 'business_profiles_workspace',
       columns: [t.workspaceId],

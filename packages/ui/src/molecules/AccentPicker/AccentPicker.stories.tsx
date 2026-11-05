@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { AccentPicker, type AccentPickerProps, type AccentQuickPick } from './AccentPicker.tsx';
+import { ContrastBadge } from './ContrastBadge.tsx';
 
 /** The nine quick picks, the dot colours of the library's hues, as the data layer hands them in. */
 const PICKS: readonly AccentQuickPick[] = [
@@ -53,6 +54,26 @@ export const Default: Story = {
     await expect(canvas.getByRole('radio', { name: 'Timefix' })).toBeChecked();
     await userEvent.click(canvas.getByRole('radio', { name: 'Orange' }));
     await expect(args.onChange).toHaveBeenCalledWith('#fb8f3c');
+  },
+};
+
+/** ContrastBadge, passing and failing: the words say it, not the dot alone. */
+export const Contrast: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <ContrastBadge ratio={12.12} passes />
+      <ContrastBadge ratio={2.14} passes={false} />
+    </Stage>
+  ),
+};
+
+/** An empty hex field naming the colour the default draws, as the Design page's four do. */
+export const HexPlaceholder: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { hexPlacement: 'inline', quickPicks: [], defaultValue: '#0a0a0a', hexPlaceholder: '#0a0a0a' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Hex' })).toHaveAttribute('placeholder', '#0a0a0a');
   },
 };
 

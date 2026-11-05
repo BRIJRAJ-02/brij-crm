@@ -5,17 +5,17 @@
 // place is read.
 import { createHash } from 'node:crypto';
 import {
-  BRAND_HEX_PATTERN,
-  brandVariables,
+  DEFAULT_MENU_LOOK,
   isMenuKey,
-  MENU_FACE,
+  MENU_FONT_FACES,
+  menuLookColours,
+  menuLookScheme,
+  menuLookShape,
   menuPhotoPath,
-  MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
   MENU_PRESS,
   MENU_PRESS_PROPERTIES,
   MenuSnapshot,
-  WARM_PRESET,
   formatPrice,
   type BusinessPageMenu,
   type BusinessPageMenuSection,
@@ -145,6 +145,8 @@ export async function readPublicMenu(
         : undefined;
     const soldOut = hidden ? new Set<string>() : await soldOutIds(tx, entry.workspaceId);
     const brand = await readMenuBrandIn(tx, entry.workspaceId);
+    const pin = menuLookPin(brand);
+    const cover = brand.menuLook?.cover;
     // Hidden, the answer keeps the header and the look and drops every menu, dish and group.
     const snapshot = hidden ? { currency: parsed.data.currency, menus: [], items: {}, groups: {} } : parsed.data;
     const menu: PublicMenu = {
@@ -169,6 +171,8 @@ export async function readPublicMenu(
         hours: place.hours as PlaceHours,
       },
       look: menuLookVersion(brand),
+      ...(pin === undefined ? {} : { scheme: pin }),
+      ...(cover === undefined || hidden ? {} : { cover }),
       ...(brand.logo === undefined ? {} : { logo: brand.logo.version }),
       menu: snapshot,
       soldOut: [...soldOut].filter((id) => Object.hasOwn(snapshot.items, id)).sort(),
@@ -181,7 +185,8 @@ export async function readPublicMenu(
 
 /**
  * One photo of a guest menu at one width (AC-6527): only a photo the place's live snapshot shows, at the version the
- * snapshot names, so no other photo of the workspace (a draft's, another place's) is ever served by a menu key.
+ * snapshot names, or the cover the saved look names, at its version, so no other photo of the workspace (a draft's,
+ * another place's) is ever served by a menu key.
  */
 export async function readMenuPhoto(
   deps: { readonly db: Database },
@@ -203,7 +208,10 @@ export async function readMenuPhoto(
     const shown = Object.values(parsed.data.items).some(
       (item) => item.photo?.id === photoId && item.photo.version === version,
     );
-    if (!shown) return undefined;
+    if (!shown) {
+      const cover = (await readMenuBrandIn(tx, entry.workspaceId)).menuLook?.cover;
+      if (cover?.id !== photoId || cover.version !== version) return undefined;
+    }
     const [photo] = await tx
       .select({ largePath: menuPhotos.largePath, smallPath: menuPhotos.smallPath, type: menuPhotos.type })
       .from(menuPhotos)
@@ -215,19 +223,29 @@ export async function readMenuPhoto(
   });
 }
 
-/** Which look the Warm preset's stylesheet is at: a new preset table, press feel or accent is a new path. */
-const WARM_LOOK = 'warm-3';
+/** Which build of the look stylesheet this is: a new preset table or press feel is a new path. */
+const LOOK_BUILD = 'look-4';
 
-/** The version the menu's look stylesheet is served at: the preset and the brand's accent pair. */
+/** The look a page wears: what the Design page saved, else the default, Warm. */
+const lookOf = (brand: PageBrand) => brand.menuLook ?? DEFAULT_MENU_LOOK;
+
+/**
+ * The version the menu's look stylesheet is served at: the look's colours, faces and corners and the brand's accent
+ * pair. Its cover isn't in the stylesheet, so a new cover is no new path.
+ */
 export function menuLookVersion(brand: PageBrand): string {
+  const { cover: _cover, ...drawn } = lookOf(brand);
   return createHash('sha256')
-    .update([WARM_LOOK, brand.accents.accent ?? '', brand.accents.accentDark ?? ''].join('|'))
+    .update([LOOK_BUILD, JSON.stringify(drawn), brand.accents.accent ?? '', brand.accents.accentDark ?? ''].join('|'))
     .digest('hex')
     .slice(0, 12);
 }
 
-/** A colour the stylesheet may write: six or eight hex digits, nothing else. */
-const isHex = (value: string) => /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value);
+/** The side a look pins its page to, or undefined while it follows the visitor. */
+export function menuLookPin(brand: PageBrand): 'light' | 'dark' | undefined {
+  const scheme = menuLookScheme(lookOf(brand));
+  return scheme === 'follow' ? undefined : scheme;
+}
 
 /** The press feel's custom properties: checklabs' curve and scales, or every scale at 1 (reduced motion). */
 const pressBlock = (isStill: boolean) =>
@@ -237,35 +255,36 @@ const pressBlock = (isStill: boolean) =>
     .join(';');
 
 /**
- * The guest menu's look (spec 0065, AC-6570, Warm only in H1): the device's own UI face as `--menu-face` (checklabs'
- * guest face, `MENU_FACE`, a constant), its press feel as `--menu-press-*` (`MENU_PRESS`, constants: the curve and how
- * far each part eases down while held, all 1 under reduced motion) and the preset's colours as `--menu-*` custom
- * properties, light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast
- * adjusted by `brandVariables`) taking the accent when the workspace has one. Every colour is a checked hex.
+ * A guest page's look (spec 0065, AC-6570 as amended): the look's two faces (closed words, `MENU_FONT_FACES`), its
+ * corners (`--menu-round`), its press feel as `--menu-press-*` (`MENU_PRESS`, constants: the curve and how far each
+ * part eases down while held, all 1 under reduced motion) and its colours as `--menu-*` custom properties (`menuLookRoles`:
+ * words held to 4.5:1, buttons to 3:1, a button's label black or white). A look that follows the visitor is light by
+ * default and dark under their dark scheme; a pinned one writes its one side. Every value is a constant or a checked
+ * hex, whatever a row holds, since this is CSS on a public page. A guest page also takes the look's body face as its
+ * `--font-sans` (so the booking parts, which draw through the text tokens, wear it), unless that is the device's or
+ * Inter, which leaves them as they are; the editor's preview, linked inside the app, leaves that out (`inApp`).
  */
-export function menuLookStylesheet(brand: PageBrand): string {
-  const accent = brand.accents.accent;
-  const colours =
-    accent === undefined || !BRAND_HEX_PATTERN.test(accent)
-      ? undefined
-      : brandVariables({
-          accent,
-          ...(brand.accents.accentDark === undefined ? {} : { accentDark: brand.accents.accentDark }),
-        });
-  const block = (mode: 'light' | 'dark') => {
-    const preset = WARM_PRESET[mode];
-    const own = colours === undefined ? undefined : mode === 'light' ? colours.light : colours.dark;
-    const values: Record<keyof typeof MENU_LOOK_PROPERTIES, string> = {
-      ...preset,
-      ...(own === undefined ? {} : { accent: own.accent, onAccent: own.onAccent }),
-    };
-    return (Object.keys(MENU_LOOK_PROPERTIES) as (keyof typeof MENU_LOOK_PROPERTIES)[])
-      .filter((name) => isHex(values[name]))
-      .map((name) => `${MENU_LOOK_PROPERTIES[name]}:${values[name]}`)
+export function menuLookStylesheet(brand: PageBrand, options: { readonly inApp?: boolean } = {}): string {
+  const look = lookOf(brand);
+  const accents = brand.accents;
+  const ownBody = options.inApp === true || look.body === 'device' || look.body === 'sans';
+  const shape = [...menuLookShape(look), ...(ownBody ? [] : ([['--font-sans', MENU_FONT_FACES[look.body]]] as const))]
+    .map(([name, value]) => `${name}:${value}`)
+    .join(';');
+  const block = (mode: 'light' | 'dark') =>
+    menuLookColours(look, accents, mode)
+      .map(([name, value]) => `${name}:${value}`)
       .join(';');
-  };
+  const pin = menuLookPin(brand);
+  if (pin !== undefined) {
+    return [
+      `:root{${shape};${pressBlock(false)};${block(pin)}}`,
+      `@media (prefers-reduced-motion: reduce){:root{${pressBlock(true)}}}`,
+      '',
+    ].join('\n');
+  }
   return [
-    `:root{--menu-face:${MENU_FACE};${pressBlock(false)};${block('light')}}`,
+    `:root{${shape};${pressBlock(false)};${block('light')}}`,
     `@media (prefers-reduced-motion: reduce){:root{${pressBlock(true)}}}`,
     `@media (prefers-color-scheme: dark){:root:not([data-theme='light']){${block('dark')}}}`,
     `:root[data-theme='dark']{${block('dark')}}`,

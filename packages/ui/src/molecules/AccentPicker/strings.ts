@@ -1,5 +1,8 @@
 /** AccentPicker's built in copy. */
 export const strings = {
+  /** ContrastBadge's words. */
+  contrastPasses: (ratio: number) => `AA ${ratio.toFixed(1)}:1`,
+  contrastFails: (ratio: number) => `Fails AA ${ratio.toFixed(1)}:1`,
   /** The swatch that opens the system's own colour picker, for any colour at all. */
   anyColour: 'Any colour',
   /** The hex field's name: the colour as six digits. */

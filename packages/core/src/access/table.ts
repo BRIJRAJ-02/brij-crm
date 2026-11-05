@@ -291,6 +291,8 @@ export const ACCESS_TABLE = {
   readMenuDraftLook: { permission: 'hospitality.service' },
   setItemSoldOut: { permission: 'hospitality.service' },
   setMenuHidden: { permission: 'hospitality.manage' },
+  saveMenuLook: { permission: 'hospitality.manage' },
+  addMenuCover: { permission: 'hospitality.manage' },
   saveMenu: { permission: 'hospitality.manage' },
   deleteMenu: { permission: 'hospitality.manage' },
   saveSection: { permission: 'hospitality.manage' },

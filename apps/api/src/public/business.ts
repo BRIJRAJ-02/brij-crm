@@ -20,7 +20,7 @@ import {
   publicBusinessPhoto,
   type MenuSource,
 } from '@crm/core';
-import { brandStylesheet, menuLookStylesheet, menuLookVersion } from '@crm/core/public';
+import { brandStylesheet, menuLookPin, menuLookStylesheet, menuLookVersion } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
@@ -141,9 +141,10 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     try {
       const entry = await enterBusinessPage({ db: deps.db, menus: deps.menus ?? businessMenuOf }, handle, slug);
       deps.edgeCache?.tag(entry.page.tags);
-      // The guest look's version: the stylesheet route above answers only this one.
+      // The guest look's version: the stylesheet route above answers only this one. The side it pins the page to, if any.
+      const pin = menuLookPin(entry.brand);
       return Response.json(
-        { ...entry.page, look: menuLookVersion(entry.brand) },
+        { ...entry.page, look: menuLookVersion(entry.brand), ...(pin === undefined ? {} : { scheme: pin }) },
         {
           headers: {
             'cache-control': BUSINESS_CACHE_CONTROL,

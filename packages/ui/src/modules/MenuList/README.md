@@ -15,6 +15,12 @@ own (Tabs `variant="pills"` for the sections, a MenuTrigger and Menu switch the 
 BookingProvider and BookingFoot). It is used by the public `/m/:key` page and by the Menus editor's phone preview, which renders the draft
 through the same component.
 
+## The look (AC-6570 as amended)
+
+The Design page saves one look for a business; the page's stylesheet writes it as `--menu-*` custom properties, read at the root. Colours (`--menu-highlight` is the price), the two faces (`--menu-face`, `--menu-display-face`), and `--menu-round`, a number the library's radii are multiplied by, so a look's corners reach the parts one level in. `coverHref` draws the look's 3:1 cover in the column under the bar. `scheme` puts `data-theme` on the root for a look pinned to one side, so the library's own tokens follow it. `lookVariables` sets the same custom properties through the CSSOM for an editor's live preview; `look-variables.ts` lets through only the look's own names with a whole hex, a font token, the device's face or a number.
+
+**MenuLookThumbnail** is a look as a small picture of itself, for a preset's tile on the Design page: the ground, a heading in its face, a price in its highlight and a button in its accent, from the same custom properties. New because LinkPageThumbnail draws a link page's parts (a host's name and rows) from a page theme's ten names, which a guest look has none of; a screen can't draw one itself. Decoration: `aria-hidden`, since the tile's own name says which look it is. Story: `LookThumbnails`.
+
 ## Use
 
 ```tsx
