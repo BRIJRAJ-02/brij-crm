@@ -8,9 +8,11 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingChatGhost } from '../BookingChat/BookingChatGhost.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
+import { BookingReceipt } from '../BookingReceipt/BookingReceipt.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
+import { VisitorBar } from '../VisitorBar/VisitorBar.tsx';
 import { LinkList } from '../LinkList/LinkList.tsx';
 import {
   BookingFrame,
@@ -381,14 +383,83 @@ export const StepToDetailsAndBack: Story = {
     const atMonth = card();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await userEvent.click(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' }));
-    // Focus is in the first field at once, while it slides in, and the card hugs the step (critics C14, A11).
+    // Focus is in the first field at once, while it slides in, and the block stands still: the page is centred in the
+    // window, so a card that changed height would move everything (the owner, 5 November 2026).
     await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
-    await expect(card()?.height).not.toBe(atMonth?.height);
+    await expect(card()?.height).toBe(atMonth?.height);
+    await expect(card()?.y).toBe(atMonth?.y);
     await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(document.getAnimations().filter((each) => each.playState === 'running')).toEqual([]));
     await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeVisible();
     await expect(card()?.height).toBe(atMonth?.height);
   },
+};
+
+/** A sketch of the page anchored in a panel (first run's preview): from the top, however tall the window is. */
+export const Anchored: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Interactive {...args} isAnchored />,
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('main')?.getBoundingClientRect();
+    const card = canvasElement.querySelector('section')?.getBoundingClientRect();
+    await expect((card?.top ?? Infinity) - (root?.top ?? 0)).toBeLessThanOrEqual(32);
+  },
+};
+
+/**
+ * The visitor's control (5 November 2026) stands over the card's end corner, in the page's padding: the rail and the
+ * card start on one line, and the bar leaving with the details step moves neither.
+ */
+export const WithVisitorBar: Story = {
+  args: { bar: <VisitorBar connectHref="/connect" /> },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    const link = canvas.getByRole('link', { name: /Connect/ }).getBoundingClientRect();
+    const card = canvasElement.querySelector('section')?.getBoundingClientRect();
+    const rail = canvasElement.querySelector('aside')?.getBoundingClientRect();
+    await expect(card?.y).toBe(rail?.y);
+    await expect(link.bottom).toBeLessThanOrEqual(card?.y ?? 0);
+    await expect(link.top).toBeGreaterThan(0);
+  },
+};
+
+/** The last step: the receipt takes the whole card at the month's height, so Confirm moves nothing on the page. */
+export const BookedInTheCard: Story = {
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        {...args}
+        heading="Choose a time"
+        view="booked"
+        coverPlace="card"
+        aside={<SlotList heading="Thu Oct 8" slots={TIMES} value={undefined} onChange={fn()} />}
+        cover={
+          <BookingReceipt
+            placement="card"
+            state="confirmed"
+            hostName="Ada Lovelace"
+            date={{ weekday: 'Thu', day: '8', month: 'Oct' }}
+            range="9:30 – 10:00 AM"
+            when="Thursday, October 8, 2026 · London time (GMT+1)"
+            summary={{ what: 'Intro call', who: 'with Ada Lovelace' }}
+            facts={[{ term: 'Where', description: 'Video call' }]}
+          />
+        }
+      >
+        <MonthTiles
+          month="2026-10"
+          today="2026-10-08"
+          openDays={OPEN}
+          value="2026-10-08"
+          onChange={fn()}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext
+          holdsHeight
+        />
+      </BookingFrame>
+    </Stage>
+  ),
 };
 
 /**
@@ -714,6 +785,7 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
           onMonthChange={fn()}
           canPrevious={false}
           canNext
+          holdsHeight={args.isEmbedded !== true}
         />
       </BookingFrame>
     </Stage>

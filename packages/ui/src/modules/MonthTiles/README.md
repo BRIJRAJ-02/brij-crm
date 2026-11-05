@@ -6,6 +6,8 @@ A booking page's month (spec 0025, AC-665): every day a square tile that fills i
 
 New. DatePicker's calendar picks any date in a small popover; a booking page's month is the page's main surface, shows which days have times, and moves only between those. Neither a variant of DatePicker nor of WeekCalendar fits: the first is a field, the second a week of hours.
 
+`holdsHeight` (5 November 2026) keeps every month one height on a wide page: its rows share six weeks' height and the tiles fill them, so paging between a five and a six week month moves nothing on a page centred in the window. Narrower, and without it, a month takes the weeks it needs with square tiles.
+
 ## Use
 
 ```tsx

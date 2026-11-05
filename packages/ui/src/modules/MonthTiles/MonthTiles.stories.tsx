@@ -42,6 +42,14 @@ export const Default: Story = {
   },
 };
 
+/** One height for every month on a wide page: a five week month's rows share six weeks' height, the tiles filling them. */
+export const HoldsHeight: Story = {
+  args: { holdsHeight: true },
+  // BookingFrame's stories draw it in place, at a page's width.
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Interactive {...args} />,
+};
+
 /** Today ringed (the calendars' one today mark) while another day is chosen. */
 export const TodayRing: Story = {
   args: { value: '2026-10-13' },

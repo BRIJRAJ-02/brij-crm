@@ -68,8 +68,13 @@ export interface BookingFrameProps {
   readonly title?: string;
   readonly description?: string;
   readonly facts?: readonly BookingFact[];
-  /** A bar above the card: the visitor's calendar ("See when you're both free"). */
+  /** Above the card in the column, moving it down: a message for this visit (a calendar that didn't connect). */
   readonly banner?: ReactNode;
+  /**
+   * The small control over the card's end corner: the visitor's calendar ("Connect your calendar"). On a wide page it
+   * stands in the room above the card and holds no place in the column, so it never moves the card.
+   */
+  readonly bar?: ReactNode;
   /** The card's heading: "Choose a time". */
   readonly heading?: string;
   /** At the heading's end, as one compact group: the clock (12h or 24h) and the view (Month, List or Chat). */
@@ -118,6 +123,11 @@ export interface BookingFrameProps {
    */
   readonly isEmbedded?: boolean;
   /**
+   * A sketch of the page anchored in a panel that cuts it (first run's preview): it starts from the top however tall
+   * the window is, rather than in the window's middle, which it isn't drawn in.
+   */
+  readonly isAnchored?: boolean;
+  /**
    * Where "Claim your free page" goes: `claimPageHref('booking_page')`, tagged as the wordmark beside it is. Leave
    * it off to show the wordmark alone (a recognised visitor).
    */
@@ -164,6 +174,7 @@ export function BookingFrame({
   description,
   facts = [],
   banner,
+  bar,
   heading,
   toolbar,
   children,
@@ -177,6 +188,7 @@ export function BookingFrame({
   enter,
   isCompact = false,
   isEmbedded = false,
+  isAnchored = false,
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
@@ -201,6 +213,8 @@ export function BookingFrame({
   const [openedLoading] = useState(isLoading);
   const isCovered = cover !== undefined;
   const isCardCovered = isCovered && coverPlace === 'card';
+  // A wide page holds the card at the month's height under such a step (CSS); stacked or embedded the step hugs.
+  const holdsCard = isCardCovered && !isCompact && !isEmbedded;
   const claim = claimHref === undefined ? {} : { claimHref };
   // The card's foot band: Book, or while nothing is chosen the quiet line in its place (`footerWaiting`).
   const footBand = (content: ReactNode) =>
@@ -218,6 +232,7 @@ export function BookingFrame({
       {...templateAttributes(brand?.template)}
       {...(isCompact ? { 'data-compact': true } : {})}
       {...(isEmbedded ? { 'data-embedded': true } : {})}
+      {...(isAnchored ? { 'data-anchored': true } : {})}
     >
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
@@ -333,12 +348,14 @@ export function BookingFrame({
         </aside>
         <div className={styles.main}>
           {banner}
+          {bar !== undefined && <div className={styles.bar}>{bar}</div>}
           <section
             className={styles.card}
             // Covered whole (the details step), the step's own form names what the card holds.
             {...(isCardCovered ? {} : { 'aria-label': heading ?? title ?? strings.loading })}
             data-instant={shown.isInstant || undefined}
             data-place={isCardCovered ? 'card' : undefined}
+            data-hold={holdsCard || undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
@@ -361,6 +378,7 @@ export function BookingFrame({
               data-moved={shown.isMoved || undefined}
               data-instant={shown.isInstant || undefined}
               data-place={isCovered ? coverPlace : undefined}
+              data-hold={holdsCard || undefined}
               // The view over the month: on a phone Book by chat sets the card's height itself (BookingChat).
               data-view={isCovered ? view : undefined}
               data-enter={enter}
