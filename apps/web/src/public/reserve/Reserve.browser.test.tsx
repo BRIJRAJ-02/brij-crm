@@ -51,6 +51,7 @@ function clientOf(sent: PublicReserveInput[]): TableClient {
           (at) => `${query.date}T${at}:00.000Z`,
         ),
       }),
+    ticket: () => Promise.resolve('t1.ticket'),
     reserve: (_key: string, input: PublicReserveInput) => {
       sent.push(input);
       return Promise.resolve({

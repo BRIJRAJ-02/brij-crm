@@ -301,7 +301,9 @@ describe('Reservations (checklabs’ one page)', () => {
     // The hours start at 10:00 and run to midnight: nine o'clock isn't drawn.
     const hours = [
       ...calendar.element().querySelectorAll<HTMLElement>('[aria-hidden="true"] > span[class*="hour"]'),
-    ].map((each) => each.textContent);
+    ]
+      .map((each) => each.textContent)
+      .filter((label) => label !== '');
     expect(hours).toHaveLength(14);
     expect(hours[0]).toMatch(/10/);
     // The cancelled booking stays on the list only.
