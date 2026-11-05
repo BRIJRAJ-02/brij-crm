@@ -1,4 +1,4 @@
-// The Menu app (spec 0065, H1, migration 0175_hospitality_menu): menus and the places they show at, sections one
+// The Menu app (spec 0065, H1, migration 0182_hospitality_menu): menus and the places they show at, sections one
 // level deep, items placed in sections (an item is one thing however many sections hold it), sizes, option groups
 // shared between items, photos, the published snapshot per place and the draft's state. Tenant tables under forced
 // row level security with the plain workspace policy; every index leads with workspace_id.

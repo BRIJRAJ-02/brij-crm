@@ -611,7 +611,7 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     await store(room.id, 'spam');
     await store(room.id, 'held', true);
     const migration = await readFile(
-      new URL('../../../db/migrations/0185_pause_full_forms.sql', import.meta.url),
+      new URL('../../../db/migrations/0176_pause_full_forms.sql', import.meta.url),
       'utf8',
     );
     // This workspace's forms only: other suites share the database.

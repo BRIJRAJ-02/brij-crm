@@ -35,6 +35,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'readOembed',
   'cleanTitle',
   'checkProfileImage',
+  'checkProfileAudio',
+  'profileAudioStorePath',
   'readPageMeta',
   'profileImageStorePath',
   'deviceFact',

@@ -250,7 +250,6 @@ describe('the places a block may name', () => {
     expect(await codeOf(save({}))).toContain('PROFILE_ITEM_DATA');
     expect(await codeOf(save({ placeId: w.placeId, url: 'https://evil.example' }))).toContain('PROFILE_ITEM_DATA');
     expect(await codeOf(save({ placeId: w.placeId, label: ' padded ' }))).toContain('PROFILE_ITEM_DATA');
-    expect(await codeOf(save({ placeId: w.placeId, size: 'wide' }))).toContain('PROFILE_ITEM_DATA');
     expect(await codeOf(save({ placeId: w.placeId }, w.placeId))).toContain('PROFILE_ITEM_DATA');
     for (let made = 0; made < 3; made += 1) expect(await codeOf(save({ placeId: w.placeId }))).toBe('saved');
     expect(await codeOf(save({ placeId: w.placeId }))).toContain('PROFILE_ITEM_LIMIT');

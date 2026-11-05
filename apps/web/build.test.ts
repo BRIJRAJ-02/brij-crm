@@ -237,8 +237,11 @@ describe('the first load', () => {
   // 44 since Calendars and Round robin became tabs of Bookings (25 October 2026): their addresses are read by the
   // command menu up front and by the bookings routes, so the build keeps that module in a shared chunk rather
   // than merging a copy into each. Same bytes, one file.
+  // 50 since the guest menu and the reservation page became entries of their own (spec 0065, 0066, 5 November 2026): what
+  // they share with the app (the search readers, `today`, `week`, the router's hooks) leaves the entry for shared chunks
+  // rather than a copy in each. The bytes are the first load budget's, which still holds; these are more files, not more.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
-    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(44);
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(50);
   });
 
   it('never loads the grid, editor, charts or schema map chunk up front', () => {

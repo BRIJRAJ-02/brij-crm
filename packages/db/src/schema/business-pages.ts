@@ -1,4 +1,4 @@
-// The business page (spec 0066 B4 lite, migration 0179_business_pages): the workspace's public page at
+// The business page (spec 0066 B4 lite, migration 0186_business_pages): the workspace's public page at
 // `/<company-handle>`, its gallery's pictures, and each place's slug with its history. Tenant tables under forced row
 // level security with the plain workspace policy; every index leads with workspace_id. The handle itself is held in
 // `auth.public_handles` (owner kind `business`) through crm_handle's definers; `handle` here mirrors the current one.

@@ -272,7 +272,7 @@ describe('the brand kit', () => {
     const tag = `brand:${owner.workspace.id}`;
     const purges = forgotten.length;
     await owner.client.brand.save({ workspace: owner.slug, accent: '#e11d48', accentDark: null, mutationId: newId() });
-    expect(forgotten.slice(purges)).toContainEqual([tag]);
+    expect(forgotten.slice(purges).flat()).toContain(tag);
     const facts = (await (await send(`/api/public/booking/${page.publicKey}`)).json()) as {
       brand?: { version?: string };
     };
