@@ -50,7 +50,7 @@ const OCCASION_KEYS = ['birthday', 'anniversary', 'date', 'business', 'other'] a
 /** Days on the phone's strip (checklabs shows three weeks). */
 const STRIP_DAYS = 21;
 
-/** Wide enough for the month beside the times; narrower, the strip of days. */
+/** Wide enough for the month (a large phone on its side and up); narrower, checklabs' strip of days. */
 const WIDE = '(min-width: 40rem)';
 
 /** Whether the page is wide enough for the month, following the window as it changes. */
@@ -154,12 +154,21 @@ export function ReservePage({
     setNotice(undefined);
   };
 
+  /** The first free time takes focus (after a render, so new times are there). */
+  const focusTimes = () =>
+    globalThis.requestAnimationFrame(() =>
+      timesRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus(),
+    );
+  /** Checked before the details (checklabs' "Pick a time slot"): no time, or no time to pick on this day. */
+  const blocked = () => {
+    if (time !== undefined) return undefined;
+    if (times.status === 'ready' && times.times.length === 0) return strings.noTimesPickDay;
+    if (times.status !== 'ready') return strings.timesLoading;
+    focusTimes();
+    return strings.pickTime;
+  };
   const reserve = async (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
-    // No time yet: the first free one takes focus, and the line says what is missing (checklabs' "Pick a time slot").
-    if (time === undefined) {
-      timesRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
-      return { kind: 'failed', message: strings.pickTime };
-    }
+    if (time === undefined) return { kind: 'failed', message: strings.pickTime };
     const picked = OCCASION_KEYS.find((key) => key === occasion[0]);
     try {
       const made = await client.reserve(page.key, {
@@ -195,7 +204,9 @@ export function ReservePage({
         }
         setTime(undefined);
         setAttempt(crypto.randomUUID());
-        return { kind: 'failed', message: error.message };
+        // The notice and the next times are at the top: the first of them takes focus.
+        focusTimes();
+        return { kind: 'failed', message: strings.takenShort };
       }
       const fields = Object.fromEntries(
         (error.data?.issues ?? []).map((issue) => [String(issue.path.at(-1) ?? ''), issue.message]),
@@ -297,6 +308,7 @@ export function ReservePage({
               required: false,
             },
           ]}
+          blocked={blocked}
           onSubmit={reserve}
         />
       }
@@ -324,7 +336,12 @@ export function ReservePage({
       />
       {!isWide && !isFullCalendar ? (
         <DayStrip
-          days={days.slice(0, STRIP_DAYS)}
+          // Three weeks, and the day picked on the full calendar when it is later.
+          days={
+            day === undefined || days.slice(0, STRIP_DAYS).includes(day)
+              ? days.slice(0, STRIP_DAYS)
+              : [...days.slice(0, STRIP_DAYS), day]
+          }
           value={day}
           onChange={(next) => {
             setDay(next);

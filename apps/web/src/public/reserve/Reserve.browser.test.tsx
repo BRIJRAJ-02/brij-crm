@@ -1,6 +1,6 @@
 // The reservation page in Chromium (spec 0066 B7 lite), as checklabs' one page booking form: the day and its times,
-// then Your details on the same page, the button named "Confirm {day} at {time}" once a time is picked, and "Pick a
-// time slot" when it is pressed before. A phone shows a strip of days with the full calendar a press away. axe is
+// then Your details on the same page, the button named "Confirm {day} at {time}" once a time is picked, and "Choose a
+// time first" before any field is checked when it is pressed before. A phone shows a strip of days with the full calendar a press away. axe is
 // clean in light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each is photographed.
 import '@crm/ui/styles.css';
 import type { PublicReserveInput, PublicTablePage, TableClient } from '@crm/data/tables';
@@ -100,11 +100,13 @@ async function shoot(name: string, theme: Theme, width: number) {
 describe('the reservation page (checklabs’ one page form)', () => {
   it('asks for a time first, then confirms the day and time on the same page', async () => {
     const sent = await show(1280);
+    // Pressed first, with nothing filled in: the time is asked for before any field.
+    await userEvent.click(page.getByRole('button', { name: 'Choose a time to continue' }));
+    await expect.element(page.getByText('Choose a time first.')).toBeVisible();
+    expect(page.getByText('Give your name.').elements()).toHaveLength(0);
     await userEvent.fill(page.getByRole('textbox', { name: /name/i }), 'Ada Lovelace');
     await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'ada@example.com');
     await userEvent.fill(page.getByRole('textbox', { name: /Number to call/ }), '07700 900123');
-    await userEvent.click(page.getByRole('button', { name: 'Select a date and time to continue' }));
-    await expect.element(page.getByText('Pick a time slot.')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: /^19:30/ }).first());
     await expect.element(page.getByRole('button', { name: /^Confirm .* at 19:30$/ })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: /^Confirm / }));
@@ -129,6 +131,10 @@ describe('the reservation page (checklabs’ one page form)', () => {
         await new Promise((resolve) => setTimeout(resolve, 800));
         expect(await axeViolations()).toEqual([]);
         await shoot('reserve', theme, width);
+        // The foot: Your details and the button named for the time.
+        document.querySelector('button[type="submit"]')?.scrollIntoView({ block: 'end' });
+        await shoot('reserve-foot', theme, width);
+        globalThis.scrollTo(0, 0);
       }
     });
   }

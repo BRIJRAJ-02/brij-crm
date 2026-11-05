@@ -103,6 +103,11 @@ export interface BookingDetailsProps {
    * after checklabs' one page booking form): the send button stands alone, the width of the form.
    */
   readonly onBack?: () => void;
+  /**
+   * What the page still needs before anything is checked (a one page form's time not picked yet): words for the line
+   * above the button, the page moving focus itself; undefined lets the form check and send.
+   */
+  readonly blocked?: () => string | undefined;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
 
@@ -174,6 +179,7 @@ export function BookingDetails({
   prefillAnswers,
   countryGuess,
   onBack,
+  blocked,
   onSubmit,
 }: BookingDetailsProps) {
   const [name, setName] = useState(prefill?.name ?? '');
@@ -360,6 +366,11 @@ export function BookingDetails({
   const submit = () => {
     if (isBusy) return;
     setLine('');
+    const missing = blocked?.();
+    if (missing !== undefined) {
+      setLine(missing);
+      return;
+    }
     // An address still in the guests field goes with the booking: taken now, never dropped.
     const pending = guestDraft.trim() === '' ? { taken: guests, left: '' } : takeGuests(guestDraft);
     const found = {
@@ -621,7 +632,7 @@ export function BookingDetails({
       <p className={styles.line} role="alert">
         {line}
       </p>
-      <div className={styles.actions} data-shake={shakeOf('actions')} data-alone={onBack === undefined || undefined}>
+      <div className={styles.actions} data-shake={shakeOf('actions')}>
         {onBack !== undefined && (
           <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
             {strings.back}
@@ -631,6 +642,7 @@ export function BookingDetails({
           variant="primary"
           size="lg"
           type="submit"
+          {...(onBack === undefined ? { isFullWidth: 'center' as const } : {})}
           isPending={isBusy && !isDone}
           {...(isDone ? { icon: 'check' as const } : {})}
         >

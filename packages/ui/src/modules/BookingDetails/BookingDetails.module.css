@@ -132,11 +132,6 @@
     gap: var(--space-8);
   }
 
-  /* Alone (no Back, one page booking): the send button takes the form's width. */
-  .actions[data-alone] > * {
-    flex: 1;
-  }
-
   @media (hover: hover) and (pointer: fine) {
     .inline:hover {
       text-decoration: underline;
