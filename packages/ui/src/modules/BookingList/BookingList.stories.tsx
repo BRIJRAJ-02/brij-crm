@@ -311,9 +311,17 @@ export const Columns: Story = {
 
 /** Columns in a phone's list: the time and status, then who on a line of their own; the page column and quick changes go. */
 export const ColumnsNarrow: Story = {
+  // The list is its own inline-size container, so it takes the phone's whole width from the stage (`phone-fill`), as
+  // it fills a block column in the app: a shrink to fit item of the plain phone row measured 0 wide.
   render: (args) => (
-    <Stage width="phone">
+    <Stage width="phone-fill">
       <BookingList {...args} layout="columns" groups={columnGroups()} />
     </Stage>
   ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('region', { name: 'Upcoming bookings' });
+    // As wide as the phone, less the stage's own space, never the 0 it measured as a row's item.
+    await expect(list.getBoundingClientRect().width).toBeGreaterThan(300);
+    await expect(canvas.getByRole('button', { name: 'Grace Hopper' })).toBeInTheDocument();
+  },
 };
