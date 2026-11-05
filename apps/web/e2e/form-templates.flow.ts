@@ -1,7 +1,7 @@
 // The form template gallery against the running app (spec 0063, AC-6323):
-// Captures › Forms › New form opens a gallery of ten tiles, Blank first, each
-// with a preview of the form it would make and a one line purpose; pressing
-// one lands in the new form's editor with the template's questions (Feedback
+// Captures › Forms › New form opens a window with Blank first, then the eleven
+// ready forms under Templates, each with a one line purpose; pressing one and
+// Start lands in the new form's editor with the template's questions (Feedback
 // is anonymous: it keeps its submissions only); Publish puts it live in one click, a setting saves itself,
 // and Discard changes puts it back. Shot in light and dark inside the real page layout, both
 // empty (nothing chosen yet) and chosen (the form it made), into
@@ -50,10 +50,12 @@ test.describe('the form template gallery', () => {
     const gallery = page.getByRole('dialog', { name: 'Start a form' });
     await expect(gallery).toBeVisible({ timeout: 30_000 });
 
-    // AC-6323's twelve tiles, Blank first, each with its purpose on the tile rather than in a tooltip.
-    const tiles = gallery.getByRole('radiogroup', { name: 'Start a form' }).getByRole('radio');
-    await expect(tiles).toHaveCount(12);
-    await expect(tiles.first()).toHaveAccessibleName('Blank form');
+    // AC-6323's twelve tiles: Blank alone first, then the rest under Templates (5 November 2026), each with its
+    // purpose on the tile rather than in a tooltip.
+    const blank = gallery.getByRole('radiogroup', { name: 'Start a form' }).getByRole('radio');
+    await expect(blank).toHaveCount(1);
+    await expect(blank).toHaveAccessibleName('Blank form');
+    await expect(gallery.getByRole('radiogroup', { name: 'Templates' }).getByRole('radio')).toHaveCount(11);
     await expect(gallery.getByText('A rating, and why. Anonymous.')).toBeVisible();
     // Both templates slice 5 held back are offered now: Lead qualification scores, Booking intake goes on to a page.
     await expect(gallery.getByRole('radio', { name: 'Lead qualification' })).toHaveCount(1);
@@ -64,7 +66,7 @@ test.describe('the form template gallery', () => {
     // light text colours still on them, which reads as a contrast bug that isn't one.
     for (const scheme of SCHEMES) {
       await page.emulateMedia({ colorScheme: scheme });
-      await expect(tiles.first()).toBeVisible();
+      await expect(blank).toBeVisible();
       await settled(page);
       await page.screenshot({ path: path.join(SHOTS, `gallery-empty-${scheme}.png`), fullPage: false });
     }

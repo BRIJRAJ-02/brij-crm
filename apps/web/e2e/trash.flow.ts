@@ -97,12 +97,12 @@ test.describe('trash', () => {
     await addPerson(page, 'Ada', 'Again', `ada-${tag}@acme.com`);
 
     // The Trash lists them, newest first (AC-533), inside Settings (A120): the settings sidebar stays, Trash
-    // current in it, and the bar's trail reads Settings › Workspace › Trash.
+    // current in it, and the bar's trail reads Settings › Data › Trash.
     await openTrash(page);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash$`));
     const settings = page.getByRole('navigation', { name: 'Settings' });
     await expect(settings.getByRole('link', { name: 'Trash', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('main').getByRole('list').first()).toHaveText(/^Settings\s*Workspace\s*Trash$/);
+    await expect(page.getByRole('main').getByRole('list').first()).toHaveText(/^Settings\s*Data\s*Trash$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Trash' })).toBeVisible();
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
