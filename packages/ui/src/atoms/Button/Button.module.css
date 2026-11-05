@@ -156,6 +156,34 @@
     padding-inline: 0;
   }
 
+  /* Drawn small, pressed across 44px: an invisible area round the button (a public page's 26px, 30px or 36px control
+     under a thumb, the guest menu's + and steppers). Nothing drawn changes. */
+  .root[data-touch-target]:is([data-size='md'], [data-size='lg'], [data-size='xl']) {
+    --touch-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+
+    position: relative;
+  }
+
+  /* The inset counts from inside the border, so the hairline comes off too: 44px from edge to edge. */
+  .root[data-touch-target][data-size='md']::after {
+    position: absolute;
+    inset: calc((var(--size-control) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
+  .root[data-touch-target][data-size='lg']::after {
+    inset: calc((var(--size-input) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-touch-target][data-size='xl']::after {
+    position: absolute;
+    inset: calc((var(--size-input) + var(--space-6) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
   /* Fully rounded: a pill with a label, a circle when the icon or mark stands alone (a link page's social links). */
   .root[data-round] {
     border-radius: var(--radius-full);
@@ -189,6 +217,11 @@
 
   .root[data-icon-only][data-size='lg'] {
     inline-size: var(--size-input);
+  }
+
+  /* An icon alone at 36px: square, round with `isRound` (a Stepper's party size buttons). */
+  .root[data-icon-only][data-size='xl'] {
+    inline-size: calc(var(--size-input) + var(--space-6));
   }
 
   .root[data-icon-only][data-size='sm'] {
