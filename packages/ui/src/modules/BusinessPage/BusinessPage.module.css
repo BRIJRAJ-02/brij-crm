@@ -3,58 +3,10 @@
    panel that stays beside the sections as they scroll. The header's words rise in once, a line at a time; the section
    tabs stick under the top with an indicator that slides between them. */
 @layer components {
-  /* The guest look (5 November 2026), so the menu, the reservation page and this page read as one product: each colour
-     from the `--menu-*` custom properties the menu's look stylesheet sets, falling back to a token, and the accent the
-     brand's (its stylesheet's `--brand-accent`), else the menu's ink, else the token ink (`surface-inverse`), never the
-     app's blue. Worked out here; one level in (the frame and the phone's bar) the library's names point at them. */
   .root {
-    --business-none: initial;
-    --business-brand: light-dark(
-      var(--brand-accent, var(--business-none)),
-      var(--brand-accent-dark, var(--business-none))
-    );
-    --business-on-brand: light-dark(
-      var(--brand-on-accent, var(--business-none)),
-      var(--brand-on-accent-dark, var(--business-none))
-    );
-    --business-brand-link: light-dark(
-      var(--brand-link, var(--business-none)),
-      var(--brand-link-dark, var(--business-none))
-    );
-    --business-ground: var(--menu-ground, var(--surface));
-    --business-card: var(--menu-card, var(--surface-raised));
-    --business-chip: var(--menu-chip, var(--surface-sunken));
-    --business-line: var(--menu-line, var(--border-subtle));
-    --business-text: var(--menu-text, var(--text));
-    --business-quiet: var(--menu-quiet, var(--text-secondary));
-    --business-ink: var(--business-brand, var(--menu-accent, var(--surface-inverse)));
-    --business-on-ink: var(--business-on-brand, var(--menu-on-accent, var(--on-inverse)));
-    --business-link: var(--business-brand-link, var(--menu-text, var(--text)));
-
     min-block-size: 100dvb;
-    background: var(--business-ground);
-    color: var(--business-text);
-  }
-
-  .frame,
-  .bar {
-    --surface: var(--business-ground);
-    --surface-raised: var(--business-card);
-    --surface-sunken: var(--business-chip);
-    --surface-hover: var(--business-chip);
-    --border: var(--business-line);
-    --border-subtle: var(--business-line);
-    --text: var(--business-text);
-    --text-secondary: var(--business-quiet);
-    --accent: var(--business-ink);
-    --accent-hover: var(--business-ink);
-    --on-accent: var(--business-on-ink);
-    --accent-line: var(--business-ink);
-    --accent-border: color-mix(in oklab, var(--business-ink) 16%, var(--business-card));
-    --accent-soft: var(--business-chip);
-    --link: var(--business-link);
-    --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
-      color-mix(in oklab, var(--business-ink) 16%, transparent);
+    background: var(--surface);
+    color: var(--text);
   }
 
   .frame {

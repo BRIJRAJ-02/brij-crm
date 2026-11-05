@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ComponentProps, type ReactNode } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -10,6 +11,7 @@ import { settleAnimations } from '../../workbench/animations.ts';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
+import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
 import { LinkList } from '../LinkList/LinkList.tsx';
@@ -603,7 +605,7 @@ const SERVICES = [
 }));
 
 /**
- * A restaurant's reservation page (5 November 2026, after checklabs): the guest menu's look (`look="menu"`, here with
+ * A restaurant's reservation page (5 November 2026, after checklabs): the guest menu's look (GuestLook, here with
  * no look stylesheet, so its token fallbacks: the ink as the accent), the place's tile beside its name with Manage
  * booking under its facts, the plain month, the day's Lunch and Dinner in one list, and the Book bar.
  */
@@ -616,13 +618,15 @@ export const Reservation: Story = {
       { id: 'where', icon: 'map-pin', children: '1 Example Street, London' },
       { id: 'phone', icon: 'phone', children: '020 7946 0000' },
     ],
-    look: 'menu',
     identity: 'tile',
     railLink: { label: 'Manage booking', href: '/r/abcdefghijklmnop/manage' },
   },
-  render: (args) => <Reserving {...args} />,
-  play: async ({ canvas, canvasElement }) => {
-    await expect(canvasElement.querySelector('main')).toHaveAttribute('data-look', 'menu');
+  render: (args) => (
+    <GuestLook>
+      <Reserving {...args} />
+    </GuestLook>
+  ),
+  play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Reserve your table' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Manage booking' })).toHaveAttribute(
       'href',
@@ -655,7 +659,9 @@ export const ReservationMenuLook: Story = {
   args: Reservation.args,
   render: (args) => (
     <MenuLook>
-      <Reserving {...args} />
+      <GuestLook>
+        <Reserving {...args} />
+      </GuestLook>
     </MenuLook>
   ),
   play: async ({ canvas }) => {
@@ -711,7 +717,7 @@ function Reserving(args: ComponentProps<typeof BookingFrame>) {
         aside={
           <SlotList
             heading="Friday 9 October"
-            badge="15 available"
+            badge={<Badge text="15 available" isWhole />}
             slots={[]}
             groups={SERVICES}
             value={time}

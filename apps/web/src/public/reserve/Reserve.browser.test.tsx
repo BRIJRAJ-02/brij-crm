@@ -5,7 +5,7 @@
 // dark at a desktop's and a phone's width, on the times and on the details. With VITE_SHOT_DIR set, each is shot.
 import '@crm/ui/styles.css';
 import type { PublicReserveInput, PublicTablePage, TableClient } from '@crm/data/tables';
-import { BookingProvider } from '@crm/ui/public-booking';
+import { BookingProvider, GuestLook } from '@crm/ui/public-booking';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -88,13 +88,15 @@ async function show(width: number) {
   act(() => {
     made.render(
       <BookingProvider locale="en-GB" timeZone="UTC">
-        <ReservePage
-          client={clientOf(sent)}
-          page={PAGE}
-          locale="en-GB"
-          isEmbedded={false}
-          onReserved={() => undefined}
-        />
+        <GuestLook>
+          <ReservePage
+            client={clientOf(sent)}
+            page={PAGE}
+            locale="en-GB"
+            isEmbedded={false}
+            onReserved={() => undefined}
+          />
+        </GuestLook>
       </BookingProvider>,
     );
   });

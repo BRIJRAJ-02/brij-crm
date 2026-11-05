@@ -81,12 +81,11 @@ export function ManageReservation({
 
   if (guest === undefined) return <FindReservation client={client} page={page} onFound={setGuest} />;
   if (loaded.status === 'loading')
-    return <BookingMessage title={strings.yourReservation} isLoading page="booking_manage" look="menu" />;
+    return <BookingMessage title={strings.yourReservation} isLoading page="booking_manage" />;
   if (loaded.status === 'error') {
     // Never a dead end: Try again, or find it by the code and email (the manage page without a link).
     return (
       <BookingMessage
-        look="menu"
         title={strings.yourReservation}
         page="booking_manage"
         onRetry={() => {
@@ -142,7 +141,6 @@ export function ManageReservation({
   };
   return (
     <BookingReceipt
-      look="menu"
       state={state}
       isWelcome={isWelcome}
       hostName={page.business.name}
@@ -425,8 +423,7 @@ function FindReservation({
   return (
     <BookingFrame
       {...frameHead(page)}
-      // The reservation page's own look (the guest menu's), so finding a reservation is the same product.
-      look="menu"
+
       description={strings.findIntro}
       facts={placeFacts(page)}
       heading={strings.findTitle}

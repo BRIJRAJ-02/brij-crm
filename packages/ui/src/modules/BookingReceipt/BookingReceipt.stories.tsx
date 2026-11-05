@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingReceipt } from './BookingReceipt.tsx';
 
@@ -65,16 +66,16 @@ export const Welcome: Story = {
   },
 };
 
-/** A restaurant's reservation (`look="menu"`, its token fallbacks here): the ink in place of the app's blue. */
+/** A restaurant's reservation (inside GuestLook, its token fallbacks here): the ink in place of the app's blue. */
 export const MenuLook: Story = {
-  args: { look: 'menu' },
   render: (args) => (
-    <Stage width="fill" height="page">
-      <BookingReceipt {...args} />
-    </Stage>
+    <GuestLook>
+      <Stage width="fill" height="page">
+        <BookingReceipt {...args} />
+      </Stage>
+    </GuestLook>
   ),
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('main')).toHaveAttribute('data-look', 'menu');
+  play: async () => {
     await settleAnimations();
   },
 };

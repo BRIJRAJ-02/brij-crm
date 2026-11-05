@@ -18,8 +18,6 @@ While it's ahead, the card's foot takes `changes` (BookingChanges: move, add gue
 
 The page formats every date and time in the booking's zone; the receipt draws what it's given.
 
-`look="menu"` (5 November 2026) wears the guest menu's look, as BookingFrame's does, so a restaurant's reservation doesn't turn blue the moment it is confirmed. Left out, the booking page's own look.
-
 ## States
 
 Confirmed (welcome or not), cancelled, past.

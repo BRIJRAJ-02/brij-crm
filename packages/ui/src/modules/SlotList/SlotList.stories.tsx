@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SlotList, type Slot } from './SlotList.tsx';
@@ -197,7 +198,13 @@ const SERVICES = [
  * heading, three across; the long date heads it with a count, and the first time is the page's to focus.
  */
 export const Groups: Story = {
-  args: { heading: 'Friday 9 October', slots: [], groups: SERVICES, badge: '18 available', onHour12Change: undefined },
+  args: {
+    heading: 'Friday 9 October',
+    slots: [],
+    groups: SERVICES,
+    badge: <Badge text="18 available" isWhole />,
+    onHour12Change: undefined,
+  },
   render: (args) => <GroupsInPane {...args} />,
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { name: 'Lunch' })).toBeInTheDocument();

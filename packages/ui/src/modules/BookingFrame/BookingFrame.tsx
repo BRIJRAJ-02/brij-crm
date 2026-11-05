@@ -116,13 +116,6 @@ export interface BookingFrameProps {
    */
   readonly brand?: PageBrand;
   /**
-   * `menu` (a restaurant's guest pages, 5 November 2026): the page wears the guest menu's look, read from the
-   * `--menu-*` custom properties the menu's look stylesheet sets (its ground, card, chip, line, words and the ink as
-   * the accent), each falling back to a token, the accent to the ink (`surface-inverse`), never the app's blue. A
-   * brand's accent still wins. Left out, the booking page's own look, unchanged.
-   */
-  readonly look?: 'menu';
-  /**
    * `tile` (a place, not a person, 5 November 2026): the rail heads with the business's initials on a square ink tile
    * (or its logo, when the brand has one) beside its name on one row, at every width, and the title under it in the
    * heading's weight (a restaurant's "Reserve your table"). Left out, the host's round picture over their name.
@@ -224,7 +217,6 @@ export function BookingFrame({
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
-  look,
   identity = 'person',
   railLink,
   isAsideGrowing = false,
@@ -257,7 +249,6 @@ export function BookingFrame({
       className={styles.root}
       ref={variables}
       {...templateAttributes(brand?.template)}
-      {...(look === 'menu' ? { 'data-look': 'menu' } : {})}
       {...(isCompact ? { 'data-compact': true } : {})}
       {...(isEmbedded ? { 'data-embedded': true } : {})}
     >
@@ -712,8 +703,6 @@ export interface BookingMessageProps {
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
   readonly page?: PoweredByPage;
-  /** `menu`: the guest menu's look, as the frame's `look` (a restaurant's reservation page loading, closed or gone). */
-  readonly look?: 'menu';
 }
 
 /**
@@ -728,14 +717,13 @@ export function BookingMessage({
   link,
   isLoading = false,
   page = 'booking_page',
-  look,
 }: BookingMessageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!isLoading) heading.current?.focus();
   }, [isLoading]);
   return (
-    <main className={styles.root} {...(look === 'menu' ? { 'data-look': 'menu' } : {})}>
+    <main className={styles.root}>
       <div className={styles.narrow}>
         <div className={styles.message} aria-busy={isLoading || undefined}>
           {isLoading ? (

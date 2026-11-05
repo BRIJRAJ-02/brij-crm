@@ -19,6 +19,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
+import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { BusinessGallery, type BusinessPhotoItem } from './BusinessGallery.tsx';
 import { BusinessHours } from './BusinessHours.tsx';
 import { BusinessLocation, mapsAppName, type DirectionsLinks, type MapsApp } from './BusinessLocation.tsx';
@@ -307,15 +308,17 @@ const addressLines = (place: BusinessPagePlace) =>
 /** The page while its read is on its way: the gallery's and the header's shapes. */
 function LoadingPage() {
   return (
-    <div className={styles.root} aria-busy aria-label={strings.loading}>
-      <div className={styles.frame}>
-        <BusinessGallery photos={[]} name="" isLoading />
-        <div className={styles.head}>
-          <Skeleton shape="line" width="medium" />
-          <Skeleton shape="text" lines={2} width="long" />
+    <GuestLook>
+      <div className={styles.root} aria-busy aria-label={strings.loading}>
+        <div className={styles.frame}>
+          <BusinessGallery photos={[]} name="" isLoading />
+          <div className={styles.head}>
+            <Skeleton shape="line" width="medium" />
+            <Skeleton shape="text" lines={2} width="long" />
+          </div>
         </div>
       </div>
-    </div>
+    </GuestLook>
   );
 }
 
@@ -343,156 +346,158 @@ export function BusinessPage(props: BusinessPageProps) {
   // The panel's second way, when its action is Reserve: the phone, which nothing above the fold shows.
   const phone = action?.kind === 'reserve' ? place.phone : undefined;
   return (
-    <div className={styles.root}>
-      <div
-        className={styles.frame}
-        // No gallery: the header starts a step under the top on a phone, never flush against it.
-        data-bare={photos.length === 0 || undefined}
-        // A panel to carry whether it is open on a wide page, so the header leaves it out there.
-        data-panel={action === undefined ? undefined : ''}
-      >
-        <BusinessGallery photos={photos} name={name} />
-        <header className={styles.head}>
-          {/* The logo, or the name's initials on the brand's colour: the name beside it says whose it is. */}
-          <Avatar
-            name={name}
-            {...(logo === undefined ? { hue: 'accent' as const } : { src: logo, fit: 'contain' as const })}
-            shape="square"
-            size="title"
-            isDecorative
-          />
-          <div className={styles.titles}>
-            <h1 className={styles.name}>{name}</h1>
-            {props.placeName !== undefined && props.placeName !== '' && (
-              <p className={styles.placeName}>{props.placeName}</p>
-            )}
-          </div>
-          <p className={styles.facts}>
-            <span>{kind}</span>
-            <OpenLine place={place} locale={locale} where="head" />
-          </p>
-          {description !== undefined && <p className={styles.description}>{description}</p>}
-          {address !== '' && (
-            <p className={styles.where}>
-              <Icon name="map-pin" />
-              <span>{address}</span>
-              {directions !== undefined && (
-                <Link href={directions[mapsApp]} weight="strong" opensInNewTab>
-                  {strings.directions}
-                </Link>
+    <GuestLook>
+      <div className={styles.root}>
+        <div
+          className={styles.frame}
+          // No gallery: the header starts a step under the top on a phone, never flush against it.
+          data-bare={photos.length === 0 || undefined}
+          // A panel to carry whether it is open on a wide page, so the header leaves it out there.
+          data-panel={action === undefined ? undefined : ''}
+        >
+          <BusinessGallery photos={photos} name={name} />
+          <header className={styles.head}>
+            {/* The logo, or the name's initials on the brand's colour: the name beside it says whose it is. */}
+            <Avatar
+              name={name}
+              {...(logo === undefined ? { hue: 'accent' as const } : { src: logo, fit: 'contain' as const })}
+              shape="square"
+              size="title"
+              isDecorative
+            />
+            <div className={styles.titles}>
+              <h1 className={styles.name}>{name}</h1>
+              {props.placeName !== undefined && props.placeName !== '' && (
+                <p className={styles.placeName}>{props.placeName}</p>
               )}
+            </div>
+            <p className={styles.facts}>
+              <span>{kind}</span>
+              <OpenLine place={place} locale={locale} where="head" />
             </p>
-          )}
-        </header>
-        <SectionTabs sections={sections} />
-        <div className={styles.body} data-panel={action === undefined ? undefined : ''}>
-          <main className={styles.main}>
-            {hasMenu && (
-              <section id="menu" className={styles.section} aria-labelledby="business-menu">
-                <h2 id="business-menu" className={styles.heading}>
-                  {strings.menu}
-                </h2>
-                <BusinessMenu sections={menu} />
-                {menuHref !== undefined && (
-                  <p className={styles.more}>
-                    <Link href={menuHref} icon="utensils" weight="strong">
-                      {strings.fullMenu}
-                    </Link>
-                  </p>
+            {description !== undefined && <p className={styles.description}>{description}</p>}
+            {address !== '' && (
+              <p className={styles.where}>
+                <Icon name="map-pin" />
+                <span>{address}</span>
+                {directions !== undefined && (
+                  <Link href={directions[mapsApp]} weight="strong" opensInNewTab>
+                    {strings.directions}
+                  </Link>
                 )}
-              </section>
+              </p>
             )}
-            {hasAbout && (
-              <section id="about" className={styles.section} aria-labelledby="business-about">
-                <h2 id="business-about" className={styles.heading}>
-                  {strings.about}
-                </h2>
-                {about !== undefined && <p className={styles.about}>{about}</p>}
-                {amenities.length > 0 && (
-                  <>
-                    <h3 className={styles.subheading}>{strings.amenities}</h3>
-                    <ul className={styles.amenities}>
-                      {amenities.map((amenity) => (
-                        <li key={amenity} className={styles.amenity}>
-                          <Icon name={AMENITY_ICONS[amenity]} />
-                          {AMENITY_LABELS[amenity]}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </section>
-            )}
-            <section id="hours" className={styles.section} aria-labelledby="business-hours">
-              <h2 id="business-hours" className={styles.heading}>
-                {strings.hours}
-              </h2>
-              <BusinessHours hours={place.hours} timeZone={place.timeZone} locale={locale} />
-            </section>
-            <section id="location" className={styles.section} aria-labelledby="business-location">
-              <h2 id="business-location" className={styles.heading}>
-                {strings.location}
-              </h2>
-              <BusinessLocation
-                lines={addressLines(place)}
-                phone={place.phone}
-                directions={directions}
-                mapsApp={mapsApp}
-                website={website}
-              />
-            </section>
-            {others.length > 0 && (
-              <section id="places" className={styles.section} aria-labelledby="business-places">
-                <h2 id="business-places" className={styles.heading}>
-                  {strings.otherPlaces}
-                </h2>
-                <ul className={styles.places}>
-                  {others.map((other) => (
-                    <li key={other.href}>
-                      <Link href={other.href} icon="map-pin" weight="strong">
-                        {other.name}
+          </header>
+          <SectionTabs sections={sections} />
+          <div className={styles.body} data-panel={action === undefined ? undefined : ''}>
+            <main className={styles.main}>
+              {hasMenu && (
+                <section id="menu" className={styles.section} aria-labelledby="business-menu">
+                  <h2 id="business-menu" className={styles.heading}>
+                    {strings.menu}
+                  </h2>
+                  <BusinessMenu sections={menu} />
+                  {menuHref !== undefined && (
+                    <p className={styles.more}>
+                      <Link href={menuHref} icon="utensils" weight="strong">
+                        {strings.fullMenu}
                       </Link>
-                    </li>
-                  ))}
-                </ul>
+                    </p>
+                  )}
+                </section>
+              )}
+              {hasAbout && (
+                <section id="about" className={styles.section} aria-labelledby="business-about">
+                  <h2 id="business-about" className={styles.heading}>
+                    {strings.about}
+                  </h2>
+                  {about !== undefined && <p className={styles.about}>{about}</p>}
+                  {amenities.length > 0 && (
+                    <>
+                      <h3 className={styles.subheading}>{strings.amenities}</h3>
+                      <ul className={styles.amenities}>
+                        {amenities.map((amenity) => (
+                          <li key={amenity} className={styles.amenity}>
+                            <Icon name={AMENITY_ICONS[amenity]} />
+                            {AMENITY_LABELS[amenity]}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </section>
+              )}
+              <section id="hours" className={styles.section} aria-labelledby="business-hours">
+                <h2 id="business-hours" className={styles.heading}>
+                  {strings.hours}
+                </h2>
+                <BusinessHours hours={place.hours} timeZone={place.timeZone} locale={locale} />
               </section>
-            )}
-          </main>
-          {/* A wide screen: the panel that stays beside the page as it scrolls, while it has an action to carry. It
+              <section id="location" className={styles.section} aria-labelledby="business-location">
+                <h2 id="business-location" className={styles.heading}>
+                  {strings.location}
+                </h2>
+                <BusinessLocation
+                  lines={addressLines(place)}
+                  phone={place.phone}
+                  directions={directions}
+                  mapsApp={mapsApp}
+                  website={website}
+                />
+              </section>
+              {others.length > 0 && (
+                <section id="places" className={styles.section} aria-labelledby="business-places">
+                  <h2 id="business-places" className={styles.heading}>
+                    {strings.otherPlaces}
+                  </h2>
+                  <ul className={styles.places}>
+                    {others.map((other) => (
+                      <li key={other.href}>
+                        <Link href={other.href} icon="map-pin" weight="strong">
+                          {other.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </main>
+            {/* A wide screen: the panel that stays beside the page as it scrolls, while it has an action to carry. It
               says nothing the header beside it already says (the name, whether it is open, Directions): the action,
               and the phone under Reserve. */}
-          {action !== undefined && (
-            <aside className={styles.panel} aria-label={name}>
-              <div className={styles.panelCard}>
-                {/* Whether it is open, and when it opens or closes (checklabs' rail card): the header leaves it here. */}
-                <OpenLine place={place} locale={locale} where="panel" />
-                <BusinessReserve action={action} />
-                {phone !== undefined && phone !== '' && (
-                  <p className={styles.panelLink}>
-                    <span>{strings.orCall}</span>{' '}
-                    <Link href={telOf(phone)} weight="strong">
-                      {phone}
-                    </Link>
-                  </p>
-                )}
-              </div>
-            </aside>
-          )}
+            {action !== undefined && (
+              <aside className={styles.panel} aria-label={name}>
+                <div className={styles.panelCard}>
+                  {/* Whether it is open, and when it opens or closes (checklabs' rail card): the header leaves it here. */}
+                  <OpenLine place={place} locale={locale} where="panel" />
+                  <BusinessReserve action={action} />
+                  {phone !== undefined && phone !== '' && (
+                    <p className={styles.panelLink}>
+                      <span>{strings.orCall}</span>{' '}
+                      <Link href={telOf(phone)} weight="strong">
+                        {phone}
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              </aside>
+            )}
+          </div>
+          {props.foot}
         </div>
-        {props.foot}
+        {/* A phone: the bar that stays at the foot of the screen with the one action. */}
+        {action !== undefined && (
+          <div className={styles.bar}>
+            <div className={styles.barText}>
+              <span className={styles.barName}>{name}</span>
+              <OpenLine place={place} locale={locale} />
+            </div>
+            <div className={styles.barAction}>
+              <BusinessReserve action={action} />
+            </div>
+          </div>
+        )}
       </div>
-      {/* A phone: the bar that stays at the foot of the screen with the one action. */}
-      {action !== undefined && (
-        <div className={styles.bar}>
-          <div className={styles.barText}>
-            <span className={styles.barName}>{name}</span>
-            <OpenLine place={place} locale={locale} />
-          </div>
-          <div className={styles.barAction}>
-            <BusinessReserve action={action} />
-          </div>
-        </div>
-      )}
-    </div>
+    </GuestLook>
   );
 }

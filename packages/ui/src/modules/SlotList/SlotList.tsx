@@ -1,5 +1,4 @@
 import { useId, type ReactNode, type Ref } from 'react';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -62,8 +61,8 @@ export interface SlotListProps {
    * that scrolls as one and runs three across at any width. Given, it takes the place of `slots` and `layout`.
    */
   readonly groups?: readonly SlotGroup[];
-  /** A short count beside the heading ("12 available"), as a neutral Badge. */
-  readonly badge?: string;
+  /** Beside the heading: the page's own short count (a neutral Badge, "12 available"). */
+  readonly badge?: ReactNode;
   /** The first time's button, so the page can move focus to the times (a time taken meanwhile, or Pick a time). */
   readonly firstRef?: Ref<HTMLButtonElement>;
 }
@@ -179,11 +178,7 @@ export function SlotList({
               {heading}
             </h2>
           )}
-          {badge !== undefined && !isLoading && (
-            <span key={badge} className={styles.badge}>
-              <Badge text={badge} isWhole />
-            </span>
-          )}
+          {badge !== undefined && !isLoading && <span className={styles.badge}>{badge}</span>}
           {onHour12Change !== undefined && (
             <SegmentedControl
               label={strings.clock}

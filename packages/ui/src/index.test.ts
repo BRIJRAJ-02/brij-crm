@@ -92,6 +92,7 @@ describe('@crm/ui', () => {
       'FormatScope',
       'FormulaEditor',
       'GRID_SHORTCUTS',
+      'GuestLook',
       'HUES',
       'HostedFormPreview',
       'HoursEditor',

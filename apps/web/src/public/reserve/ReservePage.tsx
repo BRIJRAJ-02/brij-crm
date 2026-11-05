@@ -4,9 +4,10 @@
 //   date"), Continue, then Your details on the card ("Confirm {day} at {time}"). A phone: the party, a strip of three
 //   weeks with the full calendar a press away, the times three across, and the Book bar once a time is picked.
 // Leaves out: deposits, a waitlist and "notify me" (later slices). Built on BookingFrame in the guest menu's look
-//   (`look="menu"`, the place's tile, Manage booking), PartyBand, DayStrip, MonthTiles `plain`, one grouped SlotList
+//   (GuestLook, around it in main.tsx; the place's tile, Manage booking), PartyBand, DayStrip, MonthTiles `plain`, one grouped SlotList
 //   and BookingDetails with Back. Times are the restaurant's clock. Never a sticky form.
 import {
+  Badge,
   BookingDetails,
   BookingFrame,
   BookingMessage,
@@ -169,7 +170,7 @@ export function ReservePage({
     // Not taking reservations, or no day in the window opens at all: say so with the phone, never a spinner.
     const why = page.taking ? strings.noOpenDays : strings.closedNow;
     return (
-      <BookingMessage title={page.place.name} page="booking_page" look="menu">
+      <BookingMessage title={page.place.name} page="booking_page">
         {page.place.phone === undefined ? why : `${why} ${strings.callUs(page.place.phone)}`}
       </BookingMessage>
     );
@@ -307,7 +308,9 @@ export function ReservePage({
           empty={strings.noTimes}
           firstRef={firstTime}
           drawKey={`${day ?? ''}|${String(party)}`}
-          {...(offered.length > 0 && !isLoading && !isOffering ? { badge: strings.available(offered.length) } : {})}
+          {...(offered.length > 0 && !isLoading && !isOffering
+            ? { badge: <Badge text={strings.available(offered.length)} isWhole /> }
+            : {})}
         />
       </>
     );
@@ -419,7 +422,6 @@ export function ReservePage({
   ];
   return (
     <BookingFrame
-      look="menu"
       identity="tile"
       host={{ name: page.business.name }}
       title={strings.reserveYourTable}

@@ -405,6 +405,8 @@ export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPane
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
 export { QrSheet, type QrSheetCard, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
+/** The guest menu's look around a page (5 November 2026). */
+export { GuestLook, type GuestLookProps } from './modules/GuestLook/GuestLook.tsx';
 /** A reservation's party size (spec 0066 B7, after checklabs): the band with the shared Stepper. */
 export { PartyBand, type PartyBandProps } from './modules/PartyBand/PartyBand.tsx';
 export { SlotList, type Slot, type SlotGroup, type SlotListProps } from './modules/SlotList/SlotList.tsx';

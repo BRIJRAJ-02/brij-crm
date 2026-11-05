@@ -4,7 +4,7 @@
 // page's provider. Inside a site's embed (`?embed=1`) it tells the site its height, as the booking page does.
 import '@crm/ui/styles.css';
 import { createTableClient, isDataError, type PublicTablePage } from '@crm/data/tables';
-import { BookingMessage, BookingProvider, createToasts } from '@crm/ui/public-booking';
+import { BookingMessage, BookingProvider, createToasts, GuestLook } from '@crm/ui/public-booking';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
@@ -82,13 +82,13 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
       current = false;
     };
   }, [placeKey, attempt]);
-  if (read.status === 'loading') return <BookingMessage title={strings.reserveTable} isLoading look="menu" />;
+  if (read.status === 'loading') return <BookingMessage title={strings.reserveTable} isLoading />;
   if (read.status === 'error') {
     return (
       <BookingMessage
         // Offline is not gone: the page says which, and Try again stays.
         title={read.message === strings.offline ? strings.offlineTitle : strings.notFound}
-        look="menu"
+
         onRetry={() => {
           setRead({ status: 'loading' });
           setAttempt((count) => count + 1);
@@ -129,11 +129,14 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
 createRoot(root).render(
   <StrictMode>
     <BookingProvider locale={locale} timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone} toasts={toasts}>
-      {path === null ? (
-        <BookingMessage title={strings.notFound} look="menu" />
-      ) : (
-        <Page placeKey={decodeURIComponent(path[1] ?? '')} isManage={path[2] !== undefined} />
-      )}
+      {/* One look for everything here: loading, closed, the page, the details and the receipt. */}
+      <GuestLook>
+        {path === null ? (
+          <BookingMessage title={strings.notFound} />
+        ) : (
+          <Page placeKey={decodeURIComponent(path[1] ?? '')} isManage={path[2] !== undefined} />
+        )}
+      </GuestLook>
     </BookingProvider>
   </StrictMode>,
 );
