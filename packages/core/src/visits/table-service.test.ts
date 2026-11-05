@@ -53,7 +53,7 @@ describe('setup (B7 lite)', () => {
     await w.sql(sql`update places set hours = '{"weekly":{},"exceptions":[]}'::jsonb`);
     const first = await getTableSetup(w.owner, { placeId: w.placeId });
     expect(first.saved).toBe(false);
-    expect(first.rules).toMatchObject({ partyMin: 1, partyMax: 8, minutes: 90, stepMinutes: 15, noticeMinutes: 120 });
+    expect(first.rules).toMatchObject({ partyMin: 1, partyMax: 8, minutes: 90, stepMinutes: 30, noticeMinutes: 120 });
     expect(first.steps).toEqual([
       { step: 'hours', done: false, fix: 'Set your opening hours, so guests see times.' },
       { step: 'tables', done: false, fix: 'Add a table guests can book online.' },
@@ -149,7 +149,7 @@ describe('the Service list and status moves (AC-6560, AC-6561)', () => {
     const setup = await getTableSetup(w.owner, { placeId: w.placeId });
     const saved = await saveTableSetup(w.owner, {
       placeId: w.placeId,
-      rules: { ...setup.rules, noticeMinutes: 0, partyMax: 4, online: true },
+      rules: { ...setup.rules, stepMinutes: 15, noticeMinutes: 0, partyMax: 4, online: true },
     });
     const variantId = (
       await w.sql<{ id: string }>(

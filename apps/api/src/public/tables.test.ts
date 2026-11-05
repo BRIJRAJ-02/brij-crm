@@ -150,7 +150,8 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
     expect(taken.status).toBe(409);
     expect(await taken.json()).toMatchObject({
       code: 'SLOT_TAKEN',
-      next: [`${MONDAY}T19:30:00.000Z`, `${MONDAY}T19:45:00.000Z`, `${MONDAY}T20:00:00.000Z`],
+      // Every 30 minutes, checklabs' default slot interval.
+      next: [`${MONDAY}T19:30:00.000Z`, `${MONDAY}T20:00:00.000Z`, `${MONDAY}T20:30:00.000Z`],
     });
 
     const byCode = await guest(`${key}/visit`, {

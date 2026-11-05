@@ -43,7 +43,7 @@ export const TABLE_DEFAULTS = {
   ] satisfies readonly HoldBySize[],
   partyMin: 1,
   partyMax: 8,
-  stepMinutes: 15,
+  stepMinutes: 30,
   noticeMinutes: 120,
   windowDays: 60,
   changeCutoffMinutes: 120,

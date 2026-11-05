@@ -1,8 +1,9 @@
 // Brief
 // Purpose: set up table reservations for a place and publish its page (spec 0066 B7 lite; spec 0068's foolproof rule).
 // Main task: walk the checklist (hours, tables, rules), Publish, then share timefix.com/r/<key>; the rules are
-//   checklabs' "Online booking" sheet laid out as the app's settings (parties, interval and hold, notice and window,
-//   pacing, change and cancel cutoffs), each prefilled with a sensible default.
+//   checklabs' "Online booking" sheet in its order and with its defaults (Accept online bookings, time zone, service
+//   hours, slot interval and turn time, min lead and booking window, min and max party, max covers per slot), then
+//   ours: turn time by party size and the change and cancel cutoffs.
 // Leaves out: deposits, areas offered to guests and request only parties (later). Publish refuses a broken page and
 //   says the one thing to fix, with the link to it.
 import type { BusinessView, HospitalityStore, Place, TableRules, TableSetupView, TablesStore } from '@crm/data';
@@ -13,8 +14,10 @@ import {
   Callout,
   Card,
   CopyButton,
+  DescriptionList,
   EmptyState,
   Field,
+  FieldGroup,
   FormRow,
   PageColumn,
   Select,
@@ -27,6 +30,8 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useState } from 'react';
+import { WEEK_DAYS } from '@crm/data/hospitality';
+import { clockLabel } from '../hospitality/hours-rows.ts';
 import { publicBookingOrigin } from '../booking/links.ts';
 import { businessSettingsHref, placeTablesHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -56,18 +61,18 @@ type Draft = Readonly<
 
 /** The form's fields in reading order: the first one with a problem takes focus. */
 const DRAFT_ORDER: Readonly<Record<keyof Draft, true>> = {
-  partyMin: true,
-  partyMax: true,
   step: true,
   minutes: true,
+  notice: true,
+  window: true,
+  partyMin: true,
+  partyMax: true,
+  covers: true,
   hold3: true,
   hold5: true,
   hold7: true,
-  notice: true,
-  window: true,
   change: true,
   cancel: true,
-  covers: true,
 };
 
 const draftOf = (rules: TableRules): Draft => {
@@ -80,7 +85,7 @@ const draftOf = (rules: TableRules): Draft => {
     partyMin: String(rules.partyMin),
     partyMax: String(rules.partyMax),
     step: String(rules.stepMinutes),
-    notice: String(rules.noticeMinutes / 60),
+    notice: String(rules.noticeMinutes),
     window: String(rules.windowDays),
     covers: rules.coversCap === undefined ? '' : String(rules.coversCap),
     change: String(rules.changeCutoffMinutes / 60),
@@ -115,7 +120,7 @@ const rulesOf = (
     partyMin: numberOf(draft.partyMin, { min: 1 }),
     partyMax: numberOf(draft.partyMax, { min: 1 }),
     step: numberOf(draft.step, { min: 5 }),
-    notice: numberOf(draft.notice, { min: 0, decimals: true }),
+    notice: numberOf(draft.notice, { min: 0 }),
     window: numberOf(draft.window, { min: 1 }),
     covers: numberOf(draft.covers, { min: 1, optional: true }),
     change: numberOf(draft.change, { min: 0, decimals: true }),
@@ -141,7 +146,7 @@ const rulesOf = (
       partyMin: at('partyMin'),
       partyMax: at('partyMax'),
       stepMinutes: at('step'),
-      noticeMinutes: Math.round(at('notice') * 60),
+      noticeMinutes: at('notice'),
       windowDays: at('window'),
       ...(read.covers.value === undefined ? {} : { coversCap: read.covers.value }),
       changeCutoffMinutes: Math.round(at('change') * 60),
@@ -418,25 +423,9 @@ function SetupBody({
       <Card
         title={live ? strings.pageLive : strings.publishTitle}
         description={live ? strings.liveText : strings.publishText}
-        actions={
-          live ? (
-            <Button variant="danger" isDisabled={isSaving} onPress={() => setStopping(true)}>
-              {strings.unpublish}
-            </Button>
-          ) : (
-            <Button variant="primary" isDisabled={isSaving} onPress={() => void save(true)}>
-              {strings.publish}
-            </Button>
-          )
-        }
       >
-        {live || problemLine !== undefined ? (
-          <>
-            {/* The address on its own line, cut short with its end kept readable: it never runs under the button. */}
-            {live && <TruncatedText>{link}</TruncatedText>}
-            {problemLine}
-          </>
-        ) : undefined}
+        {/* The address on its own line, cut short with its end kept readable. */}
+        {live ? <TruncatedText>{link}</TruncatedText> : undefined}
       </Card>
       <Card title={strings.alertsTitle} description={strings.alertsText}>
         <Switch
@@ -474,17 +463,116 @@ function SetupBody({
       </Modal>
     </>
   );
+  const day = new Intl.DateTimeFormat(undefined, { weekday: 'long', timeZone: 'UTC' });
+  const locale = day.resolvedOptions().locale;
+  // 2 January 2023 was a Monday: each week day's name in the reader's language.
+  const dayName = (index: number) => day.format(new Date(Date.UTC(2023, 0, 2 + index)));
   return (
     <PageColumn aside={aside} stack="aside-first">
       <Card
         title={strings.onlineBooking}
         description={strings.onlineBookingText(place.name)}
         actions={
-          <Button isDisabled={isSaving} onPress={() => void save(live)}>
-            {strings.save}
+          <Button variant="primary" isDisabled={isSaving} onPress={() => void save(live)}>
+            {strings.saveSettings}
           </Button>
         }
       >
+        {/* 1. Accept online bookings: on publishes (Publish's checks first), off asks first. */}
+        <Switch
+          label={strings.acceptOnline}
+          description={strings.acceptOnlineText}
+          isSelected={live}
+          isDisabled={isSaving}
+          onChange={(on) => {
+            if (on) void save(true);
+            else setStopping(true);
+          }}
+        />
+        {problemLine}
+        {/* 2 and 3. The time zone and service hours are the place's (one business profile): shown, edited there. */}
+        <FieldGroup
+          label={strings.timeZone}
+          action={
+            <ButtonLink href={placeTablesHref(slug, place.id)} variant="ghost" size="sm">
+              {strings.edit}
+            </ButtonLink>
+          }
+        >
+          {place.timeZone}
+        </FieldGroup>
+        <FieldGroup
+          label={strings.serviceHours}
+          hint={strings.serviceHoursHint}
+          action={
+            <ButtonLink href={placeTablesHref(slug, place.id)} variant="ghost" size="sm">
+              {strings.edit}
+            </ButtonLink>
+          }
+        >
+          <DescriptionList
+            layout="compact"
+            items={WEEK_DAYS.map((weekDay, index) => {
+              const ranges = place.hours.weekly[weekDay] ?? [];
+              return {
+                id: weekDay,
+                term: dayName(index),
+                description:
+                  ranges.length === 0
+                    ? strings.noBookings
+                    : ranges
+                        .map((range) => `${clockLabel(range.from, locale)} – ${clockLabel(range.to, locale)}`)
+                        .join(', '),
+                isPlaceholder: ranges.length === 0,
+              };
+            })}
+          />
+        </FieldGroup>
+        {/* 4. Slot interval and turn time. */}
+        <FormRow>
+          <Select
+            label={strings.interval}
+            items={[15, 30, 45, 60].map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
+            value={draft.step}
+            onChange={(next) => {
+              if (typeof next === 'string') set('step')(next);
+            }}
+          />
+          <Field
+            label={strings.turnTime}
+            inputMode="numeric"
+            suffix={strings.min}
+            name="minutes"
+            value={draft.minutes}
+            {...errorOf('minutes')}
+            onChange={set('minutes')}
+            hint={strings.turnTimeHint}
+          />
+        </FormRow>
+        {/* 5. Min lead and booking window. */}
+        <FormRow>
+          <Field
+            label={strings.notice}
+            inputMode="numeric"
+            suffix={strings.min}
+            name="notice"
+            value={draft.notice}
+            {...errorOf('notice')}
+            onChange={set('notice')}
+            hint={strings.noticeHint}
+          />
+          <Field
+            label={strings.window}
+            inputMode="numeric"
+            suffix={strings.days}
+            name="window"
+            value={draft.window}
+            {...errorOf('window')}
+            onChange={set('window')}
+            hint={strings.windowHint}
+          />
+        </FormRow>
+        {/* 6. Min and max party. */}
         <FormRow>
           <Field
             label={strings.partyMin}
@@ -504,26 +592,20 @@ function SetupBody({
             hint={strings.partyMaxHint}
           />
         </FormRow>
-        <FormRow>
-          <Select
-            label={strings.interval}
-            items={[15, 30, 60].map((minutes) => ({ id: String(minutes), label: strings.everyMinutes(minutes) }))}
-            value={draft.step}
-            onChange={(next) => {
-              if (typeof next === 'string') set('step')(next);
-            }}
-          />
-          <Field
-            label={strings.holdSmall}
-            inputMode="numeric"
-            suffix={strings.min}
-            name="minutes"
-            value={draft.minutes}
-            {...errorOf('minutes')}
-            onChange={set('minutes')}
-            hint={strings.holdHint}
-          />
-        </FormRow>
+        {/* 7. Max covers per slot. */}
+        <Field
+          label={strings.covers}
+          inputMode="numeric"
+          name="covers"
+          value={draft.covers}
+          {...errorOf('covers')}
+          onChange={set('covers')}
+          placeholder={strings.noCap}
+          hint={strings.coversHint}
+        />
+      </Card>
+      {/* Ours after checklabs' sheet: turn time by party size (its hidden turnBySize) and the guests' own changes. */}
+      <Card title={strings.moreTitle}>
         <FormRow>
           <Field
             label={strings.holdFor(3)}
@@ -553,29 +635,6 @@ function SetupBody({
             onChange={set('hold7')}
           />
         </FormRow>
-      </Card>
-      <Card title={strings.whenTitle}>
-        <FormRow>
-          <Field
-            label={strings.notice}
-            inputMode="decimal"
-            suffix={strings.hours}
-            name="notice"
-            value={draft.notice}
-            {...errorOf('notice')}
-            onChange={set('notice')}
-            hint={strings.noticeHint}
-          />
-          <Field
-            label={strings.window}
-            inputMode="numeric"
-            suffix={strings.days}
-            name="window"
-            value={draft.window}
-            {...errorOf('window')}
-            onChange={set('window')}
-          />
-        </FormRow>
         <FormRow>
           <Field
             label={strings.changeCutoff}
@@ -597,16 +656,6 @@ function SetupBody({
             hint={strings.cutoffHint}
           />
         </FormRow>
-        <Field
-          label={strings.covers}
-          inputMode="numeric"
-          name="covers"
-          value={draft.covers}
-          {...errorOf('covers')}
-          onChange={set('covers')}
-          placeholder={strings.noCap}
-          hint={strings.coversHint}
-        />
       </Card>
     </PageColumn>
   );
