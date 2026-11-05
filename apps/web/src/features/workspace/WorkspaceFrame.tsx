@@ -47,7 +47,7 @@ import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
 import { WEEK_KEYS } from '../bookings/week-keys.ts';
 import { strings as commandStrings } from '../command/frame-strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
-import { useHasBusiness } from '../settings/useHasBusiness.ts';
+import { useAppsNav } from '../settings/useHasBusiness.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { useWorkspaceFavicon } from './favicon.ts';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
@@ -661,9 +661,10 @@ function SettingsNavigation({
     setQueryFor(settings.current);
     setQuery('');
   }
-  // Business (Places, Services, Staff, Shifts) only while Appointments or Table seating is installed.
-  const hasBusiness = useHasBusiness(data, slug, permissions);
-  const groups = visibleSettingsNav(settingsNav(slug, { hasBusiness }), permissions, isOperator, isGuest);
+  // Apps only where early access is open, Business (Places, Services, Staff, Shifts) only while Appointments or Table
+  // seating is installed.
+  const appsNav = useAppsNav(data, slug, permissions);
+  const groups = visibleSettingsNav(settingsNav(slug, appsNav), permissions, isOperator, isGuest);
   const hits = searchSettings(groups, query);
   const isSearching = query.trim() !== '';
   const find = (

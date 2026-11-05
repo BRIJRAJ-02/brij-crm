@@ -298,6 +298,8 @@ export function settingsNav(
      * (Places, Services, Staff and Shifts). Absent, the group is left out.
      */
     readonly hasBusiness?: boolean;
+    /** Whether Timefix opened early access for the workspace (spec 0065, AC-6501): only then does Apps show. */
+    readonly hasApps?: boolean;
   } = {},
 ): readonly SettingsNavGroup[] {
   return [
@@ -374,15 +376,20 @@ export function settingsNav(
           requires: 'audit.read',
           keywords: ['audit', 'log', 'changes', 'activity'],
         },
-        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all.
-        {
-          id: 'apps',
-          label: hospitality.appsTitle,
-          href: appsSettingsHref(slug),
-          icon: 'blocks',
-          requires: 'workspace.manage',
-          keywords: ['hospitality', 'menu', 'qr', 'table seating', 'appointments', 'install'],
-        },
+        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all, and
+        // nobody does before Timefix opens early access.
+        ...(options.hasApps === true
+          ? [
+              {
+                id: 'apps' as const,
+                label: hospitality.appsTitle,
+                href: appsSettingsHref(slug),
+                icon: 'blocks' as const,
+                requires: 'workspace.manage' as const,
+                keywords: ['hospitality', 'menu', 'qr', 'table seating', 'appointments', 'install'],
+              },
+            ]
+          : []),
       ],
     },
     {

@@ -26,6 +26,7 @@ import { LazyNewListModal } from '../lists/LazyNewListModal.tsx';
 import { listHref } from '../lists/paths.ts';
 import { strings as listStrings } from '../lists/strings.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
+import { useAppsNav } from '../settings/useHasBusiness.ts';
 import {
   actionCommands,
   addToListCommands,
@@ -90,7 +91,12 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
     () => pageCommands(slug, objects, permissions, lists, isGuest, canConnect),
     [slug, objects, permissions, lists, isGuest, canConnect],
   );
-  const settings = useMemo(() => settingsCommands(slug, permissions, isGuest), [slug, permissions, isGuest]);
+  // Apps and Business only as the Settings sidebar shows them, so a workspace with no apps is offered neither.
+  const { hasApps, hasBusiness } = useAppsNav(data, slug, permissions);
+  const settings = useMemo(
+    () => settingsCommands(slug, permissions, isGuest, { hasApps, hasBusiness }),
+    [slug, permissions, isGuest, hasApps, hasBusiness],
+  );
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).
   const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });
   const here = objects.find((object) => object.apiSlug === params.object);
