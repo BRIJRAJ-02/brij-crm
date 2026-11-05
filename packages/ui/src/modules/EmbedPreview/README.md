@@ -20,11 +20,13 @@ New. Picking In the page, Popup or Corner button was a choice made blind: the ti
 
 - `mode`: `inline` draws the form's box among the site's lines (its headline unless `isTitleHidden`, two fields and the button in the accent; with `isTransparent` no ground or hairline, so the site's background shows); `popup` draws the site's own button with `words`, plain, since its look is the site's; `floating` draws our corner button at the page's end corner in `colour` and `words`.
 - `colour` is a `#rgb` or `#rrggbb` (anything else draws the accent), set through the CSSOM as `--brand-accent`, as the public pages' previews set theirs, with its words in white or ink, whichever reads better (`--brand-on-accent`), as the embed script picks them on the real site.
+- `kind="booking"` draws a booking page in the page instead of a form: its headline over a fortnight of days, the weekdays in `accent-soft` as the page marks the days it books (the booking page's Share tab, 5 November 2026: the same card as a form's, and a form's two fields read as the wrong thing). Why a variant: the frame, the site's lines, both buttons and the box are the same; only what sits in the box differs. Popup and Corner button draw the same for either kind.
+- `mark` puts a Lucide mark before the corner button's words, as the embed script draws one when a booking snippet asks (`data-timefix-icon`): `calendar`, `mail`, and for its round chat bubble the registry's `message-square` (adding the round one would cost every page's first load for a picture). The words still end in an ellipsis when they run long. Why a prop: the booking card's Button mark changed the snippet but nothing anyone could see.
 - It is one image (`role="img"`, named by `label`); nothing in it takes focus or a press.
 
 ## States
 
-Each mode; inline clear or on its ground, with or without its headline; a corner button in the accent or in a colour. Light and dark take the theme's own surfaces.
+Each mode; inline clear or on its ground, with or without its headline; a booking page in the page; a corner button in the accent or in a colour, with or without its mark. Light and dark take the theme's own surfaces.
 
 ## Keyboard
 

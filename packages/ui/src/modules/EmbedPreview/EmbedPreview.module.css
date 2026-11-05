@@ -71,6 +71,24 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* A booking page in the page: a fortnight of days under its headline, the open ones in the accent's soft tint, as
+     the page itself marks the days it books. */
+  .month {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .day {
+    block-size: var(--size-control);
+    border-radius: var(--radius-sm);
+    background: var(--surface-hover);
+  }
+
+  .day[data-open] {
+    background: var(--accent-soft);
+  }
+
   .send {
     align-self: flex-start;
     inline-size: var(--size-column-narrow);
@@ -106,5 +124,18 @@
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* With its mark: the mark, then the words, which still cut short with an ellipsis. */
+  .corner[data-marked] {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .corner[data-marked] .words {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

@@ -1,4 +1,6 @@
 import { contrastRatio } from '@crm/contracts/brand-colour';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { usePageVariables } from '../../lib/page-variables.ts';
 import styles from './EmbedPreview.module.css';
@@ -7,12 +9,19 @@ import styles from './EmbedPreview.module.css';
 export interface EmbedPreviewProps {
   /** How the site shows the form: in the page, from the site's own button, or from a corner button we draw. */
   readonly mode: 'inline' | 'popup' | 'floating';
+  /**
+   * What sits in the page: `form` (the default) a form's box with its fields and button; `booking` a booking page's
+   * box, its headline over a fortnight of days with the open ones tinted, as the page shows its month.
+   */
+  readonly kind?: 'form' | 'booking';
   /** The form's headline, drawn in the page's form unless `isTitleHidden`. */
   readonly headline: string;
   /** The button's words (popup: the site's own button; floating: the corner button). */
   readonly words: string;
   /** The corner button's colour as `#rrggbb`; left out, the accent. */
   readonly colour?: string;
+  /** The corner button's mark before its words (floating only), as the embed script draws one; left out, words alone. */
+  readonly mark?: IconName;
   /** Inline: the form's ground left clear, so the site's own background shows. */
   readonly isTransparent?: boolean;
   /** Inline: the headline left to the site. */
@@ -20,6 +29,24 @@ export interface EmbedPreviewProps {
   /** What the picture shows, for screen readers ("How the form sits on your site"). */
   readonly label: string;
 }
+
+/** A booking page's fortnight, Sunday first: the weekdays open, as a page with working hours shows them. */
+const FORTNIGHT: readonly boolean[] = [
+  false,
+  true,
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  true,
+  true,
+  true,
+  true,
+  true,
+  false,
+];
 
 /** A colour the preview may draw: a 3 or 6 digit hex, as six lowercase digits, or nothing. */
 function sixDigits(colour: string | undefined): string | undefined {
@@ -35,9 +62,11 @@ function sixDigits(colour: string | undefined): string | undefined {
  */
 export function EmbedPreview({
   mode,
+  kind = 'form',
   headline,
   words,
   colour,
+  mark,
   isTransparent = false,
   isTitleHidden = false,
   label,
@@ -72,14 +101,30 @@ export function EmbedPreview({
         {mode === 'inline' && (
           <div className={styles.form} data-ground={isTransparent ? 'none' : undefined}>
             {!isTitleHidden && <span className={styles.headline}>{headline}</span>}
-            <Skeleton shape="field" width="full" />
-            <Skeleton shape="field" width="full" />
-            <span className={styles.send} />
+            {kind === 'booking' ? (
+              <span className={styles.month}>
+                {FORTNIGHT.map((isOpen, day) => (
+                  // A fixed fortnight that never reorders: its place is its key.
+                  <span key={day} className={styles.day} data-open={isOpen || undefined} />
+                ))}
+              </span>
+            ) : (
+              <>
+                <Skeleton shape="field" width="full" />
+                <Skeleton shape="field" width="full" />
+                <span className={styles.send} />
+              </>
+            )}
           </div>
         )}
         {mode === 'popup' && <span className={styles.siteButton}>{words}</span>}
         <Skeleton lines={2} />
-        {mode === 'floating' && <span className={styles.corner}>{words}</span>}
+        {mode === 'floating' && (
+          <span className={styles.corner} data-marked={mark === undefined ? undefined : ''}>
+            {mark !== undefined && <Icon name={mark} size="sm" />}
+            <span className={styles.words}>{words}</span>
+          </span>
+        )}
       </div>
     </div>
   );
