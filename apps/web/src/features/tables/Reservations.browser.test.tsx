@@ -299,9 +299,7 @@ describe('Reservations (checklabs’ one page)', () => {
     // One day, named by the bar: no head of days to pick from.
     expect(calendar.element().querySelectorAll('button[aria-pressed]')).toHaveLength(0);
     // The hours start at 10:00 and run to midnight: nine o'clock isn't drawn.
-    const hours = [
-      ...calendar.element().querySelectorAll<HTMLElement>('[aria-hidden="true"] > span[class*="hour"]'),
-    ]
+    const hours = [...calendar.element().querySelectorAll<HTMLElement>('[aria-hidden="true"] > span[class*="hour"]')]
       .map((each) => each.textContent)
       .filter((label) => label !== '');
     expect(hours).toHaveLength(14);

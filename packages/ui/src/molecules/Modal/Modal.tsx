@@ -392,10 +392,7 @@ export function Modal({
             body
           )}
           {actions !== undefined && (
-            <div
-              className={styles.foot}
-              ref={footRef}
-            >
+            <div className={styles.foot} ref={footRef}>
               {footerStart !== undefined ? (
                 <div className={styles.footerStart}>{footerStart}</div>
               ) : (

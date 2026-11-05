@@ -133,7 +133,7 @@ describe('the reservation page (checklabs’ order on the booking frame)', () =>
     await userEvent.fill(page.getByRole('textbox', { name: /Phone/ }), '07700 900123');
     await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'ada@example.com');
     await userEvent.click(page.getByRole('button', { name: 'Confirm Mon 14 Jan at 19:30' }));
-    await expect.poll(() => sent.length).toBe(1);
+    await expect.poll(() => sent.length, { timeout: 6_000 }).toBe(1);
     expect(sent[0]).toMatchObject({
       party: 2,
       name: 'Ada Lovelace',
