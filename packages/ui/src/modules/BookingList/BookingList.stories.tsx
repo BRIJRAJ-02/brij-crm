@@ -311,6 +311,9 @@ export const Columns: Story = {
 
 /** Columns in a phone's list: the time and status, then who on a line of their own; the page column and quick changes go. */
 export const ColumnsNarrow: Story = {
+  // Out of the screenshots until the stage is fixed: the list is its own inline-size container, so as a shrink to fit
+  // item of Stage's phone row it measures 0 wide and the shot is only its border. In the app it fills a block column.
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="phone">
       <BookingList {...args} layout="columns" groups={columnGroups()} />
