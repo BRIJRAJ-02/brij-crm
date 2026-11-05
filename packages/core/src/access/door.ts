@@ -38,13 +38,13 @@ import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
+import { managesPageOf } from './scheduling.ts';
 import { workspaceRules } from './stored-rules.ts';
 import { countPageVisit, finishPageVisit, type VisitOrigin } from '../insights/visits.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
 import {
   bookingAccess,
-  can,
   emailLinkAccess,
   formAccess,
   isRole,
@@ -919,8 +919,9 @@ export async function mayPreviewDraft(
   );
   const [page] = read.rows;
   if (page === undefined) return false;
-  if (can(memberAccess(found.member, found.rules), 'booking.admin')) return true;
-  return page.scope === 'member' && page.owner_member_id === found.member.id;
+  // A workspace link has no owner here: only `booking.admin` manages it.
+  const ownerMemberId = page.scope === 'member' ? page.owner_member_id : null;
+  return managesPageOf({ ownerMemberId }, memberAccess(found.member, found.rules));
 }
 
 /** The ids crm_booking_by_token reads past row level security. */
