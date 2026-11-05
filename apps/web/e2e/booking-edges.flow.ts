@@ -276,7 +276,7 @@ test.describe('the booking journey’s edges', () => {
       page.context().waitForEvent('page'),
       create.getByRole('link', { name: 'Manage round robin' }).click(),
     ]);
-    await expect(settings).toHaveURL(/\/bookings\/round-robin/);
+    await expect(settings).toHaveURL(/\/settings\/scheduling\/round-robin/);
     await settings.close();
     await expect(create.getByLabel('Title')).toHaveValue('Team call');
   });

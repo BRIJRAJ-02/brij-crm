@@ -239,7 +239,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'shield-check',
           keywords: ['two factor', '2fa', 'devices', 'sessions', 'sign ins', 'backup codes', 'google', 'sign out'],
         },
-        // The one place to connect a calendar (5 November 2026); Bookings › Calendars shows the same screen.
+        // The one place to connect a calendar (5 November 2026); Bookings links here for setup.
         {
           id: 'calendars',
           label: strings.calendars,

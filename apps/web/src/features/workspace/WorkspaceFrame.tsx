@@ -88,9 +88,6 @@ const NO_NAV: NavSource = {
   getSnapshot: () => NOT_READ,
 };
 
-/** Bookings › Calendars' own address, the one page the stopped calendar banner stays off. */
-const CALENDARS_TAB = /\/bookings\/calendars\/?$/;
-
 /** Settings' own address, with no page named: on a phone, the list of every setting (5 November 2026). */
 const SETTINGS_HOME = /^\/w\/[^/]+\/settings\/?$/;
 
@@ -219,13 +216,9 @@ export function WorkspaceFrame({
   useUndoShortcut(data, toasts, slug, openHelp, openSettings);
   // The member's own sidebar (spec 0034): read with the workspace (AC-936), each change shown at once (AC-937). While
   // it loads, Records alone shows loading; read and failed, the defaults show, and the data layer says so.
-  // Whether this is Bookings › Calendars, the one page the stopped calendar banner stays off (see `banner` below).
-  // Read off the address rather than through the tabs module, which the frame would otherwise pull into the first
-  // load for one comparison; `frame.flow.ts` walks the tab and holds the two together.
-  const isOnCalendars = useLocation({
-    select: (location) =>
-      (currentPage === 'bookings' && CALENDARS_TAB.test(location.pathname)) || settings?.current === 'calendars',
-  });
+  // Whether this is Settings › Account › Calendars, the one page the stopped calendar banner stays off (see `banner`
+  // below); Bookings' old Calendars address redirects there.
+  const isOnCalendars = settings?.current === 'calendars';
   // On a phone (5 November 2026) Settings is a list that pushes into each page: the list alone on Settings' own
   // address, each page alone (its TopBar's chevron the way back) everywhere else in Settings.
   const isSettingsHome = useLocation({ select: (location) => SETTINGS_HOME.test(location.pathname) });

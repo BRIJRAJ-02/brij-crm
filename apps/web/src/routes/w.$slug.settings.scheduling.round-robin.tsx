@@ -6,7 +6,7 @@ import { strings } from '../features/booking/rotation-strings.ts';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 
 // Settings › Scheduling › Round robin (spec 0029; back in Settings on 5 November 2026, so every setting is under
-// Settings): the screen Bookings › Round robin shows too, as a settings page with its New group in the TopBar. The
+// Settings, its one home; Bookings links here): a settings page with its New group in the TopBar. The
 // rotations the reader may see come from the data layer's held list; without `booking.manage` there is no such page
 // (hidden means absent), and the access read comes first, from the data layer's cache.
 export const Route = createFileRoute('/w/$slug/settings/scheduling/round-robin')({

@@ -66,12 +66,12 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings calendar', start: at('tasks'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
-  // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so they are walked as the
-  // tabs they are; each draws its body inside the frame the tab strip already holds.
-  // The Roster, a tab of its own from 31 October 2026: its week's bar and the grid's skeleton rows.
-  { name: 'bookings roster', start: at('bookings/calendar'), target: tab('Roster') },
-  { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
-  { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
+  // The Roster, Availability's other view (5 November 2026): its week's bar and the grid's skeleton rows.
+  {
+    name: 'bookings roster',
+    start: at('bookings/availability'),
+    target: (page) => page.getByRole('radio', { name: 'Roster', exact: true }),
+  },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
@@ -83,6 +83,9 @@ const ALL_SCREENS: readonly Screen[] = [
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
   { name: 'settings members', start: at('settings/account/preferences'), target: sidebar('Members') },
+  // Calendars and Round robin have one home in Settings (5 November 2026); Bookings links there for setup.
+  { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },
+  { name: 'settings round robin', start: at('settings/account/preferences'), target: sidebar('Round robin') },
   { name: 'settings objects', start: at('settings/account/preferences'), target: sidebar('Objects') },
   {
     name: 'settings object attributes',
