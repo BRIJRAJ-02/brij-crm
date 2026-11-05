@@ -3,7 +3,7 @@
 // violations in either theme.
 import '@crm/ui/styles.css';
 import { BRAND_QUICK_PICKS } from '@crm/data';
-import { PageColumn } from '@crm/ui';
+import { BookingPagePicture, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
@@ -29,6 +29,14 @@ async function show(isLive = true) {
           title="Intro call"
           isLive={isLive}
           quickPicks={BRAND_QUICK_PICKS}
+          picture={
+            <BookingPagePicture
+              title="Intro call"
+              lengths="30 min"
+              openDays={[true, true, true, true, true, false, false]}
+              hue="blue"
+            />
+          }
         />
       </PageColumn>
     ),
@@ -46,8 +54,8 @@ const pick = (name: string) =>
     force: true,
   });
 
-/** What the Snippet field holds now. */
-const snippet = () => (page.getByRole('textbox', { name: 'Snippet' }).element() as HTMLTextAreaElement).value;
+/** What the Embed snippet field holds now (named as the form's is, 5 November 2026). */
+const snippet = () => (page.getByRole('textbox', { name: 'Embed snippet' }).element() as HTMLTextAreaElement).value;
 
 describe('Put it on your site', () => {
   it('starts on the corner button, and names the page by its handle address', async () => {
@@ -72,7 +80,8 @@ describe('Put it on your site', () => {
 
   it('keeps the side switch for a button of the site’s own, and drops it in the page', async () => {
     await show();
-    await pick('Your own button');
+    // Popup: the site's own button opens it (the form's Share tab's name for it, 5 November 2026).
+    await pick('Popup');
     await expect.element(page.getByRole('switch', { name: 'Slide in from the side' })).toBeVisible();
     await pick('In the page');
     expect(page.getByRole('switch', { name: 'Slide in from the side' }).query()).toBeNull();
@@ -83,8 +92,8 @@ describe('Put it on your site', () => {
     // The corner button is the first answer, so its own look is offered from the start.
     await expect.element(page.getByRole('radio', { name: 'Timefix' })).toBeVisible();
     expect(snippet()).toContain('data-timefix-icon="calendar"');
-    // Your own button: its words still, but nothing of ours to colour or mark.
-    await pick('Your own button');
+    // Popup, the site's own button: its words still, but nothing of ours to colour or mark.
+    await pick('Popup');
     await expect.element(page.getByRole('textbox', { name: 'Button words' })).toBeVisible();
     expect(page.getByRole('radio', { name: 'Timefix' }).query()).toBeNull();
     const code = snippet();
@@ -107,6 +116,17 @@ describe('Put it on your site', () => {
     const code = snippet();
     expect(code).toContain('Book &quot;now&quot;');
     expect(code).not.toContain('Book "now"');
+  });
+
+  it('says what each way does on its tile, and shows the pick on a made up site', async () => {
+    await show();
+    await expect.element(page.getByText('A button in the corner opens it.')).toBeVisible();
+    await expect.element(page.getByRole('img', { name: 'How the booking page sits on your site' })).toBeVisible();
+    // The mark is a choice of the corner button's own, and writes what it says.
+    await userEvent.click(page.getByRole('radio', { name: 'Mail' }), { force: true });
+    expect(snippet()).toContain('data-timefix-icon="mail"');
+    await userEvent.click(page.getByRole('radio', { name: 'None' }), { force: true });
+    expect(snippet()).not.toContain('data-timefix-icon');
   });
 
   it('hands out no snippet for a page that is not live yet, and says why', async () => {

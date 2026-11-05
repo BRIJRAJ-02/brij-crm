@@ -9,8 +9,14 @@ export const strings = {
   creatingList: 'Creating…',
   cancel: 'Cancel',
   object: 'List of',
+  /**
+   * New list's one line under its title (T11, 5 November 2026: "not sure what this feature is, it's the same as
+   * objects"): a list is some of an object's records, picked by hand, with stages and columns of its own.
+   */
+  newListLine: (plural: string) => `A hand-picked set of ${plural.toLowerCase()}, with its own stages and columns.`,
   name: 'Name',
-  namePlaceholder: 'Sales pipeline',
+  /** Named by what it tracks. */
+  namePlaceholder: 'e.g. Hiring pipeline',
   nameMissing: 'Give the list a name.',
   startWith: 'Start with',
   blank: 'Blank',
@@ -28,6 +34,8 @@ export const strings = {
   layout: 'Layout',
   count: (count: string, isOne: boolean) => `${count} ${isOne ? 'entry' : 'entries'}`,
   empty: (plural: string) => `No ${plural.toLowerCase()} in this list yet.`,
+  /** An empty list's first step (T11), for whoever may add to it: what a list is for, beside Add <singular>. */
+  firstStep: (plural: string) => `Hand-pick the ${plural.toLowerCase()} this list tracks.`,
   failed: 'The list didn’t load.',
   notFoundTitle: 'This list isn’t here',
   notFoundText: 'It may be archived, or you don’t have access.',

@@ -5,10 +5,8 @@
 import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
-  BookingPagePicture,
   Button,
   focusLater,
-  linkHue,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -29,6 +27,7 @@ import { managedPageHref, pageEditorHref, publicBookingPath, publicBookingUrl, t
 import { sharingStrings } from './sharing-strings.ts';
 import { publishStrings } from './publish-strings.ts';
 import { isDraftPage } from './draft-page.ts';
+import { pagePicture } from './page-picture.tsx';
 import { strings } from './strings.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
@@ -89,24 +88,6 @@ function factsOf(page: BookingPageView): readonly string[] {
     ...(page.scheduleId === null ? [] : [page.scheduleName]),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
-}
-
-/** The weekdays in a page's weekly hours, Monday first. */
-const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-
-/**
- * A page's picture on its card (5 November 2026, the forms list's new card worn here too): its title and lengths
- * over a month whose open days are the ones its weekly hours book, in its colour.
- */
-function pictureOf(page: BookingPageView) {
-  return (
-    <BookingPagePicture
-      title={page.title}
-      lengths={page.durations.length === 0 ? '' : strings.minutesChoice(page.durations)}
-      openDays={WEEK.map((day) => page.availability.weekly[day].length > 0)}
-      hue={linkHue(page.id)}
-    />
-  );
 }
 
 /** The cards, New booking page, and each card's switch, Copy link, Open and menu, read from the data layer's held list. */
@@ -201,7 +182,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       // No colour dot (the bookings critique, A22, B-16): a dot before the title read as a status. The state is a
       // badge, as on a form's card, and the switch.
       // What the page looks like to a guest, small: its month, its open days in its colour.
-      picture: pictureOf(page),
+      // Its picture on the card (5 November 2026, the forms list's new card worn here too), drawn as its embed card draws it.
+      picture: pagePicture(page),
       facts: factsOf(page),
       // The link Copy link copies, as a path.
       ...(isDraft ? {} : { address: publicBookingPath(page) }),

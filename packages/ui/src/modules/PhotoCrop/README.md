@@ -39,7 +39,7 @@ The drag, pinch and wheel are about 150 lines of pointer events over pure arithm
 - The Modal is a `window` (`size-dialog-wide`), so the stage is about 750px across on a desk and the window's width on a phone (round 2, 4 November 2026: at 560px the photo was too small to place).
 - The stage: 4:3 (2:1 for a cover), at most 55% of the window's height, in the dark theme whatever the page's (`data-theme="dark"` on it, as HostedFormPreview scopes its theme): `surface-sunken` under the photo, and the dark `scrim` (55%) over all of it but the frame, so what the crop cuts reads as clearly on a light page as on a dark one (a light wash was too pale to show it). The frame's edge is in the accent, and thirds fade in while the photo moves.
 - Under it: the zoom's minus, Slider and plus, then a preview a bar high in the frame's shape (round for a face): the crop as it will sit.
-- The footer: Reset at its start, then Cancel and Use photo.
+- The footer: Reset at its start, then Cancel (with its `ESC` keycap) and Use photo.
 
 ## States
 
@@ -47,7 +47,7 @@ Opening (a Skeleton fills the stage and Use photo waits), ready, moving (thirds 
 
 ## Keyboard and screen readers
 
-The stage is an `application` named "Photo position", described by how to move it. Arrows move the photo that way (2% of the frame; Shift 10%), plus and minus zoom (10%), and after each key a polite status says where the photo's centre stands ("Photo centre 50% across, 43% down.") or the zoom. The Slider is a real slider (Home, End, Page Up and Page Down too). Esc and Cancel leave with nothing used.
+The stage is an `application` named "Photo position", described by how to move it. Arrows move the photo that way (2% of the frame; Shift 10%), plus and minus zoom (10%), and after each key a polite status says where the photo's centre stands ("Photo centre 50% across, 43% down.") or the zoom. The Slider is a real slider (Home, End, Page Up and Page Down too). Esc and Cancel leave with nothing used, from anywhere in the dialog, the stage included (it passes Esc through), and `onCancel` is heard once. Cancel is the footer's close (`slot="close"`), so it shows the `ESC` keycap every dialog's Cancel shows (5 November 2026: it was a plain button with no key, so the cropper read as having no way out by keyboard while Esc already left it). No line in the footer spells out the keys; the keycaps are the hint, as in every Modal.
 
 ## Pointer and touch
 

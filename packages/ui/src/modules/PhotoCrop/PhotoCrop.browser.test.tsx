@@ -72,7 +72,12 @@ async function colourAt(blob: Blob, x: number, y: number): Promise<string> {
 }
 
 /** Opens the cropper on `source` and waits for the photo to be read. */
-async function open(source: Blob, shape: PhotoShape, onDone: (crop: PhotoRect) => void) {
+async function open(
+  source: Blob,
+  shape: PhotoShape,
+  onDone: (crop: PhotoRect) => void,
+  onCancel: () => void = () => undefined,
+) {
   act(() => {
     root.render(
       <UiProvider
@@ -83,7 +88,7 @@ async function open(source: Blob, shape: PhotoShape, onDone: (crop: PhotoRect) =
         toasts={createToasts()}
         clock={createFixedClock(0)}
       >
-        <PhotoCrop source={source} shape={shape} onCancel={() => undefined} onDone={onDone} />
+        <PhotoCrop source={source} shape={shape} onCancel={onCancel} onDone={onDone} />
       </UiProvider>,
     );
   });
@@ -123,6 +128,40 @@ describe('PhotoCrop', () => {
     expect(crop.height).toBeCloseTo(500 / 1.1, 5);
     expect(crop.x + crop.width / 2).toBeCloseTo(560, 5);
     expect(crop.y + crop.height / 2).toBeCloseTo(250, 5);
+  });
+
+  it('shows its way out by keyboard: Cancel says ESC, as every dialog’s Cancel does', async () => {
+    await open(await quarters(), 'circle', () => undefined);
+    const cancel = page.getByRole('button', { name: 'Cancel' });
+    await expect.element(cancel).toBeVisible();
+    await expect.element(cancel).toHaveAttribute('aria-keyshortcuts', 'Escape');
+  });
+
+  it('leaves on Esc from the photo itself, using nothing, and calls onCancel once', async () => {
+    const onDone = vi.fn<(crop: PhotoRect) => void>();
+    const onCancel = vi.fn<() => void>();
+    await open(await quarters(), 'square', onDone, onCancel);
+    // The stage takes the arrows and plus and minus, and lets Esc through to the dialog.
+    await userEvent.click(page.getByRole('application', { name: 'Photo position' }));
+    await userEvent.keyboard('{ArrowLeft}');
+    await userEvent.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('leaves on Esc from the zoom, and on Cancel, each once', async () => {
+    const onCancel = vi.fn<() => void>();
+    await open(await quarters(), 'square', () => undefined, onCancel);
+    act(() => {
+      (page.getByRole('slider', { name: 'Zoom' }).element() as HTMLElement).focus();
+    });
+    await userEvent.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    // Rendered again, open: Cancel leaves through the same door, so it too is heard once.
+    onCancel.mockClear();
+    await open(await quarters(), 'square', () => undefined, onCancel);
+    await userEvent.click(page.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the photo inside the frame however far it is pushed', async () => {

@@ -71,6 +71,11 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* What `content` draws there (a booking page's picture) brings its own inset: the box is its ground and hairline. */
+  .form[data-content] {
+    padding: 0;
+  }
+
   .send {
     align-self: flex-start;
     inline-size: var(--size-column-narrow);
@@ -106,5 +111,18 @@
     letter-spacing: var(--tracking-label-strong);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* With its mark: the mark, then the words, which still cut short with an ellipsis. */
+  .corner[data-marked] {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+  }
+
+  .corner[data-marked] .words {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
