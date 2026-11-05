@@ -84,7 +84,10 @@
      DeferredSelect.module.css draws the same closed trigger before this
      loads: change the two together. */
   .root[data-variant='inline'] {
+    /* Both axes' worth of hugging: in a flex parent align-self does it; in a table cell or a description the root
+       fills the slot, so its own column keeps the trigger to its content and the chevron beside the value. */
     align-self: flex-start;
+    align-items: flex-start;
     min-inline-size: 0;
     max-inline-size: 100%;
   }

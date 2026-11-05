@@ -85,14 +85,14 @@ const PICTURE =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"%3E%3Crect width="2" height="2" fill="%23266df0"/%3E%3C/svg%3E';
 
 /**
- * A member's row in Settings › Members (5 November 2026): their own picture, the name, their email as the quiet line
- * and "You" at the end. The picture waits behind the initials until it has loaded, as Avatar's does.
+ * A member's row in Settings › Members (5 November 2026): their own picture, the name, and "You" and their email as the
+ * quiet line. The picture waits behind the initials until it has loaded, as Avatar's does.
  */
 export const MemberRow: Story = {
-  args: { name: 'Ada Lovelace', meta: ['ada@example.com'], src: PICTURE },
+  args: { name: 'Ada Lovelace', meta: ['You', 'ada@example.com'], src: PICTURE },
   render: (args) => (
     <Stage width="narrow">
-      <PersonLine {...args} size="md" end={<Badge text="You" isWhole />} />
+      <PersonLine {...args} size="md" />
     </Stage>
   ),
   play: async ({ canvasElement }) => {
@@ -100,6 +100,6 @@ export const MemberRow: Story = {
       if (canvasElement.querySelector('img[data-fade="waiting"]') !== null) throw new Error('Still loading.');
     });
     await expect(canvasElement.querySelector('img')).not.toBeNull();
-    await expect(within(canvasElement).getByText('ada@example.com')).toBeVisible();
+    await expect(within(canvasElement).getByText(/ada@example\.com/)).toBeVisible();
   },
 };
