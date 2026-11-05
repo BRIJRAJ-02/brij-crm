@@ -24,6 +24,10 @@ let linked: string[] = [];
 let manifest: Manifest = {};
 
 beforeAll(async () => {
+  // Vitest sets NODE_ENV to `test`, and Vite then compiles JSX for React's development runtime, one more file than a
+  // deploy's build loads: the build here is the production one, as `pnpm build` runs it.
+  const before = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
   await build({
     root: ROOT,
     configFile: path.join(ROOT, 'vite.config.ts'),
@@ -31,6 +35,7 @@ beforeAll(async () => {
     // The real config's source maps too: hidden, then deleted (AC-164).
     build: { outDir, emptyOutDir: true },
   });
+  process.env.NODE_ENV = before;
   assets = readdirSync(path.join(outDir, 'assets'));
   html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
   manifest = JSON.parse(readFileSync(path.join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
