@@ -173,6 +173,42 @@ export const Selectable: Story = {
   },
 };
 
+/** Rows picked for a bulk action where one row can't be (`isRowSelectable`): Alan, a guest here, has no checkbox. */
+function SomeSelectableMembers({ onPick }: { readonly onPick: (ids: ReadonlySet<string>) => void }) {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  return (
+    <Table
+      label="Members"
+      columns={COLUMNS}
+      rows={MEMBERS}
+      getRowId={(member) => member.id}
+      renderCell={cell}
+      selected={selected}
+      onSelectedChange={(ids) => {
+        setSelected(ids);
+        onPick(ids);
+      }}
+      getSelectLabel={(member) => member.name}
+      isRowSelectable={(member) => member.role !== 'Guest'}
+    />
+  );
+}
+
+/**
+ * Some rows can't be picked (an invitation among a workspace's members, 5 November 2026): they draw no checkbox, and
+ * Select all picks only the others.
+ */
+export const SomeRowsSelectable: Story = {
+  args: { onSelectedChange: fn() },
+  render: (args) => <SomeSelectableMembers onPick={args.onSelectedChange ?? (() => undefined)} />,
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.queryByRole('checkbox', { name: 'Select Alan Turing' })).toBeNull();
+    await userEvent.click(canvas.getByRole('checkbox', { name: /Select all/i }));
+    await expect(canvas.getByRole('checkbox', { name: 'Select Grace Hopper' })).toBeChecked();
+    await expect(args.onSelectedChange).toHaveBeenLastCalledWith(new Set(['m1', 'm2']));
+  },
+};
+
 /** A phone's width: the columns keep their width and the table scrolls sideways in its own box. */
 export const Scrollable: Story = {
   args: { isScrollable: true },

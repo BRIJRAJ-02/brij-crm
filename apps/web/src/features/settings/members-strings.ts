@@ -8,10 +8,8 @@ const article = (role: string): string => (/^[AEIOU]/.test(role) ? 'an' : 'a');
 export const strings = {
   title: 'Members',
   membersTab: 'Members',
-  /** Everyone on their way in: requests to join, pending invitations, and the link and company email (SW1). */
-  joiningTab: 'Invitations',
-  askingSection: 'Asking to join',
-  pendingSection: 'Pending invitations',
+  /** The table's name: members, and everyone on their way in (5 November 2026, owner ask T12: one list). */
+  peopleTable: 'Members and invitations',
   otherWaysSection: 'Other ways to join',
   invite: 'Invite people',
   /** The page's second action and the Invite dialog's fold: what each role lets someone do (owner, 27 October 2026). */
@@ -22,6 +20,7 @@ export const strings = {
   rolePowers: (role: string) => `What the ${role} role can do`,
   columns: {
     name: 'Name',
+    status: 'Status',
     email: 'Email',
     role: 'Role',
     joined: 'Joined',
@@ -30,6 +29,37 @@ export const strings = {
     invitedBy: 'Invited by',
     expires: 'Expires',
   },
+  /**
+   * Each row's status (owner ask T12): a member is Active; someone on their way in is Invited (Invite expired once
+   * their link ran out, sent again with Resend) or Asks to join (answered with Approve or Decline).
+   */
+  status: {
+    active: 'Active',
+    invited: 'Invited',
+    expired: 'Invitation expired',
+    asking: 'Asks to join',
+  },
+  /** An invitation's quiet line, under its address. */
+  invitedByLine: (name: string) => `Invited by ${name}`,
+  /** A row opens its details beside the list (owner ask T12): the columns that left the table live here. */
+  details: {
+    email: 'Email',
+    role: 'Role',
+    status: 'Status',
+    joined: 'Joined',
+    twoFactor: 'Two factor',
+    calendar: 'Calendar',
+    scheduling: 'Scheduling access',
+    expires: 'Expires',
+    expired: 'Expired',
+    invitedBy: 'Invited by',
+    requested: 'Requested',
+    copyEmail: 'Copy email',
+    /** The first item of a row's menu: what a click on the row opens. */
+    menu: 'Details',
+  },
+  /** A row's details on a phone, where they fill the screen: their way back to the list. */
+  backToMembers: 'Members',
   /** The Two factor column (spec 0033, AC-895): an authenticator app. */
   twoFactorOn: 'On',
   twoFactorOff: 'Off',
@@ -40,6 +70,8 @@ export const strings = {
   searchNamePlaceholder: 'Name',
   noMatches: 'No members match',
   showMore: 'Show more members',
+  /** The table's foot while more members wait: how many of them show. */
+  shownOf: (shown: number, total: number) => `${String(shown)} of ${String(total)} members`,
   roleFor: (name: string) => `Role for ${name}`,
   rowActions: (name: string) => `Actions for ${name}`,
   remove: 'Remove from workspace',
@@ -69,21 +101,21 @@ export const strings = {
   noInvitations: 'No pending invitations',
   expired: 'Expired',
   resend: 'Resend',
-  revoke: 'Cancel invite',
+  revoke: 'Revoke invitation',
   invitationActions: (email: string) => `Actions for the invitation to ${email}`,
   resent: (email: string) => `Invitation sent again to ${email}.`,
   resentUnsent: (email: string) =>
     `The invitation to ${email} is renewed, but its email didn’t go out. Try Resend again.`,
-  revoked: (email: string) => `Invitation to ${email} cancelled.`,
+  revoked: (email: string) => `Invitation to ${email} revoked.`,
   /** A role change took away what their invitations needed (late trap): they were cancelled, said with the change. */
   roleInvitationsCancelled: (count: number) =>
     count === 1
       ? 'An invitation they sent was cancelled, since their new role can’t send it.'
       : `${String(count)} invitations they sent were cancelled, since their new role can’t send them.`,
   // The confirms (the owner, 21 October 2026: anything that ends something asks first).
-  revokeTitle: (email: string) => `Cancel the invitation to ${email}?`,
+  revokeTitle: (email: string) => `Revoke the invitation to ${email}?`,
   revokeText: 'The link in their email stops working at once.',
-  revokeAction: 'Cancel invitation',
+  revokeAction: 'Revoke invitation',
   /** The confirm's way out when its verb is itself a Cancel: never two buttons called Cancel (as Jobs' Keep job). */
   keepInvitation: 'Keep invitation',
   removeTitle: (name: string, workspace: string) => `Remove ${name} from ${workspace}?`,
@@ -128,7 +160,7 @@ export const strings = {
   inviteLinkCopied: 'Link copied.',
   inviteLinkOnCopied: 'Link on and copied.',
   inviteLinkCopyFailed: sharedStrings.couldntCopy,
-  inviteLinkSpent: 'The invite link has run out. Reset it in Members › Invitations.',
+  inviteLinkSpent: 'The invite link has run out. Reset it under Other ways to join in Members.',
   linkDescription: 'Anyone with the link can join as a member.',
   linkField: 'Link',
   linkCopy: 'Copy link',
@@ -212,7 +244,7 @@ export const strings = {
   alreadyMembers: (list: string) => `Already members: ${list}.`,
   inviteMore: 'Invite more',
   done: 'Done',
-  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Invitations tab.`,
+  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on their row in Members.`,
   // The invite dialog opened outside Settings › Members (InviteTeamDialog), when its first read fails.
   inviteLoadFailed: 'Couldn’t load your team. Check your connection, then try again.',
   inviteTryAgain: 'Try again',
@@ -237,6 +269,8 @@ export const strings = {
   bulkRoleLabel: (count: number) => `Change role for ${String(count)} ${count === 1 ? 'person' : 'people'}`,
   bulkRoleTitle: (count: number, role: string) => `Make ${String(count)} ${count === 1 ? 'person' : 'people'} ${role}?`,
   bulkRoleText: 'Some of them will lose access they have now.',
+  /** Several people given more: it still asks, since a click on a row ticks it while others are ticked. */
+  bulkRoleGiveText: 'They can do what this role allows straight away.',
   bulkRoleChanged: (count: number, role: string) =>
     `${String(count)} ${count === 1 ? 'person is' : 'people are'} now ${role}.`,
   roleCustomDown: (name: string) => `${name} will lose some of what they can do now.`,

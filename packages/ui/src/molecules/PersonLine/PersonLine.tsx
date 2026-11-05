@@ -18,6 +18,11 @@ export interface PersonLineProps {
   readonly id: string;
   readonly name: string;
   /**
+   * The person's own picture (a member's photo, in Settings › Members' rows), in place of their initials; the
+   * initials stay while it loads or if it fails, as Avatar's do.
+   */
+  readonly src?: string;
+  /**
    * The quiet line under the name, its parts in order and joined by a middle dot: the first is what the line is
    * about (the status, the week's hours), so the last, cut first, is the least needed (a job title).
    */
@@ -50,6 +55,7 @@ export interface PersonLineProps {
 export function PersonLine({
   id,
   name,
+  src,
   meta,
   tone = 'quiet',
   size = 'md',
@@ -87,7 +93,7 @@ export function PersonLine({
       {...(isDecorative ? { 'aria-hidden': true } : {})}
     >
       <span className={styles.picture}>
-        <Avatar name={name} id={id} size={size} isDecorative />
+        <Avatar name={name} id={id} size={size} {...(src === undefined ? {} : { src })} isDecorative />
       </span>
       {hint === undefined ? (
         who

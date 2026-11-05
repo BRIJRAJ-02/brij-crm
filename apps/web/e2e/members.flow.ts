@@ -2,8 +2,8 @@
 // Members, and each invitation's email reaches Mailpit with its link; the second person, signed in through the link
 // as themself, opens the first person's link and is refused with the address masked, joining nothing; the first
 // signs in through their link, accepts and lands in the workspace, and the owner's Members page shows them; the used
-// link then reads as no longer valid, like any other bad link; Cancel invite asks first, Keep invitation keeps the
-// invitation, and Cancel invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
+// link then reads as no longer valid, like any other bad link; Revoke invitation asks first, Keep invitation keeps the
+// invitation, and Revoke invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
 // behind a confirm, after which they are in no workspace. axe in light and dark on the invitation page and the Members
 // page (AC-803 to AC-806, AC-810, AC-811, AC-833).
 import { randomUUID } from 'node:crypto';
@@ -71,7 +71,7 @@ async function workspacesOf(page: Page): Promise<string[]> {
   return me.workspaces.map((workspace) => workspace.slug);
 }
 
-test('invites two people: the wrong address is refused, the invited one joins, and Cancel invite asks first', async ({
+test('invites two people: the wrong address is refused, the invited one joins, and Revoke invitation asks first', async ({
   page,
   browser,
 }, info) => {
@@ -105,10 +105,11 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   // A clean invite closes the dialog and says so in a toast; only a partial one keeps its summary open.
   await expect(page.getByText('Invited 2 people')).toBeVisible();
   await expect(invite).toHaveCount(0);
-  await page.getByRole('tab', { name: /^Invitations/ }).click();
-  await expect(page.getByRole('rowheader', { name: invitee })).toBeVisible();
-  // Invitations holds the pending invitations, then the other ways in: the invite link, then the company email.
-  await expect(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
+  // Each invitation is a row of the members' own table, Invited (owner ask T12); the other ways in follow the list:
+  // the invite link, then the company email.
+  await expect(
+    page.getByRole('row', { name: new RegExp(invitee) }).getByText('Invited', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Other ways to join' })).toBeVisible();
   await expect(page.getByRole('switch', { name: 'Invite link' })).toBeVisible();
   await expect(page.getByRole('switch', { name: /ask to join$/ })).toBeVisible();
@@ -139,40 +140,37 @@ test('invites two people: the wrong address is refused, the invited one joins, a
 
   // The owner's Members page shows the newcomer, and their invitation is gone.
   if (!isLive) await page.reload();
-  await page.getByRole('tab', { name: /Members/ }).click();
   await expect(page.getByRole('rowheader', { name: /grace/i })).toBeVisible({ timeout: 15_000 });
   await checkScreen(page, 'members-list');
-  await page.getByRole('tab', { name: /^Invitations/ }).click();
-  await expect(page.getByRole('rowheader', { name: invitee })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Actions for the invitation to ${invitee}` })).toHaveCount(0);
 
   // The used link now reads as no longer valid, like any other bad link.
   await stranger.goto(link);
   await expect(stranger.getByRole('heading', { level: 1, name: 'This invitation is no longer valid' })).toBeVisible();
 
-  // Cancel invite asks first: Keep invitation keeps it; Cancel invitation ends it.
+  // Revoke invitation asks first: Keep invitation keeps it; Revoke invitation ends it.
   const actions = page.getByRole('button', { name: `Actions for the invitation to ${other}` });
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
-  const confirm = page.getByRole('alertdialog', { name: `Cancel the invitation to ${other}?` });
+  await page.getByRole('menuitem', { name: 'Revoke invitation' }).click();
+  const confirm = page.getByRole('alertdialog', { name: `Revoke the invitation to ${other}?` });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Keep invitation' }).click();
   await expect(confirm).toBeHidden();
-  await expect(page.getByRole('rowheader', { name: other })).toBeVisible();
+  await expect(actions).toBeVisible();
   await actions.click();
-  await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
-  await confirm.getByRole('button', { name: 'Cancel invitation' }).click();
-  await expect(page.getByText(`Invitation to ${other} cancelled.`)).toBeVisible();
-  await expect(page.getByRole('rowheader', { name: other })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Revoke invitation' }).click();
+  await confirm.getByRole('button', { name: 'Revoke invitation' }).click();
+  await expect(page.getByText(`Invitation to ${other} revoked.`)).toBeVisible();
+  await expect(actions).toHaveCount(0);
 
   // Slice 3: the owner finds the newcomer by search, makes them an admin at once, then removes them, which asks first.
-  await page.getByRole('tab', { name: /Members/ }).click();
   await page.getByRole('textbox', { name: 'Search members' }).fill('grace');
   await expect(page).toHaveURL(/[?&]q=grace/i);
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toHaveCount(0);
   const grace = page.getByRole('rowheader', { name: /grace/i });
   await expect(grace).toBeVisible();
   await page.getByRole('button', { name: /Role for grace/i }).click();
-  await page.getByRole('option', { name: 'Admin' }).click();
+  await page.getByRole('option', { name: /^Admin/ }).click();
   await expect(page.getByText(/is now an Admin\./)).toBeVisible();
   await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();

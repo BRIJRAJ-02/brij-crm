@@ -61,7 +61,8 @@ export interface TopBarProps {
   readonly isLoading?: boolean;
   /**
    * The way back up on a phone, where the sidebar is hidden (a settings page, 5 November 2026): a chevron before the
-   * title, named by `label` ("All settings"), shown only when the bar is under 480px wide.
+   * title, named by `label` ("All settings"), shown only while the AppShell around the bar is under 480px wide (the
+   * shell's width, never the bar's, so a bar narrowed by the sidebar beside it never shows it).
    */
   readonly back?: { readonly label: string; readonly href: string };
 }

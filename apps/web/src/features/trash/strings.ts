@@ -3,15 +3,20 @@ export const strings = {
   title: 'Trash',
   /** The count beside the title, as a screen reader hears it: "1 record", "1,234 records" (Q98). */
   countLabel: (count: number) => (count === 1 ? 'record' : 'records'),
-  objectFilter: 'Object',
-  allObjects: 'All objects',
+  /** The table's filter (5 November 2026): by the kind of record, every kind first. */
+  kindFilter: 'Kind',
+  allKinds: 'All kinds',
+  /** A record of an archived object, in the Kind column. */
+  archivedKind: (singularName: string) => `${singularName} (archived)`,
   archived: (pluralName: string) => `${pluralName} (archived)`,
-  filterLabel: 'Trash filter',
   columns: {
     name: 'Name',
     object: 'Object',
     deletedBy: 'Deleted by',
     deletedAt: 'Deleted',
+    /** The record's kind: its object's name for one record ("Person"). */
+    kind: 'Kind',
+    actions: 'Actions',
     /** The day the record is deleted for good, 30 days after it was deleted. */
     expiresAt: 'Deleted forever on',
   },
@@ -22,9 +27,26 @@ export const strings = {
   /** The object filter matching nothing. */
   emptyObject: (pluralName: string) => `No deleted ${pluralName.toLowerCase()}`,
   emptyObjectText: (pluralName: string) => `Deleted ${pluralName.toLowerCase()} stay here for 30 days.`,
-  showAll: 'Show all objects',
+  showAll: 'Show all kinds',
   retry: 'Retry',
   restore: 'Restore',
+  /** A row's Restore, named for its record. */
+  restoreFor: (name: string) => `Restore ${name}`,
+  rowActions: (name: string) => `More for ${name}`,
+  /** A restore the server refused (its email taken by another record since): the row says so, its reason in a tip. */
+  notRestored: 'Not restored',
+  /** The tip's subject: its button reads "About Cy Lane not restored". */
+  notRestoredFor: (name: string) => `${name} not restored`,
+  /** A record of an object the person may only read: no Restore on its row. */
+  viewOnlyBadge: 'View only',
+  /** The table's foot while more wait: how many show of how many, beside the next block. */
+  shownOf: (shown: number, total: number, isAtLeast: boolean) => {
+    const format = new Intl.NumberFormat();
+    return `${format.format(shown)} of ${format.format(total)}${isAtLeast ? '+' : ''} records`;
+  },
+  showMore: 'Show more',
+  /** Past the most the table draws: the rest are reached by kind, or by Select all matching. */
+  narrowToSeeMore: 'Filter by kind to see the rest.',
   /** No selected record's object is one the person may change (AC-534), or restore or delete (AC-538). */
   viewOnly: 'View only.',
   /** Over the 500 a restore or Delete forever sends at once; Select all runs more as a background change. */

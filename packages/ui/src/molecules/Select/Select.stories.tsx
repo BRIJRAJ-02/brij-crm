@@ -4,6 +4,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Select } from './SelectWithFaces.tsx';
 import type { SelectItem, SelectProps } from './Select.tsx';
@@ -50,6 +51,33 @@ export const Default: Story = {
     await expect(args.onChange).toHaveBeenCalledWith('qualified');
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
     await waitFor(() => expect(trigger).toHaveFocus());
+  },
+};
+
+/**
+ * Inline where the slot is wider than its words (a table cell, a description; Settings › Members' Role): the chevron
+ * stays beside the value, whatever the slot's width, not at its far edge.
+ */
+export const InlineInAWideSlot: Story = {
+  args: {
+    label: 'Role',
+    isLabelHidden: true,
+    variant: 'inline',
+    items: [
+      { id: 'member', label: 'Member' },
+      { id: 'admin', label: 'Admin' },
+    ],
+    value: 'member',
+  },
+  render: (args) => (
+    <Stage width="dialog">
+      <DescriptionList items={[{ term: 'Role', description: <Select {...args} /> }]} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const description = canvas.getByRole('definition');
+    const trigger = canvas.getByRole('button', { name: /Role/ });
+    await expect(trigger.getBoundingClientRect().width).toBeLessThan(description.getBoundingClientRect().width / 2);
   },
 };
 

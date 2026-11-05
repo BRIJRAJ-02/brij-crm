@@ -1,6 +1,6 @@
 // Brief
 // Purpose: let an owner or admin let people with their own company's email ask to join (spec 0031, AC-819).
-// Main task: switch it on or off; each request then waits under Asking to join, on the Invitations tab.
+// Main task: switch it on or off; each request then waits at the top of Members' table, as Asks to join.
 // Leaves out: other domains (only the admin's own verified one may go on), and answering requests (the tab's).
 import { isDataError, type DataLayer, type WorkspaceDomainsView } from '@crm/data';
 import { SettingsRow, sharedStrings, Switch } from '@crm/ui';

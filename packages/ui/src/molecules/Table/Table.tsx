@@ -102,6 +102,12 @@ interface TableBase<T> {
   readonly selected?: ReadonlySet<string>;
   readonly onSelectedChange?: (ids: ReadonlySet<string>) => void;
   readonly getSelectLabel?: (row: T) => string;
+  /**
+   * Which rows may be ticked, with `selected`: the others draw no checkbox, can't be picked by a click or a key, and
+   * Select all leaves them out, while their row actions still work (an invitation among a workspace's members). Every
+   * row, by default.
+   */
+  readonly isRowSelectable?: (row: T) => boolean;
   /** Keeps the header in view while the page scrolls under it (a long list on its own page). */
   readonly isHeaderSticky?: boolean;
   /**
@@ -168,6 +174,7 @@ export function Table<T>({
   selected,
   onSelectedChange,
   getSelectLabel,
+  isRowSelectable,
   isHeaderSticky = false,
   isScrollable = false,
   isHeaderHidden = false,
@@ -183,6 +190,10 @@ export function Table<T>({
   const { edges, ref: frameRef } = useScrollEdges(scrolls);
   const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
   const ids = rows.map(getRowId);
+  // The rows that can't be ticked (isRowSelectable): disabled for selection alone, so their row actions still work.
+  const unselectable = new Set(
+    isSelectable && isRowSelectable !== undefined ? rows.filter((row) => !isRowSelectable(row)).map(getRowId) : [],
+  );
   const showSkeleton = useDelayedLoading(isLoading);
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
   // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
@@ -210,8 +221,12 @@ export function Table<T>({
             selectionMode: 'multiple' as const,
             selectionBehavior: 'toggle' as const,
             selectedKeys: selected,
+            disabledKeys: unselectable,
+            disabledBehavior: 'selection' as const,
             onSelectionChange: (keys: 'all' | Set<Key>) => {
-              onSelectedChange(keys === 'all' ? new Set(ids) : new Set([...keys].map(String)));
+              onSelectedChange(
+                keys === 'all' ? new Set(ids.filter((id) => !unselectable.has(id))) : new Set([...keys].map(String)),
+              );
             },
           }
         : {})}
@@ -282,11 +297,13 @@ export function Table<T>({
                 </Cell>
               ) : column.id === SELECT ? (
                 <Cell className={styles.cell} data-handle data-select>
-                  <Checkbox
-                    slot="selection"
-                    label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
-                    isLabelHidden
-                  />
+                  {!unselectable.has(item.id) && (
+                    <Checkbox
+                      slot="selection"
+                      label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
+                      isLabelHidden
+                    />
+                  )}
                 </Cell>
               ) : (
                 <Cell
