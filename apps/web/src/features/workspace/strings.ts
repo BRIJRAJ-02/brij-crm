@@ -55,7 +55,6 @@ export const strings = {
   menus: 'Menus',
   qrCodes: 'Tables',
   reservations: 'Reservations',
-  service: 'Service',
   /** The foot's way to the shortcut list (AC-930: it opens the keyboard shortcuts until a help centre exists). */
   help: 'Help and shortcuts',
   /** Item and section menus (spec 0034, AC-932, AC-933). */

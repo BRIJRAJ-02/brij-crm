@@ -1,25 +1,11 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { isPageInstalled } from '../features/hospitality/pages.ts';
-import { pendingPage } from '../features/workspace/ObjectScreen.tsx';
-import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
-import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
-import { ServiceScreen } from '../features/tables/ServiceScreen.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { reservationsSearch } from '../features/tables/search.ts';
 
-// Service, Table seating's host stand (spec 0066 B7 lite): shown only while Table seating is installed.
+// Service's old address: the day view is the Reservations page now (5 November 2026, checklabs' one Reservations
+// page), kept for links and bookmarks (the new reservation emails sent before then), with its day.
 export const Route = createFileRoute('/w/$slug/service')({
-  loader: async ({ context, params }) => {
-    const isInstalled = await isPageInstalled(context.data, params.slug, 'service');
-    const [hospitality, tables] = await Promise.all([context.data.hospitality.load(), context.data.tables.load()]);
-    return { isInstalled, hospitality, tables };
+  validateSearch: reservationsSearch,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: '/w/$slug/reservations', params, search, replace: true });
   },
-  pendingComponent: () => <WorkspacePage currentPage="service" page={pendingPage()} />,
-  component: PageRoute,
 });
-
-function PageRoute() {
-  const { isInstalled, hospitality, tables } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  const { toasts } = Route.useRouteContext();
-  if (!isInstalled) return <ComingScreen slug={slug} page="service" isInstalled={false} />;
-  return <ServiceScreen slug={slug} tables={tables} hospitality={hospitality} toasts={toasts} />;
-}

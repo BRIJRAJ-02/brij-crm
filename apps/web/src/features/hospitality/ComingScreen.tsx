@@ -1,6 +1,6 @@
 // Brief
 // Purpose: an installed Hospitality app's own page until the app itself arrives (spec 0065, AC-6510): Menus, QR
-// codes, Reservations and Service each say they are on their way.
+// codes and Reservations each say they are on their way.
 // Main task: point the person at what they can do now, the places and tables in Settings › Business.
 // Leaves out: the apps themselves (H1 to H4). A page whose app isn't installed is not found, never shown locked.
 import { ButtonLink, EmptyState, TopBar } from '@crm/ui';
@@ -15,10 +15,9 @@ const TITLES: Readonly<Record<HospitalityPage, string>> = {
   menus: workspace.menus,
   qr: workspace.qrCodes,
   reservations: workspace.reservations,
-  service: workspace.service,
 };
 
-const ICONS = { menus: 'utensils', qr: 'qr-code', reservations: 'calendar-check', service: 'table' } as const;
+const ICONS = { menus: 'utensils', qr: 'qr-code', reservations: 'calendar-check' } as const;
 
 /** The page: its title in the bar, and the app's "on its way" with the way to Business. */
 export function ComingScreen({

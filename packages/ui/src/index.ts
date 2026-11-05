@@ -99,6 +99,8 @@ export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { focusLater } from './lib/focus-later.ts';
+/** A breakpoint token in pixels (`bp-page-compact`), for a screen's media query, so no width is written twice. */
+export { breakpointToken } from './lib/token-values.ts';
 /** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
 export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';

@@ -123,12 +123,15 @@ test.describe('the business page with Menu and Table seating', () => {
     let key = '';
     await test.step('the table service published', async () => {
       await page.goto(`/w/${slug}/reservations`);
-      await expect(page.getByLabel('Largest party')).toBeVisible({ timeout: 15_000 });
-      await page.getByLabel('Largest party').fill('4');
-      await page.getByLabel('Book at least').fill('0');
-      await page.getByRole('button', { name: 'Publish', exact: true }).click();
+      await page.getByRole('button', { name: 'Online booking' }).click();
+      const sheet = page.getByRole('dialog', { name: 'Online booking' });
+      await expect(sheet.getByLabel('Max party')).toBeVisible({ timeout: 15_000 });
+      await sheet.getByLabel('Max party').fill('4');
+      await sheet.getByLabel('Min lead').fill('0');
+      await sheet.getByText('Accept online bookings', { exact: true }).click();
+      await sheet.getByRole('button', { name: 'Save settings' }).click();
       await expect(page.getByText('Your reservation page is live.')).toBeVisible({ timeout: 10_000 });
-      const link = await page.getByRole('link', { name: 'Open page' }).getAttribute('href');
+      const link = await sheet.getByRole('link', { name: 'Open page' }).getAttribute('href');
       key = /\/r\/([A-Za-z0-9_-]{16})/.exec(link ?? '')?.[1] ?? '';
       await shot(page, '05-reservations-live');
     });

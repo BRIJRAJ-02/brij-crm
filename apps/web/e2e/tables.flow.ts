@@ -1,7 +1,7 @@
 // Table seating end to end (spec 0066 B7 lite), as a newcomer walks it in an empty workspace "Somewhere": install
 // Table seating (the place opens for lunch and dinner, Tuesday to Sunday), add tables, check the rules and publish; a
 // guest reserves at phone width, finds and changes the reservation, then cancels another; the guest's closed page,
-// a time taken meanwhile and a bad manage link each leave a way on; staff seat and finish on the Service list (a
+// a time taken meanwhile and a bad manage link each leave a way on; staff seat and finish on the Reservations list (a
 // double tap on Seat never finishes the table), open a table from the floor, and seat a walk in at a free table, and
 // a second browser's floor follows. FLOW_SCREENSHOTS=<dir> keeps a picture of each screen, light and dark, at 390
 // and 1280.
@@ -79,22 +79,28 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await shot(page, '03-installed');
   });
 
-  await test.step('the Reservations page before anything is set: the checklist says what is missing', async () => {
+  await test.step('the Reservations page before anything is set: Online booking says what is missing', async () => {
     await page.goto(`/w/${slug}/reservations`);
-    await expect(page.getByText('Take reservations online')).toBeVisible({ timeout: 15_000 });
-    // The first place opened with lunch and dinner, Tuesday to Sunday: only the tables are missing.
-    await expect(page.getByText('Add a table guests can book online.')).toBeVisible();
-    // One Publish: the card's.
-    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(1);
+    // One page: the day, with the way to online booking while guests can't reserve yet.
+    await expect(page.getByText('Guests can’t reserve online yet.')).toBeVisible({ timeout: 15_000 });
     await shots(page, '04-reservations-empty');
-    // Publish before anything is set: refused, with the one thing to fix and the way to it.
-    await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Fix it' })).toBeVisible();
+    await page.getByRole('button', { name: 'Set up online booking' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Online booking' });
+    // The first place opened with lunch and dinner, Tuesday to Sunday: only the tables are missing.
+    await expect(sheet.getByText('Add a table guests can book online.')).toBeVisible();
+    // One save: the sheet's foot.
+    await expect(sheet.getByRole('button', { name: 'Save settings' })).toHaveCount(1);
+    // Publishing before anything is set: refused, with the one thing to fix and the way to it.
+    await sheet.getByText('Accept online bookings', { exact: true }).click();
+    await sheet.getByRole('button', { name: 'Save settings' }).click();
+    await expect(sheet.getByRole('link', { name: 'Fix it' }).first()).toBeVisible();
     await shots(page, '05-publish-refused');
   });
 
   await test.step('opening hours: lunch and dinner, Tuesday to Sunday, from the first install', async () => {
-    await page.getByRole('link', { name: 'Fix it' }).click();
+    await page.getByRole('dialog', { name: 'Online booking' }).getByRole('link', { name: 'Fix it' }).first().click();
+    // The switch turned on wasn't saved: leaving asks first.
+    await page.getByRole('button', { name: 'Leave without saving' }).click();
     await expect(page).toHaveURL(/\/settings\/business\/places\//);
     await expect(page.getByRole('switch', { name: 'Monday' })).not.toBeChecked({ timeout: 15_000 });
     await expect(page.getByRole('switch', { name: 'Tuesday' })).toBeChecked();
@@ -122,28 +128,35 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   let key = '';
   await test.step('rules saved and the page published', async () => {
     await page.goto(`/w/${slug}/reservations`);
-    await expect(page.getByLabel('Largest party')).toHaveValue('8', { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Online booking' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Online booking' });
+    await expect(sheet.getByLabel('Max party')).toHaveValue('8', { timeout: 15_000 });
     // A number that isn't one says so under its field, never quietly becomes a default.
-    await page.getByLabel('Largest party').fill('lots');
-    await page.getByRole('button', { name: 'Save', exact: true }).first().click();
-    await expect(page.getByText('Give a number.')).toBeVisible();
-    await expect(page.getByLabel('Largest party')).toBeFocused();
+    await sheet.getByLabel('Max party').fill('lots');
+    await sheet.getByRole('button', { name: 'Save settings' }).click();
+    await expect(sheet.getByText('Give a number.')).toBeVisible();
+    await expect(sheet.getByLabel('Max party')).toBeFocused();
     await shots(page, '07b-setup-field-error');
-    await page.getByLabel('Largest party').fill('8');
-    await page.getByLabel('Book at least').fill('0');
-    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await sheet.getByLabel('Max party').fill('8');
+    await sheet.getByLabel('Min lead').fill('0');
+    await sheet.getByText('Accept online bookings', { exact: true }).click();
+    await sheet.getByRole('button', { name: 'Save settings' }).click();
     await expect(page.getByText('Your reservation page is live.')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('heading', { name: 'Your page is live' })).toBeVisible();
-    const link = await page.getByRole('link', { name: 'Open page' }).getAttribute('href');
+    // Published, the sheet stays, its top the page's link.
+    await expect(sheet.getByText('Your page is live')).toBeVisible();
+    const link = await sheet.getByRole('link', { name: 'Open page' }).getAttribute('href');
     key = /\/r\/([A-Za-z0-9_-]{16})/.exec(link ?? '')?.[1] ?? '';
     expect(key).not.toBe('');
     await shots(page, '08-reservations-live');
-    // Stopping asks first; Keep taking them changes nothing.
-    await page.getByRole('button', { name: 'Stop taking reservations' }).click();
-    await expect(page.getByRole('alertdialog', { name: 'Stop taking reservations online?' })).toBeVisible();
+    // Taking it offline asks first; Keep taking them changes nothing.
+    await sheet.getByText('Accept online bookings', { exact: true }).click();
+    await sheet.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Stop taking reservations online?' })).toBeVisible();
     await shot(page, '09-stop-asks');
     await page.getByRole('button', { name: 'Keep taking them' }).click();
-    await expect(page.getByRole('heading', { name: 'Your page is live' })).toBeVisible();
+    await expect(sheet.getByText('Your page is live')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /^Discard/ }).click();
   });
 
   const guest = await page
@@ -281,17 +294,18 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   });
 
   await test.step('the host runs the day: seat, then finish, with Undo; the floor follows in another browser', async () => {
-    // The reservation's day on the Service list.
+    // The reservation's day on the Reservations page (Service's old address redirects there).
     await phone.goto(manageUrl);
     await page.goto(`/w/${slug}/service`);
-    await expect(page.getByText('Covers booked')).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/reservations`));
+    await expect(page.getByRole('heading', { name: /^Bookings/ })).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Next day' }).click();
     await expect(page.getByRole('rowheader', { name: /Grace Hopper/ })).toBeVisible({ timeout: 10_000 });
     await shots(page, '20-service-list');
     const floor = await page.context().newPage();
-    await floor.goto(`/w/${slug}/service`);
+    await floor.goto(`/w/${slug}/reservations`);
     await floor.getByRole('button', { name: 'Next day' }).click();
-    await floor.getByText('Floor', { exact: true }).click();
+    await floor.locator('label:has(input[value="floor"])').click();
     // A double tap on Seat seats once: the row's action stays Seat, pending, until the server answers.
     await page.route('**/api/rpc/tables/setStatus**', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1_500));
@@ -304,7 +318,7 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await page.unroute('**/api/rpc/tables/setStatus**');
     await floor.reload();
     await floor.getByRole('button', { name: 'Next day' }).click();
-    await floor.getByText('Floor', { exact: true }).click();
+    await floor.locator('label:has(input[value="floor"])').click();
     await expect(floor.getByText('Seated', { exact: true }).first()).toBeVisible({ timeout: 70_000 });
     await shots(floor, '21-service-floor');
     // A tile opens its table, with the row's actions.
@@ -334,18 +348,19 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
       .first()
       .click();
     await expect(dialog.getByText(/T7 · 8/)).toBeVisible({ timeout: 10_000 });
-    await dialog.getByLabel('Name').fill('Linus');
+    // Two guests are picked to start with, and the name is there at once.
+    await dialog.getByLabel(/Guest name/).fill('Linus');
     await shots(page, '23-walk-in');
     await dialog.getByRole('button', { name: 'Seat now' }).click();
     await expect(page.getByText('Walk in seated at T7, 6 guests')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('rowheader', { name: /Linus/ })).toBeVisible({ timeout: 10_000 });
     await shots(page, '24-service-walk-in-seated');
-    await page.getByText('Floor', { exact: true }).click();
+    await page.locator('label:has(input[value="floor"])').click();
     await shots(page, '25-floor-today');
-    await page.getByText('List', { exact: true }).click();
+    await page.locator('label:has(input[value="list"])').click();
   });
 
-  await test.step('the guest cancels; the Service list shows it cancelled', async () => {
+  await test.step('the guest cancels; the Reservations list shows it cancelled', async () => {
     // The same address with its fragment is a same document move: reload, as a guest opening it later would.
     await phone.goto(manageUrl);
     await phone.reload();

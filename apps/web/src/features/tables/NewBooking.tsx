@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the Service screen's two sheets after checklabs' reservations page: New booking (a reservation the host
+// Purpose: the Reservations page's two booking sheets after checklabs' page: New booking (a reservation the host
 //   takes on the phone or at the desk) and a booking's detail (who, when, how to reach them, and the next move).
 // Main task: take a booking in one sheet (name, day and time, party, a table that fits or the best free one, phone,
 //   email, notes) and read or move one booking without leaving the day.
@@ -53,6 +53,7 @@ const BEST = 'best';
  * and Notes (optional). Cancel, then Create booking; a refusal (the time or table taken) says so and keeps the sheet.
  */
 export function NewBookingDialog({
+  isOpen = true,
   slug,
   tables,
   placeId,
@@ -65,6 +66,8 @@ export function NewBookingDialog({
   onClose,
   onBooked,
 }: {
+  /** Open; the screen keeps the sheet mounted while it closes, so it slides out. */
+  readonly isOpen?: boolean;
   readonly slug: string;
   readonly tables: TablesStore;
   readonly placeId: string;
@@ -139,7 +142,7 @@ export function NewBookingDialog({
 
   return (
     <Modal
-      isOpen
+      isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !isSaving) onClose();
       }}
@@ -279,8 +282,8 @@ export function NewBookingDialog({
   );
 }
 
-/** Where a booking came from, in the stand's words (checklabs' source pill). */
-const sourceOf = (source: string) =>
+/** Where a booking came from, in the stand's words (checklabs' source pill): Phone, Walk in or Online. */
+export const sourceOf = (source: string) =>
   source === 'online' || source === 'desk' || source === 'walk_in' ? strings.source[source] : strings.source.other;
 
 /**

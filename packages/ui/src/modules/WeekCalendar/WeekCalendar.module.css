@@ -1,4 +1,4 @@
-/* WeekCalendar: a header row of days over a scrolling body of 24 hours, an
+/* WeekCalendar: a header row of days over a scrolling body of 24 hours (or the `hours` given), an
    axis column then seven day columns. An hour is --size-toolbar plus --space-16 tall; a
    block's place comes from its minutes (--start, --length) and its slot
    (placeBlocks.ts): a region (--left, --width, fractions of the column),
@@ -23,6 +23,9 @@
     --lanes: 1;
     --span: 1;
     --nest: var(--space-12);
+    /* The hours the grid draws (its `hours`, the whole day by default), and how many show before it scrolls. */
+    --hours: 24;
+    --visible-hours: 12;
 
     position: relative;
     display: flex;
@@ -171,11 +174,12 @@
 
   .scroller {
     overflow-y: auto;
-    block-size: calc(var(--hour) * 12);
+    /* Never taller than the hours drawn: a short stretch leaves no empty strip under the grid. */
+    block-size: calc(var(--hour) * min(var(--visible-hours), var(--hours)));
   }
 
   .body {
-    block-size: calc(var(--hour) * 24);
+    block-size: calc(var(--hour) * var(--hours));
   }
 
   /* Filling its parent: the grid takes the height it is given and the hours scroll inside, never fewer than six. */
@@ -190,13 +194,13 @@
   .root[data-fill] .scroller {
     flex: 1;
     block-size: auto;
-    min-block-size: calc(var(--hour) * 6);
+    min-block-size: calc(var(--hour) * min(6, var(--hours)));
   }
 
   .axis {
     position: relative;
     display: grid;
-    grid-template-rows: repeat(24, var(--hour));
+    grid-template-rows: repeat(var(--hours), var(--hour));
   }
 
   .hour {
@@ -206,6 +210,11 @@
     letter-spacing: var(--tracking-label);
     text-align: end;
     translate: 0 calc(-1 * var(--space-8));
+  }
+
+  /* A grid that starts after midnight (its `hours`) labels its first hour under the top line, where it shows whole. */
+  .hour[data-first] {
+    translate: 0 var(--space-2);
   }
 
   .column {

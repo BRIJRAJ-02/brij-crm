@@ -262,6 +262,13 @@ const HOSPITALITY_PAGE_APP = {
 } as const;
 
 /**
+ * The Hospitality pages the sidebar offers: Service left it (5 November 2026) when its day became the Reservations
+ * page, checklabs' one page for a restaurant's reservations; its address redirects there. A stored choice for it is
+ * skipped on read, as the Roster's is.
+ */
+const HOSPITALITY_PAGES_BUILT = NAV_HOSPITALITY_PAGES.filter((page) => page !== 'service');
+
+/**
  * The Hospitality pages the caller has (spec 0065, AC-6510; Rules settled: Navigation): the installed apps' pages,
  * in their order, for a member holding Manage hospitality or Run service; none for anyone else, or while early access
  * is closed.
@@ -270,7 +277,7 @@ async function hospitalityFor(tx: WorkspaceTx, scope: EngineScope): Promise<read
   if (scope.actor.type !== 'member') return [];
   if (!can(scope.access, 'hospitality.manage') && !can(scope.access, 'hospitality.service')) return [];
   const installed = await installedHospitalityApps(tx, scope.workspaceId);
-  return NAV_HOSPITALITY_PAGES.filter((page) => installed.has(HOSPITALITY_PAGE_APP[page]));
+  return HOSPITALITY_PAGES_BUILT.filter((page) => installed.has(HOSPITALITY_PAGE_APP[page]));
 }
 
 /** The changes `applyNavOp` reads the universe for. */

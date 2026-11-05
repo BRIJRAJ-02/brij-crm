@@ -171,7 +171,8 @@ describe('the sidebar’s Hospitality section (AC-6510)', () => {
     await installApp(w.owner, { app: 'menu', business: CARD });
     expect((await readNav(w.owner)).hospitality).toEqual(['menus']);
     await installApp(w.owner, { app: 'table_seating' });
-    expect((await readNav(w.owner)).hospitality).toEqual(['menus', 'reservations', 'service']);
+    // Reservations is the day and its online booking (5 November 2026): Service has no row of its own.
+    expect((await readNav(w.owner)).hospitality).toEqual(['menus', 'reservations']);
     // A plain member holds neither permission, so sees no section at all.
     expect((await readNav(w.member)).hospitality).toEqual([]);
   });

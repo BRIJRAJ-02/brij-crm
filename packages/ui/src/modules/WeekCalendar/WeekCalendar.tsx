@@ -274,6 +274,18 @@ export interface WeekCalendarProps {
   readonly view?: 'week' | 'day' | 'team';
   /** Lets blocks the screen names move by hand (see `WeekCalendarMove`). Absent, no block moves. */
   readonly move?: WeekCalendarMove;
+  /**
+   * The stretch of each day the grid draws, rounded out to whole hours: Reservations' day calendar draws 10:00 to
+   * midnight, as checklabs' does (from the place's first service when that is earlier). Left out, the whole day.
+   * Time outside it isn't drawn (closed hours, a band and the now line are cut to it), and a span drawn or a block
+   * moved stays inside it, so the screen widens it to hold every block it shows.
+   */
+  readonly drawnHours?: WeekCalendarRange;
+  /**
+   * How many hours show before the grid scrolls (default 12): Reservations' day calendar shows 8, about checklabs'
+   * 560px, so the bookings list under it starts on the first screen. Ignored with `isFill`.
+   */
+  readonly visibleHours?: number;
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -379,7 +391,30 @@ export function WeekCalendar({
   emptyAction,
   view = 'week',
   move,
+  drawnHours,
+  visibleHours,
 }: WeekCalendarProps) {
+  // The hours drawn, whole ones: the grid's top is `dayFrom` and its foot `dayTo`, minutes from midnight.
+  const firstHour = Math.max(0, Math.min(23, Math.floor((drawnHours?.startMinute ?? 0) / 60)));
+  const lastHour = Math.max(firstHour + 1, Math.min(24, Math.ceil((drawnHours?.endMinute ?? 1440) / 60)));
+  const dayFrom = firstHour * 60;
+  const dayTo = lastHour * 60;
+  /** A minute of the day as the grid places it, from the top of its first hour. */
+  const placed = (minute: number) => String(minute - dayFrom);
+  /** A stretch cut to the hours drawn, or nothing when none of it is drawn. */
+  const cut = (range: WeekCalendarRange): WeekCalendarRange | undefined => {
+    const startMinute = Math.max(range.startMinute, dayFrom);
+    const endMinute = Math.min(range.endMinute, dayTo);
+    return endMinute > startMinute ? { startMinute, endMinute } : undefined;
+  };
+  /** A span moved or resized by hand, kept inside the hours drawn, its length kept where it fits. */
+  const keepInHours = (span: WeekCalendarSpan): WeekCalendarSpan => {
+    const length = Math.min(span.endMinute - span.startMinute, dayTo - dayFrom);
+    const startMinute = Math.max(dayFrom, Math.min(span.startMinute, dayTo - length));
+    return { ...span, startMinute, endMinute: startMinute + length };
+  };
+  /** Whether the time now falls on the hours drawn (the now line and its label show only then). */
+  const isNowDrawn = now !== undefined && now.minute >= dayFrom && now.minute <= dayTo;
   const scroller = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const isTeam = view === 'team';
@@ -527,7 +562,7 @@ export function WeekCalendar({
     return {
       dayKeys: shown.map((each) => each.key),
       dayWidth: shown.length > 1 ? first.width : 0,
-      pxPerMinute: first.height / 1440,
+      pxPerMinute: first.height / (dayTo - dayFrom),
     };
   };
   const stepsFor = (id: string): MoveSteps => {
@@ -587,10 +622,12 @@ export function WeekCalendar({
       return null;
     }
     const steps = stepsFor(current.id);
-    const to =
+    // Kept inside the hours drawn: a block never lands where the grid draws nothing.
+    const to = keepInHours(
       grabbed.part === 'resize'
         ? resizedBy(current.from, by.y, columnsNow, steps)
-        : movedBy(current.from, by, columnsNow, steps);
+        : movedBy(current.from, by, columnsNow, steps),
+    );
     return { ...current, to };
   };
   /** Alt and the arrows on a focused block move it a step, with Shift change its length; they land a moment after the last. */
@@ -617,7 +654,9 @@ export function WeekCalendar({
     const columnsNow = measure();
     if (from === undefined || columnsNow === null) return;
     shape.current = columnsNow;
-    const to = keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id));
+    const to = keepInHours(
+      keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id)),
+    );
     if (sameSpan(to, current?.to ?? from)) return;
     setHeld({ id: block.id, from, to, source: 'keys', geometry: columnsNow });
     setSaid(move.canLand(block.id, to) === false ? strings.moveRefused(whereOf(to)) : strings.moveTo(whereOf(to)));
@@ -628,16 +667,16 @@ export function WeekCalendar({
     }, KEYS_SETTLE_MS);
   };
 
-  /** The minute under the pointer in `column`, snapped and clamped to the day. */
+  /** The minute under the pointer in `column`, snapped and clamped to the hours drawn. */
   const minuteAt = (column: HTMLElement, clientY: number): number => {
     const box = column.getBoundingClientRect();
-    const raw = ((clientY - box.top) / box.height) * 1440;
-    return Math.min(1440, Math.max(0, Math.round(raw / SNAP) * SNAP));
+    const raw = dayFrom + ((clientY - box.top) / box.height) * (dayTo - dayFrom);
+    return Math.min(dayTo, Math.max(dayFrom, Math.round(raw / SNAP) * SNAP));
   };
-  /** A span of the default length from `start`, kept inside the day. */
+  /** A span of the default length from `start`, kept inside the hours drawn. */
   const defaultSpan = (dayKey: string, start: number): WeekCalendarSpan => {
-    const startMinute = Math.min(start, 1440 - SNAP);
-    return { dayKey, startMinute, endMinute: Math.min(startMinute + drawMinutes, 1440) };
+    const startMinute = Math.max(dayFrom, Math.min(start, dayTo - SNAP));
+    return { dayKey, startMinute, endMinute: Math.min(startMinute + drawMinutes, dayTo) };
   };
 
   // Opens with the minute asked for at its top, once laid out (it tries again next frame when not yet).
@@ -647,18 +686,18 @@ export function WeekCalendar({
       const box = scroller.current;
       if (box === null) return;
       // The body's own height: in the team view the head scrolls inside too, over it.
-      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / 24;
+      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / (lastHour - firstHour);
       if (box.scrollHeight <= box.clientHeight && tries < 2) {
         frame = requestAnimationFrame(() => place(tries + 1));
         return;
       }
       // A quarter hour above the minute, so its hour's label shows whole.
-      const top = (scrollToMinute / 60) * hour - hour / 4;
+      const top = ((scrollToMinute - firstHour * 60) / 60) * hour - hour / 4;
       box.scrollTop = Math.max(0, Math.min(top, box.scrollHeight - box.clientHeight));
     };
     place(0);
     return () => cancelAnimationFrame(frame);
-  }, [scrollToMinute]);
+  }, [scrollToMinute, firstHour, lastHour]);
 
   /** Left and Right: the day before or after `from` (the one the key was pressed on), selected and focused. */
   const moveDay = (from: string, delta: number) => {
@@ -787,20 +826,32 @@ export function WeekCalendar({
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
       data-view={view}
-      {...(isTeam ? { style: { '--columns': String(Math.max(days.length, 1)) } } : {})}
+      {...(isTeam || drawnHours !== undefined || visibleHours !== undefined
+        ? {
+            style: {
+              ...(isTeam ? { '--columns': String(Math.max(days.length, 1)) } : {}),
+              ...(drawnHours === undefined ? {} : { '--hours': String(lastHour - firstHour) }),
+              ...(visibleHours === undefined ? {} : { '--visible-hours': String(Math.max(1, visibleHours)) }),
+            },
+          }
+        : {})}
     >
-      {!isTeam && headRow}
+      {/* The day view given one day alone has no head: the page's own bar names the day and picks another. */}
+      {!isTeam && !(view === 'day' && days.length === 1) && headRow}
       <div ref={scroller} className={styles.scroller}>
         {isTeam && headRow}
         <div ref={bodyRef} className={styles.body}>
           <div className={styles.axis} aria-hidden="true">
-            {HOURS.map((hour) => (
-              <span key={hour} className={styles.hour}>
+            {HOURS.slice(firstHour, lastHour).map((hour) => (
+              // Midnight's label would sit on the grid's top edge, so it is left out; a later first hour keeps its
+              // label, under its line (the day's start is worth reading on a grid that starts at 10:00).
+              <span key={hour} className={styles.hour} data-first={(hour === firstHour && hour > 0) || undefined}>
                 {hour === 0 ? '' : hourLabel(hour)}
               </span>
             ))}
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
+              isNowDrawn &&
               (now.label !== undefined || minuteLabel !== undefined) &&
               (isTeam || days.some((day) => day.key === now.dayKey)) && (
                 <span
@@ -808,7 +859,7 @@ export function WeekCalendar({
                   // One day across (a phone), it shows only on today, where its line is; every column is today in
                   // the team view.
                   data-on-day={isTeam || now.dayKey === selectedDay || undefined}
-                  style={{ '--start': String(now.minute) }}
+                  style={{ '--start': placed(now.minute) }}
                 >
                   {now.label ?? minuteLabel?.(now.minute)}
                 </span>
@@ -909,36 +960,51 @@ export function WeekCalendar({
                   const open = openHours?.(day.key);
                   return open === undefined
                     ? null
-                    : closedRanges(open).map((range) => (
-                        <span
-                          key={range.startMinute}
-                          className={styles.offHours}
-                          data-off-hours=""
-                          aria-hidden="true"
-                          style={{
-                            '--start': String(range.startMinute),
-                            '--length': String(range.endMinute - range.startMinute),
-                          }}
-                        />
-                      ));
+                    : closedRanges(open)
+                        .flatMap((whole) => {
+                          const range = cut(whole);
+                          return range === undefined ? [] : [range];
+                        })
+                        .map((range) => (
+                          <span
+                            key={range.startMinute}
+                            className={styles.offHours}
+                            data-off-hours=""
+                            aria-hidden="true"
+                            style={{
+                              '--start': placed(range.startMinute),
+                              '--length': String(range.endMinute - range.startMinute),
+                            }}
+                          />
+                        ));
                 })()}
                 {/* A band across the column (time off), under everything drawn on it; the column's name says it. */}
-                {day.band !== undefined && (
-                  <span
-                    className={styles.band}
-                    aria-hidden="true"
-                    style={{
-                      '--start': String(day.band.startMinute),
-                      '--length': String(Math.max(day.band.endMinute - day.band.startMinute, 15)),
-                    }}
-                  >
-                    <span className={styles.bandLabel}>{day.band.label}</span>
-                  </span>
-                )}
+                {(() => {
+                  const band =
+                    day.band === undefined
+                      ? undefined
+                      : cut({
+                          startMinute: day.band.startMinute,
+                          endMinute: Math.max(day.band.endMinute, day.band.startMinute + 15),
+                        });
+                  return day.band === undefined || band === undefined ? null : (
+                    <span
+                      className={styles.band}
+                      aria-hidden="true"
+                      style={{
+                        '--start': placed(band.startMinute),
+                        '--length': String(band.endMinute - band.startMinute),
+                      }}
+                    >
+                      <span className={styles.bandLabel}>{day.band.label}</span>
+                    </span>
+                  );
+                })()}
                 {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
                 {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
                   undefined && (
                   <Ghost
+                    from={dayFrom}
                     span={dragging?.dayKey === day.key ? dragging : (draft ?? dragging)}
                     isDrawing={dragging?.dayKey === day.key}
                     minuteLabel={minuteLabel}
@@ -996,7 +1062,7 @@ export function WeekCalendar({
                         block.provider === 'timefix',
                       )}
                       style={{
-                        '--start': String(block.startMinute),
+                        '--start': placed(block.startMinute),
                         '--length': String(Math.max(length, 15)),
                         '--left': String(block.left),
                         '--width': String(block.width),
@@ -1074,6 +1140,7 @@ export function WeekCalendar({
                   <MoreChip
                     key={more.id}
                     more={more}
+                    from={dayFrom}
                     isOpen={more.id === moreList?.id || more.hidden.some((block) => block.id === openId)}
                     at={minuteLabel?.(more.startMinute) ?? more.hidden[0]?.time ?? ''}
                     ref={(element) => {
@@ -1094,8 +1161,8 @@ export function WeekCalendar({
                     }
                   />
                 ))}
-                {now !== undefined && (isTeam || now.dayKey === day.key) && (
-                  <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
+                {now !== undefined && isNowDrawn && (isTeam || now.dayKey === day.key) && (
+                  <span className={styles.now} style={{ '--start': placed(now.minute) }} aria-hidden="true" />
                 )}
               </div>
             );
@@ -1286,12 +1353,15 @@ function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string, nestA
 /** "+N": blocks folded where a lane would be too narrow, a quiet chip in the last lane that fits; it opens their list. */
 function MoreChip({
   more,
+  from,
   isOpen,
   at,
   ref,
   onPress,
 }: {
   readonly more: More<WeekCalendarBlock>;
+  /** The grid's first minute (its `hours`), which its place counts from. */
+  readonly from: number;
   /** Its list or one of its blocks' cards is open. */
   readonly isOpen: boolean;
   /** When its first block starts ("9:30 AM"), for its name. */
@@ -1313,7 +1383,7 @@ function MoreChip({
       aria-expanded={isOpen}
       aria-label={strings.moreName(more.hidden.length, at)}
       style={{
-        '--start': String(more.startMinute),
+        '--start': String(more.startMinute - from),
         '--length': String(Math.max(more.endMinute - more.startMinute, 15)),
         '--left': String(more.left),
         '--width': String(more.width),
@@ -1331,11 +1401,14 @@ function MoreChip({
 
 /** The span being drawn, or drawn: an outline, dashed while dragging, with its start, and from an hour its end, at opposite corners. */
 function Ghost({
+  from,
   span,
   isDrawing,
   minuteLabel,
   ref,
 }: {
+  /** The grid's first minute (its `hours`), which its place counts from. */
+  readonly from: number;
   readonly span: WeekCalendarSpan | null;
   readonly isDrawing: boolean;
   readonly minuteLabel: ((minute: number) => string) | undefined;
@@ -1350,7 +1423,7 @@ function Ghost({
       data-drawing={isDrawing || undefined}
       data-size={sizeOf(length)}
       aria-hidden="true"
-      style={{ '--start': String(span.startMinute), '--length': String(Math.max(length, 4)) }}
+      style={{ '--start': String(span.startMinute - from), '--length': String(Math.max(length, 4)) }}
     >
       {minuteLabel !== undefined && length >= SNAP && (
         <span className={styles.ghostStart}>{minuteLabel(span.startMinute)}</span>

@@ -29,8 +29,7 @@ export type SidebarPage =
   | 'captures'
   | 'menus'
   | 'qr'
-  | 'reservations'
-  | 'service';
+  | 'reservations';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -57,12 +56,13 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   // The Hospitality apps' pages (spec 0065, AC-6510): the server offers each only while its app is installed.
   menus: { label: strings.menus, icon: 'utensils', href: (slug) => hospitalityHref(slug, 'menus') },
   qr: { label: strings.qrCodes, icon: 'qr-code', href: (slug) => hospitalityHref(slug, 'qr') },
+  // Reservations is Table seating's one page, its day and its online booking (5 November 2026, checklabs' page):
+  // Service's row went with it, and its address redirects there.
   reservations: {
     label: strings.reservations,
     icon: 'calendar-check',
     href: (slug) => hospitalityHref(slug, 'reservations'),
   },
-  service: { label: strings.service, icon: 'table', href: (slug) => hospitalityHref(slug, 'service') },
 };
 
 /** Each section's title. */

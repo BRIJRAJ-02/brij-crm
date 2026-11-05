@@ -250,6 +250,7 @@ describe('@crm/ui', () => {
       'WeekCalendar',
       'WorkspacePreview',
       'arraySource',
+      'breakpointToken',
       'columnWidthOf',
       'completeFilters',
       'conditionOn',
