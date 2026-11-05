@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import { enterBookingPage, mayPreviewDraft, NO_RULE_SOURCE } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -20,6 +21,7 @@ import {
   restoreBookingPageVersion,
   saveBookingPageDraft,
 } from './publish.ts';
+import { getPublicBookingPage, readPublicSlots } from './public.ts';
 import { loadPage } from './slots.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -59,6 +61,11 @@ async function person(name: string) {
 
 /** A plain member of `workspaceId`. */
 async function colleague(workspaceId: string, name: string) {
+  return (await colleagueWithUser(workspaceId, name)).scope;
+}
+
+/** A plain member of `workspaceId`, and their user id. */
+async function colleagueWithUser(workspaceId: string, name: string) {
   const userId = randomUUID();
   await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, $2, $3)`, [
     userId,
@@ -71,7 +78,7 @@ async function colleague(workspaceId: string, name: string) {
       sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${userId}, ${name}, ${`${userId}@example.com`}, 'member', 'system', 'system')`,
     ),
   );
-  return testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, role: 'member' });
+  return { userId, scope: testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, role: 'member' }) };
 }
 
 const page = (scope: ReturnType<typeof testScope>, title = 'Intro') =>
@@ -282,5 +289,76 @@ describe('a page made as a draft (the bookings area, 4 November 2026)', () => {
     expect(live.pausedReason).toBeUndefined();
     expect(live.title).toBe('Intro call');
     expect((await guestsSee(ada.workspaceId, made.id))?.status).toBe('live');
+  });
+});
+
+describe('a draft in its editor’s preview (the owner, 6 November 2026: a new page’s phone read Page not found)', () => {
+  const freshSession = { verifiedAt: new Date(), hasSecondFactor: () => Promise.resolve(false) };
+  const asks = (entry: Awaited<ReturnType<typeof enterBookingPage>>, userId: string, session = freshSession) =>
+    mayPreviewDraft({ db, rules: NO_RULE_SOURCE }, entry, userId, session);
+
+  /** A draft of `scope`'s, and the door a public read comes through. */
+  async function draftOf(scope: Parameters<typeof createBookingPage>[0]) {
+    const made = await createBookingPage(scope, {
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'Europe/London',
+      isDraft: true,
+    });
+    return { made, entry: await enterBookingPage({ db }, made.publicKey) };
+  }
+
+  it('answers a guest as no page, and reads for the preview only when asked for', async () => {
+    const ada = await person('Ada');
+    const { entry } = await draftOf(ada.scope);
+    await expect(getPublicBookingPage(entry)).rejects.toSatisfy(isRefusal);
+    const query = { from: '2030-01-07T00:00:00.000Z', to: '2030-01-14T00:00:00.000Z', tz: 'UTC' };
+    await expect(readPublicSlots(entry, {} as never, query)).rejects.toSatisfy(isRefusal);
+    expect(await asks(entry, ada.userId)).toBe(true);
+    const seen = await getPublicBookingPage(entry, undefined, undefined, undefined, true);
+    expect(seen.title).toBe('Intro');
+  });
+
+  it('never lets a colleague who doesn’t own it, a stranger, a removed member, or another workspace ask', async () => {
+    const ada = await person('Ada');
+    const { entry } = await draftOf(ada.scope);
+    const bea = await colleagueWithUser(ada.workspaceId, 'Bea');
+    expect(await asks(entry, bea.userId)).toBe(false);
+    expect(await asks(entry, randomUUID())).toBe(false);
+    expect(await asks(entry, 'not-a-user')).toBe(false);
+    const other = await person('Cy');
+    expect(await asks(entry, other.userId)).toBe(false);
+    // A colleague's own draft is theirs to see, and the workspace's owner sees it too.
+    const beas = await draftOf(bea.scope);
+    expect(await asks(beas.entry, bea.userId)).toBe(true);
+    expect(await asks(beas.entry, ada.userId)).toBe(true);
+    // Removed, they are nobody.
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(sql`update members set status = 'removed' where user_id = ${bea.userId}`),
+    );
+    expect(await asks(beas.entry, bea.userId)).toBe(false);
+  });
+
+  it('holds a session to the workspace’s sign in rules, as every member request is', async () => {
+    const ada = await person('Ada');
+    const { entry } = await draftOf(ada.scope);
+    await testQuery(
+      ownerUrl,
+      `insert into workspace_security (workspace_id, sessions_valid_after, created_by_type, updated_by_type)
+       values ($1, now(), 'system', 'system')
+       on conflict (workspace_id) do update set sessions_valid_after = now()`,
+      [ada.workspaceId],
+    );
+    const before = { verifiedAt: new Date(Date.now() - 60_000), hasSecondFactor: () => Promise.resolve(true) };
+    expect(await asks(entry, ada.userId, before)).toBe(false);
+    const after = { verifiedAt: new Date(Date.now() + 60_000), hasSecondFactor: () => Promise.resolve(true) };
+    expect(await asks(entry, ada.userId, after)).toBe(true);
+  });
+
+  it('is false on a page that is live or deleted, so asking for a draft changes nothing there', async () => {
+    const ada = await person('Ada');
+    const { made, entry } = await draftOf(ada.scope);
+    await updateBookingPage(ada.scope, { pageId: made.id, settings: { status: 'live' } });
+    expect(await asks(entry, ada.userId)).toBe(false);
   });
 });

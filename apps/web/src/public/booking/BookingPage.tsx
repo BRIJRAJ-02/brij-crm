@@ -52,7 +52,7 @@ import {
   useState,
   type ComponentProps,
 } from 'react';
-import { railBrand, railHost, railTitle } from './host.ts';
+import { hasNoHosts, hostInWords, railBrand, railHost } from './host.ts';
 import { brandHref, preloadImage, wearStylesheet } from '../stylesheet.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
@@ -335,6 +335,7 @@ export function BookingPage({
               ...(back.chosen.duration === undefined ? {} : { duration: back.chosen.duration }),
               ...(handoff === undefined ? {} : { p: handoff }),
               ...(o === undefined ? {} : { o }),
+              ...(isEditorPreview ? { asDraft: true } : {}),
             }),
           ),
         }
@@ -342,7 +343,7 @@ export function BookingPage({
     // Nobody may take it (the page turned out closed, or gone): its failure is then nobody's to report.
     early?.answer.catch(() => undefined);
     linkHash
-      .then((o) => client.page(publicKey, handoff, o))
+      .then((o) => client.page(publicKey, handoff, o, isEditorPreview))
       .then(
         (page) => {
           // A one off link with nothing left to book (spec 0062, AC-6204): its own calm state.
@@ -358,7 +359,12 @@ export function BookingPage({
           // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
           // host's own editor preview still draws it.
           if (page.formOnly === true && !isEditorPreview) {
-            setClosedHost({ name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) });
+            // A team page names nobody: its closed state says so plainly, with no workspace as a host.
+            if (page.team === undefined)
+              setClosedHost({
+                name: page.hostName,
+                ...(page.hostImage === undefined ? {} : { image: page.hostImage }),
+              });
             setLoaded({ state: 'closed' });
             return;
           }
@@ -850,9 +856,9 @@ function Booking({
   const zones = useMemo(() => zoneItems(zone, now(), clockNow), [zone, now, clockNow]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {
-    // As the share preview names it (critic C3): "Intro call with Ada Lovelace".
-    document.title = `${page.title} with ${page.hostName}`;
-  }, [page.title, page.hostName]);
+    // As the share preview names it (critic C3): "Intro call with Ada Lovelace". A team page's title stands alone.
+    document.title = page.team === undefined ? `${page.title} with ${page.hostName}` : page.title;
+  }, [page.title, page.hostName, page.team]);
 
   useEffect(() => {
     if (!needsRead(read, readKey, wanted)) return;
@@ -881,6 +887,7 @@ function Booking({
               // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
               ...(handoff === undefined ? {} : { p: handoff }),
               ...(o === undefined ? {} : { o }),
+              ...(isEditorPreview ? { asDraft: true } : {}),
             },
             controller.signal,
           ),
@@ -973,6 +980,7 @@ function Booking({
     );
     return () => controller.abort();
   }, [
+    isEditorPreview,
     client,
     page.publicKey,
     zone,
@@ -1067,7 +1075,7 @@ function Booking({
   };
 
   const book = (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
-    if (time === undefined) return Promise.resolve({ kind: 'failed', message: strings.errors.failed });
+    if (time === undefined) return Promise.resolve({ kind: 'failed', message: strings.errors.bookFailed });
     const needsPhone = page.location.type === 'phone';
     return tickets
       .take()
@@ -1102,7 +1110,7 @@ function Booking({
           };
         },
         (error: unknown): BookingDetailsOutcome | Promise<BookingDetailsOutcome> => {
-          if (!isDataError(error)) return { kind: 'failed', message: strings.errors.failed };
+          if (!isDataError(error)) return { kind: 'failed', message: strings.errors.bookFailed };
           // The link's last use went to someone else meanwhile (AC-6204).
           if (error.code === 'LINK_USED') {
             onEnded('used');
@@ -1143,10 +1151,10 @@ function Booking({
                   : error.code === 'CONFIG_INVALID'
                     ? strings.errors.gone
                     : error.code === 'API_UNAVAILABLE'
-                      ? strings.errors.offline
+                      ? strings.errors.bookOffline
                       : error.code === 'INPUT_INVALID'
                         ? strings.errors.check
-                        : strings.errors.failed,
+                        : strings.errors.bookFailed,
           };
         },
       );
@@ -1337,7 +1345,7 @@ function Booking({
           step: matchStep,
           isOpen: matchOpen,
           onOpenChange: setMatchOpen,
-          host: { name: page.hostName, ...(page.hostImage === undefined ? {} : { image: page.hostImage }) },
+          host: { name: hostInWords(page), ...(page.hostImage === undefined ? {} : { image: page.hostImage }) },
           ...(known === undefined ? {} : { visitor: known }),
           ...(connectHref === undefined ? {} : { connectHref }),
           ...(bestMatch === undefined
@@ -1409,7 +1417,7 @@ function Booking({
     ) : undefined;
   const frame = {
     host: railHost(page),
-    title: railTitle(page),
+    title: page.title,
     description: page.description,
     facts,
     claimHref: CLAIM_URL,
@@ -1456,7 +1464,11 @@ function Booking({
   const noTimes = allStarts.length === 0 && loaded.size >= Math.min(chunks, 2);
   // Every open time clashes with the visitor's calendar: say so, with Show all times.
   const allBusy = isAllHidden && loaded.size >= Math.min(chunks, 2);
-  const message = read.unreachable ? (
+  const message = hasNoHosts(page) ? (
+    <Callout tone="info" title={strings.noHostsTitle}>
+      {strings.noTimesText}
+    </Callout>
+  ) : read.unreachable ? (
     <Callout tone="warning">{strings.unreachable}</Callout>
   ) : read.failed ? (
     <Callout
@@ -1467,7 +1479,7 @@ function Booking({
         </Button>
       }
     >
-      {strings.errors.failed}
+      {strings.errors.timesFailed}
     </Callout>
   ) : noTimes && shared !== undefined ? (
     // Every time the host shared has gone: said as that, with the way to the page's other times.
@@ -1510,7 +1522,7 @@ function Booking({
         </Button>
       }
     >
-      {strings.allBusy(page.hostName)}
+      {strings.allBusy(hostInWords(page))}
     </Callout>
   ) : undefined;
   const slotList = (layout: 'column' | 'grid') => (

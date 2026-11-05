@@ -8,8 +8,8 @@ export const strings = {
   product: 'Timefix',
   /** A team page's avatar stack, as screen readers name it (spec 0029, AC-759). */
   teamOf: (count: number) => `Team of ${String(count)}`,
-  /** A team page's title line (spec 0037, AC-1339): "Intro call with Acme". */
-  teamTitle: (title: string, workspace: string) => `${title} with ${workspace}`,
+  /** A team page's host, in a sentence. */
+  theTeam: 'the team',
   minutesShort: (count: number) => `${String(count)} min`,
   meeting: (minutes: number, where: string) => `${String(minutes)} min · ${where}`,
   locations: { video: 'Video call', phone: 'Phone call' },
@@ -97,11 +97,13 @@ export const strings = {
     `Hi, I can book you a ${String(minutes)} min ${title} with ${who.label}. When suits you?`,
   /** The chat's name over its first line (critic B-10): what it is, in the host's name. */
   chatAssistant: (host: string) => `${host}’s booking assistant`,
+  chatTeamAssistant: 'Booking assistant',
   /** Few of the host's times fall in the visitor's daytime (critic B-10): said once, in the greeting. */
   chatOffHours: (host: string) => `Most of ${host}’s open times fall outside your daytime.`,
   /** The note, folded into the confirm card. */
   chatCardNote: (note: string) => `Note: ${note.length > 60 ? `${note.slice(0, 59)}…` : note}`,
   chatNoTimes: (host: string) => `${host} is fully booked right now. Check back soon.`,
+  chatTeamNoTimes: 'The team is fully booked right now. Check back soon.',
   chatSuggestions: ['Something later', 'Next week'] as readonly string[],
   /**
    * What the prompt box asks after each reply (the owner, 4 Nov 2026: the words follow the conversation): the first
@@ -165,6 +167,11 @@ export const strings = {
     tooMany: 'Too many attempts just now. Wait a moment and try again.',
     closed: 'This page isn’t taking bookings any more.',
     failed: 'That did not go through. Try again in a moment.',
+    /** A booking that failed: the visitor's first question is whether they are booked. */
+    bookFailed: 'That did not go through, and nothing was booked. Try again in a moment.',
+    bookOffline: 'That did not go through, and nothing was booked. Check your connection and try again.',
+    /** The times couldn't be read: the visitor sent nothing, so nothing "went" anywhere. */
+    timesFailed: 'We couldn’t load the times.',
     /** A refusal naming no field (the bot checks): something the visitor can check, not a shrug. */
     check: 'We couldn’t take that booking. Check your details and try again.',
     offline: 'That did not go through. Check your connection and try again.',
@@ -176,6 +183,8 @@ export const strings = {
   sharedGoneText: 'Pick another time from the page.',
   seeAllTimes: 'See all times',
   noTimesText: 'Check back soon.',
+  /** A team page with nobody on it: not the same as a full diary. */
+  noHostsTitle: 'No one is taking bookings here right now.',
   unreachable: 'Times unavailable. Try again shortly.',
   paused: 'Nothing is bookable here right now.',
   /** A paused page whose host we know (critic B-09). */

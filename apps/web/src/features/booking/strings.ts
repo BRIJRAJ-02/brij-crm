@@ -49,7 +49,16 @@ export const strings = {
   viewOnly: 'View only',
   /** Captures › Links' groups, when the workspace has a link of its own. */
   workspaceGroup: 'Workspace',
-  workspaceGroupLine: 'Links that book whoever in the workspace is free, in turn',
+  workspaceGroupLine: 'Links that book whoever on the team is free, in turn',
+  /** The header's status, and the notice above the tabs, for a live page guests can't book. */
+  statusCantBook: 'Live · can’t be booked',
+  cantBookTitle: 'Guests can’t book this page',
+  openRoundRobin: 'Open Round robin',
+  nobodyOn: 'Nobody is switched on. Add a host, or switch someone on in Round robin.',
+  noTimesAhead: 'No open times in the next two months. Check its booking window and your hosts’ hours.',
+  noTimesAheadOwn: 'No open times in the next two months. Check its booking window and its hours.',
+  /** On a list card: the same words as the editor's status. */
+  cantBookShort: 'Can’t be booked',
   membersGroup: 'Members’ pages',
   /** The reader's own pages, once the list holds someone else's too (spec 0037, AC-1273). */
   yourGroup: 'Your pages',
@@ -97,7 +106,11 @@ export const strings = {
   typeRoundRobinLine: 'Whoever on the team is free.',
   moreTypes: 'More types',
   typeManagedLine: 'You set it up once; each person gets their own copy.',
-  noGroupsYet: 'No round robin groups yet.',
+  needsTeammates: 'Round robin shares meetings between 2 or more people.',
+  inviteTeammates: 'Invite teammates',
+  peopleFailed: 'We couldn’t read your teammates.',
+  retryPeople: 'Try again',
+  peopleLine: 'Someone invited shows here once they join.',
   title: 'Title',
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
@@ -149,7 +162,7 @@ export const strings = {
   /** The Page tab's sections (22 Oct 2026): Details, Sharing, and Profile for a Public page. */
   details: 'Details',
   sharing: 'Sharing',
-  workspaceLinkSharing: 'Workspace link. Books whoever is free.',
+  workspaceLinkSharing: 'Books whoever on the team is free.',
   profile: 'Profile',
   /** The page's one address row: its full link, the part after the owner's handle editable (22 Oct 2026). */
   address: 'Web address',
@@ -211,7 +224,6 @@ export const strings = {
   linkFailed: 'That didn’t work. Try again.',
   /** The requests card (AC-6203). */
   requests: 'Requests',
-  noRequests: 'Nothing waiting.',
   requestsFailed: 'Requests didn’t load.',
   confirm: 'Confirm',
   decline: 'Decline',

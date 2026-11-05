@@ -2,7 +2,7 @@
 // Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273), pages they edit with an Editor badge (AC-1332).
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
-import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView } from '@crm/data';
+import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView, type RotationView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
@@ -29,6 +29,7 @@ import { publishStrings } from './publish-strings.ts';
 import { isDraftPage } from './draft-page.ts';
 import { pagePicture } from './page-picture.tsx';
 import { strings } from './strings.ts';
+import { followsEveryone, hasNoHostsOn } from './team-readiness.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
 const WORKSPACE_GROUP = 'workspace';
@@ -81,10 +82,11 @@ export interface LinksScreenProps {
  * A page's facts: its lengths, its kind, the schedule it names when it doesn't follow the default (spec 0035), and
  * a location that isn't video ("30 or 60 min · One on one · Evenings").
  */
-function factsOf(page: BookingPageView): readonly string[] {
+function factsOf(page: BookingPageView, rotations: readonly RotationView[]): readonly string[] {
   return [
     ...(page.durations.length === 0 ? [] : [strings.minutesChoice(page.durations)]),
-    page.scope === 'workspace' ? strings.workspaceLink : strings.kindLabel[page.kind],
+    // Workspace link only while it books everyone: a team page on one group reads as what it is.
+    followsEveryone(page, rotations) ? strings.workspaceLink : strings.kindLabel[page.kind],
     ...(page.scheduleId === null ? [] : [page.scheduleName]),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
@@ -95,6 +97,9 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const list = useCaptureList(data.bookingPages.view(slug));
+  // The groups, to say what a team page books and whether anyone is on it; while they read, nothing is said.
+  const rotations = useCaptureList(data.rotations.view(slug));
+  const rotationList = rotations.status === 'ready' ? rotations.items : [];
   // The managed pages the reader may change (AC-1333): an empty list for anyone who isn't an admin or an editor.
   const templateList = useCaptureList(data.managedPages.view(slug));
   const [deletingTemplate, setDeletingTemplate] = useState<ManagedPageView | undefined>(undefined);
@@ -184,7 +189,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       // What the page looks like to a guest, small: its month, its open days in its colour.
       // Its picture on the card (5 November 2026, the forms list's new card worn here too), drawn as its embed card draws it.
       picture: pagePicture(page),
-      facts: factsOf(page),
+      facts: factsOf(page, rotationList),
       // The link Copy link copies, as a path.
       ...(isDraft ? {} : { address: publicBookingPath(page) }),
       // Off shows in the muted title, the switch and a Paused badge (as a paused form's); the rest are what they can't say.
@@ -198,11 +203,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               ? { badge: strings.hostRemoved }
               : isOff
                 ? { badge: strings.notTakingBookings }
-                : page.isPrivate
-                  ? { badge: strings.linkOnly }
-                  : page.isEditor === true
-                    ? { badge: sharingStrings.editorBadge }
-                    : {}),
+                : hasNoHostsOn(page, rotations.status === 'ready' ? rotationList : undefined)
+                  ? { badge: strings.cantBookShort }
+                  : page.isPrivate
+                    ? { badge: strings.linkOnly }
+                    : page.isEditor === true
+                      ? { badge: sharingStrings.editorBadge }
+                      : {}),
       isOff,
       isPending,
       ...(isViewOnly || isDraft

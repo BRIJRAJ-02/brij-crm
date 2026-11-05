@@ -667,7 +667,7 @@ async function checkRotationsBook(tx: WorkspaceTx, workspaceId: string, pageId: 
   if (empty !== undefined) {
     throw refuseOn(
       'HOSTS_INVALID',
-      `Nobody is switched on in ${empty.name}, so this page would offer no times. Switch someone on there, or pick another rotation.`,
+      `Nobody is switched on in ${empty.name}, so this page would offer no times. Switch someone on there, or pick another group.`,
       'hosts',
     );
   }

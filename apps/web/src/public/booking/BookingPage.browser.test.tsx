@@ -5,9 +5,10 @@ import { BookingProvider } from '@crm/ui/public-booking';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { BookingPage } from './BookingPage.tsx';
 import { openedBefore, rememberOpened, saveView } from './prefs.ts';
+import { strings } from './strings.ts';
 
 const KEY = 'abcdefghijklmnop';
 
@@ -130,6 +131,64 @@ describe('the view a booking page opens in', () => {
     expect(openedBefore(globalThis.location.pathname)).toBe('chat');
     // The address itself is never kept: a link only page's address is its whole secret.
     expect(globalThis.localStorage.getItem('crm.booking.opens')).not.toContain(globalThis.location.pathname);
+  });
+});
+
+describe('a team page (the owner, 6 November 2026)', () => {
+  /** The page's facts as a team page's, with these initials on its rail. */
+  function teamApi(avatars: readonly { readonly initials: string }[], slots: readonly string[] = []) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/viewer')) return Promise.resolve(answer({ isHost: false, canConnect: false }));
+      if (url.includes('/slots'))
+        return Promise.resolve(answer({ slots: slots.map((start) => ({ start })), timeZone: 'UTC' }));
+      return Promise.resolve(
+        answer({
+          publicKey: KEY,
+          title: 'Team Link',
+          description: '',
+          hostName: 'Brij’s workspace',
+          durations: [30],
+          location: { type: 'video' },
+          hostTimeZone: 'UTC',
+          windowDays: 30,
+          defaultView: 'month',
+          team: { avatars, more: 0 },
+        }),
+      );
+    });
+  }
+
+  it('heads the page, and the tab, with its own title: never the workspace as its host', async () => {
+    vi.stubGlobal('fetch', teamApi([{ initials: 'BR' }, { initials: 'G' }]));
+    show();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Team Link', exact: true })).toBeVisible();
+    expect(document.title).toBe('Team Link');
+    expect(page.getByText(/Brij’s workspace/).elements()).toEqual([]);
+  });
+
+  it('says nobody is taking bookings when nobody is on it, not that its diary is full', async () => {
+    vi.stubGlobal('fetch', teamApi([]));
+    show();
+    await expect.element(page.getByText(strings.noHostsTitle)).toBeVisible();
+    expect(page.getByText(strings.noTimesTitle).elements()).toEqual([]);
+  });
+
+  it('says the times couldn’t load, with Try again, rather than that something didn’t go through', async () => {
+    const api = teamApi([{ initials: 'BR' }]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        return url.includes('/slots')
+          ? Promise.resolve(new Response('{"code":"INTERNAL","message":"no"}', { status: 500 }))
+          : api(input);
+      }),
+    );
+    show();
+    await expect.element(page.getByText(strings.errors.timesFailed)).toBeVisible();
+    await expect.element(page.getByRole('button', { name: strings.retry })).toBeVisible();
+    expect(page.getByText(strings.errors.failed).elements()).toEqual([]);
   });
 });
 

@@ -1,6 +1,6 @@
 // Who heads the rail (spec 0037, AC-1339): a personal page's host by name, with
 // their account picture from our origin when they have one (23 Oct 2026); a team
-// page's faces (initials only, never names) stacked over "Intro call with Acme",
+// page's faces (initials only, never names) stacked over the page's own title,
 // and named "Team of 6" for screen readers.
 import type { PublicBookingPage } from '@crm/data/booking';
 import type { BookingHost, PageBrand } from '@crm/ui/public-booking';
@@ -39,9 +39,17 @@ export function railHost(
   };
 }
 
-/** The rail's title: a team page's names the workspace ("Intro call with Acme"); a personal page's is its own. */
-export function railTitle(page: Pick<PublicBookingPage, 'title' | 'hostName' | 'team'>): string {
-  return page.team === undefined ? page.title : strings.teamTitle(page.title, page.hostName);
+/**
+ * How the page's words name its host, in a sentence: a person by name, a team page as "the team". A workspace's name
+ * read wrong there ("Every time Brij's workspace has open", the owner, 6 November 2026), and none is shown as a host.
+ */
+export function hostInWords(page: Pick<PublicBookingPage, 'hostName' | 'team'>): string {
+  return page.team === undefined ? page.hostName : strings.theTeam;
+}
+
+/** A team page nobody can take a booking on now: every host left, or switched off. Its page says so, not "no times". */
+export function hasNoHosts(page: Pick<PublicBookingPage, 'team'>): boolean {
+  return page.team?.avatars.length === 0;
 }
 
 /** "SL" as "S L", by grapheme, so the stack's initials come out as the server gave them. */

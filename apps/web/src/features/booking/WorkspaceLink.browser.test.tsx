@@ -131,7 +131,7 @@ describe('Captures › Links › Team links › New workspace link', () => {
     const data = {
       preferences: { of: () => held({ status: 'loading' as const }) },
       schedules: { view: () => held({ status: 'ready' as const, schedules: [] }) },
-      rotations: { view: () => rotations },
+      rotations: { view: () => rotations, newId: () => '0199a6f2-0000-7000-8000-0000000000r9' },
       bookingPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p1', create },
       // The dialog mints a managed page's id up front, whether or not it offers the choice.
       managedPages: { newId: () => '0199a6f2-0000-7000-8000-00000000mp01' },
@@ -183,6 +183,7 @@ describe('Captures › Links: the Workspace group', () => {
       bookingPages: { view: () => held({ status: 'ready' as const, items: pages, pendingIds: new Set<string>() }) },
       // No managed pages here: this is about the Workspace group, and Links reads the templates too.
       managedPages: { view: () => noTemplates, remove: vi.fn() },
+      rotations: { view: () => held({ status: 'ready' as const, items: [ROSTER], pendingIds: new Set<string>() }) },
     } as unknown as DataLayer;
     shown = await renderInApp(
       () => (
@@ -198,7 +199,11 @@ describe('Captures › Links: the Workspace group', () => {
   it('puts the workspace’s links first, under their own heading, then members’ pages', async () => {
     await render([
       pageOf('1', 'Intro call'),
-      pageOf('2', 'Talk to us', { kind: 'round_robin', scope: 'workspace' }),
+      pageOf('2', 'Talk to us', {
+        kind: 'round_robin',
+        scope: 'workspace',
+        hosts: { fixed: [], rotations: [ROSTER.id] },
+      }),
       pageOf('3', 'Demo', { kind: 'round_robin' }),
     ]);
     const headings = page
@@ -272,6 +277,48 @@ describe('Everyone on the roster: its dialog', () => {
   });
 });
 
+describe('A team page’s Hosts', () => {
+  const sales = {
+    ...ROSTER,
+    id: '0199a6f2-0000-7000-8000-0000000000e2',
+    follows: undefined,
+    name: 'Sales',
+  } as RotationView;
+
+  it('says who can be booked before anything else, and offers no group when there is none to add', async () => {
+    const team = pageOf('t1', 'Team Link', {
+      kind: 'round_robin',
+      scope: 'workspace',
+      hosts: { fixed: [], rotations: [sales.id] },
+    });
+    const data = { bookingPages: { update: vi.fn() }, scheduling: { loaded: () => null } } as unknown as DataLayer;
+    shown = await renderInApp(
+      () => (
+        <HostsCard
+          data={data}
+          slug="acme"
+          page={team}
+          people={PEOPLE}
+          rotations={[sales]}
+          isLocked={false}
+          rescheduleHost="same"
+          onRescheduleChange={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/captures/links/$pageId', at: '/w/acme/captures/links/t1' },
+    );
+    const who = page.getByRole('grid', { name: rotationStrings.whoIsOn });
+    const kim = who.getByRole('row', { name: /Kim Park/ });
+    await expect.element(kim).toBeVisible();
+    expect(kim.element().textContent).toContain(rotationStrings.isOff);
+    expect(who.getByRole('row', { name: /Ada Lovelace/ }).element().textContent).toContain(rotationStrings.isOn);
+    expect(page.getByText(rotationStrings.addRotation).elements()).toHaveLength(0);
+    await expect.element(page.getByText(rotationStrings.addFixed)).toBeVisible();
+    await checkEverywhere('hosts-team');
+  });
+});
+
 describe('A workspace link’s Hosts', () => {
   it('leads with one switch for everyone, including people who join later; off, the pickers', async () => {
     const link = pageOf('w1', 'Talk to us', {
@@ -280,7 +327,7 @@ describe('A workspace link’s Hosts', () => {
       hosts: { fixed: [], rotations: [ROSTER.id] },
     });
     const update = vi.fn(() => Promise.resolve(link));
-    const data = { bookingPages: { update } } as unknown as DataLayer;
+    const data = { bookingPages: { update }, scheduling: { loaded: () => null } } as unknown as DataLayer;
     shown = await renderInApp(
       () => (
         <HostsCard

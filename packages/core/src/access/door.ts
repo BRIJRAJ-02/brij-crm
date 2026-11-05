@@ -44,6 +44,7 @@ import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type En
 import { inWorkspace } from './run.ts';
 import {
   bookingAccess,
+  can,
   emailLinkAccess,
   formAccess,
   isRole,
@@ -887,6 +888,39 @@ export async function enterBookingPage(deps: { readonly db: Database }, publicKe
     access: bookingAccess(row.page_id, [people, companies, ...(read.answers === null ? [] : [read.answers])]),
   });
   return { scope, pageId: row.page_id, people, companies };
+}
+
+/**
+ * Whether this signed in person may see a page still in draft, in its editor's preview: an active member of its
+ * workspace, passing the workspace's sign in rules as every member request does (spec 0033), who holds `booking.admin`
+ * or owns the page. Anything else is false, the same as a guest: an unknown role, a session the rules refuse, a page
+ * that isn't a draft (so asking for a draft never reads differently on a published page).
+ */
+export async function mayPreviewDraft(
+  deps: Pick<DoorDeps, 'db' | 'rules'>,
+  entry: BookingEntry,
+  userId: string,
+  session: DoorSession,
+): Promise<boolean> {
+  if (!isUuid(userId)) return false;
+  const { workspaceId } = entry.scope;
+  const found = await activeMember(deps.db, workspaceId, { userId }, deps.rules);
+  if (found === undefined || !isKnownMember(found.member)) return false;
+  try {
+    await checkSignInRules(found.signIn, session, new Date());
+  } catch {
+    return false;
+  }
+  const read = await deps.db.withWorkspace(workspaceId, (tx) =>
+    tx.execute<{ readonly scope: string; readonly owner_member_id: string | null }>(
+      sql`select scope, owner_member_id::text as owner_member_id from booking_pages
+          where id = ${entry.pageId}::uuid and deleted_at is null and paused_reason = 'draft'`,
+    ),
+  );
+  const [page] = read.rows;
+  if (page === undefined) return false;
+  if (can(memberAccess(found.member, found.rules), 'booking.admin')) return true;
+  return page.scope === 'member' && page.owner_member_id === found.member.id;
 }
 
 /** The ids crm_booking_by_token reads past row level security. */

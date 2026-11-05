@@ -41,7 +41,6 @@ export const publishStrings = {
   /** Save while drafted settings are among the unsaved ones: they wait for Publish. */
   saveDraft: 'Save draft',
   /** On a section whose settings skip the draft (AC-6813): the address, privacy, the profile, hours, hosts. */
-  goesLive: 'Goes live when saved.',
   /** The Hours tab: the schedule's own hours are shared, so they skip the draft; which schedule waits for Publish. */
   hoursLive: 'Hours and days off go live when saved. A different schedule waits for Publish.',
   /** Restore over a draft that holds changes asks first. */

@@ -524,10 +524,20 @@ export const Details: Story = {
   ),
 };
 
-/** A team page (spec 0037, AC-1339): 4 faces of 6 in place of the picture, and "Intro call with Acme". */
+/** A team page with nobody on it now: no empty stack, just the page's own title. */
+export const TeamNobodyOn: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    title: 'Intro call',
+    host: { name: 'Acme', team: { people: [], total: 0, label: 'Team of 0' } },
+  },
+  render: (args) => <Interactive {...args} />,
+};
+
+/** A team page (spec 0037, AC-1339; owner, 6 November 2026): 4 faces of 6 in place of the picture, over its own title. */
 export const TeamPage: Story = {
   args: {
-    title: 'Intro call with Acme',
+    title: 'Intro call',
     host: {
       name: 'Acme',
       team: {

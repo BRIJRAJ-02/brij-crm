@@ -19,6 +19,7 @@ import {
   type BookingChatLine,
 } from '@crm/ui/public-booking/chat';
 import { useState } from 'react';
+import { hasNoHosts } from './host.ts';
 import { strings } from './strings.ts';
 import { dayKey, dayLabels, offerWords, rangeLabel, timeLabel, zoneName } from './time.ts';
 import type { TicketKeeper } from './ticket.ts';
@@ -73,9 +74,11 @@ function hostOf(page: PublicBookingPage) {
     name: page.hostName,
     ...(isTeam || page.hostImage === undefined ? {} : { image: page.hostImage }),
     // Named as what it is (critic B-10): "Ada's booking assistant", over the conversation's first line.
-    label: strings.chatAssistant(isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName)),
-    // The greeting still speaks as the host ("I'm Ada").
-    first: isTeam ? page.hostName : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
+    label: isTeam
+      ? strings.chatTeamAssistant
+      : strings.chatAssistant(page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
+    // The greeting still speaks as the host ("I'm Ada"); a team page speaks of the team, never the workspace's name.
+    first: isTeam ? strings.theTeam : (page.hostName.trim().split(/\s+/u)[0] ?? page.hostName),
     isTeam,
   };
 }
@@ -170,9 +173,12 @@ function greetingOf(props: ChatPanelProps): Line {
   const host = hostOf(page);
   const greeting = strings.chatGreeting({ label: host.first, isTeam: host.isTeam }, page.title, duration);
   const isOffHours = starts.length > 0 && daytime.length < Math.min(3, starts.length);
-  const text =
-    offered.length === 0
-      ? strings.chatNoTimes(host.first)
+  const text = hasNoHosts(page)
+    ? `${strings.noHostsTitle} ${strings.noTimesText}`
+    : offered.length === 0
+      ? host.isTeam
+        ? strings.chatTeamNoTimes
+        : strings.chatNoTimes(host.first)
       : isOffHours
         ? `${greeting} ${strings.chatOffHours(host.first)}`
         : greeting;
@@ -502,7 +508,7 @@ export function ChatPanel(props: ChatPanelProps) {
                       weekday: tile.weekday ?? '',
                       day: tile.day ?? '',
                       month: tile.month ?? '',
-                      title: strings.chatCardTitle(page.title, page.hostName),
+                      title: page.team === undefined ? strings.chatCardTitle(page.title, page.hostName) : page.title,
                       // The one date format the page uses everywhere (critic B-10): "Thu 5 Nov, 10:30–11:00".
                       when: `${dayLabels(dayKey(Date.parse(start), zone), locale).short}, ${rangeLabel(start, end, zone, locale, hour12)}`,
                       who: `${name} · ${email}`,
@@ -567,7 +573,7 @@ export function ChatPanel(props: ChatPanelProps) {
             setError({ message: strings.errors.closed });
           } else
             setError({
-              message: code === 'API_UNAVAILABLE' ? strings.errors.offline : strings.errors.failed,
+              message: code === 'API_UNAVAILABLE' ? strings.errors.bookOffline : strings.errors.bookFailed,
               onRetry: again,
             });
         },

@@ -196,6 +196,7 @@ export const Status: Story = {
     <Stage direction="column">
       <EditorStatus tone="live" text="Published · v7" />
       <EditorStatus tone="changed" text="Published · Unpublished changes" />
+      <EditorStatus tone="blocked" text="Live · can’t be booked" />
       <EditorStatus tone="draft" text="Not published" />
       <EditorStatus tone="paused" text="Not accepting" />
     </Stage>
@@ -428,6 +429,28 @@ export const WideShare: Story = {
     <Stage height="page" width="fill">
       <PreviewLayout
         previewShare="wide"
+        preview={
+          <LinkPage
+            isPreview
+            person={{ name: 'Anish Gupta', id: 'anish' }}
+            blocks={[{ kind: 'link', id: 'site', title: 'timefix.com', href: 'https://www.timefix.com', hue: 'sky' }]}
+          />
+        }
+      >
+        <Card title="Blocks">
+          <Field label="Title" value="timefix.com" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+};
+
+/** A readable form and the phone side by side, the pair centred (`previewShare="snug"`), for the booking page editor. */
+export const SnugShare: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="snug"
         preview={
           <LinkPage
             isPreview

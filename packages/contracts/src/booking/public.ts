@@ -290,6 +290,8 @@ export const PublicSlotsQuery = z
     tz: TimeZoneName,
     /** A form's signed hand off (spec 0043, AC-1609): the slots of the hosts its routing chose. */
     p: z.string().max(2_000).optional(),
+    /** The editor's preview of a draft: honoured only for someone signed in who may see that draft. */
+    draft: z.literal('1').optional(),
     /**
      * A one off link's token hashed (spec 0062, AC-6204; B-10), as the page read sends it: an invitation only page
      * offers its times only beside an open link. The token itself never leaves the address's fragment.

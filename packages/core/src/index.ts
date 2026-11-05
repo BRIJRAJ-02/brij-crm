@@ -13,6 +13,7 @@ export {
   noteKeyUse,
   type KeyEntry,
   enterWorkspace,
+  mayPreviewDraft,
   type DeletedEntry,
   NO_RULE_SOURCE,
   type DoorDeps,

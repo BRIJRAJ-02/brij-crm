@@ -270,13 +270,14 @@ test.describe('the booking journey’s edges', () => {
     const create = page.getByRole('dialog', { name: 'New booking page' });
     await create.getByLabel('Title').fill('Team call');
     await create.getByText('Round robin', { exact: true }).click();
-    await expect(create.getByText('No round robin groups yet.')).toBeVisible();
-    // Settings opens beside it, so the title typed here isn't lost on the way (B8).
+    // Alone in the workspace: round robin needs teammates. Members opens beside it, so the title typed here isn't lost
+    // on the way (B8). The Team link flow picks people here once there are some.
+    await expect(create.getByText('Round robin shares meetings between 2 or more people.')).toBeVisible();
     const [settings] = await Promise.all([
       page.context().waitForEvent('page'),
-      create.getByRole('link', { name: 'Manage round robin' }).click(),
+      create.getByRole('link', { name: 'Invite teammates' }).click(),
     ]);
-    await expect(settings).toHaveURL(/\/settings\/scheduling\/round-robin/);
+    await expect(settings).toHaveURL(/\/settings\/members/);
     await settings.close();
     await expect(create.getByLabel('Title')).toHaveValue('Team call');
   });

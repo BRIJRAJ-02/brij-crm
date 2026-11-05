@@ -441,7 +441,7 @@ describe('choosing the rotation (Settings, forms.manage)', () => {
     expect(toRotation.ownerRotationId).toBe(rotation.id);
     expect(toRotation.ownerMemberId).toBeUndefined();
     expect(await refusalOf(deleteRotation(w.scope, { rotationId: rotation.id }))).toEqual([
-      { code: 'IN_USE', message: 'Used by 1 form. Move them to another rotation first.' },
+      { code: 'IN_USE', message: 'Used by 1 form. Move them to another group first.' },
     ]);
 
     const toMember = await updateFormSettings(w.scope, { formId: created.id, ownerMemberId: bea.id });

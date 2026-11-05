@@ -43,6 +43,29 @@ export const Default: Story = {
   },
 };
 
+/**
+ * One panel following the chosen tab, its content staying mounted (an editor's preview): the chosen tab's
+ * aria-controls still names the panel after a switch.
+ */
+export const OnePanel: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function OnePanelStory(args) {
+    const [shown, setShown] = useState('activity');
+    return (
+      <Tabs {...args} defaultSelectedKey={undefined} selectedKey={shown} onSelectionChange={setShown}>
+        <TabPanel id={shown}>The same panel.</TabPanel>
+      </Tabs>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    const named = () => canvas.getByRole('tab', { selected: true }).getAttribute('aria-controls') ?? '';
+    await expect(canvas.getByRole('tabpanel').id).toBe(named());
+    await userEvent.click(canvas.getByRole('tab', { name: /Notes/ }));
+    await waitFor(() => expect(canvas.getByRole('tabpanel').id).toBe(named()));
+    await expect(named()).toContain('notes');
+  },
+};
+
 /** Big counts: up to `countMax` as they are, and a capped count as a floor ("10,000+"). */
 export const LargeCounts: Story = {
   args: {

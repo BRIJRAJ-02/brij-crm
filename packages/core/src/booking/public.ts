@@ -165,12 +165,16 @@ async function formOnlyShut(
 const FORM_ONLY_CLOSED = 'This page isn’t taking bookings right now.';
 
 /** The page, live and taking bookings: deleted is "no longer available", paused is closed. */
-async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecord> {
-  return liveOf(await loadPage(tx, entry.pageId));
+async function livePage(tx: WorkspaceTx, entry: BookingEntry, asDraft = false): Promise<PageRecord> {
+  return liveOf(await loadPage(tx, entry.pageId), asDraft);
 }
 
 /** `livePage` for a page already read, so a caller never reads it twice. */
-function liveOf(page: PageRecord | undefined): PageRecord {
+function liveOf(page: PageRecord | undefined, asDraft = false): PageRecord {
+  // The editor's own preview of a page not yet published (`mayPreviewDraft` said so): the page as Publish would open it.
+  if (asDraft && page !== undefined && !page.isDeleted && page.kind !== 'managed' && page.pausedReason === 'draft') {
+    return page;
+  }
   // A managed template is not a page (spec 0037, AC-1333): it holds settings for its members' pages, and its own
   // public link answers as a deleted page does, so nobody ever books the template.
   // A draft, never published (the bookings area, 4 November 2026), answers as no page at all: a guessed address
@@ -274,10 +278,12 @@ export async function getPublicBookingPage(
   link?: { readonly submissionId: string },
   /** A one off link's hash (spec 0062, AC-6204): the page says "This link has been used" when it has nothing left. */
   oneOff?: { readonly hash: string; readonly now: Date },
+  /** The page's editor previewing its draft; only ever true once the door's `mayPreviewDraft` said so. */
+  asDraft = false,
 ): Promise<PublicBookingPage> {
   checkEntry(entry);
   const { facts, pictureUser } = await inWorkspace(entry.scope, async (tx) => {
-    const page = await livePage(tx, entry);
+    const page = await livePage(tx, entry, asDraft);
     const shut = await formOnlyShut(tx, page, link);
     const team = await loadTeam(tx, page);
     const path = await pagePath(tx, page);
@@ -285,7 +291,8 @@ export async function getPublicBookingPage(
       publicKey: page.publicKey,
       title: page.title,
       description: page.description,
-      // A team page names no member before booking (AC-754): the workspace hosts it.
+      // A team page names no member before booking (AC-754): the workspace hosts it. Its title stands alone on the
+      // page (a workspace's name reads wrong as a host); this name is for the calendar's words.
       hostName: team === undefined ? await hostName(tx, page.ownerMemberId) : await workspaceName(tx),
       durations: page.durations,
       location: publicLocation(page),
@@ -928,13 +935,15 @@ export async function readPublicSlots(
    * link (B-10), as it books only with one.
    */
   oneOff?: { readonly hash: string },
+  /** The page's editor previewing its draft; only ever true once the door's `mayPreviewDraft` said so. */
+  asDraft = false,
 ): Promise<PublicSlots> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
   const from = new Date(query.from);
   const to = new Date(query.to);
   const { page, memberIds, team, shut, duration } = await inWorkspace(entry.scope, async (tx) => {
-    const live = await livePage(tx, entry);
+    const live = await livePage(tx, entry, asDraft);
     // Left out, the page's first length: the one the page opens on (PublicSlotsQuery).
     const length = query.duration ?? live.durations[0] ?? 0;
     checkDuration(live, length);

@@ -4,7 +4,7 @@
 // link among the types, and nothing shown turned off. Axe clean in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
-import type { BookingPageView, DataLayer, RotationView } from '@crm/data';
+import type { BookingPageView, DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
@@ -51,13 +51,26 @@ const MADE = {
   updatedAt: '2026-10-31T09:00:00.000Z',
 } as unknown as BookingPageView;
 
-async function render(rotationList: readonly RotationView[] = [], options: { readonly managed?: boolean } = {}) {
+const MADE_GROUP = '0199a6f2-0000-7000-8000-0000000000g1';
+const TEAM: readonly MemberSummary[] = [
+  { id: '0199a6f2-0000-7000-8000-0000000000a1', name: 'Brij Raj', email: 'brij@acme.dev' },
+  { id: '0199a6f2-0000-7000-8000-0000000000a2', name: 'Grace Hopper', email: 'grace@acme.dev' },
+];
+
+async function render(
+  rotationList: readonly RotationView[] = [],
+  options: { readonly managed?: boolean; readonly people?: readonly MemberSummary[] } = {},
+) {
   const create = vi.fn(() => Promise.resolve(MADE));
+  const createGroup = vi.fn(() => Promise.resolve({ id: MADE_GROUP } as RotationView));
   const data = {
     preferences: { of: () => held({ status: 'loading' as const }) },
     rotations: {
       view: () => held({ status: 'ready' as const, items: rotationList, pendingIds: new Set<string>() }),
+      newId: () => MADE_GROUP,
+      create: createGroup,
     },
+    members: { list: () => Promise.resolve(options.people ?? TEAM) },
     bookingPages: { newId: () => MADE.id, create },
     // The dialog mints a managed page's id up front, whether or not it offers the choice (no `onManaged` here).
     managedPages: { newId: () => '0199a6f2-0000-7000-8000-00000000mp01' },
@@ -77,7 +90,7 @@ async function render(rotationList: readonly RotationView[] = [], options: { rea
     ),
     { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
   );
-  return { create, onCreated };
+  return { create, createGroup, onCreated };
 }
 
 /** Axe in both themes, with every entrance settled first. */
@@ -133,6 +146,44 @@ describe('New booking page', () => {
     // A managed page takes its lengths in its own editor.
     await expect.element(dialog.getByRole('radiogroup', { name: strings.duration })).not.toBeInTheDocument();
     await checkThemes('more-types');
+  });
+
+  it('with no group yet, asks who is on it here, and makes the group from them with the page', async () => {
+    const { create, createGroup } = await render();
+    await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Team Link');
+    await userEvent.click(page.getByRole('radio', { name: new RegExp(strings.typeRoundRobin) }), { force: true });
+    await expect.element(page.getByText(strings.peopleLine)).toBeVisible();
+    await checkThemes('people-here');
+    // Fewer than two is said on the picker, and nothing is made.
+    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
+    await expect.element(page.getByText(rotationStrings.needTwo)).toBeVisible();
+    expect(createGroup).not.toHaveBeenCalled();
+    await userEvent.click(page.getByRole('button', { name: new RegExp(rotationStrings.people) }));
+    await userEvent.click(page.getByRole('option', { name: /Brij Raj/ }));
+    await userEvent.click(page.getByRole('option', { name: /Grace Hopper/ }));
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: strings.createPage }));
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(createGroup).toHaveBeenCalledWith(
+      'acme',
+      expect.objectContaining({
+        id: MADE_GROUP,
+        settings: expect.objectContaining({ name: 'Team Link', strategy: 'fair' }) as unknown,
+        members: TEAM.map((person) => expect.objectContaining({ memberId: person.id, isOn: true }) as unknown),
+      }),
+    );
+    expect(create).toHaveBeenCalledWith(
+      'acme',
+      expect.objectContaining({ kind: 'round_robin', hosts: { fixed: [], rotations: [MADE_GROUP] } }),
+    );
+  });
+
+  it('alone in the workspace, says round robin needs teammates, with the way to invite them', async () => {
+    await render([], { people: [{ id: '0199a6f2-0000-7000-8000-0000000000a1', name: 'Brij Raj' }] });
+    await userEvent.click(page.getByRole('radio', { name: new RegExp(strings.typeRoundRobin) }), { force: true });
+    await expect.element(page.getByText(strings.needsTeammates)).toBeVisible();
+    await expect.element(page.getByRole('link', { name: new RegExp(strings.inviteTeammates) })).toBeVisible();
+    await checkThemes('needs-teammates');
   });
 
   it('books the workspace’s only round robin group without asking to pick it', async () => {

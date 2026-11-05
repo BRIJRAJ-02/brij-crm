@@ -164,6 +164,10 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   const { toasts } = useRouteContext({ from: '__root__' });
   const [editing, setEditing] = useState<RotationView | 'new' | undefined>(undefined);
   const [deleting, setDeleting] = useState<RotationView | undefined>(undefined);
+  // What the dialog says while it closes: its words never change on the way out.
+  const [heldDeleting, setHeldDeleting] = useState<RotationView | undefined>(undefined);
+  if (deleting !== undefined && deleting !== heldDeleting) setHeldDeleting(deleting);
+  const isInUse = (heldDeleting?.pages ?? 0) > 0;
   const [isDeleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   // A fresh dialog per opening, so its draft and its id start afresh.
@@ -510,28 +514,36 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         {strings.handOnText(handing?.rotation.name ?? '', handing?.count ?? 0)}
       </Modal>
       <Modal
-        title={strings.deleteTitle(deleting?.name ?? '')}
+        title={
+          isInUse ? strings.deleteInUseTitle(heldDeleting?.name ?? '') : strings.deleteTitle(heldDeleting?.name ?? '')
+        }
         variant="confirm"
-        tone="danger"
+        {...(isInUse ? {} : { tone: 'danger' as const })}
         isOpen={deleting !== undefined}
         isBusy={isDeleteBusy}
         onOpenChange={(isOpen) => {
           if (!isOpen && !isDeleteBusy) setDeleting(undefined);
         }}
         actions={
-          <>
-            <Button slot="close" isDisabled={isDeleteBusy}>
-              {strings.cancel}
-            </Button>
-            <Button variant="danger-solid" isPending={isDeleteBusy} onPress={remove}>
-              {isDeleteBusy ? strings.deleting : strings.deleteAction}
-            </Button>
-          </>
+          // A group a page books from can't go: nothing to confirm, so nothing to press but Close.
+          isInUse ? (
+            <Button slot="close">{strings.deleteInUseClose}</Button>
+          ) : (
+            <>
+              <Button slot="close" isDisabled={isDeleteBusy}>
+                {strings.cancel}
+              </Button>
+              <Button variant="danger-solid" isPending={isDeleteBusy} onPress={remove}>
+                {isDeleteBusy ? strings.deleting : strings.deleteAction}
+              </Button>
+            </>
+          )
         }
       >
         <SettingsStack>
           {deleteError !== undefined && <Callout tone="danger">{deleteError}</Callout>}
-          {strings.deleteText}
+          {isInUse ? strings.deleteInUseText(heldDeleting?.pages ?? 0) : strings.deleteText}
+          {isInUse && heldDeleting !== undefined && <PagesOnGroup data={data} slug={slug} groupId={heldDeleting.id} />}
         </SettingsStack>
       </Modal>
       {/* Mounted only while asked for: it mints a page id and reads the groups as it mounts. */}
@@ -562,5 +574,30 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
         />
       )}
     </SettingsPage>
+  );
+}
+
+/** The booking pages on a group, each a way to its Hosts tab, read only while the dialog that says so is open. */
+function PagesOnGroup({
+  data,
+  slug,
+  groupId,
+}: {
+  readonly data: DataLayer;
+  readonly slug: string;
+  readonly groupId: string;
+}) {
+  const list = useCaptureList(data.bookingPages.view(slug));
+  if (list.status !== 'ready') return null;
+  return (
+    <>
+      {list.items
+        .filter((page) => page.hosts?.rotations.includes(groupId) === true)
+        .map((page) => (
+          <Link key={page.id} href={pageEditorHref(slug, page.id, 'hosts')}>
+            {page.title}
+          </Link>
+        ))}
+    </>
   );
 }
