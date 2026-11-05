@@ -63,11 +63,16 @@
     margin-inline-start: calc(-1 * var(--space-8));
   }
 
-  @container (width < 480px) {
+  /* Shown by the shell's width (AppShell under 480px, `bp-container-md`, where it hides the sidebar), never the bar's:
+     a bar narrowed by the rail or the settings sidebar beside it (a shell of 480 to about 560px) kept the chevron
+     beside a sidebar that already leads back (5 November 2026). Outside an AppShell it never shows. */
+  @container app-shell (width < 480px) {
     .back {
       display: inline-flex;
     }
+  }
 
+  @container (width < 480px) {
     /* On a phone the title holds its place: the end's actions give way first, never the trail. */
     .end {
       flex: 0 1 auto;
