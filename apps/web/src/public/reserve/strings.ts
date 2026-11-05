@@ -75,6 +75,8 @@ export const strings = {
       ? 'You can change or cancel online any time before your visit.'
       : `You can change or cancel online until ${String(cutoffHours)} ${cutoffHours === 1 ? 'hour' : 'hours'} before.`,
   notFound: 'This page is no longer available.',
+  /** The page couldn't be read (no connection): never "no longer available". */
+  offlineTitle: 'Couldn’t load this page',
   tryAgain: 'Try again',
   offline: 'You’re offline. Check your connection and try again.',
   // The manage page.

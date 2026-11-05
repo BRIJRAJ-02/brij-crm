@@ -658,19 +658,32 @@
     display: none;
   }
 
-  .claim {
+  .claim,
+  .railLink {
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
-    font: var(--text-body);
     text-decoration: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
+  .claim {
+    font: var(--text-body);
+  }
+
+  /* The rail's closing link ("Manage booking →"): the claim link's quiet line (below), in the strong weight. */
+  .railLink {
+    align-self: flex-start;
+    margin-block-start: var(--space-4);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   .brand:focus-visible,
-  .claim:focus-visible {
+  .claim:focus-visible,
+  .railLink:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-thick);
   }
@@ -820,22 +833,31 @@
     --frame-look-ink: var(--menu-accent, var(--surface-inverse));
     --frame-look-on-ink: var(--menu-on-accent, var(--on-inverse));
     --frame-accent: var(--frame-brand-accent, var(--frame-look-ink));
-    --frame-accent-hover: var(
-      --frame-brand-accent,
-      color-mix(in oklab, var(--frame-look-ink) 86%, var(--frame-look-card))
-    );
+    /* Unmixed under the pointer too: a brand's accent arrives as the menu's accent, checked at 4.5:1 only as it is. */
+    --frame-accent-hover: var(--frame-brand-accent, var(--frame-look-ink));
     --frame-on-accent: var(--frame-brand-on-accent, var(--frame-look-on-ink));
     --frame-link: var(--frame-brand-link, var(--frame-look-text));
     --frame-accent-soft: var(--frame-brand-soft, var(--frame-look-chip));
-    --frame-accent-border: var(--frame-brand-accent, var(--frame-look-ink));
+    /* A soft edge and hover fill (a day under the pointer), as the app's light accent border is: never the ink. */
+    --frame-accent-border: var(
+      --frame-brand-accent,
+      color-mix(in oklab, var(--frame-look-ink) 16%, var(--frame-look-card))
+    );
     --frame-accent-line: var(--frame-brand-accent, var(--frame-look-ink));
-    --frame-focus: var(--frame-brand-focus, 0 0 0 var(--border-width-thick) var(--frame-look-ink));
+    /* The focus token's own shape (a faint halo) in the ink: a field's edge and a button's ring carry the 3:1 mark,
+       and a solid ring here filled a primary's gap, so Continue only grew. */
+    --frame-focus: var(
+      --frame-brand-focus,
+      0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
+        color-mix(in oklab, var(--frame-look-ink) 16%, transparent)
+    );
 
     background: var(--frame-look-ground);
     color: var(--frame-look-text);
   }
 
-  .root[data-look='menu'] .layout {
+  .root[data-look='menu'] .layout,
+  .root[data-look='menu'] .narrow {
     --surface-subtle: var(--frame-look-ground);
     --surface-raised: var(--frame-look-card);
     --surface-sunken: var(--frame-look-chip);
@@ -847,29 +869,12 @@
     --text-secondary: var(--frame-look-quiet);
   }
 
-  /* The rail's closing link ("Manage booking →"): a quiet line that steps up to the text under the pointer. */
-  .railLink {
-    display: inline-flex;
-    align-items: center;
-    align-self: flex-start;
-    gap: var(--space-4);
-    margin-block-start: var(--space-4);
-    border-radius: var(--radius-xs);
-    color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    text-decoration: none;
-    transition: color var(--duration-hover) var(--ease-hover);
-  }
-
-  .railLink:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
-    outline-offset: var(--border-width-thick);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .railLink:hover {
-      color: var(--text);
+  /* A phone, its times growing with the page: the details step takes the card's own height, as in an embed, so no
+     screen of empty card sits above Confirm; the month keeps its state and comes back with Back. */
+  @media (width < 1024px) {
+    .card[data-follow] > .head[inert],
+    .card[data-follow] .under[inert] {
+      display: none;
     }
   }
 
@@ -920,7 +925,8 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .claim:hover {
+    .claim:hover,
+    .railLink:hover {
       color: var(--text);
     }
   }

@@ -219,14 +219,15 @@ export function SlotList({
             const before = shownGroups.slice(0, groupIndex).reduce((count, each) => count + each.slots.length, 0);
             const headingId = `${groupId}-${String(groupIndex)}`;
             return (
-              <section key={group.id} className={styles.group} aria-labelledby={headingId}>
+              // A plain block under its small heading: Lunch and Dinner are never landmarks of their own.
+              <div key={group.id} className={styles.group}>
                 <h3 id={headingId} className={styles.groupHeading}>
                   {group.heading}
                 </h3>
                 <ul className={styles.list} aria-label={strings.groupTimes(group.heading, heading)}>
                   {group.slots.map((slot, index) => item(slot, before + index))}
                 </ul>
-              </section>
+              </div>
             );
           })}
         </div>

@@ -39,6 +39,29 @@ async function isHidden(tx: WorkspaceTx, workspaceId: string): Promise<boolean> 
   return state?.hidden === true;
 }
 
+/**
+ * The place's guest menu address (`/m/<menu key>`) while guests can open it: the Menu app installed, the menu not
+ * hidden, and a version published for the place; else undefined. A light read for a page that only links the menu
+ * (the reservation page), in the caller's workspace transaction.
+ */
+export async function guestMenuPathOf(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  placeId: string,
+): Promise<string | undefined> {
+  if (!(await appInstalled(tx, workspaceId, 'menu')) || (await isHidden(tx, workspaceId))) return undefined;
+  const [place] = await tx
+    .select({
+      menuKey: places.menuKey,
+      published: sql<boolean>`exists (
+        select 1 from menu_versions v where v.workspace_id = ${places.workspaceId} and v.place_id = ${places.id}
+      )`,
+    })
+    .from(places)
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
+  return place !== undefined && place.published && isMenuKey(place.menuKey) ? `/m/${place.menuKey}` : undefined;
+}
+
 /** The nil uuid: a workspace no row has, for the lookup made before the workspace is known. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
 

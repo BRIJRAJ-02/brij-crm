@@ -47,13 +47,14 @@
     --text: var(--business-text);
     --text-secondary: var(--business-quiet);
     --accent: var(--business-ink);
-    --accent-hover: color-mix(in oklab, var(--business-ink) 86%, var(--business-card));
+    --accent-hover: var(--business-ink);
     --on-accent: var(--business-on-ink);
     --accent-line: var(--business-ink);
-    --accent-border: var(--business-ink);
+    --accent-border: color-mix(in oklab, var(--business-ink) 16%, var(--business-card));
     --accent-soft: var(--business-chip);
     --link: var(--business-link);
-    --shadow-focus: 0 0 0 var(--border-width-thick) var(--business-ink);
+    --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
+      color-mix(in oklab, var(--business-ink) 16%, transparent);
   }
 
   .frame {
@@ -359,8 +360,10 @@
   }
 
   /* A phone with no gallery: the header a step under the top, never flush against it. */
-  .frame[data-bare] {
-    padding-block-start: var(--space-16);
+  @media (width < 1024px) {
+    .frame[data-bare] {
+      padding-block-start: var(--space-16);
+    }
   }
 
   /* A laptop and up: the page in its own margins. */

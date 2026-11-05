@@ -125,6 +125,8 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-left"
             label={strings.previousMonth}
+            // A guest's thumb: the plain month's arrows press across 44px, drawn as before.
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canPrevious}
             onPress={() => onMonthChange(shiftMonth(month, -1))}
           />
@@ -132,6 +134,7 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-right"
             label={strings.nextMonth}
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canNext}
             onPress={() => onMonthChange(shiftMonth(month, 1))}
           />

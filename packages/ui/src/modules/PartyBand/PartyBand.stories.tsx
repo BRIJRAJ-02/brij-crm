@@ -21,7 +21,7 @@ export const Default: Story = {
     await expect(canvas.getByText('Party size')).toBeInTheDocument();
     await expect(canvas.getByText('Up to 4 guests')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'One more guest' }));
-    await expect(canvas.getByText('3')).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'Party size' })).toHaveTextContent('3');
     await expect(canvas.queryByText(/More than/)).toBeNull();
   },
 };

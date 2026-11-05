@@ -52,6 +52,43 @@
     max-inline-size: var(--size-page-card);
   }
 
+  /* `menu` (a restaurant's reservation): BookingFrame's guest look, each colour from the `--menu-*` properties with a
+     token behind it, the accent the ink. Worked out at the root; the column's names point at them one level in. */
+  .root[data-look='menu'] {
+    --receipt-ground: var(--menu-ground, var(--surface-subtle));
+    --receipt-card: var(--menu-card, var(--surface-raised));
+    --receipt-chip: var(--menu-chip, var(--surface-sunken));
+    --receipt-line: var(--menu-line, var(--border));
+    --receipt-text: var(--menu-text, var(--text));
+    --receipt-quiet: var(--menu-quiet, var(--text-secondary));
+    --receipt-ink: var(--menu-accent, var(--surface-inverse));
+    --receipt-on-ink: var(--menu-on-accent, var(--on-inverse));
+
+    background: var(--receipt-ground);
+    color: var(--receipt-text);
+  }
+
+  .root[data-look='menu'] .column {
+    --surface-subtle: var(--receipt-ground);
+    --surface-raised: var(--receipt-card);
+    --surface-sunken: var(--receipt-chip);
+    --surface-hover: var(--receipt-chip);
+    --surface-selected: var(--receipt-chip);
+    --border: var(--receipt-line);
+    --border-subtle: var(--receipt-line);
+    --text: var(--receipt-text);
+    --text-secondary: var(--receipt-quiet);
+    --accent: var(--receipt-ink);
+    --accent-hover: var(--receipt-ink);
+    --accent-line: var(--receipt-ink);
+    --accent-border: color-mix(in oklab, var(--receipt-ink) 16%, var(--receipt-card));
+    --accent-soft: var(--receipt-chip);
+    --on-accent: var(--receipt-on-ink);
+    --link: var(--receipt-text);
+    --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
+      color-mix(in oklab, var(--receipt-ink) 16%, transparent);
+  }
+
   .head {
     display: flex;
     flex-direction: column;

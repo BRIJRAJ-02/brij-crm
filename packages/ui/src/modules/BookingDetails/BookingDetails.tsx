@@ -36,6 +36,19 @@ export interface BookingDetailsValues {
   readonly trap: string;
 }
 
+/**
+ * What a guest has typed so far, kept by the page while the step is away (a one page's Back, a time taken meanwhile)
+ * and handed back as `draft`, so nothing typed is lost.
+ */
+export interface BookingDetailsDraft {
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly note: string;
+  /** The page's own questions' answers, by key, as their controls hold them. */
+  readonly answers: Readonly<Record<string, unknown>>;
+}
+
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
   /**
@@ -129,6 +142,13 @@ export interface BookingDetailsProps {
    * takes the row beside Back.
    */
   readonly confirmNote?: string;
+  /**
+   * What the guest typed when the step was last open (see `onDraft`): every field starts there, with no "Booking as"
+   * line, since the guest typed it themselves. Wins over `prefill`.
+   */
+  readonly draft?: BookingDetailsDraft;
+  /** Each change to what is typed, so the page can keep it while the step is away and hand it back as `draft`. */
+  readonly onDraft?: (draft: BookingDetailsDraft) => void;
 }
 
 /** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
@@ -205,14 +225,16 @@ export function BookingDetails({
   isPhoneFirst = false,
   intro,
   confirmNote,
+  draft,
+  onDraft,
 }: BookingDetailsProps) {
   // The guest size only when asked for, so the booking page's fields carry no size at all, as before; its buttons
   // are then a thumb's 44px, as the Book bar before them.
   const sized = fieldSize === 'lg' ? { size: 'lg' as const } : {};
   const actionSize = fieldSize === 'lg' ? 'touch' : 'lg';
-  const [name, setName] = useState(prefill?.name ?? '');
-  const [email, setEmail] = useState(prefill?.email ?? '');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(draft?.name ?? prefill?.name ?? '');
+  const [email, setEmail] = useState(draft?.email ?? prefill?.email ?? '');
+  const [phone, setPhone] = useState(draft?.phone ?? '');
   // Guests are chips (the owner, 1 November 2026): an address becomes one when Enter, a comma, a space or leaving the
   // field ends it, and whatever is still typed is taken on Confirm, so a guest is never dropped.
   const [guests, setGuestsState] = useState<readonly string[]>([]);
@@ -226,21 +248,23 @@ export function BookingDetails({
   const [guestDraft, setGuestDraft] = useState('');
   const [isAddingGuests, setAddingGuests] = useState(false);
   const [guestNote, setGuestNote] = useState('');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(draft?.note ?? '');
   const [trap, setTrap] = useState('');
   const countryNames = useMemo(
     () => new Map(countriesIn('en').map((country) => [country.code, country.name] as const)),
     [],
   );
   // Each question's answer as its control holds it: a form's hand off fills in what it asked by the same key.
-  const [held, setHeld] = useState<Readonly<Record<string, unknown>>>(() =>
-    Object.fromEntries(
-      questions.flatMap((question) => {
-        // As a hosted form takes a prefill: words for a text question, a choice by its words or key, nothing else.
-        const given = prefillAnswer(question, prefillAnswers?.[question.key]);
-        return given === undefined ? [] : [[question.key, given]];
-      }),
-    ),
+  const [held, setHeld] = useState<Readonly<Record<string, unknown>>>(
+    () =>
+      draft?.answers ??
+      Object.fromEntries(
+        questions.flatMap((question) => {
+          // As a hosted form takes a prefill: words for a text question, a choice by its words or key, nothing else.
+          const given = prefillAnswer(question, prefillAnswers?.[question.key]);
+          return given === undefined ? [] : [[question.key, given]];
+        }),
+      ),
   );
   // What each question sends, and which show now (Show when reads only earlier questions, as on a form).
   const given = Object.fromEntries(questions.map((question) => [question.key, answerOf(question, held[question.key])]));
@@ -273,8 +297,17 @@ export function BookingDetails({
   const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => globalThis.clearTimeout(doneTimer.current), []);
   const [bookingAs, setBookingAs] = useState(
-    prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
+    draft === undefined && prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
   );
+  // What is typed goes to the page as it changes (`onDraft`), read through a ref so a new callback each render never
+  // sends it again by itself.
+  const draftTo = useRef(onDraft);
+  useEffect(() => {
+    draftTo.current = onDraft;
+  });
+  useEffect(() => {
+    draftTo.current?.({ name, email, phone, note, answers: held });
+  }, [name, email, phone, note, held]);
   const form = useRef<HTMLFormElement>(null);
   const headingId = useId();
   const trapId = useId();

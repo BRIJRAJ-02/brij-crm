@@ -69,6 +69,11 @@ export interface BookingReceiptProps {
    * booking page's own foot.
    */
   readonly brand?: { readonly href: string; readonly label: string; readonly logo?: ProductLogo };
+  /**
+   * `menu`: the guest menu's look, as BookingFrame's (a restaurant's reservation, right after its Confirm). Left out,
+   * the booking page's own look, unchanged.
+   */
+  readonly look?: 'menu';
 }
 
 /**
@@ -95,6 +100,7 @@ export function BookingReceipt({
   changes,
   notice,
   brand,
+  look,
 }: BookingReceiptProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   // The heading takes focus as the page arrives, and again when the booking's state changes (cancelled from here).
@@ -117,7 +123,11 @@ export function BookingReceipt({
               ? strings.welcome
               : strings.confirmed;
   return (
-    <main className={styles.root} data-welcome={(isLive && isWelcome) || undefined}>
+    <main
+      className={styles.root}
+      data-welcome={(isLive && isWelcome) || undefined}
+      {...(look === 'menu' ? { 'data-look': 'menu' } : {})}
+    >
       <div className={styles.column}>
         <header className={styles.head}>
           <span className={styles.avatar}>

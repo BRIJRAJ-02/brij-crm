@@ -356,6 +356,7 @@ export {
 } from './modules/MeetingCard/MeetingCard.tsx';
 export {
   BookingDetails,
+  type BookingDetailsDraft,
   type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsProps,
@@ -404,7 +405,9 @@ export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPane
 /** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
 export { QrSheet, type QrSheetCard, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
-export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
+/** A reservation's party size (spec 0066 B7, after checklabs): the band with the shared Stepper. */
+export { PartyBand, type PartyBandProps } from './modules/PartyBand/PartyBand.tsx';
+export { SlotList, type Slot, type SlotGroup, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';
 export { usePhotoCrop, type PhotoCropping } from './modules/PhotoCrop/usePhotoCrop.tsx';
 export type { PhotoRect } from './lib/photo/crop-math.ts';

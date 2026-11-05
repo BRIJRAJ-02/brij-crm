@@ -142,6 +142,7 @@ describe('@crm/ui', () => {
       'PageColumn',
       'Pagination',
       'Panel',
+      'PartyBand',
       'Path',
       'PersonLine',
       'PhoneField',

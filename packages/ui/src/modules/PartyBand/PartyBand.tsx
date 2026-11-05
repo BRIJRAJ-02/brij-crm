@@ -1,10 +1,9 @@
 // A reservation's party size as checklabs' booking form asks for it: a soft band with "Party size" and "Up to 4
 // guests" at its start and one fewer, the count and one more at its end; at the most the page takes online, a line
 // under it with the way to book a bigger table ("More than 4? Call 020 7946 0000").
-import { useId } from 'react';
 import { Link } from '../../atoms/Link/Link.tsx';
+import { telOf } from '../../lib/tel.ts';
 import { Stepper } from '../../molecules/Stepper/Stepper.tsx';
-import { telOf } from '../BusinessPage/BusinessReserve.tsx';
 import styles from './PartyBand.module.css';
 import { strings } from './strings.ts';
 
@@ -26,16 +25,14 @@ export interface PartyBandProps {
  * and one fewer, the count and one more, in one band; at the most, how to book a bigger table, said politely.
  */
 export function PartyBand({ value, min, max, onChange, phone }: PartyBandProps) {
-  const labelId = useId();
   const isAtMost = value >= max;
   return (
     <div className={styles.root}>
       <div className={styles.band}>
         <div className={styles.words}>
-          <p id={labelId} className={styles.label}>
-            {strings.partySize}
-          </p>
-          <p className={styles.line}>{strings.upTo(max)}</p>
+          <p className={styles.label}>{strings.partySize}</p>
+          {/* The range when the fewest is more than one, so one fewer turning off at 2 says why. */}
+          <p className={styles.line}>{min > 1 ? strings.range(min, max) : strings.upTo(max)}</p>
         </div>
         {/* The shared Stepper at its 40px size: the band's own words name it, so its label is for screen readers. */}
         <Stepper

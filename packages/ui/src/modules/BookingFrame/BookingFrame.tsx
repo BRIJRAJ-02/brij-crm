@@ -319,8 +319,9 @@ export function BookingFrame({
                 // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
                 // its name, on one row.
                 <div className={styles.tileRow}>
+                  {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
                   {brandLogo === undefined && (
-                    <Avatar name={host.name} shape="square" hue="ink" size="lg" isDecorative />
+                    <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
                   )}
                   <p className={styles.host}>{host.name}</p>
                 </div>
@@ -403,6 +404,8 @@ export function BookingFrame({
             data-place={isCardCovered ? 'card' : undefined}
             // In a site's embed the card follows its step rather than holding the month's height (`isEmbedded`).
             data-embedded={(isEmbedded && isCardCovered) || undefined}
+            // A phone whose times grow with the page: the details step takes the card's own height, as in an embed.
+            data-follow={(isAsideGrowing && isCardCovered) || undefined}
             aria-busy={isLoading || undefined}
           >
             {(heading !== undefined || toolbar !== undefined) && (
@@ -709,6 +712,8 @@ export interface BookingMessageProps {
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
   readonly page?: PoweredByPage;
+  /** `menu`: the guest menu's look, as the frame's `look` (a restaurant's reservation page loading, closed or gone). */
+  readonly look?: 'menu';
 }
 
 /**
@@ -723,13 +728,14 @@ export function BookingMessage({
   link,
   isLoading = false,
   page = 'booking_page',
+  look,
 }: BookingMessageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!isLoading) heading.current?.focus();
   }, [isLoading]);
   return (
-    <main className={styles.root}>
+    <main className={styles.root} {...(look === 'menu' ? { 'data-look': 'menu' } : {})}>
       <div className={styles.narrow}>
         <div className={styles.message} aria-busy={isLoading || undefined}>
           {isLoading ? (

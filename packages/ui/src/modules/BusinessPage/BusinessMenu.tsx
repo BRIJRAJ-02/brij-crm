@@ -2,6 +2,7 @@
 // dishes as the guest menu draws them (5 November 2026, after checklabs): a row a dish, its name, its description on
 // two lines at most and its price under them, and its photo at the row's end when it has one. Read only here:
 // ordering is the Menu app's own page. Draws nothing for a menu with no items.
+import { useState } from 'react';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import styles from './BusinessMenu.module.css';
 import { strings } from './strings.ts';
@@ -28,6 +29,8 @@ export interface BusinessMenuProps {
 
 /** The menu's sections, each a list of its dishes as the guest menu's rows. */
 export function BusinessMenu({ sections, headingLevel = 3 }: BusinessMenuProps) {
+  // A photo that fails to load (a stale version, a removed file) leaves its row rather than drawing an empty tile.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
   const shown = sections.filter((section) => section.items.length > 0);
   if (shown.length === 0) return null;
   const Heading = headingLevel === 3 ? 'h3' : 'h4';
@@ -38,7 +41,8 @@ export function BusinessMenu({ sections, headingLevel = 3 }: BusinessMenuProps) 
           <Heading className={styles.heading}>{section.name}</Heading>
           <ul className={styles.items}>
             {section.items.map((item) => {
-              const photo = item.photo === undefined ? undefined : safeImageSrc(item.photo);
+              const safe = item.photo === undefined ? undefined : safeImageSrc(item.photo);
+              const photo = safe === undefined || failed.has(safe) ? undefined : safe;
               return (
                 <li key={item.name} className={styles.item}>
                   <span className={styles.words}>
@@ -54,6 +58,9 @@ export function BusinessMenu({ sections, headingLevel = 3 }: BusinessMenuProps) 
                       alt={strings.decorative}
                       loading="lazy"
                       decoding="async"
+                      onError={() => {
+                        setFailed((was) => new Set([...was, photo]));
+                      }}
                     />
                   )}
                 </li>

@@ -82,11 +82,13 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
       current = false;
     };
   }, [placeKey, attempt]);
-  if (read.status === 'loading') return <BookingMessage title={strings.reserveTable} isLoading />;
+  if (read.status === 'loading') return <BookingMessage title={strings.reserveTable} isLoading look="menu" />;
   if (read.status === 'error') {
     return (
       <BookingMessage
-        title={strings.notFound}
+        // Offline is not gone: the page says which, and Try again stays.
+        title={read.message === strings.offline ? strings.offlineTitle : strings.notFound}
+        look="menu"
         onRetry={() => {
           setRead({ status: 'loading' });
           setAttempt((count) => count + 1);
@@ -128,7 +130,7 @@ createRoot(root).render(
   <StrictMode>
     <BookingProvider locale={locale} timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone} toasts={toasts}>
       {path === null ? (
-        <BookingMessage title={strings.notFound} />
+        <BookingMessage title={strings.notFound} look="menu" />
       ) : (
         <Page placeKey={decodeURIComponent(path[1] ?? '')} isManage={path[2] !== undefined} />
       )}

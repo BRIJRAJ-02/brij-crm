@@ -18,6 +18,7 @@ import {
   MonthTiles,
   PartyBand,
   SlotList,
+  type BookingDetailsDraft,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
   type BookingFact,
@@ -121,6 +122,8 @@ export function ReservePage({
   const [time, setTime] = useState<string | undefined>();
   const isWide = useWide();
   const [isFullCalendar, setFullCalendar] = useState(false);
+  // A day picked on the phone's full calendar: the calendar closes and the strip's day takes focus.
+  const [isStripFocused, setStripFocused] = useState(false);
   const [step, setStep] = useState<Step>({ view: 'month', back: false, attempt: crypto.randomUUID() });
   // The answer for one party and day: a different pair is loading until its own answer lands.
   const [answer, setAnswer] = useState<{ readonly key: string; readonly times: Times } | undefined>();
@@ -129,8 +132,8 @@ export function ReservePage({
   const [notice, setNotice] = useState<{ readonly text: string; readonly next: readonly string[] } | undefined>();
   const [occasion, setOccasion] = useState<readonly string[]>([]);
   const [seating, setSeating] = useState<readonly string[]>([NO_PREFERENCE]);
-  // What the guest typed, kept when a time is taken meanwhile and the card goes back to the times.
-  const [typed, setTyped] = useState<{ readonly name: string; readonly email: string } | undefined>();
+  // What the guest typed, kept while the details step is away (Back to change the time, or a time taken meanwhile).
+  const [draft, setDraft] = useState<BookingDetailsDraft | undefined>();
   const [startedAt] = useState(() => Date.now());
   // Bumped to read the day's times again (a time was just taken and nothing else was offered with the refusal).
   const [reload, setReload] = useState(0);
@@ -166,7 +169,7 @@ export function ReservePage({
     // Not taking reservations, or no day in the window opens at all: say so with the phone, never a spinner.
     const why = page.taking ? strings.noOpenDays : strings.closedNow;
     return (
-      <BookingMessage title={page.place.name} page="booking_page">
+      <BookingMessage title={page.place.name} page="booking_page" look="menu">
         {page.place.phone === undefined ? why : `${why} ${strings.callUs(page.place.phone)}`}
       </BookingMessage>
     );
@@ -182,6 +185,19 @@ export function ReservePage({
     setMonth(monthOf(next));
     setTime(undefined);
     setNotice(undefined);
+  };
+  /** A day from the phone's full calendar: it closes, as checklabs' does, and the strip's day takes focus. */
+  const pickFromCalendar = (next: string) => {
+    pickDay(next);
+    if (!isWide && isFullCalendar) {
+      setFullCalendar(false);
+      setStripFocused(true);
+    }
+  };
+  /** The day's times again (after a failure, or a time just taken). */
+  const readAgain = () => {
+    setAnswer(undefined);
+    setReload((count) => count + 1);
   };
   /** The first free time takes focus (after a render, so new times are there). */
   const focusTimes = () => globalThis.requestAnimationFrame(() => firstTime.current?.focus());
@@ -216,16 +232,12 @@ export function ReservePage({
     } catch (error) {
       if (!isDataError(error)) return { kind: 'failed', message: strings.offline };
       if (error.code === 'SLOT_TAKEN') {
-        // Back to the times, with the next free ones offered at once (checklabs only said it was gone); with none
-        // offered, the day's times read again, so the taken one is never offered twice. What was typed comes back.
+        // Back to the times, with the next free ones offered at once (checklabs only said it was gone), and the day's
+        // times read again behind them, so the taken one is never offered twice. What was typed is kept (the draft).
         const next = (error as TableRefusal).next ?? [];
         setNotice({ text: next.length === 0 ? strings.takenNone : strings.taken, next });
-        if (next.length === 0) {
-          setAnswer(undefined);
-          setReload((count) => count + 1);
-        }
+        readAgain();
         setTime(undefined);
-        setTyped({ name: values.name, email: values.email });
         setStep({ view: 'month', back: true, attempt: crypto.randomUUID() });
         focusTimes();
         return { kind: 'failed', message: strings.takenShort };
@@ -260,27 +272,44 @@ export function ReservePage({
       })),
     }),
   );
-  const isLoading = times.status === 'loading' && !(notice !== undefined && notice.next.length > 0);
+  const isOffering = notice !== undefined && notice.next.length > 0;
+  const isLoading = times.status === 'loading' && !isOffering;
   const dayHeading = day === undefined ? '' : longDate(day, locale);
   const aside =
-    times.status === 'error' ? (
-      <Callout tone="danger" isAnnounced>
+    times.status === 'error' && !isOffering ? (
+      <Callout
+        tone="danger"
+        isAnnounced
+        actions={
+          <Button icon="refresh-cw" onPress={readAgain}>
+            {strings.tryAgain}
+          </Button>
+        }
+      >
         {times.message}
       </Callout>
     ) : (
-      // Lunch and Dinner in one list that scrolls as one, headed by the day and how many times are left.
-      <SlotList
-        heading={dayHeading}
-        slots={[]}
-        groups={groups}
-        value={time}
-        onChange={pickTime}
-        isLoading={isLoading}
-        empty={strings.noTimes}
-        firstRef={firstTime}
-        drawKey={`${day ?? ''}|${String(party)}`}
-        {...(offered.length > 0 && !isLoading ? { badge: strings.available(offered.length) } : {})}
-      />
+      <>
+        {/* A time just taken: why, beside the times it offers instead. */}
+        {notice !== undefined && (
+          <Callout tone="warning" isAnnounced>
+            {notice.text}
+          </Callout>
+        )}
+        {/* Lunch and Dinner in one list that scrolls as one, headed by the day and how many times are left. */}
+        <SlotList
+          heading={dayHeading}
+          slots={[]}
+          groups={groups}
+          value={time}
+          onChange={pickTime}
+          isLoading={isLoading}
+          empty={strings.noTimes}
+          firstRef={firstTime}
+          drawKey={`${day ?? ''}|${String(party)}`}
+          {...(offered.length > 0 && !isLoading && !isOffering ? { badge: strings.available(offered.length) } : {})}
+        />
+      </>
     );
 
   const picked = day !== undefined && time !== undefined ? { day: shortDay(day, locale), at: label(time) } : undefined;
@@ -310,7 +339,8 @@ export function ReservePage({
       isPhoneFirst
       intro={strings.detailsIntro}
       confirmNote={strings.confirmNote}
-      {...(typed === undefined ? {} : { prefill: typed })}
+      {...(draft === undefined ? {} : { draft })}
+      onDraft={setDraft}
       labels={{
         heading: strings.yourDetails,
         name: strings.fullName,
@@ -323,15 +353,7 @@ export function ReservePage({
       }}
       extra={
         <>
-          <ChoiceChips
-            label={strings.occasion}
-            labelAside={strings.optional}
-            tone="strong"
-            isSingle
-            choices={OCCASION_KEYS.map((key) => ({ id: key, label: strings.occasions[key] }))}
-            selected={occasion}
-            onChange={setOccasion}
-          />
+          {/* checklabs' order: Seating (when the place has areas), then Occasion. */}
           {areas.length > 0 && (
             <ChoiceChips
               label={strings.seating}
@@ -347,6 +369,15 @@ export function ReservePage({
               onChange={(next) => setSeating(next.length === 0 ? [NO_PREFERENCE] : next)}
             />
           )}
+          <ChoiceChips
+            label={strings.occasion}
+            labelAside={strings.optional}
+            tone="strong"
+            isSingle
+            choices={OCCASION_KEYS.map((key) => ({ id: key, label: strings.occasions[key] }))}
+            selected={occasion}
+            onChange={setOccasion}
+          />
           {page.menuPath !== undefined && (
             <p>
               <Link href={page.menuPath} icon="utensils" weight="strong" opensInNewTab>
@@ -376,8 +407,10 @@ export function ReservePage({
   const isDetails = step.view === 'details' && picked !== undefined;
   const facts: readonly BookingFact[] = [
     ...placeFacts(page),
-    // The pick, once there is one: the day and time, and the party (checklabs' summary, in the rail).
-    ...(picked === undefined
+    // The pick, once there is one: the day and time, and the party (checklabs' summary, in the rail). On a phone the
+    // rail stands above the card, so there only on the details step: a line arriving there as a time is tapped moved
+    // the times under the finger, and the Book bar already names the pick.
+    ...(picked === undefined || !(isWide || isDetails)
       ? []
       : [
           { id: 'when', icon: 'calendar' as const, children: strings.pickedAt(picked.day, picked.at) },
@@ -406,11 +439,6 @@ export function ReservePage({
       isAsideGrowing
       {...(isBarShown ? { footer: bookBar } : {})}
     >
-      {notice !== undefined && (
-        <Callout tone="warning" isAnnounced>
-          {notice.text}
-        </Callout>
-      )}
       <PartyBand
         value={party}
         min={page.partyMin}
@@ -431,8 +459,12 @@ export function ReservePage({
               : [...days.slice(0, STRIP_DAYS), day]
           }
           value={day}
-          onChange={pickDay}
-          focusesValue={step.back}
+          onChange={(next) => {
+            setStripFocused(false);
+            pickDay(next);
+          }}
+          focusesValue={step.back || isStripFocused}
+          today={page.today}
         />
       ) : (
         <MonthTiles
@@ -441,7 +473,7 @@ export function ReservePage({
           today={page.today}
           openDays={open}
           value={day}
-          onChange={pickDay}
+          onChange={pickFromCalendar}
           onMonthChange={setMonth}
           canPrevious={month > monthOf(page.today)}
           canNext={month < monthOf(days.at(-1) ?? page.today)}
@@ -453,8 +485,9 @@ export function ReservePage({
         // control to a screen reader).
         <Button
           variant="ghost"
-          size="sm"
           icon="calendar"
+          // Drawn small, pressed across 44px: a guest's thumb.
+          isTouchTarget
           isExpanded={isFullCalendar}
           onPress={() => setFullCalendar((shown) => !shown)}
         >

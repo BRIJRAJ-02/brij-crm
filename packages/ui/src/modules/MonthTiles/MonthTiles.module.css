@@ -223,14 +223,16 @@
     aspect-ratio: auto;
   }
 
+  /* An open day in the strong weight and a closed one regular and quiet: two cues, not lightness alone (under 3:1). */
   .root[data-tone='plain'] .day {
     background: transparent;
     color: var(--text);
-    font: var(--text-body);
+    font: var(--text-body-strong);
   }
 
   .root[data-tone='plain'] .day:disabled {
     color: var(--text-tertiary);
+    font: var(--text-body);
   }
 
   .root[data-tone='plain'] .day[data-today] {
@@ -239,6 +241,11 @@
 
   .root[data-tone='plain'] .day[data-today]:not(:focus-visible) {
     outline-color: var(--border-strong);
+  }
+
+  /* Chosen, the fill says it: no second edge around it. */
+  .root[data-tone='plain'] .day[data-today][aria-pressed='true']:not(:focus-visible) {
+    outline-color: transparent;
   }
 
   .root[data-tone='plain'] .day[data-loading] {

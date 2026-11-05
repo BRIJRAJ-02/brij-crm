@@ -33,6 +33,12 @@
       scale var(--duration-press) var(--ease-out);
   }
 
+  /* Today or the month under the date (`today`), small, in the tile's own colour, so it holds on the chosen day too. */
+  .month {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   /* A day's place while the days load: the tile's own size, quiet, and no press. */
   .day[data-loading] {
     block-size: calc(var(--size-row) * 1.5);

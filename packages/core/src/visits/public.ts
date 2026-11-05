@@ -19,8 +19,7 @@ import { sql } from 'drizzle-orm';
 import type { TableEntry } from '../access/table-door.ts';
 import { inWorkspace } from '../access/run.ts';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
-import { appInstalled } from '../hospitality/gate.ts';
-import { businessMenuOf, menuLookVersion } from '../hospitality/public-menu.ts';
+import { guestMenuPathOf, menuLookVersion } from '../hospitality/public-menu.ts';
 import { buildBookingIcs } from '../booking/ics.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
@@ -102,9 +101,7 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
         order by a.position, a.name
       `)
     ).rows.map((row) => row.name);
-    const menuPath = (await appInstalled(tx, workspaceId, 'menu'))
-      ? (await businessMenuOf(tx, workspaceId, entry.placeId))?.path
-      : undefined;
+    const menuPath = await guestMenuPathOf(tx, workspaceId, entry.placeId);
     return { brand, areas, menuPath };
   });
 }
@@ -113,7 +110,8 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
 export async function readTableLook(
   entry: TableEntry,
 ): Promise<{ readonly brand: PageBrand; readonly version: string }> {
-  const { brand } = await guestExtrasOf(entry);
+  // The brand alone: a stylesheet's read never reads the areas or the menu.
+  const brand = await inWorkspace(entry.scope, (tx) => readMenuBrandIn(tx, entry.scope.workspaceId));
   return { brand, version: menuLookVersion(brand) };
 }
 
@@ -145,7 +143,8 @@ export async function readTablePage(
     changeCutoffMinutes: rules?.changeCutoffMinutes ?? 120,
     hours: { weekly: place.hours.weekly, exceptions: place.hours.exceptions } as PublicTablePage['hours'],
     today: placeDateOf(now.getTime(), place.time_zone),
-    ...(extras.areas.length === 0 ? {} : { areas: extras.areas }),
+    // The areas only while the page takes reservations: an old link to a closed page never reads them.
+    ...(extras.areas.length === 0 || !(entry.installed && rules?.online === true) ? {} : { areas: extras.areas }),
     ...(extras.menuPath === undefined ? {} : { menuPath: extras.menuPath }),
     look: menuLookVersion(extras.brand),
   };

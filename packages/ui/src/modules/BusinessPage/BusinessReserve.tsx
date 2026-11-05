@@ -21,7 +21,9 @@ export interface BusinessAction {
 }
 
 /** A phone number as a `tel:` address: its digits and a leading plus only. */
-export const telOf = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
+import { telOf } from '../../lib/tel.ts';
+
+export { telOf };
 
 /**
  * The page's one action (AC-6642): Reserve a table once the flow is open; until then Call to book with a phone, else

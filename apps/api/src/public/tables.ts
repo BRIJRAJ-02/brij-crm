@@ -217,9 +217,10 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
   app.get('/public/tables/:key/look.css', async (c) => {
     const key = c.req.param('key');
     if (!TABLE_KEY_PATTERN.test(key)) return missing();
+    // Buckets of its own, so a stylesheet never spends the reads the page's facts and times need.
     const refused = limited([
-      [`tables:read:${addressKey(c.get('clientIp'))}`, TABLE_LIMITS.readsPerAddress],
-      [`tables:read-place:${key}`, TABLE_LIMITS.readsPerPlace],
+      [`tables:look:${addressKey(c.get('clientIp'))}`, TABLE_LIMITS.readsPerAddress],
+      [`tables:look-place:${key}`, TABLE_LIMITS.readsPerPlace],
     ]);
     if (refused !== undefined) return refused;
     try {

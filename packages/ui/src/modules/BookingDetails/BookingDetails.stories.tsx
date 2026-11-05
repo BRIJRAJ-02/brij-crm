@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { BookingDetails, type BookingDetailsOutcome } from './BookingDetails.tsx';
+import { BookingDetails, type BookingDetailsDraft, type BookingDetailsOutcome } from './BookingDetails.tsx';
 
 const meta = {
   title: 'Modules/BookingDetails',
@@ -209,6 +210,45 @@ export const GuestReservation: Story = {
     await waitFor(() => expect(canvas.getByRole('textbox', { name: /Full name/ })).toHaveFocus());
   },
 };
+
+/**
+ * The page keeps what is typed (`onDraft`) while the step is away and hands it back (`draft`): Back, then the step
+ * again, and every field is as the guest left it, with no "Booking as" line.
+ */
+export const KeepsTheDraft: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { needsPhone: true, maxGuests: 0, isPhoneFirst: true, fieldSize: 'lg' },
+  render: (args) => <Drafting {...args} />,
+  play: async ({ canvas }) => {
+    await userEvent.type(canvas.getByRole('textbox', { name: /Your name/ }), 'Ada Lovelace');
+    await userEvent.type(canvas.getByRole('textbox', { name: /Number to call/ }), '07700 900123');
+    await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Open the step again' }));
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveValue('Ada Lovelace');
+    await expect(canvas.getByRole('textbox', { name: /Number to call/ })).toHaveValue('07700 900123');
+    await expect(canvas.queryByText(/Booking as/)).toBeNull();
+  },
+};
+
+/** The step away and back, as a one page form's Back does, with the draft kept by the page. */
+function Drafting(args: Parameters<typeof BookingDetails>[0]) {
+  const [isOpen, setOpen] = useState(true);
+  const [draft, setDraft] = useState<BookingDetailsDraft | undefined>(undefined);
+  return (
+    <Stage width="fill">
+      {isOpen ? (
+        <BookingDetails
+          {...args}
+          {...(draft === undefined ? {} : { draft })}
+          onDraft={setDraft}
+          onBack={() => setOpen(false)}
+        />
+      ) : (
+        <Button onPress={() => setOpen(true)}>Open the step again</Button>
+      )}
+    </Stage>
+  );
+}
 
 /** The server refused: its message in the line above the buttons. */
 export const Failed: Story = {

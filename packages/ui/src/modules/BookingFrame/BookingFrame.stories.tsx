@@ -6,6 +6,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
@@ -630,25 +631,23 @@ export const Reservation: Story = {
     await expect(canvas.getByRole('button', { name: 'Pick a time' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: /^19:30/ }));
     const book = canvas.getByRole('button', { name: 'Continue · Fri 9 Oct, 19:30' });
-    // The ink, never the app's blue: the Book bar takes the inverse surface when no look stylesheet is linked.
-    const ink = getComputedStyle(canvasElement.querySelector('main') ?? document.body)
-      .getPropertyValue('--frame-look-ink')
-      .trim();
-    await expect(ink).not.toBe('');
-    await expect(getComputedStyle(book).backgroundColor).not.toBe(getComputedStyle(document.body).color);
+    // The ink, never the app's blue: with no look stylesheet the Book bar takes the inverse surface (#18191d in light).
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(24, 25, 29)');
+    // The times and the month drew in while the play ran: settled, so the theme checks read their real colours.
+    await settleAnimations();
   },
 };
 
-/** The menu's look stylesheet as the api writes it (checklabs' Nova values), set on the page as `--menu-*`. */
+/** Checklabs' Nova values, light and dark, as `--menu-*`: a stand in for the look stylesheet, so axe reads both themes. */
 const MENU_LOOK = [
-  ['--menu-ground', '#ffffff'],
-  ['--menu-card', '#ffffff'],
-  ['--menu-chip', '#f5f1ea'],
-  ['--menu-line', '#0000000f'],
-  ['--menu-text', '#1a1a1a'],
-  ['--menu-quiet', '#6b6b6b'],
-  ['--menu-accent', '#1a1a1a'],
-  ['--menu-on-accent', '#ffffff'],
+  ['--menu-ground', 'light-dark(#ffffff, #141414)'],
+  ['--menu-card', 'light-dark(#ffffff, #1c1c1c)'],
+  ['--menu-chip', 'light-dark(#f5f1ea, #2b2824)'],
+  ['--menu-line', 'light-dark(#0000000f, #ffffff17)'],
+  ['--menu-text', 'light-dark(#1a1a1a, #f5f5f5)'],
+  ['--menu-quiet', 'light-dark(#6b6b6b, #a8a8a8)'],
+  ['--menu-accent', 'light-dark(#1a1a1a, #f5f5f5)'],
+  ['--menu-on-accent', 'light-dark(#ffffff, #141414)'],
 ] as const;
 
 /** The reservation page with the menu's look stylesheet linked: the cream chips, the hairlines and the ink. */
@@ -663,10 +662,11 @@ export const ReservationMenuLook: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /^12:15/ }));
     const book = canvas.getByRole('button', { name: 'Continue · Fri 9 Oct, 12:15' });
     await expect(getComputedStyle(book).backgroundColor).toBe('rgb(26, 26, 26)');
+    await settleAnimations();
   },
 };
 
-/** Sets the menu's look on a wrapper, as its stylesheet sets it on the page's root (light only, as the story's values). */
+/** Sets the menu's look on a wrapper, as its stylesheet sets it on the page's root. */
 function MenuLook({ children }: { readonly children: ReactNode }) {
   return (
     <div

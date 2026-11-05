@@ -36,6 +36,7 @@ export { DeferredSelect, type DeferredSelectItem } from '../molecules/Select/Def
 export type { SelectItem } from '../molecules/Select/Select.tsx';
 export {
   BookingDetails,
+  type BookingDetailsDraft,
   type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
