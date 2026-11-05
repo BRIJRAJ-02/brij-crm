@@ -65,7 +65,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 
 ## Press
 
-Held, a button eases to `--scale-press`. The token is 1, so nothing in the app shrinks (20 October 2026). A public booking page sets it to 0.97 on its own root (1 November 2026), so its buttons answer a press there and only there. Reduced motion keeps every button still.
+Held, a button eases to `--scale-press`. The token is 1, so nothing in the app shrinks (20 October 2026). A public booking page sets it to 0.97 on its own root (1 November 2026), so its buttons answer a press there and only there. Reduced motion keeps every button still. The press eases on `--ease-press` when a page sets one, else `ease-out`: the guest menu sets checklabs' overshoot (`cubic-bezier(0.34, 1.56, 0.64, 1)`, written by the menu's look stylesheet, since CSS here takes curves only from tokens), so its +, steppers and Add settle with a little spring (5 November 2026).
 
 ## Keyboard
 

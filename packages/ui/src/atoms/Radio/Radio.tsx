@@ -12,7 +12,7 @@ export interface RadioProps {
   readonly value: string;
   /** Its label. */
   readonly children: string;
-  /** A line under the label that says more. */
+  /** A line under the label that says more; at the row's end in a group drawn as rows (a size's price). */
   readonly description?: string;
   /** A glyph before the label, for a group drawn as cards (`variant="cards"`): what the choice adds. */
   readonly icon?: IconName;
@@ -79,9 +79,11 @@ export interface RadioGroupProps {
    * a handful of choices that each start a different job, where the choice itself is the first step of a form
    * (the link page's Add item). `letters` draws each choice full width with its letter (A, B, C) in a key before it,
    * the chosen one filling with the accent, and a letter key picks its choice while focus is in the group (a public
-   * form, Typeform's way). `plain` (the default) is the usual stack.
+   * form, Typeform's way). `rows` draws each as a full width row with its description at the row's end, after
+   * checklabs' option rows: a dish's sizes and options on the guest menu, each with its price. `plain` (the default)
+   * is the usual stack.
    */
-  readonly variant?: 'plain' | 'cards' | 'letters';
+  readonly variant?: 'plain' | 'cards' | 'letters' | 'rows';
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */

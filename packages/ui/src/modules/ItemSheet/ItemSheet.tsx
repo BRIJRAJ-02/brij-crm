@@ -128,7 +128,7 @@ export function ItemSheet({
         <div className={styles.sheetHead}>
           <h2 className={styles.sheetName}>{item.name}</h2>
           <p className={styles.sheetMeta}>
-            {isSoldOut ? <span className={styles.soldOut}>{strings.soldOut}</span> : null}
+            {isSoldOut ? <Badge text={strings.soldOut} tone="strong" size="chip" dot="red" isRound isWhole /> : null}
             {!isSoldOut && hasPrice ? (
               <span className={styles.price}>
                 {item.sizes.length > 1
@@ -145,7 +145,7 @@ export function ItemSheet({
           <ul className={styles.dietList} aria-label={strings.dietary}>
             {item.diet.map((mark) => (
               <li key={mark}>
-                <Badge text={strings.diet[mark]} size="chip" isWhole />
+                <Badge text={strings.diet[mark]} tone="strong" size="chip" isRound isWhole />
               </li>
             ))}
           </ul>
@@ -158,7 +158,7 @@ export function ItemSheet({
             <RadioGroup
               label={strings.sizes}
               isLabelHidden
-              variant="cards"
+              variant="rows"
               value={size ?? ''}
               onChange={setSize}
               isDisabled={isSoldOut}
@@ -184,7 +184,7 @@ export function ItemSheet({
               <RadioGroup
                 label={label}
                 isLabelHidden
-                variant="cards"
+                variant="rows"
                 value={picked[0] ?? null}
                 onChange={(value) => toggle(group, value)}
                 isDisabled={isSoldOut}
@@ -211,6 +211,7 @@ export function ItemSheet({
                   return (
                     <Checkbox
                       key={option.id}
+                      variant="row"
                       label={option.name}
                       {...(description === undefined ? {} : { description })}
                       isSelected={isChosen}
@@ -233,12 +234,12 @@ export function ItemSheet({
             <ul className={styles.dietList}>
               {contains.map((name) => (
                 <li key={name}>
-                  <Badge text={name} size="chip" isWhole />
+                  <Badge text={name} tone="strong" size="chip-lg" isRound isWhole />
                 </li>
               ))}
               {may.map((name) => (
                 <li key={name}>
-                  <Badge text={strings.mayContainChip(name)} size="chip" isWhole />
+                  <Badge text={strings.mayContainChip(name)} tone="strong" size="chip-lg" isRound isWhole />
                 </li>
               ))}
             </ul>
@@ -254,7 +255,7 @@ export function ItemSheet({
           )}
           <div className={styles.actionRow}>
             <Stepper
-              size="lg"
+              size="sheet"
               tone="filled"
               label={strings.quantity}
               isLabelHidden
@@ -457,6 +458,7 @@ export function PicksSheet({
                       </span>
                     </span>
                     <Stepper
+                      size="row"
                       label={strings.quantityOf(item.name)}
                       value={pick.quantity}
                       isLabelHidden

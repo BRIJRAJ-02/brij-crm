@@ -11,6 +11,8 @@ import {
   MENU_FACE,
   MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
+  MENU_PRESS,
+  MENU_PRESS_PROPERTIES,
   MenuSnapshot,
   WARM_PRESET,
   formatPrice,
@@ -189,8 +191,8 @@ export async function readMenuPhoto(
   });
 }
 
-/** Which look the Warm preset's stylesheet is at: a new preset table or accent is a new path. */
-const WARM_LOOK = 'warm-2';
+/** Which look the Warm preset's stylesheet is at: a new preset table, press feel or accent is a new path. */
+const WARM_LOOK = 'warm-3';
 
 /** The version the menu's look stylesheet is served at: the preset and the brand's accent pair. */
 export function menuLookVersion(brand: PageBrand): string {
@@ -203,10 +205,19 @@ export function menuLookVersion(brand: PageBrand): string {
 /** A colour the stylesheet may write: six or eight hex digits, nothing else. */
 const isHex = (value: string) => /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value);
 
+/** The press feel's custom properties: checklabs' curve and scales, or every scale at 1 (reduced motion). */
+const pressBlock = (isStill: boolean) =>
+  (Object.keys(MENU_PRESS_PROPERTIES) as (keyof typeof MENU_PRESS_PROPERTIES)[])
+    .filter((name) => !isStill || name !== 'ease')
+    .map((name) => `${MENU_PRESS_PROPERTIES[name]}:${isStill ? '1' : MENU_PRESS[name]}`)
+    .join(';');
+
 /**
  * The guest menu's look (spec 0065, AC-6570, Warm only in H1): the device's own UI face as `--menu-face` (checklabs'
- * guest face, `MENU_FACE`, a constant) and the preset's colours as `--menu-*` custom properties, light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast adjusted by
- * `brandVariables`) taking the accent when the workspace has one. Every value is a checked hex.
+ * guest face, `MENU_FACE`, a constant), its press feel as `--menu-press-*` (`MENU_PRESS`, constants: the curve and how
+ * far each part eases down while held, all 1 under reduced motion) and the preset's colours as `--menu-*` custom
+ * properties, light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast
+ * adjusted by `brandVariables`) taking the accent when the workspace has one. Every colour is a checked hex.
  */
 export function menuLookStylesheet(brand: PageBrand): string {
   const accent = brand.accents.accent;
@@ -230,7 +241,8 @@ export function menuLookStylesheet(brand: PageBrand): string {
       .join(';');
   };
   return [
-    `:root{--menu-face:${MENU_FACE};${block('light')}}`,
+    `:root{--menu-face:${MENU_FACE};${pressBlock(false)};${block('light')}}`,
+    `@media (prefers-reduced-motion: reduce){:root{${pressBlock(true)}}}`,
     `@media (prefers-color-scheme: dark){:root:not([data-theme='light']){${block('dark')}}}`,
     `:root[data-theme='dark']{${block('dark')}}`,
     '',

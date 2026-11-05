@@ -1,8 +1,10 @@
 /* Stepper (after checklabs' guest steppers): one fewer, the count, one more, in a pill. Sizes: `sm` 30px (26px round
    ghost buttons, the count in the strong body style), `md` 40px (36px buttons, the heading style), `lg` 48px (30px
-   buttons, the title style). Tones: `default` a hairline pill on the card, `filled` a pill of the chip colour with no
-   line. The count reads the text styles, so a page's look sizes it (the guest menu: 14px medium and 15px semibold).
-   Colours are the surface's own names, so a page's look wears it. A visible label sits over the pill. */
+   buttons, the title style), and checklabs' own two, `row` (30px, 24px buttons, a 13px semibold count) and `sheet`
+   (48px, 32px buttons, the title style), whose − and + are the text colour and bolder. Tones: `default` a hairline
+   pill on the card, `filled` a pill of the chip colour with no line. The count reads the text styles, so a page's
+   look sizes it. Colours are the surface's own names, so a page's look wears it. A visible label sits over the
+   pill. */
 @layer components {
   .root {
     display: inline-flex;
@@ -64,5 +66,50 @@
 
   .pill[data-disabled] .value {
     opacity: var(--opacity-disabled);
+  }
+
+  /* `row` and `sheet`, checklabs' own steppers: the − and + in the text colour rather than the quiet one, drawn half as
+     bold again (its 2.25 stroke to the library's 1.5). */
+  .pill[data-size='row'],
+  .pill[data-size='sheet'] {
+    --icon-stroke: var(--icon-stroke-bold);
+    --text-secondary: var(--text);
+  }
+
+  /* `row`: 30px, 2px in, 24px buttons (its md Buttons drawn at 24px) 2px apart, the count 13px semibold. */
+  .pill[data-size='row'] {
+    --size-control: var(--space-24);
+
+    padding: var(--space-2);
+  }
+
+  /* The count and one more only: the count stands clear of the pill's round end. */
+  .pill[data-size='row'][data-fewer-hidden] {
+    padding-inline-start: var(--space-8);
+  }
+
+  .pill[data-size='row'] .value {
+    font: var(--text-title);
+    font-size: calc(var(--space-12) + var(--border-width-hairline));
+    letter-spacing: 0;
+  }
+
+  /* `sheet`: 48px, 4px in at the ends, 32px buttons (its lg Buttons drawn at 32px), the count in the title style. */
+  .pill[data-size='sheet'] {
+    --size-input: var(--space-32);
+
+    block-size: calc(var(--size-bar) + var(--space-2));
+    padding: 0 var(--space-4);
+  }
+
+  /* Filled, it draws no edge at all: checklabs' 94px, which leaves Add its whole label at 390px. */
+  .pill[data-size='sheet'][data-tone='filled'] {
+    border: 0;
+  }
+
+  .pill[data-size='sheet'] .value {
+    padding-inline: var(--space-4);
+    font: var(--text-title);
+    letter-spacing: 0;
   }
 }

@@ -30,10 +30,17 @@ same control at three sizes and two tones.
   `isDisabled`, both buttons are off (and `isDisabled` fades the count; the label keeps its colour, since it still names the group).
 - `label` names the group: drawn over the pill (FieldLabel, the group labelled by it), or for screen readers only with
   `isLabelHidden`, where the page shows what the count is beside it (a dish's row, a party size band).
-- `size`: `sm` (the default) is 30px, 26px round ghost Buttons, the count in the strong body style (checklabs' row
-  stepper); `md` is 40px, 36px Buttons, the count in the heading style (checklabs' party size); `lg` is 48px, 30px
-  Buttons, the count in the title style (checklabs' sheet quantity, beside a 48px action). The count reads the text
-  styles, so a page's look sizes it.
+- `size`: `sm` (the default) is 30px, 26px round ghost Buttons, the count in the strong body style; `md` is 40px, 36px
+  Buttons, the count in the heading style (checklabs' party size); `lg` is 48px, 30px Buttons, the count in the title
+  style. The count reads the text styles, so a page's look sizes it.
+- `size="row"` and `size="sheet"` are checklabs' own steppers, value for value (the owner wants its menu exactly, 5
+  November 2026): `row` is 30px with 2px inside, 24px buttons 2px apart and a 13px semibold count (a dish's row on the
+  guest menu, a line of Your selection); `sheet` is 48px with 32px buttons and the count in the title style (a dish
+  sheet's foot, beside Button's 48px `sheet`). Both draw the − and + in the text colour, not the quiet one, and half
+  as bold again (checklabs' 2.25 stroke). Why sizes and not a change to `sm` and `lg`: those keep the library's own
+  proportions for any other page; these two are the guest menu's, and its look owns them. The buttons are the same
+  Buttons, drawn at 24px and 32px by the pill's own sizes (`size-control`, `size-input`), so their 44px touch target
+  follows.
 - `tone`: `default` is a hairline pill on the card; `filled` a pill of the chip colour with no line (checklabs' cream).
 - A press that reaches a limit turns its own button off: focus moves to the other button, so it never falls out of
   the group (to a dialog's Close).
@@ -51,8 +58,8 @@ same control at three sizes and two tones.
 ## States
 
 Default, at the least (one fewer off), at the most (one more off, focus moved to one fewer), disabled, count only and
-one more (`isFewerHidden`), a visible or a hidden label, three sizes, two tones. Stories: Small, Medium, Large,
-AtTheLeast, AtTheMost, Disabled, AddOnly.
+one more (`isFewerHidden`), a visible or a hidden label, five sizes, two tones. Stories: Small, Medium, Large, Row,
+Sheet, AtTheLeast, AtTheMost, Disabled, AddOnly.
 
 ## Keyboard
 

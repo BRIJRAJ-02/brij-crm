@@ -37,7 +37,8 @@ through the same component.
   its end, only when the link holds two or more menus with dishes, a compact "Dinner ▾" that opens the menus (serving
   now first; the rest say "Serving from 18:00"). A published menu with no dish to show is left out.
 - The brand block: the place's name as a 12px uppercase eyebrow with the table a QR code named (`table`, "Table 4",
-  from `tableDisplayName`) after a "·" as an accent Badge; the current menu's name as the h1 (26px semibold); then
+  from `tableDisplayName`) after a "·" as a pill of the ink (Badge `fit`, `isRound`, `accent`, in the eyebrow's 11px
+  semibold capitals, 19px tall: checklabs' table chip); the current menu's name as the h1 (26px semibold); then
   checklabs' line under it: the business's own words, else the menu's note, else its address. The note moves to the
   foot only when the business's words took that line (it may carry the rates: "Prices include 5% tax.").
 - The sections as outlined 38px pills (Tabs `pills`), one section at a time, the first chosen, even when there is only
@@ -47,13 +48,15 @@ through the same component.
   brings it into view clear of the bar with focus on it (the chosen pill for a section, the heading for a sub
   section; owner, 5 November 2026), on load and on every hash change, never when the menu redraws under the guest.
 - A dish row: its name (16px semibold; Popular, Sold out with a red dot), two lines of its words (13px), the price on
-  its own line (14px medium), its marks as 24px chip Badges (the look's cream chip), then an 88px photo at 14px corners
-  at the end with a 26px + in the ink in a 2px ring of the ground on its corner (or a 32px + at the row's end without a
-  photo); a hairline between rows; pressed, the row takes the cream. A grid card: a square photo at 20px corners
+  its own line (14px medium), its marks as 24px pills of the cream with the ink's words, 10px in (Badge `chip`,
+  `isRound`, `strong`, as Popular and Sold out), then an 88px photo at 14px corners at the end with a 26px + in the ink
+  in a 2px ring of the ground on its corner (or a 32px + at the row's end without a photo), its glyph 16px and bold; a
+  hairline between rows; pressed (the dish or its +), the whole row takes the cream. A grid card: a square photo at 20px corners
   first, a 32px + of the card in its corner, then the name, the price and the words; two columns at every width. A sold out dish keeps its place,
   its photo dimmed and its name and price quiet, with no +.
-- The +: a dish with nothing to choose (one price, no option groups) adds one at once, and its + becomes a 30px
-  Stepper (− n +) in the same corner; any other dish opens its sheet. Focus follows the swap both ways (the stepper's
+- The +: a dish with nothing to choose (one price, no option groups) adds one at once, and its + becomes a 30px row
+  Stepper (− n +, Stepper `row`: 24px buttons, a 13px semibold count) in the same corner, rimmed in the ground as the
+  + is; any other dish opens its sheet. Focus follows the swap both ways (the stepper's
   - after the first add, the + again after the last remove), so a keyboard never drops to the top of the page.
     A dish with choices, once in the selection, shows its count before its + (Stepper `isFewerHidden`; the + opens the
     sheet again, and taking one away is Your selection's). The + and the stepper's buttons are drawn at checklabs' sizes
@@ -79,8 +82,15 @@ through the same component.
 - Focus rings are two rings, the ground then the full ink, so focus shows on the ink's own controls (the +, the
   chosen pill) as well as on the ground.
 - Motion (spec 0068, AC-6803, AC-6806): `hasEntrance` (the live page only, never the editor's preview) lets the
-  heading, its line and the first dishes rise in once, a stagger apart (Reveal); rows and the selection bar ease down
-  when pressed (the public pages' press, as BookingFrame's, spec 0068 AC-6806); the pill fill slides between sections. Reduced motion keeps fades and drops movement.
+  heading, its line and the first dishes rise in once, a stagger apart (Reveal); the pill fill slides between
+  sections. Presses are checklabs': each part eases down while held, on its overshoot curve
+  (`cubic-bezier(0.34, 1.56, 0.64, 1)`) over 160ms (a row and a grid card over 240ms): a row 0.985 with the cream
+  fill, a grid card 0.97 (its photo 0.985 inside it), a section's pill 0.94, the + and a stepper's buttons 0.82, Close
+  and the sheet's quantity buttons 0.88, an option's row 0.985, Add and the other buttons 0.97, the selection bar 0.98.
+  The values come from the look stylesheet as `--menu-press-*` (CSS here takes curves and scales only from tokens),
+  and the root hands them to the library's parts under their own names (`--scale-press`, `--scale-press-sm`,
+  `--ease-press`); without the look nothing shrinks but the plain buttons, at every public page's 0.97. Reduced motion keeps
+  fades and drops movement (the look sets every scale to 1 there, and every part checks it too).
 - Without `onPicksChange` the menu has no selection and no + (the editor's preview). Picks are the caller's to keep.
 
 ## Deviations from checklabs, and why
@@ -93,10 +103,11 @@ through the same component.
 - No Order now in the selection: we send no orders; it says "Show this to your server."
 - A dark theme (checklabs has none), from the same look properties; it never changes the light look.
 - The allergens foot keeps "Tell your server about any allergy before you order." (a safety line checklabs lacks).
-- The row stepper's count is 14px medium (the look's strong body style), not checklabs' 13px semibold, and its
-  buttons 26px, not 24px: the library's Button sizes. The + glyph is 14px, not 16px.
-- The pills' chosen shadow and checklabs' springy press curve (an overshoot) aren't drawn: no token holds either;
-  presses use the ease-out curve.
+- The chosen pill's lift is the library's `shadow-md`, not checklabs' own (`0 4px 12px -6px` at 35%), and the
+  selection bar's drop `shadow-lg`: no token holds checklabs' shadows.
+- The stepper on a dish's photo is 32px with its rim, 2px over checklabs' 30px: its 24px buttons keep a 2px inset
+  inside the rim where checklabs' overlap theirs.
+- No 🌱 after Vegan and Vegetarian: an emoji is a glyph from outside Lucide, the library's only icons.
 - Gone from ours (were in it before): search, dietary filter chips, the cover photo, the open now, address and phone
   line in the header (kept on a hidden menu, where Call is the way left), the bar's name fade in.
 

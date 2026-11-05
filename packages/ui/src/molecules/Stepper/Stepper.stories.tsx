@@ -57,6 +57,39 @@ export const Large: Story = {
   ),
 };
 
+/**
+ * Checklabs' row stepper (`row`): 30px, 24px buttons, a 13px semibold count, the − and + in the text colour and bolder,
+ * on a dish's row and a selection line.
+ */
+export const Row: Story = {
+  render: () => (
+    <Stage>
+      <Counted label="How many Edamame" isLabelHidden size="row" start={2} moreLabel="Add another Edamame" />
+      <Counted label="How many Miso soup" isLabelHidden size="row" start={1} min={0} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const more = canvas.getByRole('button', { name: 'Add another Edamame' });
+    await expect(more.getBoundingClientRect().height).toBe(24);
+    await expect(canvas.getByRole('group', { name: 'How many Edamame' }).getBoundingClientRect().height).toBe(30);
+    await userEvent.click(more);
+    await waitFor(() => expect(canvas.getAllByRole('status')[0]).toHaveTextContent('3'));
+  },
+};
+
+/** Checklabs' sheet quantity (`sheet`): 48px of the chip colour, 32px buttons, beside a sheet's 48px action. */
+export const Sheet: Story = {
+  render: () => (
+    <Stage>
+      <Counted label="Quantity" isLabelHidden size="sheet" tone="filled" start={1} min={1} max={99} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'One fewer' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'One more' }).getBoundingClientRect().height).toBe(32);
+  },
+};
+
 /** At the least: one fewer is off. */
 export const AtTheLeast: Story = {
   render: () => (

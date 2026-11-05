@@ -290,6 +290,11 @@ describe('the editor’s preview look', () => {
     expect(css).toContain('--menu-chip:#f5f1ea');
     expect(css).toContain('--menu-text:#1a1a1a');
     expect(css).toContain('--menu-scrim:#00000066');
+    // Its press feel: the overshoot, how far each part eases down, and every part still under reduced motion.
+    expect(css).toContain('--menu-press-ease:cubic-bezier(0.34, 1.56, 0.64, 1)');
+    expect(css).toContain('--menu-press-row:0.985');
+    expect(css).toContain('--menu-press-add:0.82');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce){:root{--menu-press-row:1;');
     expect((await send(`/api/menu/look.css?workspace=${m.slug}`)).status).toBe(401);
     const { cookie: stranger } = await signIn(app);
     expect((await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: stranger })).status).toBe(404);

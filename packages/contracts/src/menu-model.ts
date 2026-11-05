@@ -475,6 +475,34 @@ export const WARM_PRESET = {
  */
 export const MENU_FACE = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
+/**
+ * The guest menu's press feel (checklabs' guest app, value for value): the overshoot its presses settle on, and how far
+ * each part eases down while held (a dish's row and an option's row 0.985, the selection bar 0.98, a grid card, Add and
+ * the other buttons 0.97, a section's pill 0.94, Close and a sheet's quantity buttons 0.88, the + and a row's stepper
+ * buttons 0.82). The look stylesheet writes them as `--menu-press-*` custom properties, since the library's CSS takes
+ * curves and scales only from tokens, and writes every scale as 1 under reduced motion, so nothing moves there.
+ */
+export const MENU_PRESS = {
+  ease: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  row: '0.985',
+  bar: '0.98',
+  card: '0.97',
+  pill: '0.94',
+  close: '0.88',
+  add: '0.82',
+} as const;
+
+/** The custom property each press value sets. */
+export const MENU_PRESS_PROPERTIES = {
+  ease: '--menu-press-ease',
+  row: '--menu-press-row',
+  bar: '--menu-press-bar',
+  card: '--menu-press-card',
+  pill: '--menu-press-pill',
+  close: '--menu-press-close',
+  add: '--menu-press-add',
+} as const;
+
 /** The custom property each preset colour sets. */
 export const MENU_LOOK_PROPERTIES = {
   ground: '--menu-ground',
