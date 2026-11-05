@@ -58,7 +58,7 @@
     display: flex;
     flex: 1;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: 0 var(--space-8);
     min-inline-size: 0;
   }
@@ -86,8 +86,9 @@
   /* The title and its chevron are one disclosure: a press anywhere on them folds. */
   .fold {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     gap: var(--space-4);
+    min-block-size: var(--size-control);
     padding: 0;
     border: none;
     border-radius: var(--radius-xs);
@@ -101,6 +102,12 @@
 
   .fold:focus-visible {
     box-shadow: var(--shadow-focus);
+  }
+
+  @media (forced-colors: active) {
+    .fold:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
   }
 
   /* The grip's column in a row under it, so the title starts on the rows' tiles. */
@@ -184,24 +191,31 @@
 
   .foldInner {
     min-block-size: 0;
+    margin-block-end: calc(-1 * var(--space-4));
     margin-inline: calc(-1 * var(--space-8));
-    padding-block: var(--space-8) var(--space-2);
+    padding-block: var(--space-8) var(--space-4);
     padding-inline: var(--space-8);
     overflow: hidden;
+    /* Opening, its contents are there from the start of the slide; shutting, until its end. */
+    transition:
+      padding-block var(--duration-move) var(--ease-in-out),
+      visibility var(--duration-move) step-start;
+  }
+
+  .foldBody[data-folded] > .foldInner {
+    margin-block-end: 0;
+    padding-block: 0;
+    visibility: hidden;
     transition:
       padding-block var(--duration-move) var(--ease-in-out),
       visibility var(--duration-move) step-end;
   }
 
-  .foldBody[data-folded] > .foldInner {
-    padding-block: 0;
-    visibility: hidden;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .chevron,
     .foldBody,
-    .foldInner {
+    .foldInner,
+    .foldBody[data-folded] > .foldInner {
       transition: none;
     }
   }

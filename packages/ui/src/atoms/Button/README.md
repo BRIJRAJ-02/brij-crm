@@ -91,3 +91,7 @@ Held, a button eases to `--scale-press`. The token is 1, so nothing in the app s
 - The SplitButton divider on the primary uses `on-accent-kbd`, as the artifact does.
 
 A label that changes after the first paint resolves in over `--label-swap` (a 2px blur and a fade, a fade alone under reduced motion). The property is registered at 0s, so nothing moves in the app; the public booking page sets it on BookingFrame's root.
+
+## Status dot
+
+`dot` on Button draws a status dot before the label, as ToggleButton's does, in the label's type and colour: where something stands, on the control that changes it (a menu's Live or Hidden, 6 November 2026). Decorative: the label says it too. With a label only.

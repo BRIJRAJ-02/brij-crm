@@ -140,6 +140,8 @@ export function StructureTab({
   draft,
   menuId,
   query,
+  folded,
+  onFoldedChange,
   onOpen,
   said,
   toasts,
@@ -150,6 +152,9 @@ export function StructureTab({
   readonly menuId: string;
   /** The tab bar's search: a section, sub section or item by name. */
   readonly query: string;
+  /** The sections folded (UI state), held by the screen so they stay folded across the tabs. */
+  readonly folded: ReadonlySet<string>;
+  readonly onFoldedChange: (change: (was: ReadonlySet<string>) => ReadonlySet<string>) => void;
   readonly onOpen: (open: Open) => void;
   readonly said: Said;
   readonly toasts: Toasts;
@@ -158,8 +163,6 @@ export function StructureTab({
     () => draft.sections.filter((each) => each.menuId === menuId).sort((a, b) => a.position - b.position),
     [draft.sections, menuId],
   );
-  // Folded sections, by id (UI state): every section starts open, as checklabs' editor opens them all.
-  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const isNarrow = useIsNarrow();
   const kept = searchStructure(draft, sections, query);
   const all = sections.filter((each) => each.parentId === undefined);
@@ -180,7 +183,7 @@ export function StructureTab({
         ? {
             isExpanded: !folded.has(section.id),
             onExpandedChange: (isExpanded: boolean) =>
-              setFolded((was) => {
+              onFoldedChange((was) => {
                 const next = new Set(was);
                 if (isExpanded) next.delete(section.id);
                 else next.add(section.id);
@@ -429,20 +432,16 @@ function SectionBody({
     },
     // Sold out reads by the name, the row stepping back with it; the switch for it waits at the end of the row.
     ...(item.soldOut ? { titleBadge: strings.soldOutBadge, titleBadgeTone: 'strong' as const, isOff: true } : {}),
-    ...(isNarrow
-      ? {}
-      : {
-          quickAction: (
-            <Tooltip content={item.soldOut ? strings.markAvailable : strings.markSoldOut}>
-              <Button
-                variant="ghost"
-                icon={item.soldOut ? 'circle-check' : 'circle-slash'}
-                label={item.soldOut ? strings.markAvailableNamed(item.name) : strings.markSoldOutNamed(item.name)}
-                onPress={() => flipSoldOut(store, slug, item, !item.soldOut, toasts, said)}
-              />
-            </Tooltip>
-          ),
-        }),
+    quickAction: (
+      <Tooltip content={item.soldOut ? strings.markAvailable : strings.markSoldOut}>
+        <Button
+          variant="ghost"
+          icon={item.soldOut ? 'circle-check' : 'circle-slash'}
+          label={item.soldOut ? strings.markAvailableNamed(item.name) : strings.markSoldOutNamed(item.name)}
+          onPress={() => flipSoldOut(store, slug, item, !item.soldOut, toasts, said)}
+        />
+      </Tooltip>
+    ),
     ...(!draft.canEdit
       ? {
           // Run service can still mark a dish sold out from its row (AC-6526), and nothing else.

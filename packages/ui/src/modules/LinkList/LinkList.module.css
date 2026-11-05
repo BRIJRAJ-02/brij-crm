@@ -366,6 +366,8 @@
     padding-inline: var(--space-8);
     border-block-end: none;
     border-radius: var(--radius-md);
+    /* Moved to by the keyboard, a row stops clear of a Preview floating at the foot of the view. */
+    scroll-margin-block-end: calc(var(--size-control) + 2 * var(--space-16));
   }
 
   /* The grip's column stays on the same line as a section head's chevron, so the tiles start under its title. */
@@ -415,9 +417,18 @@
     color: var(--danger);
   }
 
+  /* Close beside the row's menu, on one edge down the list whatever the amount's width. No hover, no quick action:
+     the row's menu holds it, and one press here is live to guests with no tooltip to say what it does. */
   .quick {
     display: inline-flex;
     flex: none;
+    margin-inline-end: calc(var(--space-2) - var(--space-12));
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .quick {
+      display: none;
+    }
   }
 
   /* Off (Sold out): the picture steps back with the words, and all of it eases as it flips. */
@@ -425,11 +436,11 @@
     transition: opacity var(--duration-move) var(--ease-hover);
   }
 
-  .row[data-density='media'][data-off] > .leading {
+  .row[data-density='media'][data-off] .leading {
     opacity: var(--opacity-busy);
   }
 
-  .row[data-density='media'][data-off] > .amount {
+  .row[data-density='media'][data-off] .amount {
     color: var(--text-secondary);
   }
 
@@ -499,14 +510,18 @@
       grid-template-columns: auto auto minmax(0, 1fr) auto;
     }
 
-    .row[data-density='media'] > .grip,
-    .row[data-density='media'] > .leading,
-    .row[data-density='media'] > .end {
+    .row[data-density='media'] .grip,
+    .row[data-density='media'] .leading,
+    .row[data-density='media'] .end {
       grid-row: 1 / span 3;
     }
 
     .frame[data-density='media'] .main {
       display: contents;
+    }
+
+    .frame[data-density='media'] .quick {
+      display: none;
     }
 
     .frame[data-density='media'] .titleLine {

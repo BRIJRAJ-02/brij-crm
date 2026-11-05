@@ -143,3 +143,9 @@ export const FieldShape: Story = {
     await expect(full).toBeGreaterThanOrEqual(menuWide ?? 0);
   },
 };
+
+/** A square tile on the avatar scale: a picture in a row that isn't a face. */
+export const TileWithSize: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { shape: 'tile', size: 'title' },
+};

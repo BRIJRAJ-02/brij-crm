@@ -34,3 +34,7 @@ It takes no focus.
 ## Differences from the artifact
 
 - `width` takes a named share of the slot rather than a number, and `circle` and `block` are `shape` values, so no inline sizes are needed.
+
+## Tile with a size
+
+`shape="tile"` with `size` is a square tile on the avatar scale (`title`, 48px), with `radius-md`, for a picture in a row that isn't a face (a menu item's photo, 6 November 2026). Without a size, `tile` stays `size-tile`.

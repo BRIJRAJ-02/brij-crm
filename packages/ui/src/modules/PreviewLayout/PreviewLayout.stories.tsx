@@ -548,6 +548,8 @@ export const Device: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+    // No scrollbar of its own, but a long page still takes a stop for the keyboard.
+    await expect(await canvas.findByRole('region', { name: 'Phone preview' })).toHaveAttribute('tabindex', '0');
   },
 };
 

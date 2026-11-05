@@ -26,7 +26,7 @@ same frame in skeletons, its regions within 4 px of the loaded ones.
 - **DishesTab** (Items): a card "All items" with "{n} available" and New item, then a table in the order the menus read
   (the menu shown first, its sections then their sub sections, then the other menus, then items on no menu): Item
   (its photo and name), Section ("Mains · Grill", "+1" when it sits in more), Price (sizes as a range), Available (a
-  switch, toast and Undo) and ⋯ (Edit, Delete). Rows open the item, read only for Run service, who get no ⋯.
+  switch, toast and Undo) and ⋯ (Edit, Delete). Rows open the item, read only for Run service, who get no ⋯. At a phone's width the table gives way to rows like Structure's: the photo, name, where it sits, price, the switch and ⋯.
 - **OptionsTab** and **GroupDrawer**: one Card as the Items tab's, "Option groups" with "Choices guests can pick.
   Required groups need a pick." and New group, then the shared groups on a line each (choose one, up to N, any; Guests
   must choose), checked inline before anything is sent; none yet is an empty state in the Card.

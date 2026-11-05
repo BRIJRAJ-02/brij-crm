@@ -101,8 +101,9 @@ export interface LinkRow {
    */
   readonly amount?: { readonly text: string; readonly tone?: 'default' | 'quiet' | 'alert' };
   /**
-   * With `density="media"`: one control the row is mostly opened for, before its amount (Mark sold out). It waits for
-   * the pointer or focus as the row's actions do, so give the same action a home in the row's menu too.
+   * With `density="media"`: one control the row is mostly opened for, beside its actions (Mark sold out). It waits for
+   * the pointer or focus as they do, and is gone where there is no hover and on a narrow list, so give the same action
+   * a home in the row's menu too.
    */
   readonly quickAction?: ReactNode;
 }
@@ -518,7 +519,7 @@ function RowContent({
       {row.leading !== undefined && <span className={styles.leading}>{row.leading}</span>}
       <div className={styles.main}>
         <div className={styles.titleLine}>
-          <span className={styles.title} title={isCompact ? row.title : undefined}>
+          <span className={styles.title} title={isCompact || isMedia ? row.title : undefined}>
             {row.title}
           </span>
           {row.titleBadge !== undefined && (
@@ -543,13 +544,13 @@ function RowContent({
           {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
         </div>
       )}
-      {isMedia && row.quickAction !== undefined && row.quickAction !== null && (
-        <div className={styles.quick}>{row.quickAction}</div>
-      )}
       {isMedia && row.amount !== undefined && (
         <span className={styles.amount} data-tone={row.amount.tone === 'default' ? undefined : row.amount.tone}>
           {row.amount.text}
         </span>
+      )}
+      {isMedia && row.quickAction !== undefined && row.quickAction !== null && (
+        <div className={styles.quick}>{row.quickAction}</div>
       )}
       <div className={styles.end}>
         {row.figure !== undefined && (

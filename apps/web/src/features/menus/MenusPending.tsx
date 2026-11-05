@@ -8,8 +8,8 @@ const NOT_YET = () => undefined;
 /** The tabs have their counts once the draft arrives, the only thing in the bar that moves. */
 const TABS = [
   { id: 'structure', label: strings.tabStructure },
-  { id: 'dishes', label: strings.tabAllDishes },
-  { id: 'options', label: strings.tabAllOptions },
+  { id: 'dishes', label: strings.tabAllDishes, isDisabled: true },
+  { id: 'options', label: strings.tabAllOptions, isDisabled: true },
 ];
 
 /** The Menus editor, loading. */

@@ -102,6 +102,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const [query, setQuery] = useState('');
   // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
   const searched = useDeferredValue(query);
+  // Folded sections, by id (UI state, across the tabs): every section starts open, as checklabs' editor opens them all.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const isNarrow = useIsNarrow();
   // Put away from its own menu, the setup checklist stays away in this browser (UI state, never the server's).
   const setupKey = `crm.menus.setup-hidden.${slug}`;
@@ -645,6 +647,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                         draft={draft}
                         menuId={current.id}
                         query={isNarrow ? '' : searched}
+                        folded={folded}
+                        onFoldedChange={setFolded}
                         onOpen={setOpen}
                         said={said}
                         toasts={toasts}

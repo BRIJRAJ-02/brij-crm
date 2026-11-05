@@ -9,11 +9,13 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkList,
   Menu,
   MenuItem,
   MenuTrigger,
   Switch,
   Table,
+  type LinkRow,
   type TableColumn,
   type Toasts,
 } from '@crm/ui';
@@ -32,12 +34,8 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'actions', label: strings.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
-/** At a phone's width the section gives its room to the name. */
-const NARROW_COLUMNS = COLUMNS.filter((column) => column.id !== 'section');
-
 /** Someone who can't change items (Run service) has no ⋯: the row opens the item to read. */
 const READ_COLUMNS = COLUMNS.filter((column) => column.id !== 'actions');
-const NARROW_READ_COLUMNS = NARROW_COLUMNS.filter((column) => column.id !== 'actions');
 
 /** One row: the item, where it first sits ("Mains · Grill"), and how many more places it sits in. */
 interface ItemRow {
@@ -123,10 +121,72 @@ export function DishesTab({
       {strings.newDish}
     </Button>
   ) : undefined;
+  const place = (row: ItemRow) =>
+    row.path === undefined ? strings.notOnMenu : row.more === 0 ? row.path : strings.alsoIn(row.path, row.more);
+  const opened = (id: string) => {
+    const item = draft.items.find((each) => each.id === id);
+    // Run service opens it read only (UX review should-fix 14).
+    if (item !== undefined) onOpen({ kind: 'item', item });
+  };
+  const more = (item: Dish) => (
+    <MenuTrigger>
+      <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
+      <Menu
+        label={strings.moreFor(item.name)}
+        onAction={(key) => {
+          if (key === 'edit') onOpen({ kind: 'item', item });
+          else if (key === 'delete') onOpen({ kind: 'deleteItem', item });
+        }}
+      >
+        <MenuItem id="edit" icon="pencil">
+          {strings.editDish}
+        </MenuItem>
+        {draft.canEdit ? (
+          <MenuItem id="delete" icon="trash" isDanger>
+            {strings.deleteDish}
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </MenuTrigger>
+  );
+  const emptyState =
+    draft.items.length === 0 ? (
+      <EmptyState
+        icon="utensils"
+        title={strings.noDishes}
+        actions={
+          draft.canEdit ? (
+            <Button variant="primary" icon="plus" onPress={() => onOpen({ kind: 'item' })}>
+              {strings.newDish}
+            </Button>
+          ) : undefined
+        }
+      >
+        {strings.noDishesLine}
+      </EmptyState>
+    ) : (
+      <EmptyState title={strings.noMatches} layout="row" />
+    );
+  // A phone's width has no room for a table's columns: the same rows as Structure's, the switch at the end of each.
+  const narrowRows = rows.map((row): LinkRow => ({
+    id: row.item.id,
+    title: row.item.name,
+    address: '',
+    chips: [place(row)],
+    leading: <DishThumb slug={slug} item={row.item} size="title" />,
+    amount: { text: priceCell(row.item, draft.currency, locale) },
+    ...(row.item.soldOut ? { isOff: true } : {}),
+    toggle: {
+      label: strings.available(row.item.name),
+      isSelected: !row.item.soldOut,
+      onChange: (isAvailable) => flipSoldOut(store, slug, row.item, !isAvailable, toasts, said),
+    },
+    ...(draft.canEdit ? { actions: more(row.item) } : {}),
+  }));
   return (
     <Card
       title={strings.allItems}
-      description={strings.allItemsLine}
+      {...(isNarrow ? {} : { description: strings.allItemsLine })}
       actions={
         <>
           <Badge text={strings.availableCount(available)} />
@@ -134,83 +194,48 @@ export function DishesTab({
         </>
       }
     >
-      <Table
-        label={strings.allItems}
-        columns={draft.canEdit ? (isNarrow ? NARROW_COLUMNS : COLUMNS) : isNarrow ? NARROW_READ_COLUMNS : READ_COLUMNS}
-        rows={rows}
-        getRowId={(row) => row.item.id}
-        onRowAction={(id) => {
-          const item = draft.items.find((each) => each.id === id);
-          // Run service opens it read only (UX review should-fix 14).
-          if (item !== undefined) onOpen({ kind: 'item', item });
-        }}
-        renderCell={(row, column) => {
-          const { item } = row;
-          if (column === 'item')
-            return (
-              <>
-                <DishThumb slug={slug} item={item} />
-                {item.name}
-              </>
-            );
-          if (column === 'section')
-            return row.path === undefined
-              ? strings.notOnMenu
-              : row.more === 0
-                ? row.path
-                : strings.alsoIn(row.path, row.more);
-          if (column === 'price') return priceCell(item, draft.currency, locale);
-          if (column === 'available')
-            return (
-              <Switch
-                label={strings.available(item.name)}
-                isLabelHidden
-                isSelected={!item.soldOut}
-                onChange={(isAvailable) => flipSoldOut(store, slug, item, !isAvailable, toasts, said)}
-              />
-            );
-          return (
-            <MenuTrigger>
-              <Button variant="ghost" icon="ellipsis" label={strings.moreFor(item.name)} />
-              <Menu
-                label={strings.moreFor(item.name)}
-                onAction={(key) => {
-                  if (key === 'edit') onOpen({ kind: 'item', item });
-                  else if (key === 'delete') onOpen({ kind: 'deleteItem', item });
-                }}
-              >
-                <MenuItem id="edit" icon="pencil">
-                  {strings.editDish}
-                </MenuItem>
-                {draft.canEdit ? (
-                  <MenuItem id="delete" icon="trash" isDanger>
-                    {strings.deleteDish}
-                  </MenuItem>
-                ) : null}
-              </Menu>
-            </MenuTrigger>
-          );
-        }}
-        emptyState={
-          draft.items.length === 0 ? (
-            <EmptyState
-              icon="utensils"
-              title={strings.noDishes}
-              actions={
-                draft.canEdit ? (
-                  <Button variant="primary" icon="plus" onPress={() => onOpen({ kind: 'item' })}>
-                    {strings.newDish}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {strings.noDishesLine}
-            </EmptyState>
-          ) : (
-            <EmptyState title={strings.noMatches} layout="row" />
-          )
-        }
-      />
+      {isNarrow ? (
+        <LinkList
+          label={strings.allItems}
+          density="media"
+          rows={narrowRows}
+          onOpen={opened}
+          searchLabel={strings.allItems}
+          isToolbarHidden
+          emptyState={emptyState}
+        />
+      ) : (
+        <Table
+          label={strings.allItems}
+          columns={draft.canEdit ? COLUMNS : READ_COLUMNS}
+          rows={rows}
+          getRowId={(row) => row.item.id}
+          onRowAction={opened}
+          renderCell={(row, column) => {
+            const { item } = row;
+            if (column === 'item')
+              return (
+                <>
+                  <DishThumb slug={slug} item={item} />
+                  {item.name}
+                </>
+              );
+            if (column === 'section') return place(row);
+            if (column === 'price') return priceCell(item, draft.currency, locale);
+            if (column === 'available')
+              return (
+                <Switch
+                  label={strings.available(item.name)}
+                  isLabelHidden
+                  isSelected={!item.soldOut}
+                  onChange={(isAvailable) => flipSoldOut(store, slug, item, !isAvailable, toasts, said)}
+                />
+              );
+            return more(item);
+          }}
+          emptyState={emptyState}
+        />
+      )}
     </Card>
   );
 }

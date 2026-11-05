@@ -45,3 +45,7 @@ Tab reaches the box and the browse button; Enter on browse opens the file picker
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Square thumb
+
+`thumb="square"` with `variant="row"` draws the picture in a square tile (`avatar-title`), for a picture you have to recognise, which the row's wide strip would cut to its middle (a menu item's photo, 6 November 2026). Left out, the wide strip, for a logo or a banner.

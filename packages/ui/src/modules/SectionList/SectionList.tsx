@@ -93,9 +93,9 @@ export function SectionList({
   if (onMove === undefined || sections.length < 2) {
     return (
       <ol className={styles.root} data-variant={variant} aria-label={label}>
-        {sections.map((section) => (
+        {sections.map((section, index) => (
           <li key={section.id} className={styles.item} data-variant={variant}>
-            <SectionBlock section={section} look={look} />
+            <SectionBlock section={section} name={nameAt(sections, index)} look={look} />
           </li>
         ))}
       </ol>
@@ -115,6 +115,7 @@ export function SectionList({
           <MovableSection
             key={section.id}
             section={section}
+            name={nameAt(sections, index)}
             look={look}
             gripLabel={section.title === undefined ? strings.moveNumbered(index + 1) : strings.move(section.title)}
           />
@@ -130,10 +131,13 @@ export function SectionList({
  */
 function SectionBlock({
   section,
+  name,
   look,
   grip,
 }: {
   readonly section: SectionListSection;
+  /** Its name on its fold when it has no title: its place ("Section 2"). */
+  readonly name: string;
   readonly look: SectionLook;
   readonly grip?: ReactNode;
 }) {
@@ -151,7 +155,7 @@ function SectionBlock({
     <div className={styles.group}>
       {hasHead && (
         <header className={styles.head} data-inset={look.isTitleInset && !isFolding ? '' : undefined}>
-          <span className={styles.heading}>
+          <div className={styles.heading}>
             {isTitleLoading && (
               <span className={styles.titleLoading}>
                 <Skeleton width="full" />
@@ -164,6 +168,7 @@ function SectionBlock({
                   className={styles.fold}
                   aria-expanded={isExpanded}
                   aria-controls={bodyId}
+                  {...(title === undefined ? { 'aria-label': name } : {})}
                   onClick={() => {
                     onExpandedChange(!isExpanded);
                   }}
@@ -178,7 +183,7 @@ function SectionBlock({
               title !== undefined && <Title className={styles.title}>{title}</Title>
             )}
             {description !== undefined && <span className={styles.description}>{description}</span>}
-          </span>
+          </div>
           {(hasQuiet || actions !== undefined) && (
             <span className={styles.actions}>
               {hasQuiet && (
@@ -216,17 +221,19 @@ function NestedLevel({ level, children }: { readonly level: 2 | 3 | 4; readonly 
 /** A section that moves: its item in the sorting list, lifted while it moves, with its grip in its header. */
 function MovableSection({
   section,
+  name,
   look,
   gripLabel,
 }: {
   readonly section: SectionListSection;
+  readonly name: string;
   readonly look: SectionLook;
   readonly gripLabel: string;
 }) {
   const { bind, grip } = useSortableItem(section.id);
   return (
     <li ref={bind} className={styles.item} data-variant={look.variant}>
-      <SectionBlock section={section} look={look} grip={<DragHandle label={gripLabel} drag={grip} />} />
+      <SectionBlock section={section} name={name} look={look} grip={<DragHandle label={gripLabel} drag={grip} />} />
     </li>
   );
 }

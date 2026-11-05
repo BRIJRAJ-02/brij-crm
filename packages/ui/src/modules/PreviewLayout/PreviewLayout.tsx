@@ -677,7 +677,7 @@ export function PreviewLayout({
           className={styles.measure}
           data-share={previewShare === 'third' ? undefined : 'wide'}
           data-surface={isDevice ? 'device' : undefined}
-          style={{ '--device-phone': `${String(PHONE.width)}px` }}
+          style={{ '--device-phone': isDevice ? `${String(PHONE.width)}px` : undefined }}
         >
           {hasPreview && !isDevice && <div className={styles.bar}>{previewButton}</div>}
           <div

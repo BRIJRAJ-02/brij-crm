@@ -843,6 +843,12 @@ export const Media: Story = {
 /** The same rows at a phone's width: the name, then the price on a clear line, then the facts, beside the tile. */
 export const MediaNarrow: Story = {
   ...Media,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('£14.00–£16.50')).toBeVisible();
+    // Too narrow for the quick action: the row's menu holds it.
+    await expect(canvas.queryByRole('button', { name: 'Mark Edamame sold out' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'More for Edamame' })).toBeInTheDocument();
+  },
   render: (args) => (
     <Stage width="narrow">
       <Card>
@@ -850,6 +856,33 @@ export const MediaNarrow: Story = {
       </Card>
     </Stage>
   ),
+};
+
+/** Loading: tiles, the title's and facts' lines and the amount where they will land. */
+export const MediaLoading: Story = {
+  ...Media,
+  args: { ...Media.args, status: 'loading', rows: [] },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('[aria-busy="true"]')).not.toBeNull();
+  },
+};
+
+/** No rows yet: the list's `footer` still stands, with nothing else, for someone who can add. */
+export const MediaEmptyWithFooter: Story = {
+  ...Media,
+  args: { ...Media.args, rows: [] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Add item' })).toBeVisible();
+  },
+};
+
+/** Failed: the failure with Try again where the rows go. */
+export const MediaFailed: Story = {
+  ...Media,
+  args: { ...Media.args, status: 'error', rows: [], onRetry: fn() },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+  },
 };
 
 /** Sections heading the rows under them: a small uppercase label with its count, dragged like any other row. */
