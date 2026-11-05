@@ -5,6 +5,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
@@ -114,6 +115,27 @@ export interface BookingFrameProps {
    * the same custom properties as `variables` instead. Nothing the page does changes with it.
    */
   readonly brand?: PageBrand;
+  /**
+   * `menu` (a restaurant's guest pages, 5 November 2026): the page wears the guest menu's look, read from the
+   * `--menu-*` custom properties the menu's look stylesheet sets (its ground, card, chip, line, words and the ink as
+   * the accent), each falling back to a token, the accent to the ink (`surface-inverse`), never the app's blue. A
+   * brand's accent still wins. Left out, the booking page's own look, unchanged.
+   */
+  readonly look?: 'menu';
+  /**
+   * `tile` (a place, not a person, 5 November 2026): the rail heads with the business's initials on a square ink tile
+   * (or its logo, when the brand has one) beside its name on one row, at every width, and the title under it in the
+   * heading's weight (a restaurant's "Reserve your table"). Left out, the host's round picture over their name.
+   */
+  readonly identity?: 'person' | 'tile';
+  /** A quiet link closing the rail's block, its arrow after it: a reservation's "Manage booking →". */
+  readonly railLink?: { readonly label: string; readonly href: string };
+  /**
+   * Stacked under the month (a phone), the times take their own height and run with the page, rather than scrolling
+   * in an eight row box (a restaurant's Lunch and Dinner, after checklabs' phone page). Beside the month they still
+   * take its height and scroll in it. Left out, the eight row box.
+   */
+  readonly isAsideGrowing?: boolean;
 }
 
 /** A booking page's or form's brand kit, as the library draws it (spec 0060, AC-4). */
@@ -202,7 +224,13 @@ export function BookingFrame({
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
+  look,
+  identity = 'person',
+  railLink,
+  isAsideGrowing = false,
 }: BookingFrameProps) {
+  const isTile = identity === 'tile';
+  const railHref = railLink === undefined ? undefined : safeHref(railLink.href);
   const isLoading = host === undefined || title === undefined;
   const variables = usePageVariables(brand?.variables);
   // A logo that fails (a stale version, a removed file) leaves the rail rather than drawing a broken picture.
@@ -229,6 +257,7 @@ export function BookingFrame({
       className={styles.root}
       ref={variables}
       {...templateAttributes(brand?.template)}
+      {...(look === 'menu' ? { 'data-look': 'menu' } : {})}
       {...(isCompact ? { 'data-compact': true } : {})}
       {...(isEmbedded ? { 'data-embedded': true } : {})}
     >
@@ -281,8 +310,21 @@ export function BookingFrame({
               </ul>
             </div>
           ) : (
-            <div className={styles.identity} data-arrived={openedLoading || undefined}>
-              {host.team === undefined ? (
+            <div
+              className={styles.identity}
+              data-arrived={openedLoading || undefined}
+              data-identity={isTile ? 'tile' : undefined}
+            >
+              {isTile ? (
+                // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
+                // its name, on one row.
+                <div className={styles.tileRow}>
+                  {brandLogo === undefined && (
+                    <Avatar name={host.name} shape="square" hue="ink" size="lg" isDecorative />
+                  )}
+                  <p className={styles.host}>{host.name}</p>
+                </div>
+              ) : host.team === undefined ? (
                 <Avatar
                   name={host.name}
                   size="xl"
@@ -302,17 +344,19 @@ export function BookingFrame({
                 className={styles.names}
                 data-team={host.team === undefined ? undefined : ''}
                 data-alone={
-                  host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase()
+                  isTile || (host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase())
                     ? ''
                     : undefined
                 }
               >
                 {/* A team page's title already names the workspace ("Intro call with Acme"). */}
                 {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
-                {host.team === undefined && host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
-                  <p className={styles.host}>{host.name}</p>
-                )}
-                {host.team === undefined && host.role !== undefined && host.role !== '' && (
+                {!isTile &&
+                  host.team === undefined &&
+                  host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
+                    <p className={styles.host}>{host.name}</p>
+                  )}
+                {!isTile && host.team === undefined && host.role !== undefined && host.role !== '' && (
                   <p className={styles.hostRole}>{host.role}</p>
                 )}
                 <h1 className={styles.title}>{title}</h1>
@@ -338,6 +382,12 @@ export function BookingFrame({
                   moves, since the foot is pinned to the rail's end. */}
               {host.team === undefined && host.socials !== undefined && (
                 <SocialLinks links={host.socials} label={strings.socials(host.name)} />
+              )}
+              {railLink !== undefined && railHref !== undefined && (
+                <a className={styles.railLink} href={railHref}>
+                  {railLink.label}
+                  <Icon name="arrow-right" size="xs" />
+                </a>
               )}
             </div>
           )}
@@ -383,7 +433,11 @@ export function BookingFrame({
                   {/* A pane draws what it is given, loading or not: the page hands its own month and times, already
                       in their shape, so the card is the right height from the first paint. */}
                   <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
-                  {aside !== undefined && <div className={styles.aside}>{aside}</div>}
+                  {aside !== undefined && (
+                    <div className={styles.aside} data-growing={isAsideGrowing || undefined}>
+                      {aside}
+                    </div>
+                  )}
                 </div>
                 {footer !== undefined && <div className={styles.footer}>{footer}</div>}
               </div>

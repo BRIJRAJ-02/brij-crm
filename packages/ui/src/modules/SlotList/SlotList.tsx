@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -18,6 +19,14 @@ export interface Slot {
   readonly isBest?: boolean;
   /** The visitor's own calendar is busy then (shown only when they ask to see every time). */
   readonly isBusy?: boolean;
+}
+
+/** One group of times under its own small heading: a restaurant's Lunch or Dinner (spec 0066 B7). */
+export interface SlotGroup {
+  readonly id: string;
+  /** "Lunch". */
+  readonly heading: string;
+  readonly slots: readonly Slot[];
 }
 
 /** Props for SlotList. */
@@ -48,6 +57,15 @@ export interface SlotListProps {
    * fill and a check, the rest go quiet, and none can be pressed again. Nothing is removed, so nothing below moves.
    */
   readonly answered?: string;
+  /**
+   * The times in groups, each under its small heading (a restaurant's Lunch and Dinner, spec 0066 B7), in one list
+   * that scrolls as one and runs three across at any width. Given, it takes the place of `slots` and `layout`.
+   */
+  readonly groups?: readonly SlotGroup[];
+  /** A short count beside the heading ("12 available"), as a neutral Badge. */
+  readonly badge?: string;
+  /** The first time's button, so the page can move focus to the times (a time taken meanwhile, or Pick a time). */
+  readonly firstRef?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -80,11 +98,71 @@ export function SlotList({
   empty,
   drawKey,
   answered,
+  groups,
+  badge,
+  firstRef,
 }: SlotListProps) {
+  const groupId = useId();
+  /** One time's button in its row; `index` runs across the groups, so the stagger carries on from one to the next. */
+  const item = (slot: Slot, index: number) => {
+    const isPicked = variant === 'picker' && slot.id === value;
+    const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
+    return (
+      <li
+        key={slot.id}
+        className={styles.item}
+        data-picked={isPicked ? '' : undefined}
+        data-answer={isAnswer ? '' : undefined}
+        data-quiet={variant === 'offers' && answered !== undefined && !isAnswer ? '' : undefined}
+        style={{ '--slot-index': String(Math.min(index, 12)) }}
+      >
+        <button
+          {...(index === 0 && firstRef !== undefined ? { ref: firstRef } : {})}
+          type="button"
+          className={styles.slot}
+          data-busy={slot.isBusy === true ? '' : undefined}
+          {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
+          {...(variant === 'offers' && answered !== undefined
+            ? { 'aria-disabled': true, ...(isAnswer ? { 'aria-current': true } : {}) }
+            : {})}
+          aria-label={[
+            slot.name,
+            slot.isBest === true ? strings.best : undefined,
+            slot.isBusy === true ? strings.busy : undefined,
+            isAnswer ? strings.picked : undefined,
+          ]
+            .filter((part) => part !== undefined)
+            .join(', ')}
+          onClick={() => {
+            if (variant === 'offers' && answered !== undefined) return;
+            onChange(slot.id);
+          }}
+        >
+          {isAnswer && <Icon name="check" size="sm" />}
+          {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
+          <span key={slot.label} className={styles.time}>
+            {slot.label}
+          </span>
+          {slot.isBest === true && (
+            <span className={styles.best} aria-hidden="true">
+              {strings.bestTag}
+            </span>
+          )}
+          {slot.isBusy === true && (
+            <span className={styles.busy} aria-hidden="true">
+              {strings.busyTag}
+            </span>
+          )}
+        </button>
+      </li>
+    );
+  };
+  const shownGroups = groups?.filter((group) => group.slots.length > 0);
+  const isEmpty = shownGroups === undefined ? slots.length === 0 : shownGroups.length === 0;
   return (
     <div
       className={styles.root}
-      data-layout={layout}
+      data-layout={groups === undefined ? layout : 'groups'}
       data-variant={variant}
       data-answered={variant === 'offers' && answered !== undefined ? '' : undefined}
     >
@@ -100,6 +178,11 @@ export function SlotList({
             <h2 key={heading} className={styles.heading}>
               {heading}
             </h2>
+          )}
+          {badge !== undefined && !isLoading && (
+            <span key={badge} className={styles.badge}>
+              <Badge text={badge} isWhole />
+            </span>
           )}
           {onHour12Change !== undefined && (
             <SegmentedControl
@@ -127,62 +210,29 @@ export function SlotList({
             ))}
           </ul>
         </>
-      ) : slots.length === 0 && empty !== undefined ? (
+      ) : isEmpty && empty !== undefined ? (
         <div className={styles.empty}>{empty}</div>
-      ) : (
-        <ul key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
-          {slots.map((slot, index) => {
-            const isPicked = variant === 'picker' && slot.id === value;
-            const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
+      ) : shownGroups !== undefined ? (
+        // One list that scrolls as one: each group under its small heading, the stagger running on across them.
+        <div key={drawKey} className={styles.scroller}>
+          {shownGroups.map((group, groupIndex) => {
+            const before = shownGroups.slice(0, groupIndex).reduce((count, each) => count + each.slots.length, 0);
+            const headingId = `${groupId}-${String(groupIndex)}`;
             return (
-              <li
-                key={slot.id}
-                className={styles.item}
-                data-picked={isPicked ? '' : undefined}
-                data-answer={isAnswer ? '' : undefined}
-                data-quiet={variant === 'offers' && answered !== undefined && !isAnswer ? '' : undefined}
-                style={{ '--slot-index': String(Math.min(index, 12)) }}
-              >
-                <button
-                  type="button"
-                  className={styles.slot}
-                  data-busy={slot.isBusy === true ? '' : undefined}
-                  {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
-                  {...(variant === 'offers' && answered !== undefined
-                    ? { 'aria-disabled': true, ...(isAnswer ? { 'aria-current': true } : {}) }
-                    : {})}
-                  aria-label={[
-                    slot.name,
-                    slot.isBest === true ? strings.best : undefined,
-                    slot.isBusy === true ? strings.busy : undefined,
-                    isAnswer ? strings.picked : undefined,
-                  ]
-                    .filter((part) => part !== undefined)
-                    .join(', ')}
-                  onClick={() => {
-                    if (variant === 'offers' && answered !== undefined) return;
-                    onChange(slot.id);
-                  }}
-                >
-                  {isAnswer && <Icon name="check" size="sm" />}
-                  {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
-                  <span key={slot.label} className={styles.time}>
-                    {slot.label}
-                  </span>
-                  {slot.isBest === true && (
-                    <span className={styles.best} aria-hidden="true">
-                      {strings.bestTag}
-                    </span>
-                  )}
-                  {slot.isBusy === true && (
-                    <span className={styles.busy} aria-hidden="true">
-                      {strings.busyTag}
-                    </span>
-                  )}
-                </button>
-              </li>
+              <section key={group.id} className={styles.group} aria-labelledby={headingId}>
+                <h3 id={headingId} className={styles.groupHeading}>
+                  {group.heading}
+                </h3>
+                <ul className={styles.list} aria-label={strings.groupTimes(group.heading, heading)}>
+                  {group.slots.map((slot, index) => item(slot, before + index))}
+                </ul>
+              </section>
             );
           })}
+        </div>
+      ) : (
+        <ul key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
+          {slots.map((slot, index) => item(slot, index))}
         </ul>
       )}
     </div>

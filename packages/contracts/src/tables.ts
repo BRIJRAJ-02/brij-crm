@@ -79,6 +79,18 @@ export const PublicTablePage = z.object({
   hours: PlaceHours,
   /** Today on the place's wall clock. */
   today: PlaceDate,
+  /**
+   * The place's areas a guest may ask to sit in (Inside, Terrace), in the floor's order: the page offers them as a
+   * seating preference. Absent or empty, no seating choice.
+   */
+  areas: z.array(z.string()).readonly().optional(),
+  /** The place's guest menu on our own host (`/m/<menu key>`), while one is published and shown. */
+  menuPath: z.string().optional(),
+  /**
+   * The version of the guest look the page wears (the menu's look stylesheet, the brand's accent in it), served at
+   * `/api/public/tables/<key>/look.css?v=<look>`. Absent, the page wears the look's token fallbacks.
+   */
+  look: z.string().optional(),
 });
 /** A reservation page's facts. */
 export type PublicTablePage = z.infer<typeof PublicTablePage>;

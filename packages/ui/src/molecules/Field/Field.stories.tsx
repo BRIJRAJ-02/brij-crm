@@ -31,6 +31,27 @@ export const Default: Story = {
   },
 };
 
+/** `size="lg"`: a guest page's 42px field (a reservation's details), a one line value and a note, one with an error. */
+export const Large: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Field label="Full name" size="lg" autoComplete="name" defaultValue="Ada Lovelace" />
+      <Field label="Phone" size="lg" type="tel" error="Give a number we can call you on." />
+      <Field
+        label="Special requests"
+        labelAside="Optional"
+        size="lg"
+        isMultiline
+        placeholder="Dietary, high chair, accessibility…"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Full name' })).toHaveValue('Ada Lovelace');
+    await expect(canvasElement.querySelectorAll('[data-size="lg"]')).toHaveLength(3);
+  },
+};
+
 /** A row's picker and its remove button in the suffix: the Invite dialog's address with its role. */
 export const AfterControls: Story = {
   args: { label: 'Email', placeholder: 'name@company.com', defaultValue: 'grace@example.com' },

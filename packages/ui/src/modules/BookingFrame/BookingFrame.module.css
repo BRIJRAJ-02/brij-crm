@@ -184,6 +184,24 @@
     overflow-wrap: anywhere;
   }
 
+  /* `tile` (a place): the business's initials on a square ink tile beside its name, on one row at every width, so the
+     rail is a line shorter on a phone; the title under it takes the heading's weight. */
+  .tileRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .tileRow > .host {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .identity[data-identity='tile'] {
+    gap: var(--space-8);
+  }
+
   .title {
     margin: 0;
     color: var(--text-secondary);
@@ -444,6 +462,14 @@
     contain: size;
     /* Times in groups (a restaurant's Lunch and Dinner, spec 0066 B7) scroll here together, never out of the card. */
     overflow-y: auto;
+  }
+
+  /* `isAsideGrowing` (a restaurant's times on a phone): stacked under the month, the times take their own height and
+     run with the page rather than scrolling in a box of their own. Beside the month they keep its height (below). */
+  .aside[data-growing] {
+    block-size: auto;
+    contain: none;
+    overflow: visible;
   }
 
   .footer {
@@ -722,6 +748,11 @@
       padding-block: 0;
       border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     }
+
+    .root:not([data-compact]) .aside[data-growing] {
+      contain: size;
+      overflow-y: auto;
+    }
   }
 
   /* The four templates (spec 0068, AC-6801): the workspace's, from its brand kit, on this root as `data-template`
@@ -772,6 +803,74 @@
     --on-accent: var(--text-secondary);
     --shadow-primary: none;
     --opacity-disabled: var(--opacity-busy);
+  }
+
+  /* `menu` (a restaurant's guest pages, 5 November 2026): the guest menu's look, so the menu, the reservation page and
+     the business page read as one product. Each colour comes from the `--menu-*` custom properties the menu's look
+     stylesheet sets, and falls back to a token: the ground and card to the surfaces, the accent to the ink
+     (`surface-inverse`, near black in light and near white in dark), never the app's blue. A brand's accent still wins
+     over the ink. Worked out here, at the root, so the names below can point at them one level in without a cycle. */
+  .root[data-look='menu'] {
+    --frame-look-ground: var(--menu-ground, var(--surface-subtle));
+    --frame-look-card: var(--menu-card, var(--surface-raised));
+    --frame-look-chip: var(--menu-chip, var(--surface-sunken));
+    --frame-look-line: var(--menu-line, var(--border));
+    --frame-look-text: var(--menu-text, var(--text));
+    --frame-look-quiet: var(--menu-quiet, var(--text-secondary));
+    --frame-look-ink: var(--menu-accent, var(--surface-inverse));
+    --frame-look-on-ink: var(--menu-on-accent, var(--on-inverse));
+    --frame-accent: var(--frame-brand-accent, var(--frame-look-ink));
+    --frame-accent-hover: var(
+      --frame-brand-accent,
+      color-mix(in oklab, var(--frame-look-ink) 86%, var(--frame-look-card))
+    );
+    --frame-on-accent: var(--frame-brand-on-accent, var(--frame-look-on-ink));
+    --frame-link: var(--frame-brand-link, var(--frame-look-text));
+    --frame-accent-soft: var(--frame-brand-soft, var(--frame-look-chip));
+    --frame-accent-border: var(--frame-brand-accent, var(--frame-look-ink));
+    --frame-accent-line: var(--frame-brand-accent, var(--frame-look-ink));
+    --frame-focus: var(--frame-brand-focus, 0 0 0 var(--border-width-thick) var(--frame-look-ink));
+
+    background: var(--frame-look-ground);
+    color: var(--frame-look-text);
+  }
+
+  .root[data-look='menu'] .layout {
+    --surface-subtle: var(--frame-look-ground);
+    --surface-raised: var(--frame-look-card);
+    --surface-sunken: var(--frame-look-chip);
+    --surface-hover: var(--frame-look-chip);
+    --surface-selected: var(--frame-look-chip);
+    --border: var(--frame-look-line);
+    --border-subtle: var(--frame-look-line);
+    --text: var(--frame-look-text);
+    --text-secondary: var(--frame-look-quiet);
+  }
+
+  /* The rail's closing link ("Manage booking →"): a quiet line that steps up to the text under the pointer. */
+  .railLink {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--space-4);
+    margin-block-start: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .railLink:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .railLink:hover {
+      color: var(--text);
+    }
   }
 
   /* Split: on a wide page the rail is a sticky panel on the page's own ground (no card of its own: no border, no

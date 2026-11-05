@@ -90,6 +90,51 @@
     flex: none;
   }
 
+  /* Times in groups (a restaurant's Lunch and Dinner, spec 0066 B7): the heading row stays, and below it one scroller
+     takes the rest of the pane, every group under its small heading, three across at any width. */
+  .root[data-layout='groups'] {
+    container-type: inline-size;
+    flex: 1;
+  }
+
+  /* The count beside the day ("12 available"), at the row's end. */
+  .badge {
+    display: inline-flex;
+    margin-inline-start: auto;
+    animation: slot-swap var(--duration-move) var(--ease-in-out) both;
+  }
+
+  /* The fade at its foot covers only its own padding, so a list that grows with its times (a phone) ends crisp, and
+     one that scrolls in its pane fades what runs on under it. */
+  .scroller {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-block-size: 0;
+    padding-block-end: var(--space-24);
+    overflow-y: auto;
+    mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .groupHeading {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
+  }
+
+  .root[data-layout='groups'] .list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   /* Under the page breakpoint the times run under the month, two across at least. */
   @media (width < 1024px) {
     .list {
@@ -239,6 +284,7 @@
   @media (prefers-reduced-motion: reduce) {
     .item,
     .heading,
+    .badge,
     .time {
       animation-name: slot-fade;
     }

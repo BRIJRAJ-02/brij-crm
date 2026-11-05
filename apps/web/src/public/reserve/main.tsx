@@ -8,8 +8,9 @@ import { BookingMessage, BookingProvider, createToasts } from '@crm/ui/public-bo
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
+import { wearStylesheet } from '../stylesheet.ts';
 import { ManageReservation } from './ManageReservation.tsx';
-import { ReservePage } from './ReservePage.tsx';
+import { lookHref, ReservePage } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
 const root = document.getElementById('root');
@@ -65,8 +66,13 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
     client.page(placeKey).then(
       (page) => {
         if (!current) return;
-        setRead({ status: 'ready', page });
-        document.title = strings.tabTitle(page.place.name);
+        // The guest look (the menu's, with the brand's accent) before the page draws, so it never paints in the
+        // fallback first; a slow stylesheet arrives over the drawn page.
+        void wearStylesheet(document, lookHref(page)).then(() => {
+          if (!current) return;
+          setRead({ status: 'ready', page });
+          document.title = strings.tabTitle(page.place.name);
+        });
       },
       (error: unknown) => {
         if (current) setRead({ status: 'error', message: isDataError(error) ? error.message : strings.offline });

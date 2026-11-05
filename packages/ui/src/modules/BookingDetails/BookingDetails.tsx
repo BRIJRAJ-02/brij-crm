@@ -67,6 +67,12 @@ export interface BookingDetailsLabels {
   readonly done?: string;
   /** The note's label ("Anything the host should know?"). */
   readonly note?: string;
+  /** The note's placeholder: a reservation's "Dietary, high chair, accessibility…". */
+  readonly notePlaceholder?: string;
+  /** The name's label ("Your name"); a reservation's "Full name". */
+  readonly name?: string;
+  /** The phone's label ("Number to call"); a reservation's "Phone". */
+  readonly phone?: string;
 }
 
 /** Props for BookingDetails. */
@@ -109,6 +115,20 @@ export interface BookingDetailsProps {
    */
   readonly blocked?: () => string | undefined;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
+  /**
+   * A guest page's fields (a table reservation, after checklabs): `lg` draws every field at Field's 42px guest size.
+   * Left out, the booking page's own 30px fields.
+   */
+  readonly fieldSize?: 'md' | 'lg';
+  /** Asks for the phone straight after the name, before the email (checklabs' reservation order). */
+  readonly isPhoneFirst?: boolean;
+  /** One quiet line under the heading: a reservation's "We'll send your confirmation here. Free to cancel…". */
+  readonly intro?: string;
+  /**
+   * One quiet line under the send button, centred ("Free cancellation · No prepayment required"); the send button then
+   * takes the row beside Back.
+   */
+  readonly confirmNote?: string;
 }
 
 /** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
@@ -181,7 +201,15 @@ export function BookingDetails({
   onBack,
   blocked,
   onSubmit,
+  fieldSize = 'md',
+  isPhoneFirst = false,
+  intro,
+  confirmNote,
 }: BookingDetailsProps) {
+  // The guest size only when asked for, so the booking page's fields carry no size at all, as before; its buttons
+  // are then a thumb's 44px, as the Book bar before them.
+  const sized = fieldSize === 'lg' ? { size: 'lg' as const } : {};
+  const actionSize = fieldSize === 'lg' ? 'touch' : 'lg';
   const [name, setName] = useState(prefill?.name ?? '');
   const [email, setEmail] = useState(prefill?.email ?? '');
   const [phone, setPhone] = useState('');
@@ -346,10 +374,11 @@ export function BookingDetails({
     }));
     const first = [
       'name',
+      ...(isPhoneFirst ? ['phone'] : []),
       'email',
       'guests',
       ...guests.map((_, index) => `guest-${String(index)}`),
-      'phone',
+      ...(isPhoneFirst ? [] : ['phone']),
       ...showing.map((question) => `${ANSWER_FIELD}${question.key}`),
     ].find((field) => found[field] !== undefined);
     if (first?.startsWith(ANSWER_FIELD) === true) {
@@ -424,6 +453,27 @@ export function BookingDetails({
     );
   };
 
+  // A number to call, on a page that phones the visitor: after the guests, or straight after the name when asked.
+  const phoneField = needsPhone ? (
+    <div className={styles.shaker} data-shake={shakeOf('phone')}>
+      <Field
+        label={labels?.phone ?? strings.phone}
+        {...sized}
+        name="phone"
+        type="tel"
+        autoComplete="tel"
+        maxLength={40}
+        isRequired
+        value={phone}
+        onChange={(next) => {
+          setPhone(next);
+          clear('phone');
+        }}
+        {...(errors.phone === undefined ? {} : { error: errors.phone })}
+      />
+    </div>
+  ) : null;
+
   return (
     <form
       ref={form}
@@ -438,6 +488,7 @@ export function BookingDetails({
       <h2 ref={heading} id={headingId} className={styles.heading} tabIndex={-1}>
         {labels?.heading ?? strings.heading}
       </h2>
+      {intro !== undefined && <p className={styles.intro}>{intro}</p>}
       {bookingAs !== undefined && (
         <p className={styles.as}>
           {strings.bookingAs(bookingAs)}
@@ -457,7 +508,8 @@ export function BookingDetails({
       )}
       <div className={styles.shaker} data-shake={shakeOf('name')}>
         <Field
-          label={strings.name}
+          label={labels?.name ?? strings.name}
+          {...sized}
           name="name"
           autoComplete="name"
           maxLength={200}
@@ -471,9 +523,11 @@ export function BookingDetails({
           {...(errors.name === undefined ? {} : { error: errors.name })}
         />
       </div>
+      {isPhoneFirst && phoneField}
       <div className={styles.shaker} data-shake={shakeOf('email')}>
         <Field
           label={strings.email}
+          {...sized}
           name="email"
           type="email"
           autoComplete="email"
@@ -569,26 +623,11 @@ export function BookingDetails({
           </Button>
         </div>
       )}
-      {needsPhone && (
-        <div className={styles.shaker} data-shake={shakeOf('phone')}>
-          <Field
-            label={strings.phone}
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            maxLength={40}
-            isRequired
-            value={phone}
-            onChange={(next) => {
-              setPhone(next);
-              clear('phone');
-            }}
-            {...(errors.phone === undefined ? {} : { error: errors.phone })}
-          />
-        </div>
-      )}
+      {!isPhoneFirst && phoneField}
       <Field
         label={labels?.note ?? strings.note}
+        {...sized}
+        {...(labels?.notePlaceholder === undefined ? {} : { placeholder: labels.notePlaceholder })}
         // Beside the page's own questions, the note says it is optional as they do; alone, it keeps its hint.
         {...(questions.length === 0 ? { hint: strings.optional } : { labelAside: WORDS.optional })}
         name="note"
@@ -632,15 +671,24 @@ export function BookingDetails({
       <p className={styles.line} role="alert">
         {line}
       </p>
-      <div className={styles.actions} data-shake={shakeOf('actions')}>
+      <div
+        className={styles.actions}
+        data-shake={shakeOf('actions')}
+        data-wide={confirmNote === undefined ? undefined : ''}
+      >
         {onBack !== undefined && (
-          <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
+          <Button
+            variant="ghost"
+            isDisabled={isBusy}
+            onPress={onBack}
+            {...(fieldSize === 'lg' ? { size: 'touch' } : {})}
+          >
             {strings.back}
           </Button>
         )}
         <Button
           variant="primary"
-          size="lg"
+          size={actionSize}
           type="submit"
           {...(onBack === undefined ? { isFullWidth: 'center' as const } : {})}
           isPending={isBusy && !isDone}
@@ -659,6 +707,7 @@ export function BookingDetails({
                 : (labels?.confirm ?? strings.confirm)}
         </Button>
       </div>
+      {confirmNote !== undefined && <p className={styles.confirmNote}>{confirmNote}</p>}
     </form>
   );
 }

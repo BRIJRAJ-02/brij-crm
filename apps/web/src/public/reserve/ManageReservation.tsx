@@ -423,6 +423,8 @@ function FindReservation({
   return (
     <BookingFrame
       {...frameHead(page)}
+      // The reservation page's own look (the guest menu's), so finding a reservation is the same product.
+      look="menu"
       description={strings.findIntro}
       facts={placeFacts(page)}
       heading={strings.findTitle}

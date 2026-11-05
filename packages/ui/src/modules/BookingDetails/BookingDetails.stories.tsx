@@ -162,6 +162,54 @@ export const OnePage: Story = {
   },
 };
 
+/**
+ * A restaurant's details step after checklabs (5 November 2026): the guest's 42px fields, Full name, Phone, Email and
+ * Special requests in that order, a line under the heading, Back beside a send button that takes the row, and a line
+ * under it. Phone and email are both required.
+ */
+export const GuestReservation: Story = {
+  render: (args) => <WithOccasion {...args} />,
+  args: {
+    needsPhone: true,
+    maxGuests: 0,
+    fieldSize: 'lg',
+    isPhoneFirst: true,
+    intro: 'We’ll send your confirmation here. Free to cancel — no prepayment needed.',
+    confirmNote: 'Free cancellation · No prepayment required',
+    labels: {
+      name: 'Full name',
+      phone: 'Phone',
+      note: 'Special requests',
+      notePlaceholder: 'Dietary, high chair, accessibility…',
+      confirm: 'Confirm Fri 26 Jun at 19:30',
+      confirming: 'Confirming',
+      done: 'Confirmed',
+    },
+    questions: [
+      {
+        id: 'marketing',
+        key: 'marketing',
+        label: 'Send me news and offers from Somewhere.',
+        answerType: 'checkbox',
+        required: false,
+      },
+    ],
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const fields = [...canvasElement.querySelectorAll('input[name], textarea[name]')].map((field) =>
+      field.getAttribute('name'),
+    );
+    await expect(fields.slice(0, 4)).toEqual(['name', 'phone', 'email', 'note']);
+    await expect(canvas.getByText('Free cancellation · No prepayment required')).toBeInTheDocument();
+    await expect(canvas.getByRole('checkbox', { name: /news and offers/ })).not.toBeChecked();
+    // Both ways to reach the guest are required: an empty Confirm marks the name first, then the phone and the email.
+    await userEvent.click(canvas.getByRole('button', { name: 'Confirm Fri 26 Jun at 19:30' }));
+    await expect(await canvas.findByText('Give a number to call you on.')).toBeInTheDocument();
+    await expect(canvas.getByText(/Give an email address/)).toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: /Full name/ })).toHaveFocus());
+  },
+};
+
 /** The server refused: its message in the line above the buttons. */
 export const Failed: Story = {
   args: {

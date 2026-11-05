@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState, type ComponentProps } from 'react';
+import { useRef, useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SlotList, type Slot } from './SlotList.tsx';
 
@@ -177,6 +178,79 @@ export const Empty: Story = {
 };
 
 /** The story's own state, in a component so the artifact's preview can render it too. */
+/** A restaurant's day in 24 hour times: Lunch from 12:00 and Dinner from 18:00, a quarter hour apart. */
+function service(prefix: string, hour: number, count: number): readonly Slot[] {
+  return Array.from({ length: count }, (_, index) => {
+    const minutes = hour * 60 + index * 15;
+    const label = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return { id: `${prefix}-${label}`, label, name: `${label}, Fri 9 Oct` };
+  });
+}
+
+const SERVICES = [
+  { id: 'lunch', heading: 'Lunch', slots: service('lunch', 12, 7) },
+  { id: 'dinner', heading: 'Dinner', slots: service('dinner', 18, 11) },
+];
+
+/**
+ * `groups` (a restaurant's Lunch and Dinner, spec 0066 B7): one list that scrolls as one, each group under its small
+ * heading, three across; the long date heads it with a count, and the first time is the page's to focus.
+ */
+export const Groups: Story = {
+  args: { heading: 'Friday 9 October', slots: [], groups: SERVICES, badge: '18 available', onHour12Change: undefined },
+  render: (args) => <GroupsInPane {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'Lunch' })).toBeInTheDocument();
+    await expect(canvas.getByRole('list', { name: 'Dinner times on Friday 9 October' })).toBeInTheDocument();
+    await expect(canvas.getByText('18 available')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /^19:30/ }));
+    await expect(canvas.getByRole('button', { name: /^19:30/ })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(canvas.getByRole('button', { name: 'Focus the first time' }));
+    await expect(canvas.getByRole('button', { name: /^12:00/ })).toHaveFocus();
+  },
+};
+
+/** The grouped list while the times load: three across, in its pane. */
+export const GroupsLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { heading: 'Friday 9 October', slots: [], groups: [], isLoading: true, onHour12Change: undefined },
+  render: (args) => <GroupsInPane {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading times…')).toBeInTheDocument();
+  },
+};
+
+/** A grouped day with nothing left: the page's own words in the list's place. */
+export const GroupsEmpty: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    heading: 'Friday 9 October',
+    slots: [],
+    groups: [{ id: 'lunch', heading: 'Lunch', slots: [] }],
+    empty: 'No tables left that day for this party.',
+    onHour12Change: undefined,
+  },
+  render: (args) => <GroupsInPane {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No tables left that day for this party.')).toBeInTheDocument();
+    await expect(canvas.queryByRole('heading', { name: 'Lunch' })).toBeNull();
+  },
+};
+
+/** The grouped list in a pane a booking page's height, with a button that focuses the first time through `firstRef`. */
+function GroupsInPane(args: ComponentProps<typeof SlotList>) {
+  const [value, setValue] = useState(args.value);
+  const first = useRef<HTMLButtonElement>(null);
+  return (
+    <Stage width="narrow" height="page">
+      <Button variant="ghost" onPress={() => first.current?.focus()}>
+        Focus the first time
+      </Button>
+      <SlotList {...args} value={value} onChange={setValue} firstRef={first} />
+    </Stage>
+  );
+}
+
 function Interactive(args: ComponentProps<typeof SlotList>) {
   const [value, setValue] = useState(args.value);
   return (

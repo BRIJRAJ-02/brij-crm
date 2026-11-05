@@ -3,9 +3,32 @@ export const strings = {
   tabTitle: (place: string) => `Reserve a table · ${place}`,
   reserveTable: 'Reserve a table',
   reserveYourTable: 'Reserve your table',
+  /** The rail's line under "Reserve your table" (checklabs' own words). */
+  pickAt: (place: string) => `Pick a date and time at ${place}.`,
+  /** The card's heading on the month view. */
+  chooseDate: 'Choose a date',
+  manageBooking: 'Manage booking',
   yourDetails: 'Your details',
   confirmAt: (day: string, time: string) => `Confirm ${day} at ${time}`,
-  chooseToContinue: 'Choose a time to continue',
+  /** The Book bar before a time is picked, and once one is ("Continue · Fri 6 Nov, 19:30"). */
+  pickATime: 'Pick a time',
+  continueAt: (day: string, time: string) => `Continue · ${day}, ${time}`,
+  /** The count beside the day's times. */
+  available: (count: number) => `${String(count)} available`,
+  /** The rail's picked time ("Fri 6 Nov, 19:30"). */
+  pickedAt: (day: string, time: string) => `${day}, ${time}`,
+  detailsIntro: 'We’ll send your confirmation here. Free to cancel — no prepayment needed.',
+  confirmNote: 'Free cancellation · No prepayment required',
+  fullName: 'Full name',
+  phone: 'Phone',
+  specialRequests: 'Special requests',
+  specialPlaceholder: 'Dietary, high chair, accessibility…',
+  seating: 'Seating',
+  noPreference: 'No preference',
+  /** A seating choice goes to the restaurant at the head of the note, as checklabs sends it. */
+  seatingNote: (area: string, note: string) =>
+    note === '' ? `Seating preference: ${area}` : `Seating preference: ${area} — ${note}`,
+  seeMenu: 'See the menu',
   pickTime: 'Choose a time first.',
   noTimesPickDay: 'No times left this day. Choose another day.',
   timesLoading: 'The times are still loading.',
@@ -32,7 +55,8 @@ export const strings = {
   taken: 'That time was just taken. These are still free:',
   takenNone: 'That time was just taken. Pick another time below, or another day.',
   occasion: 'Occasion',
-  optional: 'Optional',
+  /** Beside an optional label, as the note's own says it (checklabs' "(optional)"). */
+  optional: '(optional)',
   occasions: {
     birthday: 'Birthday',
     anniversary: 'Anniversary',

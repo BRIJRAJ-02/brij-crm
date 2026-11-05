@@ -25,7 +25,11 @@ import { strings } from './strings.ts';
 export const COUNTER_FROM = 0.9;
 
 /** `md` (the default) is the 30px input of forms and panels; `sm` is the 26px of a cell editor or a toolbar. */
-export type FieldSize = 'md' | 'sm';
+/**
+ * `md` (the default) is the 30px field; `sm` the 26px field of a filter value or a record panel row; `lg` the 42px
+ * field of a guest page (a reservation's details, after checklabs), its words a step larger.
+ */
+export type FieldSize = 'md' | 'sm' | 'lg';
 
 /**
  * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;

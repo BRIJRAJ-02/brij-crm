@@ -156,6 +156,7 @@ export {
   guestReserve,
   guestTimes,
   guestVisit,
+  readTableLook,
   readTablePage,
   UPCOMING_PER_EMAIL,
   type GuestKey,
