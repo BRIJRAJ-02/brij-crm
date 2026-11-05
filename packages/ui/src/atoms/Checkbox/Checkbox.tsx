@@ -10,8 +10,13 @@ export interface CheckboxProps {
   /** What checking it means, in sentence case. Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
-  /** A line under the label that says more. */
+  /** A line under the label that says more; at the row's end in `variant="row"` (an add-on's +£1.50). */
   readonly description?: string;
+  /**
+   * `row` draws it as a full width row, its description at the row's end, after checklabs' add-on rows: a dish's
+   * add-ons on the guest menu, beside RadioGroup's `rows` for its sizes. `plain` (the default) is the box and label.
+   */
+  readonly variant?: 'plain' | 'row';
   readonly isSelected?: boolean;
   readonly defaultSelected?: boolean;
   readonly onChange?: (isSelected: boolean) => void;
@@ -45,6 +50,7 @@ export function Checkbox({
   label,
   isLabelHidden = false,
   description,
+  variant = 'plain',
   isSelected,
   defaultSelected,
   onChange,
@@ -60,6 +66,7 @@ export function Checkbox({
   return (
     <CheckboxField
       className={styles.field}
+      data-variant={variant === 'row' ? 'row' : undefined}
       {...(isIndeterminate === undefined ? {} : { isIndeterminate })}
       {...(slot === undefined ? {} : { slot })}
       isDisabled={isDisabled}

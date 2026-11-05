@@ -64,6 +64,33 @@ export const States: Story = {
   },
 };
 
+/**
+ * A guest page's pills (`isRound`): the table in a line of small capitals (`fit`, the line's words), a dish's marks
+ * (`chip`, `strong`) and its allergens (`chip-lg`, `strong`), after checklabs' guest menu.
+ */
+export const Pills: Story = {
+  render: () => (
+    <Stage>
+      <Badge text="Table 4" tone="accent" size="fit" isRound isWhole />
+      <Badge text="Vegan" tone="strong" size="chip" isRound isWhole />
+      <Badge text="Popular" tone="strong" size="chip" isRound isWhole />
+      <Badge text="Sold out" tone="strong" size="chip" dot="red" isRound isWhole />
+      <Badge text="Milk" tone="strong" size="chip-lg" isRound isWhole />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const chip = canvas.getByText('Vegan').parentElement;
+    const allergen = canvas.getByText('Milk').parentElement;
+    await expect(chip === null ? '' : getComputedStyle(chip).borderTopLeftRadius).not.toBe('0px');
+    // The allergen chip stands 4px taller than the mark beside it.
+    await expect(
+      allergen === null || chip === null
+        ? 0
+        : allergen.getBoundingClientRect().height - chip.getBoundingClientRect().height,
+    ).toBe(4);
+  },
+};
+
 /** `icon`: a glyph before the count, a comment mark with the open threads on a row or card; the label says what it counts. */
 export const WithIcon: Story = {
   render: () => (

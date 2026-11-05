@@ -9,11 +9,13 @@ import styles from './Stepper.module.css';
 import { strings } from './strings.ts';
 
 /**
- * `sm`: 30px, 26px buttons, the count in the strong body style (a dish's row, a selection line). `md`: 40px, 36px
- * buttons, the count in the heading style (a reservation's party size). `lg`: 48px, 30px buttons, the count in the
- * title style (a sheet's foot, beside its 48px action).
+ * `sm`: 30px, 26px buttons, the count in the strong body style. `md`: 40px, 36px buttons, the count in the heading
+ * style (a reservation's party size). `lg`: 48px, 30px buttons, the count in the title style. `row` and `sheet` are
+ * checklabs' own steppers, value for value, with the − and + in the text colour and drawn bolder: `row` 30px, 2px in,
+ * 24px buttons and a 13px semibold count (the guest menu's dish rows and the selection's lines); `sheet` 48px, 32px
+ * buttons and the count in the title style (a dish sheet's foot, beside Button's 48px `sheet`).
  */
-export type StepperSize = 'sm' | 'md' | 'lg';
+export type StepperSize = 'sm' | 'md' | 'lg' | 'row' | 'sheet';
 
 /** `default`: a hairline pill on the card. `filled`: a pill of the chip colour with no line (checklabs' cream). */
 export type StepperTone = 'default' | 'filled';
@@ -52,8 +54,8 @@ export interface StepperProps {
   readonly isCountAnnounced?: boolean;
 }
 
-/** The Button size each Stepper size draws its buttons at. */
-const BUTTON_SIZE = { sm: 'md', md: 'xl', lg: 'lg' } as const;
+/** The Button size each Stepper size draws its buttons at (`row` and `sheet` resize theirs, 24px and 32px). */
+const BUTTON_SIZE = { sm: 'md', md: 'xl', lg: 'lg', row: 'md', sheet: 'lg' } as const;
 
 /**
  * A count changed one at a time, as a group: one fewer, the count, one more. Each button is drawn small and pressed
@@ -104,43 +106,46 @@ export function Stepper({
       role="group"
       {...(isLabelHidden ? { 'aria-label': label } : { 'aria-labelledby': labelId })}
     >
-      {isFewerHidden ? null : (
+      {/* Draws nothing of its own (display: contents): it carries `row` and `sheet`'s bolder glyph to the buttons. */}
+      <span className={styles.track}>
+        {isFewerHidden ? null : (
+          <Button
+            ref={fewerRef}
+            variant="ghost"
+            size={BUTTON_SIZE[size]}
+            icon="minus"
+            label={fewerLabel}
+            isRound
+            isTouchTarget
+            isDisabled={isFewerOff}
+            onPress={() => {
+              pressed.current = document.activeElement === fewerRef.current ? 'fewer' : undefined;
+              onChange?.(Math.max(min, value - 1));
+            }}
+          />
+        )}
+        {isCountAnnounced ? (
+          <output className={styles.value} aria-live="polite">
+            {count}
+          </output>
+        ) : (
+          <span className={styles.value}>{count}</span>
+        )}
         <Button
-          ref={fewerRef}
+          ref={moreRef}
           variant="ghost"
           size={BUTTON_SIZE[size]}
-          icon="minus"
-          label={fewerLabel}
+          icon="plus"
+          label={moreLabel}
           isRound
           isTouchTarget
-          isDisabled={isFewerOff}
+          isDisabled={isMoreOff}
           onPress={() => {
-            pressed.current = document.activeElement === fewerRef.current ? 'fewer' : undefined;
-            onChange?.(Math.max(min, value - 1));
+            pressed.current = document.activeElement === moreRef.current ? 'more' : undefined;
+            onChange?.(Math.min(max, value + 1));
           }}
         />
-      )}
-      {isCountAnnounced ? (
-        <output className={styles.value} aria-live="polite">
-          {count}
-        </output>
-      ) : (
-        <span className={styles.value}>{count}</span>
-      )}
-      <Button
-        ref={moreRef}
-        variant="ghost"
-        size={BUTTON_SIZE[size]}
-        icon="plus"
-        label={moreLabel}
-        isRound
-        isTouchTarget
-        isDisabled={isMoreOff}
-        onPress={() => {
-          pressed.current = document.activeElement === moreRef.current ? 'more' : undefined;
-          onChange?.(Math.min(max, value + 1));
-        }}
-      />
+      </span>
     </span>
   );
   if (isLabelHidden) return pill;

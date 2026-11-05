@@ -46,6 +46,27 @@ export const States: Story = {
   },
 };
 
+/** Rows: a dish's add-ons on the guest menu, each a row with its price at the end, the whole row toggling it. */
+export const Rows: Story = {
+  render: () => (
+    <Stage width="dialog" direction="column">
+      <Checkbox variant="row" label="Soft egg" description="+£1.50" />
+      <Checkbox variant="row" label="Extra chashu" description="+£3.00" defaultSelected />
+      <Checkbox variant="row" label="Bamboo shoots" isDisabled />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const egg = canvas.getByRole('checkbox', { name: 'Soft egg' });
+    await expect(egg).toHaveAccessibleDescription('+£1.50');
+    // A press on the price, at the row's end, toggles the row (asked of the browser: what is under that point).
+    const price = canvas.getByText('+£1.50').getBoundingClientRect();
+    const under = document.elementFromPoint(price.left + price.width / 2, price.top + price.height / 2);
+    await expect(under?.closest('label')).toBe(egg.closest('label'));
+    await userEvent.click(egg);
+    await expect(egg).toBeChecked();
+  },
+};
+
 /** The label for screen readers only, as in a table's header. */
 export const HiddenLabel: Story = {
   args: { label: 'Select all', isLabelHidden: true, isIndeterminate: true },

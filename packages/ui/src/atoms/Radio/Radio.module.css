@@ -39,6 +39,39 @@
       border-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* Rows (after checklabs' option rows, value for value): each choice a full width row, 10px apart, a hairline round it
+     at 16px corners, 14px over and under and 16px at the sides; a 20px circle with a 1.75px edge, 14px from the label
+     at 15px; the description (a size's price) at the row's end in the quiet colour. The chosen row takes the accent's
+     line and soft fill, and the circle keeps its edge under the pointer (the row's fill says hover). The whole row
+     picks it, as a card does, and a press eases the row down to --scale-press-sm (1 in the app, where nothing shrinks;
+     a guest page sets its own) on --ease-press. */
+  .choices[data-variant='rows'] {
+    gap: calc(var(--space-8) + var(--space-2));
+  }
+
+  .choices[data-variant='rows'] .field {
+    --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
+    --radio-hover-edge: var(--control-border);
+
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-12);
+    padding: calc(var(--space-12) + var(--space-2)) var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: calc(var(--radius-xl) + var(--space-4));
+    background: var(--surface-raised);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-press, var(--ease-out));
+  }
+
+  .choices[data-variant='rows'] .field[data-selected] {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
   .choices[data-variant='cards'] .field:has(.radio[data-selected]) {
     border-color: var(--accent-line);
     background: var(--accent-soft);
@@ -47,6 +80,16 @@
   @media (hover: hover) and (pointer: fine) {
     .choices[data-variant='cards'] .field:has(.radio[data-hovered]:not([data-selected], [data-disabled])) {
       background: var(--surface-hover);
+    }
+
+    .choices[data-variant='rows'] .field:has(.radio[data-hovered]):not([data-selected], [data-disabled]) {
+      background: var(--surface-hover);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .choices[data-variant='rows'] .field:has(.radio[data-pressed]):not([data-disabled]) {
+      scale: var(--scale-press-sm);
     }
   }
 
@@ -82,6 +125,24 @@
     border-radius: var(--radius-md);
   }
 
+  /* A row: the label takes the row, 14px from its circle, at 15px; the whole row picks it. */
+  .choices[data-variant='rows'] .radio {
+    position: static;
+    flex: 1;
+    align-items: center;
+    gap: calc(var(--space-12) + var(--space-2));
+    min-inline-size: 0;
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+  }
+
+  .choices[data-variant='rows'] .radio::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--radius-xl) + var(--space-4));
+  }
+
   .circle {
     display: grid;
     flex: none;
@@ -110,6 +171,21 @@
       scale var(--duration-press) var(--ease-out);
   }
 
+  /* A row's circle: 20px with a 1.75px edge and no drop; its dot 7px. */
+  .choices[data-variant='rows'] .circle {
+    inline-size: var(--space-20);
+    block-size: var(--space-20);
+    margin: 0;
+    border: var(--row-edge) solid var(--control-border);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .choices[data-variant='rows'] .dot {
+    inline-size: calc(var(--space-6) + var(--border-width-hairline));
+    block-size: calc(var(--space-6) + var(--border-width-hairline));
+  }
+
   /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
   .radio[data-selected] .circle {
     border-color: var(--accent-line);
@@ -123,7 +199,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .radio[data-hovered]:not([data-selected], [data-disabled]) .circle {
-      border-color: var(--text-secondary);
+      border-color: var(--radio-hover-edge, var(--text-secondary));
     }
   }
 
@@ -164,6 +240,21 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  /* A row's label keeps the row's 15px, and its description (the price) sits at the row's end. */
+  .choices[data-variant='rows'] .label[data-described] {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .choices[data-variant='rows'] .description {
+    flex: none;
+    padding-inline-start: 0;
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   /* A card's value (a merge's side): the body's type and colour, cut to the card, under the label's line. */

@@ -9,6 +9,51 @@
     max-inline-size: 100%;
   }
 
+  /* A row (after checklabs' add-on rows, value for value; RadioGroup's `rows` beside it): a full width row, a hairline
+     round it at 16px corners, 14px over and under and 16px at the sides; a 20px box with 6px corners and a 1.75px
+     edge, its tick half as bold again, 14px from the label at 15px; the description (an add-on's +£1.50) at the row's
+     end in the quiet colour. A checked row takes the accent's line and soft fill, and the box keeps its edge under the
+     pointer (the row's fill says hover). The whole row toggles it, and a press eases the row down to
+     --scale-press-sm (1 in the app, where nothing shrinks; a guest page sets its own) on --ease-press. */
+  .field[data-variant='row'] {
+    --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
+    --row-tick: calc(var(--icon-stroke) * 1.5);
+    --check-hover-edge: var(--control-border);
+
+    position: relative;
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: var(--space-12);
+    box-sizing: border-box;
+    inline-size: 100%;
+    padding: calc(var(--space-12) + var(--space-2)) var(--space-16);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: calc(var(--radius-xl) + var(--space-4));
+    background: var(--surface-raised);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-press, var(--ease-out));
+  }
+
+  .field[data-variant='row'][data-selected] {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .field[data-variant='row']:has(.root[data-hovered]):not([data-selected], [data-disabled]) {
+      background: var(--surface-hover);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .field[data-variant='row']:has(.root[data-pressed]):not([data-disabled]) {
+      scale: var(--scale-press-sm);
+    }
+  }
+
   /* Positioned, so React Aria's visually hidden input stays inside the control
      and never stretches a scrolling ancestor or the page. */
   .root {
@@ -39,6 +84,19 @@
       border-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* A row's box: 20px at 6px corners, a 1.75px edge, no drop, its tick half as bold again. */
+  .field[data-variant='row'] .box {
+    --icon-stroke: var(--row-tick);
+
+    inline-size: var(--space-20);
+    block-size: var(--space-20);
+    margin: 0;
+    border: var(--row-edge) solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    box-shadow: none;
+  }
+
   /* The edge is accent-line, which holds 3:1 on selected rows too. */
   .root[data-selected] .box,
   .root[data-indeterminate] .box {
@@ -48,7 +106,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .root[data-hovered]:not([data-selected], [data-indeterminate], [data-disabled]) .box {
-      border-color: var(--text-secondary);
+      border-color: var(--check-hover-edge, var(--text-secondary));
     }
   }
 
@@ -83,6 +141,24 @@
     max-inline-size: 100%;
   }
 
+  /* A row: the label takes the row, 14px from its box, at 15px; the whole row toggles it. */
+  .field[data-variant='row'] .root {
+    position: static;
+    flex: 1;
+    align-items: center;
+    gap: calc(var(--space-12) + var(--space-2));
+    min-inline-size: 0;
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+  }
+
+  .field[data-variant='row'] .root::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--radius-xl) + var(--space-4));
+  }
+
   .leading {
     display: inline-flex;
     flex: 0 1 auto;
@@ -95,6 +171,12 @@
   .label[data-described] {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* A row's label keeps the row's 15px. */
+  .field[data-variant='row'] .label[data-described] {
+    font: inherit;
+    letter-spacing: inherit;
   }
 
   /* Under the label, past the box. */
@@ -113,6 +195,21 @@
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  /* A row's description (the price) sits at its end; an error takes a line of its own under it. */
+  .field[data-variant='row'] .description {
+    flex: none;
+    padding-inline-start: 0;
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .field[data-variant='row'] .error {
+    flex-basis: 100%;
+    padding-inline-start: 0;
   }
 
   @media (forced-colors: active) {

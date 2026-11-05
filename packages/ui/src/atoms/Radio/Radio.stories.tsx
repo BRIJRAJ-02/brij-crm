@@ -166,6 +166,36 @@ export const Cards: Story = {
   },
 };
 
+/** Rows: a dish's sizes on the guest menu, each a row with its price at the end, the whole row picking it. */
+export const Rows: Story = {
+  args: { label: 'Size', isLabelHidden: true, defaultValue: 'regular' },
+  render: (args) => (
+    <Stage width="dialog">
+      <RadioGroup {...args} variant="rows">
+        <Radio value="regular" description="£14.00">
+          Regular
+        </Radio>
+        <Radio value="large" description="£16.50">
+          Large
+        </Radio>
+        <Radio value="kids" description="£9.00" isDisabled>
+          Kids
+        </Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const large = canvas.getByRole('radio', { name: 'Large' });
+    await expect(large).toHaveAccessibleDescription('£16.50');
+    // The price sits at the row's end, and a press on it picks the row (asked of the browser, as Cards does).
+    const price = canvas.getByText('£16.50').getBoundingClientRect();
+    const under = document.elementFromPoint(price.left + price.width / 2, price.top + price.height / 2);
+    await expect(under?.closest('label')).toBe(large.closest('label'));
+    await userEvent.click(large);
+    await expect(large).toBeChecked();
+  },
+};
+
 /** A merge's side by side choice (spec 0049): each card a record's name over the value it holds, picked whole. */
 export const CardsWithValues: Story = {
   // Cards already has its screenshot; this one proves the value's place in the hit area and its description.

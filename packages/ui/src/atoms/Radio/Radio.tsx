@@ -11,7 +11,7 @@ export interface RadioProps {
   readonly value: string;
   /** Its label. */
   readonly children: string;
-  /** A line under the label that says more. */
+  /** A line under the label that says more; at the row's end in a group drawn as rows (a size's price). */
   readonly description?: string;
   /** A glyph before the label, for a group drawn as cards (`variant="cards"`): what the choice adds. */
   readonly icon?: IconName;
@@ -71,9 +71,11 @@ export interface RadioGroupProps {
   /**
    * `cards` draws each choice as a bordered card in a grid two wide, the chosen one on the accent's soft fill:
    * a handful of choices that each start a different job, where the choice itself is the first step of a form
-   * (the link page's Add item). `plain` (the default) is the usual stack.
+   * (the link page's Add item). `rows` draws each as a full width row with its description at the row's end, after
+   * checklabs' option rows: a dish's sizes and options on the guest menu, each with its price. `plain` (the default)
+   * is the usual stack.
    */
-  readonly variant?: 'plain' | 'cards';
+  readonly variant?: 'plain' | 'cards' | 'rows';
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */

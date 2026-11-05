@@ -371,9 +371,15 @@
      448px wide and the window's height, its start corners 20px, sliding in from the end. Neither draws a bar: the
      body runs to the sheet's edges (the content pads itself, so a dish's photo bleeds), and Close floats at the top
      end, 36px round: on a glass of the card over a dish's photo, on the chip colour on the selection's title row.
-     Their surface is the page's own (surface-raised, text), which the guest menu points at its look. */
-  .scrim[data-variant='sheet-card'],
+     Their surface is the page's own (surface-raised, text), which the guest menu points at its look. The dish's scrim
+     blurs the page 3px and the selection's 2px, at seven eighths of the scrim's colour (checklabs' 35% black where the
+     dish's is 40%). */
+  .scrim[data-variant='sheet-card'] {
+    backdrop-filter: blur(calc(var(--space-2) + var(--border-width-hairline)));
+  }
+
   .scrim[data-variant='sheet-side'] {
+    background: color-mix(in oklab, var(--scrim) 87.5%, transparent);
     backdrop-filter: blur(var(--space-2));
   }
 
@@ -387,6 +393,11 @@
   .root[data-variant='sheet-side'] {
     --sheet-radius: calc(var(--radius-lg) * 2);
     --sheet-motion: calc(var(--duration-press) * 2);
+    /* Close's glyph line (checklabs' 1.75 stroke on its 18px X), and how far its disc eases down while held: four
+       times the page's own press, so 0.88 where a guest page presses at 0.97, and 1 in the app. Taken here, a step
+       out from Close, which sets the page's press to 1 for the button inside it. */
+    --close-stroke: calc(var(--icon-stroke) * 7 / 6);
+    --close-press: calc(1 - (1 - var(--scale-press)) * 4);
 
     position: relative;
     inline-size: 100%;
@@ -415,15 +426,29 @@
   }
 
   /* Close: a 36px round of glass (the card, a little clear, blurred) over a dish's photo; of the chip colour on the
-     selection's title row. */
+     selection's title row. Its X is 18px in the text colour, a little bolder (checklabs'), and the whole disc eases
+     down while held, so the button inside it keeps still. */
   .root[data-variant='sheet-card'] .close,
   .root[data-variant='sheet-side'] .close {
+    --size-icon-sm: calc(var(--size-icon) + var(--space-2));
+    --text-secondary: var(--text);
+    --icon-stroke: var(--close-stroke);
+    --scale-press: 1;
+
     display: grid;
     place-items: center;
     inline-size: calc(var(--space-32) + var(--space-4));
     block-size: calc(var(--space-32) + var(--space-4));
     margin: 0;
     border-radius: var(--radius-full);
+    transition: scale var(--duration-press) var(--ease-press, var(--ease-out));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .root[data-variant='sheet-card'] .close:has([data-pressed]),
+    .root[data-variant='sheet-side'] .close:has([data-pressed]) {
+      scale: var(--close-press);
+    }
   }
 
   .root[data-variant='sheet-card'] .close {
