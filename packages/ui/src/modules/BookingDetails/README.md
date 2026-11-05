@@ -25,6 +25,8 @@ A table reservation (spec 0066 B7) passes `maxGuests={0}`: it counts its party o
 
 `labels` puts the page's own words in place of the built in ones, each optional: `heading`, `confirm`, `confirming`, `done` (the send button's three states) and `note`. A reservation page sends with "Reserve". `extra` draws the page's own controls after the note and before the questions (a reservation's occasion as ChoiceChips by key); the page holds and sends what they pick, and the form neither reads nor checks them. Story: Reservation.
 
+- `onBack` left out (a table reservation's one page, after checklabs) draws no Back: the send button stands alone at the form's width, and nothing takes focus as the form shows (it is no step arriving; the page keeps its focus at its top). Why a prop: the reservation page keeps its times and details on one page, so there is no step to go back to.
+
 ## States
 
 Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.

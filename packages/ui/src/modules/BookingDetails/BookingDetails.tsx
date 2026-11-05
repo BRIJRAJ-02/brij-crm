@@ -98,7 +98,11 @@ export interface BookingDetailsProps {
   readonly prefillAnswers?: Readonly<Record<string, string>>;
   /** The visitor's country, guessed: a phone question's code and a country question's start. */
   readonly countryGuess?: string;
-  readonly onBack: () => void;
+  /**
+   * Back to the times. Left out on a page that keeps the times and the details on one page (a table reservation,
+   * after checklabs' one page booking form): the send button stands alone, the width of the form.
+   */
+  readonly onBack?: () => void;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
 }
 
@@ -244,14 +248,17 @@ export function BookingDetails({
   // The first empty field takes focus as the step arrives, so a visitor at a keyboard just types (the owner,
   // 2 November 2026); under a finger the heading takes it instead, so a phone keeps its keyboard down until a field is
   // tapped.
+  // On a one page form (no Back) nothing arrives: the page keeps its own focus, at its top.
+  const isStep = onBack !== undefined;
   useEffect(() => {
+    if (!isStep) return;
     const first = globalThis.matchMedia('(pointer: fine)').matches
       ? [...(form.current?.querySelectorAll<HTMLInputElement>('input[name="name"], input[name="email"]') ?? [])].find(
           (input) => input.value === '',
         )
       : undefined;
     (first ?? heading.current)?.focus();
-  }, []);
+  }, [isStep]);
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
 
@@ -614,10 +621,12 @@ export function BookingDetails({
       <p className={styles.line} role="alert">
         {line}
       </p>
-      <div className={styles.actions} data-shake={shakeOf('actions')}>
-        <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
-          {strings.back}
-        </Button>
+      <div className={styles.actions} data-shake={shakeOf('actions')} data-alone={onBack === undefined || undefined}>
+        {onBack !== undefined && (
+          <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
+            {strings.back}
+          </Button>
+        )}
         <Button
           variant="primary"
           size="lg"

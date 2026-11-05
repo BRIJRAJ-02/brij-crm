@@ -1,9 +1,10 @@
 // Brief
 // Purpose: a guest reserves a table at one place (spec 0066 B7 lite; 0065 AC-6551), at timefix.com/r/<key>.
-// Main task: party, then a day and a time (Lunch and Dinner), then name, email and phone, then reserved.
-// Leaves out: deposits, areas, waitlist and "notify me" (later slices). Laid out as checklabs' guest page (the date
-//   and its times beside each other, the details after) and built on the booking page's own modules: BookingFrame,
-//   MonthTiles, SlotList and BookingDetails, the party as ChoiceChips. Times are the restaurant's clock.
+// Main task: on one page, as checklabs' booking form: the party, a day (a strip of days on a phone, with the full
+//   calendar a press away; the month on a wider screen), a time, then Your details, and "Confirm {day} at {time}".
+// Leaves out: deposits, areas, waitlist and "notify me" (later slices). Built on the booking page's own modules:
+//   BookingFrame, DayStrip, MonthTiles, SlotList and BookingDetails (with no Back: there is no step), the party as
+//   ChoiceChips. Times are the restaurant's clock.
 import {
   BookingDetails,
   BookingFrame,
@@ -11,6 +12,7 @@ import {
   Button,
   Callout,
   ChoiceChips,
+  DayStrip,
   MonthTiles,
   SlotList,
   type BookingDetailsOutcome,
@@ -18,7 +20,7 @@ import {
   type BookingFact,
 } from '@crm/ui/public-booking';
 import { isDataError, type PublicTablePage, type TableClient, type TableRefusal } from '@crm/data/tables';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { openDays, rangesOn, services, shortDay, timeLabel, type ServiceHeading } from './days.ts';
 import { strings } from './strings.ts';
 
@@ -44,6 +46,27 @@ export function frameHead(page: PublicTablePage): { readonly host: { readonly na
 
 /** The occasions, by key, in the order the chips show them. */
 const OCCASION_KEYS = ['birthday', 'anniversary', 'date', 'business', 'other'] as const;
+
+/** Days on the phone's strip (checklabs shows three weeks). */
+const STRIP_DAYS = 21;
+
+/** Wide enough for the month beside the times; narrower, the strip of days. */
+const WIDE = '(min-width: 40rem)';
+
+/** Whether the page is wide enough for the month, following the window as it changes. */
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (changed) => {
+      const list = globalThis.matchMedia(WIDE);
+      list.addEventListener('change', changed);
+      return () => {
+        list.removeEventListener('change', changed);
+      };
+    },
+    () => globalThis.matchMedia(WIDE).matches,
+    () => true,
+  );
+}
 
 /** The first of the month of a date. */
 const monthOf = (date: string) => date.slice(0, 7);
@@ -75,7 +98,8 @@ export function ReservePage({
   const [day, setDay] = useState<string | undefined>(days[0]);
   const [month, setMonth] = useState(monthOf(days[0] ?? page.today));
   const [time, setTime] = useState<string | undefined>();
-  const [isDetails, setDetails] = useState(false);
+  const isWide = useWide();
+  const [isFullCalendar, setFullCalendar] = useState(false);
   const [attempt, setAttempt] = useState(() => crypto.randomUUID());
   // The answer for one party and day: a different pair is loading until its own answer lands.
   const [answer, setAnswer] = useState<{ readonly key: string; readonly times: Times } | undefined>();
@@ -130,99 +154,57 @@ export function ReservePage({
     setNotice(undefined);
   };
 
-  if (isDetails && time !== undefined) {
-    const reserve = async (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
-      const picked = OCCASION_KEYS.find((key) => key === occasion[0]);
-      try {
-        const made = await client.reserve(page.key, {
-          idempotencyKey: attempt,
-          party,
-          start: time,
-          name: values.name,
-          email: values.email,
-          phone: values.phone,
-          ...(values.note.trim() === '' ? {} : { note: values.note }),
-          ...(picked === undefined ? {} : { occasion: picked }),
-          marketing: values.answers.marketing === true,
-          timeZone: zone,
-          company_url: values.trap,
-          startedAt,
-        });
-        return {
-          kind: 'done',
-          next: () => {
-            onReserved({ token: made.manageToken, lookupCode: made.visit.lookupCode });
-          },
-        };
-      } catch (error) {
-        if (!isDataError(error)) return { kind: 'failed', message: strings.offline };
-        if (error.code === 'SLOT_TAKEN') {
-          // Back to the times, with the next free ones offered at once (checklabs only said it was gone); with none
-          // offered, the day's times read again, so the taken one is never offered twice.
-          const next = (error as TableRefusal).next ?? [];
-          setNotice({ text: next.length === 0 ? strings.takenNone : strings.taken, next });
-          if (next.length === 0) {
-            setAnswer(undefined);
-            setReload((count) => count + 1);
-          }
-          setTime(undefined);
-          setDetails(false);
-          setAttempt(crypto.randomUUID());
-          return { kind: 'failed', message: error.message };
+  const reserve = async (values: BookingDetailsValues): Promise<BookingDetailsOutcome> => {
+    // No time yet: the first free one takes focus, and the line says what is missing (checklabs' "Pick a time slot").
+    if (time === undefined) {
+      timesRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+      return { kind: 'failed', message: strings.pickTime };
+    }
+    const picked = OCCASION_KEYS.find((key) => key === occasion[0]);
+    try {
+      const made = await client.reserve(page.key, {
+        idempotencyKey: attempt,
+        party,
+        start: time,
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        ...(values.note.trim() === '' ? {} : { note: values.note }),
+        ...(picked === undefined ? {} : { occasion: picked }),
+        marketing: values.answers.marketing === true,
+        timeZone: zone,
+        company_url: values.trap,
+        startedAt,
+      });
+      return {
+        kind: 'done',
+        next: () => {
+          onReserved({ token: made.manageToken, lookupCode: made.visit.lookupCode });
+        },
+      };
+    } catch (error) {
+      if (!isDataError(error)) return { kind: 'failed', message: strings.offline };
+      if (error.code === 'SLOT_TAKEN') {
+        // Back to the times, with the next free ones offered at once (checklabs only said it was gone); with none
+        // offered, the day's times read again, so the taken one is never offered twice.
+        const next = (error as TableRefusal).next ?? [];
+        setNotice({ text: next.length === 0 ? strings.takenNone : strings.taken, next });
+        if (next.length === 0) {
+          setAnswer(undefined);
+          setReload((count) => count + 1);
         }
-        const fields = Object.fromEntries(
-          (error.data?.issues ?? []).map((issue) => [String(issue.path.at(-1) ?? ''), issue.message]),
-        );
-        return Object.keys(fields).length > 0
-          ? { kind: 'invalid', fields, message: error.message }
-          : { kind: 'failed', message: error.message };
+        setTime(undefined);
+        setAttempt(crypto.randomUUID());
+        return { kind: 'failed', message: error.message };
       }
-    };
-    return (
-      <BookingFrame
-        {...frame}
-        heading={strings.reserveAt(shortDay(day ?? page.today, locale), label(time), party)}
-        view="details"
-        enter="forward"
-      >
-        <BookingDetails
-          needsPhone
-          maxGuests={0}
-          labels={{
-            confirm: strings.detailsConfirm,
-            confirming: strings.detailsConfirming,
-            done: strings.detailsDone,
-            note: strings.detailsNote,
-          }}
-          extra={
-            <ChoiceChips
-              label={strings.occasion}
-              labelAside={strings.optional}
-              tone="strong"
-              isSingle
-              choices={OCCASION_KEYS.map((key) => ({ id: key, label: strings.occasions[key] }))}
-              selected={occasion}
-              onChange={setOccasion}
-            />
-          }
-          questions={[
-            {
-              id: 'marketing',
-              key: 'marketing',
-              label: strings.marketing(page.business.name),
-              answerType: 'checkbox',
-              required: false,
-            },
-          ]}
-          onBack={() => {
-            setDetails(false);
-          }}
-          onSubmit={reserve}
-        />
-      </BookingFrame>
-    );
-  }
-
+      const fields = Object.fromEntries(
+        (error.data?.issues ?? []).map((issue) => [String(issue.path.at(-1) ?? ''), issue.message]),
+      );
+      return Object.keys(fields).length > 0
+        ? { kind: 'invalid', fields, message: error.message }
+        : { kind: 'failed', message: error.message };
+    }
+  };
   const partyChoices = Array.from({ length: page.partyMax - page.partyMin + 1 }, (_, index) => {
     const size = String(page.partyMin + index);
     return { id: size, label: size };
@@ -276,28 +258,47 @@ export function ReservePage({
   return (
     <BookingFrame
       {...frame}
-      heading={strings.reserveTable}
+      heading={strings.reserveYourTable}
       view="month"
       // The times' own wrapper, so Choose a time can move focus to the first one.
       aside={<div ref={timesRef}>{aside}</div>}
       footer={
-        <Button
-          variant="primary"
-          size="lg"
-          isFullWidth="center"
-          onPress={() => {
-            // Never a dead button: with no time yet it says so and takes the visitor to the first one.
-            if (time === undefined) {
-              timesRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
-              return;
-            }
-            setDetails(true);
+        // Your details under the day and its times, on the same page (checklabs' one page form).
+        <BookingDetails
+          needsPhone
+          maxGuests={0}
+          labels={{
+            heading: strings.yourDetails,
+            confirm:
+              time === undefined || day === undefined
+                ? strings.chooseToContinue
+                : strings.confirmAt(shortDay(day, locale), label(time)),
+            confirming: strings.detailsConfirming,
+            done: strings.detailsDone,
+            note: strings.detailsNote,
           }}
-        >
-          {time === undefined || day === undefined
-            ? strings.chooseTime
-            : strings.reserveAt(shortDay(day, locale), label(time), party)}
-        </Button>
+          extra={
+            <ChoiceChips
+              label={strings.occasion}
+              labelAside={strings.optional}
+              tone="strong"
+              isSingle
+              choices={OCCASION_KEYS.map((key) => ({ id: key, label: strings.occasions[key] }))}
+              selected={occasion}
+              onChange={setOccasion}
+            />
+          }
+          questions={[
+            {
+              id: 'marketing',
+              key: 'marketing',
+              label: strings.marketing(page.business.name),
+              answerType: 'checkbox',
+              required: false,
+            },
+          ]}
+          onSubmit={reserve}
+        />
       }
     >
       {notice !== undefined && (
@@ -321,20 +322,38 @@ export function ReservePage({
         tone="strong"
         labelAside={strings.largerPartyShort(page.partyMax)}
       />
-      <MonthTiles
-        month={month}
-        today={page.today}
-        openDays={open}
-        value={day}
-        onChange={(next) => {
-          setDay(next);
-          setTime(undefined);
-          setNotice(undefined);
-        }}
-        onMonthChange={setMonth}
-        canPrevious={month > monthOf(page.today)}
-        canNext={month < monthOf(days.at(-1) ?? page.today)}
-      />
+      {!isWide && !isFullCalendar ? (
+        <DayStrip
+          days={days.slice(0, STRIP_DAYS)}
+          value={day}
+          onChange={(next) => {
+            setDay(next);
+            setMonth(monthOf(next));
+            setTime(undefined);
+            setNotice(undefined);
+          }}
+        />
+      ) : (
+        <MonthTiles
+          month={month}
+          today={page.today}
+          openDays={open}
+          value={day}
+          onChange={(next) => {
+            setDay(next);
+            setTime(undefined);
+            setNotice(undefined);
+          }}
+          onMonthChange={setMonth}
+          canPrevious={month > monthOf(page.today)}
+          canNext={month < monthOf(days.at(-1) ?? page.today)}
+        />
+      )}
+      {!isWide && (
+        <Button variant="ghost" size="sm" icon="calendar" onPress={() => setFullCalendar((shown) => !shown)}>
+          {isFullCalendar ? strings.fewerDays : strings.fullCalendar}
+        </Button>
+      )}
     </BookingFrame>
   );
 }

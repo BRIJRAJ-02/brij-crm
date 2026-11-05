@@ -137,6 +137,22 @@ function WithOccasion(args: Parameters<typeof BookingDetails>[0]) {
 }
 
 /** The server refused: its message in the line above the buttons. */
+/** One page (a table reservation after checklabs): no Back, the send button the form's width, named for the time. */
+export const OnePage: Story = {
+  render: (args) => <WithOccasion {...args} />,
+  args: {
+    needsPhone: true,
+    maxGuests: 0,
+    onBack: undefined,
+    labels: {
+      heading: 'Your details',
+      confirm: 'Confirm Fri 26 Jun at 19:30',
+      confirming: 'Confirming',
+      done: 'Confirmed',
+    },
+  },
+};
+
 export const Failed: Story = {
   args: {
     prefill: { name: 'Ada Lovelace', email: 'ada@example.com' },
