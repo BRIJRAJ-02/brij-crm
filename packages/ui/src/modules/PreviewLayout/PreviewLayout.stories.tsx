@@ -515,6 +515,43 @@ export const CanvasPhone: Story = {
 };
 
 /**
+ * `previewSurface="device"`: a calm sticky companion (a menu's phone): a bezelled phone in a column as wide as the
+ * phone, the page fading at its foot while there is more. Too narrow for both, Preview floats at the view's foot.
+ */
+export const Device: Story = {
+  // New after the last baselines were shot; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="wide"
+        previewSurface="device"
+        preview={
+          <LinkPage
+            isPreview
+            person={{ name: 'Anish Gupta', id: 'anish' }}
+            blocks={Array.from({ length: 12 }, (_, index) => ({
+              kind: 'link' as const,
+              id: String(index),
+              title: `Link ${String(index + 1)}`,
+              href: 'https://www.timefix.com',
+              hue: 'sky' as const,
+            }))}
+          />
+        }
+      >
+        <Card title="Blocks">
+          <Field label="Title" value="timefix.com" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+  },
+};
+
+/**
  * The phone on its own (`PhonePreview`): no "Preview" heading and no
  * controls, for a place whose own title already says what the page is (first
  * run, spec 0036). A page that fits, and one that runs past the phone's foot,

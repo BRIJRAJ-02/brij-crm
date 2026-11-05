@@ -1,6 +1,6 @@
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -50,6 +50,8 @@ export interface LinkRow {
    * ("Default"), read with the name. States that come and go (`badge`) stay at the row's end.
    */
   readonly titleBadge?: string;
+  /** With `titleBadge`, its tone: `strong` for a state that has to read at a glance down a list (an item Sold out). */
+  readonly titleBadgeTone?: BadgeTone;
   /**
    * A tile before the title, for rows that are told apart at a glance by what they are (a link page's blocks: a
    * network's mark, an icon, a letter). Give every row one, and the list `leadingLoading`, so loading rows hold its place.
@@ -92,6 +94,17 @@ export interface LinkRow {
    * Badge under each title made the list twice as tall and as loud as its titles (owner, 5 November 2026).
    */
   readonly figure?: { readonly text: string; readonly label: string };
+  /**
+   * With `density="media"`: what the row costs, its second most important thing, in a right aligned column of its own
+   * so a scan down the list reads it. `quiet` is words rather than a figure (Market price), `alert` what still has to
+   * be fixed (No price).
+   */
+  readonly amount?: { readonly text: string; readonly tone?: 'default' | 'quiet' | 'alert' };
+  /**
+   * With `density="media"`: one control the row is mostly opened for, before its amount (Mark sold out). It waits for
+   * the pointer or focus as the row's actions do, so give the same action a home in the row's menu too.
+   */
+  readonly quickAction?: ReactNode;
 }
 
 /** Props for LinkList. */
@@ -126,8 +139,11 @@ export interface LinkListProps {
    * `comfortable` (the default): rows about 60px tall, with a description and the chips under the title, in a
    * raised, bordered box. `compact`: the records area's rows, one line at size-row, with no frame: the title and
    * address, the facts lined up in a column, then the badge, the switch and the actions, parted by hairlines.
+   * `media`: rows told apart by a picture (a menu's items) inside a Card: a large `leading` tile, the title with its
+   * `chips` as one quiet line of text under it, `amount` in a right aligned column, no frame and no hairlines; the
+   * grip, `quickAction` and `actions` wait for the pointer or focus (always there where there is no hover).
    */
-  readonly density?: 'comfortable' | 'compact';
+  readonly density?: 'comfortable' | 'compact' | 'media';
   /**
    * With `density="compact"`, where the list sits. `page` (the default) runs the rows edge to edge across the
    * view with the page's gutter inside them (Captures). `card` keeps them inside a Card's padding, inset like a
@@ -158,6 +174,11 @@ export interface LinkListProps {
    * the titles land where the lines stood. Set, the rows are laid out for a tile.
    */
   readonly leadingLoading?: ReactNode;
+  /**
+   * With `density="media"`: the list's own last line, under its rows or `emptyState`, lined up with the tiles (a menu
+   * section's Add item, which turns into its field in place).
+   */
+  readonly footer?: ReactNode;
 }
 
 /** Props for LinkListToolbar. */
@@ -244,9 +265,22 @@ export function LinkList({
   onMove,
   rowOrder: RowOrder,
   leadingLoading,
+  footer,
 }: LinkListProps) {
   const hasLeading = leadingLoading !== undefined;
   const isCompact = density === 'compact';
+  const isMedia = density === 'media';
+  // Rows that arrive after the list first drew (an item added) ease in; the first draw just stands there.
+  const [isSettled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!isMedia) return;
+    const frame = requestAnimationFrame(() => {
+      setSettled(true);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [isMedia]);
   const isCard = isCompact && placement === 'card';
   const [ownQuery, setOwnQuery] = useState('');
   const query = heldQuery ?? ownQuery;
@@ -260,7 +294,10 @@ export function LinkList({
     'data-placement': isCompact ? placement : undefined,
     'data-reorderable': moves === undefined ? undefined : '',
     'data-leading': hasLeading ? '' : undefined,
+    'data-settled': isMedia && isSettled ? '' : undefined,
   };
+  const foot =
+    isMedia && footer !== undefined && footer !== null ? <div className={styles.footer}>{footer}</div> : undefined;
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
     return (
@@ -269,7 +306,15 @@ export function LinkList({
       </EmptyState>
     );
   }
-  if (status === 'ready' && rows.length === 0) return <>{emptyState}</>;
+  if (status === 'ready' && rows.length === 0) {
+    if (foot === undefined) return <>{emptyState}</>;
+    return (
+      <div {...frameProps}>
+        {emptyState}
+        {foot}
+      </div>
+    );
+  }
   const isLoading = status === 'loading';
   const isFailed = status === 'error';
   const shown = rows.filter((row) => matches(row, query));
@@ -308,6 +353,7 @@ export function LinkList({
             <SkeletonRows
               count={SKELETON_ROWS}
               isCompact={isCompact}
+              isMedia={isMedia}
               hasGrip={moves !== undefined}
               leadingLoading={leadingLoading}
             />
@@ -340,6 +386,7 @@ export function LinkList({
           data-off={row.isOff === true || undefined}
           data-href={row.isPending === true ? undefined : row.href}
           data-variant={row.variant === 'section' ? 'section' : undefined}
+          data-density={isMedia ? 'media' : undefined}
         >
           {moves !== undefined && (
             <span className={styles.grip}>
@@ -347,7 +394,7 @@ export function LinkList({
               {grip?.(row.id, strings.move(row.title), row.isPending === true || shown.length < 2)}
             </span>
           )}
-          <RowContent row={row} isCompact={isCompact} />
+          <RowContent row={row} isCompact={isCompact} isMedia={isMedia} />
         </GridListItem>
       )}
     </GridList>
@@ -375,7 +422,7 @@ export function LinkList({
           {shown.map((row) => (
             <li key={row.id} className={styles.item}>
               <a className={styles.row} href={row.href} data-off={row.isOff === true || undefined}>
-                <RowContent row={row} isCompact={isCompact} />
+                <RowContent row={row} isCompact={isCompact} isMedia={isMedia} />
               </a>
             </li>
           ))}
@@ -391,6 +438,7 @@ export function LinkList({
           {(grip) => grid(grip)}
         </RowOrder>
       )}
+      {foot}
     </div>
   );
 }
@@ -399,11 +447,13 @@ export function LinkList({
 function SkeletonRows({
   count,
   isCompact,
+  isMedia,
   hasGrip,
   leadingLoading,
 }: {
   readonly count: number;
   readonly isCompact: boolean;
+  readonly isMedia: boolean;
   readonly hasGrip: boolean;
   readonly leadingLoading: ReactNode;
 }) {
@@ -423,12 +473,25 @@ function SkeletonRows({
           </span>
         )}
       </div>
+      {isMedia && (
+        <span className={styles.skeletonAmount}>
+          <Skeleton width="full" />
+        </span>
+      )}
     </div>
   ));
 }
 
 /** A row's title line, description and chips, and its end: the same in a GridList row and a link row. */
-function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isCompact: boolean }) {
+function RowContent({
+  row,
+  isCompact,
+  isMedia,
+}: {
+  readonly row: LinkRow;
+  readonly isCompact: boolean;
+  readonly isMedia: boolean;
+}) {
   // A section heads the rows after it: its title is the label, and its end keeps the row's own actions.
   if (row.variant === 'section') {
     return (
@@ -460,20 +523,33 @@ function RowContent({ row, isCompact }: { readonly row: LinkRow; readonly isComp
           </span>
           {row.titleBadge !== undefined && (
             <span className={styles.titleBadge}>
-              <Badge text={row.titleBadge} />
+              <Badge
+                text={row.titleBadge}
+                {...(row.titleBadgeTone === undefined ? {} : { tone: row.titleBadgeTone })}
+              />
             </span>
           )}
           {row.address !== '' && <span className={styles.address}>{row.address}</span>}
         </div>
-        {!isCompact && row.description !== undefined && row.description !== '' && (
+        {!isCompact && !isMedia && row.description !== undefined && row.description !== '' && (
           <p className={styles.description}>{row.description}</p>
         )}
-        {!isCompact && <Chips chips={row.chips} isPending={row.areChipsPending === true} />}
+        {isMedia
+          ? row.chips.length > 0 && <span className={styles.factLine}>{row.chips.join(' · ')}</span>
+          : !isCompact && <Chips chips={row.chips} isPending={row.areChipsPending === true} />}
       </div>
       {isCompact && (
         <div className={styles.facts}>
           {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
         </div>
+      )}
+      {isMedia && row.quickAction !== undefined && row.quickAction !== null && (
+        <div className={styles.quick}>{row.quickAction}</div>
+      )}
+      {isMedia && row.amount !== undefined && (
+        <span className={styles.amount} data-tone={row.amount.tone === 'default' ? undefined : row.amount.tone}>
+          {row.amount.text}
+        </span>
       )}
       <div className={styles.end}>
         {row.figure !== undefined && (

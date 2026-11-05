@@ -4,7 +4,6 @@
 // Main task: find an item and change it, or switch it off for tonight.
 // Leaves out: where an item sits and in what order (Structure), and option groups (Options).
 import type { MenuDraft, MenuItem as Dish, MenuSection, MenuStore } from '@crm/data';
-import { formatPrice } from '@crm/data/menu';
 import {
   Badge,
   Button,
@@ -22,7 +21,7 @@ import { useMemo } from 'react';
 import type { Open } from './MenusScreen.tsx';
 import { useIsNarrow } from './narrow.ts';
 import { strings } from './strings.ts';
-import { DishThumb, flipSoldOut } from './StructureTab.tsx';
+import { DishThumb, flipSoldOut, priceCell } from './StructureTab.tsx';
 
 /** The table's columns, after checklabs' Item, Category / Sub-category, Price and Visible. */
 const COLUMNS: readonly TableColumn[] = [
@@ -39,20 +38,6 @@ const NARROW_COLUMNS = COLUMNS.filter((column) => column.id !== 'section');
 /** Someone who can't change items (Run service) has no ⋯: the row opens the item to read. */
 const READ_COLUMNS = COLUMNS.filter((column) => column.id !== 'actions');
 const NARROW_READ_COLUMNS = NARROW_COLUMNS.filter((column) => column.id !== 'actions');
-
-/** An item's price in one short cell: its price, its sizes' range (£14.00–£26.00), its note, or No price. */
-function priceCell(item: Dish, currency: string, locale: string): string {
-  if (item.priceMinor !== undefined) return formatPrice(item.priceMinor, currency, locale);
-  const prices = item.sizes.map((size) => size.priceMinor);
-  if (prices.length > 0) {
-    const low = Math.min(...prices);
-    const high = Math.max(...prices);
-    return low === high
-      ? formatPrice(low, currency, locale)
-      : strings.priceRange(formatPrice(low, currency, locale), formatPrice(high, currency, locale));
-  }
-  return item.priceNote ?? strings.noPrice;
-}
 
 /** One row: the item, where it first sits ("Mains · Grill"), and how many more places it sits in. */
 interface ItemRow {
@@ -164,7 +149,7 @@ export function DishesTab({
           if (column === 'item')
             return (
               <>
-                <DishThumb slug={slug} item={item} size="xs" />
+                <DishThumb slug={slug} item={item} />
                 {item.name}
               </>
             );

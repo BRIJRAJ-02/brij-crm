@@ -345,6 +345,201 @@
     }
   }
 
+  /* density="media": a menu's items inside a Card. No box and no hairlines, the picture and the whitespace part the
+     rows; the rows reach space-8 past the Card's padding so a hover's ground has room round the tile, which stays on
+     the Card's content edge. Grip, quick action and actions wait for the pointer or focus. */
+  .frame[data-density='media'] {
+    gap: 0;
+  }
+
+  .frame[data-density='media'] .root {
+    margin-inline: calc(-1 * var(--space-8));
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .frame[data-density='media'] .row {
+    gap: var(--space-12);
+    min-block-size: calc(var(--avatar-title) + 2 * var(--space-6));
+    padding-block: var(--space-6);
+    padding-inline: var(--space-8);
+    border-block-end: none;
+    border-radius: var(--radius-md);
+  }
+
+  /* The grip's column stays on the same line as a section head's chevron, so the tiles start under its title. */
+  .frame[data-density='media'] .grip {
+    margin-inline-end: calc(var(--space-4) - var(--space-12));
+  }
+
+  .frame[data-density='media'] .main {
+    gap: 0;
+  }
+
+  .frame[data-density='media'] .title {
+    flex: 0 1 auto;
+    max-inline-size: none;
+  }
+
+  /* Facts are quiet words, not chips: what it contains, how many sizes, where else it sits. */
+  .factLine {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* What it costs: the row's second voice, one width per digit, on one right edge down the list. */
+  .amount {
+    flex: none;
+    color: var(--text);
+    font: var(--text-body-strong);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-body-strong);
+    text-align: end;
+    white-space: nowrap;
+    transition: color var(--duration-move) var(--ease-hover);
+  }
+
+  .amount[data-tone='quiet'] {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .amount[data-tone='alert'] {
+    color: var(--danger);
+  }
+
+  .quick {
+    display: inline-flex;
+    flex: none;
+  }
+
+  /* Off (Sold out): the picture steps back with the words, and all of it eases as it flips. */
+  .frame[data-density='media'] .leading {
+    transition: opacity var(--duration-move) var(--ease-hover);
+  }
+
+  .row[data-density='media'][data-off] > .leading {
+    opacity: var(--opacity-busy);
+  }
+
+  .row[data-density='media'][data-off] > .amount {
+    color: var(--text-secondary);
+  }
+
+  /* On a pointer that hovers, the row's tools wait, holding the space they will take, so nothing shifts. Where there
+     is no hover they just stand there. Reached by keyboard they show on the row's focus, and a menu they opened holds
+     them while it is open. */
+  @media (hover: hover) and (pointer: fine) {
+    .frame[data-density='media'] .grip,
+    .frame[data-density='media'] .quick,
+    .frame[data-density='media'] .rowActions {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .row[data-density='media']:is(
+        [data-hovered],
+        [data-focus-visible],
+        [data-dragging],
+        :has(:focus-visible, [aria-expanded='true'], [data-lifted])
+      )
+      :is(.grip, .quick, .rowActions) {
+      opacity: 1;
+    }
+  }
+
+  /* The list's last line, lined up with the tiles. */
+  .footer {
+    margin-block-start: var(--space-8);
+  }
+
+  .frame[data-reorderable] > .footer {
+    padding-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-4));
+  }
+
+  /* Rows that arrive after the first draw ease in, a fade with a small rise (a fade alone with reduced motion). */
+  .frame[data-settled] .row {
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      opacity var(--duration-popover) var(--ease-out),
+      translate var(--duration-popover) var(--ease-out);
+
+    @starting-style {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame[data-settled] .row {
+      @starting-style {
+        translate: none;
+      }
+    }
+  }
+
+  /* Too narrow to hold a name and a price side by side (a phone): the words stack beside the tile, the name, then the
+     price on a clear line, then the quiet facts, the tile and the end centred on all three. */
+  @container (inline-size < 480px) {
+    .frame[data-density='media'] .row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 0 var(--space-12);
+      align-items: center;
+    }
+
+    .frame[data-density='media'][data-reorderable] .row {
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+    }
+
+    .row[data-density='media'] > .grip,
+    .row[data-density='media'] > .leading,
+    .row[data-density='media'] > .end {
+      grid-row: 1 / span 3;
+    }
+
+    .frame[data-density='media'] .main {
+      display: contents;
+    }
+
+    .frame[data-density='media'] .titleLine {
+      grid-row: 1;
+    }
+
+    .frame[data-density='media'] .amount {
+      grid-row: 2;
+      text-align: start;
+    }
+
+    .frame[data-density='media'] .factLine {
+      grid-row: 3;
+      white-space: normal;
+    }
+
+    .frame[data-density='media'] :is(.titleLine, .amount, .factLine) {
+      grid-column: -3 / -2;
+    }
+
+    .frame[data-density='media'] .title {
+      overflow-wrap: normal;
+    }
+  }
+
+  .skeletonAmount {
+    display: flex;
+    flex: none;
+    align-items: center;
+    inline-size: var(--space-32);
+    block-size: var(--space-20);
+  }
+
   /* Compact: the list is the container, so its rows can drop the facts when it is narrow. */
   .frame[data-density='compact'] {
     gap: 0;

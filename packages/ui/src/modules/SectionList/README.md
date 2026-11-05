@@ -31,8 +31,12 @@ So SectionList is one sorting list (the library's drag wrapper) whose items are 
 ```
 
 - `onMove` is called with the section's id and its new index once it is dropped (by pointer, or Enter or Space on its grip, the arrows, then Enter or Space). Left out, or with one section, the sections draw no grips.
-- `title` is the Card's title, one level under the heading around the list (an `h3` under a SettingsSection's `h2`). A section with no title draws no header unless it has a grip or actions; its grip and what a move says name it by its place ("Section 2"), so a list of several sections should title each one.
-- `actions` sit after the grip at the header's end: the section's menu with Move up and Move down, the single pointer way to move it (WCAG 2.5.7) and the way a screen's own announcement says.
+- `title` is a heading one level under the heading around the list (an `h3` under a SettingsSection's `h2`), drawn by the list rather than the Card, so a chevron can stand before it and quiet words after it. A section with no title draws no header unless it has a grip or actions; its grip and what a move says name it by its place ("Section 2"), so a list of several sections should title each one.
+- `actions` sit at the header's end and are always there: the section's menu with Move up and Move down, the single pointer way to move it (WCAG 2.5.7) and the way a screen's own announcement says.
+- `quietActions` sit before them, after the grip, and wait with the grip for the pointer or focus, so a list of sections stays calm (6 November 2026). Where there is no hover they just stand there; a screen short of room leaves them out and offers the same in `actions`' menu.
+- `isTitleInset` starts every title on the column a `density="media"` LinkList's tiles start on, a chevron or nothing in the column before it, so a title, its rows and its sub sections read down one edge.
+- `variant="groups"` draws sections as a heading and rows parted by a hairline, no frame, for sections inside a section's Card (a menu's sub sections), so a card never holds a card. Each list's own headings sit a level under the Card's title that holds them.
+- `isTitleLoading` draws a Skeleton where the title goes, so a loading head keeps its height.
 - `emptyState` shows with no sections at all.
 - The list is an `ol`: its order is what it says. Its sections stack 16px apart, as a settings section's cards do.
 
@@ -53,4 +57,4 @@ Tab reaches each section's grip, then its menu, then what it holds (a LinkList t
 Not in the artifact yet.
 
 - `description` puts a line under a section's title, the Card's own (a menu section's "5 items", after checklabs' category card, 5 November 2026).
-- A section's `isExpanded` with `onExpandedChange` folds it: a ghost chevron at its header's end (after the grip and its actions; down while open, right while folded) is a disclosure button named "Show Mains", read as expanded or collapsed, that opens and closes what the section holds; a folded section draws its header alone. The caller keeps which are open (UI state). Why a variant: a menu's Structure folds its categories as checklabs' editor does (5 November 2026), and a Disclosure inside the Card would repeat its title; Card itself never folds.
+- A section's `isExpanded` with `onExpandedChange` folds it: the title and a chevron before it are one disclosure button named by the title, read as expanded or collapsed. The chevron turns as it opens, what the section holds slides shut over `duration-move`, then leaves the tab order (reduced motion: at once), and a folded section draws its header alone. The caller keeps which are open (UI state). Why a variant: a menu's Structure folds its categories as checklabs' editor does (5 November 2026), and a Disclosure inside the Card would repeat its title; Card itself never folds. The chevron moved from the header's end to before the title, where a fold is looked for (6 November 2026: at the end, drawn as a held button, it read as focused all the time).

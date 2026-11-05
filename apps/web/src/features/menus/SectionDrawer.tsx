@@ -109,6 +109,7 @@ export function SectionDrawer({
         <Field label={strings.sectionDescription} value={description} onChange={setDescription} maxLength={140} />
         <SegmentedControl
           label={strings.sectionLayout}
+          isLabelVisible
           segments={[
             { value: 'list', label: strings.layoutList },
             { value: 'grid', label: strings.layoutGrid },

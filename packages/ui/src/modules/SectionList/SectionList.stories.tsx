@@ -288,8 +288,8 @@ export const Narrow: Story = {
 };
 
 /**
- * Sections that fold (a menu's Structure, after checklabs' category chevron): a chevron at each header's end opens
- * and closes what it holds; Support starts folded, its header alone.
+ * Sections that fold (a menu's Structure): the title and the chevron before it are one disclosure, which opens and
+ * closes what it holds; Support starts folded, its header alone.
  */
 export const Folding: Story = {
   render: () => {
@@ -328,13 +328,106 @@ export const Folding: Story = {
     );
   },
   play: async ({ canvas, userEvent }) => {
-    const support = canvas.getByRole('button', { name: 'Show Support' });
+    const support = canvas.getByRole('button', { name: 'Support' });
     await expect(support).toHaveAttribute('aria-expanded', 'false');
-    await expect(canvas.queryByText('Help session')).toBeNull();
+    await expect(canvas.getByText('Help session')).not.toBeVisible();
     await userEvent.click(support);
-    await expect(canvas.getByRole('button', { name: 'Show Support' })).toHaveAttribute('aria-expanded', 'true');
-    await expect(await canvas.findByText('Help session')).toBeInTheDocument();
+    await expect(support).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByText('Help session')).toBeVisible();
   },
+};
+
+/**
+ * A menu's sections: `density="media"` rows under titles inset to their tiles, with a sub section as a `groups` list
+ * inside its section's Card, so a card never holds a card. Edit waits with the grip for the pointer or focus.
+ */
+export const GroupsInACard: Story = {
+  // New after the last baselines were shot; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    const rows = (name: string) => (
+      <LinkList
+        label={name}
+        density="media"
+        rows={[{ id: name, title: name, address: '', chips: ['Soya'], amount: { text: '£5.50' } }]}
+        onOpen={() => undefined}
+        searchLabel="Search"
+        isToolbarHidden
+      />
+    );
+    return (
+      <Stage width="fill">
+        <SectionList
+          label="Sections"
+          isTitleInset
+          onMove={() => undefined}
+          sections={['Mains', 'Sides'].map((title) => ({
+            id: title,
+            title,
+            description: '2 items',
+            isExpanded: true,
+            onExpandedChange: () => undefined,
+            quietActions: <Button variant="ghost" icon="pencil" label={`Edit ${title}`} />,
+            actions: <Button variant="ghost" icon="ellipsis" label={`More for ${title}`} />,
+            content: (
+              <>
+                {rows(`${title} one`)}
+                <SectionList
+                  label={`Sub sections of ${title}`}
+                  variant="groups"
+                  isTitleInset
+                  sections={[
+                    {
+                      id: `${title}-sub`,
+                      title: `${title} extras`,
+                      description: '1 item',
+                      content: rows(`${title} two`),
+                    },
+                  ]}
+                />
+              </>
+            ),
+          }))}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    // Quiet is not gone: Edit and the grip stay in the tab order and named.
+    await expect(canvas.getByRole('button', { name: 'Edit Mains' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Move the Mains section' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { name: 'Mains extras' })).toBeInTheDocument();
+  },
+};
+
+/** While the sections load: a Skeleton in the title's place, so the head keeps its height. */
+export const TitleLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <SectionList
+        label="Sections"
+        isTitleInset
+        sections={[
+          {
+            id: 'loading',
+            isTitleLoading: true,
+            content: (
+              <LinkList
+                label="Items"
+                density="media"
+                status="loading"
+                rows={[]}
+                onOpen={() => undefined}
+                searchLabel="Search"
+                isToolbarHidden
+              />
+            ),
+          },
+        ]}
+      />
+    </Stage>
+  ),
 };
 
 /** No sections at all: the caller's empty state. */

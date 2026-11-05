@@ -48,6 +48,11 @@ export interface FileDropProps {
    */
   readonly variant?: 'zone' | 'button' | 'row';
   /**
+   * With `variant="row"`, the picture's tile: `wide` (the default) for a logo or a banner, `square` for a picture you
+   * have to recognise, which a wide strip would cut to its middle (a menu item's photo).
+   */
+  readonly thumb?: 'wide' | 'square';
+  /**
    * What was picked is on its way: with `variant="button"` the button spins and takes no second press; on the zone
    * (spec 0061, a link page's picture) the zone stays where it is, says so, and its browse button keeps focus but
    * takes no second pick, so a keyboard never loses its place while a picture uploads.
@@ -99,6 +104,7 @@ export function FileDrop({
   isDisabled = false,
   isReadOnly = false,
   variant = 'zone',
+  thumb = 'wide',
   isPending = false,
   error: given,
   wrongTypeText,
@@ -184,7 +190,7 @@ export function FileDrop({
             void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
           }}
         >
-          <span className={styles.thumb}>
+          <span className={styles.thumb} data-shape={thumb === 'square' ? 'square' : undefined}>
             {hasPicture ? (
               <img
                 className={styles.thumbImage}

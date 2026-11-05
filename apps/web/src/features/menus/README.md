@@ -7,10 +7,13 @@ Settings, ⋯ (Discard changes while there are drafts, Delete menu) and one spli
 first publish (through the review), then "Publish · 3 drafts", which publishes at once unless something blocks it (then
 the review says what), else "View", which opens the guest menu; its chevron holds Open in new tab and Show QR code. The
 menu being edited is picked in the header beside the title (New menu at its foot) and Settings is a header button (its
-view keeps `?tab=settings`). Then one level of tabs, Structure, Items and Options (Items and Options are workspace
-wide), with a search in the tab bar over Structure and Items. At a phone's width (`narrow.ts`) the bar keeps the title,
-the picker, Settings as an icon, ⋯ and Publish; a draft's badge and the search give way. Where the screen stands is in
-the address (`?menu=&tab=&at=&preview=off`). Every string says "item", never "dish".
+view keeps `?tab=settings`). The status is a dot and a word, as an editor's status reads elsewhere. Then one level of
+tabs as the page's second bar (`variant="bar"`, as Bookings' and Captures'), Structure, Items and Options (Items and
+Options are workspace wide), with a search at its far end over Structure and Items, and one panel, so the phone stays
+as the tabs change. At a phone's width (`narrow.ts`) the bar keeps the title, the picker, the status as an eye, ⋯ (with
+Design and Settings) and Publish; a draft's status and the search give way. Where the screen stands is in the address
+(`?menu=&tab=&at=&preview=off`). Every string says "item", never "dish". While it loads, `MenusPending.tsx` draws the
+same frame in skeletons, its regions within 4 px of the loaded ones.
 
 - **MenusScreen**: Purpose: build menus and publish them. Main task: build a menu and publish it, watching the guest
   menu take shape in the phone beside it (the real `MenuList` drawing the draft, `preview.ts`, memoised so typing
@@ -19,34 +22,23 @@ the address (`?menu=&tab=&at=&preview=off`). Every string says "item", never "di
   menu (no write for it yet). Until the first Publish it opens on a SetupChecklist (hours, which opens the place's own
   week, first menu, first items, then Publish, whose Review opens the review); Hide setup puts it away in this browser.
   A first menu comes with a first section.
-- **StructureTab**: after checklabs' Structure tab. The menu's sections as cards, each head a grip, the name, "N sub
-  sections · N items" (sub sections only when it has some), Edit, List or Grid as two icons (in ⋯ at a phone's width),
-  ⋯ (Add sub section, Move up and down, Delete) and a chevron that folds the section (all open at first, as checklabs
-  opens them); its items in order (a grip each, the item's photo or, for someone who can add one, a dashed "+" slot;
-  the row opens the item; a second line of chips: its price or each size's, a price note, what it contains, where else
-  it sits; No price as a badge by the name, Sold out at the end; ⋯ holds Edit, Mark sold out or available with a toast
-  and Undo, Move up and down, Take out with Undo, Delete); a bordered "+ Add item" under the list turns into the search
-  or create field in place; its sub sections the same way. One dashed Add section at the foot. The tab bar's search
-  keeps a section whose name matches whole, else its matching sub sections and items, open, with moving off until the
-  search is cleared; nothing found says so. Empty: "Set up your menu". Deviations: the "+" slot is the row's own tile,
-  not a second control (the row opens the item, whose drawer holds the photo picker), sub sections don't fold, and
-  adding finds an existing item first (our items are shared across menus).
+- **StructureTab**: after checklabs' Structure tab, in our own look (6 November 2026). The menu's sections as one Card each (no card in a card): the chevron and name fold it, quiet words beside them ("N sub sections · N items", and Photo grid when it is one), ⋯ always at the end (Edit, Show as a list or grid, Add sub section, Move up and down, Delete), and its grip and Edit waiting for the pointer or focus (all open at first, as checklabs opens them). Its items in order (`LinkList density="media"`): a 48px photo you can recognise, or a quiet photo mark, the row opening the item whose drawer holds the photo picker; the name with Sold out by it (the row stepping back), allergens, how many sizes and where else it sits as one quiet line, and the price on one right edge (sizes as a range, a price note quieter, No price in danger). The grip, a quick Mark sold out or available (toast and Undo) and ⋯ (Edit, the same Mark, Move up and down, Take out with Undo, Delete) wait for the pointer or focus, and simply stand there on touch, which keeps ⋯ and the grip. A quiet "+ Add item" is the list's last line, turning into the search or create field in place; its sub sections follow in the same Card, parted by a hairline. One dashed Add section at the foot. The tab bar's search keeps a section whose name matches whole, else its matching sub sections and items, open, with moving off until the search is cleared; nothing found says so. Empty: "Set up your menu". Deviations from checklabs: no dashed slot, the row itself opening the photo picker; List or Grid in ⋯, not two icons on every head; sub sections don't fold; and adding finds an existing item first (our items are shared across menus).
 - **DishesTab** (Items): a card "All items" with "{n} available" and New item, then a table in the order the menus read
   (the menu shown first, its sections then their sub sections, then the other menus, then items on no menu): Item
   (its photo and name), Section ("Mains · Grill", "+1" when it sits in more), Price (sizes as a range), Available (a
   switch, toast and Undo) and ⋯ (Edit, Delete). Rows open the item, read only for Run service, who get no ⋯.
-- **OptionsTab** and **GroupDrawer**: "Option groups" with "Choices guests can pick. Required groups need a pick." and
-  New group, then the shared groups (choose one, up to N, any; Guests must choose), checked inline before anything is
-  sent; none yet is a centred empty state.
+- **OptionsTab** and **GroupDrawer**: one Card as the Items tab's, "Option groups" with "Choices guests can pick.
+  Required groups need a pick." and New group, then the shared groups on a line each (choose one, up to N, any; Guests
+  must choose), checked inline before anything is sent; none yet is an empty state in the Card.
 - **SettingsTab**: name and places, serving times per day (`serving.tsx`, the library HoursEditor, starting from the
   place's hours), tax included and service added (the foot note follows them until the owner writes their own), and
   "Phone and region": the business profile's phone, the currency and the place's time zone, read only, with Edit in
   Business. Delete menu is in the header's ⋯.
 - **SectionDrawer**: a section's name, line, layout and serving times (narrower than the menu's).
-- **ItemDialog**: one item in a drawer, in checklabs' order: name ("e.g. Grilled Salmon"), photo (cropped as it is
-  chosen in the shared cropper, shape `dish`, with Adjust crop on a photo already there; held until Save, so Cancel
-  undoes it), price with Available beside it (sent as the item saves, live at once with Undo; Run service's switch acts
-  at once), calories, description, sizes, option groups as chips with "New option group", which opens GroupDrawer over
+- **ItemDialog**: one item in a drawer, in checklabs' order: name ("e.g. Grilled Salmon"), photo (one row with a square
+  tile, cropped as it is chosen in the shared cropper, shape `dish`, with Adjust crop on a photo already there; held until
+  Save, so Cancel undoes it), price with Available beside it (sent as the item saves, live at once with Undo; Run service's
+  switch acts at once), sizes straight under the price they take over from, calories, description, option groups as chips with "New option group", which opens GroupDrawer over
   this drawer and comes back with the group picked, allergens, dietary marks, Popular. Busy until every part has gone.
   No serving size: the model has none.
 - **PublishDialog**: Review and publish: each check with Fix (hours, an item on a menu, every item priced, every menu

@@ -354,7 +354,7 @@ export const strings = {
   openNewTab: 'Open in new tab',
   publishedToast: 'Published. Guests see your changes now.',
   allItems: 'All items',
-  allItemsLine: 'Every item, in the order your menus read. Switch one off when it sells out.',
+  allItemsLine: 'Every item, in the order your menus read.',
   availableCount: (count: number) => `${String(count)} available`,
   columnItem: 'Item',
   columnSection: 'Section',
@@ -365,7 +365,7 @@ export const strings = {
   alsoIn: (path: string, more: number) => `${path} +${String(more)}`,
   notOnMenu: 'Not on a menu',
   search: 'Search sections and items',
-  searchPlaceholder: 'Search sections, items…',
+  searchPlaceholder: 'Search',
   noSearchMatches: 'No matches',
   noSearchLine: (query: string) => `Nothing matches “${query}” in this menu.`,
   /** A section head's count: its sub sections when it has any, then its items ("2 sub sections · 9 items"). */
@@ -374,6 +374,16 @@ export const strings = {
       ...(subs === 0 ? [] : [subs === 1 ? '1 sub section' : `${String(subs)} sub sections`]),
       items === 1 ? '1 item' : `${String(items)} items`,
     ].join(' · '),
+  /** A section head's count, saying when it reads as a photo grid: the switch for it folded into ⋯. */
+  sectionCount: (subs: number, items: number, isGrid: boolean) =>
+    [
+      ...(subs === 0 ? [] : [subs === 1 ? '1 sub section' : `${String(subs)} sub sections`]),
+      items === 1 ? '1 item' : `${String(items)} items`,
+      ...(isGrid ? ['Photo grid'] : []),
+    ].join(' · '),
+  sizesCount: (count: number) => (count === 1 ? '1 size' : `${String(count)} sizes`),
+  markSoldOutNamed: (name: string) => `Mark ${name} sold out`,
+  markAvailableNamed: (name: string) => `Mark ${name} available`,
   showAsList: 'Show as a list',
   deletedNamed: (name: string) => `“${name}” deleted`,
   priceRange: (low: string, high: string) => `${low}–${high}`,

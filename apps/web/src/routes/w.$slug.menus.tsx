@@ -3,10 +3,10 @@ import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
+import { MenusPending } from '../features/menus/MenusPending.tsx';
 import { MenusScreen } from '../features/menus/MenusScreen.tsx';
 import { menusSearch } from '../features/menus/search.ts';
 import { strings } from '../features/menus/strings.ts';
-import { pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 /** What the Menus screen opens on: the store with the draft read, and the business for the preview's header. */
@@ -42,7 +42,7 @@ export const Route = createFileRoute('/w/$slug/menus')({
       },
     };
   },
-  pendingComponent: () => <WorkspacePage currentPage="menus" page={pendingPage()} />,
+  pendingComponent: MenusPending,
   errorComponent: MenusError,
   component: PageRoute,
 });

@@ -28,7 +28,10 @@ export interface SkeletonProps {
   readonly lines?: number;
   /** Where the lines sit, matching the text they stand in for: `center` under a centred title (EmptyState). Lines only. */
   readonly align?: SkeletonAlign;
-  /** For `circle`: the avatar size it stands in for, so a loading face is the size the face will be. */
+  /**
+   * For `circle`: the avatar size it stands in for, so a loading face is the size the face will be. For `tile`: a
+   * square tile at that size, for a picture in a row (a menu item's photo).
+   */
   readonly size?: SkeletonSize;
   /**
    * Draws the shape without the pulse: a sketch of content, not content on

@@ -60,3 +60,7 @@ Tab moves through the notices, the body and its footer, then the preview's contr
 ## Differences from the artifact
 
 Not in the artifact. Pressing a region of the preview to scroll the editor to its group is left for later: the frame is a separate page.
+
+## previewSurface="device" (6 November 2026)
+
+For an editor whose preview is what guests see, beside a long list (a menu). Why a surface rather than changing the phone everywhere: the other editors' shots and fits stay as they are; it can become the default once they have been looked at. The phone gets a phone's corners and a bezel (drawn by shadows in the stage's padding, so it takes nothing from the fit), no scrollbar of its own, and a scroll that stops at its ends instead of carrying on into the page. While there is more below, the page fades out at its foot rather than stopping on a hard edge mid item. The column is the phone's width and no wider (at most two fifths), so no band sits empty beside it, and the editor takes the rest. Under the Tabs' `bar` variant, its top lines up under the bar and its foot sits a gutter above the window's. Too narrow for both, Preview floats at the foot of the view, after the body in tab order, rather than holding a row over the body.

@@ -2,17 +2,17 @@
 // Purpose: the Menu app's editor (spec 0065, H1, AC-6520 to AC-6527), laid out after checklabs' menu editor: a header
 // with the menu picked, its status, Settings, ⋯ (Discard changes, Delete menu) and one split Publish (Publish & go
 // live, then Publish · N drafts, else View, its chevron Open in new tab and Show QR code), then the menu's Structure
-// (sections, sub sections and their items in order), Items, Options and Settings, a search in the tab bar over
-// Structure and Items, with the guest menu's phone beside it.
+// (sections, sub sections and their items in order), Items, Options and Settings, a search in the page's tab bar over
+// Structure and Items, with the guest menu's phone beside them, staying as the tabs change.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
 // Leaves out: the guest look (the Design page), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
 import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
 import { menuLookScheme } from '@crm/data/menu';
 import { useHospitality } from '@crm/data/react';
 import {
-  Badge,
   Button,
   ButtonLink,
+  EditorStatus,
   EmptyState,
   Field,
   Menu,
@@ -32,7 +32,7 @@ import {
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { memo, useDeferredValue, useState } from 'react';
+import { memo, useDeferredValue, useState, type ReactNode } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { useIsNarrow } from './narrow.ts';
@@ -56,6 +56,7 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { SectionDrawer } from './SectionDrawer.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 import { StructureTab } from './StructureTab.tsx';
+import { MenusPending } from './MenusPending.tsx';
 import { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 import { strings } from './strings.ts';
 
@@ -129,15 +130,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       replace: true,
     });
   if (state.status === 'loading') {
-    return (
-      <WorkspacePage
-        currentPage="menus"
-        page={{
-          topBar: <TopBar title={strings.title} isLoading />,
-          body: <EmptyState title={strings.title} isLoading />,
-        }}
-      />
-    );
+    return <MenusPending />;
   }
   if (state.status === 'error') {
     return (
@@ -292,13 +285,20 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       <>
         {picker}
         <MenuTrigger>
-          {/* At a phone's width the status is its eye alone, so the bar's actions keep their room. */}
-          <Button
-            variant="ghost"
-            icon={draft.hidden ? 'eye-off' : 'eye'}
-            iconRight="chevron-down"
-            {...(isNarrow ? { label: statusText } : { children: statusText })}
-          />
+          {/* A dot and a word, as an editor's status reads elsewhere. At a phone's width its eye alone, so the bar's
+              actions keep their room. */}
+          {isNarrow ? (
+            <Button
+              variant="ghost"
+              icon={draft.hidden ? 'eye-off' : 'eye'}
+              iconRight="chevron-down"
+              label={statusText}
+            />
+          ) : (
+            <Button variant="ghost" dot={draft.hidden ? 'gray' : 'green'} iconRight="chevron-down">
+              {statusText}
+            </Button>
+          )}
           <Menu
             label={strings.visibility}
             selectionMode="single"
@@ -320,15 +320,18 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     ) : (
       <>
         {picker}
-        {/* At a phone's width a draft's badge gives its room to the menu picker; Publish says the rest. */}
-        {isNarrow && !isLive ? null : <Badge tone={isLive && !draft.hidden ? 'accent' : 'neutral'} text={statusText} />}
+        {/* At a phone's width a draft's status gives its room to the menu picker; Publish says the rest. */}
+        {isNarrow && !isLive ? null : (
+          <EditorStatus tone={isLive && !draft.hidden ? 'live' : 'draft'} text={statusText} />
+        )}
       </>
     );
 
   // The header's ⋯ (checklabs': Duplicate menu, Discard changes, Delete): only what can be done here. Duplicate menu
   // has no write yet, so it isn't offered.
   const moreItems = [
-    // At a phone's width Settings joins ⋯ rather than taking a button of its own in a full bar.
+    // At a phone's width Design and Settings join ⋯ rather than taking buttons of their own in a full bar.
+    ...(isNarrow ? (['design'] as const) : []),
     ...(isNarrow && current !== undefined ? (['settings'] as const) : []),
     ...(draft.canEdit && isLive && draft.changes > 0 ? (['discard'] as const) : []),
     ...(draft.canEdit && current !== undefined ? (['delete'] as const) : []),
@@ -373,9 +376,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
         {/* The guest look's own page, beside Settings as checklabs' menu editor has Design. */}
-        {isNarrow ? (
-          <ButtonLink variant="ghost" icon="palette" href={`/w/${slug}/menus/design`} label={strings.designTitle} />
-        ) : (
+        {isNarrow ? null : (
           <ButtonLink variant="ghost" icon="palette" href={`/w/${slug}/menus/design`}>
             {strings.designTitle}
           </ButtonLink>
@@ -403,6 +404,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   setOpen({ kind: 'deleteMenu', menuId: current.id, name: current.name });
               }}
             >
+              {moreItems.includes('design') ? (
+                <MenuItem id="design" icon="palette" href={`/w/${slug}/menus/design`}>
+                  {strings.designTitle}
+                </MenuItem>
+              ) : null}
               {moreItems.includes('settings') ? (
                 <MenuItem id="settings" icon="settings">
                   {tab === 'settings' ? strings.backToMenu : strings.tabSettings}
@@ -458,8 +464,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             onChange={setPlaceId}
           />
         ) : null}
+        {/* Hidden labels and small, as a form's look Selects: the value says what it sets, under the column's heading. */}
         <Select
           label={strings.previewDay}
+          isLabelHidden
+          size="sm"
           items={[
             { id: 'now', label: strings.previewNow },
             ...PREVIEW_DAYS.map((day) => ({ id: day, label: strings.dayNames[day] })),
@@ -477,6 +486,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         {atView === undefined ? null : (
           <Select
             label={strings.previewTime}
+            isLabelHidden
+            size="sm"
             variant="time"
             items={PREVIEW_TIMES.map((time) => ({ id: time, label: time }))}
             value={atView.time}
@@ -487,6 +498,36 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         )}
       </>
     );
+
+  // The editor and the phone beside it: the first run's checklist over both, Preview floating at a phone's foot.
+  const layout = (body: ReactNode) => (
+    <PreviewLayout
+      previewShare="wide"
+      previewSurface="device"
+      notices={
+        !isLive && !isSetupHidden ? (
+          <SetupChecklist
+            title={strings.setup}
+            steps={steps}
+            onHide={hideSetup}
+            onAction={(id) => {
+              if (id === 'hours') router.history.push(hoursHref);
+              else if (id === 'menu') newMenu();
+              else if (id === 'publish') setOpen({ kind: 'publish' });
+              else if (id === 'items' && current !== undefined) {
+                const section = draft.sections.find((each) => each.menuId === current.id);
+                setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
+              }
+            }}
+          />
+        ) : undefined
+      }
+      {...(preview === undefined ? {} : { preview })}
+      {...(previewControls === undefined ? {} : { previewControls })}
+    >
+      {body}
+    </PreviewLayout>
+  );
 
   return (
     <WorkspacePage
@@ -499,31 +540,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         ),
         body: (
           <>
-            <PreviewLayout
-              previewShare="wide"
-              notices={
-                !isLive && !isSetupHidden ? (
-                  <SetupChecklist
-                    title={strings.setup}
-                    steps={steps}
-                    onHide={hideSetup}
-                    onAction={(id) => {
-                      if (id === 'hours') router.history.push(hoursHref);
-                      else if (id === 'menu') newMenu();
-                      else if (id === 'publish') setOpen({ kind: 'publish' });
-                      else if (id === 'items' && current !== undefined) {
-                        const section = draft.sections.find((each) => each.menuId === current.id);
-                        setOpen({ kind: 'item', ...(section === undefined ? {} : { sectionId: section.id }) });
-                      }
-                    }}
-                  />
-                ) : undefined
-              }
-              {...(preview === undefined ? {} : { preview })}
-              {...(previewControls === undefined ? {} : { previewControls })}
-            >
-              {current === undefined ? (
+            {current === undefined ? (
+              layout(
                 <EmptyState
+                  layout="block"
                   icon="utensils"
                   title={strings.emptyMenus}
                   actions={
@@ -535,8 +555,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   }
                 >
                   {strings.emptyMenusLine}
-                </EmptyState>
-              ) : tab === 'settings' ? (
+                </EmptyState>,
+              )
+            ) : tab === 'settings' ? (
+              layout(
                 <>
                   <span>
                     <Button variant="ghost" icon="arrow-left" onPress={() => go({ tab: 'structure' })}>
@@ -554,79 +576,84 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                     profileHref={businessSettingsHref(slug)}
                     said={said}
                   />
-                </>
-              ) : (
-                <Tabs
-                  label={strings.menuSettings}
-                  tabs={[
-                    {
-                      id: 'structure',
-                      label: strings.tabStructure,
-                      count: draft.sections.filter((each) => each.menuId === current.id).length,
-                    },
-                    {
-                      id: 'dishes',
-                      // Every item of the workspace, not only this menu's (checklabs' Items).
-                      label: strings.tabAllDishes,
-                      count: draft.items.length,
-                      ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
-                    },
-                    { id: 'options', label: strings.tabAllOptions, count: draft.groups.length },
-                  ]}
-                  selectedKey={tab}
-                  onSelectionChange={(id) =>
-                    go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
-                  }
-                  // One search over Structure and Items, in the tab bar (checklabs'); a phone keeps the room.
-                  {...(isNarrow || tab === 'options'
-                    ? {}
-                    : {
-                        end: (
-                          <Field
-                            label={strings.search}
-                            isLabelHidden
-                            type="search"
-                            size="sm"
-                            icon="search"
-                            placeholder={strings.searchPlaceholder}
-                            value={query}
-                            onChange={setQuery}
-                            autoComplete="off"
-                          />
-                        ),
-                      })}
-                >
-                  <TabPanel id="structure" variant="fields">
-                    <StructureTab
-                      key={current.id}
-                      store={store}
-                      slug={slug}
-                      draft={draft}
-                      menuId={current.id}
-                      query={isNarrow ? '' : searched}
-                      onOpen={setOpen}
-                      said={said}
-                      toasts={toasts}
-                    />
-                  </TabPanel>
-                  <TabPanel id="dishes">
-                    <DishesTab
-                      store={store}
-                      slug={slug}
-                      draft={draft}
-                      menuId={current.id}
-                      query={isNarrow ? '' : searched}
-                      onOpen={setOpen}
-                      said={said}
-                      toasts={toasts}
-                    />
-                  </TabPanel>
-                  <TabPanel id="options">
-                    <OptionsTab draft={draft} onOpen={setOpen} />
-                  </TabPanel>
-                </Tabs>
-              )}
-            </PreviewLayout>
+                </>,
+              )
+            ) : (
+              // The page's second bar, as Bookings' and Captures' tabs: one line across the page, kept in place as the
+              // page scrolls, its search at the far end. One panel, the chosen tab's, so the phone stays as tabs change.
+              <Tabs
+                variant="bar"
+                label={strings.menuSettings}
+                tabs={[
+                  {
+                    id: 'structure',
+                    label: strings.tabStructure,
+                    count: draft.sections.filter((each) => each.menuId === current.id).length,
+                  },
+                  {
+                    id: 'dishes',
+                    // Every item of the workspace, not only this menu's (checklabs' Items).
+                    label: strings.tabAllDishes,
+                    count: draft.items.length,
+                    ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
+                  },
+                  { id: 'options', label: strings.tabAllOptions, count: draft.groups.length },
+                ]}
+                selectedKey={tab}
+                onSelectionChange={(id) =>
+                  go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
+                }
+                // One search over Structure and Items, in the tab bar (checklabs'); a phone keeps the room.
+                {...(isNarrow || tab === 'options'
+                  ? {}
+                  : {
+                      end: (
+                        <Field
+                          label={strings.search}
+                          isLabelHidden
+                          type="search"
+                          size="sm"
+                          icon="search"
+                          placeholder={strings.searchPlaceholder}
+                          value={query}
+                          onChange={setQuery}
+                          autoComplete="off"
+                        />
+                      ),
+                    })}
+              >
+                <TabPanel id={tab} variant="fill">
+                  {layout(
+                    tab === 'dishes' ? (
+                      <DishesTab
+                        store={store}
+                        slug={slug}
+                        draft={draft}
+                        menuId={current.id}
+                        query={isNarrow ? '' : searched}
+                        onOpen={setOpen}
+                        said={said}
+                        toasts={toasts}
+                      />
+                    ) : tab === 'options' ? (
+                      <OptionsTab draft={draft} onOpen={setOpen} />
+                    ) : (
+                      <StructureTab
+                        key={current.id}
+                        store={store}
+                        slug={slug}
+                        draft={draft}
+                        menuId={current.id}
+                        query={isNarrow ? '' : searched}
+                        onOpen={setOpen}
+                        said={said}
+                        toasts={toasts}
+                      />
+                    ),
+                  )}
+                </TabPanel>
+              </Tabs>
+            )}
 
             {open?.kind === 'item' ? (
               <ItemDialog

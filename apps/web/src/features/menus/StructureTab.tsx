@@ -1,14 +1,14 @@
 // Brief
-// Purpose: one menu's Structure (after checklabs' Structure tab): its sections in order, each folding by its chevron
-// with Edit at hand, "N sub-sections · N items", its sub sections and its items in order (price, sizes and allergens
-// under each name), every one moved by its grip or the keyboard, narrowed by the tab bar's search.
+// Purpose: one menu's Structure (after checklabs' Structure tab): its sections in order, each folding by its title with
+// "N sub sections · N items" beside it, its sub sections and its items in order (a photo you can recognise, the name
+// with allergens quiet under it, the price on its own right edge, Sold out by the name), every one moved by its grip or
+// the keyboard, narrowed by the tab bar's search. Grips and quick actions wait for the pointer or focus; ⋯ holds them all.
 // Main task: put items in sections and order them as the menu reads.
 // Leaves out: an item's own fields (the item drawer), the menu's settings (Settings) and Sold out across menus (Items).
 import type { MenuDraft, MenuItem as Dish, MenuSection, MenuStore } from '@crm/data';
 import { formatPrice } from '@crm/data/menu';
 import {
   Avatar,
-  AvatarEmpty,
   Button,
   EmptyState,
   Field,
@@ -19,10 +19,10 @@ import {
   MenuItem,
   MenuTrigger,
   SectionList,
-  SegmentedControl,
   Skeleton,
   SuggestionList,
   suggestionOptionId,
+  Tooltip,
   type LinkRow,
   type Toasts,
 } from '@crm/ui';
@@ -53,8 +53,22 @@ export function priceLine(item: Dish, currency: string, locale: string): string 
   return item.priceNote ?? strings.noPrice;
 }
 
-/** The tile a dish row's photo stands in while the list loads: every dish row has a leading photo or letter. */
-export const dishLeadingLoading = <Skeleton shape="circle" size="sm" />;
+/** An item's price in one short cell: its price, its sizes' range (£14.00–£26.00), its note, or No price. */
+export function priceCell(item: Dish, currency: string, locale: string): string {
+  if (item.priceMinor !== undefined) return formatPrice(item.priceMinor, currency, locale);
+  const prices = item.sizes.map((size) => size.priceMinor);
+  if (prices.length > 0) {
+    const low = Math.min(...prices);
+    const high = Math.max(...prices);
+    return low === high
+      ? formatPrice(low, currency, locale)
+      : strings.priceRange(formatPrice(low, currency, locale), formatPrice(high, currency, locale));
+  }
+  return item.priceNote ?? strings.noPrice;
+}
+
+/** The tile a dish row's photo stands in while the list loads: the row's photo tile, at its size. */
+export const dishLeadingLoading = <Skeleton shape="tile" size="title" />;
 
 /**
  * Sold out on or off from a dish's row (AC-6526): live for guests at once, so the toast says so, with Undo (UX review
@@ -146,20 +160,21 @@ export function StructureTab({
   );
   // Folded sections, by id (UI state): every section starts open, as checklabs' editor opens them all.
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const isNarrow = useIsNarrow();
   const kept = searchStructure(draft, sections, query);
   const all = sections.filter((each) => each.parentId === undefined);
   const top = kept === undefined ? all : all.filter((each) => kept.has(each.id));
   const subsOf = (section: MenuSection) =>
     sections.filter((each) => each.parentId === section.id && (kept === undefined || kept.has(each.id)));
-  // A section's head, after checklabs' category card: its grip, its name, "N sub-sections · N items", then Edit, the
-  // List or Grid switch, its ⋯ (Add sub section, Move, Delete) and its chevron. No numbers.
+  // A section's head, after checklabs' category card: its chevron and name, which fold it, "N sub sections · N items",
+  // then its ⋯ (Edit, List or Grid, Add sub section, Move, Delete); its grip and Edit wait for the pointer or focus.
   const card = (section: MenuSection, index: number, siblings: readonly MenuSection[]) => {
     const subs = sections.filter((each) => each.parentId === section.id);
     const items = section.itemIds.length + subs.reduce((sum, sub) => sum + sub.itemIds.length, 0);
     return {
       id: section.id,
       title: section.name,
-      description: strings.structureCount(subs.length, items),
+      description: strings.sectionCount(subs.length, items, section.layout === 'grid'),
       // While searching every match shows open; the chevron comes back with the whole menu.
       ...(kept === undefined
         ? {
@@ -173,17 +188,9 @@ export function StructureTab({
               }),
           }
         : {}),
-      actions: draft.canEdit ? (
-        <SectionHead
-          store={store}
-          slug={slug}
-          section={section}
-          index={index}
-          count={siblings.length}
-          onOpen={onOpen}
-          said={said}
-        />
-      ) : undefined,
+      ...(draft.canEdit
+        ? sectionActions({ store, slug, section, index, count: siblings.length, isNarrow, onOpen, said })
+        : {}),
       content: (
         <SectionBody
           store={store}
@@ -195,13 +202,14 @@ export function StructureTab({
           onOpen={onOpen}
           said={said}
           toasts={toasts}
+          isNarrow={isNarrow}
         />
       ),
     };
   };
   if (kept !== undefined && top.length === 0) {
     return (
-      <EmptyState icon="search" title={strings.noSearchMatches}>
+      <EmptyState layout="block" icon="search" title={strings.noSearchMatches}>
         {strings.noSearchLine(query.trim())}
       </EmptyState>
     );
@@ -210,6 +218,7 @@ export function StructureTab({
     <>
       <SectionList
         label={strings.sectionsLabel}
+        isTitleInset
         sections={top.map((section, index) => card(section, index, top))}
         // Moving waits for the whole menu: a search shows only part of it.
         {...(draft.canEdit && kept === undefined
@@ -217,6 +226,7 @@ export function StructureTab({
           : {})}
         emptyState={
           <EmptyState
+            layout="block"
             icon="list"
             title={strings.setUpMenu}
             actions={
@@ -240,13 +250,17 @@ export function StructureTab({
   );
 }
 
-/** A section's head actions: Edit at hand (checklabs' pencil), the List or Grid switch, then its ⋯. */
-function SectionHead({
+/**
+ * A section's head actions: Edit waits with the grip for the pointer or focus, and ⋯ is always there. At a phone's
+ * width Edit is only in ⋯, so the head keeps its name on one line.
+ */
+function sectionActions({
   store,
   slug,
   section,
   index,
   count,
+  isNarrow,
   onOpen,
   said,
 }: {
@@ -255,27 +269,29 @@ function SectionHead({
   readonly section: MenuSection;
   readonly index: number;
   readonly count: number;
+  readonly isNarrow: boolean;
   readonly onOpen: (open: Open) => void;
   readonly said: Said;
 }) {
-  // At a phone's width List or Grid moves into ⋯, so the head keeps its name on one line.
-  const isNarrow = useIsNarrow();
-  return (
-    <>
-      <Button
-        variant="ghost"
-        icon="pencil"
-        label={strings.editNamed(section.name)}
-        onPress={() => onOpen({ kind: 'section', menuId: section.menuId, sectionId: section.id })}
-      />
-      {isNarrow ? null : <LayoutSwitch store={store} slug={slug} section={section} said={said} />}
+  const edit = () => onOpen({ kind: 'section', menuId: section.menuId, sectionId: section.id });
+  return {
+    ...(isNarrow
+      ? {}
+      : {
+          quietActions: (
+            <Tooltip content={strings.editSection}>
+              <Button variant="ghost" icon="pencil" label={strings.editNamed(section.name)} onPress={edit} />
+            </Tooltip>
+          ),
+        }),
+    actions: (
       <SectionMenu
         section={section}
         index={index}
         count={count}
-        hasLayout={isNarrow}
         onAction={(key) => {
-          if (key === 'layout')
+          if (key === 'edit') edit();
+          else if (key === 'layout')
             void store
               .saveSection(slug, { ...sectionInput(section), layout: section.layout === 'grid' ? 'list' : 'grid' })
               .then(said);
@@ -285,63 +301,32 @@ function SectionHead({
           else if (key === 'delete') onOpen({ kind: 'deleteSection', sectionId: section.id, name: section.name });
         }}
       />
-    </>
-  );
+    ),
+  };
 }
 
-/** A section's List or Grid, as icons in its head (checklabs' place for it). */
-function LayoutSwitch({
-  store,
-  slug,
-  section,
-  said,
-}: {
-  readonly store: MenuStore;
-  readonly slug: string;
-  readonly section: MenuSection;
-  readonly said: Said;
-}) {
-  return (
-    <SegmentedControl
-      label={strings.layoutLabel(section.name)}
-      segments={[
-        { value: 'list', label: strings.layoutList, icon: 'list', isIconOnly: true },
-        { value: 'grid', label: strings.layoutGrid, icon: 'layout-grid', isIconOnly: true },
-      ]}
-      value={section.layout}
-      onChange={(layout: string) =>
-        void store
-          .saveSection(slug, { ...sectionInput(section), layout: layout === 'grid' ? 'grid' : 'list' })
-          .then(said)
-      }
-    />
-  );
-}
-
-/** A section's menu: add a sub section, move (for a pointer that can't drag), delete; Edit sits beside it. */
+/** A section's menu: everything its head can do, for a finger and a keyboard: edit, list or grid, add a sub section, move, delete. */
 function SectionMenu({
   section,
   index,
   count,
-  hasLayout = false,
   onAction,
 }: {
   readonly section: MenuSection;
   readonly index: number;
   readonly count: number;
-  /** List or Grid as an item (a phone's width, where the head has no room for the switch). */
-  readonly hasLayout?: boolean;
   readonly onAction: (key: string) => void;
 }) {
   return (
     <MenuTrigger>
       <Button variant="ghost" icon="ellipsis" label={strings.moreFor(section.name)} />
       <Menu label={strings.moreFor(section.name)} onAction={(key) => onAction(String(key))}>
-        {hasLayout ? (
-          <MenuItem id="layout" icon={section.layout === 'grid' ? 'list' : 'layout-grid'}>
-            {section.layout === 'grid' ? strings.showAsList : strings.showAsGrid}
-          </MenuItem>
-        ) : null}
+        <MenuItem id="edit" icon="pencil">
+          {strings.editSection}
+        </MenuItem>
+        <MenuItem id="layout" icon={section.layout === 'grid' ? 'list' : 'layout-grid'}>
+          {section.layout === 'grid' ? strings.showAsList : strings.showAsGrid}
+        </MenuItem>
         {section.parentId === undefined ? (
           <MenuItem id="sub" icon="plus">
             {strings.addSubsection}
@@ -366,17 +351,12 @@ function SectionMenu({
 }
 
 /**
- * An item row's second line (checklabs' price, allergen and size chips): its price (or each size's), its price note,
- * what it contains, and where else it sits.
+ * An item row's quiet line, as words: how many sizes it comes in (the row's price column gives their range), what it
+ * contains, and where else it sits. The price itself is the row's own column.
  */
-export function itemChips(item: Dish, currency: string, locale: string, alsoOn: readonly string[]): readonly string[] {
+export function itemFacts(item: Dish, alsoOn: readonly string[]): readonly string[] {
   return [
-    ...(item.priceMinor === undefined ? [] : [formatPrice(item.priceMinor, currency, locale)]),
-    ...item.sizes.map((size) => `${size.name} ${formatPrice(size.priceMinor, currency, locale)}`),
-    // A price note stands where a price would; No price is the row's own badge, not a fact.
-    ...(item.priceMinor === undefined && item.sizes.length === 0 && item.priceNote !== undefined
-      ? [item.priceNote]
-      : []),
+    ...(item.sizes.length === 0 ? [] : [strings.sizesCount(item.sizes.length)]),
     ...item.allergens.filter((each) => each.level === 'contains').map((each) => strings.allergens[each.code]),
     ...(alsoOn.length === 0 ? [] : [strings.alsoOn(alsoOn.join(', '))]),
   ];
@@ -393,6 +373,7 @@ function SectionBody({
   onOpen,
   said,
   toasts,
+  isNarrow,
 }: {
   readonly store: MenuStore;
   readonly slug: string;
@@ -404,6 +385,7 @@ function SectionBody({
   readonly onOpen: (open: Open) => void;
   readonly said: Said;
   readonly toasts: Toasts;
+  readonly isNarrow: boolean;
 }) {
   const items = new Map(draft.items.map((item) => [item.id, item]));
   const locale = draft.places[0]?.locale ?? 'en-GB';
@@ -436,17 +418,31 @@ function SectionBody({
   const rows = placed.map((item, index): LinkRow => ({
     id: item.id,
     title: item.name,
-    // The price, sizes and allergens ride the second line as chips (checklabs'), not inline after the name.
     address: '',
-    chips: itemChips(item, draft.currency, locale, menuNames(item.id)),
-    // The item's photo; with none, a dashed + that opens its drawer at the photo picker (checklabs' empty slot), or
-    // a quiet photo mark for someone who can't change it. Never a letter tile.
-    // The item's photo; with none, a dashed "+" slot for someone who can add one (checklabs' empty slot): the row
-    // opens the item, whose drawer holds the photo picker. Never a letter tile.
-    leading: <DishThumb slug={slug} item={item} isSlot={draft.canEdit} />,
-    // No price is what the row is until fixed (Publish refuses it), so it sits by the name; Sold out at the end.
-    ...(isUnpriced(item) ? { titleBadge: strings.noPriceBadge } : {}),
-    ...(item.soldOut ? { badge: strings.soldOutBadge, isOff: true } : {}),
+    chips: itemFacts(item, menuNames(item.id)),
+    leading: <DishThumb slug={slug} item={item} size="title" />,
+    // The price on one right edge down the list: a note reads quieter than a figure, and No price (Publish refuses it)
+    // stands where the price should be.
+    amount: {
+      text: priceCell(item, draft.currency, locale),
+      tone: isUnpriced(item) ? 'alert' : item.priceMinor === undefined && item.sizes.length === 0 ? 'quiet' : 'default',
+    },
+    // Sold out reads by the name, the row stepping back with it; the switch for it waits at the end of the row.
+    ...(item.soldOut ? { titleBadge: strings.soldOutBadge, titleBadgeTone: 'strong' as const, isOff: true } : {}),
+    ...(isNarrow
+      ? {}
+      : {
+          quickAction: (
+            <Tooltip content={item.soldOut ? strings.markAvailable : strings.markSoldOut}>
+              <Button
+                variant="ghost"
+                icon={item.soldOut ? 'circle-check' : 'circle-slash'}
+                label={item.soldOut ? strings.markAvailableNamed(item.name) : strings.markSoldOutNamed(item.name)}
+                onPress={() => flipSoldOut(store, slug, item, !item.soldOut, toasts, said)}
+              />
+            </Tooltip>
+          ),
+        }),
     ...(!draft.canEdit
       ? {
           // Run service can still mark a dish sold out from its row (AC-6526), and nothing else.
@@ -511,6 +507,7 @@ function SectionBody({
     <>
       <LinkList
         label={strings.dishesIn(section.name)}
+        density="media"
         rows={rows}
         onOpen={(id) => {
           const item = items.get(id);
@@ -527,32 +524,27 @@ function SectionBody({
                 void store.move(slug, 'placement', id, toIndex, section.id).then(said),
             }
           : {})}
-        emptyState={<EmptyState title={strings.emptySection} layout="row" />}
+        // Someone who can add sees Add item alone, the count saying the rest; a reader is told it is empty.
+        {...(draft.canEdit && !isSearching
+          ? {}
+          : { emptyState: <EmptyState title={strings.emptySection} layout="row" /> })}
+        footer={
+          draft.canEdit && !isSearching ? (
+            <AddDishes store={store} slug={slug} draft={draft} section={section} onOpen={onOpen} said={said} />
+          ) : undefined
+        }
       />
-      {draft.canEdit && !isSearching ? (
-        <AddDishes store={store} slug={slug} draft={draft} section={section} onOpen={onOpen} said={said} />
-      ) : null}
       {subsections.length === 0 ? null : (
         <SectionList
           label={strings.subsectionsLabel(section.name)}
+          variant="groups"
+          isTitleInset
           sections={subsections.map((sub, index) => ({
             id: sub.id,
             title: sub.name,
-            description: strings.itemCount(sub.itemIds.length),
+            description: strings.sectionCount(0, sub.itemIds.length, sub.layout === 'grid'),
             ...(draft.canEdit
-              ? {
-                  actions: (
-                    <SectionHead
-                      store={store}
-                      slug={slug}
-                      section={sub}
-                      index={index}
-                      count={subsections.length}
-                      onOpen={onOpen}
-                      said={said}
-                    />
-                  ),
-                }
+              ? sectionActions({ store, slug, section: sub, index, count: subsections.length, isNarrow, onOpen, said })
               : {}),
             content: (
               <SectionBody
@@ -565,6 +557,7 @@ function SectionBody({
                 onOpen={onOpen}
                 said={said}
                 toasts={toasts}
+                isNarrow={isNarrow}
               />
             ),
           }))}
@@ -652,14 +645,12 @@ function AddDishes({
     }
     keyDown(event);
   };
-  // A bordered button, not a quiet one (checklabs' Add item is the section's own action), opening the search or create.
+  // A quiet last line of the list, on the tiles' edge (Linear's, Notion's), opening the search or create in place.
   if (!isAdding)
     return (
-      <span>
-        <Button ref={addButton} icon="plus" onPress={() => setAdding(true)}>
-          {strings.addDishButton}
-        </Button>
-      </span>
+      <Button ref={addButton} variant="ghost" icon="plus" onPress={() => setAdding(true)}>
+        {strings.addDishButton}
+      </Button>
     );
   return (
     <>
@@ -711,30 +702,25 @@ function AddDishes({
   );
 }
 
-/** A dish row's leading tile: its photo, or a quiet photo mark in its place. */
+/** A dish row's leading tile: its photo, or a quiet photo mark in its place (the row opens the drawer that adds one). */
 export function DishThumb({
   slug,
   item,
   size = 'sm',
-  isSlot = false,
 }: {
   readonly slug: string;
   readonly item: Dish;
-  readonly size?: 'xs' | 'sm';
-  /** With no photo, a dashed "+" slot waiting for one (someone who can add it), rather than the quiet photo mark. */
-  readonly isSlot?: boolean;
+  readonly size?: 'xs' | 'md' | 'sm' | 'title';
 }) {
-  const isEmpty = isSlot && item.photo === undefined;
-  const Tile = isEmpty ? AvatarEmpty : Avatar;
   return (
-    <Tile
+    <Avatar
       name={item.name}
       id={item.id}
       size={size}
       shape="square"
       hue="gray"
       isDecorative
-      mark={<Icon name={isEmpty ? 'plus' : 'image'} size="xs" />}
+      mark={<Icon name="image" size={size === 'title' ? 'md' : 'xs'} tone="muted" />}
       {...(item.photo === undefined ? {} : { src: draftPhotoHref(slug, item.photo.id, 'small', item.photo.version) })}
     />
   );

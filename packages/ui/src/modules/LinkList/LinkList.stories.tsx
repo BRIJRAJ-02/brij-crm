@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -750,6 +751,105 @@ export const Leading: Story = {
       },
     ],
   },
+};
+
+/**
+ * `density="media"`: a menu's items in a Card. A large tile, the name with quiet facts under it, the amount on one
+ * right edge; the grip, the quick action and the row's menu wait for the pointer or focus, each row's amount holding
+ * still as they arrive. No hairlines. Sold out by the name, a price note quieter than a figure, No price in danger.
+ */
+export const Media: Story = {
+  // New after the last baselines were shot; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Items',
+    density: 'media',
+    leadingLoading: <Skeleton shape="tile" size="title" />,
+    onMove: fn(),
+    rowOrder: LinkListRowOrder,
+    footer: (
+      <Button variant="ghost" icon="plus">
+        Add item
+      </Button>
+    ),
+    rows: [
+      {
+        id: 'edamame',
+        title: 'Edamame',
+        address: '',
+        chips: ['Soya'],
+        leading: <Skeleton shape="tile" size="title" isStill />,
+        amount: { text: '£5.50' },
+        quickAction: <Button variant="ghost" icon="circle-slash" label="Mark Edamame sold out" />,
+        actions: <Button variant="ghost" icon="ellipsis" label="More for Edamame" />,
+      },
+      {
+        id: 'ramen',
+        title: 'Tonkotsu ramen',
+        address: '',
+        chips: ['2 sizes', 'Gluten', 'Eggs', 'Soya', 'Sesame'],
+        leading: <Skeleton shape="tile" size="title" isStill />,
+        amount: { text: '£14.00–£16.50' },
+        quickAction: <Button variant="ghost" icon="circle-slash" label="Mark Tonkotsu ramen sold out" />,
+        actions: <Button variant="ghost" icon="ellipsis" label="More for Tonkotsu ramen" />,
+      },
+      {
+        id: 'salmon',
+        title: 'Miso-glazed salmon',
+        address: '',
+        chips: ['Fish'],
+        leading: <Skeleton shape="tile" size="title" isStill />,
+        amount: { text: '£16.50' },
+        titleBadge: 'Sold out',
+        titleBadgeTone: 'strong',
+        isOff: true,
+        quickAction: <Button variant="ghost" icon="circle-check" label="Mark Miso-glazed salmon available" />,
+        actions: <Button variant="ghost" icon="ellipsis" label="More for Miso-glazed salmon" />,
+      },
+      {
+        id: 'oysters',
+        title: 'Oysters',
+        address: '',
+        chips: [],
+        leading: <Skeleton shape="tile" size="title" isStill />,
+        amount: { text: 'Market price', tone: 'quiet' },
+      },
+      {
+        id: 'cucumber',
+        title: 'Smashed cucumber',
+        address: '',
+        chips: [],
+        leading: <Skeleton shape="tile" size="title" isStill />,
+        amount: { text: 'No price', tone: 'alert' },
+      },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <Card>
+        <LinkList {...args} />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('£14.00–£16.50')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Add item' })).toBeInTheDocument();
+    // Quiet is not gone: the row's controls are there for the keyboard and a screen reader.
+    await expect(canvas.getByRole('button', { name: 'Mark Edamame sold out' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Move Edamame' })).toBeInTheDocument();
+  },
+};
+
+/** The same rows at a phone's width: the name, then the price on a clear line, then the facts, beside the tile. */
+export const MediaNarrow: Story = {
+  ...Media,
+  render: (args) => (
+    <Stage width="narrow">
+      <Card>
+        <LinkList {...args} />
+      </Card>
+    </Stage>
+  ),
 };
 
 /** Sections heading the rows under them: a small uppercase label with its count, dragged like any other row. */

@@ -71,6 +71,13 @@
     block-size: var(--skeleton-circle);
   }
 
+  /* A square tile at the same scale: a picture that isn't a face (a menu item's photo). */
+  .root[data-shape='tile'][data-size] {
+    inline-size: var(--skeleton-circle);
+    block-size: var(--skeleton-circle);
+    border-radius: var(--radius-md);
+  }
+
   .root[data-size='xs'] {
     --skeleton-circle: var(--avatar-xs);
   }

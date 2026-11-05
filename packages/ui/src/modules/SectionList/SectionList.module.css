@@ -1,6 +1,7 @@
 /* SectionList: an ordered list of Cards, stacked space-16 apart as a settings section stacks its cards, with no
-   markers. The section being moved is lifted (shadow-md around its Card's radius-lg corners) above the others,
-   which slide out of its way. */
+   markers, or (groups) bare headings and rows parted by a hairline inside a Card. A head holds the chevron and title
+   with quiet words after them; the grip and quiet actions wait at its end for the pointer or focus, beside the menu,
+   which is always there. The section being moved is lifted above the others, which slide out of its way. */
 @layer components {
   .root {
     display: flex;
@@ -12,6 +13,11 @@
     list-style: none;
   }
 
+  .root[data-variant='groups'] {
+    gap: 0;
+    margin-block-start: var(--space-12);
+  }
+
   .item {
     display: flex;
     flex-direction: column;
@@ -19,9 +25,185 @@
     border-radius: var(--radius-lg);
   }
 
-  /* A folding section's body: the region its chevron names, adding no box, so the Card lays its content out as before. */
+  .item[data-variant='groups'] {
+    padding-block-start: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: 0;
+  }
+
+  .item[data-variant='groups']:not(:last-child) {
+    padding-block-end: var(--space-12);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+  }
+
+  /* No chevron to fold by (a sub section, or everything open under a search): the title keeps the column it would
+     have, on the tiles' edge. */
+  .head[data-inset] {
+    padding-inline-start: calc(var(--size-icon-sm) + 2 * var(--space-2) + var(--space-4));
+  }
+
+  .heading {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .item[data-variant='groups'] .title {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .titleLoading {
+    display: flex;
+    align-items: center;
+    inline-size: var(--size-column);
+    max-inline-size: 100%;
+    block-size: var(--size-control);
+  }
+
+  /* The title and its chevron are one disclosure: a press anywhere on them folds. */
+  .fold {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: start;
+    outline: none;
+  }
+
+  .fold:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The grip's column in a row under it, so the title starts on the rows' tiles. */
+  .chevron {
+    display: inline-flex;
+    flex: none;
+    align-self: center;
+    justify-content: center;
+    inline-size: calc(var(--size-icon-sm) + 2 * var(--space-2));
+    color: var(--text-tertiary);
+    transition:
+      color var(--duration-hover) var(--ease-hover),
+      rotate var(--duration-move) var(--ease-in-out);
+  }
+
+  .fold[aria-expanded='true'] > .chevron {
+    rotate: 90deg;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .fold:hover > .chevron {
+      color: var(--text-secondary);
+    }
+  }
+
+  .description {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .quiet {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  /* On a pointer that hovers, the grip and quiet actions wait for the head; where there is no hover they stand there.
+     Reached by keyboard, or holding a lifted section, they show. */
+  @media (hover: hover) and (pointer: fine) {
+    .quiet {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .quiet:has([data-lifted]) {
+      opacity: 1;
+    }
+
+    .head:hover .quiet,
+    .head:has(:focus-visible) .quiet,
+    .item[data-dragging] .quiet {
+      opacity: 1;
+    }
+  }
+
   .body {
-    display: contents;
+    margin-block-start: var(--space-8);
+  }
+
+  /* What a folding section holds slides shut: its height eases, its contents go from reach once it has shut. The inner
+     box reaches space-8 past the Card's padding, as the rows do, so the clip that shuts it never cuts a hover's ground. */
+  .foldBody {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--duration-move) var(--ease-in-out);
+  }
+
+  .foldBody[data-folded] {
+    grid-template-rows: 0fr;
+  }
+
+  .foldInner {
+    min-block-size: 0;
+    margin-inline: calc(-1 * var(--space-8));
+    padding-block: var(--space-8) var(--space-2);
+    padding-inline: var(--space-8);
+    overflow: hidden;
+    transition:
+      padding-block var(--duration-move) var(--ease-in-out),
+      visibility var(--duration-move) step-end;
+  }
+
+  .foldBody[data-folded] > .foldInner {
+    padding-block: 0;
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron,
+    .foldBody,
+    .foldInner {
+      transition: none;
+    }
   }
 
   /* The section being moved (the drag wrapper sets data-dragging). */
@@ -29,6 +211,10 @@
     position: relative;
     z-index: var(--z-raised);
     box-shadow: var(--shadow-md);
+  }
+
+  .item[data-variant='groups'][data-dragging] {
+    background: var(--surface-raised);
   }
 
   /* Lifted, in forced colours, where the shadow is gone. */

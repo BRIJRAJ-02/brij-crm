@@ -163,6 +163,11 @@ export type ButtonProps = ButtonLook &
      * Aria extends with the spinner's "In progress".
      */
     readonly isPending?: boolean;
+    /**
+     * A status dot before the label, as ToggleButton's: where something stands, on the control that changes it (a
+     * menu's Live or Hidden). With a label only.
+     */
+    readonly dot?: Hue;
     readonly type?: 'button' | 'submit' | 'reset';
     /** The `id` of the form it submits when it sits outside it, such as a Modal's footer submitting a Form in its body. */
     readonly form?: string;
@@ -254,7 +259,7 @@ function keycaps(kbd: ButtonLook['kbd'], variant: ButtonVariant): ReactNode {
   );
 }
 
-function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; isPending: boolean }) {
+function Face({ face, look, isPending, dot }: { face: ButtonFace; look: ButtonLook; isPending: boolean; dot?: Hue }) {
   const variant = look.variant ?? 'secondary';
   // A label that changes after the first paint ("Book" to "Book Thu Oct 8 at 9:30 AM") is drawn anew and marked, so
   // a page that asks for it (--label-swap) resolves it in. The first label is simply there.
@@ -293,7 +298,13 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         )
       )}
       {face.children !== undefined &&
-        (look.animateLabel === true ? (
+        (dot !== undefined ? (
+          <Suspense fallback={face.children}>
+            <LazyStatusDot hue={dot} isInherited>
+              {face.children}
+            </LazyStatusDot>
+          </Suspense>
+        ) : look.animateLabel === true ? (
           <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
             <Suspense fallback={face.children}>
               <LazyTextSwap>{face.children}</LazyTextSwap>
@@ -404,7 +415,7 @@ function PlainButton(props: ButtonProps) {
       {...shortcutAttribute(kbd ?? tooltipKbd, platform)}
       {...lookAttributes(props, face)}
     >
-      <Face face={face} look={look} isPending={isPending} />
+      <Face face={face} look={look} isPending={isPending} {...(props.dot === undefined ? {} : { dot: props.dot })} />
     </AriaButton>
   );
 }

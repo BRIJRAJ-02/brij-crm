@@ -198,6 +198,27 @@ export const AsRow: Story = {
   },
 };
 
+/** The row with a square tile, for a picture you have to recognise (a menu item's photo). */
+export const AsRowSquare: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Photo',
+    variant: 'row',
+    thumb: 'square',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+    preview: { src: PIXEL, alt: '' },
+    onAdjust: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Adjust crop' })).toBeEnabled();
+  },
+};
+
 /** The row with a picture there: a small picture of it, Change, Adjust crop and Remove. */
 export const AsRowWithPicture: Story = {
   parameters: { crm: { screenshot: false } },

@@ -222,7 +222,7 @@ describe('the Menus editor', () => {
     await expect.element(page.getByRole('button', { name: /Review/ }).first()).toBeInTheDocument();
     // The item Publish would refuse says so on its row, and on the Items tab, before Publish is pressed.
     await expect.element(page.getByText('No price').first()).toBeVisible();
-    // Sold out is in an item's ⋯ on Structure (checklabs' rows have no switch); the Items tab keeps the switch.
+    // Sold out is a quick button on an item's row and in its ⋯ on Structure; the Items tab keeps the switch.
     await expect.element(page.getByRole('button', { name: 'More for Oysters' }).first()).toBeInTheDocument();
     // The first publish is checklabs' "Publish & go live", through the review.
     await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
@@ -293,15 +293,37 @@ describe('the Menus editor', () => {
     );
     // A section with no sub sections counts its items alone.
     await expect.element(page.getByText('3 items', { exact: true }).first()).toBeInTheDocument();
-    // The price, sizes and allergens ride each item's second line.
-    await expect.element(page.getByText('Half £14.00').first()).toBeInTheDocument();
-    const fold = page.getByRole('button', { name: 'Show Small plates' });
+    // The price on its own column (sizes as a range), the sizes' count and the allergens on the quiet line.
+    await expect.element(page.getByText('£14.00–£26.00').first()).toBeInTheDocument();
+    await expect.element(page.getByText('2 sizes · Fish').first()).toBeInTheDocument();
+    const fold = page.getByRole('button', { name: 'Small plates', exact: true });
     await expect.element(fold).toHaveAttribute('aria-expanded', 'true');
-    await expect.element(page.getByLabelText('Items in Small plates')).toBeInTheDocument();
+    await expect.element(page.getByLabelText('Items in Small plates')).toBeVisible();
     await userEvent.click(fold);
     // Folded, the section draws its head alone (the phone preview beside it still reads the whole menu).
-    await expect.element(page.getByLabelText('Items in Small plates')).not.toBeInTheDocument();
+    await expect.element(page.getByLabelText('Items in Small plates')).not.toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Edit Mains' })).toBeInTheDocument();
+  });
+
+  it('keeps every quiet control reachable: Mark sold out is on the row and in ⋯, with Undo, and Edit in the section’s ⋯', async () => {
+    await page.viewport(1280, 900);
+    const { store, calls } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{}} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+    );
+    // Sold out reads by the name; the quick switch flips it at once.
+    await expect.element(page.getByText('Sold out').first()).toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: 'Mark Oysters available' }));
+    await expect.poll(() => calls.includes('soldOut')).toBe(true);
+    await userEvent.click(page.getByRole('button', { name: 'More for Small plates' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Edit section' })).toBeVisible();
+    await expect.element(page.getByRole('menuitem', { name: 'Show as a photo grid' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: 'More for Burrata, blood orange, chilli' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Mark sold out' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
   });
 
   it('makes a new option group from an item’s drawer and comes back with it picked', async () => {

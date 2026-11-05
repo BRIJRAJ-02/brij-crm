@@ -62,6 +62,11 @@
     align-items: start;
   }
 
+  /* `device`: the phone's own width, which the component sets, holds the column (see the container query). */
+  .measure[data-surface='device'] {
+    --device-phone: 100%;
+  }
+
   /* `wide`: the phone's column is two fifths of the width, the body three, so the phone shows beside an editor that
      already sits beside a sidebar. */
   .measure[data-share='wide'] {
@@ -231,6 +236,10 @@
     min-inline-size: 0;
   }
 
+  .preview[data-surface='device'] .stage {
+    padding: var(--space-8);
+  }
+
   /* PhonePreview size="pane": a pane given to the preview alone, so the phone takes its whole height. */
   .preview[data-place='bare'][data-size='pane'] {
     padding-block: 0;
@@ -269,6 +278,41 @@
 
   .screen > :only-child {
     flex: 1 0 auto;
+  }
+
+  /* previewSurface="device": the phone's own column (see the container query below for its width), a row of a label
+     and the controls above it, and a bezel drawn by shadows round a phone with a phone's corners, in the stage's
+     padding, so it takes nothing from the scale that fits it. */
+  .preview[data-surface='device'] .head {
+    align-self: stretch;
+    inline-size: auto;
+    min-inline-size: 0;
+    padding-inline: var(--space-8);
+  }
+
+  .preview[data-surface='device'] .heading {
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .preview[data-surface='device'] .phone {
+    border-radius: calc(2 * var(--radius-xl));
+    box-shadow:
+      0 0 0 var(--space-4) var(--surface-subtle),
+      0 0 0 calc(var(--space-4) + var(--border-width-hairline)) var(--border),
+      var(--shadow-md);
+  }
+
+  .preview[data-surface='device'] .screen {
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  /* While there is more below, the page fades out at the phone's foot rather than stopping on a hard edge mid item
+     (only the mask's alpha counts, so the surface token stands in for opaque). */
+  .screen[data-fade] {
+    mask-image: linear-gradient(to top, transparent, var(--surface) calc(2 * var(--space-24)));
   }
 
   /* A long preview's screen, or a long page's frame, takes focus to be scrolled: the phone's outline shows it. */
@@ -328,6 +372,23 @@
     border: 0;
   }
 
+  /* Too narrow for the phone beside the body: Preview floats at the foot of the view, keeping a row's room above it at
+     the body's end so it never sits on the last thing there. */
+  .bar[data-floating] {
+    position: sticky;
+    inset-block-end: var(--space-16);
+    z-index: var(--z-sticky);
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .floating {
+    display: inline-flex;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    pointer-events: auto;
+  }
+
   @container (width >= 320px) {
     /* The editor in the first two thirds, the phone in the last. */
     .body[data-preview] {
@@ -345,6 +406,17 @@
         minmax(0, min(calc((100% - var(--space-32)) * 3 / 5), var(--size-dialog-wide)))
         minmax(0, min(calc((100% - var(--space-32)) * 2 / 5), var(--size-panel)));
       justify-content: center;
+    }
+
+    /* The column is the phone's width and no more, so no empty band sits beside it; the editor takes the rest. */
+    .measure[data-surface='device'] > .body[data-preview] {
+      grid-template-columns:
+        minmax(0, 1fr)
+        min(
+          calc((100% - var(--space-24)) * 2 / 5),
+          calc(var(--device-phone) + 2 * var(--space-8) + 2 * var(--border-width-hairline))
+        );
+      gap: var(--space-24);
     }
 
     .side {

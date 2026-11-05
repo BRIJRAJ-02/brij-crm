@@ -74,9 +74,13 @@ export interface PreviewLayoutProps {
   /**
    * `canvas` sets the preview on a sunken canvas (forms fixes 3, the design critic: a full height white slab in dark
    * mode): the frame takes the height of what it shows, at most the room there is, centred on the canvas, and the
-   * "Preview" heading is left to screen readers (the controls stay). Left out, the phone keeps its full height.
+   * "Preview" heading is left to screen readers (the controls stay). `device` is a calm sticky companion that reads
+   * as what guests see (a menu's phone): a bezelled phone with the page fading at its foot while there is more, no
+   * scrollbar of its own and a scroll that stops at its ends; its column as wide as the phone, the editor taking the
+   * rest; and, too narrow for both, Preview floats at the foot of the view rather than holding a row over the body.
+   * Left out, the phone keeps its full height.
    */
-  readonly previewSurface?: 'canvas';
+  readonly previewSurface?: 'canvas' | 'device';
   /**
    * The screen the preview lays its page out at: `phone` (the default) or `desktop`, a laptop's window scaled to
    * the column, as Tally's and Typeform's previews switch (forms fixes 3). The caller offers the switch in its
@@ -443,25 +447,32 @@ function useContentHeight(screen: RefObject<HTMLDivElement | null>, isOn: boolea
   return isOn ? height : undefined;
 }
 
-/** Whether the screen's content runs past its foot (a long form), so it scrolls and takes focus to be scrolled. */
+/**
+ * Whether the screen's content runs past its foot (a long form), so it scrolls and takes focus to be scrolled, and
+ * whether there is still more below where it is scrolled to, which a `device` phone fades its foot for.
+ */
 function useOverflow() {
   const ref = useRef<HTMLDivElement>(null);
   const [isOverflowing, setOverflowing] = useState(false);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
     const check = () => {
       setOverflowing(element.scrollHeight > element.clientHeight);
+      setHasMoreBelow(element.scrollHeight - element.clientHeight - element.scrollTop > 1);
     };
+    element.addEventListener('scroll', check, { passive: true });
     const observer = new ResizeObserver(check);
     observer.observe(element);
     // The content's own size changes as a form gains questions; the screen's never does.
     if (element.firstElementChild !== null) observer.observe(element.firstElementChild);
     return () => {
+      element.removeEventListener('scroll', check);
       observer.disconnect();
     };
   }, []);
-  return { ref, isOverflowing };
+  return { ref, isOverflowing, hasMoreBelow };
 }
 
 /** Props for PhoneColumn. */
@@ -478,8 +489,8 @@ interface PhoneColumnProps {
   readonly note?: ReactNode;
   /** `pane` (bare only): the phone takes its pane's whole height (PhonePreview's `size`). */
   readonly size?: 'pane';
-  /** `canvas`: on a sunken canvas, the frame as tall as what it shows (PreviewLayout's `previewSurface`). */
-  readonly surface?: 'canvas';
+  /** `canvas` or `device`, PreviewLayout's `previewSurface`. */
+  readonly surface?: 'canvas' | 'device';
   /** The screen the page is laid out at (PreviewLayout's `previewDevice`). */
   readonly device?: Device;
   /** What the phone shows. */
@@ -503,7 +514,7 @@ function PhoneColumn({
   children,
 }: PhoneColumnProps) {
   const { ref, scale, height } = usePhoneFit(device);
-  const { ref: screenRef, isOverflowing } = useOverflow();
+  const { ref: screenRef, isOverflowing, hasMoreBelow } = useOverflow();
   const content = useContentHeight(screenRef, surface === 'canvas');
   // On the canvas the frame is as tall as what it shows, never taller than the room there is.
   const shown = content === undefined ? height : Math.min(height, Math.max(content, 1));
@@ -540,6 +551,7 @@ function PhoneColumn({
             ref={screenRef}
             className={styles.screen}
             data-hug={surface === 'canvas' || undefined}
+            data-fade={(surface === 'device' && hasMoreBelow) || undefined}
             {...(isOverflowing
               ? { tabIndex: 0, role: 'region', 'aria-label': device === 'desktop' ? strings.desktop : strings.phone }
               : {})}
@@ -651,18 +663,23 @@ export function PreviewLayout({
   const [isOpen, setOpen] = useState(false);
   const hasPreview = preview !== undefined && preview !== null;
   const headingId = useId();
+  const isDevice = previewSurface === 'device';
+  const previewButton = (
+    <Button icon="smartphone" onPress={() => setOpen(true)}>
+      {strings.showPreview}
+    </Button>
+  );
   return (
     <div className={styles.root}>
       <div className={styles.inner} data-snug={(previewShare === 'snug' && hasPreview) || undefined}>
         {notices}
-        <div className={styles.measure} data-share={previewShare === 'third' ? undefined : 'wide'}>
-          {hasPreview && (
-            <div className={styles.bar}>
-              <Button icon="smartphone" onPress={() => setOpen(true)}>
-                {strings.showPreview}
-              </Button>
-            </div>
-          )}
+        <div
+          className={styles.measure}
+          data-share={previewShare === 'third' ? undefined : 'wide'}
+          data-surface={isDevice ? 'device' : undefined}
+          style={{ '--device-phone': `${String(PHONE.width)}px` }}
+        >
+          {hasPreview && !isDevice && <div className={styles.bar}>{previewButton}</div>}
           <div
             className={styles.body}
             data-preview={hasPreview || undefined}
@@ -685,6 +702,12 @@ export function PreviewLayout({
               </aside>
             )}
           </div>
+          {hasPreview && isDevice && (
+            // After the body, so it stays at the foot of the view however long the body is, and comes after it in tab order.
+            <div className={styles.bar} data-floating="">
+              <span className={styles.floating}>{previewButton}</span>
+            </div>
+          )}
         </div>
       </div>
       {hasPreview && (

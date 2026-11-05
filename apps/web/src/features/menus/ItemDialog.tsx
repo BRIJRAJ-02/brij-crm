@@ -218,6 +218,8 @@ export function ItemDialog({
   const photoField = (
     <FileDrop
       label={strings.photo}
+      variant="row"
+      thumb="square"
       acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
       typesText={pendingPhoto === undefined ? strings.photoTypes : strings.photoAfterSave}
       maxSize={MENU_LIMITS.photoMaxBytes}
@@ -296,32 +298,7 @@ export function ItemDialog({
             }}
           />
         </FormRow>
-        {price.trim() === '' && sizes.length === 0 ? (
-          <Field
-            isReadOnly={isReadOnly}
-            label={strings.priceNote}
-            value={priceNote}
-            onChange={setPriceNote}
-            hint={strings.priceNoteHint}
-            maxLength={MENU_LIMITS.priceNoteMax}
-          />
-        ) : null}
-        <Field
-          isReadOnly={isReadOnly}
-          label={strings.kcal}
-          value={kcal}
-          onChange={setKcal}
-          inputMode="numeric"
-          error={problems.kcal}
-        />
-        <Field
-          isReadOnly={isReadOnly}
-          label={strings.description}
-          value={description}
-          onChange={setDescription}
-          isMultiline
-          maxLength={400}
-        />
+        {/* Sizes sit straight under the price they take over from, not after the description. */}
         {sizes.map((size, index) => (
           <Field
             isReadOnly={isReadOnly}
@@ -360,6 +337,7 @@ export function ItemDialog({
         ))}
         {isReadOnly || sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
           <Button
+            variant="dashed"
             icon="plus"
             onPress={() => {
               // The first size takes the dish's price, so nothing typed is lost when sizes take over.
@@ -370,6 +348,32 @@ export function ItemDialog({
             {strings.addSize}
           </Button>
         )}
+        {price.trim() === '' && sizes.length === 0 ? (
+          <Field
+            isReadOnly={isReadOnly}
+            label={strings.priceNote}
+            value={priceNote}
+            onChange={setPriceNote}
+            hint={strings.priceNoteHint}
+            maxLength={MENU_LIMITS.priceNoteMax}
+          />
+        ) : null}
+        <Field
+          isReadOnly={isReadOnly}
+          label={strings.kcal}
+          value={kcal}
+          onChange={setKcal}
+          inputMode="numeric"
+          error={problems.kcal}
+        />
+        <Field
+          isReadOnly={isReadOnly}
+          label={strings.description}
+          value={description}
+          onChange={setDescription}
+          isMultiline
+          maxLength={400}
+        />
         {isReadOnly && draft.groups.length === 0 ? null : (
           // New option group opens its drawer over this one and comes back with the group picked, so nothing typed
           // here is lost (checklabs' modifier groups, which it left unlinked).

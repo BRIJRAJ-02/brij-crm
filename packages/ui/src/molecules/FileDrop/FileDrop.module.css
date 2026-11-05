@@ -93,6 +93,12 @@
     background: var(--surface-subtle);
   }
 
+  .thumb[data-shape='square'] {
+    inline-size: var(--avatar-title);
+    block-size: var(--avatar-title);
+    border-radius: var(--radius-md);
+  }
+
   .thumbImage {
     inline-size: 100%;
     block-size: 100%;

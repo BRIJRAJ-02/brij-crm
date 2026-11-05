@@ -762,6 +762,18 @@ export const WithAmount: Story = {
   },
 };
 
+/** A status dot before the label, on the control that changes it (a menu's Live or Hidden). */
+export const WithDot: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Button variant="ghost" dot="green" iconRight="chevron-down">
+        Live
+      </Button>
+    </Stage>
+  ),
+};
+
 /** Drawn small, pressed across 44px (`touchTarget`): the guest menu's 26px and 30px round controls. */
 export const TouchTarget: Story = {
   parameters: { crm: { screenshot: false } },
