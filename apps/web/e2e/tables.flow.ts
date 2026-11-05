@@ -99,8 +99,7 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
 
   await test.step('opening hours: lunch and dinner, Tuesday to Sunday, from the first install', async () => {
     await page.getByRole('dialog', { name: 'Online booking' }).getByRole('link', { name: 'Fix it' }).first().click();
-    // The switch turned on wasn't saved: leaving asks first.
-    await page.getByRole('button', { name: 'Leave without saving' }).click();
+    // The drawer's way out is a link: the switch turned on wasn't saved, and stays off.
     await expect(page).toHaveURL(/\/settings\/business\/places\//);
     await expect(page.getByRole('switch', { name: 'Monday' })).not.toBeChecked({ timeout: 15_000 });
     await expect(page.getByRole('switch', { name: 'Tuesday' })).toBeChecked();

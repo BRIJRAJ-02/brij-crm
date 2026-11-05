@@ -283,6 +283,19 @@ export function Modal({
     ...(!isConfirm && !isAlert ? { press: strings.submitLongKey } : {}),
   };
   const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+  // Both: toasts keep off the footer (its cleanup kept), and ⌘↵ finds the footer's primary. One function, so a render
+  // never lets go of the footer only to take it again.
+  const footRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      setFoot(element);
+      const release = keepToastsOff(element);
+      return () => {
+        release?.();
+        setFoot(null);
+      };
+    },
+    [keepToastsOff],
+  );
   usePressOnKey(foot);
   return (
     <ModalOverlay
@@ -381,15 +394,7 @@ export function Modal({
           {actions !== undefined && (
             <div
               className={styles.foot}
-              // Both: toasts keep off the footer (its cleanup kept), and ⌘↵ finds the footer's primary.
-              ref={(foot: HTMLDivElement | null) => {
-                setFoot(foot);
-                const release = keepToastsOff(foot);
-                return () => {
-                  release?.();
-                  setFoot(null);
-                };
-              }}
+              ref={footRef}
             >
               {footerStart !== undefined ? (
                 <div className={styles.footerStart}>{footerStart}</div>
