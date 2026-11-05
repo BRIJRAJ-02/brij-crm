@@ -3382,7 +3382,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'menu.deleteGroup': 3,
   'menu.setSoldOut': 5,
   'menu.setHidden': 6,
-  'menu.saveLook': 4,
+  'menu.saveLook': 5,
   'menu.publish': 5,
   'menu.discard': 6,
   // The Hospitality setup (spec 0065): Table seating installed first (and tables added, an area made, or a table
