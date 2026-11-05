@@ -1,9 +1,12 @@
-// The Members page in Chromium. Its confirms (the owner, 21 October 2026: anything that ends something asks first):
-// Cancel invite on an invitation (Keep invitation, never a second Cancel), Remove from workspace and Transfer ownership on a
-// member each open a danger confirm; the way out changes nothing, and the verb runs once, busy while the server
-// works, with the server's refusal inside the dialog, which stays open. Someone else's role changes at once, no
-// confirm. The Invitations tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
-// limits save with a toast and Undo, then Company email). A member reads one note and no controls.
+// The Members page in Chromium (owner ask T12, 5 November 2026: one table). Everyone on their way in sits in the
+// members' own table, first: someone asking to join (Approve, Decline), then each invitation (Invited, with Resend and
+// Revoke invite in its menu), then the members, each row's role and status in its columns and the rest in its
+// details beside the list. Its confirms (the owner, 21 October 2026: anything that ends something asks first): Revoke
+// invite (Keep invitation, never a second Cancel), Remove from workspace and Transfer ownership each open a danger
+// confirm; the way out changes nothing, and the verb runs once, busy while the server works, with the server's
+// refusal inside the dialog, which stays open. Someone else's role changes at once, no confirm. Other ways to join
+// follows the list (the invite link, whose limits save with a toast and Undo, then Company email). A member reads
+// no note and no controls.
 import type {
   RolesOverview,
   DataLayer,
@@ -399,29 +402,28 @@ async function renderMembers(
   };
 }
 
-/** Opens the Invitations tab and picks Cancel invite on Grace's row. */
-async function pickCancelInvite(): Promise<void> {
-  await page.getByRole('tab', { name: /Invitations/ }).click();
+/** Picks Revoke invite in the menu on Grace's row, in the members' own table. */
+async function pickRevokeInvite(): Promise<void> {
   await page.getByRole('button', { name: 'Actions for the invitation to grace@example.com' }).click();
-  await page.getByRole('menuitem', { name: 'Cancel invite' }).click();
+  await page.getByRole('menuitem', { name: 'Revoke invite' }).click();
 }
 
-describe('cancelling an invitation asks first', () => {
-  it('names the address, and Keep invitation cancels nothing', async () => {
+describe('revoking an invitation asks first', () => {
+  it('names the address, and Keep invitation revokes nothing', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
-    await pickCancelInvite();
-    const dialog = page.getByRole('alertdialog', { name: 'Cancel the invitation to grace@example.com?' });
+    await pickRevokeInvite();
+    const dialog = page.getByRole('alertdialog', { name: 'Revoke the invitation to grace@example.com?' });
     await expect.element(dialog).toBeVisible();
     expect(dialog.element().textContent).toContain('The link in their email stops working at once.');
-    // Never two buttons called Cancel: the way out is Keep invitation, the verb Cancel invitation.
+    // The way out is Keep invitation, the verb Revoke invitation.
     expect(dialog.getByRole('button', { name: 'Cancel', exact: true }).elements()).toHaveLength(0);
     await dialog.getByRole('button', { name: 'Keep invitation' }).click();
     await expect.element(dialog).not.toBeInTheDocument();
     expect(counted.revokes()).toBe(0);
   });
 
-  it('cancels once on the verb, busy while the server works', async () => {
+  it('revokes once on the verb, busy while the server works', async () => {
     let release: () => void = () => undefined;
     const counted = layerWith(
       () =>
@@ -430,9 +432,9 @@ describe('cancelling an invitation asks first', () => {
         }),
     );
     await renderMembers(counted.layer);
-    await pickCancelInvite();
-    const dialog = page.getByRole('alertdialog', { name: 'Cancel the invitation to grace@example.com?' });
-    const commit = dialog.getByRole('button', { name: 'Cancel invitation' });
+    await pickRevokeInvite();
+    const dialog = page.getByRole('alertdialog', { name: 'Revoke the invitation to grace@example.com?' });
+    const commit = dialog.getByRole('button', { name: 'Revoke invitation' });
     await commit.click();
     await commit.click({ force: true });
     expect(counted.revokes()).toBe(1);
@@ -447,9 +449,9 @@ describe('cancelling an invitation asks first', () => {
   it('shows a refusal inside the dialog, which stays open', async () => {
     const counted = layerWith(() => Promise.reject(refusal('NOT_FOUND', 'That invitation doesn’t exist.')));
     await renderMembers(counted.layer);
-    await pickCancelInvite();
-    const dialog = page.getByRole('alertdialog', { name: 'Cancel the invitation to grace@example.com?' });
-    await dialog.getByRole('button', { name: 'Cancel invitation' }).click();
+    await pickRevokeInvite();
+    const dialog = page.getByRole('alertdialog', { name: 'Revoke the invitation to grace@example.com?' });
+    await dialog.getByRole('button', { name: 'Revoke invitation' }).click();
     await expect.element(dialog.getByRole('alert')).toBeVisible();
     await expect.element(dialog).toBeVisible();
     expect(counted.revokes()).toBe(1);
@@ -513,16 +515,57 @@ describe('removing a member asks first', () => {
   });
 });
 
-describe('calendar health (spec 0037, AC-1308, AC-1309)', () => {
-  it('shows each person’s status in words, and asks a broken calendar’s owner to reconnect from their menu', async () => {
+describe('a row’s details (owner ask T12: the secondary columns left the table)', () => {
+  it('keeps the table to the person, their role and status, and the row’s actions', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
-    await expect.element(page.getByRole('columnheader', { name: 'Calendar' })).toBeVisible();
-    await expect.element(page.getByText('Reconnect needed')).toBeVisible();
-    await expect.element(page.getByText('Connected')).toBeVisible();
+    // After the selection column (Change role for several, spec 0037): the person, role, status and actions alone.
+    expect(
+      page
+        .getByRole('columnheader')
+        .elements()
+        .map((header) => header.textContent),
+    ).toEqual(['Select all rows', 'Name', 'Role', 'Status', 'Actions']);
+    // The person's email sits under their name, in the one cell.
+    await expect.element(page.getByRole('rowheader', { name: /Linus Torvalds.*linus@example\.com/ })).toBeVisible();
+  });
+
+  it('shows two factor, calendar health and scheduling access beside the list, Remove at its foot', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
+    const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
+    await expect.element(details).toBeVisible();
+    for (const term of ['Email', 'Role', 'Status', 'Joined', 'Two factor', 'Calendar', 'Scheduling access']) {
+      await expect.element(details.getByText(term, { exact: true })).toBeVisible();
+    }
+    await expect.element(details.getByText('Reconnect needed')).toBeVisible();
+    // Removing still asks first, in its own dialog.
+    await details.getByRole('button', { name: 'Remove from workspace' }).click();
+    await expect.element(page.getByRole('alertdialog', { name: 'Remove Linus Torvalds from Acme?' })).toBeVisible();
+    expect(counted.calls.remove).toBe(0);
+  });
+
+  it('asks a broken calendar’s owner to reconnect from their menu (spec 0037, AC-1309)', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
     await page.getByRole('button', { name: 'Actions for Linus Torvalds' }).click();
     await page.getByRole('menuitem', { name: 'Ask to reconnect' }).click();
-    expect(healthAsks).toEqual([LINUS.id]);
+    expect(healthAsks).toContain(LINUS.id);
+  });
+
+  it('opens an invitation’s details with Resend, and Revoke invite there asks first', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await page.getByRole('rowheader', { name: /grace@example\.com/ }).click();
+    const details = page.getByRole('dialog', { name: 'grace@example.com' });
+    await expect.element(details.getByText('Invited by', { exact: true })).toBeVisible();
+    await expect.element(details.getByRole('button', { name: 'Resend' })).toBeVisible();
+    await details.getByRole('button', { name: 'Revoke invite' }).click();
+    await expect
+      .element(page.getByRole('alertdialog', { name: 'Revoke the invitation to grace@example.com?' }))
+      .toBeVisible();
+    expect(counted.revokes()).toBe(0);
   });
 });
 
@@ -531,7 +574,7 @@ describe('changing roles', () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
     await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
-    await page.getByRole('option', { name: 'Admin' }).click();
+    await page.getByRole('option', { name: /^Admin/ }).click();
     // No confirm asked: the change went at once, and its toast says so.
     expect(document.querySelector('[role="alertdialog"][aria-modal="true"]')).toBeNull();
     expect(counted.calls.setRole).toBe(1);
@@ -553,7 +596,7 @@ describe('changing roles', () => {
     // Linus is an admin, made a member: what he sent as an admin opens nothing now.
     await renderMembers(layer, { members: [ADA, { ...LINUS, role: 'admin' }] });
     await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
-    await page.getByRole('option', { name: 'Member' }).click();
+    await page.getByRole('option', { name: /^Member/ }).click();
     // A step down asks first (Admin to Member), then says it as a change made at once does.
     const confirm = page.getByRole('alertdialog', { name: 'Make Linus Torvalds a Member?' });
     await expect.element(confirm.getByText('Linus Torvalds can no longer manage members or settings.')).toBeVisible();
@@ -573,7 +616,7 @@ describe('changing roles', () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
     await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
-    await page.getByRole('option', { name: 'Guest' }).click();
+    await page.getByRole('option', { name: /^Guest/ }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Make Linus Torvalds a Guest?' });
     await expect.element(confirm.getByText('1 page paused')).toBeVisible();
     await expect.element(confirm.getByText('Leaves 2 round robins')).toBeVisible();
@@ -592,7 +635,7 @@ describe('changing roles', () => {
     };
     await renderMembers(failing);
     await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
-    await page.getByRole('option', { name: 'Guest' }).click();
+    await page.getByRole('option', { name: /^Guest/ }).click();
     await expect.element(confirm.getByText('Couldn’t count what changes')).toBeVisible();
   });
 
@@ -627,55 +670,82 @@ describe('transferring ownership asks first (AC-813)', () => {
   });
 });
 
-describe('the Invitations tab', () => {
-  it('counts invitations and requests, and holds Asking to join, Pending invitations, then Other ways to join', async () => {
+describe('everyone on their way in, in the one table (owner ask T12)', () => {
+  it('lists the requests, then the invitations, then the members, each with its status; Other ways to join follows', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, { requests: [REQUEST], link: LINK, domains: DOMAINS });
-    // One tab for everyone on their way in, in the one strip with Members, Teams and Roles (4 November 2026).
+    // No tab of their own: the entry's strip is Members and Teams.
     expect(
       page
         .getByRole('tab')
         .elements()
         .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
-    ).toEqual(['Members', 'Invitations', 'Teams']);
-    // Its count is the pending invitations plus the requests waiting: 1 and 1.
+    ).toEqual(['Members', 'Teams']);
+    // Each name over its quiet line (after the picture's initials).
     expect(
       page
-        .getByRole('tab', { name: /Invitations/ })
-        .element()
-        .textContent.replaceAll(/\s/g, ''),
-    ).toBe('Invitations2');
-    await page.getByRole('tab', { name: /Invitations/ }).click();
-    const panel = page.getByRole('tabpanel');
-    await expect.element(panel.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
-    // The invite link's limits sit folded under Link settings, whose trigger is a heading of its own.
-    expect(
-      panel
-        .getByRole('heading')
+        .getByRole('rowheader')
         .elements()
-        .map((heading) => heading.textContent),
-    ).toEqual(['Asking to join', 'Pending invitations', 'Other ways to join', 'Link settings']);
-    await expect.element(panel.getByRole('rowheader', { name: /Mary Shelley/ })).toBeVisible();
-    await expect.element(panel.getByRole('rowheader', { name: 'grace@example.com' })).toBeVisible();
+        .map((header) => header.textContent),
+    ).toEqual([
+      'MSMary Shelleymary@acme.com',
+      'Ggrace@example.comInvited by Ada Lovelace',
+      'ALAda LovelaceYou · ada@example.com',
+      'LTLinus Torvaldslinus@example.com',
+    ]);
+    await expect.element(page.getByRole('row', { name: /Mary Shelley/ }).getByText('Asks to join')).toBeVisible();
+    await expect.element(page.getByRole('row', { name: /grace@example\.com/ }).getByText('Invited')).toBeVisible();
+    await expect.element(page.getByRole('row', { name: /Linus Torvalds/ }).getByText('Active')).toBeVisible();
+    // No "Just you so far" while anyone is on their way in, and one Invite button, in the bar (here, none: the harness
+    // mounts no bar).
+    expect(page.getByText('Just you so far').elements()).toHaveLength(0);
+    // Other ways to join follows the table, set once, so last.
+    const table = page.getByRole('grid', { name: 'Members and invitations' }).element();
+    const otherWays = page.getByRole('heading', { name: 'Other ways to join' }).element();
+    expect(table.compareDocumentPosition(otherWays) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The invite link first, then Company email, with what Company email does.
-    const link = panel.getByRole('switch', { name: 'Invite link' }).element();
-    const email = panel.getByRole('switch', { name: 'Let @acme.com ask to join' }).element();
+    const link = page.getByRole('switch', { name: 'Invite link' }).element();
+    const email = page.getByRole('switch', { name: 'Let @acme.com ask to join' }).element();
     expect(link.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(panel.element().textContent).toContain('Let @acme.com ask to join');
   });
 
-  it('leaves Asking to join out while nobody waits', async () => {
+  it('gives only members a checkbox for Change role: never the reader, nor anyone on their way in', async () => {
     const counted = layerWith(() => Promise.resolve());
-    await renderMembers(counted.layer, { link: LINK });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
-    await expect.element(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
-    expect(page.getByRole('heading', { name: 'Asking to join' }).elements()).toHaveLength(0);
+    await renderMembers(counted.layer, { requests: [REQUEST] });
+    // Each checkbox is named by its row's person (their email too, from the row's header).
+    await expect.element(page.getByRole('checkbox', { name: /^Select Linus Torvalds/ })).toBeInTheDocument();
+    for (const name of [/^Select Ada Lovelace/, /^Select Mary Shelley/, /^Select grace@example\.com/]) {
+      expect(page.getByRole('checkbox', { name }).elements()).toHaveLength(0);
+    }
+    // Select all picks the one person who may take a new role. A click on the box's own input, which the header's text
+    // covers in this unstyled page.
+    (page.getByRole('checkbox', { name: /Select all/i }).element() as HTMLElement).click();
+    await expect.element(page.getByRole('toolbar', { name: /selected/i })).toBeVisible();
+    await expect.element(page.getByText('1 selected')).toBeVisible();
+  });
+
+  it('keeps each role’s help in the role picker, one line under its name', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
+    await expect.element(page.getByRole('listbox').getByText('Members and settings.')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+  });
+
+  it('puts someone asking to join first, answered on their row', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer, { requests: [REQUEST] });
+    const row = page.getByRole('row', { name: /Mary Shelley/ });
+    await expect.element(row.getByRole('button', { name: 'Approve Mary Shelley' })).toBeVisible();
+    await row.getByRole('button', { name: 'Decline Mary Shelley' }).click();
+    // Declining ends their request, so it asks first.
+    await expect.element(page.getByRole('alertdialog', { name: 'Decline Mary Shelley’s request?' })).toBeVisible();
+    expect(counted.calls.decide).toEqual([]);
   });
 
   it('says the invite link saved, and Undo puts the old limit back', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -691,7 +761,6 @@ describe('the Invitations tab', () => {
   it('never turns the link back on: turning it off closes the open Undo', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -707,23 +776,9 @@ describe('the Invitations tab', () => {
     expect(counted.link().enabled).toBe(false);
   });
 
-  it('closes the open Undo when the tab is left, so a remount can’t act on an old one', async () => {
-    const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
-    await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
-    await page.getByRole('button', { name: 'Link settings' }).click();
-    await page.getByRole('button', { name: /people Most uses/ }).click();
-    await page.getByRole('option', { name: '50 people' }).click();
-    await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
-    await page.getByRole('tab', { name: /^Members/ }).click();
-    await expect.element(page.getByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
-    expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
-  });
-
   it('leaves another admin’s newer value alone, and says so', async () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     const { reload } = await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
     await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
@@ -740,25 +795,11 @@ describe('the Invitations tab', () => {
   it('says the link saved when it is turned on, with no Undo', async () => {
     const counted = layerWith(() => Promise.resolve(), { enabled: false, uses: 0, isSpent: false });
     await renderMembers(counted.layer, { liveLink: counted.link });
-    await page.getByRole('tab', { name: /Invitations/ }).click();
     // A click on the switch's own input, which the row's text covers in this unstyled page.
     (page.getByRole('switch', { name: 'Invite link' }).element() as HTMLElement).click();
     await expect.element(page.getByText('Invite link saved.')).toBeVisible();
     expect(page.getByRole('button', { name: 'Undo' }).elements()).toHaveLength(0);
     expect(counted.calls.setLink).toEqual([{ enabled: true }]);
-  });
-
-  it('opens on Invitations while someone asks to join', async () => {
-    const waiting = layerWith(() => Promise.resolve());
-    await renderMembers(waiting.layer, { requests: [REQUEST] });
-    await expect.element(page.getByRole('tab', { name: /Invitations/ })).toHaveAttribute('aria-selected', 'true');
-    await expect.element(page.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
-  });
-
-  it('opens on Members while nobody asks', async () => {
-    const counted = layerWith(() => Promise.resolve());
-    await renderMembers(counted.layer);
-    await expect.element(page.getByRole('tab', { name: /^Members/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('moves focus off the page body once the last request is approved', async () => {
@@ -796,13 +837,15 @@ describe('a member who can’t invite', () => {
     // this harness doesn't mount.
     await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
     expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
-    // No Invitations tab: only Members and Teams.
+    // Members and Teams, and no Status column: they see members alone, all of them active.
     expect(
       page
         .getByRole('tab')
         .elements()
         .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
     ).toEqual(['Members', 'Teams']);
+    expect(page.getByRole('columnheader', { name: 'Status' }).elements()).toHaveLength(0);
+    expect(page.getByRole('heading', { name: 'Other ways to join' }).elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
     // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.
     expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);

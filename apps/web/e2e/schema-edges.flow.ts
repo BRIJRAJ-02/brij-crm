@@ -18,7 +18,7 @@ test.describe('the schema’s edges', () => {
     const slug = `joinask-${tag}`;
     await newWorkspace(page, `owner-${tag}@${domain}`, slug);
     await page.goto(`/w/${slug}/settings/members`);
-    await page.getByRole('tab', { name: /Joining/ }).click();
+    // Company email sits under the list, in Other ways to join (owner ask T12: no tab of its own).
     await page.getByRole('switch', { name: `Let @${domain} ask to join` }).click();
     await expect(page.getByText(`People at @${domain} can now ask to join.`)).toBeVisible();
 

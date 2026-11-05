@@ -1,16 +1,15 @@
 // Brief
-// Purpose: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811): who is in the workspace, what each can
-// do, and who is invited.
-// Main task: find someone by name or email; owners and admins change roles, remove people and invite, answer
-// requests to join, resend or cancel invitations, and set the invite link and company email (the Invitations tab); an
-// owner hands the workspace on; a step down (to Guest above all) asks first; everyone reads who is in, a guest
-// without anyone's email.
-// Leaves out: leaving (the workspace menu's), teams and roles (their own pages), and a role for the invite link.
+// Purpose: Settings › People › Members (spec 0031, AC-803, AC-810, AC-811; owner ask T12, "looks confusing"): who is
+// in the workspace and who is on their way in, in one table.
+// Main task: find someone by name or email; read each person's role and status at a glance; owners and admins
+// change roles, answer requests to join, resend or revoke invitations, remove people (each ending asks first), and
+// open a row for the rest (two factor, calendar, scheduling access); invite from the bar's one button.
+// Leaves out: leaving (the workspace menu's), teams and roles (their own tabs and pages), and a role for the invite
+// link.
 import {
   isDataError,
-  ROLE_DESCRIPTIONS,
-  ROLE_LABELS,
   ROLES,
+  ROLE_LABELS,
   type DataLayer,
   type InvitationView,
   type InviteLinkView,
@@ -31,26 +30,29 @@ import {
   Button,
   ButtonGroup,
   Card,
+  DescriptionList,
   EmptyState,
   Field,
-  InfoTip,
   LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
+  Panel,
+  PersonLine,
   RelativeTime,
   Select,
   SettingsSection,
   SettingsStack,
   sharedStrings,
   Table,
+  type DescriptionItem,
   type TableColumn,
   type Toasts,
-  TruncatedText,
+  usePhoneWidth,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
@@ -58,7 +60,7 @@ import { EmailDomainRow } from './EmailDomainRow.tsx';
 import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
-import { SCHEDULING_ACCESS_COLUMN, SchedulingAccessCell } from './SchedulingAccessCell.tsx';
+import { SchedulingAccessCell } from './SchedulingAccessCell.tsx';
 import {
   askReconnect,
   askReconnectItem,
@@ -88,66 +90,49 @@ export interface MembersScreenProps {
   readonly search: string;
   /** Searches again (the route reads `?q=` and loads that page). */
   readonly onSearch: (search: string) => void;
-  /** The open invitations; undefined for someone who can't invite (no tab at all). */
+  /** The open invitations; undefined for someone who can't invite (no rows for anyone on their way in). */
   readonly invitations: readonly InvitationView[] | undefined;
   /** The invite link, for holders of `members.invite` (with the invitations). */
   readonly link?: InviteLinkView | undefined;
-  /** Open requests to join, for holders of `members.invite`; Asking to join shows only while any wait. */
+  /** Open requests to join, for holders of `members.invite`; their rows show only while any wait. */
   readonly requests?: readonly JoinRequestView[] | undefined;
   /** The email domains, for holders of `workspace.manage`. */
   readonly domains?: WorkspaceDomainsView | undefined;
   readonly access: MyAccess;
   /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first, then custom roles. */
   readonly roles: RolesList;
-  /** The workspace's teams, for team delegations in the Scheduling access column (undefined: not read). */
+  /** The workspace's teams, for team delegations in Scheduling access (undefined: not read). */
   readonly teams?: readonly TeamView[] | undefined;
   /** Every role with what it holds (`roles.overview`): whether a change takes access away, "What can Priya do". */
   readonly overview: RolesOverview;
 }
 
-const MEMBER_COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true },
-  { id: 'email', label: strings.columns.email },
-  {
-    id: 'role',
-    label: strings.columns.role,
-    info: (
-      <InfoTip label={strings.columns.role}>
-        {ROLES.map((role) => `${ROLE_LABELS[role]}: ${ROLE_DESCRIPTIONS[role]}`).join(' ')}
-      </InfoTip>
-    ),
-  },
-  { id: 'joined', label: strings.columns.joined },
-  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
-];
+/**
+ * One row of the table (owner ask T12: one list, not a hidden tab): someone asking to join, someone invited, or a
+ * member. Requests and invitations carry a prefix in their id, so no row can share a member's id.
+ */
+type PersonRow =
+  | { readonly kind: 'request'; readonly id: string; readonly request: JoinRequestView }
+  | { readonly kind: 'invitation'; readonly id: string; readonly invitation: InvitationView }
+  | { readonly kind: 'member'; readonly id: string; readonly member: MemberView };
 
-/** A guest's columns (spec 0031, AC-829): no Email, since the server tells a guest nobody's address. */
-const GUEST_COLUMNS: readonly TableColumn[] = MEMBER_COLUMNS.filter((column) => column.id !== 'email');
-
-/** The same columns with Two factor after Role, for owners and admins, whom the server tells (spec 0033, AC-895). */
-const MEMBER_COLUMNS_WITH_FACTOR: readonly TableColumn[] = [
-  ...MEMBER_COLUMNS.slice(0, 3),
-  { id: 'twoFactor', label: strings.columns.twoFactor },
-  SCHEDULING_ACCESS_COLUMN,
-  // Each person's calendar health (spec 0037, AC-1308): a status, never an account or a calendar.
-  { id: 'calendar', label: calendarHealthStrings.column },
-  ...MEMBER_COLUMNS.slice(3),
-];
-
-const REQUEST_COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true },
-  { id: 'email', label: strings.columns.email },
-  { id: 'requested', label: strings.requested },
-  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
-];
-
-const INVITATION_COLUMNS: readonly TableColumn[] = [
-  { id: 'email', label: strings.columns.email, isRowHeader: true },
-  { id: 'role', label: strings.columns.role },
-  { id: 'invitedBy', label: strings.columns.invitedBy },
-  { id: 'expires', label: strings.columns.expires },
-  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
-];
+/**
+ * The table's columns: the person (picture, name, and their email under it), their role, their status (for those who
+ * may invite, the only readers who see anyone but members), then the row's actions. Two factor, calendar and
+ * scheduling access live in the row's details.
+ */
+const NAME_COLUMN: TableColumn = { id: 'name', label: strings.columns.name, isRowHeader: true, phone: 'title' };
+const ROLE_COLUMN: TableColumn = { id: 'role', label: strings.columns.role };
+const STATUS_COLUMN: TableColumn = { id: 'status', label: strings.columns.status };
+const ACTIONS_COLUMN: TableColumn = {
+  id: 'actions',
+  label: strings.columns.actions,
+  isLabelHidden: true,
+  align: 'end',
+  size: 'fit',
+};
+const COLUMNS: readonly TableColumn[] = [NAME_COLUMN, ROLE_COLUMN, ACTIONS_COLUMN];
+const COLUMNS_WITH_STATUS: readonly TableColumn[] = [NAME_COLUMN, ROLE_COLUMN, STATUS_COLUMN, ACTIONS_COLUMN];
 
 /** How long the search waits after the last key before it asks again. */
 const SEARCH_WAIT_MS = 250;
@@ -155,7 +140,13 @@ const SEARCH_WAIT_MS = 250;
 /** The message a refusal shows, in the server's words when it gave any. */
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
-/** The Members page: Members and Invitations tabs, the Invite dialog and the confirms. */
+/** Whether a request or an invitation answers the search the members were read for (the server searched those). */
+const answers = (search: string, ...texts: readonly string[]) => {
+  const query = search.trim().toLocaleLowerCase();
+  return query === '' || texts.some((text) => text.toLocaleLowerCase().includes(query));
+};
+
+/** The Members page: one table of members and everyone on their way in, a row's details beside it, and the confirms. */
 export function MembersScreen({
   data,
   toasts,
@@ -179,9 +170,6 @@ export function MembersScreen({
   const [isInviting, setInviting] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
-  // The tab shown: the search belongs to the Members tab alone. It opens on Invitations while someone waits to join,
-  // since join requests send no other notice (the Invitations count alone can't tell them from invitations).
-  const [tab, setTab] = useState(() => (requests.length > 0 ? 'joining' : 'members'));
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   // The change the page is asking about, if any, what to say once it is done, and whether its row goes with it (focus
@@ -198,6 +186,10 @@ export function MembersScreen({
   // The people ticked for Change role (spec 0037, AC-1242), and whether that change is on its way.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [isBulkBusy, setBulkBusy] = useState(false);
+  // The row whose details are open beside the table, by row id (it closes when the row goes).
+  const [openId, setOpenId] = useState<string | undefined>(undefined);
+  // On a phone a row's details fill the screen, with Back to Members as their way out.
+  const isPhone = usePhoneWidth();
   // The pick whose guest count is out: a later pick's answer wins, an earlier one is dropped.
   const counting = useRef<symbol | undefined>(undefined);
   // The search as typed; the route searches once typing pauses.
@@ -242,21 +234,46 @@ export function MembersScreen({
   };
   /** The role a member holds, as the role Selects name it: their custom role's id, else their built in role. */
   const roleIdOf = (member: MemberView) => member.customRoleId ?? member.role;
-  /** A role option for a Select: custom ones under "Custom". */
+  /**
+   * A role option for a Select: its one line of what it allows under its name (owner ask T12: role help lives in the
+   * picker, not a button in the bar), custom ones under "Custom".
+   */
   const itemOf = (option: RolesList['roles'][number]) => ({
     id: option.id,
     label: option.label,
+    ...(option.description === '' ? {} : { description: option.description }),
     ...(option.builtIn === undefined ? { group: strings.custom } : {}),
   });
   const held = more.from === page ? more : { from: page, members: [], cursor: page.nextCursor };
-  const rows = [...page.members, ...held.members];
-  // The ticks on rows shown now: a search that hides someone untick them (spec 0037, AC-1242).
+  const members = [...page.members, ...held.members];
+  // Everyone on their way in, first, since they wait on someone here (the requests, then the invitations), narrowed
+  // by the search as the members were; then the members. Only those who may invite see anyone on their way in.
+  const people: readonly PersonRow[] = [
+    ...(canInvite
+      ? [
+          ...requests
+            .filter((request) => answers(search, request.name, request.email))
+            .map((request): PersonRow => ({ kind: 'request', id: `request:${request.id}`, request })),
+          ...invitations
+            .filter((invitation) => answers(search, invitation.email))
+            .map((invitation): PersonRow => ({ kind: 'invitation', id: `invitation:${invitation.id}`, invitation })),
+        ]
+      : []),
+    ...members.map((member): PersonRow => ({ kind: 'member', id: member.id, member })),
+  ];
+  // The ticks on rows shown now: a search that hides someone unticks them (spec 0037, AC-1242).
   const ticked: ReadonlySet<string> = new Set(
-    rows.filter((member) => selected.has(member.id)).map((member) => member.id),
+    members.filter((member) => selected.has(member.id)).map((member) => member.id),
   );
   // Calendar health for the rows shown, read together, for holders of `members.manage` (AC-1308).
   const healthStore = useSchedulingStore(data, canManage);
-  const health = useCalendarHealth(healthStore, slug, canManage ? rows.map((member) => member.id) : []);
+  const health = useCalendarHealth(healthStore, slug, canManage ? members.map((member) => member.id) : []);
+  // The row whose details show, fresh from this render's rows; the last one kept (by its id, since every render makes
+  // new rows) while the panel plays its exit after its row went or it closed.
+  const opened = people.find((row) => row.id === openId);
+  const [lastOpened, setLastOpened] = useState<PersonRow | undefined>(opened);
+  if (opened !== undefined && opened.id !== lastOpened?.id) setLastOpened(opened);
+  const shown = opened ?? lastOpened;
 
   const showMore = () => {
     const { cursor } = held;
@@ -379,7 +396,7 @@ export function MembersScreen({
   // access away from anyone; one call, so a refusal changes nobody.
   const askBulkRole = (role: string) => {
     if (isBulkBusy) return;
-    const picked = rows.filter((member) => ticked.has(member.id) && mayRechange(member));
+    const picked = members.filter((member) => ticked.has(member.id) && mayRechange(member));
     if (picked.length === 0) return;
     const run = async () => {
       setBulkBusy(true);
@@ -421,11 +438,12 @@ export function MembersScreen({
     });
   };
 
+  // Removing asks first in its own dialog, which reads what the removal changes (AC-814, AC-816).
   const remove = (member: MemberView) => {
     setRemoving(member);
   };
 
-  // The dialog says who was invited; the Invitations tab reads them in behind it.
+  // The dialog says who was invited; the table reads them in behind it.
   const invited = () => {
     void reload();
   };
@@ -467,7 +485,7 @@ export function MembersScreen({
     });
   };
 
-  // Cancelling ends the link, so it asks first; its way out is Keep invitation, never a second Cancel.
+  // Revoking ends the link, so it asks first; its way out is Keep invitation.
   const revoke = (invitation: InvitationView) => {
     setQuestion({
       title: strings.revokeTitle(invitation.email),
@@ -480,125 +498,6 @@ export function MembersScreen({
     });
   };
 
-  const memberCell = (member: MemberView, column: string) => {
-    const isMe = member.id === access.memberId;
-    const role = pendingRoles.get(member.id) ?? roleIdOf(member);
-    switch (column) {
-      case 'name':
-        return (
-          <>
-            <Avatar
-              name={member.name}
-              id={member.id}
-              {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
-              isDecorative
-            />
-            {/* On a phone the name truncates and "You" stays whole. */}
-            <TruncatedText>{member.name}</TruncatedText>
-            {isMe && <Badge text={strings.you} isWhole />}
-          </>
-        );
-      case 'email':
-        return member.email;
-      case 'role': {
-        // Your own role is never yours to change here: it reads as text (an owner hands on through Transfer).
-        const options = isMe ? [] : optionsFor(grantableRoles(actor, member.role));
-        if (options.length === 0) return labelOf(role);
-        return (
-          <Select
-            savesOnPick
-            label={strings.roleFor(member.name)}
-            isLabelHidden
-            // The role reads as text with its chevron, like the rows that can't change it, rather than a column of boxes.
-            variant="inline"
-            items={options.map(itemOf)}
-            value={role}
-            isDisabled={pendingRoles.has(member.id)}
-            onChange={(chosen) => {
-              const picked = options.find((option) => option.id === chosen);
-              if (picked !== undefined) askRole(member, picked.id);
-            }}
-          />
-        );
-      }
-      case 'twoFactor':
-        return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
-      case 'scheduling': {
-        // A custom role that sees or manages everyone reaches everyone but owners and admins (spec 0037): said as
-        // text, as Owner's and Admin's Everyone is.
-        const customRole =
-          member.customRoleId === undefined
-            ? undefined
-            : overview.roles.find((each) => each.id === member.customRoleId);
-        if (customRole !== undefined && reachOf(customRole.permissions).see === 'everyone') {
-          return roleStrings.allButAdmins;
-        }
-        return (
-          <SchedulingAccessCell
-            data={data}
-            toasts={toasts}
-            slug={slug}
-            me={access.memberId}
-            member={member}
-            teams={teams}
-          />
-        );
-      }
-      case 'calendar':
-        // A guest connects no calendar (spec 0031, slice 9).
-        return member.role === 'guest' ? null : <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
-      case 'joined':
-        return <RelativeTime value={member.joinedAt} />;
-      default: {
-        // Only an owner hands the workspace on, to someone who isn't one yet (AC-813).
-        const mayTransfer = !isMe && actor === 'owner' && member.role !== 'owner';
-        const mayRemove = canRemove(actor, member.role, isMe);
-        // Ask to reconnect (spec 0037, AC-1309): a colleague whose calendar needs them.
-        const calendar = isMe ? undefined : health.get(member.id);
-        const mayAsk = offersAsk(calendar);
-        // "What can Priya do" (spec 0037, AC-1243): about oneself, or anyone for holders of `members.manage`.
-        const mayExplain = isMe || canManage;
-        // No menu at all for a row the reader can't act on, rather than a locked one.
-        if (!mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
-        const first = member.name.trim().split(/\s+/)[0] ?? member.name;
-        return (
-          <MenuTrigger>
-            <Button variant="ghost" icon="ellipsis" label={strings.rowActions(member.name)} />
-            <Menu
-              label={strings.rowActions(member.name)}
-              onAction={(key) => {
-                if (key === 'explain') setExplaining(member);
-                if (key === 'transfer') transfer(member);
-                if (key === 'remove') remove(member);
-                if (key === 'ask-reconnect') askReconnect(healthStore, slug, member.id, member.name);
-              }}
-            >
-              {mayExplain && (
-                <MenuItem id="explain" icon="id-card">
-                  {strings.capabilities.menu(first)}
-                </MenuItem>
-              )}
-              {mayExplain && (mayAsk || mayTransfer || mayRemove) && <MenuSeparator />}
-              {askReconnectItem(calendar)}
-              {mayAsk && (mayTransfer || mayRemove) && <MenuSeparator />}
-              {mayTransfer && (
-                <MenuItem id="transfer" icon="crown">
-                  {strings.transfer}
-                </MenuItem>
-              )}
-              {mayTransfer && mayRemove && <MenuSeparator />}
-              {mayRemove && (
-                <MenuItem id="remove" icon="user-x" isDanger>
-                  {strings.remove}
-                </MenuItem>
-              )}
-            </Menu>
-          </MenuTrigger>
-        );
-      }
-    }
-  };
-
   // Approving brings them in at once; declining ends their request, so it asks first.
   const approve = (request: JoinRequestView) => {
     setApproving(request.id);
@@ -608,7 +507,7 @@ export function MembersScreen({
         async () => {
           await reload();
           toasts.toast({ tone: 'success', message: strings.approved(request.name) });
-          // Its row went (and Asking to join with the last one), Approve with it.
+          // Its Approve went with its row (they are a member now, further down): focus to the page's title.
           focusTitle();
         },
         (error: unknown) => {
@@ -630,85 +529,355 @@ export function MembersScreen({
     });
   };
 
-  const requestCell = (request: JoinRequestView, column: string) => {
+  /** What the reader may do to a member, by the owner rules (the server's too). */
+  const powersOver = (member: MemberView) => {
+    const isMe = member.id === access.memberId;
+    const calendar = isMe ? undefined : health.get(member.id);
+    return {
+      isMe,
+      // Only an owner hands the workspace on, to someone who isn't one yet (AC-813).
+      mayTransfer: !isMe && actor === 'owner' && member.role !== 'owner',
+      mayRemove: canRemove(actor, member.role, isMe),
+      // Ask to reconnect (spec 0037, AC-1309): a colleague whose calendar needs them.
+      calendar,
+      mayAsk: offersAsk(calendar),
+      // "What can Priya do" (spec 0037, AC-1243): about oneself, or anyone for holders of `members.manage`.
+      mayExplain: isMe || canManage,
+    };
+  };
+
+  /** A member's role: their picker where the reader may change it, else its name as text (your own always). */
+  const roleOf = (member: MemberView, label?: string): ReactNode => {
+    const role = pendingRoles.get(member.id) ?? roleIdOf(member);
+    const options = member.id === access.memberId ? [] : optionsFor(grantableRoles(actor, member.role));
+    if (options.length === 0) return labelOf(role);
+    return (
+      <Select
+        savesOnPick
+        label={label ?? strings.roleFor(member.name)}
+        isLabelHidden
+        // The role reads as text with its chevron, like the rows that can't change it, rather than a column of boxes.
+        variant="inline"
+        items={options.map(itemOf)}
+        // Each role's one line wraps under its name, so the list stays a menu wide (as New role's Start from).
+        optionDescription="below"
+        value={role}
+        isDisabled={pendingRoles.has(member.id)}
+        onChange={(chosen) => {
+          const picked = options.find((option) => option.id === chosen);
+          if (picked !== undefined) askRole(member, picked.id);
+        }}
+      />
+    );
+  };
+
+  /** A member's reach over others' scheduling, in a few words or its popover (spec 0037, AC-1267). */
+  const schedulingOf = (member: MemberView): ReactNode => {
+    // A custom role that sees or manages everyone reaches everyone but owners and admins (spec 0037): said as text,
+    // as Owner's and Admin's Everyone is.
+    const customRole =
+      member.customRoleId === undefined ? undefined : overview.roles.find((each) => each.id === member.customRoleId);
+    if (customRole !== undefined && reachOf(customRole.permissions).see === 'everyone') return roleStrings.allButAdmins;
+    return (
+      <SchedulingAccessCell
+        data={data}
+        toasts={toasts}
+        slug={slug}
+        me={access.memberId}
+        member={member}
+        teams={teams}
+      />
+    );
+  };
+
+  /** A member's row menu: What can Priya do, Ask to reconnect, Transfer ownership, Remove from workspace. */
+  const memberMenu = (member: MemberView) => {
+    const { mayTransfer, mayRemove, calendar, mayAsk, mayExplain } = powersOver(member);
+    // No menu at all for a row the reader can't act on, rather than a locked one.
+    if (!mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
+    const first = member.name.trim().split(/\s+/)[0] ?? member.name;
+    return (
+      <MenuTrigger>
+        <Button variant="ghost" icon="ellipsis" label={strings.rowActions(member.name)} />
+        <Menu
+          label={strings.rowActions(member.name)}
+          onAction={(key) => {
+            if (key === 'explain') setExplaining(member);
+            if (key === 'transfer') transfer(member);
+            if (key === 'remove') remove(member);
+            if (key === 'ask-reconnect') askReconnect(healthStore, slug, member.id, member.name);
+          }}
+        >
+          {mayExplain && (
+            <MenuItem id="explain" icon="id-card">
+              {strings.capabilities.menu(first)}
+            </MenuItem>
+          )}
+          {mayExplain && (mayAsk || mayTransfer || mayRemove) && <MenuSeparator />}
+          {askReconnectItem(calendar)}
+          {mayAsk && (mayTransfer || mayRemove) && <MenuSeparator />}
+          {mayTransfer && (
+            <MenuItem id="transfer" icon="crown">
+              {strings.transfer}
+            </MenuItem>
+          )}
+          {mayTransfer && mayRemove && <MenuSeparator />}
+          {mayRemove && (
+            <MenuItem id="remove" icon="user-x" isDanger>
+              {strings.remove}
+            </MenuItem>
+          )}
+        </Menu>
+      </MenuTrigger>
+    );
+  };
+
+  /** Whether the reader may resend or revoke an invitation: only an owner manages an owner's, as only an owner sends one. */
+  const managesInvitation = (invitation: InvitationView) => invitation.role !== 'owner' || actor === 'owner';
+
+  /** An invitation's row menu: Resend, then Revoke invite (asked first). */
+  const invitationMenu = (invitation: InvitationView) => {
+    // No menu, rather than a locked one.
+    if (!managesInvitation(invitation)) return null;
+    return (
+      <MenuTrigger>
+        <Button
+          variant="ghost"
+          icon="ellipsis"
+          label={strings.invitationActions(invitation.email)}
+          isPending={busy.has(invitation.id)}
+        />
+        <Menu
+          label={strings.invitationActions(invitation.email)}
+          onAction={(key) => {
+            if (key === 'resend') resend(invitation);
+            if (key === 'revoke') revoke(invitation);
+          }}
+        >
+          <MenuItem id="resend" icon="send">
+            {strings.resend}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem id="revoke" icon="x" isDanger>
+            {strings.revoke}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
+    );
+  };
+
+  /** A request's answer: Approve, and Decline (asked first). */
+  const requestButtons = (request: JoinRequestView) => (
+    <ButtonGroup label={strings.requestActions(request.name)} layout="row">
+      <Button
+        size="sm"
+        label={strings.approveFor(request.name)}
+        isPending={approving === request.id}
+        isDisabled={approving !== undefined && approving !== request.id}
+        onPress={() => approve(request)}
+      >
+        {strings.approve}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        label={strings.declineFor(request.name)}
+        isDisabled={approving === request.id}
+        onPress={() => decline(request)}
+      >
+        {strings.decline}
+      </Button>
+    </ButtonGroup>
+  );
+
+  /** A row's status as a dot and a word: green Active, blue Invited, orange when it waits on someone here. */
+  const statusOf = (row: PersonRow) => {
+    if (row.kind === 'member') return <Badge text={strings.status.active} dot="green" isWhole />;
+    if (row.kind === 'request') return <Badge text={strings.status.asking} dot="orange" isWhole />;
+    return row.invitation.isExpired ? (
+      <Badge text={strings.status.expired} dot="orange" isWhole />
+    ) : (
+      <Badge text={strings.status.invited} dot="blue" isWhole />
+    );
+  };
+
+  const cell = (row: PersonRow, column: string): ReactNode => {
     switch (column) {
       case 'name':
+        if (row.kind === 'member') {
+          const { member } = row;
+          return (
+            <PersonLine
+              id={member.id}
+              name={member.name}
+              // Their email under the name; a guest is told nobody's address (spec 0031, AC-829). The reader's own row
+              // says "You" first, beside the name rather than across a wide column at the line's end.
+              meta={[
+                ...(member.id === access.memberId ? [strings.you] : []),
+                ...(member.email === undefined ? [] : [member.email]),
+              ]}
+              {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
+            />
+          );
+        }
+        if (row.kind === 'request') {
+          return <PersonLine id={row.request.id} name={row.request.name} meta={[row.request.email]} />;
+        }
         return (
-          <>
-            <Avatar name={request.name} id={request.id} isDecorative />
-            {request.name}
-          </>
+          <PersonLine
+            id={row.invitation.id}
+            name={row.invitation.email}
+            meta={[strings.invitedByLine(row.invitation.invitedBy)]}
+          />
         );
-      case 'email':
-        return request.email;
-      case 'requested':
-        return <RelativeTime value={request.requestedAt} />;
+      case 'role':
+        if (row.kind === 'member') return roleOf(row.member);
+        if (row.kind === 'invitation') return row.invitation.roleLabel ?? labelOf(row.invitation.role);
+        // Someone asking joins with the role new people get, which is the server's to pick: nothing to say yet.
+        return null;
+      case 'status':
+        return statusOf(row);
       default:
-        return (
-          <ButtonGroup label={strings.requestActions(request.name)} layout="row">
-            <Button
-              size="sm"
-              label={strings.approveFor(request.name)}
-              isPending={approving === request.id}
-              isDisabled={approving !== undefined && approving !== request.id}
-              onPress={() => approve(request)}
-            >
-              {strings.approve}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              label={strings.declineFor(request.name)}
-              isDisabled={approving === request.id}
-              onPress={() => decline(request)}
-            >
-              {strings.decline}
-            </Button>
-          </ButtonGroup>
-        );
+        if (row.kind === 'member') return memberMenu(row.member);
+        if (row.kind === 'invitation') return invitationMenu(row.invitation);
+        return requestButtons(row.request);
     }
   };
 
-  const invitationCell = (invitation: InvitationView, column: string) => {
-    switch (column) {
-      case 'email':
-        return invitation.email;
-      case 'role':
-        return invitation.roleLabel ?? labelOf(invitation.role);
-      case 'invitedBy':
-        return invitation.invitedBy;
-      case 'expires':
-        return invitation.isExpired ? <Badge text={strings.expired} /> : <RelativeTime value={invitation.expiresAt} />;
-      default:
-        // Only an owner manages an owner's invitation, as only an owner sends one: no menu, rather than a locked one.
-        if (invitation.role === 'owner' && actor !== 'owner') return null;
-        return (
-          <MenuTrigger>
-            <Button
-              variant="ghost"
-              icon="ellipsis"
-              label={strings.invitationActions(invitation.email)}
-              isPending={busy.has(invitation.id)}
-            />
-            <Menu
-              label={strings.invitationActions(invitation.email)}
-              onAction={(key) => {
-                if (key === 'resend') resend(invitation);
-                if (key === 'revoke') revoke(invitation);
-              }}
-            >
-              <MenuItem id="resend" icon="send">
-                {strings.resend}
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem id="revoke" icon="x" isDanger>
-                {strings.revoke}
-              </MenuItem>
-            </Menu>
-          </MenuTrigger>
-        );
+  /** What a row's details hold beside the table: the facts the table leaves out, and its actions at the foot. */
+  const detailsOf = (row: PersonRow) => {
+    if (row.kind === 'member') {
+      const { member } = row;
+      const { mayRemove, mayExplain, calendar } = powersOver(member);
+      const first = member.name.trim().split(/\s+/)[0] ?? member.name;
+      const items: DescriptionItem[] = [
+        ...(member.email === undefined
+          ? []
+          : [
+              {
+                term: strings.details.email,
+                description: member.email,
+                copy: { value: member.email, label: strings.details.copyEmail },
+              },
+            ]),
+        { term: strings.details.role, description: roleOf(member, strings.details.role) },
+        { term: strings.details.status, description: statusOf(row) },
+        { term: strings.details.joined, description: <RelativeTime value={member.joinedAt} /> },
+        // What only owners and admins are told, or may change (spec 0033, AC-895; spec 0037, AC-1267, AC-1308).
+        ...(canManage
+          ? [
+              {
+                term: strings.details.twoFactor,
+                description: member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff,
+              },
+              // A guest connects no calendar and holds no scheduling (spec 0031, slice 9).
+              ...(member.role === 'guest'
+                ? []
+                : [
+                    {
+                      term: strings.details.calendar,
+                      description: <CalendarHealthChip state={health.get(member.id)} name={member.name} />,
+                    },
+                    { term: strings.details.scheduling, description: schedulingOf(member) },
+                  ]),
+            ]
+          : []),
+      ];
+      return {
+        title: member.name,
+        leading: (
+          <Avatar
+            name={member.name}
+            id={member.id}
+            {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
+            isDecorative
+          />
+        ),
+        items,
+        footer: (
+          <>
+            {/* Ask to reconnect (spec 0037, AC-1309), as the row's menu offers it: once asked, said and off. */}
+            {calendar?.status === 'ready' && offersAsk(calendar) && (
+              <Button
+                icon="mail"
+                isDisabled={calendar.asked}
+                onPress={() => askReconnect(healthStore, slug, member.id, member.name)}
+              >
+                {calendar.asked ? calendarHealthStrings.asked : calendarHealthStrings.ask}
+              </Button>
+            )}
+            {mayExplain && (
+              <Button icon="id-card" onPress={() => setExplaining(member)}>
+                {strings.capabilities.menu(first)}
+              </Button>
+            )}
+          </>
+        ),
+        footerStart: mayRemove ? (
+          <Button variant="danger" icon="user-x" onPress={() => remove(member)}>
+            {strings.remove}
+          </Button>
+        ) : null,
+      };
     }
+    if (row.kind === 'invitation') {
+      const { invitation } = row;
+      const manages = managesInvitation(invitation);
+      return {
+        title: invitation.email,
+        leading: <Avatar name={invitation.email} id={invitation.id} isDecorative />,
+        items: [
+          { term: strings.details.role, description: invitation.roleLabel ?? labelOf(invitation.role) },
+          { term: strings.details.status, description: statusOf(row) },
+          { term: strings.details.invitedBy, description: invitation.invitedBy },
+          {
+            term: invitation.isExpired ? strings.details.expired : strings.details.expires,
+            description: <RelativeTime value={invitation.expiresAt} />,
+          },
+        ] satisfies DescriptionItem[],
+        footer: manages ? (
+          <Button icon="send" isPending={busy.has(invitation.id)} onPress={() => resend(invitation)}>
+            {strings.resend}
+          </Button>
+        ) : null,
+        footerStart: manages ? (
+          <Button variant="danger" icon="x" onPress={() => revoke(invitation)}>
+            {strings.revoke}
+          </Button>
+        ) : null,
+      };
+    }
+    const { request } = row;
+    return {
+      title: request.name,
+      leading: <Avatar name={request.name} id={request.id} isDecorative />,
+      items: [
+        {
+          term: strings.details.email,
+          description: request.email,
+          copy: { value: request.email, label: strings.details.copyEmail },
+        },
+        { term: strings.details.status, description: statusOf(row) },
+        { term: strings.details.requested, description: <RelativeTime value={request.requestedAt} /> },
+      ] satisfies DescriptionItem[],
+      footer: (
+        <Button
+          variant="primary"
+          isPending={approving === request.id}
+          isDisabled={approving !== undefined && approving !== request.id}
+          onPress={() => approve(request)}
+        >
+          {strings.approve}
+        </Button>
+      ),
+      footerStart: (
+        <Button variant="danger" isDisabled={approving === request.id} onPress={() => decline(request)}>
+          {strings.decline}
+        </Button>
+      ),
+    };
   };
+  const details = shown === undefined ? undefined : detailsOf(shown);
 
   const searchField = (
     <Field
@@ -722,34 +891,60 @@ export function MembersScreen({
     />
   );
 
-  const membersList = (
-    <>
+  return (
+    <SettingsPage
+      title={strings.title}
+      tabBody="table"
+      // The entry's tab strip (Members · Teams): Members' own tab carries the count, the search at the strip's end.
+      tabBar={{ count: page.total, end: searchField }}
+      // The page's one primary action, in the bar (the owner, 21 October 2026: no title block). Role help lives in the
+      // role picker and on Roles and access, never a second button here (owner ask T12).
+      actions={
+        <>
+          {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
+              A guest changes nothing here, and the read only table says so already. */}
+          {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
+          {canInvite && inviteRoles.length > 0 && (
+            <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
+              {strings.invite}
+            </Button>
+          )}
+        </>
+      }
+    >
       <Table
-        label={strings.membersTab}
-        columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : isGuest ? GUEST_COLUMNS : MEMBER_COLUMNS}
-        rows={rows}
-        getRowId={(member) => member.id}
-        renderCell={memberCell}
-        isScrollable
+        label={canInvite ? strings.peopleTable : strings.membersTab}
+        // Status only where the table can hold anyone but members: the readers who may invite.
+        columns={canInvite ? COLUMNS_WITH_STATUS : COLUMNS}
+        rows={people}
+        getRowId={(row) => row.id}
+        renderCell={cell}
+        onRowAction={setOpenId}
+        // On a phone each row reads as two lines: the person, then their role and status, nothing scrolling sideways.
+        phoneLayout="rows"
         emptyState={<EmptyState icon="search" title={strings.noMatches} />}
         {...(canManage
           ? {
               selected: ticked,
-              // Only the people the reader may give a role to tick (never themself, an owner only for an owner), so the
-              // bar's count is the change's.
+              // Only the people the reader may give a role to tick (never themself, an owner only for an owner, nobody
+              // on their way in), so the bar's count is the change's.
+              isRowSelectable: (row: PersonRow) => row.kind === 'member' && mayRechange(row.member),
               onSelectedChange: (ids: ReadonlySet<string>) => {
-                setSelected(
-                  new Set(rows.filter((member) => ids.has(member.id) && mayRechange(member)).map((m) => m.id)),
-                );
+                setSelected(new Set(members.filter((member) => ids.has(member.id)).map((member) => member.id)));
               },
-              getSelectLabel: (member: MemberView) => member.name,
+              getSelectLabel: (row: PersonRow) =>
+                row.kind === 'member'
+                  ? row.member.name
+                  : row.kind === 'request'
+                    ? row.request.name
+                    : row.invitation.email,
             }
           : {})}
       />
       {canManage && ticked.size > 0 && (
         <BulkActionBar
           count={ticked.size}
-          total={rows.length}
+          total={members.length}
           onClear={() => {
             setSelected(new Set());
           }}
@@ -760,6 +955,7 @@ export function MembersScreen({
             isLabelHidden
             placeholder={strings.bulkRole}
             items={optionsFor(grantableRoles(actor, 'member')).map(itemOf)}
+            optionDescription="below"
             // Always the placeholder: a pick is an action, and a cancelled confirm leaves nothing chosen.
             value={null}
             isDisabled={isBulkBusy}
@@ -774,128 +970,70 @@ export function MembersScreen({
           {strings.showMore}
         </Button>
       )}
-      {/* A lone member who may invite (critics A and B, 5 November 2026): no "Just you so far" box. The people they
-          invited show as rows under their own, so the page says who is coming; the Invite button is in the bar. */}
-      {canInvite && search === '' && page.total === 1 && invitations.length > 0 && (
-        <SettingsSection title={strings.pendingSection}>
-          <Table
-            label={strings.pendingSection}
-            columns={INVITATION_COLUMNS}
-            rows={invitations}
-            getRowId={(invitation) => invitation.id}
-            renderCell={invitationCell}
-            isScrollable
-          />
-        </SettingsSection>
-      )}
-    </>
-  );
-
-  return (
-    <SettingsPage
-      title={strings.title}
-      tabBody="table"
-      // Members' own tab carries the count and the search; Invitations sits beside it in the same strip, for those who
-      // may invite (the owner, 4 November 2026: Members, Teams and Roles as one item, one row of tabs).
-      tabBar={{
-        count: page.total,
-        // The search for everyone on the Members tab (a guest's by name alone), at the strip's end or atop the body.
-        ...(tab === 'members' ? { end: searchField } : {}),
-        ...(canInvite
-          ? {
-              extra: { id: 'joining', label: strings.joiningTab, count: invitations.length + requests.length },
-              isExtraSelected: tab === 'joining',
-              onExtra: (isSelected: boolean) => {
-                setTab(isSelected ? 'joining' : 'members');
-              },
-            }
-          : {}),
-      }}
-      // The page's one primary action, in the header's action place (the owner, 21 October 2026: no title block;
-      // it moves to the settings header bar's action slot when that lands).
-      // What each role can do is the Roles tab beside this one (4 November 2026), so no second button here.
-      actions={
-        <>
-          {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
-              A guest changes nothing here, and the read only table says so already. */}
-          {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
-          {canInvite && inviteRoles.length > 0 && (
-            <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
-              {strings.invite}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {canInvite && tab === 'joining' ? (
+      {/* Set once, so after the list (and never among a search's matches): the invite link, then the company email, a
+          Card each, so each way reads apart; a breath under the table's last row. */}
+      {canInvite && search === '' && (link !== undefined || domains !== undefined) && (
         <SettingsStack>
-          {/* Only while some wait (AC-810), so a workspace with none never shows an empty list. */}
-          {requests.length > 0 && (
-            <SettingsSection title={strings.askingSection}>
-              <Table
-                label={strings.askingSection}
-                columns={REQUEST_COLUMNS}
-                rows={requests}
-                getRowId={(request) => request.id}
-                renderCell={requestCell}
-                // On a phone the table scrolls sideways in its own frame, as Members' does.
-                isScrollable
-              />
-            </SettingsSection>
-          )}
-          <SettingsSection title={strings.pendingSection}>
-            <Table
-              label={strings.pendingSection}
-              columns={INVITATION_COLUMNS}
-              rows={invitations}
-              getRowId={(invitation) => invitation.id}
-              renderCell={invitationCell}
-              // On a phone the table scrolls sideways in its own frame, as Members' does.
-              isScrollable
-              emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
-            />
+          <SettingsSection title={strings.otherWaysSection}>
+            {link !== undefined && (
+              <Card>
+                <InviteLinkRows
+                  data={data}
+                  slug={slug}
+                  link={link}
+                  ask={setQuestion}
+                  onChanged={reload}
+                  toasts={toasts}
+                  onFailed={(message) => {
+                    toasts.toast({ tone: 'danger', message });
+                  }}
+                />
+              </Card>
+            )}
+            {domains !== undefined && (
+              <Card>
+                <EmailDomainRow
+                  data={data}
+                  slug={slug}
+                  domains={domains}
+                  ask={setQuestion}
+                  onChanged={reload}
+                  onTurnedOn={(message) => {
+                    toasts.toast({ tone: 'success', message });
+                  }}
+                  onFailed={(message) => {
+                    toasts.toast({ tone: 'danger', message });
+                  }}
+                />
+              </Card>
+            )}
           </SettingsSection>
-          {/* Set once, so last: the invite link, then the company email, a Card each, so each way reads apart. */}
-          {(link !== undefined || domains !== undefined) && (
-            <SettingsSection title={strings.otherWaysSection}>
-              {link !== undefined && (
-                <Card>
-                  <InviteLinkRows
-                    data={data}
-                    slug={slug}
-                    link={link}
-                    ask={setQuestion}
-                    onChanged={reload}
-                    toasts={toasts}
-                    onFailed={(message) => {
-                      toasts.toast({ tone: 'danger', message });
-                    }}
-                  />
-                </Card>
-              )}
-              {domains !== undefined && (
-                <Card>
-                  <EmailDomainRow
-                    data={data}
-                    slug={slug}
-                    domains={domains}
-                    ask={setQuestion}
-                    onChanged={reload}
-                    onTurnedOn={(message) => {
-                      toasts.toast({ tone: 'success', message });
-                    }}
-                    onFailed={(message) => {
-                      toasts.toast({ tone: 'danger', message });
-                    }}
-                  />
-                </Card>
-              )}
-            </SettingsSection>
-          )}
         </SettingsStack>
-      ) : (
-        membersList
       )}
+      {/* A row's details beside the list, the page narrowing for them: closed by Esc, its close button, or its row
+          going (a removal, a revoke, an approval). */}
+      <Panel
+        title={details?.title ?? ''}
+        // On a phone the panel is the whole screen: its close is Back to Members at the head's start, where a phone
+        // looks for the way out, as a form's submission does; elsewhere the person's picture leads the title.
+        {...(isPhone
+          ? { closeAs: 'back' as const, backLabel: strings.backToMembers }
+          : details === undefined
+            ? {}
+            : { leading: details.leading })}
+        isOpen={opened !== undefined}
+        onClose={() => {
+          setOpenId(undefined);
+        }}
+        isStacked
+        pushesPage
+        {...(details?.footer === undefined || details.footer === null ? {} : { footer: details.footer })}
+        {...(details?.footerStart === undefined || details.footerStart === null
+          ? {}
+          : { footerStart: details.footerStart })}
+      >
+        {details !== undefined && <DescriptionList items={details.items} />}
+      </Panel>
       <MemberConfirm
         question={question}
         onClose={() => {
@@ -931,7 +1069,7 @@ export function MembersScreen({
         slug={slug}
         member={explaining}
         roles={overview.roles}
-        members={rows}
+        members={members}
         readsEveryone={canManage}
         onClose={() => {
           setExplaining(undefined);
@@ -950,7 +1088,7 @@ export function MembersScreen({
             roles.defaultRole
           }
           memberEmails={
-            new Set(rows.flatMap((member) => (member.email === undefined ? [] : [member.email.toLowerCase()])))
+            new Set(members.flatMap((member) => (member.email === undefined ? [] : [member.email.toLowerCase()])))
           }
           // An expired invitation can be sent again, so only live ones refuse a row.
           invitedEmails={new Set(invitations.filter((each) => !each.isExpired).map((each) => each.email.toLowerCase()))}
@@ -963,41 +1101,26 @@ export function MembersScreen({
 }
 
 /**
- * Settings › Members while it loads: the header, the tabs for those who get
- * them (or the note), the search, and skeleton rows.
+ * Settings › Members while it loads: the bar, the tab strip with the search, and the table's skeleton rows under its
+ * columns, so nothing moves when the page arrives.
  */
 export function MembersPending() {
-  // Invitations only for those who get it, so nothing moves when the page arrives.
   const canInvite = useCan('members.invite');
-  const canManage = useCan('members.manage');
-  const searchField = (
-    <Field
-      label={strings.search}
-      isLabelHidden
-      variant="search"
-      size="sm"
-      placeholder={strings.searchPlaceholder}
-      isDisabled
-    />
-  );
-  const table = (
-    <Table
-      label={strings.membersTab}
-      columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : MEMBER_COLUMNS}
-      rows={[]}
-      getRowId={() => ''}
-      renderCell={() => null}
-      isLoading
-    />
-  );
   return (
     <SettingsPage
       title={strings.title}
       tabBody="table"
-      // Invitations' place in the strip and the search hold while the page loads, so nothing moves when it arrives.
       tabBar={{
-        end: searchField,
-        ...(canInvite ? { extra: { id: 'joining', label: strings.joiningTab } } : {}),
+        end: (
+          <Field
+            label={strings.search}
+            isLabelHidden
+            variant="search"
+            size="sm"
+            placeholder={strings.searchPlaceholder}
+            isDisabled
+          />
+        ),
       }}
       // The bar's actions hold their places while the page loads.
       actions={
@@ -1011,7 +1134,15 @@ export function MembersPending() {
         </>
       }
     >
-      {table}
+      <Table
+        label={strings.membersTab}
+        columns={canInvite ? COLUMNS_WITH_STATUS : COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        phoneLayout="rows"
+        isLoading
+      />
     </SettingsPage>
   );
 }

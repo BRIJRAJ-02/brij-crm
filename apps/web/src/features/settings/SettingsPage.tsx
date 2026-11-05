@@ -57,8 +57,7 @@ interface SettingsPageBase {
   readonly inFrame?: boolean;
   /**
    * On a page that is one tab of a settings entry (Members' Teams), what the page adds to the entry's tab bar,
-   * which SettingsPage draws itself: a count on its own tab, its tools at the bar's end, and one tab of its own
-   * beside it (Members' Invitations), which the page shows in place of its body while chosen.
+   * which SettingsPage draws itself: a count on its own tab, and its tools at the bar's end.
    */
   readonly tabBar?: SettingsTabBar;
   /** Under the tab bar, the body's sections a breath below it (the default), or a Table flush on its hairline. */
@@ -77,12 +76,6 @@ export interface SettingsTabBar {
   readonly count?: number;
   /** The page's tools at the bar's end (Members' search), or atop the body when there is no bar. */
   readonly end?: ReactNode;
-  /** One more tab, right after the page's own, that the page fills itself (Members' Invitations). */
-  readonly extra?: { readonly id: string; readonly label: string; readonly count?: number };
-  /** Whether `extra` is the chosen tab. */
-  readonly isExtraSelected?: boolean;
-  /** Choosing `extra` (true) or the page's own tab (false). */
-  readonly onExtra?: (isSelected: boolean) => void;
 }
 
 /** A page in the settings column (SettingsLayout): most of them. */
@@ -254,7 +247,8 @@ function tabbedEntry(entry: SettingsNavEntry | undefined, pathname: string): Set
 
 /**
  * The tab bar of an entry that holds several pages (Members · Teams; Roles · Sign in rules; 5 November 2026): one strip
- * under the bar, each tab its own address, the page's body in its tab, and a page's own extra tab (Invitations) beside it.
+ * under the bar, each tab its own address, the page's body in its tab. (Members' own Invitations tab beside it went on
+ * 5 November 2026, owner ask T12: everyone on their way in sits in the members' table.)
  */
 function EntryTabs({
   entry,
@@ -272,32 +266,19 @@ function EntryTabs({
   readonly children: ReactNode;
 }) {
   const tabs = entry.tabs ?? [];
-  const extra = tabBar?.extra;
-  const items: readonly TabItem[] = tabs.flatMap((tab): readonly TabItem[] => {
-    const own: TabItem = {
-      id: tab.id,
-      label: tab.label,
-      href: tab.href,
-      ...(tab.id === page && tabBar?.count !== undefined ? { count: tabBar.count } : {}),
-    };
-    if (tab.id !== page || extra === undefined) return [own];
-    return [own, { id: extra.id, label: extra.label, ...(extra.count === undefined ? {} : { count: extra.count }) }];
-  });
-  const selected = extra !== undefined && tabBar?.isExtraSelected === true ? extra.id : (page ?? '');
+  const items: readonly TabItem[] = tabs.map((tab): TabItem => ({
+    id: tab.id,
+    label: tab.label,
+    href: tab.href,
+    ...(tab.id === page && tabBar?.count !== undefined ? { count: tabBar.count } : {}),
+  }));
+  const selected = page ?? '';
   return (
     <Tabs
       label={entry.label}
       selectedKey={selected}
       onSelectionChange={(next) => {
         if (next === selected) return;
-        if (extra !== undefined && next === extra.id) {
-          tabBar?.onExtra?.(true);
-          return;
-        }
-        if (next === page) {
-          tabBar?.onExtra?.(false);
-          return;
-        }
         const tab = tabs.find((each) => each.id === next);
         if (tab !== undefined) onGo(tab.href);
       }}

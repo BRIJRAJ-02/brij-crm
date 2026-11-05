@@ -92,7 +92,7 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   const invite = page.getByRole('dialog', { name: 'Invite people' });
   await invite.getByRole('textbox', { name: 'Email' }).fill(email);
   await invite.getByRole('button', { name: /Role for/ }).click();
-  await page.getByRole('option', { name: 'Guest' }).click();
+  await page.getByRole('option', { name: /^Guest/ }).click();
   await check(page, 'guests-invite');
   await invite.getByRole('button', { name: /^Invite/ }).click();
   await expect(invite).toHaveCount(0);
@@ -146,7 +146,7 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   // The owner makes Gus a Member at once; he makes a booking page; back to Guest asks first and counts the page.
   await page.goto(`/w/${slug}/settings/members`);
   await page.getByRole('button', { name: /Role for gus/i }).click();
-  await page.getByRole('option', { name: 'Member' }).click();
+  await page.getByRole('option', { name: /^Member/ }).click();
   await expect(page.getByText(/is now a Member\./)).toBeVisible();
   await rpc(gus, 'bookingPages/create', {
     workspace: slug,
@@ -163,9 +163,9 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   await visitor.goto(`/${handle}`);
   await expect(visitor.getByRole('heading', { level: 1 })).toContainText(/gus/i);
   await page.getByRole('button', { name: /Role for gus/i }).click();
-  await expect(page.getByRole('option', { name: 'Guest' })).toBeVisible();
+  await expect(page.getByRole('option', { name: /^Guest/ })).toBeVisible();
   await check(page, 'guests-role-menu');
-  await page.getByRole('option', { name: 'Guest' }).click();
+  await page.getByRole('option', { name: /^Guest/ }).click();
   const confirm = page.getByRole('alertdialog', { name: /^Make gus.* a Guest\?$/i });
   await expect(confirm).toBeVisible();
   await expect(confirm.getByText('1 page paused')).toBeVisible();
@@ -175,7 +175,7 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   await expect(confirm).toBeHidden();
   await expect(page.getByRole('button', { name: /Role for gus/i })).toHaveText(/Member/);
   await page.getByRole('button', { name: /Role for gus/i }).click();
-  await page.getByRole('option', { name: 'Guest' }).click();
+  await page.getByRole('option', { name: /^Guest/ }).click();
   await confirm.getByRole('button', { name: 'Make Guest' }).click();
   await expect(page.getByText(/is now a Guest\./)).toBeVisible();
   await expect(page.getByRole('button', { name: /Role for gus/i })).toHaveText(/Guest/);

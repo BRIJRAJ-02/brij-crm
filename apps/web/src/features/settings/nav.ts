@@ -286,7 +286,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       id: 'people',
       label: strings.people,
       entries: [
-        // Members, with Invitations (the screen's own tab) and Teams (spec 0031, slice 8).
+        // Members, with Teams (spec 0031, slice 8); everyone on their way in sits in Members' own table (owner ask T12).
         {
           id: 'members',
           label: members.title,
