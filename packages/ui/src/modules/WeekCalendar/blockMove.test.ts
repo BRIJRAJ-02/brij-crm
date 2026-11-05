@@ -109,3 +109,23 @@ describe('shiftOf and sameSpan', () => {
     expect(sameSpan(TUESDAY_TEN, at('2026-11-03', 600, 645))).toBe(false);
   });
 });
+
+describe('moves inside the hours drawn (T13)', () => {
+  const geometry: MoveGeometry = { dayKeys: DAYS, dayWidth: 100, pxPerMinute: 1, bounds: { start: 480, end: 1080 } };
+
+  it('stops a drag at the first and the last hour drawn', () => {
+    expect(movedBy(TUESDAY_TEN, { x: 0, y: -600 }, geometry, STEPS).startMinute).toBe(480);
+    expect(movedBy(TUESDAY_TEN, { x: 0, y: 900 }, geometry, STEPS).endMinute).toBe(1080);
+  });
+
+  it('stops a pulled end at the last hour drawn', () => {
+    expect(resizedBy(TUESDAY_TEN, 900, geometry, STEPS).endMinute).toBe(1080);
+  });
+
+  it('stops the keys at the hours drawn', () => {
+    const early = at('2026-11-03', 480, 510);
+    expect(keyedFrom(early, 'ArrowUp', false, DAYS, STEPS, geometry.bounds)).toEqual(early);
+    const late = at('2026-11-03', 1050, 1080);
+    expect(keyedFrom(late, 'ArrowDown', true, DAYS, STEPS, geometry.bounds)).toEqual(late);
+  });
+});

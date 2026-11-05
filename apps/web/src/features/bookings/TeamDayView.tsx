@@ -626,6 +626,8 @@ export function TeamDayView(props: TeamDayViewProps) {
         blocks={blocks}
         isLoading={state.status === 'loading'}
         isFill
+        // The team's working day across everyone shown, not all 24 hours (T13).
+        fitsHours
         zone={props.zone}
         hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
         minuteLabel={minuteLabel}

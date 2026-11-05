@@ -18,7 +18,17 @@ export interface MoveGeometry {
   readonly dayWidth: number;
   /** The grid's height for one minute, in pixels. */
   readonly pxPerMinute: number;
+  /** The minutes drawn (the hours the week fits to its working day, T13); absent is the whole day. */
+  readonly bounds?: MinuteBounds;
 }
+
+/** The first and the last minute a block may sit between (0 and 1440 for the whole day). */
+export interface MinuteBounds {
+  readonly start: number;
+  readonly end: number;
+}
+
+const WHOLE: MinuteBounds = { start: 0, end: 1440 };
 
 /** How far a move and a change of length snap, in minutes. */
 export interface MoveSteps {
@@ -28,8 +38,6 @@ export interface MoveSteps {
 
 /** No block is drawn shorter than this by a resize (an even shorter one it already is stays as it is). */
 export const MIN_LENGTH = 15;
-
-const DAY = 1440;
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
@@ -45,7 +53,12 @@ export function movedBy(
 ): BlockSpan {
   const length = from.endMinute - from.startMinute;
   const minutes = stepsOf(travel.y / geometry.pxPerMinute, steps.move) * steps.move;
-  const startMinute = clamp(from.startMinute + minutes, 0, Math.max(0, DAY - length));
+  const { start, end } = geometry.bounds ?? WHOLE;
+  const startMinute = clamp(
+    from.startMinute + minutes,
+    Math.min(start, from.startMinute),
+    Math.max(start, end - length, from.startMinute),
+  );
   const at = geometry.dayKeys.indexOf(from.dayKey);
   const columns = geometry.dayWidth > 0 && at !== -1 ? stepsOf(travel.x, geometry.dayWidth) : 0;
   const dayKey = geometry.dayKeys[clamp(at + columns, 0, geometry.dayKeys.length - 1)] ?? from.dayKey;
@@ -57,7 +70,7 @@ export function resizedBy(from: BlockSpan, travelY: number, geometry: MoveGeomet
   const length = from.endMinute - from.startMinute;
   const wanted = length + stepsOf(travelY / geometry.pxPerMinute, steps.length) * steps.length;
   const fewest = Math.min(length, MIN_LENGTH);
-  const most = DAY - from.startMinute;
+  const most = Math.max((geometry.bounds ?? WHOLE).end, from.endMinute) - from.startMinute;
   return { ...from, endMinute: from.startMinute + clamp(wanted, fewest, most) };
 }
 
@@ -79,16 +92,22 @@ export function keyedFrom(
   isResize: boolean,
   dayKeys: readonly string[],
   steps: MoveSteps,
+  bounds: MinuteBounds = WHOLE,
 ): BlockSpan {
   const direction = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : 1;
   if (key === 'ArrowUp' || key === 'ArrowDown') {
     if (isResize) {
       const length = from.endMinute - from.startMinute + direction * steps.length;
       const fewest = Math.min(from.endMinute - from.startMinute, MIN_LENGTH);
-      return { ...from, endMinute: from.startMinute + clamp(length, fewest, DAY - from.startMinute) };
+      const most = Math.max(bounds.end, from.endMinute) - from.startMinute;
+      return { ...from, endMinute: from.startMinute + clamp(length, fewest, most) };
     }
     const length = from.endMinute - from.startMinute;
-    const startMinute = clamp(from.startMinute + direction * steps.move, 0, Math.max(0, DAY - length));
+    const startMinute = clamp(
+      from.startMinute + direction * steps.move,
+      Math.min(bounds.start, from.startMinute),
+      Math.max(bounds.start, bounds.end - length, from.startMinute),
+    );
     return { ...from, startMinute, endMinute: startMinute + length };
   }
   if (isResize) return from;

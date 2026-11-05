@@ -2,39 +2,75 @@
 // link to a tab without loading it.
 
 /**
- * Bookings' tabs, in their order (spec 0037, AC-1447): the week calendar, the list, the team's week (the Roster, a tab
- * of its own from 31 October 2026, the owner's ask, where it had been Availability's Team view behind a Mine | Team
- * switch; shown only to whoever sees someone else's scheduling, `rosterIsShown` in booking/links.ts), the member's own hours, the groups a booking is
- * shared out between, and the calendars it reads. The last two came up out of Settings › Scheduling (25 October
- * 2026): they are what somebody setting up bookings does next, not workspace housekeeping, and a person who had
- * not connected a calendar had no reason to go looking three levels into Settings for the one thing that makes
- * every other tab work. Routing (spec 0037, AC-1447) follows Round robin, for holders of `routing.manage` only.
- * Pages comes first (the bookings critique, B-02, 5 November 2026): the booking pages themselves, the same list as
- * Captures › Links, so somebody setting up bookings finds where pages live without leaving Bookings.
+ * Bookings' tabs, in their order (the IA brief of 5 November 2026, "do it as per competition", as Calendly and
+ * Cal.com lay theirs out): Meetings (the week, the day, the team's day and the list, one switch between them), Pages
+ * (the booking pages; round robin is a page's type, not an area of its own), Availability (the member's own hours,
+ * and the team's Roster beside them for whoever sees a colleague's scheduling) and Routing (holders of
+ * `routing.manage` only). Each tab is one or more views, each view its own address, so every old link still opens.
  */
-export const BOOKINGS_TABS = [
-  'pages',
-  'calendar',
-  'list',
-  'roster',
-  'availability',
-  'round-robin',
-  'routing',
-  'calendars',
-] as const;
+export const BOOKINGS_TABS = ['meetings', 'pages', 'availability', 'routing'] as const;
 
 /** One of Bookings' tabs. */
 export type BookingsPageTab = (typeof BOOKINGS_TABS)[number];
+
+/**
+ * Bookings' views, each a route of its own (`/bookings/<view>`): the address a tab's switch moves between. Round
+ * robin's groups and Calendars keep their addresses (and the command menu's way in), drawn under Pages and Meetings.
+ */
+export const BOOKINGS_VIEWS = [
+  'calendar',
+  'list',
+  'calendars',
+  'pages',
+  'round-robin',
+  'availability',
+  'roster',
+  'routing',
+] as const;
+
+/** One of Bookings' views (a route under `/bookings`). */
+export type BookingsView = (typeof BOOKINGS_VIEWS)[number];
+
+/** The tab each view sits under. */
+const TAB_OF: Readonly<Record<BookingsView, BookingsPageTab>> = {
+  calendar: 'meetings',
+  list: 'meetings',
+  calendars: 'meetings',
+  pages: 'pages',
+  'round-robin': 'pages',
+  availability: 'availability',
+  roster: 'availability',
+  routing: 'routing',
+};
+
+/** The view a tab opens on. */
+const FIRST_VIEW: Readonly<Record<BookingsPageTab, BookingsView>> = {
+  meetings: 'calendar',
+  pages: 'pages',
+  availability: 'availability',
+  routing: 'routing',
+};
 
 /** Whether `value` names one of Bookings' tabs. */
 export const isBookingsPageTab = (value: string): value is BookingsPageTab =>
   (BOOKINGS_TABS as readonly string[]).includes(value);
 
-/** A Bookings tab's address. */
-export const bookingsTabHref = (slug: string, tab: BookingsPageTab) => `/w/${slug}/bookings/${tab}`;
+/** Whether `value` names one of Bookings' views. */
+export const isBookingsView = (value: string): value is BookingsView =>
+  (BOOKINGS_VIEWS as readonly string[]).includes(value);
 
-/** The tab an address under Bookings shows: its last segment when that names a tab, else Calendar. */
-export function bookingsTabOf(pathname: string): BookingsPageTab {
+/** A view's address, or a tab's (the view it opens on). */
+export const bookingsTabHref = (slug: string, to: BookingsView | BookingsPageTab) =>
+  `/w/${slug}/bookings/${isBookingsView(to) ? to : FIRST_VIEW[to]}`;
+
+/** The view an address under Bookings shows: its last segment when that names a view, else the calendar. */
+export function bookingsViewOf(pathname: string): BookingsView {
   const last = pathname.replace(/\/+$/, '').split('/').at(-1) ?? '';
-  return isBookingsPageTab(last) ? last : 'calendar';
+  return isBookingsView(last) ? last : 'calendar';
 }
+
+/** The tab a view sits under. */
+export const tabOfView = (view: BookingsView): BookingsPageTab => TAB_OF[view];
+
+/** The tab an address under Bookings shows: the tab its view sits under (bare `/bookings` is Meetings). */
+export const bookingsTabOf = (pathname: string): BookingsPageTab => TAB_OF[bookingsViewOf(pathname)];

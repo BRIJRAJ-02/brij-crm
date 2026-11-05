@@ -6,16 +6,14 @@ export const strings = {
   /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
   pageTabs: {
+    meetings: 'Meetings',
     pages: 'Pages',
-    calendar: 'Calendar',
-    list: 'List',
     availability: 'Availability',
-    roster: 'Roster',
-    // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
-    'round-robin': 'Round robin',
     routing: 'Routing',
-    calendars: 'Calendars',
   },
+  /** Availability's two views, on the strip's end for whoever sees a colleague's scheduling (as Cal.com's toggle). */
+  availabilityViewsLabel: 'Whose hours',
+  availabilityViews: { availability: 'My hours', roster: 'Roster' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },
@@ -50,6 +48,8 @@ export const strings = {
   viewMenuLabel: (view: string) => `View: ${view}`,
   dayView: 'Day',
   weekView: 'Week',
+  /** Meetings' list, the last of its views (D, W, Team, List), on the same switch. */
+  listView: 'List',
   /** An empty week's way on: the day of the reader's next booking after it. */
   nextBooking: (day: string) => `Next booking: ${day}`,
   weekLabel: (range: string) => `Bookings, ${range}`,

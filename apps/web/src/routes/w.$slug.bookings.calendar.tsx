@@ -181,6 +181,8 @@ function Calendar({ objects, pages, connections, availability, forPeople, member
   return (
     <BookingsCalendarScreen
       slug={slug}
+      // Meetings' List, on the same switch as Day, Week and Team: the list keeps the page and calendars picked.
+      onList={() => void navigate({ to: '/w/$slug/bookings/list', params: { slug }, search: rawOf('list', search) })}
       hosts={choice}
       search={search}
       week={week}

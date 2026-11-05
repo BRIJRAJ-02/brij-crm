@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
 import { rosterIsShown } from '../features/booking/links.ts';
-import { BOOKINGS_TABS, bookingsTabOf, type BookingsPageTab } from '../features/bookings/tabs.ts';
+import { BOOKINGS_TABS, bookingsViewOf, tabOfView, type BookingsView } from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import {
   BookingsActionSlot,
@@ -16,12 +16,13 @@ import { useBookingArrivals } from '../features/bookings/useBookingArrivals.ts';
 import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings, after Records in the sidebar, laid out as Captures is: the frame, the TopBar (the tile, the upcoming
-// count and New, as People's) and the tab strip (Pages · Calendar · List · Roster · Availability · Round robin · Routing · Calendars)
-// in the row People's ViewBar takes, with the tab's own route (`bookings.calendar`, `bookings.roster`, …) drawn in the
-// chosen panel. A tab's own WorkspacePage draws only its body inside this frame. The layout owns New, so it never
-// moves or remounts as the tabs change. Bare `/bookings` goes to Calendar, or List for an old `?view=list` link
-// (`bookings.index`).
-/** The tabs that read bookings, where an admin's Mine · Everyone shows. */
+// count and New, as People's) and the tab strip (Meetings · Pages · Availability · Routing, the IA brief of 5 November
+// 2026, as Calendly and Cal.com) in the row People's ViewBar takes, with the view's own route (`bookings.calendar`,
+// `bookings.roster`, …) drawn in the chosen panel. A view's own WorkspacePage draws only its body inside this frame.
+// The layout owns New, so it never moves or remounts as the tabs change. Bare `/bookings` (and `/bookings/meetings`)
+// goes to the calendar, or the list for an old `?view=list` link (`bookings.index`). Round robin's groups and
+// Calendars keep their addresses, under Pages and Meetings, with no tab of their own.
+/** The views that read bookings, where an admin's Mine · Everyone shows. */
 const READS_BOOKINGS = new Set<string>(['calendar', 'list']);
 /** The tabs that put their own primary action where New meeting sits, rather than letting the TopBar keep it. */
 const OWN_ACTION = new Set<string>(['availability', 'roster', 'round-robin', 'calendars']);
@@ -37,14 +38,15 @@ function BookingsRoute() {
   const { slug } = Route.useParams();
   // A booking arriving while Bookings is open says so (the bookings critique, B-12).
   useBookingArrivals(slug);
-  // The tab the address names. While leaving Bookings the address is already another page's, which names no tab:
-  // the strip keeps the last one rather than flashing to Calendar (the bookings critique, C18).
+  // The view the address names. While leaving Bookings the address is already another page's, which names no view:
+  // the strip keeps the last one rather than flashing to Meetings (the bookings critique, C18).
   const named = useLocation({
-    select: (location) => (isUnderBookings(location.pathname) ? bookingsTabOf(location.pathname) : undefined),
+    select: (location) => (isUnderBookings(location.pathname) ? bookingsViewOf(location.pathname) : undefined),
   });
-  const [lastTab, setLastTab] = useState<BookingsPageTab>(named ?? 'calendar');
-  if (named !== undefined && named !== lastTab) setLastTab(named);
-  const tab = named ?? lastTab;
+  const [lastView, setLastView] = useState<BookingsView>(named ?? 'calendar');
+  if (named !== undefined && named !== lastView) setLastView(named);
+  const view = named ?? lastView;
+  const tab = tabOfView(view);
   // New › Booking page, held here so the TopBar's menu, Pages' empty list and the Calendar's empty state open one dialog.
   const [isAddingPage, setAddingPage] = useState(false);
   const addPage = useMemo(
@@ -54,7 +56,7 @@ function BookingsRoute() {
     [],
   );
   // The Team day (spec 0030) shows everyone the reader may see, whatever Mine or Everyone says: the switch steps aside.
-  const isTeamDay = useLocation({ select: (location) => tab === 'calendar' && location.search.v === 'team' });
+  const isTeamDay = useLocation({ select: (location) => view === 'calendar' && location.search.v === 'team' });
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
   // screen): Availability's New schedule, the Roster's Set usual hours, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
@@ -67,26 +69,17 @@ function BookingsRoute() {
   // The Roster only for someone who sees a colleague's scheduling, and Routing only for a holder of routing.manage
   // (spec 0037, AC-1447); either address falls back for everyone else.
   const canRoute = useCan('routing.manage');
-  // Calendar sync off for the deployment with nothing connected (the bookings critique, A2): the Calendars tab and
-  // every Connect calendar link hide, since they could only lead to "Calendar sync is off". Until the read answers,
-  // they show as before.
+  // Calendar sync off for the deployment with nothing connected (the bookings critique, A2): every Connect calendar
+  // link hides, since it could only lead to "Calendar sync is off". Until the read answers, they show as before.
   const { data } = useRouteContext({ from: '__root__' });
   const calendar = useCalendar(data.calendar.view(slug));
   const canConnectCalendar = calendar.status !== 'ready' || calendar.enabled || calendar.connections.length > 0;
-  // The tab itself waits for the answer, so with sync off it never draws and then leaves the strip.
-  const showsCalendars = calendar.status === 'ready' && canConnectCalendar;
   // Calendars has no Connect with sync off, so New keeps the TopBar's end there rather than leaving it empty (A5).
-  const ownsAction = OWN_ACTION.has(tab) && (tab !== 'calendars' || canConnectCalendar);
-  const tabs = useMemo(
-    () =>
-      BOOKINGS_TABS.filter(
-        (each) =>
-          (each !== 'roster' || (access !== undefined && rosterIsShown(access))) &&
-          (each !== 'routing' || canRoute) &&
-          (each !== 'calendars' || showsCalendars || tab === 'calendars'),
-      ),
-    [access, canRoute, showsCalendars, tab],
-  );
+  const ownsAction = OWN_ACTION.has(view) && (view !== 'calendars' || canConnectCalendar);
+  // Routing only for a holder of routing.manage (spec 0037, AC-1447).
+  const tabs = useMemo(() => BOOKINGS_TABS.filter((each) => each !== 'routing' || canRoute), [canRoute]);
+  // My hours · Roster only for someone who sees a colleague's scheduling (spec 0037, AC-1447).
+  const hasRoster = access !== undefined && rosterIsShown(access);
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);
   return (
@@ -112,8 +105,10 @@ function BookingsRoute() {
                   <BookingsTabs
                     slug={slug}
                     tab={tab}
+                    view={view}
                     tabs={tabs}
-                    hosts={READS_BOOKINGS.has(tab) && !isTeamDay ? hosts : undefined}
+                    hasRoster={hasRoster}
+                    hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
                   >
                     <Outlet />
                   </BookingsTabs>
