@@ -34,7 +34,9 @@ export const NAV_TOP_PAGES = ['linkPage', 'inbox', 'tasks', 'notes'] as const;
 export const NAV_SCHEDULING_PAGES = ['bookings', 'roster', 'captures'] as const;
 /**
  * The Hospitality section's pages (spec 0065, AC-6510; Rules settled: Navigation), in their default order: Menus
- * (Menu), QR codes (Menu QR), Reservations and Service (Table seating). Only the installed apps' pages show.
+ * (Menu), QR codes (Menu QR), Reservations and Service (Table seating). Only the installed apps' pages show, and
+ * Service no longer does (5 November 2026: its day is the Reservations page); it stays here so a stored choice for
+ * it still reads.
  */
 export const NAV_HOSPITALITY_PAGES = ['menus', 'qr', 'reservations', 'service'] as const;
 /** Every page the sidebar may store a choice for. Fixed items (Trash, Settings) are never stored. */

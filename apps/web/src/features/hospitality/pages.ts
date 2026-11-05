@@ -3,14 +3,13 @@
 import type { DataLayer, HospitalityApp } from '@crm/data';
 
 /** One of the Hospitality pages. */
-export type HospitalityPage = 'menus' | 'qr' | 'reservations' | 'service';
+export type HospitalityPage = 'menus' | 'qr' | 'reservations';
 
 /** The app each page belongs to. */
 const APP_OF: Readonly<Record<HospitalityPage, HospitalityApp>> = {
   menus: 'menu',
   qr: 'menu_qr',
   reservations: 'table_seating',
-  service: 'table_seating',
 };
 
 /** Whether the page's app is installed in the workspace (the Apps page's read; false when it can't be read). */

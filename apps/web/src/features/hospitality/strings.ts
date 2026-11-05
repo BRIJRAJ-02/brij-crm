@@ -242,7 +242,6 @@ export const strings = {
     menus: 'Menus are on their way',
     qr: 'QR codes are on their way',
     reservations: 'Reservations are on their way',
-    service: 'Service is on its way',
   },
   comingText: 'Set up your places meanwhile.',
   openBusiness: 'Open Business',

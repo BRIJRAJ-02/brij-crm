@@ -295,10 +295,12 @@ describe('the guest’s emails (AC-6555)', () => {
     });
     const [mail, staff] = prepared.messages;
     expect(mail?.subject).toBe('Your table at Somewhere Nowhere is booked');
-    // The owner hears of a new online reservation by default, with a link to the Service screen.
+    // The owner hears of a new online reservation by default, with a link to the Reservations page on its day.
     expect(prepared.messages).toHaveLength(2);
     expect(staff).toMatchObject({ to: 'ada@example.com', subject: 'New reservation: Grace Hopper, 2 guests' });
-    expect(staff?.button?.url).toMatch(/^https:\/\/app\.timefix\.com\/w\/visits-[^/]+\/service$/);
+    expect(staff?.button?.url).toMatch(
+      /^https:\/\/app\.timefix\.com\/w\/visits-[^/]+\/reservations\?date=\d{4}-\d{2}-\d{2}$/,
+    );
     expect(staff?.ics).toBeUndefined();
     expect(mail?.rows).toContainEqual({ label: 'Reservation code', value: made.visit.lookupCode });
     expect(mail?.button?.url).toBe(`https://timefix.com/r/${key}/manage#${made.manageToken ?? ''}`);

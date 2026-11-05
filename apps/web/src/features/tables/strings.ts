@@ -1,9 +1,9 @@
-// Table seating's staff words (spec 0066 B7 lite): the setup and the Service screen, in the app's plain voice.
+// Table seating's staff words (spec 0066 B7 lite): the Reservations page (the day, after checklabs' page) and its
+// Online booking drawer, in the app's plain voice.
 import type { VisitStatus } from '@crm/data';
 
 export const strings = {
   reservations: 'Reservations',
-  service: 'Service',
   place: 'Place',
   noPlace: 'Add your restaurant’s place first',
   addPlace: 'Open Business',
@@ -25,6 +25,7 @@ export const strings = {
   published: 'Your reservation page is live.',
   unpublished: 'Your page no longer takes reservations.',
   saved: 'Saved.',
+  savingSettings: 'Saving',
   fixIt: 'Fix it',
   fixFields: 'Some numbers need a look. Each one says what it needs.',
   numberRequired: 'Give a number.',
@@ -39,11 +40,11 @@ export const strings = {
   alertsText: 'An email to you each time a guest reserves online.',
   alertsSwitch: 'Email me new reservations',
   onlineBooking: 'Online booking',
-  onlineBookingText: (place: string) => `How guests reserve at ${place}.`,
   saveSettings: 'Save settings',
   acceptOnline: 'Accept online bookings',
-  acceptOnlineText:
-    'Guests can book this place from the web. Turning it on saves your settings and publishes the page.',
+  acceptOnlineText: 'Guests can book this place from the web. Saving with this on publishes your page.',
+  notLiveNotice: 'Guests can’t reserve online yet.',
+  setUpOnline: 'Set up online booking',
   timeZone: 'Time zone',
   serviceHours: 'Service hours',
   serviceHoursHint: 'Days and times bookings are accepted.',
@@ -77,21 +78,26 @@ export const strings = {
   cutoffHint: 'Minutes before the visit. After that, guests are asked to call.',
   pageLive: 'Your page is live',
   liveText: 'Guests reserve at this address. Share it, or put it on your site.',
-  // The Service screen.
+  // The day: the bar, the calendar and the bookings list.
   previousDay: 'Previous day',
   nextDay: 'Next day',
   today: 'Today',
+  pickDay: (day: string) => `${day}, pick a day`,
+  goToDate: 'Go to date',
+  more: 'More',
   view: 'View',
   list: 'List',
   floor: 'Floor',
+  showFloor: 'Show the floor',
+  showList: 'Show the list',
   time: 'Time',
   guest: 'Guest',
   party: 'Guests',
   table: 'Table',
   statusTitle: 'Status',
   actions: 'Actions',
-  listLabel: (day: string) => `Reservations on ${day}`,
-  noReservations: (day: string) => `No reservations on ${day}`,
+  listLabel: (day: string) => `Bookings on ${day}`,
+  noReservations: (day: string) => `No bookings on ${day}.`,
   moreFor: (name: string) => `More for ${name}`,
   seat: 'Seat',
   finish: 'Finish',
@@ -103,8 +109,6 @@ export const strings = {
   undone: (name: string) => `${name}: back as it was`,
   note: 'Note',
   occasionTitle: 'Occasion',
-  doneRows: 'Finished and cancelled',
-  retry: 'Try again',
   close: 'Close',
   offline: 'You’re offline. Check your connection and try again.',
   // Table detail and walk ins.
@@ -114,14 +118,13 @@ export const strings = {
   walkIn: 'Walk in',
   walkInHere: 'Seat a walk in here',
   walkInTitle: 'Seat a walk in',
-  walkInParty: 'How many guests?',
+  walkInParty: 'Party size',
   walkInTables: 'Free tables',
-  walkInName: 'Name',
-  walkInNameHint: 'Optional. Left empty, the row reads Walk in.',
+  walkInName: 'Guest name',
+  walkInNameHint: 'Left empty, the row reads Walk in.',
   walkInNone: (party: number) =>
     `No free table seats ${String(party)} right now. Try fewer guests, or finish a table first.`,
   walkInHold: (minutes: number) => `Held for ${String(minutes)} minutes from now.`,
-  walkInPickParty: 'Pick the party size to see the free tables.',
   seatNow: 'Seat now',
   seating: 'Seating',
   seatedWalkIn: (label: string, party: number) =>
@@ -147,10 +150,6 @@ export const strings = {
   next: (time: string, party: number) => `Next: ${time} for ${String(party)}`,
   noneNext: 'Nothing booked later',
   guestsCount: (party: number) => (party === 1 ? '1 guest' : `${String(party)} guests`),
-  coversLabel: 'Covers',
-  coversBooked: 'Covers booked',
-  coversSeated: 'Seated now',
-  coversToCome: 'Still to come',
   truncated: 'Showing the first 500 reservations of this day.',
   // New booking and a booking's detail (checklabs' sheets).
   newBooking: 'New booking',
@@ -176,17 +175,32 @@ export const strings = {
   bookPartyRange: 'Choose 1 to 100 guests.',
   seatsShort: (seats: number) => (seats === 1 ? '1 seat' : `${String(seats)} seats`),
   booked: (name: string) => `Booked ${name}`,
-  bookedOn: (name: string, day: string) => `Booked ${name} on ${day}`,
   when: 'When',
   sourceTitle: 'Source',
   code: 'Code',
   noTable: 'No table',
   copyPhone: 'Copy phone',
   copyEmail: 'Copy email',
-  source: { online: 'Online', desk: 'By staff', walk_in: 'Walk in', other: 'Other' } as const,
+  // Checklabs' source pill: a booking taken by staff reads Phone, as checklabs' staff bookings do.
+  source: { online: 'Online', desk: 'Phone', walk_in: 'Walk in', other: 'Other' } as const,
   dayCalendar: 'Day calendar',
-  dayCalendarHint: (count: number, canBook: boolean) =>
-    `${String(count)} on the calendar${canBook ? ' · pick a time to add a booking' : ''}`,
+  /** The calendar's line: the bookings on it and the day's covers (the old Stats row), then how to add one. */
+  dayCalendarHint: (
+    count: number,
+    covers: { readonly booked: number; readonly seated: number; readonly toCome: number },
+    canBook: boolean,
+  ) =>
+    [
+      count === 0 ? 'Nothing booked' : `${String(count)} ${count === 1 ? 'booking' : 'bookings'}`,
+      ...(count === 0
+        ? []
+        : [
+            covers.booked === 1 ? '1 cover' : `${String(covers.booked)} covers`,
+            `${String(covers.seated)} seated`,
+            `${String(covers.toCome)} to come`,
+          ]),
+      ...(canBook ? ['pick a time to add a booking'] : []),
+    ].join(' · '),
   calendarLabel: (day: string) => `Day calendar, ${day}`,
   bookings: (count: number) => `Bookings · ${String(count)}`,
   bookingsTitle: 'Bookings',

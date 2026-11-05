@@ -239,9 +239,13 @@ const OCCASIONS: Readonly<Record<string, string>> = {
   other: 'Occasion',
 };
 
-/** The staff's email of a new online reservation: who, when, how many, and a button to the Service screen. */
+/**
+ * The staff's email of a new online reservation: who, when, how many, and a button to the Reservations page on the
+ * reservation's own day (`?date=`, the place's calendar date).
+ */
 function staffMail(row: MailRow, to: string, when: string, appOrigin: string): BookingMail {
   const party = `${String(row.party_size)} ${row.party_size === 1 ? 'guest' : 'guests'}`;
+  const day = DateTime.fromJSDate(new Date(row.starts_at), { zone: row.time_zone }).toISODate() ?? '';
   return {
     to,
     subject: `New reservation: ${row.client_name}, ${party}`,
@@ -257,8 +261,11 @@ function staffMail(row: MailRow, to: string, when: string, appOrigin: string): B
       ...(row.party_note === null ? [] : [{ label: 'Note', value: row.party_note }]),
       { label: 'Reservation code', value: row.lookup_code },
     ],
-    button: { label: 'Open Service', url: `${appOrigin}/w/${encodeURIComponent(row.slug)}/service` },
-    why: `You get this because new reservation emails are on for you at ${row.place_name}. Turn them off in Reservations.`,
+    button: {
+      label: 'Open reservations',
+      url: `${appOrigin}/w/${encodeURIComponent(row.slug)}/reservations${day === '' ? '' : `?date=${day}`}`,
+    },
+    why: `You get this because new reservation emails are on for you at ${row.place_name}. Turn them off in Reservations, Online booking.`,
   };
 }
 
