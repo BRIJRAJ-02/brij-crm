@@ -1,7 +1,7 @@
 // The settings pages that say less (copy pass, 31 October 2026), each read in the real app: the Background jobs
 // table is empty under its title alone, and its confirms are the 400px question; Workspace security heads its rows
 // without a line under them and asks its sign out in the one short sentence; Scheduling access has no sentence
-// under an empty list; Sign in and devices lost its section lines; and Calendars offers a provider button, not a
+// under an empty list; Sign in and security lost its section lines; and Calendars offers a provider button, not a
 // paragraph of why (or says plainly that sync is off).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
@@ -42,26 +42,28 @@ test.describe('the settings pages that say less', () => {
     await expect(confirm).toBeHidden();
   });
 
-  test('Scheduling access, Sign in and devices and Calendars drop the lines that repeat their labels', async ({
+  test('Scheduling access, Sign in and security and Calendars drop the lines that repeat their labels', async ({
     page,
   }) => {
     test.setTimeout(180_000);
     const slug = await fresh(page, 'wordsb');
 
-    // Alone in the workspace: nobody else yet, and nobody to add, each in a few words.
+    // Alone in the workspace: the owners and admins row alone, and nobody to add, in a few words. The old Account
+    // address opens Settings › Scheduling › Scheduling access (5 November 2026).
     await page.goto(`/w/${slug}/settings/account/scheduling`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Scheduling access' })).toBeVisible();
-    await expect(page.getByText('Nobody else yet.')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/scheduling/access$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Scheduling access' })).toBeAttached();
+    await expect(page.getByText('Nobody else yet.')).toHaveCount(0);
     await expect(page.getByText(/Add an assistant or a colleague/)).toHaveCount(0);
     await page.getByRole('button', { name: 'Add someone' }).click();
     await expect(page.getByText('Everyone already has access.')).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // Sign in and devices: sections headed by their names, with no sentence restating them.
+    // Sign in and security: sections headed by their names, with no sentence restating them.
     await page.goto(`/w/${slug}/settings/account/sign-in`);
     await expect(page.getByRole('heading', { name: 'Signed in devices' })).toBeVisible();
     await expect(page.getByText(/Each browser and app signed in to your account/)).toHaveCount(0);
-    await expect(page.getByText('Last 90 days.')).toBeVisible();
+    await expect(page.getByText('Last 90 days.')).toHaveCount(0);
 
     // Calendars: a provider button where sync is on, or the plain note where it is off. Never a paragraph of why.
     await page.goto(`/w/${slug}/settings/account/calendars`);

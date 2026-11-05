@@ -2,7 +2,7 @@
 // Purpose: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811): who is in the workspace, what each can
 // do, and who is invited.
 // Main task: find someone by name or email; owners and admins change roles, remove people and invite, answer
-// requests to join, resend or cancel invitations, and set the invite link and company email (the Joining tab); an
+// requests to join, resend or cancel invitations, and set the invite link and company email (the Invitations tab); an
 // owner hands the workspace on; a step down (to Guest above all) asks first; everyone reads who is in, a guest
 // without anyone's email.
 // Leaves out: leaving (the workspace menu's), teams and roles (their own pages), and a role for the invite link.
@@ -39,7 +39,6 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
-  Modal,
   RelativeTime,
   Select,
   SettingsSection,
@@ -47,8 +46,6 @@ import {
   sharedStrings,
   Table,
   type TableColumn,
-  TabPanel,
-  Tabs,
   type Toasts,
   TruncatedText,
 } from '@crm/ui';
@@ -61,7 +58,6 @@ import { EmailDomainRow } from './EmailDomainRow.tsx';
 import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
-import { hasGuide, RoleGuide } from './RoleGuide.tsx';
 import { SCHEDULING_ACCESS_COLUMN, SchedulingAccessCell } from './SchedulingAccessCell.tsx';
 import {
   askReconnect,
@@ -159,7 +155,7 @@ const SEARCH_WAIT_MS = 250;
 /** The message a refusal shows, in the server's words when it gave any. */
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
-/** The Members page: Members and Joining tabs, the Invite dialog and the confirms. */
+/** The Members page: Members and Invitations tabs, the Invite dialog and the confirms. */
 export function MembersScreen({
   data,
   toasts,
@@ -181,11 +177,10 @@ export function MembersScreen({
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
   const canManage = access.permissions.includes('members.manage');
   const [isInviting, setInviting] = useState(false);
-  const [isGuideOpen, setGuideOpen] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
-  // The tab shown: the search belongs to the Members tab alone. It opens on Joining while someone waits to join,
-  // since join requests send no other notice (the Joining count alone can't tell them from invitations).
+  // The tab shown: the search belongs to the Members tab alone. It opens on Invitations while someone waits to join,
+  // since join requests send no other notice (the Invitations count alone can't tell them from invitations).
   const [tab, setTab] = useState(() => (requests.length > 0 ? 'joining' : 'members'));
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -430,7 +425,7 @@ export function MembersScreen({
     setRemoving(member);
   };
 
-  // The dialog says who was invited; the Joining tab reads them in behind it.
+  // The dialog says who was invited; the Invitations tab reads them in behind it.
   const invited = () => {
     void reload();
   };
@@ -779,20 +774,19 @@ export function MembersScreen({
           {strings.showMore}
         </Button>
       )}
-      {/* A lone member who may invite: the empty state under their one row (the row layout is for a list with
-          more below it; nothing is below this one), with the way to fill it. */}
-      {canInvite && search === '' && page.total === 1 && inviteRoles.length > 0 && (
-        <EmptyState
-          icon="users"
-          title={strings.aloneTitle}
-          actions={
-            <Button icon="user-plus" onPress={() => setInviting(true)}>
-              {strings.invite}
-            </Button>
-          }
-        >
-          {strings.aloneText}
-        </EmptyState>
+      {/* A lone member who may invite (critics A and B, 5 November 2026): no "Just you so far" box. The people they
+          invited show as rows under their own, so the page says who is coming; the Invite button is in the bar. */}
+      {canInvite && search === '' && page.total === 1 && invitations.length > 0 && (
+        <SettingsSection title={strings.pendingSection}>
+          <Table
+            label={strings.pendingSection}
+            columns={INVITATION_COLUMNS}
+            rows={invitations}
+            getRowId={(invitation) => invitation.id}
+            renderCell={invitationCell}
+            isScrollable
+          />
+        </SettingsSection>
       )}
     </>
   );
@@ -800,20 +794,31 @@ export function MembersScreen({
   return (
     <SettingsPage
       title={strings.title}
-      hasTabs={canInvite}
+      tabBody="table"
+      // Members' own tab carries the count and the search; Invitations sits beside it in the same strip, for those who
+      // may invite (the owner, 4 November 2026: Members, Teams and Roles as one item, one row of tabs).
+      tabBar={{
+        count: page.total,
+        // The search for everyone on the Members tab (a guest's by name alone), at the strip's end or atop the body.
+        ...(tab === 'members' ? { end: searchField } : {}),
+        ...(canInvite
+          ? {
+              extra: { id: 'joining', label: strings.joiningTab, count: invitations.length + requests.length },
+              isExtraSelected: tab === 'joining',
+              onExtra: (isSelected: boolean) => {
+                setTab(isSelected ? 'joining' : 'members');
+              },
+            }
+          : {}),
+      }}
       // The page's one primary action, in the header's action place (the owner, 21 October 2026: no title block;
       // it moves to the settings header bar's action slot when that lands).
-      // What each role can do sits before it, for everyone: choosing a role, or reading one's own, starts there.
+      // What each role can do is the Roles tab beside this one (4 November 2026), so no second button here.
       actions={
         <>
           {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
               A guest changes nothing here, and the read only table says so already. */}
           {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
-          {hasGuide(roles.roles) && (
-            <Button icon="shield-check" onPress={() => setGuideOpen(true)}>
-              {strings.roleGuide}
-            </Button>
-          )}
           {canInvite && inviteRoles.length > 0 && (
             <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
               {strings.invite}
@@ -822,93 +827,74 @@ export function MembersScreen({
         </>
       }
     >
-      {canInvite ? (
-        <Tabs
-          label={strings.tabsLabel}
-          inset="none"
-          tabs={[
-            { id: 'members', label: strings.membersTab, count: page.total },
-            // Everyone on their way in: pending invitations and waiting requests (SW1, SW2).
-            { id: 'joining', label: strings.joiningTab, count: invitations.length + requests.length },
-          ]}
-          selectedKey={tab}
-          onSelectionChange={setTab}
-          {...(tab === 'members' ? { end: searchField } : {})}
-        >
-          <TabPanel id="members">{membersList}</TabPanel>
-          <TabPanel id="joining">
-            <SettingsStack>
-              {/* Only while some wait (AC-810), so a workspace with none never shows an empty list. */}
-              {requests.length > 0 && (
-                <SettingsSection title={strings.askingSection}>
-                  <Table
-                    label={strings.askingSection}
-                    columns={REQUEST_COLUMNS}
-                    rows={requests}
-                    getRowId={(request) => request.id}
-                    renderCell={requestCell}
-                    // On a phone the table scrolls sideways in its own frame, as Members' does.
-                    isScrollable
+      {canInvite && tab === 'joining' ? (
+        <SettingsStack>
+          {/* Only while some wait (AC-810), so a workspace with none never shows an empty list. */}
+          {requests.length > 0 && (
+            <SettingsSection title={strings.askingSection}>
+              <Table
+                label={strings.askingSection}
+                columns={REQUEST_COLUMNS}
+                rows={requests}
+                getRowId={(request) => request.id}
+                renderCell={requestCell}
+                // On a phone the table scrolls sideways in its own frame, as Members' does.
+                isScrollable
+              />
+            </SettingsSection>
+          )}
+          <SettingsSection title={strings.pendingSection}>
+            <Table
+              label={strings.pendingSection}
+              columns={INVITATION_COLUMNS}
+              rows={invitations}
+              getRowId={(invitation) => invitation.id}
+              renderCell={invitationCell}
+              // On a phone the table scrolls sideways in its own frame, as Members' does.
+              isScrollable
+              emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
+            />
+          </SettingsSection>
+          {/* Set once, so last: the invite link, then the company email, a Card each, so each way reads apart. */}
+          {(link !== undefined || domains !== undefined) && (
+            <SettingsSection title={strings.otherWaysSection}>
+              {link !== undefined && (
+                <Card>
+                  <InviteLinkRows
+                    data={data}
+                    slug={slug}
+                    link={link}
+                    ask={setQuestion}
+                    onChanged={reload}
+                    toasts={toasts}
+                    onFailed={(message) => {
+                      toasts.toast({ tone: 'danger', message });
+                    }}
                   />
-                </SettingsSection>
+                </Card>
               )}
-              <SettingsSection title={strings.pendingSection}>
-                <Table
-                  label={strings.pendingSection}
-                  columns={INVITATION_COLUMNS}
-                  rows={invitations}
-                  getRowId={(invitation) => invitation.id}
-                  renderCell={invitationCell}
-                  // On a phone the table scrolls sideways in its own frame, as Members' does.
-                  isScrollable
-                  emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
-                />
-              </SettingsSection>
-              {/* Set once, so last: the invite link, then the company email, a Card each, so each way reads apart. */}
-              {(link !== undefined || domains !== undefined) && (
-                <SettingsSection title={strings.otherWaysSection}>
-                  {link !== undefined && (
-                    <Card>
-                      <InviteLinkRows
-                        data={data}
-                        slug={slug}
-                        link={link}
-                        ask={setQuestion}
-                        onChanged={reload}
-                        toasts={toasts}
-                        onFailed={(message) => {
-                          toasts.toast({ tone: 'danger', message });
-                        }}
-                      />
-                    </Card>
-                  )}
-                  {domains !== undefined && (
-                    <Card>
-                      <EmailDomainRow
-                        data={data}
-                        slug={slug}
-                        domains={domains}
-                        ask={setQuestion}
-                        onChanged={reload}
-                        onTurnedOn={(message) => {
-                          toasts.toast({ tone: 'success', message });
-                        }}
-                        onFailed={(message) => {
-                          toasts.toast({ tone: 'danger', message });
-                        }}
-                      />
-                    </Card>
-                  )}
-                </SettingsSection>
+              {domains !== undefined && (
+                <Card>
+                  <EmailDomainRow
+                    data={data}
+                    slug={slug}
+                    domains={domains}
+                    ask={setQuestion}
+                    onChanged={reload}
+                    onTurnedOn={(message) => {
+                      toasts.toast({ tone: 'success', message });
+                    }}
+                    onFailed={(message) => {
+                      toasts.toast({ tone: 'danger', message });
+                    }}
+                  />
+                </Card>
               )}
-            </SettingsStack>
-          </TabPanel>
-        </Tabs>
+            </SettingsSection>
+          )}
+        </SettingsStack>
       ) : (
-        <>
-          {searchField}
-          {membersList}
-        </>
+        membersList
       )}
       <MemberConfirm
         question={question}
@@ -940,18 +926,6 @@ export function MembersScreen({
           toasts.toast({ tone: 'success', message });
         }}
       />
-      <Modal
-        title={strings.roleGuide}
-        isOpen={isGuideOpen}
-        onOpenChange={setGuideOpen}
-        actions={
-          <Button variant="primary" slot="close">
-            {strings.done}
-          </Button>
-        }
-      >
-        <RoleGuide roles={roles.roles} initialRole={roles.roles.find((option) => option.builtIn === access.role)?.id} />
-      </Modal>
       <CapabilitiesDialog
         data={data}
         slug={slug}
@@ -993,7 +967,7 @@ export function MembersScreen({
  * them (or the note), the search, and skeleton rows.
  */
 export function MembersPending() {
-  // Tabs only for those who get tabs, so nothing moves when the page arrives.
+  // Invitations only for those who get it, so nothing moves when the page arrives.
   const canInvite = useCan('members.invite');
   const canManage = useCan('members.manage');
   const searchField = (
@@ -1019,14 +993,16 @@ export function MembersPending() {
   return (
     <SettingsPage
       title={strings.title}
-      hasTabs={canInvite}
+      tabBody="table"
+      // Invitations' place in the strip and the search hold while the page loads, so nothing moves when it arrives.
+      tabBar={{
+        end: searchField,
+        ...(canInvite ? { extra: { id: 'joining', label: strings.joiningTab } } : {}),
+      }}
       // The bar's actions hold their places while the page loads.
       actions={
         <>
           {!canInvite && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
-          <Button icon="shield-check" isDisabled>
-            {strings.roleGuide}
-          </Button>
           {canInvite && (
             <Button variant="primary" icon="user-plus" isDisabled>
               {strings.invite}
@@ -1035,25 +1011,7 @@ export function MembersPending() {
         </>
       }
     >
-      {canInvite ? (
-        <Tabs
-          label={strings.tabsLabel}
-          inset="none"
-          tabs={[
-            { id: 'members', label: strings.membersTab },
-            { id: 'joining', label: strings.joiningTab },
-          ]}
-          end={searchField}
-        >
-          <TabPanel id="members">{table}</TabPanel>
-          <TabPanel id="joining">{null}</TabPanel>
-        </Tabs>
-      ) : (
-        <>
-          {searchField}
-          {table}
-        </>
-      )}
+      {table}
     </SettingsPage>
   );
 }

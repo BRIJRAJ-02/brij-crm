@@ -7,18 +7,9 @@ export const strings = {
   generalTitle: 'General',
   workspaceSection: 'Details',
   name: 'Workspace name',
-  /** The logo row: the logo itself is set in Brand, beside the colour (spec 0060); one upload, never a second. */
-  logo: 'Logo',
-  logoText: 'Heads the sidebar, the browser tab, booking pages and forms. Set it in Brand, with your colour.',
-  /** The same row for a member who can't change it. */
-  logoTextReadOnly: 'Heads the sidebar, the browser tab, booking pages and forms. Owners and admins set it in Brand.',
-  /** The logo's name where the row shows it. */
-  logoAlt: 'Your logo',
-  openBrand: 'Open Brand',
   timeZone: 'Time zone',
-  timeZoneInfo: 'Default for new pages and members.',
-  /** Under the time zone's title: what reads in it, so a wrong zone is noticed (meetings QA, 4 November 2026). */
-  timeZoneUse: 'Used for team calendars and daily limits.',
+  /** The time zone's InfoTip: what reads in it, so a wrong zone is noticed (meetings QA, 4 November 2026). */
+  timeZoneInfo: 'Used for team calendars and daily limits, and the default for new pages and members.',
   currency: 'Currency',
   country: 'Country',
   /** What a cleared currency or country shows: the language's region's, as before it was set. */
@@ -119,7 +110,6 @@ export const strings = {
   profileTitle: 'Profile',
   /** The public profile on Profile (22 Oct 2026): the handle booking addresses start with, and a bio. */
   publicProfileSection: 'Public profile',
-  publicProfileText: 'Your public address in this workspace.',
   handle: 'Handle',
   handleNew: 'Suggested. Claim it or change it.',
   handleKept: 'Your old address keeps working if you change it.',
@@ -129,7 +119,6 @@ export const strings = {
   handleFix: 'Fix your handle first.',
   claimHandle: 'Claim',
   bio: 'Bio',
-  bioText: 'One line under your name on your page.',
   bioNeedsHandle: 'Claim a handle first: the bio shows on its page.',
   yourPage: 'Your page',
   /**
@@ -139,7 +128,6 @@ export const strings = {
   yourPagePrivate: 'Private. Only you can open it.',
   copyLink: 'Copy link',
   /** Under their name beside the picture, whichever way it came (their own upload or Google's). */
-  photoShown: 'Shown on your pages and bookings.',
   /** Their own photo (spec 0068, AC-6809): the picker's words before and once there is one. */
   uploadPhoto: 'Upload photo',
   changePhoto: 'Change photo',
@@ -207,7 +195,6 @@ export const strings = {
   } as const satisfies Record<GooglePhotoResult, unknown>,
   yourName: 'Your name',
   email: 'Email',
-  emailUse: 'Used to sign in',
   sameAsWorkspace: (zone: string) => `Same as the workspace (${zone})`,
   zoneFollows: 'Your time zone now follows the workspace.',
 } as const;

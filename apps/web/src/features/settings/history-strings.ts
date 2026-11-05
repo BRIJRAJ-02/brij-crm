@@ -1,4 +1,4 @@
-// Settings › History's words (spec 0046): the tabs, the table, every state, and
+// Settings › History's words (spec 0046): the table, its day headings, every state, and
 // one sentence per action Workspace changes lists (AC-4605). Imported only by
 // History's screen modules, never by a route's loader, so the first load never
 // carries them. A sentence names its actor first ("Ada changed Bea’s role from
@@ -21,14 +21,27 @@ export interface SentenceWords {
   readonly role: (role: Role) => string;
   /** An invitation by its address, the invite link, or "someone" once its address is gone. */
   readonly invitation: (target: Extract<AuditEntryView['target'], { type: 'invitation' }>) => string;
-  /** A booking as "Intro call on 24 Oct, 3:30 pm" in the reader's zone, or "a deleted booking". */
+  /** A booking as "Intro call on 24 Oct, 3:30 pm" in the reader’s zone, or "a booking (since deleted)". */
   readonly booking: (target: Extract<AuditEntryView['target'], { type: 'booking' }>) => string;
-  /** A round robin, form, booking page or list by its name, or "a deleted round robin". */
+  /** A round robin, form, booking page or list by its name, or "a round robin (since deleted)". */
   readonly thing: (target: {
     readonly type: 'rotation' | 'form' | 'booking_page' | 'list';
     readonly name?: string;
     readonly isGone: boolean;
   }) => string;
+  /**
+   * The same, with its kind of thing: "the form Contact us" (or "the Intro call managed page", `after`), and "a form
+   * (since deleted)" once it is gone, never "the form a deleted form" (critic A, 5 November 2026).
+   */
+  readonly the: (
+    target: {
+      readonly type: 'rotation' | 'form' | 'booking_page' | 'list';
+      readonly name?: string;
+      readonly isGone: boolean;
+    },
+    noun: string,
+    place?: 'before' | 'after',
+  ) => string;
   /** A day in the reader's format. */
   readonly day: (at: string) => string;
   /** Words joined as a list: "name, time zone and bio". */
@@ -216,7 +229,7 @@ const SENTENCES: SentenceTemplates = {
         ? `published ${w.thing(entry.target)} with changed routing rules`
         : `changed the routing rules of ${w.thing(entry.target)}`,
     ),
-  'form.created': (entry, w) => actor(`made the form ${w.thing(entry.target)}`),
+  'form.created': (entry, w) => actor(`made ${w.the(entry.target, 'form')}`),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
   'form.exported': (entry, w) => actor(`exported the submissions of ${w.thing(entry.target)}`),
@@ -225,10 +238,10 @@ const SENTENCES: SentenceTemplates = {
   'form.submissions_restored': (entry, w) =>
     actor(`restored ${submissionsOf(entry.params.submissions)} of ${w.thing(entry.target)}`),
   // Lists (spec 0048): "Ada made the list Sales pipeline".
-  'list.created': (entry, w) => actor(`made the list ${w.thing(entry.target)}`),
-  'list.updated': (entry, w) => actor(`changed the list ${w.thing(entry.target)}`),
-  'list.archived': (entry, w) => actor(`archived the list ${w.thing(entry.target)}`),
-  'list.restored': (entry, w) => actor(`restored the list ${w.thing(entry.target)}`),
+  'list.created': (entry, w) => actor(`made ${w.the(entry.target, 'list')}`),
+  'list.updated': (entry, w) => actor(`changed ${w.the(entry.target, 'list')}`),
+  'list.archived': (entry, w) => actor(`archived ${w.the(entry.target, 'list')}`),
+  'list.restored': (entry, w) => actor(`restored ${w.the(entry.target, 'list')}`),
   'booking.no_show': (entry, w) => actor(`marked ${w.booking(entry.target)} as a no show`),
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
@@ -361,9 +374,9 @@ const SENTENCES: SentenceTemplates = {
   'booking_page.link_revoked': (entry, w) => actor(`revoked a one-time link for ${w.thing(entry.target)}`),
   'managed_page.changed': (entry, w) =>
     entry.params.added === 0 && entry.params.removed === 0
-      ? actor(`changed the ${w.thing(entry.target)} managed page`)
+      ? actor(`changed ${w.the(entry.target, 'managed page', 'after')}`)
       : actor(
-          `changed who has the ${w.thing(entry.target)} managed page${peopleMoved(entry.params.added, entry.params.removed)}`,
+          `changed who has ${w.the(entry.target, 'managed page', 'after')}${peopleMoved(entry.params.added, entry.params.removed)}`,
         ),
   'routing.settings_changed': () => actor('changed the routing settings'),
   'routing.skills_changed': () => actor('changed routing skills'),
@@ -390,10 +403,6 @@ function whoseScheduling(over: AuditPerson | undefined, w: SentenceWords): strin
 }
 
 export const strings = {
-  /** The page's tabs (owners and admins see both). */
-  tabs: 'History',
-  changesTab: 'Workspace changes',
-  signInsTab: 'Your sign ins',
   /** Workspace changes' table. */
   table: 'Workspace changes',
   when: 'When',
@@ -425,12 +434,19 @@ export const strings = {
     /** An invitation whose address is gone: purged, or the member it made deleted their account. */
     invitation: 'someone',
     inviteLink: 'the invite link',
-    booking: 'a deleted booking',
-    rotation: 'a deleted round robin',
-    form: 'a deleted form',
-    list: 'a deleted list',
-    booking_page: 'a deleted booking page',
+    booking: 'a booking (since deleted)',
+    rotation: 'a round robin (since deleted)',
+    form: 'a form (since deleted)',
+    list: 'a list (since deleted)',
+    booking_page: 'a booking page (since deleted)',
   },
+  /** Something of a kind, gone: "a form (since deleted)". */
+  goneThing: (noun: string) => `a ${noun} (since deleted)`,
+  /** A run of the same change collapsed into one row: "Changed the list Sales 5 times". */
+  times: (sentence: string, count: number) => `${sentence} ${String(count)} times`,
+  /** Day headings over the rows. */
+  today: 'Today',
+  yesterday: 'Yesterday',
   /** "Intro call on 24 Oct, 3:30 pm". */
   bookingOn: (page: string, when: string) => `${page} on ${when}`,
   /** The states (AC-4615 to AC-4618). */
@@ -440,8 +456,5 @@ export const strings = {
   /** When the page itself failed and the data layer had no words for why. */
   failedText: 'Try again in a moment.',
   forbidden: 'Only workspace owners and admins can see workspace changes.',
-  /** Your sign ins (AC-4619). */
-  signInsTitle: 'Your sign ins',
-  signInsText: 'Every workspace, last 90 days.',
   sentences: SENTENCES,
 } as const;

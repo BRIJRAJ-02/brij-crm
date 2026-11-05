@@ -20,7 +20,9 @@ async function makeKey(page: Page, name: string, access: 'Read' | 'Read and writ
   return token;
 }
 
-test.describe('API keys', () => {
+// Parked with Settings › Developer (the owner, 4 November 2026); its address redirects to Settings. Turn this back on
+// when the page returns.
+test.describe.skip('API keys', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Settings run at desktop width.');
 
   test('a key made once reads and writes records over /api/v1, and Revoke stops it with Undo', async ({ page }) => {

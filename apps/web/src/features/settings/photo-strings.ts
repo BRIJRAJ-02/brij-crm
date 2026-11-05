@@ -3,10 +3,8 @@
 /** "Show my photo on booking pages": its row, its states and the toasts its changes raise. */
 export const strings = {
   title: 'Show my photo on booking pages',
-  /** The account has a photo: which one, and what turning it off does. */
-  hint: 'When off, your booking pages and profile show your initials.',
-  /** No photo yet (an email code account has none): the choice still holds for when one comes. */
-  noPhoto: 'You have no photo yet, so your pages show your initials.',
+  /** No photo yet (an email code account has none): why the switch is off and can't turn on. */
+  noPhoto: 'Add a photo first. Your pages show your initials.',
   /** A member with no sign in of their own, which the app never shows today: nothing to hide. */
   readOnly: 'Only a person who signs in has a photo to show.',
   /** Beside the title while a slow save is on its way, for screen readers. */

@@ -177,6 +177,27 @@ export const RecordPage: Story = {
   },
 };
 
+/**
+ * `back` (5 November 2026): the way up from a settings page on a phone, where the sidebar is hidden. Under 480px the
+ * chevron shows before the title; on a wider bar it stays out of sight (AppShell's PhonePage story).
+ */
+export const TopBarBack: Story = {
+  render: () => (
+    <Stage width="phone">
+      <TopBar
+        title="Profile"
+        crumbs={[{ id: 'settings', label: 'Settings' }]}
+        back={{ label: 'All settings', href: '/settings' }}
+      >
+        <Button variant="primary">Save</Button>
+      </TopBar>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'All settings' })).toBeVisible();
+  },
+};
+
 /** A page still loading: the top bar keeps its height with a skeleton line for its title; the h1 says it is loading. */
 export const TopBarLoading: Story = {
   render: () => <TopBar title="Loading" isLoading />,

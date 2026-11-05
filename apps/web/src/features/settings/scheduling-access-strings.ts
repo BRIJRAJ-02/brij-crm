@@ -12,7 +12,6 @@ export const strings = {
 
   // Who can see or manage your scheduling.
   overMe: 'Who can see or manage your scheduling',
-  overMeDescription: 'Manage can also change and book for you.',
   addSomeone: 'Add someone',
   ownersAndAdmins: 'Workspace owners and admins',
   ownersAndAdminsSource: 'Through their role',
@@ -20,7 +19,6 @@ export const strings = {
   theyAdded: 'They added you',
   addedBy: (name: string) => `${name} added`,
   addedByAdmin: 'Added by an admin',
-  nobodyOverMe: 'Nobody else yet.',
 
   // Whose scheduling you can see or manage.
   mine: 'Whose scheduling you can see or manage',

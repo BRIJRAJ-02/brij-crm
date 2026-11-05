@@ -7,21 +7,21 @@ import { strings } from '../features/settings/history-strings.ts';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
 import { WorkspaceChangesPending, WorkspaceChangesTab } from '../features/settings/WorkspaceChangesTab.tsx';
 
-// Settings › History › Workspace changes (spec 0046, AC-4601, AC-4603): owners and admins only (`audit.read`). Anyone
-// else is sent on to Your sign ins (hidden means absent, never shown locked). The loader opens the log, which starts
+// Settings › Workspace › History (spec 0046, AC-4601, AC-4603): the workspace's changes, owners and admins only
+// (`audit.read`). Anyone else is sent on to their own sign ins in Account › Sign in and security (hidden means absent,
+// never shown locked; History's sign ins tab moved there on 5 November 2026). The loader opens the log, which starts
 // its first page at once without waiting for it, so the table shows its own loading rows; each visit reads afresh.
 export const Route = createFileRoute('/w/$slug/settings/history/changes')({
   beforeLoad: async ({ context, params }) => {
     const access = await context.data.access.mine(params.slug);
     if (!access.permissions.includes('audit.read')) {
-      throw redirect({ to: '/w/$slug/settings/history/sign-ins', params: { slug: params.slug }, replace: true });
+      throw redirect({ to: '/w/$slug/settings/account/sign-in', params: { slug: params.slug }, replace: true });
     }
   },
   loader: async ({ context, params }) => ({ log: await context.data.audit.openLog(params.slug) }),
-  // Only a holder of `audit.read` gets this far, so the pending page has the tab bar.
   pendingComponent: () => (
     <LoadingNow>
-      <HistoryPending tab="changes" canReadChanges body={<WorkspaceChangesPending />} />
+      <HistoryPending body={<WorkspaceChangesPending />} />
     </LoadingNow>
   ),
   errorComponent: HistoryError,
@@ -30,9 +30,8 @@ export const Route = createFileRoute('/w/$slug/settings/history/changes')({
 
 function WorkspaceChangesRoute() {
   const { log } = Route.useLoaderData();
-  const { slug } = Route.useParams();
   return (
-    <HistoryScreen slug={slug} tab="changes" canReadChanges>
+    <HistoryScreen>
       <WorkspaceChangesTab log={log} />
     </HistoryScreen>
   );

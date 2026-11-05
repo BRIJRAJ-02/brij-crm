@@ -233,11 +233,13 @@ test.describe('lists around the record, settings and archive (milestones 3 and 4
     await newList(page, 'Hiring', 'People', 'Blank');
 
     await page.goto(`/w/${slug}/settings/lists`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Lists' })).toBeVisible();
+    // Settings › Data › Lists (5 November 2026).
+    await expect(page.getByRole('heading', { level: 1, name: 'Lists' })).toBeAttached();
     await page.getByRole('row').filter({ hasText: 'Hiring' }).click();
     await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
+    // The name saves on Enter or when the field is left (one save model, 5 November 2026).
     await page.getByLabel('Name', { exact: true }).fill('Recruiting');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByLabel('Name', { exact: true }).press('Enter');
     await expect(page.getByText('Recruiting saved')).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Each record once' })).toBeChecked();
 

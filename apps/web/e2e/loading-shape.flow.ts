@@ -76,8 +76,9 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
   { name: 'form editor', start: at('captures/forms'), target: card('Untitled form') },
+  // Settings opens on Profile (5 November 2026).
   {
-    name: 'settings preferences',
+    name: 'settings profile',
     start: at('tasks'),
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
@@ -95,14 +96,14 @@ const ALL_SCREENS: readonly Screen[] = [
   },
   // Teams (spec 0031) and an object's Access tab (spec 0032): the list's rows, and the summary line, the grid and the
   // Fields fold where they land.
-  { name: 'settings teams', start: at('settings/account/preferences'), target: sidebar('Teams') },
+  // Teams is a tab of Members (5 November 2026).
+  { name: 'settings teams', start: at('settings/members'), target: tab('Teams') },
   {
     name: 'settings object access',
     start: at('settings/objects/people/attributes'),
     target: tab('Access'),
   },
-  { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
-  // History (spec 0046): the owner's Workspace changes, its tabs and the table's skeleton rows where the rows land.
+  // History (spec 0046): the owner's Workspace changes, the table's skeleton rows where the rows land.
   { name: 'settings history', start: at('settings/account/preferences'), target: sidebar('History') },
   { name: 'trash', start: at('settings/account/preferences'), target: sidebar('Trash') },
 ];

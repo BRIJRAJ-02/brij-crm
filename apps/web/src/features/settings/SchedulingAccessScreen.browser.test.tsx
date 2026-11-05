@@ -165,7 +165,8 @@ describe('Scheduling access', () => {
     await expect.element(dialog.getByText('Priya can no longer manage your scheduling.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Remove access' }).click();
     expect(made.revoked).toEqual(['priya-me']);
-    await expect.element(page.getByText('Nobody else yet.', { exact: false })).toBeVisible();
+    // The owners and admins row stands alone, with no "Nobody else yet" line under it (critic A #10, 5 November 2026).
+    await expect.element(page.getByText('Priya', { exact: true })).not.toBeInTheDocument();
   });
 
   it('adds a teammate with Manage from the keyboard, and never offers an admin or someone already added', async () => {

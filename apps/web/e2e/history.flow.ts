@@ -88,8 +88,10 @@ test('History reads the workspace’s changes to its owner, and only their own s
   await page.getByRole('link', { name: 'History', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/history/changes$`));
   await expect(page.getByRole('heading', { level: 1, name: 'History' })).toBeVisible();
-  await expect(page.getByRole('tab')).toHaveText(['Workspace changes', 'Your sign ins']);
-  const table = page.getByRole('grid', { name: 'Workspace changes' });
+  // One page, no tabs: each member's own sign ins moved to Account › Sign in and security (5 November 2026).
+  await expect(page.getByRole('tablist')).toHaveCount(0);
+  // A day at a time: today's changes in the first table.
+  const table = page.getByRole('grid', { name: /^Workspace changes/ }).first();
   const role = table.getByRole('rowheader', { name: /^Ada Lovelace changed grace.*’s role from Admin to Member$/ });
   const invited = table.getByRole('rowheader', { name: `Ada Lovelace invited ${invitee} as Admin` });
   await expect(role).toBeVisible();
@@ -103,22 +105,18 @@ test('History reads the workspace’s changes to its owner, and only their own s
   expect(at(/role from Admin to Member/)).toBeLessThan(at(new RegExp(`invited ${invitee}`)));
   await checkScreen(page, 'history-changes');
 
-  // Your sign ins, its own address.
-  await page.getByRole('tab', { name: 'Your sign ins' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/history/sign-ins$`));
-  await expect(page.getByText('Signed in').first()).toBeVisible();
+  // The old sign ins address opens Sign in and security, where the sign ins are now.
+  await page.goto(`/w/${slug}/settings/history/sign-ins`);
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/account/sign-in$`));
+  await expect(page.getByText(/^Signed in/).first()).toBeVisible();
 
-  // Grace, a member now, finds her own sign ins with no tab bar, and the changes address sends her on.
+  // Grace, a member now, has no History in the navigation, and its address sends her to her own sign ins.
   await grace.goto(`/w/${slug}/settings/history`);
-  await expect(grace).toHaveURL(new RegExp(`/w/${slug}/settings/history/sign-ins$`));
-  await expect(grace.getByRole('heading', { level: 1, name: 'History' })).toBeVisible();
-  await expect(grace.getByText('Signed in').first()).toBeVisible();
-  await expect(grace.getByRole('tablist')).toHaveCount(0);
-  await expect(grace.getByRole('grid', { name: 'Workspace changes' })).toHaveCount(0);
+  await expect(grace).toHaveURL(new RegExp(`/w/${slug}/settings/account/sign-in$`));
+  await expect(grace.getByRole('heading', { level: 1, name: 'Sign in and security' })).toBeAttached();
+  await expect(grace.getByRole('link', { name: 'History', exact: true })).toHaveCount(0);
+  await expect(grace.getByRole('grid', { name: /^Workspace changes/ })).toHaveCount(0);
   await checkScreen(grace, 'history-sign-ins');
-  await grace.goto(`/w/${slug}/settings/history/changes`);
-  await expect(grace).toHaveURL(new RegExp(`/w/${slug}/settings/history/sign-ins$`));
-  await expect(grace.getByRole('tablist')).toHaveCount(0);
 
   await graceContext.close();
 });

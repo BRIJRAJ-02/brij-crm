@@ -50,7 +50,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Deals',
       'Bookings',
       'Availability',
-      'Calendars',
+      'Connect a calendar',
       'Booking pages',
       'Forms',
       'Link page',
@@ -92,12 +92,23 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
   });
 
   // Round robin is for someone who makes booking pages, as its own page is: hidden means absent (25 October 2026).
-  it('offers Round robin beside Calendars only to a member who may make booking pages', () => {
-    const names = (permissions: Permission[]) => pageCommands('acme', OBJECTS, permissions).map((each) => each.name);
-    expect(names([])).not.toContain('Round robin');
-    expect(names(['booking.manage'])).toContain('Round robin');
-    const listed = names(['booking.manage']);
-    expect(listed.indexOf('Round robin')).toBe(listed.indexOf('Calendars') + 1);
+  it('offers Settings › Round robin only to a member who may make booking pages', () => {
+    const names = (permissions: Permission[]) => settingsCommands('acme', permissions).map((each) => each.name);
+    expect(names([])).not.toContain('Settings › Round robin');
+    expect(names(['booking.manage'])).toContain('Settings › Round robin');
+  });
+
+  // Critic B (5 November 2026): "calendar" in the menu found nothing to do.
+  it('connects a calendar from the menu, in Settings › Account › Calendars', () => {
+    const connect = pageCommands('acme', OBJECTS).find((command) => command.id === 'page:calendars');
+    expect(connect?.name).toBe('Connect a calendar');
+    expect(connect?.run).toEqual({ kind: 'go', href: '/w/acme/settings/account/calendars' });
+    const all = [...pageCommands('acme', OBJECTS), ...settingsCommands('acme', [])];
+    expect(
+      matchCommands(all, 'calendar')
+        .map((command) => command.name)
+        .slice(0, 2),
+    ).toEqual(['Connect a calendar', 'Settings › Calendars']);
   });
 
   it('creates a record only of objects the member may write, then the three themes', () => {
@@ -161,18 +172,18 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     expect(settingsCommands('acme', []).map((command) => command.name)).toEqual([
       'Settings › Profile',
       'Settings › Preferences',
-      'Settings › Sign in and devices',
       'Settings › Notifications',
-      'Settings › Scheduling access',
+      'Settings › Sign in and security',
+      'Settings › Calendars',
       'Settings › General',
       'Settings › Brand',
       'Settings › Members',
       'Settings › Teams',
       'Settings › Roles',
+      'Settings › Availability',
+      'Settings › Scheduling access',
       'Settings › Objects',
       'Settings › Lists',
-      'Settings › Background jobs',
-      'Settings › History',
     ]);
   });
 });
@@ -194,18 +205,18 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings',
       'Settings › Profile',
       'Settings › Preferences',
-      'Settings › Sign in and devices',
       'Settings › Notifications',
-      'Settings › Scheduling access',
+      'Settings › Sign in and security',
+      'Settings › Calendars',
       'Settings › General',
       'Settings › Brand',
       'Settings › Members',
       'Settings › Teams',
       'Settings › Roles',
+      'Settings › Availability',
+      'Settings › Scheduling access',
       'Settings › Objects',
       'Settings › Lists',
-      'Settings › Background jobs',
-      'Settings › History',
     ]);
   });
 

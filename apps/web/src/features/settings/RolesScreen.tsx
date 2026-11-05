@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Settings › Workspace › Roles (spec 0037, AC-1239): every role, built in then custom, and what each can do.
+// Purpose: Settings › People › Roles and access › Roles (spec 0037, AC-1239): every role, built in then custom, and what each can do.
 // Main task: owners and admins open a role to change it, make a new one, or copy, default or delete one; everyone
 // compares roles side by side.
 // Leaves out: who sees which objects (an object's Access tab), and per person scheduling access (Members).
@@ -18,7 +18,6 @@ import {
   Badge,
   Button,
   Icon,
-  Link,
   LockReason,
   Menu,
   MenuItem,
@@ -105,10 +104,12 @@ export function RolesScreen({ data, toasts, slug, overview, canManage }: RolesSc
   const cell = (role: RoleDefinition, column: string) => {
     switch (column) {
       case 'role':
+        // The name in plain text, the whole row opening the role (critics A #18 and B, 5 November 2026: names were
+        // underlined blue links, each built in one badged "Built in"). Only the default carries a word; a built in
+        // role is told by having no "..." menu, as Attio lists its roles.
         return (
           <>
-            <Link href={roleHref(slug, role.id)}>{role.label}</Link>
-            {role.builtIn !== undefined && <Badge text={strings.builtIn} isWhole />}
+            {role.label}
             {role.isDefault && <Badge text={strings.default} tone="accent" isWhole />}
           </>
         );

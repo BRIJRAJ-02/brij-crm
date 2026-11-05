@@ -8,9 +8,8 @@
 import type { ListView, ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
-import { strings as automationStrings } from '../automations/strings.ts';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
-import { availabilityHref, calendarsHref, linksHref, roundRobinHref } from '../booking/links.ts';
+import { availabilityHref, calendarsHref, linksHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
 import { importHref } from '../imports/paths.ts';
 import { listHref } from '../lists/paths.ts';
@@ -92,27 +91,16 @@ export function pageCommands(
           terms: strings.availabilityTerms,
           run: go(availabilityHref(slug)),
         },
-        // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so the menu finds them
-        // where it finds Availability rather than under Settings, where they no longer are.
+        // Connecting a calendar is the one thing every Bookings tab needs (critic B, 5 November 2026: "calendar" in
+        // the menu found nothing to do): an action, opening Settings › Account › Calendars. Round robin and the
+        // Calendars page itself are Settings entries now, so the menu lists them under Settings.
         {
           id: 'page:calendars',
-          name: strings.calendars,
-          icon: 'calendar',
+          name: strings.connectCalendar,
+          icon: 'calendar-plus',
           terms: strings.calendarsTerms,
           run: go(calendarsHref(slug)),
         },
-        // Only for someone who makes booking pages: hidden means absent, and the page itself says nothing either.
-        ...(permissions?.includes('booking.manage') === true
-          ? [
-              {
-                id: 'page:round-robin',
-                name: strings.roundRobin,
-                icon: 'users-round',
-                terms: strings.roundRobinTerms,
-                run: go(roundRobinHref(slug)),
-              } satisfies Command,
-            ]
-          : []),
         {
           id: 'page:booking-pages',
           name: strings.bookingPages,
@@ -200,9 +188,8 @@ export function pageCommands(
 const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
   preferences: strings.preferencesTerms,
   objects: strings.objectsTerms,
-  jobs: strings.jobsTerms,
-  automations: automationStrings.terms,
   security: strings.signInTerms,
+  'round-robin': strings.roundRobinTerms,
 };
 
 /** The Settings pages this member may open (`visibleSettingsNav`), named "Settings › <page>" (AC-1082). */
@@ -212,16 +199,24 @@ export function settingsCommands(
   isGuest = false,
 ): readonly Command[] {
   // The trash's entry opens its own page, which "Open trash" already reaches.
+  // An entry with tabs (Members: Teams) gives each tab its own command, so "Settings › Teams" still finds it.
   return visibleSettingsNav(settingsNav(slug), permissions, false, isGuest).flatMap((group) =>
     group.entries
       .filter((entry) => entry.id !== 'trash')
-      .map((entry): Command => ({
-        id: `settings:${entry.id}`,
-        name: strings.settingsPage(entry.label),
-        icon: entry.icon,
-        terms: SETTINGS_TERMS[entry.id] ?? [],
-        run: go(entry.href),
-      })),
+      .flatMap((entry) =>
+        (entry.tabs ?? [entry]).map((page): Command => ({
+          id: `settings:${page.id}`,
+          name: strings.settingsPage(page.label),
+          icon: entry.icon,
+          // The page's own words, then the navigation's (what "Find a setting" matches too), for the entry's own page.
+          terms: [
+            ...(SETTINGS_TERMS[page.id] ?? []),
+            ...(page.id === entry.id ? (entry.keywords ?? []) : []),
+            ...('keywords' in page && page !== entry ? (page.keywords ?? []) : []),
+          ],
+          run: go(page.href),
+        })),
+      ),
   );
 }
 

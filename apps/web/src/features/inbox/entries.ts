@@ -9,7 +9,7 @@ import { availabilityHref } from '../booking/links.ts';
 import { bookingsTabHref } from '../bookings/tabs.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
-import { membersSettingsHref, webhooksHref } from '../settings/nav.ts';
+import { membersSettingsHref } from '../settings/nav.ts';
 import { strings } from './strings.ts';
 
 /**
@@ -98,12 +98,13 @@ export function targetOf(
   objectSlugs: ReadonlyMap<string, string>,
 ): NotificationTarget {
   if (view.taskId !== undefined) return { kind: 'task', taskId: view.taskId };
-  // Members opens on Joining while someone waits, where Approve and Decline are.
+  // Members opens on Invitations while someone waits, where Approve and Decline are.
   if (view.joinRequestId !== undefined) return { kind: 'href', href: membersSettingsHref(slug) };
   // Someone changed the reader's scheduling (spec 0037, AC-1264): their hours, where the change shows.
   if (view.kind === 'scheduling_changed') return { kind: 'href', href: availabilityHref(slug) };
-  // A webhook endpoint turned off (spec 0064, AC-6423): Settings › Webhooks, where the one switch turns it back on.
-  if (view.kind === 'webhook_off') return { kind: 'href', href: webhooksHref(slug) };
+  // A webhook endpoint turned off (spec 0064, AC-6423) opens nothing while Settings › Webhooks is parked (the owner,
+  // 4 November 2026): its page is out of the app until it is built properly, so the notice only says so.
+  if (view.kind === 'webhook_off') return undefined;
   // A guest's booking (B-12): Bookings' List with its card open.
   if (view.kind === 'booking' && view.bookingId !== undefined) {
     return { kind: 'href', href: `${bookingsTabHref(slug, 'list')}?open=${view.bookingId}` };

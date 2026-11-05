@@ -148,10 +148,14 @@ async function renderGeneral({
 
 const nameField = () => page.getByRole('textbox', { name: strings.name });
 
-describe('the time zone', () => {
-  it('says what reads in it, under its title', async () => {
+describe('the rows', () => {
+  // Critic A #5 (5 November 2026): Brand owns the logo, so General has no Logo row; the time zone says what reads in
+  // it in its InfoTip, not a line under its title.
+  it('has no Logo row', async () => {
     await renderGeneral();
-    await expect.element(page.getByText(strings.timeZoneUse)).toBeVisible();
+    await expect.element(nameField()).toBeVisible();
+    expect(page.getByText('Logo', { exact: true }).elements()).toEqual([]);
+    expect(page.getByRole('link', { name: 'Open Brand' }).elements()).toEqual([]);
   });
 });
 
@@ -401,7 +405,7 @@ describe('saving at once', () => {
 });
 
 describe('keeping submissions (spec 0023, AC-1054)', () => {
-  const keepSelect = () => page.getByRole('button', { name: new RegExp(strings.keepSubmissions) });
+  const keepSelect = () => page.getByRole('button', { name: new RegExp(`^(?!About ).*${strings.keepSubmissions}`) });
   const pick = async (choice: '12' | '24' | 'forever') => {
     await userEvent.click(keepSelect());
     await userEvent.click(page.getByRole('option', { name: strings.keepChoices[choice] }));
@@ -455,7 +459,9 @@ describe('keeping submissions (spec 0023, AC-1054)', () => {
     await renderGeneral({ asMember: true });
     // Read only, the choice is shown as text and nothing opens to change it.
     await expect.element(page.getByText(strings.keepChoices.forever)).toBeVisible();
-    expect(page.getByRole('button', { name: new RegExp(strings.keepSubmissions) }).elements()).toEqual([]);
+    expect(
+      page.getByRole('button', { name: new RegExp(`^(?!About ).*${strings.keepSubmissions}`) }).elements(),
+    ).toEqual([]);
   });
 });
 

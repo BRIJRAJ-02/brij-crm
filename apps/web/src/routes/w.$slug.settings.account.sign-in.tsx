@@ -4,7 +4,7 @@ import { SecurityLoading, SecurityScreen } from '../features/settings/SecuritySc
 import { strings } from '../features/settings/security-strings.ts';
 import { SettingsPage } from '../features/settings/SettingsPage.tsx';
 
-// Settings › Account › Sign in and devices (spec 0033; Security until 22 October 2026, renamed so the
+// Settings › Account › Sign in and security (spec 0033; Security until 22 October 2026, renamed so the
 // Settings sidebar holds one Security, the workspace's): how this person signs in and the devices signed in, held by
 // the data layer, which reads them from the top each time the page opens; and
 // the first page of Recent activity, started here and never waited for: its

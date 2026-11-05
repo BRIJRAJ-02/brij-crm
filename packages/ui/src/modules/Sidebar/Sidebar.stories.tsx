@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { ThemeSwitch } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -442,6 +443,52 @@ export const SettingsKeyboard: Story = {
     // Back in, focus lands on the current page's item.
     await userEvent.tab({ shift: true });
     await expect(preferences).toHaveFocus();
+  },
+};
+
+/** "Find a setting" (`find`): a search field the sidebar's width under the head; the screen filters its own items. */
+export const SettingsFind: Story = {
+  render: function Render() {
+    const [query, setQuery] = useState('');
+    const all = ['Profile', 'Preferences', 'Notifications'];
+    const shown = all.filter((name) => name.toLowerCase().includes(query.toLowerCase()));
+    return (
+      <Stage height="page">
+        <Sidebar
+          heading="Settings"
+          back={{ label: 'Leave settings', href: '/companies' }}
+          label="Settings"
+          keyboard="arrows"
+          find={
+            <Field
+              label="Find a setting"
+              isLabelHidden
+              variant="search"
+              placeholder="Find a setting"
+              value={query}
+              onChange={setQuery}
+            />
+          }
+        >
+          <NavGroup label={shown.length === 0 ? 'No setting matches' : 'Account'} isLabelShown>
+            {shown.map((name) => (
+              <NavItem key={name} icon="user-round" href={`/settings/${name.toLowerCase()}`}>
+                {name}
+              </NavItem>
+            ))}
+          </NavGroup>
+        </Sidebar>
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole('textbox', { name: 'Find a setting' });
+    await userEvent.type(field, 'pre');
+    await expect(canvas.getByRole('link', { name: 'Preferences' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: 'Profile' })).toBeNull();
+    // Down from the field reaches the first match.
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('link', { name: 'Preferences' })).toHaveFocus();
   },
 };
 

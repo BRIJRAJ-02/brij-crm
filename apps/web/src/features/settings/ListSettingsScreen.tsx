@@ -28,7 +28,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArchiveListDialog } from '../lists/ArchiveListDialog.tsx';
 import { listHref } from '../lists/paths.ts';
 import { strings as listStrings } from '../lists/strings.ts';
@@ -73,22 +73,35 @@ function GeneralTab({
   const [icon, setIcon] = useState<ObjectIcon>(list.icon);
   const [hue, setHue] = useState<Hue>(list.hue);
   const [isBusy, setBusy] = useState(false);
+  const sent = useRef({ name: list.name, icon: list.icon, hue: list.hue });
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [isArchiving, setArchiving] = useState(false);
   const canManage = list.canManage;
-  const isChanged = name.trim() !== list.name || icon !== list.icon || hue !== list.hue;
-
-  const save = () => {
-    if (isBusy || name.trim() === '') return;
+  // One save model (critic A #8, 5 November 2026): the name saves when the field is left or Enter is pressed, the
+  // icon and colour as they are picked, each with its toast; no Save button in the card.
+  const commit = (next: { readonly name?: string; readonly icon?: ObjectIcon; readonly hue?: Hue }) => {
+    const nextName = (next.name ?? name).trim();
+    if (nextName === '') {
+      setName(list.name);
+      return;
+    }
+    const nextIcon = next.icon ?? icon;
+    const nextHue = next.hue ?? hue;
+    // Against what was last sent, not the list as last read: Enter then leaving the field, or two quick picks, send
+    // each change once.
+    const was = sent.current;
+    if (nextName === was.name && nextIcon === was.icon && nextHue === was.hue) return;
+    sent.current = { name: nextName, icon: nextIcon, hue: nextHue };
     setBusy(true);
     setProblem(undefined);
-    data.lists.update(slug, list.id, { name: name.trim(), icon, hue }).then(
+    data.lists.update(slug, list.id, { name: nextName, icon: nextIcon, hue: nextHue }).then(
       (saved) => {
         setBusy(false);
         toasts.toast({ tone: 'success', message: listStrings.saved(saved.name) });
       },
       (error: unknown) => {
         setBusy(false);
+        sent.current = was;
         setProblem(isDataError(error) ? error.message : listStrings.saveFailed);
       },
     );
@@ -108,22 +121,38 @@ function GeneralTab({
     <SettingsStack>
       {!canManage && <Callout>{lockSentence(list, members)}</Callout>}
       <SettingsSection title={listStrings.nameColumn}>
-        <Card>
+        <Card isBusy={isBusy}>
           <Field
             label={listStrings.nameColumn}
             value={name}
             onChange={setName}
+            onBlur={() => {
+              commit({ name });
+            }}
+            onSubmit={() => {
+              commit({ name });
+            }}
             maxLength={100}
             isReadOnly={!canManage}
             {...(problem === undefined ? {} : { error: problem })}
           />
-          <ObjectIconButton icon={icon} hue={hue} onChange={setIcon} isReadOnly={!canManage} />
-          <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
-          {canManage && (
-            <Button variant="primary" isPending={isBusy} isDisabled={!isChanged} onPress={save}>
-              {listStrings.save}
-            </Button>
-          )}
+          <ObjectIconButton
+            icon={icon}
+            hue={hue}
+            onChange={(next) => {
+              setIcon(next);
+              commit({ icon: next });
+            }}
+            isReadOnly={!canManage}
+          />
+          <ObjectHueField
+            hue={hue}
+            onChange={(next) => {
+              setHue(next);
+              commit({ hue: next });
+            }}
+            isReadOnly={!canManage}
+          />
         </Card>
       </SettingsSection>
       <Card>

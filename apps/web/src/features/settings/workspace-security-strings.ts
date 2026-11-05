@@ -1,16 +1,19 @@
-// Settings › Workspace › Security: the page's copy (spec 0033, milestone 4), apart from Account › Sign in and devices' own.
+// Settings › People › Roles and access › Sign in rules: the page's copy (spec 0033, milestone 4), apart from Account ›
+// Sign in and security's own.
 
 /** Days as the session length Select says them. */
 const days = (count: number) => (count === 1 ? '1 day' : `${String(count)} days`);
 
 /** Settings › Workspace › Security's copy (AC-893 to AC-895, AC-899). */
 export const strings = {
-  /** The entry in the settings navigation, under Workspace. */
-  navLabel: 'Security',
-  /** The nav's own name: the trail already says Workspace (Settings › Workspace › Security). */
-  title: 'Security',
-  twoFactor: 'Two factor sign in',
-  require: 'Require two factor sign in',
+  /** The page's name while it loads or fails: the tab's name in Roles and access (5 November 2026). */
+  title: 'Sign in rules',
+  /**
+   * The one section: rules for everyone here, so it never reads like the member's own "Two factor sign in" card on
+   * Sign in and security (critic B, 5 November 2026).
+   */
+  section: 'For everyone',
+  require: 'Require two factor for everyone',
   requireInfo: 'A code from an app on their phone, after the email code.',
   /** The row's line while the switch is on: who still has to set it up (nothing while it is off, the switch says it). */
   requireOn: (without: number) =>

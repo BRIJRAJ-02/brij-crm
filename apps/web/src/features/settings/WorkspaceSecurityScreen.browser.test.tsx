@@ -140,12 +140,16 @@ async function renderScreen(layer: DataLayer): Promise<Toasts> {
 }
 
 describe('the page’s words (SW10, SW11, SW13)', () => {
-  it('is titled Security, with headings only, and no box above the switch while it is off limits', async () => {
+  it('is the Sign in rules tab, one section For everyone, and no box above the switch while it is off limits', async () => {
     const { layer } = layerWith([]);
     await renderScreen(layer);
-    // The trail already says Workspace, so the title is the nav's own word.
-    await expect.element(page.getByRole('heading', { level: 1, name: 'Security' })).toBeInTheDocument();
-    // Headings only: no line under Two factor sign in or Sessions.
+    // A tab of People › Roles and access (5 November 2026): its h1 is the entry's name, or the tab's when alone.
+    await expect
+      .element(page.getByRole('heading', { level: 1, name: /^(Roles and access|Sign in rules)$/ }))
+      .toBeInTheDocument();
+    // One section named as the rule it holds, never a second "Two factor sign in" beside the member's own (critic B).
+    await expect.element(page.getByRole('heading', { name: 'For everyone' })).toBeInTheDocument();
+    expect(page.getByRole('heading', { name: 'Two factor sign in' }).elements()).toHaveLength(0);
     const text = document.body.textContent;
     expect(text).not.toContain('A second step at sign in');
     expect(text).not.toContain('How long a sign in lasts here');
@@ -155,7 +159,7 @@ describe('the page’s words (SW10, SW11, SW13)', () => {
     await expect
       .element(page.getByRole('link', { name: 'Set up yours' }))
       .toHaveAttribute('href', '/w/acme/settings/account/sign-in');
-    await expect.element(page.getByRole('switch', { name: 'Require two factor sign in' })).toBeDisabled();
+    await expect.element(page.getByRole('switch', { name: 'Require two factor for everyone' })).toBeDisabled();
     expect(text).not.toContain('How long people stay signed in before they sign in again.');
     expect(text).toContain('Everyone signs in again.');
   });

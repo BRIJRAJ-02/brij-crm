@@ -1,7 +1,7 @@
 // Recent activity in Chromium (spec 0033, AC-898; Q51, SA25, SA35): the section reads its first page through use()
 // without React's "use() to suspend in a previous render" error, across the first page, a failed read and its
-// retry, and a new first page after a change (which keeps the rows shown, busy, until it arrives); and another page
-// can give it its own heading and line (History's "Your sign ins").
+// retry, and a new first page after a change (which keeps the rows shown, busy, until it arrives); five events
+// first, then Show more; and another page can give it its own heading.
 import type { ActivityPage, DataLayer, SecurityActivity } from '@crm/data';
 import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -47,10 +47,7 @@ const useErrors = () =>
   errors.mock.calls.map((call) => String(call[0])).filter((message) => message.includes('use() to suspend'));
 
 /** The section with a first page the test swaps, as the route's loader would on a retry or after a change. */
-async function render(
-  initial: Promise<ActivityPage | undefined>,
-  extra: { title?: string; description?: string } = {},
-) {
+async function render(initial: Promise<ActivityPage | undefined>, extra: { title?: string } = {}) {
   let swap: (next: Promise<ActivityPage | undefined>) => void = () => undefined;
   let retries = 0;
   const retried = later<undefined>();
@@ -120,29 +117,35 @@ describe('Recent activity', () => {
     expect(useErrors()).toEqual([]);
   });
 
-  it('takes another heading and line', async () => {
-    await render(Promise.resolve(FIRST), { title: 'Your sign ins', description: 'Where and when you signed in.' });
+  it('takes another heading, with no line under either', async () => {
+    await render(Promise.resolve(FIRST), { title: 'Your sign ins' });
     await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
-    await expect.element(page.getByText('Where and when you signed in.')).toBeVisible();
     await expect.element(page.getByRole('heading', { name: 'Recent activity' })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Last 90 days.');
   });
 
-  it('has a pending screen with the loaded section’s heading, line and loading rows', async () => {
+  // Critic A #12 (5 November 2026): a long list of one Mac's sign ins. Five first, then Show more shows the rest read.
+  it('shows five events, then the rest of the page on Show more', async () => {
+    const many: ActivityPage = { items: ['1', '2', '3', '4', '5', '6', '7'].map((id) => event(id, 'sign_in')) };
+    await render(Promise.resolve(many));
+    await vi.waitFor(() => {
+      expect(page.getByText('Signed in with an email code').elements()).toHaveLength(5);
+    });
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await vi.waitFor(() => {
+      expect(page.getByText('Signed in with an email code').elements()).toHaveLength(7);
+    });
+    // Everything read, and no older page to read: Show more goes.
+    await expect.element(page.getByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+  });
+
+  it('has a pending screen with the loaded section’s heading and loading rows', async () => {
     shown = await renderInApp(() => <RecentActivityPending />, {
       data: {},
       pattern: '/w/$slug/settings/account/sign-in',
       at: '/w/acme/settings/account/sign-in',
     });
     await expect.element(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
-    await expect.element(page.getByText('Last 90 days.')).toBeVisible();
     expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
-    shown.unmount();
-    shown = await renderInApp(() => <RecentActivityPending title="Your sign ins" />, {
-      data: {},
-      pattern: '/w/$slug/settings/account/sign-in',
-      at: '/w/acme/settings/account/sign-in',
-    });
-    await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
-    await expect.element(page.getByText('Last 90 days.')).toBeVisible();
   });
 });

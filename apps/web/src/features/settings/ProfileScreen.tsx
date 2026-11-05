@@ -18,6 +18,7 @@ import {
   Card,
   Field,
   FileDrop,
+  InfoTip,
   SaveBar,
   type SaveBarStatus,
   SettingsRow,
@@ -185,11 +186,9 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       ? strings.saveBeforeSync
       : profile.google === 'unlinked'
         ? strings.googleUnlinked(profile.email)
-        : profile.image !== undefined
-          ? strings.photoShown
-          : profile.google === 'linked'
-            ? strings.googleNoPhoto
-            : undefined;
+        : profile.image === undefined && profile.google === 'linked'
+          ? strings.googleNoPhoto
+          : undefined;
   const isNameMissing = name.trim() === '';
   const handleError = isHandleDirty ? handleProblem(wantedHandle) : undefined;
   const isBioWithoutHandle = isBioDirty && profile.handle === undefined && !isHandleDirty;
@@ -360,24 +359,25 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
               {...(isNameMissing && isDirty ? { error: strings.yourNameMissing } : {})}
             />
           </SettingsRow>
-          <SettingsRow title={strings.email} description={strings.emailUse} control="field">
+          <SettingsRow title={strings.email} control="field">
             {profile.email}
           </SettingsRow>
         </Card>
       </SettingsSection>
       {/* The public profile (22 Oct 2026): the person's own, the same in every workspace. */}
-      <SettingsSection title={strings.publicProfileSection} description={strings.publicProfileText}>
+      <SettingsSection title={strings.publicProfileSection}>
         <Card>
+          {/* Only a handle still to claim says so under its title; a kept one's note is its InfoTip. */}
           <SettingsRow
             title={strings.handle}
-            description={
-              profile.handle === undefined
-                ? [
+            {...(profile.handle === undefined
+              ? {
+                  description: [
                     strings.handleNew,
                     ...(otherPageNames.length === 0 ? [] : [strings.otherLinkPages(otherPageNames)]),
-                  ].join(' ')
-                : strings.handleKept
-            }
+                  ].join(' '),
+                }
+              : { meta: <InfoTip label={strings.handle}>{strings.handleKept}</InfoTip> })}
             control="field"
           >
             <Field
@@ -411,7 +411,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
                   : {})}
             />
           </SettingsRow>
-          <SettingsRow title={strings.bio} description={strings.bioText} control="field">
+          <SettingsRow title={strings.bio} control="field">
             <Field
               label={strings.bio}
               isLabelHidden
@@ -458,11 +458,12 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
         />
       )}
       {/* What the page at their handle holds (spec 0051) is edited on its own page, beside its phone preview. */}
-      <SettingsSection title={linkPageCopy.profileSection} description={linkPageCopy.profileSectionText}>
+      {/* The page's address shows once, in Your page above (critic A #5): this row only opens the editor. */}
+      <SettingsSection title={linkPageCopy.profileSection}>
         <Card>
           <SettingsRow
             title={linkPageCopy.title}
-            description={profile.handle === undefined ? linkPageCopy.profileNoHandle : publicProfileUrl(profile.handle)}
+            {...(profile.handle === undefined ? { description: linkPageCopy.profileNoHandle } : {})}
           >
             <ButtonLink href={linkPageHref(slug)} icon="pencil" isDisabled={profile.handle === undefined}>
               {linkPageCopy.editLinkPage}
@@ -494,12 +495,12 @@ export function ProfilePending() {
           <SettingsRow title={strings.yourName} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
-          <SettingsRow title={strings.email} description={strings.emailUse} control="field">
+          <SettingsRow title={strings.email} control="field">
             <Skeleton />
           </SettingsRow>
         </Card>
       </SettingsSection>
-      <SettingsSection title={strings.publicProfileSection} description={strings.publicProfileText}>
+      <SettingsSection title={strings.publicProfileSection}>
         <Card isBusy>
           <SettingsRow title={strings.handle} control="field">
             <Skeleton shape="field" />
@@ -510,9 +511,9 @@ export function ProfilePending() {
         </Card>
       </SettingsSection>
       <SocialLinksSectionPending />
-      <SettingsSection title={linkPageCopy.profileSection} description={linkPageCopy.profileSectionText}>
+      <SettingsSection title={linkPageCopy.profileSection}>
         <Card isBusy>
-          <SettingsRow title={linkPageCopy.title} description={<Skeleton width="medium" />}>
+          <SettingsRow title={linkPageCopy.title}>
             <Skeleton shape="field" width="short" />
           </SettingsRow>
         </Card>

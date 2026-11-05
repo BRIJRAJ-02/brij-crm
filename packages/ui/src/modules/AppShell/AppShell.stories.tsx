@@ -150,3 +150,56 @@ export const PushedByPanel: Story = {
     await expect(filter.getBoundingClientRect().right).toBeLessThanOrEqual(panel.getBoundingClientRect().left);
   },
 };
+
+/** A settings page on a phone (`phoneSidebar="hidden"`): the page alone, its TopBar's chevron the way back up. */
+export const PhonePage: Story = {
+  render: () => (
+    <Stage width="phone" height="page">
+      <AppShell
+        phoneSidebar="hidden"
+        sidebar={
+          <Sidebar heading="Settings" back={{ label: 'Leave settings', href: '/' }} label="Settings">
+            <NavItem icon="user-round" href="/settings/profile" isCurrent>
+              Profile
+            </NavItem>
+          </Sidebar>
+        }
+        topBar={<TopBar title="Profile" back={{ label: 'All settings', href: '/settings' }} />}
+      >
+        <EmptyState title="Your details">Name and photo.</EmptyState>
+      </AppShell>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('navigation', { name: 'Settings', hidden: true })).not.toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'All settings' })).toBeVisible();
+  },
+};
+
+/** Settings on a phone (`phoneSidebar="full"`): the sidebar alone, open and the whole width, every entry labelled. */
+export const PhoneList: Story = {
+  render: () => (
+    <Stage width="phone" height="page">
+      <AppShell
+        phoneSidebar="full"
+        sidebar={
+          <Sidebar heading="Settings" back={{ label: 'Leave settings', href: '/' }} label="Settings">
+            <NavItem icon="user-round" href="/settings/profile">
+              Profile
+            </NavItem>
+            <NavItem icon="bell" href="/settings/notifications">
+              Notifications
+            </NavItem>
+          </Sidebar>
+        }
+        topBar={<TopBar title="Settings" />}
+      >
+        <EmptyState title="Nothing here">The list is the page.</EmptyState>
+      </AppShell>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Notifications' })).toBeVisible();
+    await expect(canvas.getByRole('main', { hidden: true })).not.toBeVisible();
+  },
+};

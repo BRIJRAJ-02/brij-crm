@@ -55,6 +55,26 @@
     outline: none;
   }
 
+  /* The way back up (`back`): only on a phone's bar, where the sidebar is hidden. Its button sits on the gutter's
+     line, its icon where the title would start. */
+  .back {
+    display: none;
+    flex: none;
+    margin-inline-start: calc(-1 * var(--space-8));
+  }
+
+  @container (width < 480px) {
+    .back {
+      display: inline-flex;
+    }
+
+    /* On a phone the title holds its place: the end's actions give way first, never the trail. */
+    .end {
+      flex: 0 1 auto;
+      min-inline-size: 0;
+    }
+  }
+
   /* The view's open search: wide enough for a name, never the whole bar. */
   .search {
     inline-size: calc(8 * var(--size-chip));
