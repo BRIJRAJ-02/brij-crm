@@ -1,8 +1,8 @@
 // The required attributes an import that makes records leaves empty (spec
 // 0040, 27 October 2026): no column fills them and they can't fill
 // themselves, so every new row would be refused. The columns step names each
-// one with a way to match a column, and Continue waits on them, rather than
-// the server refusing at Start. Pure; the engine's own check
+// one with a way to match a column, as a quiet row until Continue is pressed
+// (then as an error), rather than the server refusing at Start. Pure; the engine's own check
 // (`isUnfillableRequired`, by a member) still refuses one this misses.
 import type { AttributeDefinition, ImportTarget } from '@crm/data';
 
@@ -23,4 +23,28 @@ export function unmatchedRequired(
   return [...attributes]
     .filter((attribute) => isUnfilledRequired(attribute) && !matched.has(attribute.id))
     .sort((a, b) => a.position - b.position);
+}
+
+/** Why Continue can't go on yet: no column has a field, or a required field has no column. */
+export type ColumnsBlock = 'no-column' | 'required';
+
+/**
+ * What stops the columns step (the foolproof pass, 5 November 2026): checked only when Continue is pressed, so an
+ * unfinished match never reads as an error. A required field with no column comes first, since its Match a column is
+ * the way on and gives a column a field as well; then no column at all. Updating only (nothing made) needs no
+ * required field.
+ */
+export function columnsBlock(
+  matched: number,
+  required: readonly AttributeDefinition[],
+  isCreating: boolean,
+): ColumnsBlock | undefined {
+  if (isCreating && required.length > 0) return 'required';
+  if (matched === 0) return 'no-column';
+  return undefined;
+}
+
+/** How an unmatched required field's row reads: quiet until Continue was pressed with it unmatched. */
+export function requiredTone(isTried: boolean): 'info' | 'danger' {
+  return isTried ? 'danger' : 'info';
 }

@@ -8,9 +8,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 
 // One import's summary (spec 0040, AC-1127): `/w/$slug/objects/$object/imports/$importId`,
 // kept for its undo window. The loader reads the import (following its jobs,
-// so the page shows their progress live) and its first page of refused rows
-// through the data layer. One the person may not see, or that doesn't exist,
-// shows the same not found page (AC-1137).
+// so the page shows their progress live), its first page of refused rows, and
+// the list it went into, if any, through the data layer. One the person may
+// not see, or that doesn't exist, shows the same not found page (AC-1137).
 export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importId')({
   // Coming back reads the import afresh: its job may have ended since, changing its counts and its undo.
   shouldReload: ({ cause }) => cause === 'enter',
@@ -19,12 +19,24 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importI
       const objects = await context.data.objects.all(params.slug);
       const object = objects.find((each) => each.apiSlug === params.object);
       if (object === undefined) return { screen: undefined };
-      const [initial, page] = await Promise.all([
+      // The live lists come with the import (cached by the workspace's frame, so usually no call): an import into a
+      // list ends on that list (the foolproof pass), with its name, icon and View <list>; one gone, on the object.
+      const [initial, page, lists] = await Promise.all([
         context.data.imports.get(params.slug, params.importId),
         context.data.imports.rows(params.slug, params.importId),
+        context.data.lists.list(params.slug).catch(() => []),
       ]);
       if (initial.objectId !== object.id) return { screen: undefined };
-      return { screen: { object, initial, refused: page.rows, nextCursor: page.nextCursor } };
+      const list = initial.listId === undefined ? undefined : lists.find((each) => each.id === initial.listId);
+      return {
+        screen: {
+          object,
+          initial,
+          refused: page.rows,
+          nextCursor: page.nextCursor,
+          ...(list === undefined ? {} : { list }),
+        },
+      };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') return { screen: undefined };
       throw error;

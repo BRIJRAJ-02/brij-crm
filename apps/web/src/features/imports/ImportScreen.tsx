@@ -29,6 +29,7 @@ import {
   EmptyState,
   type FieldAttribute,
   FileDrop,
+  focusLater,
   Icon,
   loadPhoneLibrary,
   Modal,
@@ -49,7 +50,6 @@ import {
   Table,
   type TableColumn,
   type TextContext,
-  Tooltip,
   TopBar,
   useFormatSettings,
 } from '@crm/ui';
@@ -96,7 +96,7 @@ import {
   type ReadChoices,
   type ReadRows,
 } from './rows.ts';
-import { unmatchedRequired } from './required.ts';
+import { columnsBlock, requiredTone, unmatchedRequired } from './required.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for the import page: what its route loaded through the data layer. */
@@ -723,7 +723,7 @@ export function ImportScreen({
 
   const topBar = (
     <TopBar
-      title={strings.title(into?.list.name ?? object.pluralName)}
+      title={into === undefined ? strings.title(object.pluralName) : strings.listTitle(into.list.name)}
       icon={into?.list.icon ?? object.icon}
       hue={into?.list.hue ?? object.hue}
       crumbs={[
@@ -1175,7 +1175,7 @@ export function ImportScreen({
     </PageColumn>
   );
 
-  return <WorkspacePage currentObject={object.apiSlug} page={{ topBar, body }} />;
+  return <WorkspacePage {...(into === undefined ? { currentObject: object.apiSlug } : {})} page={{ topBar, body }} />;
 }
 
 /** Props for the match columns step. */
@@ -1196,7 +1196,7 @@ interface ColumnsStepProps {
   /** The date columns whose values read either way round, each with its order and one value read by it. */
   readonly dates: readonly DateColumn[];
   readonly onDateOrder: (column: number, order: DateOrder) => void;
-  /** Required attributes no column fills and no default fills: each a danger row, and Continue waits. */
+  /** Required attributes no column fills and no default fills: each a quiet row, an error once Continue is pressed. */
   readonly required: readonly AttributeDefinition[];
   /** Rows matching no record make one (the default), so the required attributes need a column. */
   readonly isCreating: boolean;
@@ -1243,7 +1243,28 @@ function ColumnsStep({
   onBack,
   onContinue,
 }: ColumnsStepProps) {
-  const isMissingRequired = isCreating && required.length > 0;
+  // Checked when Continue is pressed, never before (the foolproof pass): until then an unmatched required field is a
+  // quiet row with its Match a column, and Continue is always there to press. Each press that stops counts, so the
+  // rows mount again and are said again, and the press moves focus to the first one's Match a column (from the press,
+  // never as a row mounts: WCAG 3.2.2). Once nothing stops it, or Only update records I have changes, the rows read
+  // quietly again until the next press.
+  const [tries, setTried] = useState(0);
+  const block = columnsBlock(matched, required, isCreating);
+  if (block === undefined && tries > 0) setTried(0);
+  const shownBlock = tries > 0 ? block : undefined;
+  // Each required row's Match a column by its attribute, and Continue: where focus goes after a press or a pick.
+  const matchRefs = useRef(new Map<string, HTMLButtonElement>());
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const firstMatch = (among: readonly AttributeDefinition[]) =>
+    among.map((each) => matchRefs.current.get(each.id)).find((each) => each?.isConnected === true);
+  const tryContinue = () => {
+    if (block !== undefined) {
+      setTried((count) => count + 1);
+      if (block === 'required') focusLater(() => firstMatch(required));
+      return;
+    }
+    onContinue();
+  };
   const freeColumns: readonly SelectItem[] = loaded.table.headers.flatMap((header, column) =>
     targets[column] === undefined
       ? [{ id: String(column), label: header === '' ? strings.newAttributeTitle(column) : header }]
@@ -1282,18 +1303,9 @@ function ColumnsStep({
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          {matched === 0 || isMissingRequired ? (
-            // Off until a column has somewhere to go and every required field has one, and says so on hover and focus.
-            <Tooltip content={matched === 0 ? strings.matchOneFirst : strings.matchRequiredFirst}>
-              <Button variant="primary" isDisabled>
-                {strings.continue}
-              </Button>
-            </Tooltip>
-          ) : (
-            <Button variant="primary" isPending={checked !== undefined} onPress={onContinue}>
-              {strings.continue}
-            </Button>
-          )}
+          <Button ref={continueRef} variant="primary" isPending={checked !== undefined} onPress={tryContinue}>
+            {strings.continue}
+          </Button>
         </>
       }
     >
@@ -1302,13 +1314,20 @@ function ColumnsStep({
           {error}
         </Callout>
       )}
-      {/* Guarded here, not at Start: a required field no column fills would refuse every new row. */}
+      {shownBlock === 'no-column' && (
+        <Callout tone="danger" isAnnounced>
+          {strings.matchOneFirst}
+        </Callout>
+      )}
+      {/* Guarded here, not at Start: a required field no column fills would refuse every new row. Quiet until
+          Continue is pressed with it unmatched, then an error. */}
       {isCreating &&
         required.map((attribute) => (
           <Callout
-            key={`required-${attribute.id}`}
-            tone="danger"
-            isPolite
+            key={`required-${attribute.id}-${shownBlock === 'required' ? String(tries) : 'quiet'}`}
+            tone={requiredTone(shownBlock === 'required')}
+            // An error the person caused, with focus already on its way on: said politely (Callout's README).
+            {...(shownBlock === 'required' ? { isPolite: true } : {})}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1319,18 +1338,37 @@ function ColumnsStep({
                       size="sm"
                       items={freeColumns}
                       value={null}
+                      triggerRef={(element) => {
+                        if (element === null) matchRefs.current.delete(attribute.id);
+                        else matchRefs.current.set(attribute.id, element);
+                      }}
                       onChange={(id) => {
-                        if (id !== null) onTarget(Number(id), { attributeId: attribute.id });
+                        if (id === null) return;
+                        onTarget(Number(id), { attributeId: attribute.id });
+                        // The row goes with its pick: focus moves on to the next one's Match a column, else Continue.
+                        const rest = required.filter((each) => each.id !== attribute.id);
+                        focusLater(() => firstMatch(rest) ?? continueRef.current);
                       }}
                     />
                   ),
                 }
               : {})}
           >
-            {strings.requiredMissing(attribute.title)}
+            {shownBlock === 'required'
+              ? strings.requiredMissing(attribute.title)
+              : strings.requiredUnmatched(attribute.title)}
           </Callout>
         ))}
-      {required.length > 0 && <Checkbox label={strings.updateOnly} isSelected={!isCreating} onChange={onUpdateOnly} />}
+      {required.length > 0 && (
+        <Checkbox
+          label={strings.updateOnly}
+          isSelected={!isCreating}
+          onChange={(isOnly) => {
+            setTried(0);
+            onUpdateOnly(isOnly);
+          }}
+        />
+      )}
       {checked !== undefined && (
         <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
       )}

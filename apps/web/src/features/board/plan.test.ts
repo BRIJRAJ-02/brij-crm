@@ -1,6 +1,6 @@
 import type { AttributeDefinition } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { planBoard } from './plan.ts';
+import { planBoard, stageField } from './plan.ts';
 
 const attribute = (id: string, extra: Partial<AttributeDefinition> = {}): AttributeDefinition => ({
   id,
@@ -115,5 +115,42 @@ describe('the board a view shows', () => {
   it('falls back to the defaults when the stored grouping field is no longer groupable', () => {
     const plan = planBoard(DEALS, { groupByAttributeId: 'value', cardFields: [], showEmptyColumns: true });
     expect(plan.kind === 'board' && plan.groupBy.id).toBe('stage');
+  });
+});
+
+describe('stageField (Add Stage)', () => {
+  const ids = () => {
+    let n = 0;
+    return () => {
+      n += 1;
+      return `id-${String(n)}`;
+    };
+  };
+
+  it('makes a status field named Stage with open stages first, then won and lost, each with its own id', () => {
+    const made = stageField('people', ids());
+    expect(made).toMatchObject({ id: 'id-1', objectId: 'people', title: 'Stage', type: 'status' });
+    expect(made.options?.map((each) => [each.id, each.label, each.outcome])).toEqual([
+      ['id-2', 'Lead', 'open'],
+      ['id-3', 'In progress', 'open'],
+      ['id-4', 'Won', 'won'],
+      ['id-5', 'Lost', 'lost'],
+    ]);
+  });
+
+  it('names a later try "Stage 2" when the name was taken', () => {
+    expect(stageField('people', ids(), 2).title).toBe('Stage 2');
+  });
+
+  it('is a field the board groups by at once', () => {
+    const made = stageField('people', ids());
+    const stage = attribute(made.id, {
+      type: 'status',
+      title: made.title,
+      options: (made.options ?? []).map((each, position) => ({ ...each, position, isArchived: false })),
+    });
+    const outcome = planBoard([CREATED, stage], undefined);
+    expect(outcome.kind).toBe('board');
+    if (outcome.kind === 'board') expect(outcome.groupBy.id).toBe(made.id);
   });
 });

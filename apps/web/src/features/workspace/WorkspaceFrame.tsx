@@ -126,6 +126,8 @@ export interface WorkspaceFrameProps {
   readonly isMissing?: boolean;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
+  /** The list a page belongs to whose address doesn't name it (an import into it). */
+  readonly currentList?: string;
   /** A page of the sidebar's that isn't an object's: Tasks, a Scheduling page or the trash. */
   readonly currentPage?: SidebarPage;
   /** Inside Settings: the settings sidebar in place of the app's (spec 0026, AC-681). */
@@ -165,6 +167,7 @@ export function WorkspaceFrame({
   lists,
   isMissing = false,
   currentObject,
+  currentList,
   currentPage,
   settings,
   permissions,
@@ -394,6 +397,7 @@ export function WorkspaceFrame({
                 lists={lists ?? []}
                 {...(canMakeLists ? { onNewList: openNewList } : {})}
                 {...(currentObject === undefined ? {} : { currentObject })}
+                {...(currentList === undefined ? {} : { currentList })}
                 {...(currentPage === undefined ? {} : { currentPage })}
                 toasts={toasts}
                 onCustomise={openCustomise}
@@ -434,6 +438,7 @@ export function WorkspaceFrame({
       setRail,
       currentPage,
       currentObject,
+      currentList,
       openHelp,
       data,
       universe,

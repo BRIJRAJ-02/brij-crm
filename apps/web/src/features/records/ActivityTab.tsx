@@ -1,6 +1,6 @@
 // Brief
 // Purpose: what happened to a record, newest first, on its page's Activity tab (and Overview's Recent activity).
-// Main task: read who changed what and when (one save's changes as one entry), with its notes, tasks, threads and meetings, as it happens.
+// Main task: read who changed what and when (one save's changes as one entry), with its notes, tasks, threads and meetings, as it happens; log a call or meeting where it will show.
 // Leaves out: emails (#43), a restore's own entry (the record keeps no history of it), and which job made a change.
 import type {
   ActivityEntryShape,
@@ -10,8 +10,16 @@ import type {
   EntrySource,
 } from '@crm/data';
 import { useActivity } from '@crm/data/react';
-import { ActivityFeed, Select, type ActivityFeedLayout, type MeetingAttendee, type MeetingEntry } from '@crm/ui';
+import {
+  ActivityFeed,
+  Button,
+  Select,
+  type ActivityFeedLayout,
+  type MeetingAttendee,
+  type MeetingEntry,
+} from '@crm/ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { strings as noteStrings } from '../notes/strings.ts';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink, type SubmissionLink, type TaskLink } from './timeline.ts';
 
@@ -38,6 +46,8 @@ export interface ActivityTabProps {
   readonly onAddPerson?: (meetingId: string, attendee: MeetingAttendee) => Promise<void>;
   /** The timeline cut to some kinds: given, the tab shows its filter (All, Changes, Notes, Calls, Tasks, Comments, Meetings). */
   readonly feedFor?: (kinds: readonly ActivityKind[]) => Promise<ActivityFeedSource>;
+  /** Opens the Log activity dialog (a call or meeting): given where the person may change the record. */
+  readonly onLogActivity?: () => void;
 }
 
 /** The filter's choices and the kinds each reads; All reads the whole feed. */
@@ -57,7 +67,7 @@ const FILTERS: readonly { readonly id: string; readonly label: string; readonly 
  * which shows loading in place until it arrives.
  */
 export function ActivityTab(props: ActivityTabProps) {
-  const { feed, feedFor } = props;
+  const { feed, feedFor, onLogActivity } = props;
   const [filter, setFilter] = useState('all');
   const [filtered, setFiltered] = useState<{ readonly id: string; readonly feed: ActivityFeedSource } | undefined>(
     undefined,
@@ -84,16 +94,32 @@ export function ActivityTab(props: ActivityTabProps) {
       feed={shown ?? feed}
       isSwitching={shown === undefined}
       toolbar={
-        <Select
-          label={strings.activityFilter}
-          isLabelHidden
-          size="sm"
-          items={FILTERS.map(({ id, label }) => ({ id, label }))}
-          value={filter}
-          onChange={(next) => {
-            if (typeof next === 'string') setFilter(next);
-          }}
-        />
+        <>
+          <Select
+            label={strings.activityFilter}
+            isLabelHidden
+            size="sm"
+            items={FILTERS.map(({ id, label }) => ({ id, label }))}
+            value={filter}
+            onChange={(next) => {
+              if (typeof next === 'string') setFilter(next);
+            }}
+          />
+          {/* The calls and meetings this tab filters are logged from here too (the foolproof pass), at the
+              control height the filter beside it has. Logged from under a filter that shows neither, the tab
+              goes back to All, so what was logged shows. */}
+          {onLogActivity !== undefined && (
+            <Button
+              icon="phone"
+              onPress={() => {
+                if (filter !== 'all' && filter !== 'calls' && filter !== 'meetings') setFilter('all');
+                onLogActivity();
+              }}
+            >
+              {noteStrings.logActivity}
+            </Button>
+          )}
+        </>
       }
     />
   );

@@ -28,6 +28,7 @@ Spec 0017, milestones 1 to 3: a record's own page, its timeline, and its related
 
 - **Purpose**: a record at a glance, and what happened to it, newest first.
 - **Main task**: see the newest entries (Overview draws five in place, the library's `inline` layout), and go on to the whole timeline ("View all"), which pages as it scrolls and shows changes made anywhere within a second.
+- **Log activity** sits beside the Activity tab's filter for whoever may change the record, opening the same dialog as the Notes tab's; pressed under a filter that shows neither calls nor meetings, the tab goes back to All.
 - **Leaves out**: Highlights (#18), notes and comments in the feed (#19, #29), the record's own delete and restore (#36). Overview shows Open tasks above Recent activity, and the feed shows tasks (spec 0019).
 
 ## Related sections and cards (RelatedSections, spec 0017 milestone 3)
