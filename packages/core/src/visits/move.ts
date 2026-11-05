@@ -28,6 +28,7 @@ interface VisitRow extends Record<string, unknown> {
   readonly place_id: string;
   readonly status: AppointmentStatus;
   readonly starts_at: string;
+  readonly ends_at: string;
   readonly party_size: number;
 }
 
@@ -35,7 +36,7 @@ async function visitOf(scope: EngineScope, appointmentId: string) {
   return inWorkspace(scope, async (tx) => {
     const [row] = (
       await tx.execute<VisitRow>(sql`
-        select id::text, place_id::text, status, starts_at, party_size from appointments where id = ${appointmentId}::uuid
+        select id::text, place_id::text, status, starts_at, ends_at, party_size from appointments where id = ${appointmentId}::uuid
       `)
     ).rows;
     if (row === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
@@ -156,6 +157,15 @@ export async function moveVisit(
   const party = input.party ?? row.party_size;
   if (!Number.isInteger(party) || party < VISIT_LIMITS.partyMin || party > VISIT_LIMITS.partyMax) {
     throw inputInvalid('party', 'Choose a party of 1 to 100.');
+  }
+  // The same time and party: nothing to write and nobody to tell, so a repeat never sends a second email.
+  if (start.getTime() === new Date(row.starts_at).getTime() && party === row.party_size) {
+    return {
+      appointmentId: row.id,
+      start: new Date(row.starts_at).toISOString(),
+      end: new Date(row.ends_at).toISOString(),
+      party,
+    };
   }
   const now = deps.now?.() ?? new Date();
   const from = new Date(start.getTime() - DAY);

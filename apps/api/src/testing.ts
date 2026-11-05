@@ -236,6 +236,18 @@ export function captureLogs(): { lines: () => LogLine[]; restore: () => void } {
   };
 }
 
+/** A guest reservation's body with a fill ticket for its place, issued `ageMs` ago, as `withBookingTicket` does. */
+export function withTableTicket(path: string, body: unknown, ageMs = 60_000): unknown {
+  const found = /(?:^|\/)([A-Za-z0-9_-]{16})\/reserve$/.exec(path);
+  if (found === null || typeof body !== 'object' || body === null || 'ticket' in body) return body;
+  const book = createTicketBook({
+    salt: LOCAL_FORMS_IP_SALT,
+    limiter: createMemoryLimiter(),
+    now: () => Date.now() - ageMs,
+  });
+  return { ...body, ticket: book.issue(`table:${found[1] ?? ''}`) };
+}
+
 /**
  * A public booking's or booking chat turn's body with a fill ticket for its page (B-04: with tickets set up, a
  * booking without one is refused as too fast), issued `ageMs` ago on the app's own salt (`FORMS_IP_SALT` unset in

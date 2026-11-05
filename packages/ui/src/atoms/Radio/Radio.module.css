@@ -110,7 +110,7 @@
     margin-block-start: var(--space-2);
     border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-full);
-    background: var(--surface-raised);
+    background: var(--radio-rest, var(--surface-raised));
     box-shadow: var(--shadow-xs);
     transition:
       background-color var(--duration-hover) var(--ease-hover),

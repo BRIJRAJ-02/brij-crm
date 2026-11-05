@@ -779,6 +779,7 @@ export function createApp({
   // Table seating's guest page (spec 0066 B7 lite): a place's public key, no session; writes passed the Origin check.
   mountPublicTables(app, {
     db,
+    tickets,
     busy: bookingBusy,
     slotCache: visitSlots,
     linkKey,

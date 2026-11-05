@@ -26,7 +26,6 @@ import {
   Badge,
   Button,
   ButtonLink,
-  Callout,
   CalloutBar,
   EmptyState,
   sharedStrings,

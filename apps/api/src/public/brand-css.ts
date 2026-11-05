@@ -28,7 +28,7 @@ import type { EdgeCache } from '../edge-cache.ts';
 import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { FileStore } from '../storage/blob.ts';
-import { BOOKING_LIMITS, type PublicLimiter } from './limits.ts';
+import { BOOKING_LIMITS, limitAddress, type PublicLimiter } from './limits.ts';
 import { pictureResponse } from './picture.ts';
 
 /**
@@ -76,7 +76,7 @@ export function stylesheetResponse(css: string): Response {
 /** The client address as a short hash, as the booking routes key it. */
 export function addressKey(clientIp: string | undefined): string {
   return createHash('sha256')
-    .update(clientIp ?? 'unknown')
+    .update(limitAddress(clientIp) ?? 'unknown')
     .digest('base64url')
     .slice(0, 22);
 }

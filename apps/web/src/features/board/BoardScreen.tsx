@@ -25,7 +25,6 @@ import { useBoard, useLiveStatus, type BoardView } from '@crm/data/react';
 import {
   Board,
   Button,
-  Callout,
   CalloutBar,
   EmptyState,
   TopBar,

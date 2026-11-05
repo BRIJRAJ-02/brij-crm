@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BulkActionBar } from './BulkActionBar.tsx';

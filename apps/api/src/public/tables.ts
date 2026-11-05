@@ -47,7 +47,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import { asksFor, nothingHere, stylesheetResponse } from './brand-css.ts';
-import { BOOKING_LIMITS, botReason, type LimitRule, type PublicLimiter } from './limits.ts';
+import type { TicketBook } from '../forms/ticket.ts';
+import { BOOKING_LIMITS, botReason, limitAddress, limitEmail, type LimitRule, type PublicLimiter } from './limits.ts';
 
 /** The table routes' own limits, beside the booking pages' (AC-6557). */
 export const TABLE_LIMITS = {
@@ -55,7 +56,13 @@ export const TABLE_LIMITS = {
   readsPerPlace: { max: 600, windowMs: 60_000 },
   reservesPerAddress: BOOKING_LIMITS.booksPerAddress,
   reservesPerPlace: BOOKING_LIMITS.booksPerPage,
+  /** The ceiling across every place on an instance: a flood refused by its own address never spends this first. */
+  reservesPerInstance: BOOKING_LIMITS.booksPerInstance,
+  /** One place's mail to one guest email: 5 an hour, counted once a reservation is made, so nobody's inbox is a target. */
+  reservesPerEmail: BOOKING_LIMITS.booksPerEmail,
   managePerAddress: BOOKING_LIMITS.managePerAddress,
+  /** One reservation's changes and cancels, whoever sends them: each change emails its guest. */
+  managePerVisit: BOOKING_LIMITS.managePerBooking,
   /** A lookup by code and email: 10 a minute per address, 60 per place, so codes can't be swept. */
   lookupsPerAddress: { max: 10, windowMs: 60_000 },
   lookupsPerPlace: { max: 60, windowMs: 60_000 },
@@ -75,6 +82,8 @@ export interface PublicTableServices {
   /** The key manage tokens derive from (the booking pages' and the worker's), so emails write the same link. */
   readonly linkKey: ManageLinkKey;
   readonly limiter: PublicLimiter;
+  /** Fill tickets (spec 0023, B-04): the server's clock for the minimum fill time. */
+  readonly tickets?: TicketBook;
   readonly now?: () => Date;
   /** The calendar file's facts: the UID's domain, the public origin and the sending address. */
   readonly ics: { readonly uidDomain: string; readonly publicOrigin: string; readonly organizerEmail: string };
@@ -116,12 +125,16 @@ function refusalAnswer(error: unknown): Response {
   });
 }
 
+/** The client address as a short hash: limits key on it (an IPv6 address by its /64, B-02). */
 function addressKey(clientIp: string | undefined): string {
   return createHash('sha256')
-    .update(clientIp ?? 'unknown')
+    .update(limitAddress(clientIp) ?? 'unknown')
     .digest('base64url')
     .slice(0, 22);
 }
+
+/** A short hash for a limiter key, so no email or token sits in the limiter's memory. */
+const hashed = (text: string): string => createHash('sha256').update(text).digest('base64url').slice(0, 22);
 
 const invalid = (issues: readonly SchemaIssue[]) => {
   const { message, issues: listed } = inputProblems(issues, { limit: 10, leadWithField: true });
@@ -141,9 +154,13 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     log,
   };
 
-  const limited = (checks: readonly (readonly [string, LimitRule])[]): Response | undefined => {
+  /** Answers 429 when any limit is spent; with `count: false`, only whether one already is. */
+  const limited = (
+    checks: readonly (readonly [string, LimitRule])[],
+    options: { readonly count?: boolean } = {},
+  ): Response | undefined => {
     for (const [key, rule] of checks) {
-      const decision = limiter(key, rule);
+      const decision = limiter(key, rule, options);
       if (!decision.allowed) {
         return answer(
           'RATE_LIMITED',
@@ -185,7 +202,21 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
             [`tables:code-write:${address}`, TABLE_LIMITS.codeWritesPerAddress],
             [`tables:code-write-place:${key}`, TABLE_LIMITS.codeWritesPerPlace],
           ] as const);
-    return limited([[`tables:manage:${address}`, TABLE_LIMITS.managePerAddress], ...('code' in guest ? byCode : [])]);
+    // A write spends the reservation's own budget too: each change emails its guest, whichever address sends it.
+    const byVisit =
+      use === 'write'
+        ? ([
+            [
+              `tables:visit:${hashed('token' in guest ? guest.token : `${guest.code}:${limitEmail(guest.email)}`)}`,
+              TABLE_LIMITS.managePerVisit,
+            ],
+          ] as const)
+        : [];
+    return limited([
+      [`tables:manage:${address}`, TABLE_LIMITS.managePerAddress],
+      ...('code' in guest ? byCode : []),
+      ...byVisit,
+    ]);
   };
 
   app.use(
@@ -258,21 +289,39 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     const refused = limited([
       [`tables:reserve:${addressKey(c.get('clientIp'))}`, TABLE_LIMITS.reservesPerAddress],
       [`tables:reserve-place:${key}`, TABLE_LIMITS.reservesPerPlace],
+      ['tables:reserve-instance', TABLE_LIMITS.reservesPerInstance],
     ]);
     if (refused !== undefined) return refused;
     const read = await jsonOf(c);
     if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
     const input = PublicReserveInput.safeParse(read.body);
     if (!input.success) return invalid(input.error.issues);
-    const bot = botReason(input.data, (services.now?.() ?? new Date()).getTime());
+    // The ticket is the clock wherever a ticket book exists (B-04): a `startedAt` the client chose decides nothing.
+    const ticket = services.tickets?.check(`table:${key}`, input.data.ticket);
+    const bot = botReason(
+      input.data,
+      (services.now?.() ?? new Date()).getTime(),
+      ticket?.kind === 'valid' ? ticket.elapsedMs : undefined,
+      { tickets: services.tickets !== undefined, expired: ticket?.kind === 'expired' },
+    );
     if (bot !== undefined) {
-      log.warn('tables.bot_refused', { requestId: c.get('requestId'), reason: bot });
+      log.warn('tables.bot_refused', { requestId: c.get('requestId'), reason: bot, ticket: ticket?.kind ?? 'none' });
       return answer('INPUT_INVALID', BOT_REFUSED);
     }
+    // One place's mail to one email: read here, counted once it is made, so a refusal never spends a real guest's.
+    const emailRule = [
+      `tables:reserve-email:${key}:${hashed(limitEmail(input.data.email))}`,
+      TABLE_LIMITS.reservesPerEmail,
+    ] as const;
+    const spent = limited([emailRule], { count: false });
+    if (spent !== undefined) return spent;
     try {
       const entry = await enterTablePage({ db }, key);
       const made = await guestReserve(entry, deps, input.data, [outboxHook()]);
-      if (!made.booked.replayed) services.wakeRelay();
+      if (!made.booked.replayed) {
+        limiter(...emailRule);
+        services.wakeRelay();
+      }
       return ok({ visit: made.visit, ...(made.manageToken === undefined ? {} : { manageToken: made.manageToken }) });
     } catch (error) {
       if (!toApiError(error).expected) {

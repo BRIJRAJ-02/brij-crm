@@ -17,7 +17,7 @@ import {
   type ViewQuery,
   type ViewState,
 } from '@crm/data';
-import { AttributeDisplay, BulkActionBar, Button, Callout, CalloutBar, Modal } from '@crm/ui';
+import { AttributeDisplay, BulkActionBar, Button, CalloutBar, Modal } from '@crm/ui';
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
 import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';

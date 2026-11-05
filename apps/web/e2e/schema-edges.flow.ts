@@ -20,7 +20,10 @@ test.describe('the schema’s edges', () => {
     await page.goto(`/w/${slug}/settings/members`);
     // Company email sits under the list, in Other ways to join (owner ask T12: no tab of its own).
     // The label a person presses: the input is hidden inside it, so a click on the input itself never lands.
-    await page.getByRole('switch', { name: `Let @${domain} ask to join` }).locator('xpath=ancestor::label').click();
+    await page
+      .getByRole('switch', { name: `Let @${domain} ask to join` })
+      .locator('xpath=ancestor::label')
+      .click();
     await expect(page.getByText(`People at @${domain} can now ask to join.`)).toBeVisible();
 
     // Someone at the same domain asks, in a browser of their own.
@@ -108,12 +111,17 @@ test.describe('the schema’s edges', () => {
     await expect(page.getByRole('dialog', { name: 'New attribute' }).getByLabel('Name', { exact: true })).toHaveValue(
       'Suppliers',
     );
-    await page.getByRole('dialog', { name: 'New attribute' }).getByRole('button', { name: / Type$/ }).click();
+    await page
+      .getByRole('dialog', { name: 'New attribute' })
+      .getByRole('button', { name: / Type$/ })
+      .click();
     await page.getByRole('option', { name: 'Relationship' }).click();
 
     // The related object doesn't exist yet: New object… makes it and comes back with it chosen.
     // The Select, not the help beside its label, whose name ends the same way.
-    const related = step.getByRole('button', { name: /Related object$/ }).and(page.locator('[aria-haspopup="listbox"]'));
+    const related = step
+      .getByRole('button', { name: /Related object$/ })
+      .and(page.locator('[aria-haspopup="listbox"]'));
     await related.click();
     await page.getByRole('option', { name: 'New object…' }).click();
     const create = page.getByRole('dialog', { name: 'New object' });

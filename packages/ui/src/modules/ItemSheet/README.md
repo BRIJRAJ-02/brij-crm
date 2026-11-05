@@ -25,9 +25,9 @@ ChoiceChips can't carry a price beside each choice.
 - `ItemSheet` (checklabs' dish sheet, value for value): the photo bleeding to the sheet's edges at 4:3 (400 and 1200
   pixel sources), then 20px in: the name (22px semibold, in the menu's display face), the price (16px semibold; "from
   £9.50" with sizes) or Sold out, calories, the words (15px at 1.55), the dietary marks (pills of the cream), then the
-  sizes as checklabs' option rows (RadioGroup `rows`: 16px corners, a 20px circle, the price at the row's end; the first
+  sizes as checklabs' option rows (`RadioRowsGroup`: 16px corners, a 20px circle, the price at the row's end; the first
   chosen), each choose one group the same with its price difference ("+£0.50"), and each choose many group as
-  checkbox rows (Checkbox `row`: a 20px box at 6px corners, "+£1.50" at the end), each under a small caps overline with
+  checkbox rows (`CheckboxRow`: a 20px box at 6px corners, "+£1.50" at the end), each under a small caps overline with
   its rule ("CHOOSE UP TO 2 · REQUIRED"), 28px apart, then ALLERGENS as 28px pills at 13px (Badge `chip-lg`), only when
   the dish names any. Without a photo the name sits on the floating Close's row. The foot stays in view over a
   hairline: a 48px Stepper (Stepper `sheet`: 32px buttons; 1 to 99, − off at 1) and the 48px "Add to your selection"

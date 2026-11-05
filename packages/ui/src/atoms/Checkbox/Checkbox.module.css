@@ -31,7 +31,7 @@
     margin-block-start: var(--space-2);
     border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-xs);
-    background: var(--surface-raised);
+    background: var(--check-rest, var(--surface-raised));
     box-shadow: var(--shadow-xs);
     color: var(--on-accent);
     transition:

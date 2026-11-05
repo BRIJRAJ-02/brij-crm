@@ -846,7 +846,7 @@ export function WeekCalendar({
         '--columns': String(Math.max(days.length, 1)),
         '--from': String(hours.from),
         '--hours': String(hours.to - hours.from),
-        ...(visibleHours === undefined ? {} : { '--visible-hours': String(Math.max(1, visibleHours)) }),
+        '--visible-hours': String(Math.max(1, visibleHours ?? 12)),
       }}
     >
       {/* The day view given one day alone has no head: the page's own bar names the day and picks another. */}

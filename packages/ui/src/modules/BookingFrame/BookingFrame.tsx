@@ -279,7 +279,7 @@ export function BookingFrame({
     );
   return (
     <main
-      className={styles.root}
+      className={isTile ? `${styles.root ?? ''} ${placeLook.root ?? ''}` : styles.root}
       ref={variables}
       {...templateAttributes(brand?.template)}
       {...(isCompact ? { 'data-compact': true } : {})}
@@ -355,12 +355,12 @@ export function BookingFrame({
               {isTile ? (
                 // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
                 // its name, on one row.
-                <div className={placeLook?.tileRow}>
+                <div className={placeLook.tileRow}>
                   {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
                   {brandLogo === undefined && (
                     <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
                   )}
-                  <p className={`${styles.host ?? ''} ${placeLook?.host ?? ''}`}>{host.name}</p>
+                  <p className={`${styles.host ?? ''} ${placeLook.host ?? ''}`}>{host.name}</p>
                 </div>
               ) : host.team === undefined ? (
                 <Avatar

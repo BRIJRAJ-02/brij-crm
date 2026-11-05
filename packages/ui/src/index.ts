@@ -399,6 +399,8 @@ export {
   type BookingProfileSectionProps,
   type BookingTeam,
 } from './modules/BookingFrame/BookingFrame.tsx';
+/** BookingFrame for a place, not a person: a restaurant's reservation page. */
+export { PlaceBookingFrame } from './modules/BookingFrame/PlaceBookingFrame.tsx';
 export {
   BookingReceipt,
   type BookingReceiptProps,

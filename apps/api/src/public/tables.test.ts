@@ -8,7 +8,7 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
-import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices, withTableTicket } from '../testing.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
@@ -58,7 +58,7 @@ function guest(path: string, init: { method?: string; body?: unknown; ip?: strin
   return app.request(`/api/public/tables/${path}`, {
     method: init.method ?? 'GET',
     headers,
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    ...(init.body === undefined ? {} : { body: JSON.stringify(withTableTicket(path, init.body)) }),
   });
 }
 
@@ -136,9 +136,16 @@ describe('a reservation page from an empty workspace (spec 0066 B7 lite)', () =>
     expect(
       (await guest(`${key}/reserve`, { method: 'POST', body: reservation(), origin: 'https://evil.example' })).status,
     ).toBe(403);
-    // The bot check: sent faster than a person could.
+    // The bot check, by the server's clock: a fill ticket half a second old, or none whatever `startedAt` says.
+    const tooFast = withTableTicket(`${key}/reserve`, reservation(), 500);
+    expect((await guest(`${key}/reserve`, { method: 'POST', body: tooFast })).status).toBe(400);
     expect(
-      (await guest(`${key}/reserve`, { method: 'POST', body: reservation({ startedAt: NOW.getTime() }) })).status,
+      (await guest(`${key}/reserve`, { method: 'POST', body: reservation({ ticket: undefined, startedAt: 0 }) }))
+        .status,
+    ).toBe(400);
+    // Words that don't print refuse before anything is written.
+    expect(
+      (await guest(`${key}/reserve`, { method: 'POST', body: reservation({ name: 'Grace\u0000Hopper' }) })).status,
     ).toBe(400);
 
     const made = await guest(`${key}/reserve`, { method: 'POST', body: reservation() });

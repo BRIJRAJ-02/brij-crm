@@ -1,5 +1,5 @@
 // Menu QR per table (spec 0065, H2). Every table (a resource of kind `table`) carries its own code, 22 random
-// base64url characters (`resources.table_code`, migration 0180), and its printed QR opens `/m/<menu key>?t=<code>`.
+// base64url characters (`resources.table_code`, migration 0187), and its printed QR opens `/m/<menu key>?t=<code>`.
 // The QR codes screen lists a place's live tables with their codes and scan counts, and a code can be replaced,
 // which stops the old print opening the table. `hospitality.manage` only, checked before any input is read, and only
 // while Menu QR is installed.

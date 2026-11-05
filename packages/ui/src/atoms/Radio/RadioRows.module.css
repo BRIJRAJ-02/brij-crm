@@ -14,6 +14,7 @@
     --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
     --radio-hover-edge: var(--control-border);
     --radio-focus: none;
+    --radio-rest: transparent;
 
     position: relative;
     flex-direction: row;
@@ -73,8 +74,7 @@
     inline-size: var(--space-20);
     block-size: var(--space-20);
     margin: 0;
-    border: var(--row-edge) solid var(--control-border);
-    background: transparent;
+    border-width: var(--row-edge);
     box-shadow: none;
   }
 

@@ -31,6 +31,8 @@ export interface TableClient {
     query: { readonly party: number; readonly date: string },
     signal?: AbortSignal,
   ): Promise<PublicTableTimes>;
+  /** A fill ticket for the page (spec 0023, B-04); undefined when it can't be had, which a reservation then answers. */
+  ticket(key: string): Promise<string | undefined>;
   reserve(key: string, input: PublicReserveInput): Promise<PublicReserved>;
   visit(key: string, guest: GuestKey): Promise<PublicTableVisit>;
   change(
@@ -99,6 +101,14 @@ export function createTableClient(options: {
         `${at(key)}/times?${new URLSearchParams({ party: String(query.party), date: query.date }).toString()}`,
         signal === undefined ? {} : { signal },
       ),
+    ticket: async (key) => {
+      try {
+        const answer = await call<{ readonly ticket?: unknown }>(`${at(key)}/ticket`);
+        return typeof answer.ticket === 'string' ? answer.ticket : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     reserve: (key, input) => post<PublicReserved>(`${at(key)}/reserve`, input),
     visit: async (key, guest) => (await post<{ visit: PublicTableVisit }>(`${at(key)}/visit`, { guest })).visit,
     change: async (key, guest, change) =>

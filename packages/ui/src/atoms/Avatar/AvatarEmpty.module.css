@@ -1,6 +1,6 @@
 /* AvatarEmpty: an empty slot, on the menu editor's rows. Its own file, so a public page never loads it. */
 @layer components {
-  /* An empty slot (isEmpty): no fill, a dashed control edge, the mark in the quiet text colour, inside the tile's own
+  /* An empty slot: no fill, a dashed control edge, the mark in the quiet text colour, inside the tile's own
      size so a row keeps its line (a menu item with no photo yet). */
   .root[data-empty] {
     border: var(--border-width-hairline) dashed var(--control-border);

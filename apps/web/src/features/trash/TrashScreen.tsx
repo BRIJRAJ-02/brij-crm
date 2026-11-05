@@ -18,7 +18,6 @@ import {
   Badge,
   BulkActionBar,
   Button,
-  Callout,
   CalloutBar,
   EmptyState,
   focusLater,

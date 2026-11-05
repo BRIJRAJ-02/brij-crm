@@ -1,5 +1,5 @@
 // A reservation's guest emails (spec 0066 B7 lite; spec 0065 AC-6555), through the queue booking mail uses:
-// `crm_enqueue_visit_mail` (migration 0177, crm_queue's) puts ids and a kind on Graphile's queue in the write's own
+// `crm_enqueue_visit_mail` (migration 0184, crm_queue's) puts ids and a kind on Graphile's queue in the write's own
 // transaction; the worker's `crm_visit_mail` task reads the visit again as the system (`prepareVisitMail`), and the
 // api draws it with the booking email's layout and sends it with its calendar file. Kinds: `confirmed`, `changed`,
 // `cancelled`, and the reminders 24 hours and 2 hours before (keyed per visit and replaced by a change, so an old one

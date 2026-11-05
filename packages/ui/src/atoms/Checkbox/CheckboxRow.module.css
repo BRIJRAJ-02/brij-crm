@@ -1,6 +1,6 @@
 /* CheckboxRow: a dish's add-ons, beside RadioRowsGroup. Its own file, so a page without it never loads it. */
 @layer components {
-  /* A row (after checklabs' add-on rows, value for value; RadioGroup's `rows` beside it): a full width row, a hairline
+  /* A row (after checklabs' add-on rows, value for value; RadioRowsGroup beside it): a full width row, a hairline
      round it at 16px corners, 14px over and under and 16px at the sides; a 20px box with 6px corners and a 1.75px
      edge, its tick half as bold again, 14px from the label at 15px; the description (an add-on's +£1.50) at the row's
      end in the quiet colour. A checked row takes the accent's line and soft fill, and the box keeps its edge under the
@@ -10,6 +10,7 @@
     --row-edge: calc(var(--border-width-thick) - var(--border-width-hairline) / 4);
     --check-hover-edge: var(--control-border);
     --check-focus: none;
+    --check-rest: transparent;
 
     position: relative;
     display: flex;
@@ -63,9 +64,8 @@
     inline-size: var(--space-20);
     block-size: var(--space-20);
     margin: 0;
-    border: var(--row-edge) solid var(--control-border);
+    border-width: var(--row-edge);
     border-radius: var(--radius-sm);
-    background: transparent;
     box-shadow: none;
   }
 

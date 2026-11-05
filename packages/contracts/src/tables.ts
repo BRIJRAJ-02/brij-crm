@@ -3,6 +3,7 @@
 // One schema per shape, the type beside it under the same name.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { hasControl } from './booking/public.ts';
 import { Area, Place, PlaceHours, Resource } from './hospitality.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
@@ -112,10 +113,21 @@ const GuestName = z
   .string()
   .trim()
   .min(1, 'Give your name.')
-  .max(VISIT_LIMITS.clientNameMax, 'Use 120 characters or fewer.');
+  .max(VISIT_LIMITS.clientNameMax, 'Use 120 characters or fewer.')
+  .refine((name) => !hasControl(name), 'Give your name as plain text.');
 const GuestEmail = z.email({ error: 'Give an email address like name@example.com.' }).trim().toLowerCase().max(254);
-const GuestPhone = z.string().trim().min(5, 'Give a phone number we can call.').max(VISIT_LIMITS.clientPhoneMax);
-const GuestNote = z.string().trim().max(VISIT_LIMITS.noteMax, 'Use 500 characters or fewer.');
+const GuestPhone = z
+  .string()
+  .trim()
+  .min(5, 'Give a phone number we can call.')
+  .max(VISIT_LIMITS.clientPhoneMax)
+  .refine((phone) => !hasControl(phone), 'Give a phone number we can call.');
+const GuestNote = z
+  .string()
+  .trim()
+  .max(VISIT_LIMITS.noteMax, 'Use 500 characters or fewer.')
+  // Lines and tabs are a note's own; nothing else that doesn't print.
+  .refine((note) => !hasControl(note.replace(/[\n\r\t]/g, '')), 'Write your note as plain text.');
 
 /** A guest's reservation (0065 AC-6551): the party, the time, who they are, and the bot checks' fields. */
 export const PublicReserveInput = z.object({
@@ -131,6 +143,8 @@ export const PublicReserveInput = z.object({
   marketing: z.boolean().default(false),
   timeZone: z.string().max(64).optional(),
   company_url: z.string().max(200).optional(),
+  /** The fill ticket the page fetched (spec 0023, B-04): the server's clock for the minimum fill time. */
+  ticket: z.string().max(200).optional(),
   startedAt: z.number().int().nonnegative().optional(),
 });
 /** A guest's reservation. */

@@ -44,7 +44,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 
 ## Conventions
 
-- Each component's CSS lives in a CSS module beside it, inside `@layer components`, using tokens only. Variants are data attributes (`data-size`, `data-tone`, `data-hue`) declared once in that module. Callers never pass a class name or a style.
+- Each component's CSS lives in a CSS module beside it, inside `@layer components`, using tokens only. Variants are data attributes (`data-size`, `data-tone`, `data-hue`) declared once in that module. Callers never pass a class name (one exception: a guest only variant kept out of a public page's CSS budget lives in its own stylesheet beside a thin wrapper, `MonthTilesPlain`, `RadioRowsGroup`, `TOUCH_TARGET` and the like, which passes its classes in; its selectors must not tie with the base's state rules, since which file loads later is not ours to rely on) or a style.
 - Cursors come from `src/styles/cursors.css`, never a component module, unless only the component can know (the Field and DatePicker boxes, a column resizer, a drag handle, a read only Select). A row or card with an action sets `data-pressable`; a disabled placeholder that shows a Skeleton sets `data-loading`, so it keeps the arrow instead of not-allowed.
 - Every styled component has a `README.md` beside it (`pnpm house-rules` checks this). The README says where its API differs from the artifact's, and why.
 - Icons come only from Lucide, through `src/atoms/Icon/icons.ts` (and its scoped and base sets beside it), the only files ESLint lets import `lucide-react`. To add an icon, add one import and one line there, under its lucide.dev name.

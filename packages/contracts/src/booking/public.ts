@@ -390,7 +390,7 @@ const isHidden = (code: number): boolean =>
   code === 0xfeff;
 
 /** Whether `text` holds a control or invisible character (`isHidden`). */
-function hasControl(text: string): boolean {
+export function hasControl(text: string): boolean {
   for (let at = 0; at < text.length; at += 1) if (isHidden(text.charCodeAt(at))) return true;
   return false;
 }

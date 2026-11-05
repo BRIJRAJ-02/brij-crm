@@ -77,7 +77,7 @@ export function createTicketBook(deps: TicketDeps): TicketBook {
 
 /**
  * Mounts the two ticket endpoints, never cached: `GET
- * /public/forms/:publicKey/ticket` and `GET /public/booking/:publicKey/ticket`.
+ * /public/forms/:publicKey/ticket`, `GET /public/booking/:publicKey/ticket` and `GET /public/tables/:publicKey/ticket`.
  * They read nothing (an unknown key gets a ticket no submit will match), so
  * they say nothing about which forms or pages exist. 30 a minute per address,
  * 200 a second per instance, on their own limiter.
@@ -91,7 +91,7 @@ export function mountTickets<E extends Env>(
     readonly addressOf: (c: Context<E>) => string;
   },
 ): void {
-  const handler = (kind: 'form' | 'booking') => (c: Context<E>) => {
+  const handler = (kind: 'form' | 'booking' | 'table') => (c: Context<E>) => {
     const ceiling = deps.limiter('ticket:instance', TICKET_LIMITS.issuePerInstance);
     const limit = ceiling.allowed
       ? deps.limiter(`ticket:issue:${deps.addressOf(c)}`, TICKET_LIMITS.issuePerAddress)
@@ -107,4 +107,5 @@ export function mountTickets<E extends Env>(
   };
   app.get('/public/forms/:publicKey/ticket', handler('form'));
   app.get('/public/booking/:publicKey/ticket', handler('booking'));
+  app.get('/public/tables/:publicKey/ticket', handler('table'));
 }

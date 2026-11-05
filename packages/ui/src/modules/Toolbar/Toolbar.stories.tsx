@@ -7,7 +7,6 @@ import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
-import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';

@@ -29,6 +29,7 @@ import {
 import { isDataError, type PublicTablePage, type TableClient, type TableRefusal } from '@crm/data/tables';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { longDate, openDays, rangesOn, services, shortDay, timeLabel, type ServiceHeading } from './days.ts';
+import { keepTicket } from '../booking/ticket.ts';
 import { strings } from './strings.ts';
 
 /** What a reservation made hands the page: the manage link's token and the code. */
@@ -137,6 +138,9 @@ export function ReservePage({
   // What the guest typed, kept while the details step is away (Back to change the time, or a time taken meanwhile).
   const [draft, setDraft] = useState<BookingDetailsDraft | undefined>();
   const [startedAt] = useState(() => Date.now());
+  // The fill ticket, asked for as the page loads and kept ready (`booking/ticket.ts`): the server's clock for how fast
+  // a reservation came, spent by each send, with the next fetched behind it.
+  const [tickets] = useState(() => keepTicket(() => client.ticket(page.key)));
   // Bumped to read the day's times again (a time was just taken and nothing else was offered with the refusal).
   const [reload, setReload] = useState(0);
   const firstTime = useRef<HTMLButtonElement>(null);
@@ -211,7 +215,9 @@ export function ReservePage({
     // A seating choice goes at the head of the note, as checklabs sends it; the note keeps the server's limit.
     const note = area === NO_PREFERENCE ? values.note.trim() : strings.seatingNote(area, values.note.trim());
     try {
+      const ticket = await tickets.take();
       const made = await client.reserve(page.key, {
+        ...(ticket === undefined ? {} : { ticket }),
         idempotencyKey: step.attempt,
         party,
         start: time,
