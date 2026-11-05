@@ -151,13 +151,21 @@ export function naturalHeight(page: Element, view: Pick<Window, 'getComputedStyl
   return bottom - top + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
 }
 
-/** Calls `changed` once a frame whenever anything under `root` changes size or shape; answers the stop. */
+/**
+ * Calls `changed` once per task whenever anything under `root` changes size or shape; answers the stop.
+ *
+ * A microtask, not an animation frame, carries the call: Linux WebKit (the pinned Playwright image, as in CI) held a
+ * framed page's `requestAnimationFrame` for about two seconds, so a booking page that had just swapped its loading
+ * shape for its times left the site's frame at the loading height that long. A change to the tree is measured as
+ * soon as it lands (the measure lays the page out itself); a change in size alone still comes from the
+ * ResizeObserver, whenever the engine reports it.
+ */
 export function watchTree(root: Element, changed: () => void): () => void {
   let queued = false;
   const queue = () => {
     if (queued) return;
     queued = true;
-    globalThis.requestAnimationFrame(() => {
+    queueMicrotask(() => {
       queued = false;
       changed();
     });
