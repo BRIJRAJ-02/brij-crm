@@ -326,6 +326,7 @@ export const strings = {
       items === 1 ? '1 item' : `${String(items)} items`,
     ].join(' · '),
   showAsList: 'Show as a list',
+  deletedNamed: (name: string) => `“${name}” deleted`,
   priceRange: (low: string, high: string) => `${low}–${high}`,
   showAsGrid: 'Show as a photo grid',
   addPhotoFor: (name: string) => `Add a photo of ${name}`,

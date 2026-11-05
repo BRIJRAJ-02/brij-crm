@@ -157,6 +157,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const said = (refused: { readonly message: string } | undefined) => {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
+  // A delete says it happened, as the Tables page's does, or why it didn't.
+  const deleted = (refused: { readonly message: string } | undefined, name: string) =>
+    toasts.toast(
+      refused === undefined
+        ? { tone: 'success', message: strings.deletedNamed(name) }
+        : { tone: 'danger', message: refused.message },
+    );
   const place = draft.places.find((each) => each.id === placeId) ?? draft.places[0];
   const placeHours = place === undefined ? undefined : business.hours[place.id];
   const menus = [...draft.menus].sort((a, b) => a.position - b.position);
@@ -730,7 +737,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                     onPress={() => {
                       if (open?.kind === 'deleteMenu') {
                         go({ menu: undefined, tab: undefined });
-                        void store.deleteMenu(slug, open.menuId).then(said);
+                        const { name } = open;
+                        void store.deleteMenu(slug, open.menuId).then((refused) => deleted(refused, name));
                       }
                       setOpen(undefined);
                     }}
@@ -756,7 +764,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (open?.kind === 'deleteSection') void store.deleteSection(slug, open.sectionId).then(said);
+                      if (open?.kind === 'deleteSection') {
+                        const { name } = open;
+                        void store.deleteSection(slug, open.sectionId).then((refused) => deleted(refused, name));
+                      }
                       setOpen(undefined);
                     }}
                   >
@@ -781,7 +792,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (open?.kind === 'deleteItem') void store.deleteItem(slug, open.item.id).then(said);
+                      if (open?.kind === 'deleteItem') {
+                        const { name } = open.item;
+                        void store.deleteItem(slug, open.item.id).then((refused) => deleted(refused, name));
+                      }
                       setOpen(undefined);
                     }}
                   >
