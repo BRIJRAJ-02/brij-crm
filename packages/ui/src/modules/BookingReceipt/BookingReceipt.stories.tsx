@@ -65,6 +65,20 @@ export const Welcome: Story = {
   },
 };
 
+/** A restaurant's reservation (`look="menu"`, its token fallbacks here): the ink in place of the app's blue. */
+export const MenuLook: Story = {
+  args: { look: 'menu' },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('main')).toHaveAttribute('data-look', 'menu');
+    await settleAnimations();
+  },
+};
+
 /** Cancelled: the time struck through, and a way to book again. */
 export const Cancelled: Story = {
   args: {
