@@ -236,10 +236,13 @@ export function OnlineBookingDrawer({
   // The form and the copy it started from. Until the person changes something, it follows the latest copy (the read
   // the sheet starts, another manager's save); once they have, what they typed stays, and Save lays only their
   // changes over the latest copy, so it never sends back a value someone else changed meanwhile (Accept online
-  // bookings above all).
+  // bookings above all). Not during a save: the store shows the rules at once and puts them back if they are refused,
+  // and following that would take the form back with them, the switch just turned on included, and leave it clean, so
+  // Fix it left without asking.
+  const [isSaving, setSaving] = useState(false);
   const [base, setBase] = useState<TableSetupView | undefined>(ready);
   const [draft, setDraft] = useState<Draft | undefined>(ready === undefined ? undefined : () => draftOf(ready));
-  if (ready !== undefined && ready !== base) {
+  if (!isSaving && ready !== undefined && ready !== base) {
     const latest = draftOf(ready);
     if (base === undefined || draft === undefined || sameDraft(draft, draftOf(base)) || sameDraft(draft, latest)) {
       setBase(ready);
@@ -248,7 +251,6 @@ export function OnlineBookingDrawer({
   }
   const [errors, setErrors] = useState<Readonly<Partial<Record<keyof Numbers, string>>>>({});
   const [problem, setProblem] = useState<{ readonly message: string; readonly href?: string } | undefined>();
-  const [isSaving, setSaving] = useState(false);
   const [isStopping, setStopping] = useState(false);
   // The zone's name reads its offset as of opening the sheet.
   const [openedAt] = useState(() => Date.now());

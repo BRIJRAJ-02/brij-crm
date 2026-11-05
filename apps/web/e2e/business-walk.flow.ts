@@ -23,6 +23,7 @@ async function shot(page: Page, name: string): Promise<void> {
 test.describe('the business page with Menu and Table seating', () => {
   test.use({ locale: 'en-GB', timezoneId: 'Europe/London', actionTimeout: 15_000 });
   test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Walked at a desktop width.');
 
   test('install both apps, publish the menu, the tables and the page; a guest reserves and reads the menu', async ({
     page,
@@ -96,24 +97,27 @@ test.describe('the business page with Menu and Table seating', () => {
     await test.step('a menu with two dishes, published', async () => {
       await page.goto(`/w/${slug}/menus`);
       await page.getByRole('button', { name: 'New menu' }).first().click();
-      await expect(page.getByRole('tab', { name: /Dinner/ })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Menu to edit' })).toContainText('Dinner');
       for (const [name, price] of [
         ['Edamame', '5.5'],
         ['Ramen', '14'],
       ] as const) {
-        const add = page.getByLabel('Add dishes').first();
+        // A section's quiet Add item turns into the search or create field, and stays one.
+        const start = page.getByRole('button', { name: 'Add item', exact: true }).first();
+        if (await start.isVisible()) await start.click();
+        const add = page.getByLabel('Add items').first();
         await add.fill(name);
         await expect(page.getByRole('option', { name: new RegExp(`Create “${name}”`) })).toBeVisible();
         await add.press('Enter');
         const drawer = page.getByRole('dialog', { name });
         await drawer.getByLabel('Price', { exact: true }).fill(price);
-        await drawer.getByRole('button', { name: 'Save dish' }).click();
+        await drawer.getByRole('button', { name: 'Save item' }).click();
         await expect(drawer).toBeHidden();
       }
-      await page.getByRole('button', { name: /^(Review and publish|Publish)$/ }).click();
+      await page.getByRole('button', { name: 'Publish & go live' }).click();
       await page
         .getByRole('dialog', { name: 'Review and publish' })
-        .getByRole('button', { name: 'Publish', exact: true })
+        .getByRole('button', { name: 'Publish & go live' })
         .click();
       await expect(page.getByRole('dialog', { name: 'Your menu is live' })).toBeVisible();
       await shot(page, '04-menu-live');
@@ -123,7 +127,7 @@ test.describe('the business page with Menu and Table seating', () => {
     let key = '';
     await test.step('the table service published', async () => {
       await page.goto(`/w/${slug}/reservations`);
-      await page.getByRole('button', { name: 'Online booking' }).click();
+      await page.getByRole('button', { name: 'Online booking', exact: true }).click();
       const sheet = page.getByRole('dialog', { name: 'Online booking' });
       await expect(sheet.getByLabel('Max party')).toBeVisible({ timeout: 15_000 });
       await sheet.getByLabel('Max party').fill('4');
@@ -168,16 +172,14 @@ test.describe('the business page with Menu and Table seating', () => {
       await shot(guest, '07-guest-business-page');
       await reserve.click();
       await expect(guest).toHaveURL(new RegExp(`/r/${key}$`));
-      await expect(guest.getByRole('heading', { name: 'Reserve a table' })).toBeVisible({ timeout: 15_000 });
+      await expect(guest.getByRole('heading', { level: 1, name: 'Reserve your table' })).toBeVisible({
+        timeout: 15_000,
+      });
     });
 
     await test.step('the guest books a table for 2', async () => {
-      await guest
-        .getByRole('radio', { name: '2' })
-        .or(guest.getByRole('button', { name: '2', exact: true }))
-        .first()
-        .click();
-      // Tomorrow, or the next open day.
+      // Two guests is where the page starts. Tomorrow, or the next open day.
+      await expect(guest.getByRole('group', { name: 'Party size' }).getByRole('status')).toContainText('2');
       const days = guest.locator('button[data-day]:not([disabled])');
       const slot = guest
         .locator('button[aria-pressed]')
@@ -189,13 +191,13 @@ test.describe('the business page with Menu and Table seating', () => {
       }
       await slot.click();
       await shot(guest, '08-guest-time');
-      await guest.getByRole('button', { name: /^Reserve .* for 2$/ }).click();
-      await guest.getByLabel('Your name').fill('Grace Hopper');
-      await guest.getByLabel('Email').fill('grace@navy.example');
-      await guest.getByLabel(/Number to call/).fill('7946 000000');
+      await guest.getByRole('button', { name: /^Continue · / }).click();
+      await guest.getByRole('textbox', { name: /Full name/ }).fill('Grace Hopper');
+      await guest.getByRole('textbox', { name: /Phone/ }).fill('7946 000000');
+      await guest.getByRole('textbox', { name: /Email/ }).fill('grace@navy.example');
       // A person takes a few seconds over their details; the page's bot guard refuses a form filled faster.
       await guest.waitForTimeout(4_000);
-      await guest.getByRole('button', { name: 'Reserve', exact: true }).click();
+      await guest.getByRole('button', { name: /^Confirm / }).click();
       await expect(guest).toHaveURL(/\/r\/[A-Za-z0-9_-]{16}\/manage#/, { timeout: 15_000 });
       await expect(guest.getByText('Reservation code')).toBeVisible();
       await shot(guest, '09-guest-reserved');
@@ -205,7 +207,7 @@ test.describe('the business page with Menu and Table seating', () => {
       await guest.goto(`/${handle}`);
       await guest.getByRole('region', { name: 'Menu' }).getByRole('link', { name: 'See the full menu' }).click();
       await expect(guest).toHaveURL(/\/m\/[A-Za-z0-9_-]+$/);
-      await expect(guest.getByRole('heading', { name: 'Somewhere' })).toBeVisible({ timeout: 15_000 });
+      await expect(guest.getByRole('heading', { level: 1, name: 'Dinner' })).toBeVisible({ timeout: 15_000 });
       await expect(guest.getByText('Ramen')).toBeVisible();
       await shot(guest, '10-guest-menu');
     });

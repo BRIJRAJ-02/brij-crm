@@ -36,14 +36,17 @@ test.describe('the form journey', () => {
     await page.getByRole('menuitem', { name: 'Job title', exact: true }).click();
     await page.getByRole('button', { name: 'More for What is your role?' }).click();
     await expect(page.getByRole('menuitem', { name: /^Save answer to/ })).toContainText('Job title');
-    await page.keyboard.press('Escape');
+    // Clicked away, as a person would (reopened after a filing, this menu doesn't hold focus, so Escape doesn't reach it).
+    await page.mouse.click(640, 5);
+    await expect(page.getByRole('menu')).toHaveCount(0);
 
-    // Named on the page, as its one title (Tally's way): the headline, which an Untitled form takes as its name too.
-    // Then the first publish is one click, with nothing asked.
+    // The title on the page (Tally's way) is the headline visitors read. A form from a template keeps its template's
+    // name in the bar; only an Untitled form takes the title as its name. The first publish is one click, nothing asked.
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
     await title.fill(`Talk to us ${tag}`);
     await title.press('Tab');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(`Talk to us ${tag}`, { timeout: 15_000 });
+    await expect(title).toHaveValue(`Talk to us ${tag}`);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Contact us');
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByRole('heading', { name: / is live$/ })).toBeVisible({ timeout: 30_000 });
     expect(await page.getByRole('dialog', { name: 'Publish your form' }).count()).toBe(0);
@@ -59,6 +62,7 @@ test.describe('the form journey', () => {
     const visitorContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
     await visitor.goto(`${new URL(page.url()).origin}/f/${key}`);
+    await expect(visitor.getByRole('heading', { name: `Talk to us ${tag}` })).toBeVisible({ timeout: 15_000 });
     await visitor.getByLabel(/Your name/).fill('Grace Hopper');
     await visitor.getByLabel(/Work email/).fill(`grace-${tag}@example.com`);
     await visitor.getByLabel(/What is your role\?/).fill('Rear admiral');
@@ -98,6 +102,7 @@ test.describe('the form journey', () => {
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();
     const button = page.getByRole('textbox', { name: 'Button text' });
+    const liveWords = await button.inputValue();
     await button.fill('Send it');
     await page.keyboard.press('Escape');
     // The preview's sheet (below the widest screens) closes too, so the header is in reach.
@@ -121,6 +126,6 @@ test.describe('the form journey', () => {
       await page.getByRole('button', { name: 'Show preview' }).click();
     }
     await page.getByRole('button', { name: 'Edit the button' }).click();
-    await expect(page.getByRole('textbox', { name: 'Button text' })).toHaveValue('Send');
+    await expect(page.getByRole('textbox', { name: 'Button text' })).toHaveValue(liveWords);
   });
 });

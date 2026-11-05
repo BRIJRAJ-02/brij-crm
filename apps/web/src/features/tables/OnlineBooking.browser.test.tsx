@@ -131,7 +131,18 @@ function changingHeld<Value>(value: Value) {
   return { held, change };
 }
 
-function storesOf(online: boolean) {
+/** Publish refused as the real store refuses it: the rules shown at once, then back as they were, then the refusal. */
+const NO_TABLES: TableSetupView = {
+  ...setupOf(false),
+  ready: false,
+  steps: [
+    { step: 'hours', done: true },
+    { step: 'tables', done: false, fix: 'Add a table guests can book online.' },
+    { step: 'rules', done: true },
+  ],
+};
+
+function storesOf(online: boolean, refusing = false) {
   const saved: TableRules[] = [];
   const notified: boolean[] = [];
   const business = heldOf(BUSINESS);
@@ -143,9 +154,13 @@ function storesOf(online: boolean) {
     floor: () => floor,
     day: () => day,
     setup: () => setup,
-    saveSetup: (_slug: string, _place: string, rules: TableRules) => {
+    saveSetup: async (_slug: string, _place: string, rules: TableRules) => {
       saved.push(rules);
-      return Promise.resolve(undefined);
+      if (!refusing) return undefined;
+      changeSetup({ ...NO_TABLES, rules });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      changeSetup(NO_TABLES);
+      return { code: 'CONFLICT', message: 'Add a table guests can book online.' };
     },
     setNotify: (_slug: string, _place: string, on: boolean) => {
       notified.push(on);
@@ -187,9 +202,9 @@ function Page({ tables }: { readonly tables: TablesStore }) {
 }
 
 /** The page at `width`, with Online booking open from the bar (from More on a narrow one). */
-async function open(width: number, online = false) {
+async function open(width: number, online = false, refusing = false) {
   await page.viewport(width, width < 600 ? 844 : 900);
-  const stores = storesOf(online);
+  const stores = storesOf(online, refusing);
   shown = await renderInApp(() => <Page tables={stores.tables} />, {
     data: {},
     pattern: '/w/$slug/reservations',
@@ -275,6 +290,25 @@ describe('Online booking (checklabs’ sheet)', () => {
     await expect.poll(() => notified).toEqual([false]);
     // The rules were already saved and unchanged: nothing else is sent.
     expect(saved).toHaveLength(0);
+  });
+
+  it('keeps what was typed when Publish is refused, and asks before Fix it leaves it', async () => {
+    const { sheet, changeSetup } = await open(1280, false, true);
+    changeSetup(NO_TABLES);
+    const accept = sheet.getByRole('switch', { name: /Accept online bookings/ });
+    await userEvent.click(sheet.getByText('Accept online bookings', { exact: true }));
+    await userEvent.fill(sheet.getByRole('textbox', { name: 'Min lead' }), '45');
+    await userEvent.click(sheet.getByRole('button', { name: 'Save settings' }));
+    // Refused, the rules go back in the store, but the form is what the person typed, and says why it wasn't saved.
+    await expect.element(sheet.getByRole('link', { name: 'Fix it' }).nth(1)).toBeVisible();
+    await expect.element(accept).toBeChecked();
+    await expect.element(sheet.getByRole('textbox', { name: 'Min lead' })).toHaveValue('45');
+    await userEvent.click(sheet.getByRole('link', { name: 'Fix it' }).first());
+    const ask = page.getByRole('alertdialog', { name: 'Leave without saving?' });
+    await expect.element(ask).toBeVisible();
+    await userEvent.click(ask.getByRole('button', { name: 'Keep editing' }));
+    await expect.element(accept).toBeChecked();
+    expect(shown?.router.state.location.pathname).toBe('/w/acme/reservations');
   });
 
   it('refuses a min party over the max, at the field', async () => {

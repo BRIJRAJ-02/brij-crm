@@ -49,7 +49,28 @@ function openEarlyAccess(slug: string): void {
   ]);
 }
 
+/** The next open day, the nth time on it, and on to the details (the Book bar: "Continue · Fri 6 Nov, 19:30"). */
+async function pickTime(guest: Page, nth = 0): Promise<void> {
+  await guest.locator('button[data-day]:not([disabled])').nth(1).click();
+  const slot = guest
+    .locator('button[aria-pressed]')
+    .filter({ hasText: /PM|AM|:/ })
+    .nth(nth);
+  await expect(slot).toBeVisible({ timeout: 10_000 });
+  await slot.click();
+  await guest.getByRole('button', { name: /^Continue · / }).click();
+}
+
+/** The details step: name, phone and email (whose order the page keeps). */
+async function fillDetails(guest: Page, name: string, email: string, phone: string): Promise<void> {
+  await guest.getByRole('textbox', { name: /Full name/ }).fill(name);
+  await guest.getByRole('textbox', { name: /Phone/ }).fill(phone);
+  await guest.getByRole('textbox', { name: /Email/ }).fill(email);
+}
+
 test.describe.configure({ mode: 'serial' });
+test.use({ actionTimeout: 15_000 });
+test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Walked at a desk; the guest opens a phone of their own.');
 
 test('a newcomer sets up Table seating, a guest reserves, the host runs service', async ({ page }) => {
   test.setTimeout(360_000);
@@ -98,8 +119,14 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   });
 
   await test.step('opening hours: lunch and dinner, Tuesday to Sunday, from the first install', async () => {
-    await page.getByRole('dialog', { name: 'Online booking' }).getByRole('link', { name: 'Fix it' }).first().click();
-    // The drawer's way out is a link: the switch turned on wasn't saved, and stays off.
+    // The refused switch stays on as it was typed, and the drawer's way out asks before leaving it unsaved.
+    const sheet = page.getByRole('dialog', { name: 'Online booking' });
+    await expect(sheet.getByRole('switch', { name: /Accept online bookings/ })).toBeChecked();
+    await sheet.getByRole('link', { name: 'Fix it' }).first().click();
+    await page
+      .getByRole('alertdialog', { name: 'Leave without saving?' })
+      .getByRole('button', { name: 'Leave without saving' })
+      .click();
     await expect(page).toHaveURL(/\/settings\/business\/places\//);
     await expect(page.getByRole('switch', { name: 'Monday' })).not.toBeChecked({ timeout: 15_000 });
     await expect(page.getByRole('switch', { name: 'Tuesday' })).toBeChecked();
@@ -127,7 +154,7 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   let key = '';
   await test.step('rules saved and the page published', async () => {
     await page.goto(`/w/${slug}/reservations`);
-    await page.getByRole('button', { name: 'Online booking' }).click();
+    await page.getByRole('button', { name: 'Online booking', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Online booking' });
     await expect(sheet.getByLabel('Max party')).toHaveValue('8', { timeout: 15_000 });
     // A number that isn't one says so under its field, never quietly becomes a default.
@@ -165,18 +192,22 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   if (guest === undefined) throw new Error('No second context.');
   const phone = await guest.newPage();
   let manageUrl = '';
+  let bookedDay = '';
+  // Seat and Finish are for today: the host's browser opens on the day the guest booked, at noon, as they would then.
+  const openHostOnBookedDay = () => page.context().clock.setFixedTime(new Date(`${bookedDay}T12:00:00Z`));
   await test.step('a guest reserves at phone width: party, day, time, details, reserved', async () => {
     await phone.goto(`/r/${key}`);
-    await expect(phone.getByRole('heading', { name: 'Reserve a table' })).toBeVisible({ timeout: 15_000 });
+    await expect(phone.getByRole('heading', { level: 1, name: 'Reserve your table' })).toBeVisible({ timeout: 15_000 });
     // "Somewhere / Somewhere": the place named as its business shows once.
-    expect(await phone.getByText('Somewhere', { exact: true }).count()).toBeLessThan(2);
+    await expect(phone.getByRole('heading', { name: 'Choose a date' })).toBeVisible();
     await shot(phone, '10-guest-party');
-    await phone
-      .getByRole('radio', { name: '4' })
-      .or(phone.getByRole('button', { name: '4', exact: true }))
-      .first()
-      .click();
-    await phone.locator('button[data-day]:not([disabled])').nth(1).click();
+    const party = phone.getByRole('group', { name: 'Party size' });
+    await party.getByRole('button', { name: 'One more guest' }).click();
+    await party.getByRole('button', { name: 'One more guest' }).click();
+    await expect(party.getByRole('status')).toContainText('4');
+    const day = phone.locator('button[data-day]:not([disabled])').nth(1);
+    bookedDay = (await day.getAttribute('data-day')) ?? '';
+    await day.click();
     const slot = phone
       .locator('button[aria-pressed]')
       .filter({ hasText: /PM|AM|:/ })
@@ -185,22 +216,21 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     // The day's times under its own service windows.
     await expect(phone.getByText('Lunch', { exact: true })).toBeVisible();
     await expect(phone.getByText('Dinner', { exact: true })).toBeVisible();
-    // Reserve is never a dead button: with no time yet it takes the guest to the first one.
-    await phone.getByRole('button', { name: 'Choose a time' }).click();
-    await expect(slot).toBeFocused();
+    // On a phone the Book bar waits for a time, so it is never a dead button.
+    await expect(phone.getByRole('button', { name: 'Pick a time' })).toHaveCount(0);
     await shot(phone, '11-guest-times');
     await slot.click();
-    await phone.getByRole('button', { name: /^Reserve .* for 4$/ }).click();
-    await phone.getByLabel('Your name').fill('Grace Hopper');
-    await phone.getByLabel('Email').fill('grace@navy.example');
-    await phone.getByLabel(/Number to call/).fill('7946 000000');
+    await phone.getByRole('button', { name: /^Continue · / }).click();
+    await fillDetails(phone, 'Grace Hopper', 'grace@navy.example', '7946 000000');
     await phone
       .getByRole('radio', { name: 'Birthday' })
       .or(phone.getByRole('button', { name: 'Birthday', exact: true }))
       .first()
       .click();
     await shot(phone, '12-guest-details');
-    await phone.getByRole('button', { name: 'Reserve', exact: true }).click();
+    // A person takes more than the bot check's 2 seconds from opening the page to confirming.
+    await phone.waitForTimeout(2_100);
+    await phone.getByRole('button', { name: /^Confirm / }).click();
     await expect(phone).toHaveURL(/\/r\/[A-Za-z0-9_-]{16}\/manage#/, { timeout: 15_000 });
     await expect(phone.getByText('Reservation code')).toBeVisible();
     manageUrl = phone.url();
@@ -272,18 +302,10 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
       route.fulfill({ status: 409, json: { code: 'SLOT_TAKEN', message: 'That time was just taken.', next: [] } }),
     );
     await other.goto(`/r/${key}`);
-    await other.locator('button[data-day]:not([disabled])').nth(1).click();
-    await other
-      .locator('button[aria-pressed]')
-      .filter({ hasText: /PM|AM|:/ })
-      .first()
-      .click();
-    await other.getByRole('button', { name: /^Reserve .* for 2$/ }).click();
-    await other.getByLabel('Your name').fill('Ada Lovelace');
-    await other.getByLabel('Email').fill('ada@engine.example');
-    await other.getByLabel(/Number to call/).fill('7946 000001');
+    await pickTime(other);
+    await fillDetails(other, 'Ada Lovelace', 'ada@engine.example', '7946 000001');
     const before = timesRead;
-    await other.getByRole('button', { name: 'Reserve', exact: true }).click();
+    await other.getByRole('button', { name: /^Confirm / }).click();
     await expect(other.getByText('That time was just taken. Pick another time below, or another day.')).toBeVisible({
       timeout: 10_000,
     });
@@ -295,15 +317,14 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
   await test.step('the host runs the day: seat, then finish, with Undo; the floor follows in another browser', async () => {
     // The reservation's day on the Reservations page (Service's old address redirects there).
     await phone.goto(manageUrl);
+    await openHostOnBookedDay();
     await page.goto(`/w/${slug}/service`);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/reservations`));
     await expect(page.getByRole('heading', { name: /^Bookings/ })).toBeVisible({ timeout: 15_000 });
-    await page.getByRole('button', { name: 'Next day' }).click();
     await expect(page.getByRole('rowheader', { name: /Grace Hopper/ })).toBeVisible({ timeout: 10_000 });
     await shots(page, '20-service-list');
     const floor = await page.context().newPage();
     await floor.goto(`/w/${slug}/reservations`);
-    await floor.getByRole('button', { name: 'Next day' }).click();
     await floor.locator('label:has(input[value="floor"])').click();
     // A double tap on Seat seats once: the row's action stays Seat, pending, until the server answers.
     await page.route('**/api/rpc/tables/setStatus**', async (route) => {
@@ -316,7 +337,6 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await expect(page.getByRole('row', { name: /Grace Hopper/ }).getByText('Seated', { exact: true })).toBeVisible();
     await page.unroute('**/api/rpc/tables/setStatus**');
     await floor.reload();
-    await floor.getByRole('button', { name: 'Next day' }).click();
     await floor.locator('label:has(input[value="floor"])').click();
     await expect(floor.getByText('Seated', { exact: true }).first()).toBeVisible({ timeout: 70_000 });
     await shots(floor, '21-service-floor');
@@ -325,20 +345,27 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await expect(floor.getByRole('dialog', { name: 'Table T1' })).toBeVisible();
     await shots(floor, '22-table-detail');
     await floor.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Finish', exact: true }).click();
+    // The second tap of that double tap lands on the row once Seat is busy, opening its sheet: put it away.
+    await page.bringToFront();
+    const sheet = page.getByRole('dialog', { name: 'Grace Hopper' });
+    if (await sheet.isVisible()) await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    const row = page.getByRole('row', { name: /Grace Hopper/ });
+    await row.getByRole('button', { name: 'Finish', exact: true }).click();
     await expect(page.getByText('Grace Hopper: Finished')).toBeVisible();
     await page
       .getByText('Grace Hopper: Finished')
       .locator('xpath=ancestor::*[.//button[normalize-space()="Undo"]][1]')
       .getByRole('button', { name: 'Undo' })
       .click();
-    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByRole('button', { name: 'Finish', exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Grace Hopper: back as it was')).toBeVisible({ timeout: 10_000 });
     await floor.close();
   });
 
   await test.step('a walk in: party size, then the free tables that fit, then seat now', async () => {
-    await page.getByRole('button', { name: 'Today', exact: true }).click();
+    await page.context().clock.setFixedTime(new Date());
+    await page.goto(`/w/${slug}/reservations`);
     await page.getByRole('button', { name: 'Walk in' }).click();
     const dialog = page.getByRole('dialog', { name: 'Seat a walk in' });
     await dialog
@@ -369,19 +396,11 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await shot(phone, '17-guest-manage-seated');
     // A second reservation, cancelled by its guest.
     await phone.goto(`/r/${key}`);
-    await phone.locator('button[data-day]:not([disabled])').nth(1).click();
-    await phone
-      .locator('button[aria-pressed]')
-      .filter({ hasText: /PM|AM|:/ })
-      .nth(6)
-      .click();
-    await phone.getByRole('button', { name: /^Reserve .* for 2$/ }).click();
-    await phone.getByLabel('Your name').fill('Ada Lovelace');
-    await phone.getByLabel('Email').fill('ada@engine.example');
-    await phone.getByLabel(/Number to call/).fill('7946 000001');
+    await pickTime(phone, 6);
+    await fillDetails(phone, 'Ada Lovelace', 'ada@engine.example', '7946 000001');
     // A person takes more than the bot check's 2 seconds from opening the page to confirming.
     await phone.waitForTimeout(2_100);
-    await phone.getByRole('button', { name: 'Reserve', exact: true }).click();
+    await phone.getByRole('button', { name: /^Confirm / }).click();
     await expect(phone.getByText('Reservation code')).toBeVisible({ timeout: 15_000 });
     await phone.getByRole('button', { name: 'Cancel reservation' }).click();
     const confirm = phone.getByRole('alertdialog').or(phone.getByRole('dialog'));
@@ -392,8 +411,8 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await expect(phone.getByText('Your reservation is cancelled.')).toBeVisible({ timeout: 10_000 });
     await shots(phone, '18-guest-cancelled');
     await guest.close();
+    await openHostOnBookedDay();
     await page.reload();
-    await page.getByRole('button', { name: 'Next day' }).click();
     await expect(page.getByText('Cancelled', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
   });
 });

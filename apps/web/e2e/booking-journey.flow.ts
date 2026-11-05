@@ -57,9 +57,10 @@ test.describe('the booking journey', () => {
     // A new page is a draft (the bookings area, 4 November 2026): Publish puts it live and ends on its link.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     const live = page.getByRole('dialog', { name: /is live$/ });
-    const address = await live.getByRole('link', { name: 'Open' }).getAttribute('href');
+    // The share panel shows the address, with Copy link beside it (and no Open of its own).
+    const address = await live.getByRole('group', { name: 'Link', exact: true }).locator('span').first().textContent();
     await live.getByRole('button', { name: 'Done' }).click();
-    expect(address).not.toBeNull();
+    expect(address).toMatch(/^https?:\/\//);
 
     // The visitor: a browser of their own, signed in to nothing.
     const visitorContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });

@@ -32,6 +32,27 @@ async function clearToasts(page: Page): Promise<void> {
   while ((await dismiss.count()) > 0) await dismiss.first().click();
 }
 
+/** Starts adding from a section's foot: its quiet Add item turns into the search or create field. */
+async function addItem(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name: 'Add item', exact: true }).first();
+  if (await button.isVisible()) await button.click();
+  const add = page.getByLabel('Add items').first();
+  await add.fill(name);
+  await expect(page.getByRole('option', { name: new RegExp(`Create “${name}”`) })).toBeVisible();
+  await shot(page, `08-add-${name.toLowerCase()}`);
+  await add.press('Enter');
+}
+
+/** Opens the guest's address afresh and says how many of `what` it holds once it has drawn, for a poll. */
+async function countAfterOpening(guest: Page, address: string, what: ReturnType<Page['getByText']>): Promise<number> {
+  await guest.goto(address);
+  await what
+    .first()
+    .waitFor({ timeout: 3_000 })
+    .catch(() => undefined);
+  return what.count();
+}
+
 /** The workspace's menu draft as the page's own session reads it. */
 async function draftOf(page: Page, workspace: string) {
   return page.evaluate(async (slug) => {
@@ -69,6 +90,10 @@ test.describe('the Menu app from an empty workspace', () => {
   if (process.env.FLOW_WIDTH !== undefined)
     test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
   test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 0) < 1000 && process.env.FLOW_WIDTH === undefined,
+    'Walked at a desktop width.',
+  );
 
   test('install, build, publish, guest, sold out, republish, discard, delete', async ({ page, context }) => {
     test.setTimeout(240_000);
@@ -123,17 +148,14 @@ test.describe('the Menu app from an empty workspace', () => {
     await test.step('make the first menu: it comes with a first section', async () => {
       await page.goto(`/w/${slug}/menus`);
       await page.getByRole('button', { name: 'New menu' }).first().click();
-      await expect(page.getByRole('tab', { name: /Dinner/ })).toBeVisible();
-      await expect(page.getByText('1. Starters')).toBeVisible();
+      // The menu is picked in the header; a first menu is Dinner, and comes with a section to fill.
+      await expect(page.getByRole('button', { name: 'Menu to edit' })).toContainText('Dinner');
+      await expect(page.getByRole('button', { name: 'Starters', exact: true })).toBeVisible();
       await shot(page, '07-first-menu');
     });
 
     await test.step('add a dish from the section: name, photo, price, allergens', async () => {
-      const add = page.getByLabel('Add dishes').first();
-      await add.fill('Edamame');
-      await expect(page.getByRole('option', { name: /Create “Edamame”/ })).toBeVisible();
-      await shot(page, '08-add-dishes');
-      await add.press('Enter');
+      await addItem(page, 'Edamame');
       const drawer = page.getByRole('dialog', { name: 'Edamame' });
       await expect(drawer).toBeVisible();
       await expect(drawer.getByLabel('Name')).toHaveValue('Edamame');
@@ -153,7 +175,7 @@ test.describe('the Menu app from an empty workspace', () => {
       await drawer.getByRole('button', { name: 'Soya', exact: true }).first().click();
       await drawer.getByRole('button', { name: 'Vegan', exact: true }).click();
       await shot(page, '09-dish-drawer');
-      await drawer.getByRole('button', { name: 'Save dish' }).click();
+      await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();
       await expect(page.getByRole('row', { name: /Edamame/ }).first()).toBeVisible();
       // The photo chosen before the dish existed went up with it.
@@ -167,9 +189,7 @@ test.describe('the Menu app from an empty workspace', () => {
     });
 
     await test.step('closing a drawer with changes asks first', async () => {
-      const add = page.getByLabel('Add dishes').first();
-      await add.fill('Wine');
-      await add.press('Enter');
+      await addItem(page, 'Wine');
       const drawer = page.getByRole('dialog', { name: 'Wine' });
       await expect(drawer).toBeVisible();
       await drawer.getByLabel('Description').fill('A crisp white.');
@@ -186,14 +206,14 @@ test.describe('the Menu app from an empty workspace', () => {
       await drawer.getByLabel('Size 2').fill('Bottle');
       await drawer.getByLabel('Price (GBP)').nth(1).fill('38');
       await shot(page, '12-sizes');
-      await drawer.getByRole('button', { name: 'Save dish' }).click();
+      await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();
     });
 
     await test.step('make an option group and offer it', async () => {
-      await page.getByRole('tab', { name: /All options/ }).click();
-      await page.getByRole('button', { name: 'Add option group' }).first().click();
-      const drawer = page.getByRole('dialog', { name: 'Option group' });
+      await page.getByRole('tab', { name: /^Options/ }).click();
+      await page.getByRole('button', { name: 'New group' }).first().click();
+      const drawer = page.getByRole('dialog', { name: 'New option group' });
       await drawer.getByRole('textbox', { name: 'Name' }).fill('Sides');
       await drawer.getByRole('radio', { name: 'Up to' }).click({ force: true });
       await drawer.getByRole('textbox', { name: 'Option 1' }).fill('Fries');
@@ -204,11 +224,11 @@ test.describe('the Menu app from an empty workspace', () => {
       await drawer.getByRole('button', { name: 'Save group' }).click();
       await expect(drawer).toBeHidden();
       await expect(page.getByRole('row', { name: /Sides/ })).toBeVisible();
-      await page.getByRole('tab', { name: /All dishes/ }).click();
+      await page.getByRole('tab', { name: /^Items/ }).click();
       await page.getByRole('row', { name: /Wine/ }).click();
       const wine = page.getByRole('dialog', { name: 'Wine' });
       await wine.getByRole('button', { name: 'Sides', exact: true }).click();
-      await wine.getByRole('button', { name: 'Save dish' }).click();
+      await wine.getByRole('button', { name: 'Save item' }).click();
       await expect(wine).toBeHidden();
       await shot(page, '14-dishes-tab');
     });
@@ -223,7 +243,7 @@ test.describe('the Menu app from an empty workspace', () => {
       await page.keyboard.press('ArrowUp');
       await page.waitForTimeout(300);
       await page.keyboard.press('Space');
-      const dishes = page.getByRole('grid', { name: 'Dishes in Starters' }).getByRole('row');
+      const dishes = page.getByRole('grid', { name: 'Items in Starters' }).getByRole('row');
       await expect(dishes.first()).toContainText('Wine');
       await shot(page, '15-reordered');
     });
@@ -244,57 +264,57 @@ test.describe('the Menu app from an empty workspace', () => {
 
     await test.step('preview at a time, then review and publish', async () => {
       await shot(page, '16-preview');
-      await page.getByRole('button', { name: /^(Review and publish|Publish)$/ }).click();
+      // The first publish goes through the review: "Publish & go live", or "Publish" on a phone's bar.
+      await page.getByRole('button', { name: /^Publish( & go live)?$/ }).click();
       const review = page.getByRole('dialog', { name: 'Review and publish' });
       await expect(review).toBeVisible();
       // Every check passes, so the review says what goes live instead of a list of ticks.
-      await expect(review).toContainText('Guests will see 2 dishes on Dinner.');
+      await expect(review).toContainText('Guests will see 2 items on Dinner.');
       await shot(page, '17-review');
-      await review.getByRole('button', { name: 'Publish', exact: true }).click();
+      await review.getByRole('button', { name: 'Publish & go live', exact: true }).click();
       await expect(page.getByRole('dialog', { name: 'Your menu is live' })).toBeVisible();
       await shot(page, '18-live');
       await page.getByRole('button', { name: 'Done' }).click();
     });
 
     let guestUrl = '';
-    await test.step('the guest menu: search, filter, open a dish, pick a size, add to picks', async () => {
-      await page.getByRole('button', { name: 'More', exact: true }).click();
-      const copy = page.getByRole('menuitem', { name: 'Copy link' });
-      await expect(copy).toBeVisible();
+    await test.step('the guest menu: its name and sections, open an item, pick a size, add to the selection', async () => {
+      // Once live, the header's split button views the guest menu, and its chevron shares it.
+      await page.getByRole('button', { name: 'Share menu' }).click();
+      await expect(page.getByRole('menuitem', { name: 'Show QR code' })).toBeVisible();
       await page.keyboard.press('Escape');
       guestUrl = `/m/${(await draftOf(page, slug)).places[0]?.menuKey ?? ''}`;
       const guest = await context.newPage();
       await guest.goto(guestUrl);
-      await expect(guest.getByRole('heading', { name: 'Somewhere' })).toBeVisible();
+      await expect(guest.getByRole('heading', { level: 1, name: 'Dinner' })).toBeVisible();
+      await expect(guest.getByRole('banner').getByText('Somewhere')).toBeVisible();
+      await expect(guest.getByRole('tab', { name: 'Starters' })).toBeVisible();
       await shot(guest, '19-guest');
-      await guest.getByRole('searchbox').fill('wine');
-      await expect(guest.getByText('Edamame')).toBeHidden();
-      await guest.getByRole('searchbox').fill('');
       await guest.getByRole('button', { name: /^Wine/ }).first().click();
       const sheet = guest.getByRole('dialog', { name: 'Wine' });
       await guest.getByRole('radio', { name: /Bottle/ }).click({ force: true });
       await expect(guest.getByRole('radio', { name: /Bottle/ })).toBeChecked();
-      await expect(sheet.getByRole('button', { name: /Add to your picks.*£38\.00/ })).toBeVisible();
+      await expect(sheet.getByRole('button', { name: /Add to selection.*£38\.00/ })).toBeVisible();
       await shot(guest, '20-guest-sheet');
-      await sheet.getByRole('button', { name: /Add to your picks/ }).click();
-      await expect(guest.getByRole('button', { name: /Your picks|View your picks/ })).toBeVisible();
+      await sheet.getByRole('button', { name: /Add to selection/ }).click();
+      await expect(guest.getByRole('button', { name: /View selection/ })).toBeVisible();
       await shot(guest, '21-guest-picks');
       await guest.close();
     });
 
     await test.step('sold out goes live at once', async () => {
-      await page.getByRole('switch', { name: 'Edamame available' }).first().click({ force: true });
+      // On the row, a quick action beside its ⋯ (on a phone, in its ⋯).
+      if ((page.viewportSize()?.width ?? 0) >= 640) {
+        await page.getByRole('button', { name: 'Mark Edamame sold out' }).click();
+      } else {
+        await page.getByRole('button', { name: 'More for Edamame' }).click();
+        await page.getByRole('menuitem', { name: 'Mark sold out' }).click();
+      }
       await expect(page.getByText('Edamame sold out. Guests see it now.')).toBeVisible();
       await shot(page, '22a-sold-out-toast');
       const guest = await context.newPage();
       await expect
-        .poll(
-          async () => {
-            await guest.goto(guestUrl);
-            return guest.getByText('Sold out').count();
-          },
-          { timeout: 20_000 },
-        )
+        .poll(() => countAfterOpening(guest, guestUrl, guest.getByText('Sold out')), { timeout: 20_000 })
         .toBeGreaterThan(0);
       await shot(guest, '22-guest-sold-out');
       await guest.close();
@@ -313,10 +333,12 @@ test.describe('the Menu app from an empty workspace', () => {
       const guest = await context.newPage();
       await expect
         .poll(
-          async () => {
-            await guest.goto(guestUrl);
-            return guest.getByRole('heading', { name: 'This menu isn’t available right now' }).count();
-          },
+          () =>
+            countAfterOpening(
+              guest,
+              guestUrl,
+              guest.getByRole('heading', { name: 'This menu isn’t available right now' }),
+            ),
           { timeout: 20_000 },
         )
         .toBeGreaterThan(0);
@@ -330,13 +352,7 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(page.getByText('Menu live again. Guests see it now.')).toBeVisible();
       await clearToasts(page);
       await expect
-        .poll(
-          async () => {
-            await guest.goto(guestUrl);
-            return guest.getByText('Edamame').count();
-          },
-          { timeout: 20_000 },
-        )
+        .poll(() => countAfterOpening(guest, guestUrl, guest.getByText('Edamame')), { timeout: 20_000 })
         .toBeGreaterThan(0);
       await guest.close();
     });
@@ -348,19 +364,19 @@ test.describe('the Menu app from an empty workspace', () => {
         .click();
       const drawer = page.getByRole('dialog', { name: 'Edamame' });
       await drawer.getByLabel('Price', { exact: true }).fill('6');
-      await drawer.getByRole('button', { name: 'Save dish' }).click();
-      await page.getByRole('button', { name: /^(Review and publish|Publish)$/ }).click();
-      await page
-        .getByRole('dialog', { name: 'Review and publish' })
-        .getByRole('button', { name: 'Publish', exact: true })
-        .click();
-      await page.getByRole('button', { name: 'Done' }).click();
-      // "Published" stands two seconds, then the button reads as before (with nothing new, disabled).
-      await expect(page.getByRole('button', { name: 'Published' })).toBeVisible();
-      await expect(page.getByRole('button', { name: /^(Review and publish|Publish)$/ })).toBeDisabled({
-        timeout: 6_000,
-      });
-      await page.getByRole('tab', { name: /Settings/ }).click();
+      await drawer.getByRole('button', { name: 'Save item' }).click();
+      await expect(drawer).toBeHidden();
+      // Once live, Publish · N drafts publishes at once; with nothing new, the same button is View.
+      await page.getByRole('button', { name: /^Publish( · \d+ drafts?)?$/ }).click();
+      await expect(page.getByText('Published. Guests see your changes now.')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'View', exact: true })).toBeVisible();
+      await clearToasts(page);
+      if ((page.viewportSize()?.width ?? 0) >= 640) {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      } else {
+        await page.getByRole('button', { name: 'More', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Settings' }).click();
+      }
       await page.getByLabel('Service added').fill('12.5');
       await page.getByLabel('Service added').press('Tab');
       await expect(page.getByLabel('Note at the foot')).toHaveValue('12.5% service is added.');
@@ -370,20 +386,21 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(page.getByRole('button', { name: /Friday from/ }).first()).toContainText(/12:00/);
       await shot(page, '23-settings');
       await page.getByRole('button', { name: 'More', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Discard' }).click();
-      await page.getByRole('button', { name: 'Discard changes' }).click();
+      await page.getByRole('menuitem', { name: 'Discard changes' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
       await expect(page.getByLabel('Service added')).toHaveValue('0');
     });
 
     await test.step('delete the menu after the confirm', async () => {
-      await page.getByRole('button', { name: 'Delete menu' }).click();
+      await page.getByRole('button', { name: 'More', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Delete menu' }).click();
       await shot(page, '24-delete-confirm');
       await page.getByRole('alertdialog').getByRole('button', { name: 'Delete menu' }).click();
       await expect(page.getByText('No menus yet')).toBeVisible();
       // Deleting is a draft change: guests keep the published menu until the next Publish.
       await expect(page.getByRole('button', { name: 'Live', exact: true })).toBeVisible();
-      // At a phone's width the count waits in the review; wider, it sits beside Live.
-      if ((page.viewportSize()?.width ?? 0) >= 640) await expect(page.getByText(/^\d+ changes?$/)).toBeVisible();
+      // The deletion waits on the header's Publish, its count said there (on a phone, just Publish).
+      await expect(page.getByRole('button', { name: /^Publish( · \d+ drafts?)?$/ })).toBeVisible();
       // Live with changes, More keeps Discard in reach even with no menu left.
       await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible();
       await shot(page, '25-deleted');
@@ -414,6 +431,10 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
   if (process.env.FLOW_WIDTH !== undefined)
     test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
   test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 0) < 1000 && process.env.FLOW_WIDTH === undefined,
+    'Walked at a desktop width.',
+  );
 
   test('install both, tables, a code per table, downloads, the print sheet, the guest’s table, a new code', async ({
     page,
@@ -446,17 +467,14 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     const placeId = place?.id ?? '';
     const menuKey = place?.menuKey ?? '';
 
-    await test.step('QR codes with no tables yet: the way to add them', async () => {
+    await test.step('Tables with none yet: the way to add them', async () => {
       await page.goto(`/w/${slug}/qr`);
-      await expect(page.getByRole('heading', { level: 1, name: 'QR codes' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Tables' })).toBeVisible();
       await expect(page.getByText('No tables yet')).toBeVisible();
       // Nothing is published yet, so the page says scans would show nothing.
       await expect(page.getByText(/Your menu isn’t published yet/)).toBeVisible();
       await shot(page, 'qr-02-empty');
-      await expect(page.getByRole('link', { name: 'Add tables' })).toHaveAttribute(
-        'href',
-        `/w/${slug}/settings/business/places/${placeId}`,
-      );
+      await expect(page.getByRole('button', { name: 'Add your first table' })).toBeVisible();
     });
 
     await test.step('a menu published and four tables added', async () => {
@@ -514,18 +532,18 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     let firstAddress = '';
     await test.step('every table has its own code; one opens in a dialog with its link and downloads', async () => {
       await page.goto(`/w/${slug}/qr`);
-      await expect(page.getByRole('rowheader', { name: 'Table 4' })).toBeVisible();
+      await expect(page.getByRole('rowheader', { name: 'T4' })).toBeVisible();
       await expect(page.getByText(/Your menu isn’t published yet/)).toBeHidden();
       await shot(page, 'qr-03-list');
-      await page.getByRole('button', { name: 'Show the QR code for Table 1' }).click();
-      const dialog = page.getByRole('dialog', { name: 'QR code for Table 1' });
-      await expect(dialog.getByRole('img', { name: 'QR code for Table 1' })).toBeVisible();
+      await page.getByRole('button', { name: 'QR code for T1' }).click();
+      const dialog = page.getByRole('dialog', { name: 'QR for T1' });
+      await expect(dialog.getByRole('img', { name: 'QR code for T1' })).toBeVisible();
       await shot(page, 'qr-04-code');
       const download = page.waitForEvent('download');
-      await dialog.getByRole('button', { name: 'Download the Table 1 code as PNG' }).click();
+      await dialog.getByRole('button', { name: 'Download the T1 code as PNG' }).click();
       expect((await download).suggestedFilename()).toMatch(/-t1-qr\.png$/);
       const svg = page.waitForEvent('download');
-      await dialog.getByRole('button', { name: 'Download the Table 1 code as SVG' }).click();
+      await dialog.getByRole('button', { name: 'Download the T1 code as SVG' }).click();
       expect((await svg).suggestedFilename()).toMatch(/-t1-qr\.svg$/);
       firstAddress = (await dialog.getByRole('link', { name: 'Open menu' }).getAttribute('href')) ?? '';
       expect(firstAddress).toMatch(new RegExp(`/m/${menuKey}\\?t=[A-Za-z0-9_-]{22}$`));
@@ -539,10 +557,13 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await expect(page.getByText('Downloaded 4 codes.')).toBeVisible();
     });
 
-    await test.step('the print sheet: tent cards, two or four to a sheet', async () => {
-      await page.getByRole('link', { name: 'Print table cards' }).click();
+    await test.step('the print sheet: tiles, or tent cards two or four to a sheet', async () => {
+      await page.getByRole('link', { name: 'Print QR sheet' }).click();
+      await expect(page.getByText('4 tables · scan-ready')).toBeVisible();
+      // It opens as tiles; tent cards go two to a sheet, or four.
+      await page.getByRole('radio', { name: 'Tent cards' }).click({ force: true });
       await expect(page.getByRole('region', { name: 'Page 1 of 2' })).toBeVisible();
-      await expect(page.getByRole('article', { name: 'Table 1' })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'T1' })).toBeVisible();
       await shot(page, 'qr-05-print-two');
       await page.getByRole('radio', { name: '4 per sheet' }).click({ force: true });
       await expect(page.getByRole('region', { name: 'Page 1 of 1' })).toBeVisible();
@@ -550,8 +571,8 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await page.emulateMedia({ media: 'print' });
       await shot(page, 'qr-07-print-media');
       await page.emulateMedia({ media: 'screen' });
-      await page.getByRole('link', { name: 'Back to QR codes' }).click();
-      await expect(page.getByRole('heading', { level: 1, name: 'QR codes' })).toBeVisible();
+      await page.getByRole('link', { name: 'Back to Tables' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Tables' })).toBeVisible();
     });
 
     await test.step('a guest scans Table 1: the menu says so in its bar, and the scan counts', async () => {
@@ -574,16 +595,16 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     });
 
     await test.step('a new code asks first; the old print then opens the menu with no table', async () => {
-      await page.getByRole('button', { name: 'Actions for Table 1' }).last().click();
+      await page.getByRole('button', { name: 'More for T1' }).last().click();
       await page.getByRole('menuitem', { name: 'New code…' }).click();
-      const confirm = page.getByRole('alertdialog', { name: 'New code for Table 1?' });
+      const confirm = page.getByRole('alertdialog', { name: 'New code for T1?' });
       await expect(confirm).toBeVisible();
       await shot(page, 'qr-09-new-code');
       await confirm.getByRole('button', { name: 'Make a new code' }).click();
-      await expect(page.getByText('Table 1 has a new code. Print it to replace the old one.')).toBeVisible();
+      await expect(page.getByText('T1 has a new code. Print it to replace the old one.')).toBeVisible();
       const guest = await context.newPage();
       await guest.goto(firstAddress.replace(/^https?:\/\/[^/]+/, ''));
-      await expect(guest.getByRole('heading', { name: 'Somewhere' })).toBeVisible();
+      await expect(guest.getByRole('heading', { level: 1, name: 'Dinner' })).toBeVisible();
       await guest.waitForTimeout(1000);
       await expect(guest.getByText('Table 1', { exact: true })).toBeHidden();
       await guest.close();
@@ -609,11 +630,6 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     await test.step('the link page gets a Menu block and a Reserve a table block, then Publish', async () => {
       await page.goto(`/w/${slug}/link-page`);
       await expect(page.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible();
-      publicPage =
-        (await page
-          .getByRole('group', { name: 'Share online' })
-          .getByRole('link', { name: 'Open' })
-          .getAttribute('href')) ?? '';
       await page.getByRole('button', { name: 'Edit page' }).click();
       await page.getByRole('button', { name: 'Add item' }).click();
       const add = page.getByRole('dialog', { name: 'Add to your link page' });
@@ -631,6 +647,10 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await shot(page, 'blocks-02-editor-rows');
       await page.getByRole('button', { name: 'Done' }).click();
       await rpc(page, 'profile/publish', { workspace: slug, mutationId: crypto.randomUUID() });
+      // A new link page is private until it is shared; then it is live at its handle.
+      await rpc(page, 'profile/show', { workspace: slug, mutationId: crypto.randomUUID() });
+      const { handle } = await rpc<{ handle: string }>(page, 'profile/get', { workspace: slug });
+      publicPage = `/${handle}`;
     });
 
     await test.step('a visitor sees the menu’s first dishes and Reserve a table, each opening its page', async () => {
@@ -639,7 +659,7 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
         ...(process.env.FLOW_COLOR_SCHEME === 'dark' ? { colorScheme: 'dark' as const } : {}),
       });
       const visitor = await visitorContext.newPage();
-      await visitor.goto(publicPage.replace(/^https?:\/\/[^/]+/, ''));
+      await visitor.goto(publicPage);
       const menuRow = visitor.getByRole('link', { name: /Our menu.*Soup £6\.50 · Risotto £14\.50 · Tart £7\.00/ });
       await expect(menuRow).toHaveAttribute('href', `/m/${menuKey}`);
       await expect(visitor.getByRole('link', { name: /Reserve a table/ })).toHaveAttribute('href', /^\/r\//);
@@ -654,15 +674,17 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
         ...(process.env.FLOW_COLOR_SCHEME === 'dark' ? { colorScheme: 'dark' as const } : {}),
       });
       const visitor = await visitorContext.newPage();
-      await visitor.goto(publicPage.replace(/^https?:\/\/[^/]+/, ''));
+      await visitor.goto(publicPage);
       await expect(visitor.getByRole('link', { name: /Reserve a table/ })).toBeVisible();
       await expect(visitor.getByRole('link', { name: /Our menu/ })).toHaveCount(0);
       await expect
         .poll(
-          async () => {
-            await visitor.goto(`/m/${menuKey}`);
-            return visitor.getByRole('heading', { name: 'This menu isn’t available right now' }).count();
-          },
+          () =>
+            countAfterOpening(
+              visitor,
+              `/m/${menuKey}`,
+              visitor.getByRole('heading', { name: 'This menu isn’t available right now' }),
+            ),
           { timeout: 20_000 },
         )
         .toBeGreaterThan(0);
