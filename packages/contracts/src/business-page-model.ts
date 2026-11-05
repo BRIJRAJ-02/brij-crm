@@ -205,6 +205,8 @@ export interface PublicBusinessPage {
    * `/api/public/business/<handle>/look/menu.css?v=<look>`, which the page wears in place of the brand's own.
    */
   readonly look?: string | undefined;
+  /** Which side the look pins the page to; absent, it follows the visitor. */
+  readonly scheme?: 'light' | 'dark' | undefined;
   /** Whether search engines may list this address (AC-6644: a place can be hidden). */
   readonly indexable: boolean;
   /** When the page was last published. */

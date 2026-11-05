@@ -2,6 +2,7 @@
 // the menu, the reservation page and the business page read as one product. It draws nothing of its own.
 import { useState, type ReactNode } from 'react';
 import { UNSAFE_PortalProvider } from 'react-aria';
+import '@crm/tokens/packs.css';
 import styles from './GuestLook.module.css';
 
 /** Props for GuestLook. */

@@ -981,6 +981,8 @@ export {
   publishProblem,
   readMenuDraftLook,
   readMenuPhotoFile,
+  saveMenuLook,
+  addMenuCover,
   type MenuPhotoFile,
   type MenuPublishResult,
 } from './hospitality/menu.ts';

@@ -14,7 +14,7 @@ import { createBusinessClient, directionsLinks, isDataError, type PublicBusiness
 export { createBusinessClient };
 import { BookingFoot, BookingMessage, BusinessPage, GuestLook } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { wearStylesheet } from '../stylesheet.ts';
+import { wearGuestScheme, wearStylesheet } from '../stylesheet.ts';
 import { businessStrings, kindWord } from './business-strings.ts';
 import { mapsAppFor } from './maps-app.ts';
 import { strings, tabTitle } from './strings.ts';
@@ -89,6 +89,7 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
         ? `/api/public/business/${encodeURIComponent(page.handle)}/look/menu.css?v=${lookVersion}`
         : undefined;
     void wearStylesheet(document, href);
+    wearGuestScheme(document.documentElement, page?.scheme);
   }, [page, lookVersion]);
   if (loaded.state === 'loading') return <BusinessPage {...EMPTY} isLoading />;
   if (loaded.state === 'gone') {

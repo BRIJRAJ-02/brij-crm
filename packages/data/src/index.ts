@@ -371,7 +371,7 @@ import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
 import type { MenuStore } from './menu/store.ts';
-import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
+import type { MenuDraft as MenuDraftAnswer, MenuLookCover as MenuLookCoverAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
 export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
 import type { BusinessPageStore } from './business-page/store.ts';
@@ -446,6 +446,8 @@ export type {
   ItemFields,
   Menu,
   MenuDraft,
+  MenuLook,
+  MenuLookCover,
   MenuItem,
   MenuOption,
   MenuPlace,
@@ -6378,6 +6380,26 @@ export function createDataLayer({
                 throw toDataError({ ...fields, status: response.status });
               }
               return answer as MenuDraftAnswer;
+            },
+            // A cover for the guest look, the same two widths to its own route, answering what the look will name.
+            sendCover: async (workspace, photo) => {
+              const body = new FormData();
+              body.set('large', photo.large, 'large');
+              body.set('small', photo.small, 'small');
+              const response = await fetch(new URL('/api/menu/look/cover', origin).href, {
+                method: 'POST',
+                headers: { 'x-crm-workspace': workspace },
+                body,
+                credentials: 'include',
+              }).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              if (!response.ok) {
+                const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+                throw toDataError({ ...fields, status: response.status });
+              }
+              return answer as MenuLookCoverAnswer;
             },
           }),
         )),

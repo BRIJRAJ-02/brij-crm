@@ -29,7 +29,10 @@ import {
   type MenuPhotoHref,
 } from '../ItemSheet/ItemSheet.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { useNow } from '../../provider/context.ts';
+import { checkedLookVariables } from './look-variables.ts';
+import '@crm/tokens/packs.css';
 import styles from './MenuList.module.css';
 import { strings } from './strings.ts';
 
@@ -63,6 +66,18 @@ export interface MenuListProps {
    * `?at=`), so an owner sees which menus and sections serve on Saturday at 11:00. Left out, the provider's clock.
    */
   readonly at?: number;
+  /** The cover photo the look names, drawn over the page's title; left out, none. */
+  readonly coverHref?: string;
+  /**
+   * The side the look pins the page to (`data-theme` on its root, so the library's own tokens follow it too). Left
+   * out, the page follows the document.
+   */
+  readonly scheme?: 'light' | 'dark';
+  /**
+   * The look's custom properties, for an editor's live preview (`menuLookShape` and `menuLookColours`), set on the root
+   * through the CSSOM; the live page has a stylesheet. Only the names and values a look can make pass.
+   */
+  readonly lookVariables?: PageVariables;
 }
 
 /** The item's price line: its own price, its smallest size's "from", or its price note. */
@@ -104,7 +119,11 @@ export function MenuList({
   isPicksOpen = false,
   hasEntrance = false,
   at,
+  coverHref,
+  scheme,
+  lookVariables,
 }: MenuListProps) {
+  const lookRef = usePageVariables(lookVariables, checkedLookVariables);
   const clock = useNow();
   const now = new Date(at ?? clock);
   // Taken down for now (Live or Hidden): the menu's own look, header and foot, a plain line, and the ways still open.
@@ -346,7 +365,7 @@ export function MenuList({
   };
 
   return (
-    <div className={styles.root} data-menu-list="">
+    <div ref={lookRef} className={styles.root} data-menu-list="" data-theme={scheme}>
       <span role="status">
         <VisuallyHidden>{said}</VisuallyHidden>
       </span>
@@ -408,6 +427,11 @@ export function MenuList({
             </div>
           </div>
 
+          {coverHref === undefined ? null : (
+            <div className={styles.cover}>
+              <img className={styles.coverPhoto} src={coverHref} alt={strings.decorative} width={1200} height={400} />
+            </div>
+          )}
           <header className={styles.head}>
             <div className={styles.titles}>
               <p className={styles.eyebrow}>

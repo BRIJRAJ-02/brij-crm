@@ -4,7 +4,7 @@
 // screen. Publish, Discard and Sold out wait for nothing either: Sold out flips at once (it is live for guests, AC-6526),
 // Publish shows "0 changes" when the server answers. Only managers edit, one at a time, so no change event carries
 // the draft: another tab sees a change when it holds the draft again.
-import type { ItemFields, MenuDraft, MenuItem, MenuServing, SectionLayout } from '@crm/contracts';
+import type { ItemFields, MenuDraft, MenuItem, MenuLook, MenuLookCover, MenuServing, SectionLayout } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import { holder, type HospitalityHeld } from '../hospitality/store.ts';
 
@@ -68,6 +68,7 @@ export interface MenuProcedures {
   readonly deleteGroup: (input: Scoped & { groupId: string }, options: Options) => Promise<MenuDraft>;
   readonly setSoldOut: (input: Scoped & { itemId: string; soldOut: boolean }, options: Options) => Promise<MenuDraft>;
   readonly setHidden: (input: Scoped & { hidden: boolean }, options: Options) => Promise<MenuDraft>;
+  readonly saveLook: (input: Scoped & { look: MenuLook }, options: Options) => Promise<MenuDraft>;
   readonly publish: (input: Scoped, options: Options) => Promise<MenuDraft>;
   readonly discard: (input: Scoped, options: Options) => Promise<MenuDraft>;
 }
@@ -80,6 +81,9 @@ export interface MenuPhotoBlobs {
 
 /** Sends a photo to the api's own upload route, answering the draft or rejecting with a DataError. */
 export type SendMenuPhoto = (workspace: string, itemId: string, photo: MenuPhotoBlobs) => Promise<MenuDraft>;
+
+/** Sends a cover to the api's own upload route, answering what the look will name, or rejecting with a DataError. */
+export type SendMenuCover = (workspace: string, photo: MenuPhotoBlobs) => Promise<MenuLookCover>;
 
 /** One more change counted on the copy, as the server will count it. */
 const counted = (draft: MenuDraft): MenuDraft => ({ ...draft, changes: draft.changes + 1 });
@@ -99,6 +103,7 @@ export function openMenus(given: {
   readonly call: <T>(run: (options: Options) => Promise<T>) => Promise<T>;
   readonly mintId: () => string;
   readonly sendPhoto: SendMenuPhoto;
+  readonly sendCover: SendMenuCover;
   readonly now?: () => number;
 }) {
   const { api, call, mintId } = given;
@@ -496,6 +501,24 @@ export function openMenus(given: {
         (draft) => draft,
         (mutationId, options) => api.discard({ workspace, mutationId }, options),
       ),
+    /**
+     * Saves the guest look (AC-6570 as amended): shows at once on the copy, and the copy goes back if it's refused. No
+     * change is counted: a look is live as it saves, with no Publish.
+     */
+    saveLook: (workspace: string, look: MenuLook): Promise<DataError | undefined> =>
+      edit(
+        workspace,
+        (draft) => ({ ...draft, look }),
+        (mutationId, options) => api.saveLook({ workspace, look, mutationId }, options),
+      ),
+    /** Keeps a new cover drawn at both widths, answering what the look will name; a refusal comes back as a DataError. */
+    uploadCover: async (workspace: string, photo: MenuPhotoBlobs): Promise<MenuLookCover | DataError> => {
+      try {
+        return await given.sendCover(workspace, photo);
+      } catch (error) {
+        return toDataError(error);
+      }
+    },
     /** Gives an item a photo drawn at both widths (AC-6527); shows once the server kept it. */
     uploadPhoto: (workspace: string, itemId: string, photo: MenuPhotoBlobs): Promise<DataError | undefined> =>
       draftOf(workspace).change(

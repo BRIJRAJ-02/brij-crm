@@ -7,6 +7,7 @@
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
 // Leaves out: the guest look's presets (H5), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
 import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
+import { menuLookScheme } from '@crm/data/menu';
 import { useHospitality } from '@crm/data/react';
 import {
   Badge,
@@ -371,6 +372,14 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const actions =
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
+        {/* The guest look's own page, beside Settings as checklabs' menu editor has Design. */}
+        {isNarrow ? (
+          <ButtonLink variant="ghost" icon="palette" href={`/w/${slug}/menus/design`} label={strings.designTitle} />
+        ) : (
+          <ButtonLink variant="ghost" icon="palette" href={`/w/${slug}/menus/design`}>
+            {strings.designTitle}
+          </ButtonLink>
+        )}
         {/* Settings in the header, as checklabs' editor has it; its view keeps `?tab=settings`. */}
         {current === undefined || isNarrow ? null : (
           <ToggleButton
@@ -837,11 +846,15 @@ const PreviewMenu = memo(function PreviewMenu({
   readonly hours?: PlaceHours;
   readonly at?: number;
 }) {
+  const scheme = menuLookScheme(draft.look);
+  const { cover } = draft.look;
   return (
     <MenuList
       menu={previewMenu(draft, place, { businessName, ...(hours === undefined ? {} : { hours }) })}
       photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
       {...(at === undefined ? {} : { at })}
+      {...(scheme === 'follow' ? {} : { scheme })}
+      {...(cover === undefined ? {} : { coverHref: draftPhotoHref(slug, cover.id, 'large', cover.version) })}
     />
   );
 });

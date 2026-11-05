@@ -46,6 +46,8 @@ const item = (
 
 const DRAFT: MenuDraft = {
   currency: 'GBP',
+  look: { preset: 'warm', heading: 'device', body: 'device', radius: 'soft' },
+  lookAccents: {},
   places: [{ id: PLACE, name: 'Soho', menuKey: 'AbCdEfGhIjKlMnOp', timeZone: 'Europe/London', locale: 'en-GB' }],
   menus: [
     {

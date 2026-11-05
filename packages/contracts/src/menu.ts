@@ -11,7 +11,10 @@ import {
   ALLERGEN_LEVELS,
   DIET_MARKS,
   EU_ALLERGENS,
+  MENU_FONTS,
   MENU_LIMITS,
+  MENU_PRESETS,
+  MENU_RADII,
   OPTION_RULES,
   RATE_MAX,
   SECTION_LAYOUTS,
@@ -30,6 +33,40 @@ const Text = (max: number) =>
     .trim()
     .max(max, `Use ${String(max)} characters or fewer.`);
 const Name = (max: number, missing: string) => Text(max).min(1, missing);
+
+/** One colour of a guest look: `#` and six lowercase hex digits, nothing else, since it reaches a public page's CSS. */
+const LookColour = z.string().regex(/^#[0-9a-f]{6}$/, 'Use a colour like #1f5fd6.');
+
+/** A photo the look names: its row and the version its path carries. */
+export const MenuLookCover = z.strictObject({
+  id: Uuid,
+  version: z.string().regex(/^[0-9a-f]{12}$/),
+});
+/** A photo the look names. */
+export type MenuLookCover = z.infer<typeof MenuLookCover>;
+
+/**
+ * A guest look (spec 0065, AC-6570 as amended): a preset, the colours picked over it, two faces, the corners and a
+ * cover. Untrusted, since it ends up as custom properties on a public page, so every part is strict: closed lists for
+ * the words, a whole hex for each colour, and no key of its own. A string can't reach CSS through any of them.
+ */
+export const MenuLook = z.strictObject({
+  preset: z.enum(MENU_PRESETS),
+  palette: z
+    .strictObject({
+      surface: LookColour.optional(),
+      ink: LookColour.optional(),
+      brand: LookColour.optional(),
+      highlight: LookColour.optional(),
+    })
+    .optional(),
+  heading: z.enum(MENU_FONTS),
+  body: z.enum(MENU_FONTS),
+  radius: z.enum(MENU_RADII),
+  cover: MenuLookCover.optional(),
+});
+/** A guest look. */
+export type MenuLook = z.infer<typeof MenuLook>;
 
 /** A price in minor units of the workspace currency (AC-6532): a whole number, never a float. */
 export const PriceMinor = z
@@ -174,6 +211,10 @@ export type MenuPlace = z.infer<typeof MenuPlace>;
  */
 export const MenuDraft = z.object({
   currency: z.string(),
+  /** The guest look, saved on the Design page: live at once, never waiting for Publish. */
+  look: MenuLook,
+  /** The brand kit's accent pair, so the Design page's preview draws what the look's stylesheet will. */
+  lookAccents: z.object({ accent: z.string().optional(), accentDark: z.string().optional() }),
   places: z.array(MenuPlace),
   menus: z.array(Menu),
   sections: z.array(MenuSection),
@@ -358,6 +399,11 @@ export const MenuHiddenInput = WorkspaceScoped.extend({ hidden: z.boolean(), ...
 /** Live or Hidden. */
 export type MenuHiddenInput = z.infer<typeof MenuHiddenInput>;
 
+/** Saves the guest look. No Publish: guests see it on their next read. */
+export const SaveMenuLookInput = WorkspaceScoped.extend({ look: MenuLook, ...Write });
+/** Saves the guest look. */
+export type SaveMenuLookInput = z.infer<typeof SaveMenuLookInput>;
+
 /** Publish or Discard (AC-6525). */
 export const MenuDraftWrite = WorkspaceScoped.extend(Write);
 /** Publish or Discard. */
@@ -462,6 +508,10 @@ export const PublicMenu = z.object({
   place: PublicMenuPlace,
   /** The versions the look and the logo are served at, when there are any. */
   look: z.string().optional(),
+  /** Which side the look pins the page to; absent, it follows the visitor. */
+  scheme: z.enum(['light', 'dark']).optional(),
+  /** The cover photo the look names, drawn over the page's title; absent while the menu is hidden. */
+  cover: MenuLookCover.optional(),
   logo: z.string().optional(),
   menu: MenuSnapshot,
   soldOut: z.array(Uuid),
@@ -503,6 +553,7 @@ export const menuContract = {
   deleteGroup: oc.input(GroupIdInput).output(MenuDraft),
   setSoldOut: oc.input(SoldOutInput).output(MenuDraft),
   setHidden: oc.input(MenuHiddenInput).output(MenuDraft),
+  saveLook: oc.input(SaveMenuLookInput).output(MenuDraft),
   publish: oc.input(MenuDraftWrite).output(MenuDraft),
   discard: oc.input(MenuDraftWrite).output(MenuDraft),
 };

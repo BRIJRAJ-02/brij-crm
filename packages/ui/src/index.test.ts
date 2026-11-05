@@ -129,6 +129,7 @@ describe('@crm/ui', () => {
       'Menu',
       'MenuItem',
       'MenuList',
+      'MenuLookThumbnail',
       'MenuSection',
       'MenuSeparator',
       'MenuTrigger',

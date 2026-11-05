@@ -2,7 +2,7 @@
 // a new version or goes, against a stand in document.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lookHref } from './booking/link-page.ts';
-import { brandHref, LOOK_LINK_ID, wearStylesheet, type StylesheetDocument } from './stylesheet.ts';
+import { brandHref, LOOK_LINK_ID, wearGuestScheme, wearStylesheet, type StylesheetDocument } from './stylesheet.ts';
 
 interface FakeLink {
   id: string;
@@ -75,6 +75,31 @@ describe('lookHref and brandHref', () => {
     expect(brandHref('forms', 'project-enquiry', undefined)).toBeUndefined();
     expect(brandHref('forms', '../x', 'abcdef012345')).toBeUndefined();
     expect(brandHref('forms', 'Project_Enquiry', 'abcdef012345')).toBeUndefined();
+  });
+});
+
+describe('wearGuestScheme', () => {
+  const root = () => {
+    const attributes = new Map<string, string>();
+    return {
+      attributes,
+      setAttribute: (name: string, value: string) => void attributes.set(name, value),
+      removeAttribute: (name: string) => void attributes.delete(name),
+    };
+  };
+
+  it('says a pinned side on the document, and takes it off for a look that follows the guest', () => {
+    const document = root();
+    wearGuestScheme(document, 'dark');
+    expect(document.attributes.get('data-theme')).toBe('dark');
+    wearGuestScheme(document, undefined);
+    expect(document.attributes.has('data-theme')).toBe(false);
+  });
+
+  it('writes nothing but light or dark', () => {
+    const document = root();
+    wearGuestScheme(document, 'url(x)');
+    expect(document.attributes.has('data-theme')).toBe(false);
   });
 });
 

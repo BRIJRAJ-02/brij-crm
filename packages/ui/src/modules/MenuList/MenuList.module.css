@@ -18,6 +18,7 @@
     --look-line: var(--menu-line, var(--border));
     --look-glass: var(--menu-glass, var(--surface-raised));
     --look-text: var(--menu-text, var(--text));
+    --look-highlight: var(--menu-highlight, var(--look-text));
     --look-quiet: var(--menu-quiet, var(--text-secondary));
     --look-accent: var(--menu-accent, var(--accent));
     --look-on-accent: var(--menu-on-accent, var(--on-accent));
@@ -28,8 +29,14 @@
        (grid photos) and an 88px row photo. */
     --look-gutter: var(--space-20);
     --look-column: calc(var(--size-dialog) - var(--space-32));
-    --look-squircle: calc(var(--radius-xl) + var(--space-2));
-    --look-card-radius: calc(var(--radius-lg) * 2);
+    --look-squircle: calc((var(--radius-xl) + var(--space-2)) * var(--menu-round, 1));
+    --look-card-radius: calc(var(--radius-lg) * 2 * var(--menu-round, 1));
+    /* The look's corners (`--menu-round`, 1 with none), for the library's parts one level in. */
+    --look-radius-xs: calc(var(--radius-xs) * var(--menu-round, 1));
+    --look-radius-sm: calc(var(--radius-sm) * var(--menu-round, 1));
+    --look-radius-md: calc(var(--radius-md) * var(--menu-round, 1));
+    --look-radius-lg: calc(var(--radius-lg) * var(--menu-round, 1));
+    --look-radius-xl: calc(var(--radius-xl) * var(--menu-round, 1));
     --look-thumb: calc(var(--space-32) * 2 + var(--space-24));
 
     /* Its type sizes and tracking. */
@@ -73,6 +80,11 @@
   }
 
   .look {
+    --radius-xs: var(--look-radius-xs);
+    --radius-sm: var(--look-radius-sm);
+    --radius-md: var(--look-radius-md);
+    --radius-lg: var(--look-radius-lg);
+    --radius-xl: var(--look-radius-xl);
     --surface: var(--look-ground);
     --surface-subtle: var(--look-ground);
     --surface-raised: var(--look-card);
@@ -113,7 +125,8 @@
     --text-label-strong: 500 var(--look-type-12) / var(--space-16) var(--look-face);
     --text-title: 600 var(--look-type-15) / var(--space-20) var(--look-face);
     --text-title-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
-    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--look-face);
+    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2)
+      var(--menu-display-face, var(--look-face));
     --tracking-body-strong: var(--track-tight);
     --tracking-label-strong: var(--track-snug);
     --tracking-title: var(--track-snug);
@@ -135,6 +148,25 @@
     max-inline-size: var(--look-column);
     margin-inline: auto;
     padding-inline: var(--look-gutter);
+  }
+
+  /* The look's cover: the page's 3:1 banner, in the column under the bar, on the look's own corners. */
+  .cover {
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: var(--look-column);
+    margin-inline: auto;
+    padding-block-start: var(--space-16);
+    padding-inline: var(--look-gutter);
+  }
+
+  .coverPhoto {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 3 / 1;
+    border-radius: var(--look-card-radius);
+    object-fit: cover;
   }
 
   /* The glass bar: the brand mark, and the menus at the end when the link holds several; 50px, 8px above and below. */
@@ -540,7 +572,7 @@
 
   .price {
     margin-block-start: var(--space-8);
-    color: var(--look-text);
+    color: var(--look-highlight);
     font: var(--text-body-strong);
     font-size: var(--look-type-14);
     line-height: normal;

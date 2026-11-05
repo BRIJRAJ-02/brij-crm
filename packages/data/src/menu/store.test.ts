@@ -9,6 +9,8 @@ const SECTION = '01900000-0000-7000-8000-000000000002';
 const ITEM = '01900000-0000-7000-8000-000000000003';
 const DRAFT: MenuDraft = {
   currency: 'GBP',
+  look: { preset: 'warm', heading: 'device', body: 'device', radius: 'soft' },
+  lookAccents: {},
   places: [],
   menus: [{ id: MENU, name: 'Dinner', placeIds: [], position: 0, taxRate: 0, serviceRate: 0 }],
   sections: [{ id: SECTION, menuId: MENU, name: 'Mains', layout: 'list', position: 0, itemIds: [ITEM] }],
@@ -53,8 +55,52 @@ function setUp(overrides: Partial<MenuProcedures>) {
     call: (run) => run({}),
     mintId: () => `id-${String((id += 1))}`,
     sendPhoto: () => Promise.reject(new Error('Not used here.')),
+    sendCover: () => Promise.reject(new Error('Not used here.')),
   });
 }
+
+describe('the guest look', () => {
+  const NOIR = { preset: 'noir', heading: 'grotesk', body: 'grotesk', radius: 'square' } as const;
+
+  it('shows at once with no change counted, and goes back on a refusal', async () => {
+    let answer: (draft: MenuDraft) => void = () => undefined;
+    let refuse: (error: unknown) => void = () => undefined;
+    const store = setUp({
+      draft: () => Promise.resolve(DRAFT),
+      saveLook: () =>
+        new Promise<MenuDraft>((resolve, reject) => {
+          answer = resolve;
+          refuse = reject;
+        }),
+    });
+    await store.readDraft('w');
+    const copy = () => {
+      const state = store.draft('w').getSnapshot();
+      if (state.status !== 'ready') throw new Error('Not ready.');
+      return state.value;
+    };
+    const saving = store.saveLook('w', NOIR);
+    await Promise.resolve();
+    expect(copy().look).toEqual(NOIR);
+    expect(copy().changes).toBe(0);
+    answer({ ...DRAFT, look: NOIR });
+    expect(await saving).toBeUndefined();
+    expect(copy().look).toEqual(NOIR);
+
+    const refused = store.saveLook('w', { ...NOIR, radius: 'round' });
+    await Promise.resolve();
+    expect(copy().look.radius).toBe('round');
+    refuse(new Error('No.'));
+    expect(await refused).toBeDefined();
+    expect(copy().look).toEqual(NOIR);
+  });
+
+  it('answers a refused cover as a DataError', async () => {
+    const store = setUp({});
+    const answer = await store.uploadCover('w', { large: new Blob(['l']), small: new Blob(['s']) });
+    expect(answer).toMatchObject({ code: expect.any(String) });
+  });
+});
 
 const item = {
   name: 'Soup',

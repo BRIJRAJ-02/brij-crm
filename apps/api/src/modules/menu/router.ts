@@ -1,4 +1,4 @@
-import { menuCacheTags } from '@crm/contracts';
+import { brandCacheTags, menuCacheTags } from '@crm/contracts';
 import {
   businessCacheTags,
   deleteItem,
@@ -13,6 +13,7 @@ import {
   removeMenuPhoto,
   saveItem,
   saveMenu,
+  saveMenuLook,
   saveOptionGroup,
   saveSection,
   setItemSoldOut,
@@ -140,6 +141,19 @@ export const menuRouter = m.router({
     await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
+    return draft;
+  }),
+  // The guest look (spec 0065, AC-6570 as amended): live at once, so every guest page's edge copy goes once it has
+  // committed: the menus' answers and shells, the business page's, and anything filed under the brand.
+  saveLook: m.saveLook.handler(async ({ context, input }) => {
+    const { draft, placeIds } = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveMenuLook(context.scope, { look: input.look }),
+    );
+    await forgetAfterCommit(context.edgeCache, [
+      ...menuCacheTags(...placeIds),
+      ...businessCacheTags(context.scope.workspaceId, placeIds),
+      ...brandCacheTags(context.scope.workspaceId),
+    ]);
     return draft;
   }),
   publish: m.publish.handler(async ({ context, input }) => {

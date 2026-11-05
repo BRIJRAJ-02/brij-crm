@@ -4,7 +4,7 @@
 // back to the last Publish, the limits refuse clearly, the gate refuses with Menu removed (AC-6504), and a menu key
 // never reads another workspace.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS, type FirstBusiness, type ItemFields } from '@crm/contracts';
+import { DEFAULT_MENU_LOOK, PERMISSIONS, type FirstBusiness, type ItemFields } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { newId } from '../engine/ids.ts';
@@ -23,10 +23,13 @@ import {
   saveMenu,
   saveOptionGroup,
   saveSection,
+  saveMenuLook,
+  addMenuCover,
   setItemSoldOut,
   setMenuHidden,
 } from './menu.ts';
-import { businessMenuOf, enterMenuPage, readPublicMenu } from './public-menu.ts';
+import { readMenuBrandIn } from '../brand/public.ts';
+import { businessMenuOf, enterMenuPage, menuLookStylesheet, readMenuPhoto, readPublicMenu } from './public-menu.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -197,6 +200,105 @@ describe('Live or Hidden', () => {
     expect((await guestMenu(w.place.menuKey))?.menu.hidden).toBe(true);
     expect((await setMenuHidden(w.owner, { hidden: false })).draft.hidden).toBe(false);
     expect((await guestMenu(w.place.menuKey))?.menu.menu.items[itemId]?.name).toBe('Broth');
+  });
+});
+
+describe('the guest look (AC-6570 as amended)', () => {
+  const NOIR = { preset: 'noir', heading: 'grotesk', body: 'grotesk', radius: 'square' } as const;
+
+  it('is Warm until saved, live at once without a draft change, and read by the guest menu', async () => {
+    const w = await menuWorkspace();
+    expect((await readMenuDraft(w.owner)).look).toEqual(DEFAULT_MENU_LOOK);
+    const { sectionId } = await dinner(w);
+    await saveItem(w.owner, { id: newId(), sectionId, item: dish('Soup', 650) });
+    await publishMenus(w.owner);
+    const before = await guestMenu(w.place.menuKey);
+    expect(before?.menu.scheme).toBeUndefined();
+    const { draft, placeIds } = await saveMenuLook(w.owner, { look: NOIR });
+    expect(draft).toMatchObject({ look: NOIR, changes: 0 });
+    expect(placeIds).toEqual([w.place.id]);
+    const after = await guestMenu(w.place.menuKey);
+    expect(after?.menu.look).not.toBe(before?.menu.look);
+    expect(after?.menu.scheme).toBe('dark');
+    expect(after?.brand.menuLook).toEqual(NOIR);
+    const css = menuLookStylesheet(after?.brand ?? { accents: {} });
+    expect(css).toContain('--menu-ground:#0a0a0a');
+    expect(css).toContain('--menu-accent:#d4af37');
+    expect(css).toContain('--menu-face:var(--font-pack-grotesk)');
+    expect(css).toContain('--menu-round:0.25');
+    // The body's face reaches the booking parts on a guest page, never the app around the editor's preview.
+    expect(css).toContain('--font-sans:var(--font-pack-grotesk)');
+    expect(menuLookStylesheet(after?.brand ?? { accents: {} }, { inApp: true })).not.toContain('--font-sans');
+    expect(css).not.toContain('prefers-color-scheme');
+  });
+
+  it('keeps a word out of the stylesheet whatever the row or the caller holds', async () => {
+    const w = await menuWorkspace();
+    for (const look of [
+      { ...NOIR, palette: { brand: 'red;}body{display:none' } },
+      { ...NOIR, heading: 'Comic Sans' },
+      { ...NOIR, radius: '4px' },
+      { ...NOIR, css: 'x' },
+      'noir',
+    ]) {
+      expect(await refusalOf(saveMenuLook(w.owner, { look }))).toBe('INPUT_INVALID');
+    }
+    // A row someone wrote by hand wears the default rather than reaching CSS.
+    const evil = { ...NOIR, palette: { brand: '#000;}body{display:none}' } };
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update business_profiles set look = ${JSON.stringify(evil)}::jsonb`),
+    );
+    const { look } = await readMenuDraft(w.owner);
+    expect(look).toEqual(DEFAULT_MENU_LOOK);
+    const brand = await db.withWorkspace(w.workspaceId, (tx) => readMenuBrandIn(tx, w.workspaceId));
+    expect(menuLookStylesheet(brand)).not.toContain('display:none');
+  });
+
+  it('refuses anyone without Manage hospitality, and with Menu removed', async () => {
+    const w = await menuWorkspace();
+    expect(await refusalOf(saveMenuLook(w.member, { look: NOIR }))).toBe('FORBIDDEN');
+    expect(
+      await refusalOf(
+        addMenuCover(w.member, { photo: { largePath: 'x', smallPath: 'y', type: 'image/webp', version: 'abcdefabcdef' } }),
+      ),
+    ).toBe('FORBIDDEN');
+    expect((await readMenuDraft(w.owner)).look).toEqual(DEFAULT_MENU_LOOK);
+    await removeApp(w.owner, { app: 'menu' });
+    expect(await refusalOf(saveMenuLook(w.owner, { look: NOIR }))).toBe('APP_NOT_INSTALLED');
+  });
+
+  it('names only a cover this workspace stores, keeps it past Publish and serves it to guests alone by its version', async () => {
+    const w = await menuWorkspace();
+    const other = await menuWorkspace();
+    const { sectionId } = await dinner(w);
+    await saveItem(w.owner, { id: newId(), sectionId, item: dish('Soup', 650) });
+    const photo = { largePath: 'l', smallPath: 's', type: 'image/webp', version: 'abcdefabcdef' } as const;
+    const cover = await addMenuCover(w.owner, { photo });
+    // Another workspace's photo, and a version that isn't this photo's, are not found.
+    expect(await refusalOf(saveMenuLook(other.owner, { look: { ...NOIR, cover } }))).toBe('NOT_FOUND');
+    expect(
+      await refusalOf(saveMenuLook(w.owner, { look: { ...NOIR, cover: { ...cover, version: '000000000000' } } })),
+    ).toBe('NOT_FOUND');
+    await saveMenuLook(w.owner, { look: { ...NOIR, cover } });
+    const { removedPaths } = await publishMenus(w.owner);
+    expect(removedPaths).not.toContain('l');
+    const entry = await enterMenuPage({ db }, w.place.menuKey);
+    if (entry === undefined) throw new Error('No entry.');
+    expect((await readPublicMenu({ db }, entry))?.menu.cover).toEqual(cover);
+    expect(await readMenuPhoto({ db }, entry, cover.id, 'large', cover.version)).toMatchObject({ path: 'l' });
+    expect(await readMenuPhoto({ db }, entry, cover.id, 'large', '000000000000')).toBeUndefined();
+    // Another menu's key never serves it.
+    const elsewhere = await enterMenuPage({ db }, other.place.menuKey);
+    if (elsewhere === undefined) throw new Error('No entry.');
+    expect(await readMenuPhoto({ db }, elsewhere, cover.id, 'large', cover.version)).toBeUndefined();
+    // Hidden, the guest's answer carries no cover and the photo stops answering.
+    await setMenuHidden(w.owner, { hidden: true });
+    expect((await readPublicMenu({ db }, entry))?.menu.cover).toBeUndefined();
+    expect(await readMenuPhoto({ db }, entry, cover.id, 'large', cover.version)).toBeUndefined();
+    await setMenuHidden(w.owner, { hidden: false });
+    // Taken off, the next Publish lets it go.
+    await saveMenuLook(w.owner, { look: NOIR });
+    expect((await publishMenus(w.owner)).removedPaths).toEqual(expect.arrayContaining(['l', 's']));
   });
 });
 

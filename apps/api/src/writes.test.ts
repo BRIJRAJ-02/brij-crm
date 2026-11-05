@@ -3382,6 +3382,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'menu.deleteGroup': 3,
   'menu.setSoldOut': 5,
   'menu.setHidden': 6,
+  'menu.saveLook': 4,
   'menu.publish': 5,
   'menu.discard': 6,
   // The Hospitality setup (spec 0065): Table seating installed first (and tables added, an area made, or a table
@@ -4049,6 +4050,12 @@ Object.assign(WRITES, {
     await menuItemOf(m);
     await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
     await m.client.menu.setHidden({ workspace: m.slug, hidden: true, mutationId });
+    return [{ kind: 'nav' }];
+  },
+  'menu.saveLook': async (m: Member, mutationId: string) => {
+    await menuItemOf(m);
+    const look = { preset: 'noir', heading: 'grotesk', body: 'grotesk', radius: 'square' } as const;
+    await m.client.menu.saveLook({ workspace: m.slug, look, mutationId });
     return [{ kind: 'nav' }];
   },
   'menu.publish': async (m: Member, mutationId: string) => {

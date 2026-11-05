@@ -1,10 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
+import { MENU_PRESET_LOOKS, MENU_PRESETS, menuLookColours, menuLookShape, presetLook } from '@crm/contracts/menu';
+import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { id, sampleMenu, samplePhotoHref } from '../../workbench/menu-samples.ts';
 import { MenuList, type GuestPick } from './MenuList.tsx';
+import { MenuLookThumbnail } from './MenuLookThumbnail.tsx';
 
 function WithPicks({
   initial = [],
@@ -49,6 +52,59 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** The look's custom properties as a preview sets them: Noir, pinned dark, in its own faces and corners. */
+export const NoirLook: Story = {
+  render: () => {
+    const look = presetLook('noir');
+    return (
+      <Stage width="fill" height="page">
+        <MenuList
+          menu={sampleMenu()}
+          photoHref={samplePhotoHref}
+          scheme="dark"
+          lookVariables={[...menuLookShape(look), ...menuLookColours(look, {}, 'dark')]}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('[data-menu-list]');
+    if (root === null) throw new Error('No menu.');
+    await expect(getComputedStyle(root).getPropertyValue('--menu-ground').trim()).toBe('#0a0a0a');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+  },
+};
+
+/** Each preset as a small picture of itself, as the Design page's tiles draw them. */
+export const LookThumbnails: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <TileGrid
+        variant="choice"
+        label="Look"
+        keepsPicture
+        defaultValue="warm"
+        tiles={MENU_PRESETS.map((id) => {
+          const look = presetLook(id);
+          const own = MENU_PRESET_LOOKS[id].scheme;
+          const side = own === 'follow' ? 'light' : own;
+          return {
+            id,
+            name: id,
+            thumbnail: (
+              <MenuLookThumbnail
+                scheme={side}
+                variables={[...menuLookShape(look), ...menuLookColours(look, {}, side)]}
+              />
+            ),
+          };
+        })}
+      />
+    </Stage>
+  ),
+};
 
 /** Dinner serving now, Brunch a tap away; the sections as pills, one at a time; a sold out dish stays in place. */
 export const Default: Story = {

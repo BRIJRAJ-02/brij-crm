@@ -13,11 +13,23 @@
     --guest-quiet: var(--menu-quiet, var(--text-secondary));
     --guest-ink: var(--menu-accent, var(--surface-inverse));
     --guest-on-ink: var(--menu-on-accent, var(--on-inverse));
+    --guest-radius-xs: calc(var(--radius-xs) * var(--menu-round, 1));
+    --guest-radius-sm: calc(var(--radius-sm) * var(--menu-round, 1));
+    --guest-radius-md: calc(var(--radius-md) * var(--menu-round, 1));
+    --guest-radius-lg: calc(var(--radius-lg) * var(--menu-round, 1));
+    --guest-radius-xl: calc(var(--radius-xl) * var(--menu-round, 1));
 
     display: contents;
   }
 
   .names {
+    --radius-xs: var(--guest-radius-xs);
+    --radius-sm: var(--guest-radius-sm);
+    --radius-md: var(--guest-radius-md);
+    --radius-lg: var(--guest-radius-lg);
+    --radius-xl: var(--guest-radius-xl);
+    /* The look's heading face, on the booking parts' own headings. */
+    --frame-face: var(--menu-display-face, var(--font-sans));
     --surface: var(--guest-surface);
     --surface-subtle: var(--guest-ground);
     --surface-raised: var(--guest-card);

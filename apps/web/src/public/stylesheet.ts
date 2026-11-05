@@ -55,6 +55,15 @@ export function preloadImage(src: string | undefined, waitMs: number = STYLESHEE
   return Promise.race([image.decode().catch(() => undefined), wait]);
 }
 
+/**
+ * Says on the document which side a guest look pins its page to (spec 0065, AC-6570 as amended), so the library's own
+ * tokens follow it too; a look that follows the visitor says nothing, and takes off a side an older read said.
+ */
+export function wearGuestScheme(root: Pick<Element, 'setAttribute' | 'removeAttribute'>, scheme?: string): void {
+  if (scheme === 'light' || scheme === 'dark') root.setAttribute('data-theme', scheme);
+  else root.removeAttribute('data-theme');
+}
+
 /** What linking needs from the document: its head, a lookup by id, and a new element. */
 export type StylesheetDocument = Pick<Document, 'head' | 'getElementById' | 'createElement'>;
 

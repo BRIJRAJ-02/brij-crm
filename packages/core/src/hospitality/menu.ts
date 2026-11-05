@@ -5,7 +5,9 @@
 // (`menu_versions`), with Sold out read live over it (AC-6526). Every write takes the workspace's menu lock, so two
 // editors never pass a limit or each other's positions, and answers the whole draft.
 import {
+  DEFAULT_MENU_LOOK,
   MENU_LIMITS,
+  MenuLook,
   type ItemFields,
   type MenuDraft,
   type MenuPlace,
@@ -13,14 +15,14 @@ import {
   type SectionLayout,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, count, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
-import { refuse, refuseOn } from '../engine/refusals.ts';
+import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import { readMenuBrandIn } from '../brand/public.ts';
 import { auditSetup, hospitalityMember, requireApp } from './gate.ts';
 import { menuLookStylesheet } from './public-menu.ts';
@@ -50,6 +52,7 @@ const {
   menuDrafts,
   places,
   workspaces,
+  businessProfiles,
 } = schema;
 
 const MENU_NOT_FOUND = 'That menu doesn’t exist.';
@@ -93,8 +96,14 @@ async function readDraft(tx: WorkspaceTx, scope: EngineScope): Promise<MenuDraft
     .select({ changes: menuDrafts.changes, publishedAt: menuDrafts.publishedAt, hidden: menuDrafts.hidden })
     .from(menuDrafts)
     .where(eq(menuDrafts.workspaceId, workspaceId));
+  const brand = await readMenuBrandIn(tx, workspaceId);
   return draftOf(rows, {
     currency: await currencyOf(tx, workspaceId),
+    look: brand.menuLook ?? DEFAULT_MENU_LOOK,
+    lookAccents: {
+      ...(brand.accents.accent === undefined ? {} : { accent: brand.accents.accent }),
+      ...(brand.accents.accentDark === undefined ? {} : { accentDark: brand.accents.accentDark }),
+    },
     places: await placesOf(tx, workspaceId),
     changes: state?.changes ?? 0,
     ...(state?.publishedAt === null || state?.publishedAt === undefined
@@ -147,15 +156,15 @@ export async function readMenuDraft(scope: EngineScope): Promise<MenuDraft> {
 }
 
 /**
- * The editor's preview look (spec 0065, H1): the stylesheet guests' menus wear (the Warm preset with the brand's
+ * The editor's preview look (spec 0065, H1): the stylesheet guests' menus wear (the saved look with the brand's
  * accent), for any member who reads the Menus screen, so the phone preview draws what guests will see before the
- * first Publish. It names nothing of the draft.
+ * first Publish. It names nothing of the draft. It is linked inside the app, so it never takes the app's own face.
  */
 export async function readMenuDraftLook(scope: EngineScope): Promise<string> {
   requireMenuReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId));
+    return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId), { inApp: true });
   });
 }
 
@@ -736,6 +745,76 @@ export async function setMenuHidden(
 }
 
 /**
+ * Saves the guest look (spec 0065, AC-6570 as amended): the business's one look for its guest menu, reservation page
+ * and business page. Live at once, with no Publish and no draft change, so an owner sees it as they save it. The look is
+ * parsed again here, whichever door it came by, since it ends up in CSS on a public page; a cover must be a stored photo
+ * of this workspace at that version. Answers the draft and every place, for the api's purge.
+ */
+export async function saveMenuLook(
+  scope: EngineScope,
+  input: { readonly look: unknown },
+): Promise<{ readonly draft: MenuDraft; readonly placeIds: readonly string[] }> {
+  requirePermission(scope, 'hospitality.manage');
+  const by = hospitalityMember(scope);
+  const parsed = MenuLook.safeParse(input.look);
+  if (!parsed.success) throw inputInvalid('look', 'That look can’t be saved. Choose from the options on the page.');
+  const look = parsed.data;
+  return inWorkspace(scope, async (tx) => {
+    const ws = scope.workspaceId;
+    await requireApp(tx, ws, 'menu');
+    await lockKey(tx, `menu:${ws}`);
+    if (look.cover !== undefined) {
+      const [photo] = await tx
+        .select({ id: menuPhotos.id })
+        .from(menuPhotos)
+        .where(
+          and(
+            eq(menuPhotos.workspaceId, ws),
+            eq(menuPhotos.id, look.cover.id),
+            eq(menuPhotos.version, look.cover.version),
+          ),
+        );
+      if (photo === undefined) throw refuse('NOT_FOUND', 'That cover photo doesn’t exist.');
+    }
+    const changed = await tx
+      .update(businessProfiles)
+      .set({ look, updatedAt: sql`now()`, updatedByMemberId: by })
+      .where(eq(businessProfiles.workspaceId, ws))
+      .returning({ workspaceId: businessProfiles.workspaceId });
+    if (changed.length === 0) throw refuse('CONFLICT', 'Add your business first, then you can design its menu.');
+    await auditSetup(tx, scope, 'menu.look_saved');
+    return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
+  });
+}
+
+/**
+ * Keeps a new cover photo's row, up to the workspace's photos (AC-6527), and answers what the look names. Nothing shows
+ * it until a saved look does; a photo no look or item names goes with the next Publish or Discard.
+ */
+export async function addMenuCover(
+  scope: EngineScope,
+  input: { readonly photo: MenuPhotoFile },
+): Promise<{ readonly id: string; readonly version: string }> {
+  requirePermission(scope, 'hospitality.manage');
+  const by = hospitalityMember(scope);
+  return inWorkspace(scope, async (tx) => {
+    const ws = scope.workspaceId;
+    await requireApp(tx, ws, 'menu');
+    await lockKey(tx, `menu:${ws}`);
+    const [counted] = await tx.select({ n: count() }).from(menuPhotos).where(eq(menuPhotos.workspaceId, ws));
+    if ((counted?.n ?? 0) >= L.photos)
+      throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.photos)} photos.`);
+    const [photo] = await tx
+      .insert(menuPhotos)
+      .values({ workspaceId: ws, ...input.photo, createdByMemberId: by })
+      .returning({ id: menuPhotos.id, version: menuPhotos.version });
+    if (photo === undefined) throw new Error('The photo was not stored.');
+    await auditSetup(tx, scope, 'menu.cover_added', { photoId: photo.id });
+    return photo;
+  });
+}
+
+/**
  * A draft photo's stored file at one width, for the editor and its preview (the guest page serves only what a
  * snapshot shows). Manage hospitality or Run service, while Menu is installed; anything else is absent.
  */
@@ -823,17 +902,24 @@ export async function removeMenuPhoto(scope: EngineScope, input: { readonly item
 }
 
 /**
- * Deletes the photos neither the draft nor what was published names (they are the same set right after Publish or
- * Discard), answering their stored paths for the api to remove from the store.
+ * Deletes the photos neither the draft, what was published nor the saved look names (the first two are the same set
+ * right after Publish or Discard), answering their stored paths for the api to remove from the store.
  */
 async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string): Promise<readonly string[]> {
   const used = tx
     .select({ id: menuItems.photoId })
     .from(menuItems)
     .where(and(eq(menuItems.workspaceId, workspaceId), sql`${menuItems.photoId} is not null`));
+  const coverId = (await readMenuBrandIn(tx, workspaceId)).menuLook?.cover?.id;
   const gone = await tx
     .delete(menuPhotos)
-    .where(and(eq(menuPhotos.workspaceId, workspaceId), notInArray(menuPhotos.id, sql`(${used})`)))
+    .where(
+      and(
+        eq(menuPhotos.workspaceId, workspaceId),
+        notInArray(menuPhotos.id, sql`(${used})`),
+        ...(coverId === undefined ? [] : [ne(menuPhotos.id, coverId)]),
+      ),
+    )
     .returning({ largePath: menuPhotos.largePath, smallPath: menuPhotos.smallPath });
   return gone.flatMap((row) => [row.largePath, row.smallPath]);
 }
