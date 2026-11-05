@@ -44,12 +44,42 @@ describe('settingsNav', () => {
     ]);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Notifications', 'Sign in and security', 'Calendars'],
-      ['General', 'Brand', 'History'],
+      ['General', 'Brand', 'History', 'Apps'],
       ['Members', 'Roles and access'],
       ['Availability', 'Round robin', 'Routing', 'Scheduling access'],
       ['Objects', 'Lists', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
+  });
+
+  it('adds the Business group after Scheduling only while Appointments or Table seating is installed', () => {
+    expect(settingsNav('acme').some((group) => group.id === 'business')).toBe(false);
+    const groups = settingsNav('acme', { hasBusiness: true });
+    expect(groups.map((group) => group.id)).toEqual([
+      'account',
+      'workspace',
+      'people',
+      'scheduling',
+      'business',
+      'data',
+      'admin',
+    ]);
+    const business = groups.find((group) => group.id === 'business');
+    expect(business?.entries.map((entry) => [entry.label, entry.href])).toEqual([
+      ['Places', '/w/acme/settings/business'],
+      ['Services', '/w/acme/settings/services'],
+      ['Staff', '/w/acme/settings/staff'],
+      ['Shifts', '/w/acme/settings/shifts'],
+    ]);
+    // Each for its own permission: the front desk (`services.calendar`) sees Shifts alone.
+    expect(ids(visibleSettingsNav(groups, ['services.calendar'])).find((each) => each.includes('shifts'))).toEqual([
+      'shifts',
+    ]);
+    const icons = groups.flatMap((group) => group.entries.map((entry) => entry.icon));
+    expect(new Set(icons).size).toBe(icons.length);
+    expect(settingsPageOf('/w/acme/settings/business/places/p1')).toBe('business');
+    expect(settingsPageOf('/w/acme/settings/staff/s1')).toBe('staff');
+    expect(settingsPageOf('/w/acme/settings/apps')).toBe('apps');
   });
 
   it('keeps the parked pages out: Webhooks, Automations, Developer and Background jobs', () => {
@@ -74,6 +104,8 @@ describe('settingsNav', () => {
       general: '/w/acme/settings/general',
       brand: '/w/acme/settings/brand',
       history: '/w/acme/settings/history',
+      // The Hospitality apps (spec 0065).
+      apps: '/w/acme/settings/apps',
       members: '/w/acme/settings/members',
       roles: '/w/acme/settings/roles',
       availability: '/w/acme/settings/scheduling/availability',

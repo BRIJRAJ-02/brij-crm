@@ -7,6 +7,8 @@
 // are a snapshot of a period. The users list grows a page at a time with
 // `more()`, its pages kept for that period and search.
 import type {
+  EarlyAccessChange,
+  EarlyAccessFlag,
   OperatorOverview,
   OperatorPageDetail,
   OperatorPages,
@@ -16,6 +18,7 @@ import type {
   OperatorUserPage,
   OperatorUserRow,
 } from '@crm/contracts';
+import { EARLY_ACCESS_FLAGS } from '@crm/contracts/hospitality';
 import { toDataError, type DataError } from '../errors.ts';
 
 /** One read's state: loading (nothing yet), its answer, or its refusal. */
@@ -65,6 +68,12 @@ export interface OperatorApi {
   readonly pages: (period: OperatorPeriod) => Promise<OperatorPages>;
   readonly page: (workspaceId: string, pageId: string, period: OperatorPeriod) => Promise<OperatorPageDetail>;
   readonly site: (period: OperatorPeriod) => Promise<OperatorSite>;
+  /** The console's one write (spec 0065, AC-6502): a workspace's early access flag. */
+  readonly setEarlyAccess: (input: {
+    readonly workspaceId: string;
+    readonly flag: EarlyAccessFlag;
+    readonly on: boolean;
+  }) => Promise<EarlyAccessChange>;
 }
 
 /** How long an answer is shown before it is read again behind it, when asked for again. */
@@ -86,6 +95,11 @@ interface Entry<T> {
   readonly held: OperatorHeld<T>;
   /** Reads again: `keepShown` keeps a shown answer while it reads and if the read fails. */
   readonly refresh: (keepShown: boolean) => void;
+}
+
+/** `current` with `flag` turned on or off, in the closed list's order. */
+function toggled(current: readonly string[], flag: string, on: boolean): EarlyAccessFlag[] {
+  return EARLY_ACCESS_FLAGS.filter((each) => (each === flag ? on : current.includes(each)));
 }
 
 /** The store, one per data layer. `now` is passed in for tests. */
@@ -245,7 +259,48 @@ export function createOperatorStore(api: OperatorApi, now: () => number = Date.n
     return { ...entry.held, more };
   }
 
+  /** Every held person's page that lists `workspaceId`, its early access set to `flags`. */
+  const showEarlyAccess = (workspaceId: string, flags: (current: readonly EarlyAccessFlag[]) => EarlyAccessFlag[]) => {
+    for (const [key, entry] of entries) {
+      if (!key.startsWith('user:')) continue;
+      const state = entry.state as OperatorState<OperatorUserDetail>;
+      if (state.status !== 'ready' || !state.value.workspaces.some((each) => each.workspaceId === workspaceId))
+        continue;
+      entry.state = {
+        status: 'ready',
+        value: {
+          ...state.value,
+          workspaces: state.value.workspaces.map((each) =>
+            each.workspaceId === workspaceId ? { ...each, earlyAccess: flags(each.earlyAccess) } : each,
+          ),
+        },
+      } satisfies OperatorState<OperatorUserDetail>;
+      for (const listener of [...entry.listeners]) listener();
+    }
+  };
+
+  /**
+   * Turns a workspace's early access flag on or off (spec 0065, AC-6502): every held person's page listing that
+   * workspace shows it at once, and goes back if the server refuses. Answers the refusal, or undefined once it landed.
+   */
+  const setEarlyAccess = async (
+    workspaceId: string,
+    flag: EarlyAccessFlag,
+    on: boolean,
+  ): Promise<DataError | undefined> => {
+    showEarlyAccess(workspaceId, (current) => toggled(current, flag, on));
+    try {
+      const change = await api.setEarlyAccess({ workspaceId, flag, on });
+      showEarlyAccess(workspaceId, () => [...change.after]);
+      return undefined;
+    } catch (error) {
+      showEarlyAccess(workspaceId, (current) => toggled(current, flag, !on));
+      return toDataError(error);
+    }
+  };
+
   return {
+    setEarlyAccess,
     overview: (period: OperatorPeriod) => read(`overview:${period}`, () => api.overview(period)),
     users: usersList,
     user: (userId: string, period: OperatorPeriod) => read(`user:${userId}:${period}`, () => api.user(userId, period)),

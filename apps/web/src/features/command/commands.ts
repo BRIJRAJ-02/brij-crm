@@ -220,7 +220,7 @@ export function settingsCommands(
 ): readonly Command[] {
   // The trash's entry opens its own page, which "Open trash" already reaches.
   // An entry with tabs (Members: Teams) gives each tab its own command, so "Settings › Teams" still finds it.
-  return visibleSettingsNav(settingsNav(slug), permissions, false, isGuest).flatMap((group) =>
+  return visibleSettingsNav(settingsNav(slug, { hasBusiness: true }), permissions, false, isGuest).flatMap((group) =>
     group.entries
       .filter((entry) => entry.id !== 'trash')
       .flatMap((entry) =>

@@ -237,6 +237,17 @@
     gap: var(--space-12);
   }
 
+  /* A row's one quiet number (a block's clicks): secondary text, its digits one width so a column of them lines up. */
+  .figure {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* The row's quiet icon actions, close together, with no frame of their own. */
   .rowActions {
     display: flex;

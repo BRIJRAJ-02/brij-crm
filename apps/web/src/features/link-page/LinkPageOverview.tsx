@@ -1,38 +1,22 @@
 // Brief
-// Purpose: what the Link page opens on (the owner's design, 27 October 2026): the page as something to hand out,
-// not a builder. Its address to copy, its code to scan, and the page itself beside them.
-// Main task: share the page in a message or across a table; Edit page is the one way into the editor.
-// Leaves out: the blocks, the look and sharing settings, which Edit page opens; and any way to share while the page
-// is Private: then one line and Turn on Live, the bar's switch in words (spec 0058, AC-23). Insights (spec 0061)
-// sit under the card once the page holds something.
-import type { DataLayer, LinkPageStore, ProfileItem } from '@crm/data';
-import {
-  Button,
-  ButtonGroup,
-  ButtonLink,
-  Card,
-  EmptyState,
-  Field,
-  FieldGroup,
-  QrCode,
-  Separator,
-  SpotIllustration,
-  type AccentQuickPick,
-} from '@crm/ui';
+// Purpose: what the Link page opens on (the owner's design, 27 October 2026; made calm 5 November 2026, "lack of
+// hierarchy, too many buttons"): the page beside its phone, one way into the editor, its code, and how it does.
+// Main task: Edit page, the one primary. Sharing (copy, Share, the code's style, Wallet) lives once, in the bar.
+// Leaves out: the address field, Share links and Open, which the bar's pill and Share hold; the tagline; and any way
+// to share while the page is Private: then one line and Turn on Live (spec 0058, AC-23). Insights (spec 0061) sit
+// under the card once the page holds something.
+import type { LinkPageStore, ProfileItem } from '@crm/data';
+import { Button, ButtonGroup, Card, EmptyState, QrCode, SpotIllustration } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
-import { homeStrings } from './home-strings.ts';
 import { Insights } from './Insights.tsx';
-import { reachStrings } from './reach-strings.ts';
-import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
+import { drawnQrStyle, useQrStyle } from './ShareTools.tsx';
 import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
-import { useWalletLink } from './private-page.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the overview. */
 export interface LinkPageOverviewProps {
-  readonly data: DataLayer;
   readonly slug: string;
   /** The person's handle, which names the saved code's file. */
   readonly handle: string;
@@ -54,13 +38,10 @@ export interface LinkPageOverviewProps {
   readonly items: readonly ProfileItem[];
   /** The person's own picture, when it shows on their pages: a choice for the code's middle. */
   readonly personImage?: string | undefined;
-  /** The code's quick colour picks: the brand kit's nine. */
-  readonly quickPicks: readonly AccentQuickPick[];
 }
 
-/** Share online and Share in person, then, while the page holds nothing, its first empty moment. */
+/** Your page (Edit page and the code), then, while the page holds nothing, its first empty moment, else Insights. */
 export function LinkPageOverview({
-  data,
   slug,
   handle,
   address,
@@ -72,17 +53,12 @@ export function LinkPageOverview({
   linkPage,
   items,
   personImage,
-  quickPicks,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const [isMarking, setMarking] = useState(false);
-  const [isStyling, setStyling] = useState(false);
-  // The code in the owner's saved style (AC-6124), here and in what Download code saves.
+  // The code in the owner's saved style (AC-6124), here and in what Download saves.
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
-  const wallet = useWalletLink(data, slug, isPublic);
-  const shown = address.replace(/^https?:\/\//, '');
   const download = () => {
     const svg = codeRef.current;
     if (svg === null || isSaving) return;
@@ -92,10 +68,6 @@ export function LinkPageOverview({
       .catch(() => toasts.toast({ tone: 'danger', message: shareStrings.downloadFailed }))
       .finally(() => setSaving(false));
   };
-  // One framed card holding both ways to share, as the owner's artboard draws it: the page is one thing to hand
-  // out, not a column of settings. Each way is a titled section inside it, with a rule between them. While the page
-  // is Private nobody else can open it, so it offers nothing to share (spec 0058, AC-23): one line, and Turn on Live,
-  // the bar's switch in words. Every way to share comes back once it is Live.
   const edit = (
     // While the page is empty the start card below holds the one primary, so this one steps back.
     <Button variant={isEmpty ? 'secondary' : 'primary'} icon="pencil" onPress={onEdit}>
@@ -105,50 +77,15 @@ export function LinkPageOverview({
   return (
     <>
       {isPublic ? (
-        <Card title={strings.yourPage} description={strings.promise} actions={edit}>
-          <FieldGroup
-            tone="heading"
-            headingLevel={3}
-            label={strings.shareOnline}
-            action={
-              <>
-                <Button variant="ghost" size="sm" icon="link" onPress={() => setMarking(true)}>
-                  {reachStrings.shareLinksOpen}
-                </Button>
-                <ButtonLink variant="ghost" size="sm" href={address} isExternal icon="arrow-up-right">
-                  {homeStrings.open}
-                </ButtonLink>
-              </>
-            }
-          >
-            <Field
-              label={strings.yourAddress}
-              variant="copy"
-              icon="link"
-              value={shown}
-              copyLabel={shareStrings.copy}
-              isLabelHidden
-            />
-          </FieldGroup>
-          <Separator />
-          <FieldGroup tone="heading" headingLevel={3} label={strings.shareInPerson}>
-            <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
-              {/* The address is in the field just above; beside the code, only what to do with it. */}
-              <ButtonGroup label={strings.shareInPerson} layout="row">
-                <Button icon="download" isPending={isSaving} onPress={download}>
-                  {strings.downloadCode}
-                </Button>
-                <Button variant="ghost" icon="palette" onPress={() => setStyling(true)}>
-                  {reachStrings.qrStyle}
-                </Button>
-                {wallet !== undefined && (
-                  <ButtonLink href={wallet} isExternal icon="wallet">
-                    {homeStrings.addToWallet}
-                  </ButtonLink>
-                )}
-              </ButtonGroup>
-            </QrCode>
-          </FieldGroup>
+        <Card title={strings.yourPage} actions={edit}>
+          {/* The code to print or show across a table, and the one thing to do with it here: Share holds the rest. */}
+          <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
+            <ButtonGroup label={strings.shareInPerson} layout="row">
+              <Button icon="download" isPending={isSaving} onPress={download}>
+                {shareStrings.download}
+              </Button>
+            </ButtonGroup>
+          </QrCode>
         </Card>
       ) : (
         <Card title={strings.yourPage} description={strings.privateShareLine} actions={edit}>
@@ -162,6 +99,7 @@ export function LinkPageOverview({
       {isEmpty && (
         <Card>
           <EmptyState
+            layout="block"
             illustration={<SpotIllustration kind="link-page" />}
             title={strings.startTitle}
             actions={
@@ -175,17 +113,6 @@ export function LinkPageOverview({
         </Card>
       )}
       {!isEmpty && <Insights linkPage={linkPage} slug={slug} items={items} />}
-      <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
-      <QrStyleModal
-        linkPage={linkPage}
-        slug={slug}
-        handle={handle}
-        address={address}
-        {...(personImage === undefined ? {} : { personImage })}
-        quickPicks={quickPicks}
-        isOpen={isStyling}
-        onClose={() => setStyling(false)}
-      />
     </>
   );
 }

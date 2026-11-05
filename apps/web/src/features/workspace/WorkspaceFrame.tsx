@@ -47,6 +47,7 @@ import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
 import { WEEK_KEYS } from '../bookings/week-keys.ts';
 import { strings as commandStrings } from '../command/frame-strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
+import { useHasBusiness } from '../settings/useHasBusiness.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { useWorkspaceFavicon } from './favicon.ts';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
@@ -70,12 +71,13 @@ export type { SidebarPage } from './sidebar.ts';
  */
 const DEFAULT_NAV: NavState = {
   items: [],
-  sections: { order: ['favourites', 'records', 'lists', 'scheduling'], folded: [] },
+  sections: { order: ['favourites', 'records', 'lists', 'scheduling', 'hospitality'], folded: [] },
   rail: false,
   version: 0,
   favourites: [],
   top: ['tasks', 'notes'],
   scheduling: ['bookings', 'captures'],
+  hospitality: [],
 };
 
 /** Nothing read, ever: one snapshot, so React sees no change. */
@@ -285,6 +287,7 @@ export function WorkspaceFrame({
     () =>
       settings !== undefined ? (
         <SettingsNavigation
+          data={data}
           slug={slug}
           settings={settings}
           permissions={permissions}
@@ -636,12 +639,14 @@ function RailShortcut({ isRail, onRail }: { readonly isRail: boolean; readonly o
  * Enter opens the first, Escape clears (5 November 2026, as Vercel's and Linear's settings search).
  */
 function SettingsNavigation({
+  data,
   slug,
   settings,
   permissions,
   isOperator,
   isGuest,
 }: {
+  readonly data: DataLayer;
   readonly slug: string;
   readonly settings: SettingsSidebar;
   readonly permissions: readonly Permission[] | undefined;
@@ -656,7 +661,9 @@ function SettingsNavigation({
     setQueryFor(settings.current);
     setQuery('');
   }
-  const groups = visibleSettingsNav(settingsNav(slug), permissions, isOperator, isGuest);
+  // Business (Places, Services, Staff, Shifts) only while Appointments or Table seating is installed.
+  const hasBusiness = useHasBusiness(data, slug, permissions);
+  const groups = visibleSettingsNav(settingsNav(slug, { hasBusiness }), permissions, isOperator, isGuest);
   const hits = searchSettings(groups, query);
   const isSearching = query.trim() !== '';
   const find = (

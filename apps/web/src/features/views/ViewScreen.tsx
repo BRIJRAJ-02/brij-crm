@@ -812,7 +812,7 @@ export function ViewScreen(props: ViewScreenProps) {
     view === undefined ? undefined : (
       <>
         {view.visibility === 'workspace' && view.isLocked && (
-          <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
+          <Callout tone="info" placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
             {isLockedForMe
               ? strings.lockedUnsaved(memberName(members, view.lockedBy))
               : strings.lockedBy(memberName(members, view.lockedBy))}
@@ -1144,7 +1144,6 @@ export function ViewScreen(props: ViewScreenProps) {
           ? {
               filteredEmpty: (
                 <EmptyState
-                  icon="search"
                   title={strings.noSearchMatchesTitle(object.pluralName, searched)}
                   actions={
                     <Button
@@ -1162,7 +1161,6 @@ export function ViewScreen(props: ViewScreenProps) {
             ? {
                 filteredEmpty: (
                   <EmptyState
-                    icon="list-filter"
                     title={strings.noMatchesTitle(object.pluralName)}
                     actions={
                       // One way out: the filters themselves (the Toolbar's Discard stays for a draft).

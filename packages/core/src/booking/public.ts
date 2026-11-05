@@ -17,6 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
+import type { PublicPlaceBlock } from '../profile/place-blocks.ts';
 import { handoffAnswers, handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -36,6 +37,16 @@ import {
   ProfileFaqBlock,
   ProfileTestimonialBlock,
   ProfileTextBlock,
+  ProfileEventsBlock,
+  ProfileLocationBlock,
+  ProfileStatusBlock,
+  ProfileStepsBlock,
+  ProfileTimelineBlock,
+  PROFILE_CARD_LINE_MAX,
+  PROFILE_LOGO_ALT_MAX,
+  PROFILE_WAVE,
+  directionsHref,
+  profileAudioPath,
   PublicProfileItem,
   MEDIA_PROVIDERS,
   PROFILE_ALT_MAX,
@@ -460,9 +471,25 @@ function matches(item: PublicProfileItem, words: string): boolean {
         return [item.caption ?? ''];
       case 'banner':
         return [item.text];
+      case 'menu':
+        return [item.title, ...item.dishes.map((dish) => dish.name)];
+      case 'reserve':
+        return [item.title];
       case 'gallery':
       case 'socials':
-        return [];
+      case 'audio':
+      case 'logos':
+      case 'profile':
+        return item.kind === 'audio' ? [item.title ?? ''] : [];
+      case 'status':
+        return [item.text];
+      case 'location':
+        return [item.title ?? '', item.address];
+      case 'timeline':
+      case 'work':
+      case 'steps':
+      case 'events':
+        return [item.title ?? '', ...item.items.map((row) => row.title)];
     }
   })();
   return said.some((text) => text.toLowerCase().includes(words));
@@ -478,7 +505,7 @@ function pictureOf(handle: string, sizes: PictureSizes, id: unknown) {
   return size === undefined ? undefined : { src: profileImagePath(handle, id), ...size };
 }
 
-/** A tile's size, when it is one other than the default. */
+/** A card's span, when it is one other than the default (spec 0068: every kind but a heading and a banner). */
 function sizeOf(data: Readonly<Record<string, unknown>>): { readonly size?: string } {
   return data.size === 'wide' || data.size === 'large' ? { size: data.size } : {};
 }
@@ -503,7 +530,12 @@ function publicItemOf(
   pages: ReadonlyMap<string, PageRow>,
   forms: ReadonlyMap<string, string>,
   handle: string,
-  extras: { readonly pictures: PictureSizes; readonly hasSocials: boolean } = {
+  extras: {
+    readonly pictures: PictureSizes;
+    readonly hasSocials: boolean;
+    /** The Menu and Reserve blocks a visitor sees now (spec 0065, AC-6528), read in the page's own workspace. */
+    readonly placeBlocks?: ReadonlyMap<string, PublicPlaceBlock>;
+  } = {
     pictures: new Map(),
     hasSocials: false,
   },
@@ -557,6 +589,7 @@ function publicItemOf(
       id: row.id,
       body: written.data.body,
       ...(written.data.title === undefined ? {} : { title: written.data.title }),
+      ...sizeOf(data),
     };
   } else if (row.kind === 'testimonial') {
     // Checked again on the way out, as a piece of writing is: a row an older build stored badly is skipped rather
@@ -569,6 +602,7 @@ function publicItemOf(
       quote: said.data.quote,
       author: said.data.author,
       ...(said.data.role === undefined ? {} : { role: said.data.role }),
+      ...sizeOf(data),
     };
   } else if (row.kind === 'faq') {
     // Same rule as a piece of writing: parsed again on the way out, and a row an older build stored badly is
@@ -580,6 +614,7 @@ function publicItemOf(
       id: row.id,
       items: asked.data.items,
       ...(asked.data.title === undefined ? {} : { title: asked.data.title }),
+      ...sizeOf(data),
     };
   } else if (row.kind === 'form') {
     // The address the door read, and the words the owner typed. The form's own name and headline stay behind
@@ -587,7 +622,7 @@ function publicItemOf(
     const key = row.form_id === null ? undefined : forms.get(row.form_id);
     const label = typeof data.label === 'string' ? data.label.trim() : '';
     if (key === undefined || label === '') return undefined;
-    candidate = { kind: 'form', id: row.id, title: label, key };
+    candidate = { kind: 'form', id: row.id, title: label, key, ...sizeOf(data) };
   } else if (row.kind === 'page') {
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     if (page === undefined) return undefined;
@@ -597,11 +632,11 @@ function publicItemOf(
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     const duration = page?.durations[0];
     if (page === undefined || duration === undefined) return undefined;
-    candidate = { kind: 'times', id: row.id, slug: page.slug, title: page.title, duration };
+    candidate = { kind: 'times', id: row.id, slug: page.slug, title: page.title, duration, ...sizeOf(data) };
   } else if (row.kind === 'socials') {
     // The person's own links (AC-6104): a row with nothing in it is no row.
     if (!extras.hasSocials) return undefined;
-    candidate = { kind: 'socials', id: row.id };
+    candidate = { kind: 'socials', id: row.id, ...sizeOf(data) };
   } else if (row.kind === 'media') {
     // The frame's address from the parsed provider and id alone (AC-6106), each read again on the way out.
     const provider = MEDIA_PROVIDERS.find((each) => each === data.provider);
@@ -652,6 +687,11 @@ function publicItemOf(
     if (text === undefined) return undefined;
     const url = addressOf(data.url);
     candidate = { kind: 'banner', id: row.id, text, ...(url === undefined ? {} : { url }) };
+  } else if (row.kind === 'menu' || row.kind === 'reserve') {
+    // A place's menu or reservation page (spec 0065, AC-6528): only as the page's own workspace read it just now.
+    const shown = extras.placeBlocks?.get(row.id);
+    if (shown?.kind !== row.kind) return undefined;
+    candidate = shown;
   } else if (row.kind === 'contact') {
     // The card's whole rule first, as its vCard reads it, so the page never offers a card that answers 404. Then its
     // name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
@@ -663,7 +703,121 @@ function publicItemOf(
       fullName: card.data.fullName,
       ...(card.data.jobTitle === undefined ? {} : { jobTitle: card.data.jobTitle }),
       ...(card.data.company === undefined ? {} : { company: card.data.company }),
+      ...sizeOf(data),
     };
+  } else if (row.kind === 'profile') {
+    // The page's own face and name are the profile's; the card adds its one line, and nothing else.
+    const line = lineOf(data.line, PROFILE_CARD_LINE_MAX);
+    candidate = { kind: 'profile', id: row.id, ...(line === undefined ? {} : { line }), ...sizeOf(data) };
+  } else if (row.kind === 'status') {
+    const status = ProfileStatusBlock.safeParse({ ...data, kind: 'status' });
+    if (!status.success) return undefined;
+    candidate = {
+      kind: 'status',
+      id: row.id,
+      text: status.data.text,
+      state: status.data.state ?? 'open',
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'audio') {
+    // The recording only while it is one of this page's own, as a picture is (the same live check), served from our
+    // origin; its waveform only in its one shape.
+    const id = typeof data.audio === 'string' ? data.audio : undefined;
+    if (id === undefined || !extras.pictures.has(id)) return undefined;
+    const title = lineOf(data.title, 60);
+    const wave = typeof data.wave === 'string' && PROFILE_WAVE.test(data.wave) ? data.wave : undefined;
+    candidate = {
+      kind: 'audio',
+      id: row.id,
+      src: profileAudioPath(handle, id),
+      ...(title === undefined ? {} : { title }),
+      ...(wave === undefined ? {} : { wave }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'timeline') {
+    const timeline = ProfileTimelineBlock.safeParse({ ...data, kind: 'timeline' });
+    if (!timeline.success) return undefined;
+    candidate = {
+      kind: 'timeline',
+      id: row.id,
+      items: timeline.data.items,
+      ...(timeline.data.title === undefined ? {} : { title: timeline.data.title }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'steps') {
+    const steps = ProfileStepsBlock.safeParse({ ...data, kind: 'steps' });
+    if (!steps.success) return undefined;
+    candidate = {
+      kind: 'steps',
+      id: row.id,
+      items: steps.data.items,
+      ...(steps.data.title === undefined ? {} : { title: steps.data.title }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'location') {
+    const place = ProfileLocationBlock.safeParse({ ...data, kind: 'location' });
+    if (!place.success) return undefined;
+    candidate = {
+      kind: 'location',
+      id: row.id,
+      address: place.data.address,
+      // Built here from the stored words, so the page never makes an address from what a visitor sees.
+      directions: directionsHref(place.data.address),
+      ...(place.data.title === undefined ? {} : { title: place.data.title }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'events') {
+    const events = ProfileEventsBlock.safeParse({ ...data, kind: 'events' });
+    if (!events.success) return undefined;
+    // Soonest first; which are still to come is the visitor's page's to say, by its own clock.
+    const items = [...events.data.items]
+      .sort((one, other) => Date.parse(one.at) - Date.parse(other.at))
+      .map((event) => ({
+        title: event.title,
+        at: event.at,
+        ...(event.place === undefined ? {} : { place: event.place }),
+        ...(event.url === undefined ? {} : { url: event.url }),
+      }));
+    candidate = {
+      kind: 'events',
+      id: row.id,
+      items,
+      ...(events.data.title === undefined ? {} : { title: events.data.title }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'logos') {
+    const images = (Array.isArray(data.images) ? (data.images as readonly unknown[]) : []).flatMap((each) => {
+      if (typeof each !== 'object' || each === null) return [];
+      const picture = pictureOf(handle, extras.pictures, 'image' in each ? each.image : undefined);
+      const alt = lineOf('alt' in each ? each.alt : undefined, PROFILE_LOGO_ALT_MAX);
+      return picture === undefined || alt === undefined ? [] : [{ ...picture, alt }];
+    });
+    if (images.length === 0) return undefined;
+    const title = lineOf(data.title, 40);
+    candidate = { kind: 'logos', id: row.id, images, ...(title === undefined ? {} : { title }), ...sizeOf(data) };
+  } else if (row.kind === 'work') {
+    // Each card's words and its picture while it is one of the page's own; its link only while the rule still
+    // passes it, and a card that fails its own words is left out rather than half drawn.
+    const items = (Array.isArray(data.items) ? (data.items as readonly unknown[]) : []).flatMap((each) => {
+      if (typeof each !== 'object' || each === null) return [];
+      const card = each as Readonly<Record<string, unknown>>;
+      const cardTitle = lineOf(card.title, 60);
+      if (cardTitle === undefined) return [];
+      const image = pictureOf(handle, extras.pictures, card.image);
+      const body = lineOf(card.body, 160);
+      const url = addressOf(card.url);
+      return [
+        {
+          title: cardTitle,
+          ...(image === undefined ? {} : { image }),
+          ...(body === undefined ? {} : { body }),
+          ...(url === undefined ? {} : { url }),
+        },
+      ];
+    });
+    if (items.length === 0) return undefined;
+    const title = lineOf(data.title, 40);
+    candidate = { kind: 'work', id: row.id, items, ...(title === undefined ? {} : { title }), ...sizeOf(data) };
   } else {
     return undefined;
   }
@@ -714,6 +868,8 @@ export async function readLinkPage(
     readonly pictures?: PictureSizes;
     /** Who the page belongs to, as its owner chose to show it (3 Nov 2026). */
     readonly identity?: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
+    /** The Menu and Reserve blocks a visitor sees now (spec 0065, AC-6528). */
+    readonly placeBlocks?: ReadonlyMap<string, PublicPlaceBlock>;
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
@@ -791,6 +947,7 @@ export async function readLinkPage(
     const item = publicItemOf(row, pages, formKeys, found.owner.handle, {
       pictures: found.pictures ?? new Map(),
       hasSocials: found.owner.socials.length > 0,
+      ...(found.placeBlocks === undefined ? {} : { placeBlocks: found.placeBlocks }),
     });
     if (item === undefined) return [];
     if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];

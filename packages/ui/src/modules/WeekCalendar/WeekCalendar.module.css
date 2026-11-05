@@ -26,6 +26,8 @@
     --nest: var(--space-12);
     --from: 0;
     --hours: 24;
+    /* How many hours show before the grid scrolls (its `visibleHours`). */
+    --visible-hours: 12;
 
     position: relative;
     display: flex;
@@ -174,7 +176,8 @@
 
   .scroller {
     overflow-y: auto;
-    block-size: calc(var(--hour) * 12);
+    /* Never taller than the hours drawn: a short stretch leaves no empty strip under the grid. */
+    block-size: calc(var(--hour) * min(var(--visible-hours), var(--hours)));
   }
 
   /* The hours drawn (T13): `--hours` tall from `--from`. Its axis and days stay a whole day tall, lifted by the
@@ -217,6 +220,11 @@
     letter-spacing: var(--tracking-label);
     text-align: end;
     translate: 0 calc(-1 * var(--space-8));
+  }
+
+  /* A grid that starts after midnight (`drawnHours`) labels its first hour under the top line, where it shows whole. */
+  .hour[data-first] {
+    translate: 0 var(--space-2);
   }
 
   .column {

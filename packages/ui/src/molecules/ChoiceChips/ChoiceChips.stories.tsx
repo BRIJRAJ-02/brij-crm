@@ -62,6 +62,19 @@ export const WithError: Story = {
   },
 };
 
+/** A strong selection: the held chip filled with the accent, as a reservation's selected day and time are. */
+export const SelectionStrong: Story = {
+  args: { selected: ['30'], isSingle: true, isSelectionStrong: true },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips {...args} choices={lengths()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: /30/ })).toHaveAttribute('data-selection', 'strong');
+  },
+};
+
 /** A control after the last chip, outside the group: a booking page's "+ Custom" length. */
 export const WithEnd: Story = {
   args: { selected: ['30'] },
@@ -123,5 +136,32 @@ export const WithEnds: Story = {
     await expect(canvas.getByRole('radiogroup')).toHaveAccessibleDescription('Not likely Very likely');
     // The scale takes its column's width: a size container in a column that sizes to its content once collapsed.
     await expect(canvas.getByRole('radiogroup').getBoundingClientRect().width).toBeGreaterThan(200);
+  },
+};
+
+/**
+ * A dot per choice (Menu QR's zones, after checklabs' zone pills): each zone's colour before its name and count, one
+ * choice at a time, "All" first and "Unzoned" last with no dot.
+ */
+export const WithDots: Story = {
+  args: { label: 'Zones', isSingle: true, selected: ['patio'] },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips
+        {...args}
+        choices={[
+          { id: 'all', label: 'All (14)' },
+          { id: 'bar', label: 'Bar (4)', dot: 'orange' },
+          { id: 'patio', label: 'Patio (6)', dot: 'green' },
+          { id: 'window', label: 'Window (2)', dot: 'purple' },
+          { id: 'none', label: 'Unzoned (2)' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The dot is decorative: each chip is named by its label alone.
+    await expect(canvas.getByRole('radio', { name: 'Patio (6)' })).toHaveAttribute('aria-checked', 'true');
+    await expect(canvas.getByRole('radio', { name: 'Unzoned (2)' })).toBeInTheDocument();
   },
 };

@@ -366,7 +366,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const actions =
     note?.tone === 'info' ? (
       // A count of zero: said for a moment in the actions' place, while the ticks it was for clear.
-      <Callout placement="bar" isAnnounced>
+      <Callout tone="info" placement="bar" isAnnounced>
         {note.text}
       </Callout>
     ) : (
@@ -387,7 +387,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         )}
         {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
         {!isAllowed && (
-          <Callout placement="bar" isAnnounced>
+          <Callout tone="info" placement="bar" isAnnounced>
             {strings.viewOnly}
           </Callout>
         )}

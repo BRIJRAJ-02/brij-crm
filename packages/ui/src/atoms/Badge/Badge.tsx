@@ -7,16 +7,29 @@ import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Badge.module.css';
 import { strings } from './strings.ts';
 
-/** `neutral` (the default) for counts beside a label, `accent` for counts that ask for attention (unread). */
-export type BadgeTone = 'neutral' | 'accent';
+/**
+ * `neutral` (the default) for counts beside a label, `accent` for counts that ask for attention (unread), `strong` for
+ * a label in the text colour on the neutral fill (a guest page's tags: checklabs' ink on cream).
+ */
+export type BadgeTone = 'neutral' | 'accent' | 'strong';
 
 /** What every Badge takes, count or label. */
 interface BadgeBase {
   readonly tone?: BadgeTone;
   /** What it counts, read after the number by screen readers ("unread"). */
   readonly label?: string;
-  /** `chip` is a Tag's height (`size-chip`), for a Badge in a row of chips (the calendars a page checks); `sm` by default. */
-  readonly size?: 'sm' | 'chip';
+  /**
+   * `sm` (the default) is a 16px count. `chip` is a Tag's height (`size-chip`), for a Badge in a row of chips (the
+   * calendars a page checks, a dish's diet marks). `chip-lg` is 4px taller in the body's words, for chips read on
+   * their own (a dish's allergens on its sheet). `fit` is as tall as its words, 4px over and under, for a label inside
+   * a line of small type whose words the line sets (the guest menu's table in its eyebrow).
+   */
+  readonly size?: 'sm' | 'chip' | 'chip-lg' | 'fit';
+  /**
+   * Fully rounded, a pill, its sides half its height in less 2px (10px on a 24px chip): a guest page's labels, after
+   * checklabs' pills (the guest menu's table, a dish's marks and allergens).
+   */
+  readonly isRound?: boolean;
 }
 
 /** Props for Badge: a count, or a short label (a row's note, "New"). */
@@ -58,7 +71,7 @@ export type BadgeProps = BadgeBase &
 
 /** A small count beside a tab, a nav item or a list (3, 99+, or 10,000+ at least), or a short label. */
 export function Badge(props: BadgeProps) {
-  const { tone = 'neutral', label, size = 'sm' } = props;
+  const { tone = 'neutral', label, size = 'sm', isRound = false } = props;
   const { locale } = useFormatSettings();
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale));
   let shown: string;
@@ -74,7 +87,8 @@ export function Badge(props: BadgeProps) {
       data-tone={tone}
       data-text={props.text === undefined ? undefined : ''}
       data-whole={props.isWhole === true || undefined}
-      data-size={size === 'chip' ? 'chip' : undefined}
+      data-size={size === 'sm' ? undefined : size}
+      data-round={isRound || undefined}
       data-icon={props.icon === undefined ? undefined : ''}
     >
       {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}

@@ -142,6 +142,7 @@ export function AdminFailed({
     return (
       <SettingsPage title={title}>
         <EmptyState
+          layout="block"
           icon="shield-check"
           title={strings.twoFactorTitle}
           actions={<Link href={securitySettingsHref(slug)}>{strings.twoFactorAction}</Link>}
@@ -220,6 +221,7 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
   const stillHeld = retry.afterConfirm;
   return (
     <EmptyState
+      layout="block"
       icon="shield-check"
       title={strings.signInTitle}
       isLoading={security.status === 'loading'}

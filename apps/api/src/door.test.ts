@@ -330,10 +330,13 @@ describe('no scope is built in this app', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(join(root, file), 'utf8');
-      // The attribute router passes an attribute's validation rules (spec 0013) on as `rules: input.rules`: not the
-      // door's. That one form, in that one file, is let through.
+      // The attribute router passes an attribute's validation rules (spec 0013) on as `rules: input.rules`, and Table
+      // seating's router a place's table rules (spec 0066 B7): not the door's. That one form, in those files, is let
+      // through.
       const checked =
-        file === 'modules/attributes/router.ts' ? source.replaceAll(/\brules: input\.rules\b/g, '') : source;
+        file === 'modules/attributes/router.ts' || file === 'modules/tables/router.ts'
+          ? source.replaceAll(/\brules: input\.rules\b/g, '')
+          : source;
       // The server, the worker, the Vercel Function (spec 0045) and the jobs they share hand on rules.ts's source,
       // the same one to all, and nothing else.
       const passed = PASSERS.has(file) ? checked.replaceAll(/\brules: APP_RULES\b/g, '') : checked;

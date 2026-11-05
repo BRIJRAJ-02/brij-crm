@@ -194,12 +194,12 @@ describe('the code’s style (AC-6124)', () => {
 });
 
 describe('a tile’s size and a full kind (AC-6103, AC-6115)', () => {
-  it('picks a size by sight from the keyboard', async () => {
+  it('picks a card’s width by sight from the keyboard', async () => {
     const onChange = vi.fn();
     await render(() => <SizePicker value="small" onChange={onChange} />);
-    const sizes = page.getByRole('radiogroup', { name: 'Size on a grid' });
-    await expect.element(sizes.getByRole('radio', { name: 'Small' })).toBeChecked();
-    (sizes.getByRole('radio', { name: 'Small' }).element() as HTMLElement).focus();
+    const sizes = page.getByRole('radiogroup', { name: 'Width on a grid' });
+    await expect.element(sizes.getByRole('radio', { name: 'One column' })).toBeChecked();
+    (sizes.getByRole('radio', { name: 'One column' }).element() as HTMLElement).focus();
     await userEvent.keyboard('{ArrowRight}');
     expect(onChange).toHaveBeenLastCalledWith('wide');
   });

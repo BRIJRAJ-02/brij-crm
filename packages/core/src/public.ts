@@ -133,3 +133,38 @@ export { isShownAt } from './profile/schedule.ts';
 // Insights (spec 0067): a visit's origin from what its page sent, and a share link's numbers only page.
 export { originOf, type VisitOrigin } from './insights/visits.ts';
 export { readInsightShare } from './insights/shares.ts';
+
+// The guest menu (spec 0065, H1, AC-6528): a menu key's door (ids only, through `crm_menu_by_key`), the place's live
+// snapshot with Sold out over it, and its photos, only those the snapshot shows.
+export {
+  enterMenuPage,
+  menuLookStylesheet,
+  menuLookVersion,
+  readMenuPhoto,
+  readPublicMenu,
+  type MenuEntry,
+  type PublicMenuRead,
+} from './hospitality/public-menu.ts';
+// Menu QR (spec 0065, H2): the table a QR's code names on the key's own place, counting the scan.
+export { scanTable } from './hospitality/qr.ts';
+
+// Table seating's guest page (spec 0066 B7 lite): the door by a place's public key, and the guest's reads and writes.
+export { enterTablePage, TABLE_KEY_PATTERN, type TableEntry } from './access/table-door.ts';
+export {
+  guestCancel,
+  guestChange,
+  guestIcs,
+  guestReserve,
+  guestTimes,
+  guestVisit,
+  readTableLook,
+  readTablePage,
+  UPCOMING_PER_EMAIL,
+  type GuestKey,
+  type GuestReserved,
+} from './visits/public.ts';
+
+/** The business pages search engines may list (spec 0066, AC-6644), for sitemap-handles.xml. */
+export { bookingCompanyOf, listSitemapBusinesses } from './hospitality/public-page.ts';
+/** The business's and its guest menus' edge cache tags (spec 0066): an opaque id, never the workspace's id. */
+export { businessCacheTags, menuWorkspaceCacheTags } from './hospitality/cache-tags.ts';

@@ -75,6 +75,19 @@ const readPage = (origin) => async (handle, slug, signal) => {
   }
 };
 
+/** Reads a business's published page (spec 0066, B4), by its handle and maybe a place's slug, never joined from a path. */
+const readBusiness = (origin) => async (handle, slug, signal) => {
+  const path =
+    slug === undefined ? encodeURIComponent(handle) : `${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
+  const answer = await fetch(`${origin}/api/public/business/${path}`, {
+    signal,
+    headers: { accept: 'application/json' },
+  });
+  if (answer.status === 404) return undefined;
+  if (!answer.ok) throw new Error(`business read answered ${String(answer.status)}`);
+  return await answer.json();
+};
+
 /** Files this answer under its cache tags, and never fails the answer for it (a missed tag only shortens its life). */
 async function tagQuietly(tags) {
   try {
@@ -99,6 +112,7 @@ export async function GET(request) {
     cardOrigin: origin,
     readProfile: readProfile(url.origin),
     readPage: readPage(url.origin),
+    readBusiness: readBusiness(url.origin),
     onMiss: (handle, reason) => {
       // One line, the handle and why: a miss is invisible otherwise, since the visitor sees a working page.
       console.warn(JSON.stringify({ event: 'handle.shell.missed', handle, reason }));

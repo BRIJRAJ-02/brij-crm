@@ -164,6 +164,21 @@ export const ReadOnly: Story = {
   },
 };
 
+/** Staff with their own colours (spec 0066 B1, the Shifts grid): a hue on each tile in place of one from the id. */
+export const StaffColours: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <TeamWeek
+        {...args}
+        people={people().map((each, index) => ({
+          ...each,
+          hue: (['purple', 'green', 'orange', 'sky'] as const)[index % 4],
+        }))}
+      />
+    </Stage>
+  ),
+};
+
 /** The footer with the workspace link's coverage under each day: how many of those working it can book. */
 export const LinkCoverage: Story = {
   render: (args) => (

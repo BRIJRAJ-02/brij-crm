@@ -88,7 +88,7 @@ export function AccessFields({ object, fields, subjects, onChange }: AccessField
           isScrollable
         />
       ) : (
-        <Callout>{strings.fieldsNone(subject.name, object)}</Callout>
+        <Callout tone="info">{strings.fieldsNone(subject.name, object)}</Callout>
       )}
     </Disclosure>
   );

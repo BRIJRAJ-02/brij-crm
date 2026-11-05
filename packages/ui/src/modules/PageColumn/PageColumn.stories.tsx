@@ -38,7 +38,11 @@ export const WithFooter: Story = {
       <PageColumn
         {...args}
         actions={<Button icon="plus">New booking page</Button>}
-        footer={<Callout actions={<Button variant="primary">Save</Button>}>Unsaved changes</Callout>}
+        footer={
+          <Callout tone="warning" actions={<Button variant="primary">Save</Button>}>
+            Unsaved changes
+          </Callout>
+        }
       >
         <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
       </PageColumn>

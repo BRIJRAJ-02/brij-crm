@@ -356,6 +356,7 @@ function Body({
   if (insights.pages.length === 0) {
     return (
       <EmptyState
+        layout="block"
         icon="chart-line"
         title={strings.noPagesTitle}
         actions={
@@ -373,7 +374,6 @@ function Body({
     const isLong = isAllTime;
     return (
       <EmptyState
-        icon="chart-line"
         title={isLong ? strings.emptyTitle : strings.noneInPeriod}
         actions={
           isLong ? (

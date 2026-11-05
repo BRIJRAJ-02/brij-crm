@@ -37,3 +37,7 @@ Tab reaches the group; arrows move between chips; Space or Enter toggles one.
 ## Differences from the artifact
 
 Not in the artifact.
+
+`isSelectionStrong` fills the held chip with the accent (Button's ToggleButton `isSelectionStrong`), where the chips sit beside an accent filled day and time: a reservation's party size (5 November 2026).
+
+A choice's `dot` (a `Hue`, named as Badge names its dot) puts a colour dot before its label: the colour that choice wears elsewhere on the page, such as a zone's chip over its tables on Menu QR's Tables page ("● Patio (8)", after checklabs' zone pills, 5 November 2026). ToggleButton draws it with StatusDot in the label's own type, as SegmentedControl's `hue` does, so there is one dot in the library. The dot is decorative; the label names the choice. Why a variant: the chips are the same ToggleButtons with one more mark, so a held chip with a dot still looks as any held chip does.

@@ -101,7 +101,7 @@ export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isL
       {isLoading ? skeleton : tile}
       {shownTitle}
       {isLoading || hasTrail ? <VisuallyHidden>{heading}</VisuallyHidden> : null}
-      {isLoading ? null : meta}
+      {isLoading || meta === undefined ? null : <span className={styles.meta}>{meta}</span>}
       {!isLoading && children !== undefined && <div className={styles.end}>{children}</div>}
     </header>
   );

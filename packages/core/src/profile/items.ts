@@ -34,6 +34,7 @@ import {
   type ProfileCounts,
   type ProfileDay,
   type ProfileFactValue,
+  type ProfileAudioType,
   type ProfileImageKind,
   type ProfileImageType,
   type ProfileInsightDays,
@@ -56,8 +57,9 @@ import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { mediaShareUrl, parseMediaLink } from './embeds.ts';
+import { isPlaceBlock, PLACE_BLOCK_TITLES, placeFactsOf, type PlaceFacts } from './place-blocks.ts';
 
-const { bookingPages, forms, workspaces } = schema;
+const { bookingPages, forms, places, workspaces } = schema;
 
 /** One block as the editor's definers answer it. */
 interface ItemRow extends Record<string, unknown> {
@@ -101,6 +103,8 @@ type FactsByForm = ReadonlyMap<string, { readonly workspaceId: string; readonly 
 interface BlockFacts {
   readonly pages: FactsByPage;
   readonly forms: FactsByForm;
+  /** A Menu or Reserve block's place, by place id (spec 0065, AC-6528). */
+  readonly places?: ReadonlyMap<string, PlaceFacts>;
 }
 
 /**
@@ -260,6 +264,11 @@ function itemOf(row: ItemRow, facts: BlockFacts, outside: ReadonlySet<string> = 
       ...stored,
       ...(outside.has(row.id) ? { outsideWorkspace: true } : {}),
     };
+  } else if (isPlaceBlock(row.kind)) {
+    // A Menu or Reserve block (spec 0065, AC-6528): its place's facts for its own kind, when the place is there.
+    const placeId = 'placeId' in data && typeof data.placeId === 'string' ? data.placeId : undefined;
+    const found = placeId === undefined ? undefined : facts.places?.get(placeId);
+    candidate = { ...data, kind: row.kind, ...stored, ...(found === undefined ? {} : { place: found[row.kind] }) };
   } else if (row.kind === 'media') {
     // The share link is rebuilt from the provider and id (spec 0061, AC-6105): what was pasted was never kept.
     const provider = 'provider' in data && typeof data.provider === 'string' ? data.provider : '';
@@ -298,9 +307,18 @@ async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promi
     ),
   ];
   const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
+  const placeIds = rows.flatMap((row) =>
+    isPlaceBlock(row.kind) && typeof row.data === 'object' && row.data !== null && 'placeId' in row.data
+      ? [String(row.data.placeId)]
+      : [],
+  );
   return {
     pages: pageIds.length === 0 ? new Map() : await factsOf(await enterOwnPages(scope, pageIds)),
     forms: formIds.length === 0 ? new Map() : await formFactsOf(await enterOwnForms(scope, formIds)),
+    places:
+      placeIds.length === 0
+        ? new Map()
+        : await inWorkspace(scope, (tx) => placeFactsOf(tx, scope.workspaceId, placeIds)),
   };
 }
 
@@ -553,6 +571,15 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number], media?: Resol
   if (block.kind === 'page' || block.kind === 'times') {
     return { kind: block.kind, data: shared, workspaceId: block.workspaceId, pageId: block.pageId, formId: null };
   }
+  if (block.kind === 'menu' || block.kind === 'reserve') {
+    return {
+      kind: block.kind,
+      data: compact({ placeId: block.placeId, label: block.label, ...shared }),
+      workspaceId: null,
+      pageId: null,
+      formId: null,
+    };
+  }
   if (block.kind === 'media') {
     if (media === undefined) throw new Error('A media block is stored only once its link is read.');
     return {
@@ -568,6 +595,30 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number], media?: Resol
     const kept = compact({ ...fields, ...shared });
     // A gallery's `row` is its default, left out as a size's `small` is.
     if (kind === 'gallery' && kept.display === 'row') delete kept.display;
+    // `small` is every span's default, left out (the grid's one column).
+    if (kept.size === 'small') delete kept.size;
+    return { kind, data: kept, workspaceId: null, pageId: null, formId: null };
+  }
+  if (
+    block.kind === 'profile' ||
+    block.kind === 'status' ||
+    block.kind === 'audio' ||
+    block.kind === 'location' ||
+    block.kind === 'timeline' ||
+    block.kind === 'logos' ||
+    block.kind === 'work' ||
+    block.kind === 'steps' ||
+    block.kind === 'events'
+  ) {
+    // Spec 0068's cards (AC-6808): the fields the schema kept, an empty one never stored, and in a card made of
+    // rows each row the same way. A status's `open` is its default, left out as a size's `small` is.
+    const { kind, showFrom: _from, hideAfter: _after, size: _size, ...fields } = block;
+    const rows =
+      'items' in fields
+        ? { items: (fields.items as readonly Readonly<Record<string, unknown>>[]).map((row) => compact(row)) }
+        : {};
+    const kept = compact({ ...fields, ...rows, ...shared });
+    if (kind === 'status' && kept.state === 'open') delete kept.state;
     return { kind, data: kept, workspaceId: null, pageId: null, formId: null };
   }
   if (block.kind === 'form') {
@@ -718,6 +769,15 @@ export async function saveProfileItem(
     if (block.kind === 'link') {
       const problem = await workspaceAddressProblem(tx, scope.workspaceId, block.url, options.publicOrigins ?? []);
       if (problem !== undefined) throw refuseOn('CONFIG_INVALID', problem, 'url');
+    }
+    // A Menu or Reserve block names one of this workspace's own places (spec 0065, AC-6528), read here under its
+    // row level security: another workspace's id is refused as one that isn't there.
+    if (block.kind === 'menu' || block.kind === 'reserve') {
+      const [place] = await tx
+        .select({ id: places.id })
+        .from(places)
+        .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, block.placeId)));
+      if (place === undefined) throw refuseOn('NOT_FOUND', 'That place isn’t in this workspace.', 'placeId');
     }
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);
@@ -1032,6 +1092,7 @@ function blockLabel(item: ProfileItem): string {
   if (item.kind === 'banner') return item.text;
   if (item.kind === 'form') return item.label;
   if ((item.kind === 'page' || item.kind === 'times') && item.page !== undefined) return item.page.title;
+  if (item.kind === 'menu' || item.kind === 'reserve') return item.label ?? PLACE_BLOCK_TITLES[item.kind];
   return item.kind;
 }
 
@@ -1084,9 +1145,10 @@ export async function addProfileImage(
   scope: EngineScope,
   image: {
     readonly id: string;
-    readonly kind: ProfileImageKind;
+    /** `audio` is an audio intro's recording (spec 0068), whose sides are 1 by 1. */
+    readonly kind: ProfileImageKind | 'audio';
     readonly path: string;
-    readonly type: ProfileImageType;
+    readonly type: ProfileImageType | ProfileAudioType;
     readonly bytes: number;
     readonly width: number;
     readonly height: number;

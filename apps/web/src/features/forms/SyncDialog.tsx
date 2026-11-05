@@ -164,7 +164,7 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
           {shown.message}
         </Callout>
       ) : preview?.total === 0 ? (
-        <EmptyState layout="row" icon="circle-check" title={strings.syncNothing}>
+        <EmptyState layout="row" title={strings.syncNothing}>
           {strings.syncNothingText}
         </EmptyState>
       ) : (

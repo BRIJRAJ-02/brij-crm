@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -23,6 +23,14 @@ export interface Slot {
    * "03:30 London"). Read out through `name`, so the screen puts it there too.
    */
   readonly detail?: string;
+}
+
+/** One group of times under its own small heading: a restaurant's Lunch or Dinner (spec 0066 B7). */
+export interface SlotGroup {
+  readonly id: string;
+  /** "Lunch". */
+  readonly heading: string;
+  readonly slots: readonly Slot[];
 }
 
 /** Props for SlotList. */
@@ -60,6 +68,15 @@ export interface SlotListProps {
    * fill and a check, the rest go quiet, and none can be pressed again. Nothing is removed, so nothing below moves.
    */
   readonly answered?: string;
+  /**
+   * The times in groups, each under its small heading (a restaurant's Lunch and Dinner, spec 0066 B7), in one list
+   * that scrolls as one and runs three across at any width. Given, it takes the place of `slots` and `layout`.
+   */
+  readonly groups?: readonly SlotGroup[];
+  /** Beside the heading: the page's own short count (a neutral Badge, "12 available"). */
+  readonly badge?: ReactNode;
+  /** The first time's button, so the page can move focus to the times (a time taken meanwhile, or Pick a time). */
+  readonly firstRef?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -105,48 +122,120 @@ export function SlotList({
   empty,
   drawKey,
   answered,
+  groups,
+  badge,
+  firstRef,
 }: SlotListProps) {
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const isLocked = variant === 'offers' && answered !== undefined;
+  const shownGroups = groups?.filter((group) => group.slots.length > 0);
+  // Every time in the order they read, across the groups, for the tab stop and the arrows.
+  const all = shownGroups === undefined ? slots : shownGroups.flatMap((group) => group.slots);
+  const isEmpty = all.length === 0;
   // The tab stop: the picked time, else the one the keyboard last stood on, else the first (review, 5 Nov 2026: tabbing
   // away and back returned to the first time).
   const [lastFocused, setLastFocused] = useState<string | undefined>(undefined);
-  const has = (id: string | undefined) => id !== undefined && slots.some((slot) => slot.id === id);
-  const tabbable = has(value) ? value : has(lastFocused) ? lastFocused : slots[0]?.id;
+  const has = (id: string | undefined) => id !== undefined && all.some((slot) => slot.id === id);
+  const tabbable = has(value) ? value : has(lastFocused) ? lastFocused : all[0]?.id;
   const slotButton = (id: string) =>
     [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-slot]') ?? [])].find(
       (button) => button.dataset.slot === id,
     );
   const onKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const index = slots.findIndex((slot) => slot.id === event.currentTarget.dataset.slot);
+    const index = all.findIndex((slot) => slot.id === event.currentTarget.dataset.slot);
     if (index < 0) return;
     if (event.key === 'Enter' && !isLocked) {
       event.preventDefault();
-      const id = slots[index]?.id;
+      const id = all[index]?.id;
       if (id === undefined) return;
       onChange(id);
       onCommit?.(id);
       return;
     }
-    const across = columnsOf(listRef.current);
+    const across = columnsOf(listRef.current?.querySelector('ul') ?? null);
     const moves: Readonly<Record<string, number>> = {
       ArrowRight: index + 1,
       ArrowLeft: index - 1,
       ArrowDown: index + across,
       ArrowUp: index - across,
       Home: 0,
-      End: slots.length - 1,
+      End: all.length - 1,
     };
     const to = moves[event.key];
     if (to === undefined) return;
     event.preventDefault();
-    const next = slots[Math.min(Math.max(to, 0), slots.length - 1)];
+    const next = all[Math.min(Math.max(to, 0), all.length - 1)];
     if (next !== undefined) slotButton(next.id)?.focus();
+  };
+  const groupId = useId();
+  /** One time's button in its row; `index` runs across the groups, so the stagger carries on from one to the next. */
+  const item = (slot: Slot, index: number) => {
+    const isPicked = variant === 'picker' && slot.id === value;
+    const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
+    return (
+      <li
+        key={slot.id}
+        className={styles.item}
+        data-picked={isPicked ? '' : undefined}
+        data-answer={isAnswer ? '' : undefined}
+        data-quiet={variant === 'offers' && answered !== undefined && !isAnswer ? '' : undefined}
+        style={{ '--slot-index': String(Math.min(index, 12)) }}
+      >
+        <button
+          {...(index === 0 && firstRef !== undefined ? { ref: firstRef } : {})}
+          type="button"
+          className={styles.slot}
+          data-slot={slot.id}
+          tabIndex={slot.id === tabbable ? 0 : -1}
+          onKeyDown={onKey}
+          onFocus={() => setLastFocused(slot.id)}
+          data-busy={slot.isBusy === true ? '' : undefined}
+          {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
+          {...(variant === 'offers' && answered !== undefined
+            ? { 'aria-disabled': true, ...(isAnswer ? { 'aria-current': true } : {}) }
+            : {})}
+          aria-label={[
+            slot.name,
+            slot.isBest === true ? strings.best : undefined,
+            slot.isBusy === true ? strings.busy : undefined,
+            isAnswer ? strings.picked : undefined,
+          ]
+            .filter((part) => part !== undefined)
+            .join(', ')}
+          onClick={() => {
+            if (variant === 'offers' && answered !== undefined) return;
+            onChange(slot.id);
+          }}
+        >
+          {isAnswer && <Icon name="check" size="sm" />}
+          {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
+          <span key={slot.label} className={styles.time}>
+            {slot.label}
+          </span>
+          {slot.isBest === true && (
+            <span className={styles.best} aria-hidden="true">
+              {strings.bestTag}
+            </span>
+          )}
+          {slot.isBusy === true && (
+            <span className={styles.busy} aria-hidden="true">
+              {strings.busyTag}
+            </span>
+          )}
+          {slot.detail !== undefined && (
+            <span className={styles.detail} aria-hidden="true">
+              {slot.detail}
+            </span>
+          )}
+        </button>
+      </li>
+    );
   };
   return (
     <div
+      ref={listRef}
       className={styles.root}
-      data-layout={layout}
+      data-layout={groups === undefined ? layout : 'groups'}
       data-variant={variant}
       data-answered={variant === 'offers' && answered !== undefined ? '' : undefined}
     >
@@ -167,6 +256,7 @@ export function SlotList({
               </span>
             </h2>
           )}
+          {badge !== undefined && !isLoading && <span className={styles.badge}>{badge}</span>}
           {onHour12Change !== undefined && (
             <SegmentedControl
               label={strings.clock}
@@ -193,71 +283,30 @@ export function SlotList({
             ))}
           </ul>
         </>
-      ) : slots.length === 0 && empty !== undefined ? (
+      ) : isEmpty && empty !== undefined ? (
         <div className={styles.empty}>{empty}</div>
-      ) : (
-        <ul ref={listRef} key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
-          {slots.map((slot, index) => {
-            const isPicked = variant === 'picker' && slot.id === value;
-            const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
+      ) : shownGroups !== undefined ? (
+        // One list that scrolls as one: each group under its small heading, the stagger running on across them.
+        <div key={drawKey} className={styles.scroller}>
+          {shownGroups.map((group, groupIndex) => {
+            const before = shownGroups.slice(0, groupIndex).reduce((count, each) => count + each.slots.length, 0);
+            const headingId = `${groupId}-${String(groupIndex)}`;
             return (
-              <li
-                key={slot.id}
-                className={styles.item}
-                data-picked={isPicked ? '' : undefined}
-                data-answer={isAnswer ? '' : undefined}
-                data-quiet={variant === 'offers' && answered !== undefined && !isAnswer ? '' : undefined}
-                style={{ '--slot-index': String(Math.min(index, 12)) }}
-              >
-                <button
-                  type="button"
-                  className={styles.slot}
-                  data-slot={slot.id}
-                  tabIndex={slot.id === tabbable ? 0 : -1}
-                  onKeyDown={onKey}
-                  onFocus={() => setLastFocused(slot.id)}
-                  data-busy={slot.isBusy === true ? '' : undefined}
-                  {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
-                  {...(variant === 'offers' && answered !== undefined
-                    ? { 'aria-disabled': true, ...(isAnswer ? { 'aria-current': true } : {}) }
-                    : {})}
-                  aria-label={[
-                    slot.name,
-                    slot.isBest === true ? strings.best : undefined,
-                    slot.isBusy === true ? strings.busy : undefined,
-                    isAnswer ? strings.picked : undefined,
-                  ]
-                    .filter((part) => part !== undefined)
-                    .join(', ')}
-                  onClick={() => {
-                    if (variant === 'offers' && answered !== undefined) return;
-                    onChange(slot.id);
-                  }}
-                >
-                  {isAnswer && <Icon name="check" size="sm" />}
-                  {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
-                  <span key={slot.label} className={styles.time}>
-                    {slot.label}
-                  </span>
-                  {slot.isBest === true && (
-                    <span className={styles.best} aria-hidden="true">
-                      {strings.bestTag}
-                    </span>
-                  )}
-                  {slot.isBusy === true && (
-                    <span className={styles.busy} aria-hidden="true">
-                      {strings.busyTag}
-                    </span>
-                  )}
-                  {slot.detail !== undefined && (
-                    <span className={styles.detail} aria-hidden="true">
-                      {slot.detail}
-                    </span>
-                  )}
-                </button>
-              </li>
+              // A plain block under its small heading: Lunch and Dinner are never landmarks of their own.
+              <div key={group.id} className={styles.group}>
+                <h3 id={headingId} className={styles.groupHeading}>
+                  {group.heading}
+                </h3>
+                <ul className={styles.list} aria-label={strings.groupTimes(group.heading, heading)}>
+                  {group.slots.map((slot, index) => item(slot, before + index))}
+                </ul>
+              </div>
             );
           })}
+        </div>
+      ) : (
+        <ul key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
+          {slots.map((slot, index) => item(slot, index))}
         </ul>
       )}
     </div>

@@ -86,11 +86,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
   if (value.length === 0) {
     return (
       <div ref={rootRef} className={styles.root}>
-        <EmptyState
-          title={strings.noSorts}
-          icon="arrow-down-wide-narrow"
-          {...(adder === null ? {} : { actions: adder })}
-        >
+        <EmptyState title={strings.noSorts} {...(adder === null ? {} : { actions: adder })}>
           {strings.noSortsText}
         </EmptyState>
       </div>

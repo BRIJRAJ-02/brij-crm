@@ -201,6 +201,7 @@ export {
   cleanTitle,
 } from './profile/embeds.ts';
 export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
+export { checkProfileAudio, profileAudioStorePath, type CheckedAudio } from './profile/audio.ts';
 export { deviceFact } from './profile/sources.ts';
 export { zonedToUtc, windowOf } from './profile/schedule.ts';
 // A workspace's brand kit and the caller's own link page accent and photos (spec 0060).
@@ -936,6 +937,172 @@ export { recordsImport } from './imports/kind.ts';
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
 export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+// The Hospitality suite's setup (spec 0065, H0): the apps and their one gate, the business, its places and floors.
+export { listApps, installApp, removeApp } from './hospitality/apps.ts';
+export { appInstalled, requireApp, requireAnyApp, APP_NOT_INSTALLED_MESSAGE } from './hospitality/gate.ts';
+export { getBusiness, saveBusiness, createPlace, updatePlace, localeForCountry } from './hospitality/places.ts';
+export {
+  listResources,
+  saveArea,
+  deleteArea,
+  addResources,
+  updateResource,
+  moveResource,
+  archiveResource,
+  restoreResource,
+  deleteResource,
+} from './hospitality/floor.ts';
+// Menu QR (spec 0065, H2): a place's table codes and their scans, and a new code for one table.
+export { listQrCodes, regenerateTableCode, QR_SCAN_DAYS } from './hospitality/qr.ts';
+// The link page's Menu and Reserve blocks (spec 0065, AC-6528): the places one can name, with each kind's facts.
+export { listPlaceChoices } from './profile/place-blocks.ts';
+// The Menu app (spec 0065, H1): the draft, its edits, Publish and Discard, Sold out and photos.
+export {
+  readMenuDraft,
+  saveMenu,
+  deleteMenu,
+  saveSection,
+  deleteSection,
+  saveItem,
+  deleteItem,
+  placeItem,
+  moveMenuPart,
+  saveOptionGroup,
+  deleteOptionGroup,
+  setItemSoldOut,
+  setMenuHidden,
+  attachMenuPhoto,
+  removeMenuPhoto,
+  publishMenus,
+  discardMenuDraft,
+  menuPlaceIds,
+  requireMenuEditor,
+  menuPhotoFolder,
+  publishProblem,
+  readMenuDraftLook,
+  readMenuPhotoFile,
+  type MenuPhotoFile,
+  type MenuPublishResult,
+} from './hospitality/menu.ts';
+/** A place's hours read at an instant (spec 0065, AC-6508): pure, on the place's own wall clock. */
+export { openAt, nextOpening, rangesOn, type OpenNow } from './hospitality/hours.ts';
+// The visit engine (spec 0066, B0): the pure planner, the offered times and booking a visit, with the slot cache.
+export {
+  planVisit,
+  earliestStart,
+  type PlanInput,
+  type PlanResult,
+  type PlannedStart,
+  type PlannerItem,
+  type PlannerResource,
+  type PlannerStaff,
+} from './visits/planner.ts';
+export {
+  bookVisit,
+  visitTimes,
+  createSlotCache,
+  isVisitTaken,
+  VISIT_TAKEN_MESSAGE,
+  type BookedVisit,
+  type OfferedVisit,
+  type SlotCache,
+  type VisitBookInput,
+  type VisitDeps,
+} from './visits/book.ts';
+export { linkStaffMember, type LinkOverlap } from './visits/staff-link.ts';
+/** Settings › Services, Staff and Shifts (spec 0066 B1): the catalogue, the profiles, their shifts and the desk's times. */
+export {
+  archiveServices,
+  deleteServiceCategory,
+  getCatalogue,
+  moveService,
+  moveServiceCategory,
+  restoreServices,
+  saveService,
+  saveServiceCategory,
+  setServicesCategory,
+  setServicesOnline,
+  type CatalogueDeps,
+} from './visits/catalogue.ts';
+export {
+  addStaffBlock,
+  addStaffTimeOff,
+  archiveStaff,
+  copyShifts,
+  getShifts,
+  getTeam,
+  linkStaff,
+  moveStaff,
+  readStaffPhoto,
+  removeStaffBlock,
+  removeStaffPhoto,
+  removeStaffTimeOff,
+  restoreStaff,
+  saveStaff,
+  setShifts,
+  setStaffPhoto,
+  staffPhotoFolder,
+} from './visits/team.ts';
+export { serviceTimes } from './visits/times.ts';
+export {
+  getTableSetup,
+  saveTableSetup,
+  listServiceDay,
+  listServicePlaces,
+  readServiceFloor,
+  setReservationAlert,
+  setVisitStatus,
+  setupSteps,
+  tableRulesProblem,
+  TABLE_DEFAULTS,
+  type DayVisit,
+  type ServiceDay,
+  type SetupStep,
+  type TableRules,
+  type TableSetup,
+} from './visits/table-service.ts';
+export {
+  freeTables,
+  reserveForGuest,
+  seatWalkIn,
+  WALK_IN_TAKEN,
+  type FreeTable,
+  type FreeTables,
+} from './visits/walk-in.ts';
+/** The business page's editor (spec 0066, B4 lite): its address, draft, places' slugs, photos and Publish. */
+export {
+  addBusinessPhoto,
+  businessPhotoFolder,
+  businessPhotoPath,
+  claimBusinessHandle,
+  discardBusinessPage,
+  getBusinessPage,
+  publishBusinessPage,
+  readBusinessPhoto,
+  saveBusinessPage,
+  setPlaceSlug,
+  type BusinessPageChange,
+  type BusinessPagePublished,
+} from './hospitality/business-page.ts';
+/** The business's and its guest menus' edge cache tags (spec 0066): an opaque id, never its workspace's id. */
+export { businessCacheId, businessCacheTags, menuWorkspaceCacheTags } from './hospitality/cache-tags.ts';
+/** The public business page's reads (spec 0066, B4 lite): no session, the handle is the only key. */
+export {
+  bookingCompanyOf,
+  businessPhotoSrc,
+  enterBusinessPage,
+  listSitemapBusinesses,
+  NO_MENUS,
+  publicBusinessBrand,
+  publicBusinessPhoto,
+  publishedBusinessHandle,
+  type BusinessPageEntry,
+  type MenuSource,
+} from './hospitality/public-page.ts';
+/** A place's published menu as its business page shows it (spec 0066 B4 with 0065 H1): the page's `MenuSource`. */
+export { businessMenuOf } from './hospitality/public-menu.ts';
+/** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
+export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
 export {
   operatorOverview,

@@ -86,11 +86,10 @@ export function ScheduleFields({ value, onChange, problems }: ScheduleFieldsProp
   );
 }
 
-/** A tile's three sizes, each a picture of its shape (AC-6103). */
-const SIZES: readonly { readonly id: 'small' | 'wide' | 'large'; readonly icon: IconName }[] = [
+/** A card's two spans on the bento grid (spec 0068, AC-6808), each a picture of its shape. */
+const SIZES: readonly { readonly id: 'small' | 'wide'; readonly icon: IconName }[] = [
   { id: 'small', icon: 'square' },
   { id: 'wide', icon: 'rectangle-horizontal' },
-  { id: 'large', icon: 'grid-2x2' },
 ];
 
 /** Props for SizePicker. */
@@ -100,20 +99,20 @@ export interface SizePickerProps {
 }
 
 /**
- * How big a block's tile is on a grid page (AC-6103): three tiles to pick from by sight, one tab stop, the arrows
- * move and pick. A list page draws every block as a row whatever its size.
+ * How wide a card is on a grid page (spec 0068, AC-6808): one column or two, picked by sight, one tab stop, the
+ * arrows move and pick. A card stored with spec 0061's `large` reads as two. Under it, the rule the page keeps: a
+ * card widens to close a gap, so the grid has no holes; a stacked page draws every card in one column.
  */
 export function SizePicker({ value, onChange }: SizePickerProps) {
   const words = {
     small: [strings.sizeSmall, strings.sizeSmallText],
     wide: [strings.sizeWide, strings.sizeWideText],
-    large: [strings.sizeLarge, strings.sizeLargeText],
   } as const;
   return (
     <TileGrid
       variant="choice"
       label={strings.size}
-      value={value}
+      value={value === 'large' ? 'wide' : value}
       tiles={SIZES.map((size) => ({
         id: size.id,
         name: words[size.id][0],

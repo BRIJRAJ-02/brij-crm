@@ -242,7 +242,7 @@ function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: 
   if (schedule.pages.length === 0) {
     return (
       <Card title={scheduleStrings.usedByLabel}>
-        <EmptyState layout="row" icon="link" title={scheduleStrings.usedByNone} />
+        <EmptyState layout="row" title={scheduleStrings.usedByNone} />
       </Card>
     );
   }

@@ -10,7 +10,10 @@ export const strings = {
   workspace: 'Workspace',
   people: 'People',
   scheduling: 'Scheduling',
+  business: 'Business',
   data: 'Data',
+  /** Settings › Business's first entry: the business profile and its places (spec 0065). */
+  places: 'Places',
   preferences: 'Preferences',
   calendars: 'Calendars',
   availability: 'Availability',

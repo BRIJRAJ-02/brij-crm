@@ -241,6 +241,7 @@ const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
   nav: { lists: ['memberIds'] },
   calendars: { lists: ['memberIds'] },
   time_off: {},
+  visits: { lists: ['placeIds'] },
   bookings: {},
   automations: {},
   forms: {},

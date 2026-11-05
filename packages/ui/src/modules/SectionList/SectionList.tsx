@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
@@ -13,10 +14,18 @@ export interface SectionListSection {
    * section with none, which then draws no header unless it moves or has actions.
    */
   readonly title?: string;
+  /** A line under its title: what it holds ("5 items", a menu section's count). */
+  readonly description?: string;
   /** What it holds: its rows, a LinkList (`density="compact" placement="card"`). */
   readonly content: ReactNode;
   /** At its header's end, after its grip: the section's menu (Move up and Move down, for a pointer that can't drag). */
   readonly actions?: ReactNode;
+  /**
+   * Folds the section to its header (a menu's section, after checklabs' category chevron): with `onExpandedChange`,
+   * a chevron at the header's end opens and closes what it holds, and a folded section draws its header alone.
+   */
+  readonly isExpanded?: boolean;
+  readonly onExpandedChange?: (isExpanded: boolean) => void;
 }
 
 /** Props for SectionList. */
@@ -50,9 +59,9 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
   if (onMove === undefined || sections.length < 2) {
     return (
       <ol className={styles.root} aria-label={label}>
-        {sections.map((section) => (
+        {sections.map((section, index) => (
           <li key={section.id} className={styles.item}>
-            <SectionCard section={section} />
+            <SectionCard section={section} name={nameAt(sections, index)} />
           </li>
         ))}
       </ol>
@@ -72,6 +81,7 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
           <MovableSection
             key={section.id}
             section={section}
+            name={nameAt(sections, index)}
             gripLabel={section.title === undefined ? strings.moveNumbered(index + 1) : strings.move(section.title)}
           />
         ))}
@@ -80,31 +90,75 @@ export function SectionList({ label, sections, onMove, emptyState }: SectionList
   );
 }
 
-/** One section's Card: its title, then its grip and its actions at the header's end, then what it holds. */
-function SectionCard({ section, grip }: { readonly section: SectionListSection; readonly grip?: ReactNode }) {
+/**
+ * One section's Card: its title, then its grip, its actions and (folding) its chevron at the header's end, then what
+ * it holds, unless it is folded.
+ */
+function SectionCard({
+  section,
+  name,
+  grip,
+}: {
+  readonly section: SectionListSection;
+  /** Its name in its chevron's: its title, else its place ("Section 2"). */
+  readonly name: string;
+  readonly grip?: ReactNode;
+}) {
+  const bodyId = useId();
+  const { onExpandedChange } = section;
+  const isFolding = onExpandedChange !== undefined;
+  const isExpanded = !isFolding || section.isExpanded !== false;
+  const fold = isFolding ? (
+    <Button
+      variant="ghost"
+      icon={isExpanded ? 'chevron-down' : 'chevron-right'}
+      label={strings.fold(name)}
+      isExpanded={isExpanded}
+      {...(isExpanded ? { controls: bodyId } : {})}
+      onPress={() => onExpandedChange(!isExpanded)}
+    />
+  ) : undefined;
   const actions =
-    grip === undefined && section.actions === undefined ? undefined : (
+    grip === undefined && section.actions === undefined && fold === undefined ? undefined : (
       <>
         {grip}
         {section.actions}
+        {fold}
       </>
     );
   return (
     <Card
       {...(section.title === undefined ? {} : { title: section.title })}
+      {...(section.description === undefined ? {} : { description: section.description })}
       {...(actions === undefined ? {} : { actions })}
     >
-      {section.content}
+      {isExpanded ? (
+        isFolding ? (
+          <div id={bodyId} className={styles.body}>
+            {section.content}
+          </div>
+        ) : (
+          section.content
+        )
+      ) : undefined}
     </Card>
   );
 }
 
 /** A section that moves: its item in the sorting list, lifted while it moves, with its grip in its header. */
-function MovableSection({ section, gripLabel }: { readonly section: SectionListSection; readonly gripLabel: string }) {
+function MovableSection({
+  section,
+  name,
+  gripLabel,
+}: {
+  readonly section: SectionListSection;
+  readonly name: string;
+  readonly gripLabel: string;
+}) {
   const { bind, grip } = useSortableItem(section.id);
   return (
     <li ref={bind} className={styles.item}>
-      <SectionCard section={section} grip={<DragHandle label={gripLabel} drag={grip} />} />
+      <SectionCard section={section} name={name} grip={<DragHandle label={gripLabel} drag={grip} />} />
     </li>
   );
 }

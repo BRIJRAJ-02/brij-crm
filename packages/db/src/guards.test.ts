@@ -93,6 +93,10 @@ describe('every tenant table', () => {
             // form takes an address one held while it still finds that one.
             row.index === 'form_public_keys_key' ||
             row.index === 'booking_pages_public_key' ||
+            // A place's reservation page and guest menu keys find it before the workspace is known (spec 0065, H1
+            // and H3), so they are unique everywhere.
+            row.index === 'places_public_key' ||
+            row.index === 'places_menu_key' ||
             // `/<handle>/<slug>` and a profile's pages are found before the workspace is known (22 Oct 2026), read
             // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
             row.index === 'booking_pages_owner_slug' ||
@@ -167,9 +171,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
+      // The business branch of the handle lookup (spec 0066, B4, migration 0179).
+      { name: 'crm_business_handle_owner', owner: 'crm_handle' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
       // The calendar health sweep's read across workspaces, ids and counts only (spec 0037, migration 0134).
       { name: 'crm_calendar_health_candidates', owner: 'crm_sweep' },
+      { name: 'crm_claim_business_handle', owner: 'crm_handle' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       // A booking made from a link page (spec 0061, AC-6119).
@@ -188,6 +195,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       // The member told of someone else's change to their scheduling (spec 0037, migration 0122).
       { name: 'crm_enqueue_scheduling_notice', owner: 'crm_queue' },
+      // A reservation's guest email (spec 0066 B7 lite, migration 0177).
+      { name: 'crm_enqueue_visit_mail', owner: 'crm_queue' },
       // One webhook delivery's next try (spec 0064, slice 3).
       { name: 'crm_enqueue_webhook_delivery', owner: 'crm_queue' },
       { name: 'crm_ensure_public_profile', owner: 'crm_handle' },
@@ -204,6 +213,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
       { name: 'crm_link_page_rows', owner: 'crm_handle' },
       { name: 'crm_link_page_state', owner: 'crm_handle' },
+      // A published business listed for search engines, or not (spec 0066, AC-6644).
+      { name: 'crm_list_business', owner: 'crm_handle' },
+      // The workspace and place a guest menu's key names (spec 0065, H1, migration 0175).
+      { name: 'crm_menu_by_key', owner: 'crm_menu_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -259,16 +272,21 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      // The operator console's one write (spec 0065, AC-6502, migration 0174).
+      { name: 'crm_set_early_access', owner: 'crm_operator' },
       // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
+      { name: 'crm_sitemap_businesses', owner: 'crm_handle' },
       // The handles search engines may list (spec 0061, AC-6123).
       { name: 'crm_sitemap_handles', owner: 'crm_handle' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
       { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
+      // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0177).
+      { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
@@ -299,8 +317,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_address', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_business_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_calendar_health_candidates', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises the unique violation a taken address is refused with, and the 20 handle cap.
+      { name: 'crm_claim_business_handle', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_count_item_press', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -320,6 +341,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_scheduling_notice', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_visit_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_webhook_delivery', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it tries a handle, then the next, and raises PROFILE_HANDLE_BASE.
       { name: 'crm_ensure_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -334,6 +356,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_link_page_rows', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_link_page_state', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it checks the workspace and the handle before it writes the listing.
+      { name: 'crm_list_business', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_menu_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -394,16 +419,19 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_set_early_access', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership before it writes, as the one below does.
       { name: 'crm_set_public_profile_live', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes.
       { name: 'crm_show_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_sitemap_businesses', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_sitemap_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers how many rows past the year it removed.
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many held handles it freed.
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_table_place_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_take_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -414,7 +442,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_menu_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep, crm_table_lookup and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -427,19 +455,22 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
+      'crm_menu_lookup',
       'crm_operator',
       'crm_purge',
       'crm_relay',
       'crm_search',
       'crm_sweep',
+      'crm_table_lookup',
     ]);
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
-  // inherits it), or the worker alone. Listing workspaces reaches across them, so it is the worker's (spec 0008);
-  // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user. The
-  // prune is the worker's alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace
-  // listing (spec 0008, milestone 3).
+  // inherits it), the worker alone, or definers alone (a helper only other definer functions call, never the app or
+  // the worker). Listing workspaces reaches across them, so it is the worker's (spec 0008); the app keeps it too
+  // until milestone 3's contract migration, once every worker runs on crm_worker_user. The prune is the worker's
+  // alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace listing (spec 0008,
+  // milestone 3).
   it.each([
     [
       'crm_search',
@@ -464,6 +495,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_scheduling_notice',
         'crm_enqueue_webhook_delivery',
         'crm_enqueue_automation',
+        'crm_enqueue_visit_mail',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -474,8 +506,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_scheduling_notice(uuid, uuid)',
         'crm_enqueue_webhook_delivery(uuid)',
         'crm_enqueue_automation()',
+        'crm_enqueue_visit_mail(uuid, text)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
@@ -507,6 +540,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_form_by_key(text)', 'crm_form_owner_forms(uuid, uuid, uuid[])'],
       ['app', 'app'],
     ],
+    ['crm_menu_lookup', ['crm_menu_by_key'], ['crm_menu_by_key(text)'], ['app']],
+    ['crm_table_lookup', ['crm_table_place_by_key'], ['crm_table_place_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
       ['crm_invitation_by_token', 'crm_invitation_open_for'],
@@ -528,7 +563,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_profile_pages',
         'crm_booking_owner_slugs',
         'crm_booking_owner_pages',
-        // Whether a person is an active member of a workspace: executable by crm_handle alone, so no signature below.
+        // Whether a person is an active member of a workspace: executable by crm_handle alone (`definers` below).
         'crm_workspace_member',
       ],
       [
@@ -538,8 +573,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_booking_profile_pages(uuid, uuid, smallint, uuid, text, integer)',
         'crm_booking_owner_slugs(uuid, uuid, text)',
         'crm_booking_owner_pages(uuid, uuid, uuid[])',
+        'crm_workspace_member(uuid, uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'definers'],
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
@@ -558,6 +594,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_daily',
         'crm_operator_pages',
         'crm_operator_page_days',
+        'crm_set_early_access',
       ],
       [
         'crm_operator_workspaces(uuid[])',
@@ -566,8 +603,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_daily(date, date)',
         'crm_operator_pages(date, date, uuid, uuid)',
         'crm_operator_page_days(date, date, uuid, uuid)',
+        'crm_set_early_access(uuid, text, boolean)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_handle',
@@ -580,7 +618,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_social_links',
         'crm_social_links_of',
         // The link page's (migration 0098); the last two, its data check and its packing, run only inside the
-        // others and no one else may call them, so they have no signature below.
+        // others and no one else may call them (`definers` below).
         'crm_profile_items',
         'crm_profile_items_archived',
         'crm_profile_items_public',
@@ -621,12 +659,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_save_profile_accent',
         'crm_save_profile_image',
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
-        // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
+        // above that take a handle, as crm_pack_profile_items is (`definers` below).
         'crm_make_handle_room',
         // The link pages carrying a form, for a webhook's link_page.signup (spec 0064, slice 3).
         'crm_webhook_form_handles',
         // Spec 0061 (migration 0147). The kind cap and the picture ids a block names run only inside the others,
-        // as the pack does, so they have no signature below.
+        // as the pack does (`definers` below).
         'crm_profile_kind_cap',
         'crm_profile_item_images',
         'crm_count_profile_booking',
@@ -641,8 +679,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_handles',
         'crm_profile_identity',
         'crm_save_profile_identity',
-        // Publish for link pages (spec 0068, migration 0172). The rows reader runs only inside the others, so it has
-        // no signature below.
+        // Publish for link pages (spec 0068, migration 0172). The rows reader runs only inside the others
+        // (`definers` below).
         'crm_link_page_rows',
         'crm_link_page_state',
         'crm_publish_link_page',
@@ -650,6 +688,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_discard_link_draft',
         'crm_profile_identity_public',
         'crm_profile_look_public',
+        // The business page (spec 0066, B4, migration 0179): the business branch of the handle lookup, its claim, its
+        // listing for search engines and the sitemap's read of the listings.
+        'crm_business_handle_owner',
+        'crm_claim_business_handle',
+        'crm_list_business',
+        'crm_sitemap_businesses',
+        // Bento cards (spec 0068, migration 0182): the one line rule the block check reads, run only inside it.
+        'crm_profile_text_ok',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -704,10 +750,21 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_discard_link_draft(uuid, uuid)',
         'crm_profile_identity_public(uuid, uuid)',
         'crm_profile_look_public(uuid, uuid)',
+        'crm_business_handle_owner(text)',
+        'crm_claim_business_handle(uuid, text)',
+        'crm_list_business(uuid, text, text[], boolean)',
+        'crm_sitemap_businesses(text, integer)',
+        // The six that run only inside the others: crm_handle's own to call, never the app's or the worker's.
+        'crm_check_profile_item(text, jsonb, uuid, uuid, uuid)',
+        'crm_pack_profile_items(uuid, uuid)',
+        'crm_make_handle_room(uuid)',
+        'crm_profile_kind_cap(text)',
+        'crm_profile_item_images(jsonb)',
+        'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
-      // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 52 }, () => 'app'),
+      // One per signature: the first 56 crm_app's to call and nobody else's, the last six crm_handle's alone.
+      // Counted rather than written out, since a signature added without the count moved read as unreachable.
+      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 6 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -728,17 +785,27 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         [name, fns],
       );
       expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
-      // The app (or the worker alone) can call each, and nobody else by default.
+      // Every function listed has its signature, and every signature its caller, so none goes unchecked.
+      expect(callers).toHaveLength(signatures.length);
+      expect([...new Set(signatures.map((signature) => signature.slice(0, signature.indexOf('('))))].sort()).toEqual(
+        [...fns].sort(),
+      );
+      // The app (or the worker alone, or definers alone) can call each, and nobody else. Each row is read by its own
+      // signature; a null `proacl` is Postgres's default grant, EXECUTE to PUBLIC, which aclexplode(NULL) would hide.
       for (const [index, signature] of signatures.entries()) {
         const grants = await owner.query<{ app: boolean; worker: boolean; anyone: boolean }>(
           `
-        select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
-          has_function_privilege('crm_worker', $1, 'EXECUTE') as worker,
-          exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
+        select has_function_privilege('crm_app', p.oid, 'EXECUTE') as app,
+          has_function_privilege('crm_worker', p.oid, 'EXECUTE') as worker,
+          (p.proacl is null or exists (select 1 from aclexplode(p.proacl) where grantee = 0)) as anyone
+        from pg_proc p where p.oid = $1::regprocedure
       `,
-          [signature, fns[index]],
+          [signature],
         );
-        expect(grants.rows, signature).toEqual([{ app: callers[index] === 'app', worker: true, anyone: false }]);
+        const caller = callers[index];
+        expect(grants.rows, signature).toEqual([
+          { app: caller === 'app', worker: caller !== 'definers', anyone: false },
+        ]);
       }
       // And an app login can't become it.
       await expect(
@@ -812,12 +879,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       forms: ['id', 'workspace_id'],
       members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
       records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
-      workspaces: ['created_at', 'deleted_at', 'id', 'name', 'slug'],
+      workspaces: ['created_at', 'deleted_at', 'early_access', 'id', 'name', 'slug'],
     };
     expect(columns.rows).toEqual(
-      Object.entries(granted)
-        .flatMap(([table, names]) => names.map((name) => ({ column: `${table}.${name}`, privilege: 'SELECT' })))
-        .sort((a, b) => (a.column < b.column ? -1 : a.column > b.column ? 1 : 0)),
+      [
+        ...Object.entries(granted).flatMap(([table, names]) =>
+          names.map((name) => ({ column: `${table}.${name}`, privilege: 'SELECT' })),
+        ),
+        // The console's one write (spec 0065, AC-6502): a workspace's early access flags, and nothing else.
+        { column: 'workspaces.early_access', privilege: 'UPDATE' },
+      ].sort((a, b) => (a.column < b.column ? -1 : a.column > b.column ? 1 : a.privilege < b.privilege ? -1 : 1)),
     );
     // Not a value, a note's body, a task's text, an answer or a visitor: Postgres refuses the column itself.
     for (const [table, column] of [
@@ -1360,6 +1431,307 @@ describe('isolation', () => {
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it("reads none of another workspace's apps, places or tables (spec 0065)", async () => {
+    const a = await workspaceWithMember('hosp-iso-a');
+    const b = await workspaceWithMember('hosp-iso-b');
+    for (const [index, w] of [a, b].entries()) {
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        await tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${w.workspaceId}, 'menu')`);
+        const place = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${`pubkey${String(index)}aaaaaaaaa`},
+              ${`menkey${String(index)}aaaaaaaaa`}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into resources (workspace_id, place_id, kind, label, min_capacity, max_capacity, position)
+            values (${w.workspaceId}, ${place}, 'table', 'T1', 2, 4, 0)`,
+        );
+      });
+    }
+    for (const table of ['workspace_apps', 'places', 'resources']) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    // A table's seats stay between 1 and 30, the fewest never above the most.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update resources set min_capacity = 6, max_capacity = 4`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it("reads none of another workspace's menus, and finds a guest menu by its key only while Menu is installed (spec 0065, H1)", async () => {
+    const a = await workspaceWithMember('menu-iso-a');
+    const b = await workspaceWithMember('menu-iso-b');
+    const keys: string[] = [];
+    for (const [index, w] of [a, b].entries()) {
+      const key = `menukey${String(index)}aaaaaaaa`;
+      keys.push(key);
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        await tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${w.workspaceId}, 'menu')`);
+        const place = randomUUID();
+        const menu = randomUUID();
+        const section = randomUUID();
+        const item = randomUUID();
+        const group = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${`pubmen${String(index)}aaaaaaaaa`},
+              ${key}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menus (workspace_id, id, name, position) values (${w.workspaceId}, ${menu}, 'Dinner', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_places (workspace_id, menu_id, place_id) values (${w.workspaceId}, ${menu}, ${place})`,
+        );
+        await tx.execute(
+          sql`insert into menu_sections (workspace_id, id, menu_id, name, position) values (${w.workspaceId}, ${section}, ${menu}, 'Mains', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_items (workspace_id, id, name, price_minor) values (${w.workspaceId}, ${item}, 'Soup', 650)`,
+        );
+        await tx.execute(
+          sql`insert into menu_placements (workspace_id, section_id, item_id, position) values (${w.workspaceId}, ${section}, ${item}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_item_sizes (workspace_id, item_id, name, price_minor, position) values (${w.workspaceId}, ${item}, 'Bowl', 800, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_option_groups (workspace_id, id, name, rule) values (${w.workspaceId}, ${group}, 'Bread', 'one')`,
+        );
+        await tx.execute(
+          sql`insert into menu_options (workspace_id, group_id, name, position) values (${w.workspaceId}, ${group}, 'Sourdough', 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_item_option_groups (workspace_id, item_id, group_id, position) values (${w.workspaceId}, ${item}, ${group}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into menu_photos (workspace_id, large_path, small_path, type, version) values (${w.workspaceId}, 'a', 'b', 'image/webp', '0123456789ab')`,
+        );
+        await tx.execute(
+          sql`insert into menu_versions (workspace_id, place_id, version, snapshot) values (${w.workspaceId}, ${place}, 1, '{}'::jsonb)`,
+        );
+        await tx.execute(sql`insert into menu_drafts (workspace_id, changes) values (${w.workspaceId}, 1)`);
+      });
+    }
+    for (const table of [
+      'menus',
+      'menu_places',
+      'menu_sections',
+      'menu_items',
+      'menu_placements',
+      'menu_item_sizes',
+      'menu_option_groups',
+      'menu_options',
+      'menu_item_option_groups',
+      'menu_photos',
+      'menu_versions',
+      'menu_drafts',
+    ]) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    const lookup = (key: string) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from crm_menu_by_key(${key})`),
+      );
+    // No early access yet: the key names nothing.
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
+    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([{ workspace_id: a.workspaceId }]);
+    // Removing Menu hides its guest page at once (AC-6504).
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'menu'`),
+    );
+    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
+    expect((await lookup('no-such-key-here')).rows).toEqual([]);
+    // A price is never below zero, and an item's diet marks come from the closed list.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update menu_items set price_minor = -1`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update menu_items set diet = '{spicy_9}'`)),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it('finds a reservation page by its place key only while the workspace is live with business apps, saying whether Table seating is installed (spec 0066 B7)', async () => {
+    const a = await workspaceWithMember('table-door-a');
+    const key = `tblkey${randomUUID().slice(0, 10)}`;
+    const place = randomUUID();
+    await db.withWorkspace(a.workspaceId, async (tx) => {
+      await tx.execute(
+        sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+          values (${a.workspaceId}, ${place}, 'Main', 'GB', 'Europe/London', 'en-GB', ${key}, ${`mnu${key.slice(3)}`}, 0)`,
+      );
+    });
+    const lookup = (each: string) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ workspace_id: string; place_id: string; installed: boolean }>(
+          sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${each})`,
+        ),
+      );
+    // No early access yet: the key names nothing.
+    expect((await lookup(key)).rows).toEqual([]);
+    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: false }]);
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${a.workspaceId}, 'table_seating')`),
+    );
+    expect((await lookup(key)).rows[0]?.installed).toBe(true);
+    // Removing the app keeps the place found (a guest's manage link), but not installed.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'table_seating'`),
+    );
+    expect((await lookup(key)).rows[0]?.installed).toBe(false);
+    await owner.query(`update workspaces set deleted_at = now() where id = $1`, [a.workspaceId]);
+    expect((await lookup(key)).rows).toEqual([]);
+    expect((await lookup('no-such-key-here')).rows).toEqual([]);
+  });
+
+  it("reads none of another workspace's business page, photos or place slugs, and keeps business handles apart (spec 0066, B4)", async () => {
+    const a = await workspaceWithMember('biz-iso-a');
+    const b = await workspaceWithMember('biz-iso-b');
+    const tag = randomUUID().slice(0, 8);
+    for (const [index, w] of [a, b].entries()) {
+      await db.withWorkspace(w.workspaceId, async (tx) => {
+        const place = randomUUID();
+        const photo = randomUUID();
+        await tx.execute(
+          sql`insert into places (workspace_id, id, name, country, time_zone, locale, public_key, menu_key, position)
+            values (${w.workspaceId}, ${place}, 'Main', 'IN', 'Asia/Kolkata', 'en-IN', ${`bp${String(index)}${tag}aaaaa`},
+              ${`bm${String(index)}${tag}aaaaa`}, 0)`,
+        );
+        await tx.execute(
+          sql`insert into place_slugs (workspace_id, slug, place_id) values (${w.workspaceId}, 'main', ${place})`,
+        );
+        await tx.execute(
+          sql`insert into place_pages (workspace_id, place_id, slug) values (${w.workspaceId}, ${place}, 'main')`,
+        );
+        await tx.execute(
+          sql`insert into business_photos (workspace_id, id, path, type, bytes, width, height)
+            values (${w.workspaceId}, ${photo}, ${`business-page/${w.workspaceId}/${photo}.jpg`}, 'image/jpeg', 10, 4, 3)`,
+        );
+        const claimed = await tx.execute<{ handle: string }>(
+          sql`select crm_claim_business_handle(${w.workspaceId}::uuid, ${`biz-${String(index)}-${tag}`}) as handle`,
+        );
+        await tx.execute(
+          sql`insert into business_pages (workspace_id, handle) values (${w.workspaceId}, ${claimed.rows[0]?.handle ?? null})`,
+        );
+      });
+    }
+    for (const table of ['business_pages', 'business_photos', 'place_pages', 'place_slugs']) {
+      const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${sql.identifier(table)}`),
+      );
+      expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    }
+    // A picture's path is always its own workspace's folder and its own id.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into business_photos (workspace_id, id, path, type, bytes, width, height)
+            values (${a.workspaceId}, ${randomUUID()}, ${`business-page/${b.workspaceId}/x.jpg`}, 'image/jpeg', 10, 4, 3)`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    // A reserved second segment is never a place's slug.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into place_slugs (workspace_id, slug, place_id) select workspace_id, 'reserve', place_id from place_pages`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    // Another workspace's business handle, or one claimed for another workspace, is refused.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`select crm_claim_business_handle(${a.workspaceId}::uuid, ${`biz-1-${tag}`})`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23505' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`select crm_claim_business_handle(${b.workspaceId}::uuid, ${`biz-x-${tag}`})`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    // Its own handle again is its own; the lookup names the business's workspace and never a person's handle.
+    const again = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ handle: string }>(
+        sql`select crm_claim_business_handle(${a.workspaceId}::uuid, ${`biz-0-${tag}`}) as handle`,
+      ),
+    );
+    expect(again.rows).toEqual([{ handle: `biz-0-${tag}` }]);
+    const owner = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ workspace_id: string }>(
+        sql`select workspace_id::text from crm_business_handle_owner(${`biz-0-${tag}`})`,
+      ),
+    );
+    expect(owner.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    const person = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute(sql`select user_id from crm_handle_owner(${`biz-0-${tag}`})`),
+    );
+    expect(person.rows).toEqual([]);
+    // Listing is for the transaction's own workspace and its own handle only; the sitemap reads only listings.
+    const listedElsewhere = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ listed: boolean }>(
+        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-1-${tag}`}, '{}'::text[], true) as listed`,
+      ),
+    );
+    expect(listedElsewhere.rows).toEqual([{ listed: false }]);
+    const listed = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ listed: boolean }>(
+        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-0-${tag}`}, '{main}'::text[], true) as listed`,
+      ),
+    );
+    expect(listed.rows).toEqual([{ listed: true }]);
+    const sitemap = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ handle: string; places: string[] }>(
+        sql`select handle, places from crm_sitemap_businesses(null, 50000)`,
+      ),
+    );
+    expect(sitemap.rows).toContainEqual({ handle: `biz-0-${tag}`, places: ['main'] });
+    expect(sitemap.rows.map((row) => row.handle)).not.toContain(`biz-1-${tag}`);
+    // The app reads the listings only through those definers.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`select * from auth.business_listings`)),
+    ).rejects.toMatchObject({
+      cause: { code: '42501' },
+    });
+  });
+
+  it('switches early access through crm_set_early_access only, keeping the closed list (spec 0065, AC-6502)', async () => {
+    const a = await workspaceWithMember('early-a');
+    const call = (flag: string, on: boolean) =>
+      db.withWorkspace(randomUUID(), (tx) =>
+        tx.execute<{ before: string[]; after: string[] }>(
+          sql`select before, after from crm_set_early_access(${a.workspaceId}::uuid, ${flag}, ${on})`,
+        ),
+      );
+    expect((await call('business_apps', true)).rows).toEqual([{ before: [], after: ['business_apps'] }]);
+    expect((await call('business_apps', true)).rows).toEqual([{ before: ['business_apps'], after: ['business_apps'] }]);
+    expect((await call('billing', true)).rows).toEqual([]);
+    expect((await call('business_apps', false)).rows).toEqual([{ before: ['business_apps'], after: [] }]);
+    // The app may not write the column itself.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update workspaces set early_access = '{business_apps}' where id = ${a.workspaceId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+  });
+
+  it('lets the app update every workspaces column but early_access, so a new column needs its grant (spec 0065)', async () => {
+    const columns = await owner.query<{ name: string; ok: boolean }>(`
+      select a.attname as name, has_column_privilege('crm_app', 'public.workspaces', a.attname, 'UPDATE') as ok
+      from pg_attribute a
+      where a.attrelid = 'public.workspaces'::regclass and a.attnum > 0 and not a.attisdropped
+      order by a.attnum
+    `);
+    expect(columns.rows.filter((row) => row.ok === (row.name === 'early_access')).map((row) => row.name)).toEqual([]);
   });
 
   it('refuses a row written into another workspace', async () => {
@@ -2234,6 +2606,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
   const AUTH_TABLES = [
     'account',
     'activity_day',
+    // The business pages listed for search engines (spec 0066, AC-6644, migration 0179).
+    'business_listings',
     // A guest calendar connect's single use hand off (4 Nov 2026, migration 0168).
     'guest_connect_handoffs',
     'known_device',
@@ -2280,6 +2654,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // And a link page's block, which may name a booking page by its workspace and id (migration 0098): never read
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
+      // A business listed for search engines names its workspace (spec 0066, migration 0179).
+      'business_listings',
       // A link page's bookings, pictures and views by fact (spec 0061, migration 0147).
       'profile_booking_days',
       'profile_images',
@@ -2429,6 +2805,13 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by (table_name || ' ' || privilege_type) collate "C"
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
+      // The business pages listed for search engines (spec 0066, migration 0179), through crm_handle's functions only.
+      'business_listings DELETE',
+      // And the purge's, taking a purged workspace's business out of the sitemap (migration 0179).
+      'business_listings DELETE',
+      'business_listings INSERT',
+      'business_listings SELECT',
+      'business_listings UPDATE',
       // A guest connect's hand off (migration 0168): kept, then taken once; never changed.
       'guest_connect_handoffs DELETE',
       'guest_connect_handoffs INSERT',
@@ -2499,10 +2882,16 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(columns.rows.map((row) => row.grant)).toEqual([
+      // A purged workspace's business listing (migration 0179): which is its.
+      'auth.business_listings.workspace_id SELECT',
       // A purged workspace's link pages and handles (migration 0127): which are its, and its handles let go.
       'auth.profile_items.workspace_id SELECT',
       'auth.profile_view_days.workspace_id SELECT',
       'auth.profile_views.workspace_id SELECT',
+      // Its business handles let go into the hold (migration 0179): a member's kind, stamped released.
+      'auth.public_handles.owner_kind SELECT',
+      'auth.public_handles.owner_kind UPDATE',
+      'auth.public_handles.released_at UPDATE',
       'auth.public_handles.user_id SELECT',
       'auth.public_handles.user_id UPDATE',
       'auth.public_handles.workspace_id SELECT',

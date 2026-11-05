@@ -40,6 +40,7 @@ import type { LinkPageImageProps } from './LinkPageImage.tsx';
 import type { LinkPageMediaProps } from './LinkPageMedia.tsx';
 import type { LinkPageNoticeProps } from './LinkPageNotice.tsx';
 import type { LinkPageTimesProps } from './LinkPageTimes.tsx';
+import type { LinkPageBentoProps, LinkPageCardProps } from './LinkPageCards.tsx';
 import { strings } from './strings.ts';
 
 /** A social network whose own mark a link shows (ProviderMark's social marks). */
@@ -124,6 +125,7 @@ export type LinkPageBlock =
       readonly author: string;
       /** What they do, under their name, when the owner gave one. */
       readonly role?: string;
+      readonly size?: LinkPageTileSize;
     }
   | {
       readonly kind: 'text';
@@ -132,6 +134,7 @@ export type LinkPageBlock =
       readonly title?: string;
       /** The words themselves, drawn as text with their line breaks kept. Never markup: nothing in it is parsed. */
       readonly body: string;
+      readonly size?: LinkPageTileSize;
     }
   | {
       readonly kind: 'faq';
@@ -140,6 +143,7 @@ export type LinkPageBlock =
       readonly title?: string;
       /** The questions, in the owner's order, each one a fold that starts closed. All drawn as text. */
       readonly items: readonly { readonly question: string; readonly answer: string }[];
+      readonly size?: LinkPageTileSize;
     }
   | {
       readonly kind: 'form';
@@ -150,6 +154,7 @@ export type LinkPageBlock =
       readonly href: string;
       /** The line under the title, when the page has one to say. */
       readonly line?: string;
+      readonly size?: LinkPageTileSize;
     }
   | {
       readonly kind: 'page';
@@ -166,6 +171,7 @@ export type LinkPageBlock =
       readonly kind: 'socials';
       readonly id: string;
       readonly links: readonly SocialLinkItem[];
+      readonly size?: LinkPageTileSize;
     }
   | {
       /**
@@ -210,6 +216,7 @@ export type LinkPageBlock =
       /** The length the chips are for, in minutes. */
       readonly duration: number;
       readonly times?: LinkPageTimes;
+      readonly size?: LinkPageTileSize;
     }
   | {
       /** One line at the very top of the page (spec 0061, AC-6112), with an optional link, closed for the visit. */
@@ -217,6 +224,24 @@ export type LinkPageBlock =
       readonly id: string;
       readonly text: string;
       readonly href?: string;
+    }
+  | {
+      /**
+       * A place's guest menu (spec 0065, AC-6528): a row that opens it on our own origin (`/m/<key>`), with its first
+       * few dishes and their prices under the title.
+       */
+      readonly kind: 'menu';
+      readonly id: string;
+      readonly title: string;
+      readonly href: string;
+      readonly dishes: readonly { readonly name: string; readonly price?: string }[];
+    }
+  | {
+      /** A place's reservation page (spec 0065, AC-6528): a row that opens it on our own origin (`/r/<key>`). */
+      readonly kind: 'reserve';
+      readonly id: string;
+      readonly title: string;
+      readonly href: string;
     }
   | {
       readonly kind: 'contact';
@@ -230,6 +255,96 @@ export type LinkPageBlock =
        * works with no script and from a QR code, and a phone offers to add it to its contacts.
        */
       readonly href: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /**
+       * The profile card (spec 0068, AC-6808): the page's own face and name, its one line (the bio when it has none),
+       * and Book (the page's `book`, else its first booking page) with the page's Share beside it.
+       */
+      readonly kind: 'profile';
+      readonly id: string;
+      readonly line?: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** "Available for work" (AC-6808): a green dot while `open`, a quiet one while `away`. */
+      readonly kind: 'status';
+      readonly id: string;
+      readonly text: string;
+      readonly state: 'open' | 'away';
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /**
+       * A short audio intro (AC-6808): the recording on our own origin, its title and the waveform drawn in the
+       * owner's browser (48 bars, each `0` to `v`). Nothing loads but its metadata until Play.
+       */
+      readonly kind: 'audio';
+      readonly id: string;
+      readonly src: string;
+      readonly title?: string;
+      readonly wave?: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** An experience timeline (AC-6808): when, what and where, in the owner's order. */
+      readonly kind: 'timeline';
+      readonly id: string;
+      readonly title?: string;
+      readonly items: readonly { readonly when: string; readonly title: string; readonly place?: string }[];
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** Client logos (AC-6808), drifting sideways, each named by its alt text. */
+      readonly kind: 'logos';
+      readonly id: string;
+      readonly title?: string;
+      readonly images: readonly (LinkPagePicture & { readonly alt: string })[];
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** Work cards (AC-6808): a picture, a title and two lines, each opening its link in a new tab when it has one. */
+      readonly kind: 'work';
+      readonly id: string;
+      readonly title?: string;
+      readonly items: readonly {
+        readonly image?: LinkPagePicture;
+        readonly title: string;
+        readonly body?: string;
+        readonly href?: string;
+      }[];
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** How I work (AC-6808): numbered steps, one shown at a time, switched by a segmented control. */
+      readonly kind: 'steps';
+      readonly id: string;
+      readonly title?: string;
+      readonly items: readonly { readonly title: string; readonly body: string }[];
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** A location (AC-6808): its name, the address and Directions (the map search the server built). */
+      readonly kind: 'location';
+      readonly id: string;
+      readonly title?: string;
+      readonly address: string;
+      readonly directions: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** Next events (AC-6808): the ones still to come by the page's clock, soonest first. */
+      readonly kind: 'events';
+      readonly id: string;
+      readonly title?: string;
+      readonly items: readonly {
+        readonly title: string;
+        readonly at: string;
+        readonly place?: string;
+        readonly href?: string;
+      }[];
+      readonly size?: LinkPageTileSize;
     };
 
 /** The person at the top of the page. */
@@ -494,6 +609,12 @@ function groupsOf(blocks: readonly LinkPageBlock[]) {
   return groups;
 }
 
+/** The page's first booking page as its Book (spec 0068): the words the page says, and the page's own path. */
+function bookOf(blocks: readonly LinkPageBlock[] | undefined) {
+  const page = blocks?.find((block) => block.kind === 'page');
+  return page === undefined || ownPath(page.href) === undefined ? undefined : { label: strings.book, href: page.href };
+}
+
 /** The owner's contact card, wherever it sits in their order: the one the header's Save contact downloads. */
 function contactOf(blocks: readonly LinkPageBlock[] | undefined) {
   return blocks?.find((block) => block.kind === 'contact');
@@ -591,8 +712,35 @@ const TILE_ICONS = {
   image: 'image',
   gallery: 'layers',
   banner: 'megaphone',
+  // Spec 0068's cards (AC-6808), again from marks the registry already holds.
+  profile: 'user-round',
+  status: 'zap',
+  audio: 'mic',
+  timeline: 'activity',
+  logos: 'building',
+  work: 'briefcase',
+  steps: 'list-checks',
+  location: 'map-pin',
+  events: 'calendar-days',
 } as const satisfies Record<
-  'heading' | 'text' | 'faq' | 'testimonial' | 'socials' | 'media' | 'image' | 'gallery' | 'banner',
+  | 'heading'
+  | 'text'
+  | 'faq'
+  | 'testimonial'
+  | 'socials'
+  | 'media'
+  | 'image'
+  | 'gallery'
+  | 'banner'
+  | 'profile'
+  | 'status'
+  | 'audio'
+  | 'timeline'
+  | 'logos'
+  | 'work'
+  | 'steps'
+  | 'location'
+  | 'events',
   IconName
 >;
 
@@ -624,6 +772,14 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
     return (
       <span className={styles.tile} data-tile="page">
         <Icon name="clipboard-list" />
+      </span>
+    );
+  }
+  // A place's menu and its reservation page (spec 0065, AC-6528) take the marks their own pages carry.
+  if (block.kind === 'menu' || block.kind === 'reserve') {
+    return (
+      <span className={styles.tile} data-tile="page">
+        <Icon name={block.kind === 'menu' ? 'utensils' : 'calendar-check'} />
       </span>
     );
   }
@@ -760,18 +916,35 @@ type LinkBlock = Extract<LinkPageBlock, { kind: 'link' }>;
  * the blocks lay out, whether a noticed link was already continued this visit, the way to ask before one opens, and
  * the times blocks' reader. The default is the editor's: a list, every notice taken as read, nothing to ask.
  */
-interface PageActions {
+export interface PageActions {
   readonly layout: 'list' | 'grid';
   readonly isContinued: (id: string) => boolean;
   readonly ask: (block: LinkBlock) => void;
   readonly onTimesNear: ((id: string) => void) | undefined;
+  /** Whether this is the live page, where things enter once and presses count (never a preview or a draft). */
+  readonly isLive: boolean;
+  /** Who the page is, for the profile card (spec 0068, AC-6808): the person, the page's Share and its Book. */
+  readonly person: LinkPagePerson | undefined;
+  readonly share: ReactNode;
+  readonly book: { readonly label: string; readonly href: string } | undefined;
+  /** The face's shape the look draws. */
+  readonly avatar: 'circle' | 'rounded';
 }
 
-const PageActionsContext = createContext<PageActions>({
+/**
+ * What the blocks several levels down read from the page. Exported for the lazy bento chunk (`LinkPageCards`) only;
+ * the library's index never lists it.
+ */
+export const PageActionsContext = createContext<PageActions>({
   layout: 'list',
   isContinued: () => true,
   ask: () => undefined,
   onTimesNear: undefined,
+  isLive: false,
+  person: undefined,
+  share: undefined,
+  book: undefined,
+  avatar: 'circle',
 });
 
 /**
@@ -924,6 +1097,16 @@ const RENDERERS: {
       </a>
     );
   },
+  menu: (block, onPress) => (
+    <PlaceRow
+      block={block}
+      line={block.dishes
+        .map((dish) => (dish.price === undefined ? dish.name : strings.dishPrice(dish.name, dish.price)))
+        .join(' · ')}
+      onPress={onPress}
+    />
+  ),
+  reserve: (block, onPress) => <PlaceRow block={block} onPress={onPress} />,
   page: (block, onPress) => {
     const target = samePath(block.href);
     const body = (
@@ -977,6 +1160,65 @@ const RENDERERS: {
   },
 };
 
+/** A place's menu or reservation page as a row on our own origin, with an optional line under its title. */
+function PlaceRow({
+  block,
+  line,
+  onPress,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'menu' | 'reserve' }>;
+  readonly line?: string;
+  readonly onPress: (() => void) | undefined;
+}) {
+  const target = samePath(block.href);
+  const body = (
+    <>
+      <LinkPageTile block={block} />
+      <BlockText title={block.title} {...(line === undefined || line === '' ? {} : { line })} />
+    </>
+  );
+  if (target === undefined) {
+    return (
+      <span className={styles.block} data-inert="">
+        {body}
+      </span>
+    );
+  }
+  return (
+    <a className={styles.block} href={target} onClick={onPress}>
+      {body}
+      <span className={styles.end}>
+        <Icon name="chevron-right" size="sm" />
+      </span>
+    </a>
+  );
+}
+
+/**
+ * A row's card on its own, without the list item: the bento's cell for a form, a contact card, a place's menu or
+ * reservations, or a link row.
+ */
+export function RowCard({
+  block,
+  onPress,
+}: {
+  readonly block: RowBlock;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  const press = onPress === undefined ? undefined : () => onPress(block.id);
+  return block.kind === 'link'
+    ? RENDERERS.link(block, press)
+    : block.kind === 'form'
+      ? RENDERERS.form(block, press)
+      : block.kind === 'page'
+        ? RENDERERS.page(block, press)
+        : block.kind === 'menu'
+          ? RENDERERS.menu(block, press)
+          : block.kind === 'reserve'
+            ? RENDERERS.reserve(block, press)
+            : RENDERERS.contact(block, press);
+}
+
 /** One block in its row. */
 function BlockRow({
   block,
@@ -994,63 +1236,77 @@ function BlockRow({
           ? RENDERERS.form(block, press)
           : block.kind === 'page'
             ? RENDERERS.page(block, press)
-            : RENDERERS.contact(block, press)}
+            : block.kind === 'menu'
+              ? RENDERERS.menu(block, press)
+              : block.kind === 'reserve'
+                ? RENDERERS.reserve(block, press)
+                : RENDERERS.contact(block, press)}
     </li>
   );
 }
 
-/** A block a row draws: a link, a form, a booking page, or a second contact card. */
-type RowBlock = Extract<LinkPageBlock, { kind: 'link' | 'form' | 'page' | 'contact' }>;
+/** A block a row draws: a link, a form, a booking page, a place's menu or reservations, or a second contact card. */
+export type RowBlock = Extract<LinkPageBlock, { kind: 'link' | 'form' | 'page' | 'menu' | 'reserve' | 'contact' }>;
 
-/** A block a grid page draws as a sized tile (spec 0061, AC-6103): `PROFILE_SIZED_KINDS` in the contracts. */
-type TileBlock = Extract<LinkPageBlock, { kind: 'link' | 'page' | 'media' | 'image' | 'gallery' }>;
+/** Spec 0068's cards (AC-6808), drawn by the lazy `LinkPageCards` chunk in a list as on a grid. */
+export type CardBlock = Extract<
+  LinkPageBlock,
+  { kind: 'profile' | 'status' | 'audio' | 'timeline' | 'logos' | 'work' | 'steps' | 'location' | 'events' }
+>;
+
+/** Whether a block is one of spec 0068's cards. */
+export function isCardBlock(block: LinkPageBlock): block is CardBlock {
+  return (
+    block.kind === 'profile' ||
+    block.kind === 'status' ||
+    block.kind === 'audio' ||
+    block.kind === 'timeline' ||
+    block.kind === 'logos' ||
+    block.kind === 'work' ||
+    block.kind === 'steps' ||
+    block.kind === 'location' ||
+    block.kind === 'events'
+  );
+}
 
 /**
  * A block that is not a row: the person's own words, the questions they answer, something a customer said, and
  * spec 0061's socials row, media, pictures and next times. On a grid page each spans the whole row.
  */
-type ApartBlock = Extract<
+export type ApartBlock = Extract<
   LinkPageBlock,
   { kind: 'text' | 'faq' | 'testimonial' | 'socials' | 'media' | 'image' | 'gallery' | 'times' }
 >;
 
-function isRowBlock(block: LinkPageBlock): block is RowBlock {
-  return block.kind === 'link' || block.kind === 'form' || block.kind === 'page' || block.kind === 'contact';
-}
-
-function isTileBlock(block: LinkPageBlock): block is TileBlock {
+export function isRowBlock(block: LinkPageBlock): block is RowBlock {
   return (
     block.kind === 'link' ||
+    block.kind === 'form' ||
     block.kind === 'page' ||
-    block.kind === 'media' ||
-    block.kind === 'image' ||
-    block.kind === 'gallery'
+    block.kind === 'menu' ||
+    block.kind === 'reserve' ||
+    block.kind === 'contact'
   );
 }
 
-/** A group's children in order: each run of rows, each run of tiles, and each block that stands apart between them. */
+/** A group's children in order: each run of rows, and each block that stands apart between them. */
 type Run =
   | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: RowBlock[] }
-  | { readonly kind: 'tiles'; readonly key: string; readonly isFirst: boolean; readonly tiles: TileBlock[] }
-  | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock };
+  | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock }
+  | { readonly kind: 'card'; readonly key: string; readonly block: CardBlock };
 
 /**
- * The runs, in the owner's order exactly. On a list page the rows run together and everything else stands apart; on
- * a grid page (AC-6103) the sized kinds run together as tiles, a form or contact card is a row of its own across the
- * grid, and every other kind stands apart, so what you see, the reading order and the focus order always match.
+ * A list page's runs, in the owner's order exactly: the rows run together and everything else stands apart, so what
+ * you see, the reading order and the focus order always match. A grid page draws the whole group as one bento.
  */
-function runsOf(blocks: readonly LinkPageBlock[], layout: 'list' | 'grid'): Run[] {
+function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
   const runs: Run[] = [];
   let isFirst = true;
   for (const block of blocks) {
     if (block.kind === 'heading' || block.kind === 'banner') continue;
     const last = runs.at(-1);
-    if (layout === 'grid' && isTileBlock(block)) {
-      if (last?.kind === 'tiles') last.tiles.push(block);
-      else {
-        runs.push({ kind: 'tiles', key: block.id, isFirst, tiles: [block] });
-        isFirst = false;
-      }
+    if (isCardBlock(block)) {
+      runs.push({ kind: 'card', key: block.id, block });
     } else if (isRowBlock(block)) {
       if (last?.kind === 'rows') last.rows.push(block);
       else {
@@ -1131,6 +1387,36 @@ const LazyTimes = lazy<ComponentType<LinkPageTimesProps>>(() =>
   import('./LinkPageTimes.tsx').then(
     (module) => ({ default: module.LinkPageTimes }),
     () => ({ default: TimesUnloaded }),
+  ),
+);
+/** A card whose chunk couldn't load: nothing rather than a hole or the route's error. */
+function CardUnloaded(_: LinkPageCardProps) {
+  return null;
+}
+
+/** A bento whose chunk couldn't load: the group as the list draws it, so every block still opens. */
+function BentoUnloaded({ rows, onPress }: LinkPageBentoProps) {
+  return (
+    <ul className={styles.list}>
+      {rows.filter(isRowBlock).map((block) => (
+        <BlockRow key={block.id} block={block} onPress={onPress} />
+      ))}
+    </ul>
+  );
+}
+
+// Spec 0068's cards and the bento grid (AC-6808): one chunk, loaded only for a page on a grid or with one of the
+// new cards, so the booking page's first load carries none of it.
+const LazyCard = lazy<ComponentType<LinkPageCardProps>>(() =>
+  import('./LinkPageCards.tsx').then(
+    (module) => ({ default: module.LinkPageCard }),
+    () => ({ default: CardUnloaded }),
+  ),
+);
+const LazyBento = lazy<ComponentType<LinkPageBentoProps>>(() =>
+  import('./LinkPageCards.tsx').then(
+    (module) => ({ default: module.LinkPageBento }),
+    () => ({ default: BentoUnloaded }),
   ),
 );
 const LazyNotice = lazy<ComponentType<LinkPageNoticeProps>>(() =>
@@ -1225,6 +1511,9 @@ export function LinkPageHold({ block, isTile = false }: LinkPageHoldProps) {
           <Skeleton shape="text" width="short" />
         </span>
       </span>
+      <span className={styles.holdWeek}>
+        <Skeleton shape="fill" />
+      </span>
       <span className={styles.holdChips}>
         {Array.from({ length: HOLD_CHIPS }, (_, index) => (
           <span key={index} className={styles.holdChip}>
@@ -1237,6 +1526,28 @@ export function LinkPageHold({ block, isTile = false }: LinkPageHoldProps) {
   );
 }
 
+/**
+ * A card's place while the cards' chunk loads, and a bento's: a quiet card with a title and two lines, out of the
+ * accessibility tree, in the card's own box.
+ */
+export function LinkPageCardHold() {
+  return (
+    <span className={styles.holdCard} data-times="" data-hold-for="card" aria-hidden="true">
+      <span className={styles.holdHead}>
+        <span className={styles.holdTitle}>
+          <Skeleton shape="text" width="medium" />
+        </span>
+        <span className={styles.holdLine}>
+          <Skeleton shape="text" width="long" />
+        </span>
+        <span className={styles.holdLine}>
+          <Skeleton shape="text" width="short" />
+        </span>
+      </span>
+    </span>
+  );
+}
+
 /** A picture's link, checked here by the page's one rule: a web address only, else none. */
 function webHrefOf(href: string | undefined): { readonly webHref?: string } {
   const target = href === undefined ? undefined : linkTarget(href);
@@ -1244,7 +1555,7 @@ function webHrefOf(href: string | undefined): { readonly webHref?: string } {
 }
 
 /** A media, picture or gallery block, from its own chunk, as a whole row or as a tile. */
-function LazyPictureBlock({
+export function LazyPictureBlock({
   block,
   onPress,
   isTile,
@@ -1281,7 +1592,13 @@ function LazyPictureBlock({
  * A grid page's tile for a link or a booking page (AC-6103): its picture filling the top when it has one, else its
  * tile at the top; then its words, and the quiet mark of where it goes. The same press, rel and notice as its row.
  */
-function LinkTile({ block, onPress }: { readonly block: LinkBlock; readonly onPress: (() => void) | undefined }) {
+export function LinkTile({
+  block,
+  onPress,
+}: {
+  readonly block: LinkBlock;
+  readonly onPress: (() => void) | undefined;
+}) {
   const target = linkTarget(block.href);
   const click = useLinkClick(block, onPress);
   const isWeb = target?.scheme === 'web';
@@ -1356,7 +1673,7 @@ function TilePicture({ block, picture }: { readonly block: LinkBlock; readonly p
 }
 
 /** A booking page as a grid tile: its calendar at the top, its title and lengths at the foot, opened in this tab. */
-function PageTile({
+export function PageTile({
   block,
   onPress,
 }: {
@@ -1391,47 +1708,11 @@ function PageTile({
 }
 
 /**
- * A run of tiles (AC-6103): one list on a grid of 2 columns, 4 where the blocks have the room, each tile `small` (1
- * by 1), `wide` (2 by 1) or `large` (2 by 2). Rows are as tall as a column is wide, and the grid never packs densely,
- * so a tile is always after the one before it in the owner's order, on the screen as in the reading and focus order.
- */
-function TileRun({
-  tiles,
-  label,
-  onPress,
-}: {
-  readonly tiles: readonly TileBlock[];
-  readonly label: string | undefined;
-  readonly onPress: ((id: string) => void) | undefined;
-}) {
-  return (
-    <div className={styles.tilesRoom}>
-      <ul className={styles.tiles} {...(label === undefined ? {} : { 'aria-label': label })}>
-        {tiles.map((block) => {
-          const press = onPress === undefined ? undefined : () => onPress(block.id);
-          return (
-            <li key={block.id} className={styles.tileItem} data-size={block.size ?? 'small'}>
-              {block.kind === 'link' ? (
-                <LinkTile block={block} onPress={press} />
-              ) : block.kind === 'page' ? (
-                <PageTile block={block} onPress={press} />
-              ) : (
-                <LazyPictureBlock block={block} onPress={onPress} isTile />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/**
  * A block that stands outside the list of rows: the person's words, the questions they answer, and spec 0061's
  * kinds. Its title takes the level under whatever names its group, so a page with no sections never skips from the
  * person's name to an h3 and one with them never repeats a section's own level.
  */
-function ApartBlockView({
+export function ApartBlockView({
   block,
   level,
   onPress,
@@ -1537,11 +1818,30 @@ function GroupRows({
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const { layout } = useContext(PageActionsContext);
+  // A grid page (spec 0068, AC-6808): the group is one bento, from its own chunk.
+  if (layout === 'grid') {
+    return (
+      <Suspense fallback={<LinkPageCardHold />}>
+        <LazyBento
+          rows={rows}
+          level={level}
+          {...(isNamed ? {} : { label: strings.blocks })}
+          {...(onPress === undefined ? {} : { onPress })}
+        />
+      </Suspense>
+    );
+  }
   // Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list, and a
   // text block is the person's words between the lists.
-  return runsOf(rows, layout).map((run) => {
-    const label = !isNamed && run.kind !== 'apart' && run.isFirst ? strings.blocks : undefined;
-    if (run.kind === 'tiles') return <TileRun key={run.key} tiles={run.tiles} label={label} onPress={onPress} />;
+  return runsOf(rows).map((run) => {
+    const label = !isNamed && run.kind === 'rows' && run.isFirst ? strings.blocks : undefined;
+    if (run.kind === 'card') {
+      return (
+        <Suspense key={run.key} fallback={<LinkPageCardHold />}>
+          <LazyCard block={run.block} level={level} {...(onPress === undefined ? {} : { onPress })} />
+        </Suspense>
+      );
+    }
     if (run.kind === 'rows') {
       return (
         <ul key={run.key} className={styles.list} {...(label === undefined ? {} : { 'aria-label': label })}>
@@ -1927,14 +2227,34 @@ export function LinkPage({
   }, []);
   // Only the page itself asks before a noticed link: the editor's preview and a draft are inert anyway.
   const isLive = layout === 'page' && !isPreview;
+  const drawn = theme === undefined ? undefined : drawnLook(theme);
+  // The page's Book (spec 0068): the caller's, else its first booking page, which is real data the page holds.
+  const pageBook = book ?? bookOf(blocks);
   const actions = useMemo<PageActions>(
     () => ({
       layout: pageLayout,
       isContinued: (id) => !isLive || isAskingOff || (isHeld ? heldContinued : (continuedNotices ?? [])).includes(id),
       ask: setAsking,
       onTimesNear,
+      isLive,
+      person,
+      share,
+      book: pageBook,
+      avatar: drawn?.avatar === 'rounded' ? 'rounded' : 'circle',
     }),
-    [pageLayout, isLive, isAskingOff, isHeld, heldContinued, continuedNotices, onTimesNear],
+    [
+      pageLayout,
+      isLive,
+      isAskingOff,
+      isHeld,
+      heldContinued,
+      continuedNotices,
+      onTimesNear,
+      person,
+      share,
+      pageBook,
+      drawn?.avatar,
+    ],
   );
   const banner = blocks?.find((block) => block.kind === 'banner');
   // A socials row block puts the person's marks where the owner placed it, so the header's own row steps aside.
@@ -1965,7 +2285,11 @@ export function LinkPage({
   const contact = contactOf(blocks);
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
-  const groups = blocks === undefined ? [] : groupsOf(blocks);
+  // In Split the sticky panel is who the page is (spec 0068): a profile card beside it would say it twice.
+  const groups =
+    blocks === undefined
+      ? []
+      : groupsOf(drawn?.template === 'split' ? blocks.filter((block) => block.kind !== 'profile') : blocks);
   // Words that rise in once on the live page and are simply there everywhere else (a preview, a draft).
   const entering = (words: string, order: 1 | 2 | 3) =>
     isLive ? (
@@ -1976,9 +2300,19 @@ export function LinkPage({
       words
     );
   const look = lookAttributes(theme, photos);
-  const drawn = theme === undefined ? undefined : drawnLook(theme);
   const variablesRef = usePageVariables(variables);
-  const bookHref = ownPath(book?.href);
+  const isSplit = drawn?.template === 'split';
+  // A profile card leads the page in place of the hero (AC-6808), except in Split, whose panel is who the page is.
+  // Only a card the owner put first leads: one further down the page leaves the hero where it is.
+  const leadsWithCard =
+    !isSplit && layout === 'page' && blocks?.find((block) => block.kind !== 'banner')?.kind === 'profile';
+  // Split's panel always offers Book when the page has a booking page (AC-6801); elsewhere only the caller's.
+  // The profile card carries Book when it leads, so the header never draws a second one.
+  const heroBook = leadsWithCard ? undefined : (book ?? (isSplit ? pageBook : undefined));
+  const bookHref = ownPath(heroBook?.href);
+  // Split leads with its cover in the panel when the page has one (AC-6801, AC-6802).
+  const hasCover =
+    drawn !== undefined && (headerOf(drawn, photos?.cover === true) === 'cover' || (isSplit && photos?.cover === true));
   if (layout === 'blocks') {
     return (
       <PageActionsContext value={actions}>
@@ -2040,8 +2374,18 @@ export function LinkPage({
               of a wide page (spec 0068, AC-6801). */}
           <div className={styles.identity}>
             {brand !== undefined && <Lockup brand={brand} />}
-            <header className={styles.hero} aria-busy={person === undefined || undefined}>
-              {person === undefined ? (
+            <header
+              className={styles.hero}
+              data-cover={(person !== undefined && hasCover) || undefined}
+              aria-busy={person === undefined || undefined}
+            >
+              {person !== undefined && leadsWithCard ? (
+                // The profile card says who the page is (spec 0068, AC-6808): the header keeps the page's one h1
+                // for screen readers and the outline, and the card draws the face, name and line once.
+                <h1 className={styles.name}>
+                  <VisuallyHidden>{person.name}</VisuallyHidden>
+                </h1>
+              ) : person === undefined ? (
                 <>
                   <Skeleton shape="circle" size="xl" />
                   <p className={styles.name}>
@@ -2060,9 +2404,7 @@ export function LinkPage({
               ) : (
                 <>
                   {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
-                  {drawn !== undefined && headerOf(drawn, photos?.cover === true) === 'cover' && (
-                    <span className={styles.cover} aria-hidden="true" />
-                  )}
+                  {hasCover && <span className={styles.cover} aria-hidden="true" />}
                   {drawn?.avatar !== 'none' && (
                     <span className={styles.face}>
                       <Avatar
@@ -2106,7 +2448,7 @@ export function LinkPage({
                 {openNow}
               </p>
             )}
-            {person !== undefined && bookHref !== undefined && book !== undefined && (
+            {person !== undefined && bookHref !== undefined && heroBook !== undefined && (
               <ButtonLink
                 variant="primary"
                 size="touch"
@@ -2115,14 +2457,14 @@ export function LinkPage({
                 isFullWidth="center"
                 {...(onPress === undefined ? {} : { onPress: () => onPress('book') })}
               >
-                {book.label}
+                {heroBook.label}
               </ButtonLink>
             )}
             {/* The one action under the person, then the way to pass the page on, then where else to find them.
               Share stands while the page loads: it shares the address the visitor is already on. */}
             <Actions
               contact={contact}
-              share={share}
+              share={leadsWithCard ? undefined : share}
               onPress={onPress}
               {...(walletHref === undefined ? {} : { walletHref })}
             />

@@ -1,12 +1,18 @@
 import {
+  businessCacheTags,
+  menuWorkspaceCacheTags,
   operatorOverview,
   operatorPage,
   operatorPages,
   operatorSite,
   operatorUser,
   operatorUsers,
+  setEarlyAccess,
   type OperatorDeps,
 } from '@crm/core';
+import { forgetAfterCommit } from '../../edge-cache.ts';
+import { errorFields, log } from '../../log.ts';
+import { captureFault } from '../../monitoring/sentry.ts';
 import { operator, type RequestContext } from '../../orpc.ts';
 
 // The operator console (spec 0047): read only, behind the operator gate (`requireOperator`: OPERATOR_EMAILS, two
@@ -27,4 +33,31 @@ export const operatorRouter = operator.operator.router({
   pages: operator.operator.pages.handler(({ context, input }) => operatorPages(deps(context), input.period)),
   page: operator.operator.page.handler(({ context, input }) => operatorPage(deps(context), input)),
   site: operator.operator.site.handler(({ context, input }) => operatorSite(deps(context), input.period)),
+  // The console's one write (spec 0065, AC-6502): the gate logged the attempt before it ran; once the switch is
+  // made, its before and after join the log as a row of their own.
+  setEarlyAccess: operator.operator.setEarlyAccess.handler(async ({ context, input }) => {
+    const change = await setEarlyAccess({ db: context.db }, input);
+    // Closing a workspace's business apps takes its guest menus (spec 0065, H1) and its business page, with the
+    // page's photos (spec 0066), off the edge at once. The switch has committed, so a failed purge never refuses it.
+    if (!input.on) {
+      await forgetAfterCommit(context.edgeCache, menuWorkspaceCacheTags(input.workspaceId));
+      await forgetAfterCommit(context.edgeCache, businessCacheTags(input.workspaceId));
+    }
+    const event = {
+      userId: context.user.id,
+      action: 'operator.earlyAccessChanged',
+      target: input.workspaceId,
+      requestId: context.requestId,
+      before: { earlyAccess: change.before },
+      after: { earlyAccess: change.after },
+    };
+    // The switch has committed: a failed log row is tried once more, then reported, never left silent.
+    try {
+      await context.identity.logOperatorEvent(event).catch(() => context.identity.logOperatorEvent(event));
+    } catch (error) {
+      log.error('Early access change not logged', { requestId: context.requestId, ...errorFields(error) });
+      captureFault(error, { task: 'operator-early-access-log' });
+    }
+    return change;
+  }),
 });

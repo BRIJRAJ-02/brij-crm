@@ -30,6 +30,7 @@ import {
   Select,
   Skeleton,
   Tooltip,
+  ViewOnlyTag,
   useFormatSettings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -292,7 +293,10 @@ function ActivityForm({
               </Tooltip>
             ),
           }
-        : {})}
+        : isReadOnly
+          ? // An activity the reader may only read: one tag in the title bar, never a note over the fields.
+            { headerActions: <ViewOnlyTag reason={strings.readOnly} /> }
+          : {})}
       actions={
         <>
           <Button slot="close" onPress={onClose}>
@@ -321,7 +325,6 @@ function ActivityForm({
             {`${isEdit ? strings.saveFailed : strings.logFailed} ${refusalSummary(failure)}`}
           </Callout>
         )}
-        {isReadOnly && <Callout tone="info">{strings.readOnly}</Callout>}
         <SegmentedControl
           label={strings.kindLabel}
           segments={[

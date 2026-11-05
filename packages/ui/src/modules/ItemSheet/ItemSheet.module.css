@@ -1,0 +1,379 @@
+/* A dish's sheet and Your selection (spec 0065, H1), after checklabs' guest sheets, value for value. The dish: its
+   photo bleeding to the sheet's edges at 4:3, then 20px in: the name 22px semibold, the price 16px semibold, the
+   words 15px at 1.55 in the quiet colour; each choice group under a small caps overline (12px semibold, 0.08em), 28px
+   apart; allergens as chips; then a foot that stays in view (the 48px quantity pill and the 48px Add carrying the
+   live price). Your selection: a title row (18px semibold, the count under it) over a hairline, the lines (a 48px
+   thumb, the name 14px medium, the line's price 13px quiet, a 30px stepper) with a hairline between, then the foot
+   over a hairline: the bill, the total 15px semibold, the note and Clear all. Colours are the library's own names,
+   which the guest menu points at its look; the face is the page's. */
+@layer components {
+  .sheet,
+  .picksSheet {
+    --sheet-inset: var(--space-20);
+    --sheet-type-12: var(--space-12);
+    --sheet-type-13: calc(var(--space-12) + var(--border-width-hairline));
+    --sheet-type-14: calc(var(--space-12) + var(--space-2));
+    --sheet-type-15: calc(var(--space-16) - var(--border-width-hairline));
+    --sheet-type-16: var(--space-16);
+    --sheet-type-18: calc(var(--space-16) + var(--space-2));
+    --sheet-type-22: calc(var(--space-20) + var(--space-2));
+    --squircle: calc(var(--radius-xl) + var(--space-2));
+
+    display: flex;
+    flex-direction: column;
+    color: var(--text);
+  }
+
+  .sheetPhoto {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  .sheetBody {
+    display: flex;
+    flex-direction: column;
+    padding: var(--sheet-inset) var(--sheet-inset) var(--space-16);
+  }
+
+  .sheetHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* Without a photo the name sits on the floating Close's row, clear of it at the end (as Your selection's title). */
+  .sheetBody[data-bare] {
+    padding-block-start: var(--space-16);
+  }
+
+  .sheetBody[data-bare] .sheetHead {
+    padding-inline-end: calc(var(--space-32) + var(--space-16));
+  }
+
+  .sheetName {
+    margin: 0;
+    font: var(--text-heading);
+    font-family: var(--menu-display-face, inherit);
+    font-size: var(--sheet-type-22);
+    line-height: calc(var(--sheet-type-22) * 1.2);
+    letter-spacing: calc(var(--tracking-heading) * 1.5);
+  }
+
+  .sheetMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-8);
+    margin: 0;
+  }
+
+  .price {
+    margin: 0;
+    font: var(--text-title);
+    font-family: inherit;
+    font-size: var(--sheet-type-16);
+    line-height: normal;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .quiet {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-family: inherit;
+  }
+
+  .sheetAbout {
+    margin: calc(var(--space-12) + var(--space-2)) 0 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-family: inherit;
+    font-size: var(--sheet-type-15);
+    line-height: calc(var(--sheet-type-15) * 1.55);
+  }
+
+  .dietList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sheetHead + .dietList,
+  .sheetAbout + .dietList {
+    margin-block-start: calc(var(--space-12) + var(--space-2));
+  }
+
+  /* A choice group (sizes, an option group, the allergens): 28px above, its overline 14px over its choices. */
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space-12) + var(--space-2));
+    margin: calc(var(--space-24) + var(--space-4)) 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .groupName {
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    font: var(--text-title);
+    font-family: inherit;
+    font-size: var(--sheet-type-12);
+    line-height: normal;
+    letter-spacing: calc(var(--tracking-kbd) * 4);
+    text-transform: uppercase;
+  }
+
+  /* A legend sits outside its fieldset's flex row, so the gap under it is its own. */
+  .groupName[data-legend] {
+    padding-block-end: calc(var(--space-12) + var(--space-2));
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space-8) + var(--space-2));
+  }
+
+  /* The foot: stays in view at the bottom of the sheet, over the words, on the sheet's own card, a hairline over it;
+     the reason Add waits sits over it. */
+  .sheetActions {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: calc(var(--space-12) + var(--space-2)) var(--sheet-inset)
+      calc(var(--sheet-inset) + env(safe-area-inset-bottom, 0));
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .reason {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-family: inherit;
+    text-align: center;
+  }
+
+  /* The quantity's buttons ease down to 0.88 while held, Add to 0.97 (checklabs'), from the menu's look. */
+  .actionRow {
+    --scale-press: var(--menu-press-close, 1);
+
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space-8) + var(--space-2));
+  }
+
+  /* Add takes the rest of the row beside the quantity pill. */
+  .addSlot {
+    --scale-press: var(--menu-press-card, var(--scale-enter));
+
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  /* Your selection: the title row, its count under it, over a hairline; room at its end for the floating Close. */
+  .picksSheet {
+    min-block-size: 100%;
+  }
+
+  .picksHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-16) calc(var(--sheet-inset) + var(--space-32) + var(--space-12)) var(--space-12)
+      var(--sheet-inset);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .picksTitle {
+    margin: 0;
+    font: var(--text-heading);
+    font-family: inherit;
+    font-size: var(--sheet-type-18);
+    line-height: normal;
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .picksCount {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-family: inherit;
+    font-size: var(--sheet-type-12);
+    letter-spacing: var(--tracking-kbd);
+  }
+
+  .picksBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--sheet-inset);
+  }
+
+  .pickGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .pickGroup .groupName {
+    padding-block-start: var(--space-8);
+  }
+
+  .picks {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* A line's stepper buttons ease down to 0.82 while held (checklabs'), from the menu's look. */
+  .pick {
+    --scale-press: var(--menu-press-add, 1);
+
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding-block: var(--space-12);
+  }
+
+  .pick + .pick {
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .pickThumb {
+    flex: none;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    border-radius: var(--squircle);
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  .itemText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .itemName {
+    font: var(--text-body-strong);
+    font-family: inherit;
+    font-size: var(--sheet-type-14);
+    line-height: calc(var(--sheet-type-14) * 1.25);
+  }
+
+  .itemAbout {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-family: inherit;
+  }
+
+  /* A line's price: 13px in the quiet colour. */
+  .pick .price {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-family: inherit;
+    font-size: var(--sheet-type-13);
+  }
+
+  .undo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    margin: 0;
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12);
+    border-radius: var(--squircle);
+    background: var(--surface-sunken);
+    font: var(--text-body);
+    font-family: inherit;
+    animation: undo-in var(--duration-popover) var(--ease-out);
+  }
+
+  /* The foot: the bill, the total, the note and Clear all, over a hairline. */
+  .picksFoot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-16) var(--sheet-inset) calc(var(--sheet-inset) + env(safe-area-inset-bottom, 0));
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .bill {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin: 0;
+  }
+
+  .billLine {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-8);
+    font: var(--text-body);
+    font-family: inherit;
+  }
+
+  .billLine[data-quiet] {
+    color: var(--text-secondary);
+  }
+
+  .billLine .price {
+    font: inherit;
+  }
+
+  .billLine[data-total] {
+    font: var(--text-title);
+    font-family: inherit;
+    font-size: var(--sheet-type-15);
+  }
+
+  .note {
+    margin: 0;
+    padding: var(--space-12);
+    border-radius: var(--squircle);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-family: inherit;
+    text-align: center;
+  }
+
+  @keyframes undo-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .undo {
+      animation-name: undo-fade;
+    }
+  }
+
+  @keyframes undo-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

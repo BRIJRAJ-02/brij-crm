@@ -7,9 +7,11 @@
 // sit under a TopBar holding their trail and h1; `titleLevel={1}` with
 // `trail` is for a page with no TopBar above it.
 import { useContext, useId, type ReactNode, type Ref } from 'react';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
@@ -67,6 +69,13 @@ export interface SettingsLayoutProps {
   readonly meta?: ReactNode;
   /** One line under the title: what the page is for. */
   readonly description?: ReactNode;
+  /**
+   * The viewer may look but not change anything here: a "View only" tag beside the title, its lock saying why
+   * ("Only owners and admins can change this."). One tag in the header, in place of a callout in the body. Under a
+   * TopBar (`header="bar"`) the TopBar's `meta` should carry a `ViewOnlyTag` instead; the layout then draws it at
+   * the head of the body only when told here, for a frame that owns its own bar.
+   */
+  readonly viewOnly?: string;
   /** The page's actions, at the end of the header ("New object"). */
   readonly actions?: ReactNode;
   /** The page's head is still coming: skeletons after the loading delay; the navigation stays usable. */
@@ -119,6 +128,7 @@ export function SettingsLayout({
   hue,
   meta,
   description,
+  viewOnly,
   actions,
   isLoading = false,
   hasTile = false,
@@ -150,6 +160,11 @@ export function SettingsLayout({
               Disclosure) run out to the page's edges and keep their text on the content edge (PageEdge). */}
           <div className={styles.body}>
             <PageEdge value>
+              {viewOnly !== undefined && (
+                <div className={styles.viewOnlyLine}>
+                  <ViewOnlyTag reason={viewOnly} />
+                </div>
+              )}
               <CardTitleLevel value={2}>{children}</CardTitleLevel>
             </PageEdge>
           </div>
@@ -208,6 +223,7 @@ export function SettingsLayout({
                   {title}
                 </Heading>
                 {meta}
+                {viewOnly !== undefined && <ViewOnlyTag reason={viewOnly} />}
               </span>
               {description !== undefined && <span className={styles.description}>{description}</span>}
             </span>
@@ -223,6 +239,27 @@ export function SettingsLayout({
         {footerSlot}
       </div>
     </div>
+  );
+}
+
+/** Props for ViewOnlyTag. */
+export interface ViewOnlyTagProps {
+  /** Why the viewer can't change it, and who can: "Only owners and admins can change this." */
+  readonly reason: string;
+}
+
+/**
+ * "View only" beside a page's title, with a LockReason saying why (its name,
+ * and its tooltip on hover and keyboard focus): the one way a settings page
+ * says its viewer can look but not change anything (in a TopBar's `meta`, or
+ * SettingsLayout's `viewOnly`). Never a callout in the body.
+ */
+export function ViewOnlyTag({ reason }: ViewOnlyTagProps) {
+  return (
+    <span className={styles.viewOnly}>
+      <Badge text={strings.viewOnly} isWhole />
+      <LockReason reason={reason} size="sm" />
+    </span>
   );
 }
 

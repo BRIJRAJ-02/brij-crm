@@ -321,10 +321,22 @@ export const publicHandles = auth.table(
     createdAt: createdAt(),
     /** When it was let go (its person's account deleted, or room made at the cap): set with a null `userId` only. */
     releasedAt: timestamptz('released_at'),
+    /**
+     * `member` (a person's link page) or `business` (a workspace's business page, spec 0066 B4, migration 0179): a
+     * business handle names no person, is never released, and belongs to its workspace.
+     */
+    ownerKind: text('owner_kind').notNull().default('member'),
   },
   (t) => [
     primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
-    check('public_handles_released', sql`(${t.userId} is null) = (${t.releasedAt} is not null)`),
+    check('public_handles_owner_kind', sql`${t.ownerKind} in ('member', 'business')`),
+    check(
+      'public_handles_released',
+      sql`(${t.ownerKind} = 'member' and (${t.userId} is null) = (${t.releasedAt} is not null)) or (${t.ownerKind} = 'business' and ${t.userId} is null and ${t.releasedAt} is null)`,
+    ),
+    index('public_handles_business')
+      .on(t.workspaceId)
+      .where(sql`${t.ownerKind} = 'business'`),
     index('public_handles_released')
       .on(t.releasedAt)
       .where(sql`${t.releasedAt} is not null`),
@@ -516,7 +528,7 @@ export const profileItems = auth.table(
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check(
       'profile_items_kind',
-      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner')`,
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner', 'menu', 'reserve', 'profile', 'status', 'audio', 'timeline', 'logos', 'work', 'steps', 'location', 'events')`,
     ),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
@@ -527,7 +539,7 @@ export const profileItems = auth.table(
     check('profile_items_page', sql`${t.kind} not in ('page', 'times') or ${t.pageId} is not null`),
     check(
       'profile_items_plain',
-      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner') or (${t.pageId} is null and ${t.formId} is null)`,
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner', 'profile', 'status', 'audio', 'timeline', 'logos', 'work', 'steps', 'location', 'events') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
       .on(t.userId, t.workspaceId, t.pageId)
@@ -697,9 +709,12 @@ export const profileImages = auth.table(
     id: uuid('id').notNull().primaryKey(),
     userId: uuid('user_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    /** `upload`, `thumb` or `poster`: what made it, never who may see it. */
+    /**
+     * `upload`, `thumb` or `poster`: what made it, never who may see it. `audio` (spec 0068, migration 0182) is an
+     * audio intro's recording, the one kind that is a sound; its sides are held at 1.
+     */
     kind: text('kind').notNull(),
-    /** Its store path, made by the server: `link-page/<user>/<workspace>/<id>.<jpg|png|webp>`. */
+    /** Its store path, made by the server: `link-page/<user>/<workspace>/<id>.<jpg|png|webp|mp3|m4a|ogg|webm>`. */
     path: text('path').notNull(),
     contentType: text('content_type').notNull(),
     bytes: integer('bytes').notNull(),
@@ -711,13 +726,15 @@ export const profileImages = auth.table(
     uniqueIndex('profile_images_path').on(t.path),
     index('profile_images_page').on(t.userId, t.workspaceId),
     index('profile_images_created').on(t.createdAt),
-    check('profile_images_kind', sql`${t.kind} in ('upload', 'thumb', 'poster')`),
+    check('profile_images_kind', sql`${t.kind} in ('upload', 'thumb', 'poster', 'audio')`),
     check(
       'profile_images_shape',
-      sql`${t.path} ~ ('^link-page/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/' || ${t.id}::text || '[.](png|jpg|webp)$')
-        and ${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')
+      sql`${t.path} ~ ('^link-page/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/' || ${t.id}::text || '[.](png|jpg|webp|mp3|m4a|ogg|webm)$')
+        and ${t.contentType} in ('image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm')
+        and (${t.kind} = 'audio') = (${t.contentType} like 'audio/%')
         and ${t.bytes} between 1 and 1572864
-        and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096`,
+        and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096
+        and (${t.kind} <> 'audio' or (${t.width} = 1 and ${t.height} = 1))`,
     ),
     foreignKey({ name: 'profile_images_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     foreignKey({
@@ -973,6 +990,9 @@ export const operatorEvent = auth.table(
     /** The users list's search as typed, when there was one: who looked whom up is what this log answers. */
     q: text('q'),
     requestId: text('request_id').notNull(),
+    /** A write's state before and after it (spec 0065, AC-6502: a workspace's early access flags). Reads have none. */
+    before: jsonb('before'),
+    after: jsonb('after'),
   },
   (t) => [
     index('operator_event_at').on(t.at),

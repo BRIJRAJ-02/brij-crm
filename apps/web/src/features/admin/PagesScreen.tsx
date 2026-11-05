@@ -190,7 +190,7 @@ export function PagesBody({
             const page = pages?.pages.find((each) => each.pageId === id);
             if (page !== undefined) void navigate({ href: adminPageHref(slug, page.workspaceId, page.pageId) });
           }}
-          emptyState={<EmptyState icon="calendar-days" title={strings.noPages} />}
+          emptyState={<EmptyState title={strings.noPages} />}
         />
       </SettingsSection>
     </SettingsPage>
@@ -288,6 +288,7 @@ export function PageMissing() {
       crumbs={[{ id: 'pages', label: strings.pages, href: adminPagesHref(slug) }]}
     >
       <EmptyState
+        layout="block"
         icon="search"
         title={strings.pageMissing}
         actions={<Link href={adminPagesHref(slug)}>{strings.backToPages}</Link>}

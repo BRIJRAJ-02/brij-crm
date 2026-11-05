@@ -85,6 +85,19 @@
     inline-size: calc(8 * var(--size-chip));
   }
 
+  /* The page's state beside the trail: whatever the page puts there (a status, badges, an InfoTip) in one row,
+     centred on the trail, never clipped (a focus ring inside it shows whole). A status that must keep its room on
+     a phone says so itself (EditorStatus's short word). */
+  .meta {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: var(--space-8);
+    /* It gives way to the actions as its parts did when they stood in the bar alone: each part shrinks by its own
+       rule (a Badge cuts its words); nothing here clips. */
+    min-inline-size: 0;
+  }
+
   .end {
     display: flex;
     flex: none;

@@ -89,6 +89,7 @@ export function SkillsTab({ data, slug, members, toasts }: SkillsTabProps) {
         isLoading={state.status === 'loading'}
         emptyState={
           <EmptyState
+            layout="block"
             icon="tag"
             title={strings.noSkills}
             actions={

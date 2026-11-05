@@ -22,7 +22,11 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId_/preview'
 function PreviewRoute() {
   const { page } = Route.useLoaderData();
   if (page === undefined || !page.canChange) {
-    return <EmptyState title={publishStrings.previewMissingTitle}>{publishStrings.previewMissing}</EmptyState>;
+    return (
+      <EmptyState layout="block" title={publishStrings.previewMissingTitle}>
+        {publishStrings.previewMissing}
+      </EmptyState>
+    );
   }
   return (
     <main>

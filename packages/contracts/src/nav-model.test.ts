@@ -8,6 +8,7 @@ import {
   navKey,
   pruneNavItems,
   sectionItems,
+  sectionOf,
   sectionOrder,
   type NavOperation,
   type NavPrefs,
@@ -27,8 +28,24 @@ const universe: NavUniverse = {
   records: [PEOPLE, COMPANIES, DEALS],
   lists: [],
   scheduling: ['bookings', 'captures'],
+  hospitality: ['menus', 'service'],
   favourites: new Set([`view:${VIEW}`, `record:${RECORD}`]),
 };
+
+describe('the Hospitality section (spec 0065, AC-6510)', () => {
+  it('holds the installed apps’ pages, and a stored row without the section shows it at its default place', () => {
+    expect(sectionItems(DEFAULT_NAV_PREFS, universe, 'hospitality').map((entry) => entry.id)).toEqual([
+      'menus',
+      'service',
+    ]);
+    const stored: NavPrefs = {
+      ...DEFAULT_NAV_PREFS,
+      sections: { order: ['favourites', 'records', 'lists', 'scheduling'], folded: [] },
+    };
+    expect(sectionOrder(stored).at(-1)).toBe('hospitality');
+    expect(sectionOf({ kind: 'page', id: 'qr' })).toBe('hospitality');
+  });
+});
 
 function apply(prefs: NavPrefs, ...ops: NavOperation[]): NavPrefs {
   return ops.reduce((current, op) => {
@@ -46,7 +63,7 @@ describe('the sidebar model', () => {
     expect(ids(DEFAULT_NAV_PREFS, 'records')).toEqual([PEOPLE, COMPANIES, DEALS]);
     expect(ids(DEFAULT_NAV_PREFS, 'scheduling')).toEqual(['bookings', 'captures']);
     expect(ids(DEFAULT_NAV_PREFS, 'favourites')).toEqual([]);
-    expect(sectionOrder(DEFAULT_NAV_PREFS)).toEqual(['favourites', 'records', 'lists', 'scheduling']);
+    expect(sectionOrder(DEFAULT_NAV_PREFS)).toEqual(['favourites', 'records', 'lists', 'scheduling', 'hospitality']);
   });
 
   it('moves an item inside its section, and puts a new object at the end without being asked (AC-926)', () => {
@@ -157,7 +174,7 @@ describe('the sidebar model', () => {
       { op: 'rail', on: true },
     );
     expect(changed.sections.folded).toEqual(['scheduling']);
-    expect(sectionOrder(changed)).toEqual(['scheduling', 'favourites', 'records', 'lists']);
+    expect(sectionOrder(changed)).toEqual(['scheduling', 'favourites', 'records', 'lists', 'hospitality']);
     expect(changed.rail).toBe(true);
     const again = applyNavOp(changed, { op: 'rail', on: true }, universe);
     expect(again.ok && again.prefs).toBe(changed);

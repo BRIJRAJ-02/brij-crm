@@ -15,6 +15,7 @@ import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useToastClearance } from '../../provider/toast-clearance.ts';
 import { pathOf, stepOf } from '../../lib/step-keys.ts';
 
 /** How wide a panel is: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks. */
@@ -136,6 +137,8 @@ export function Panel({
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
   const [openedBy] = useState(() => (isFocusVisible ? 'keyboard' : 'pointer'));
+  // Toasts rise above the footer (a form's Save) when they would cover it.
+  const keepToastsOff = useToastClearance();
   const { keyboardProps } = useKeyboard({
     onKeyDown: (event) => {
       if (event.key === 'Escape') onClose();
@@ -198,7 +201,7 @@ export function Panel({
             <PageEdge value={false}>{children}</PageEdge>
           </div>
           {(footer !== undefined || footerStart !== undefined) && (
-            <footer className={styles.foot}>
+            <footer className={styles.foot} ref={keepToastsOff}>
               {footerStart !== undefined && <span className={styles.footStart}>{footerStart}</span>}
               {footer}
             </footer>

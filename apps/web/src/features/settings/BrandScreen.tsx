@@ -214,30 +214,31 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       <HostedFormPreview form={SAMPLE_FORM} brand={wearing} />
     );
   return (
-    <SettingsPage title={strings.title} fillsView>
+    <SettingsPage
+      title={strings.title}
+      fillsView
+      {...(kit !== undefined && !canEdit ? { viewOnly: strings.readOnly } : {})}
+    >
       <PreviewLayout
         bodyWidth="form"
         previewShare="wide"
         // Every notice that holds, together (a refused colour never hides a template waiting for Publish): a refusal
-        // above the sections, where each can be seen from; the read only note; then the Publish bar (owner, 4 Nov
-        // 2026: every public page changes at once when it goes, so it heads the page, where the editors' bars sit).
-        {...(refusal === undefined && (kit === undefined || canEdit) && kit?.templateDraft === undefined
+        // above the sections, where each can be seen from; then the Publish bar (owner, 4 Nov 2026: every public page
+        // changes at once when it goes, so it heads the page, where the editors' bars sit). A reader's View only tag
+        // is the page's own (`viewOnly`), never a note here.
+        {...(refusal === undefined && (kit?.templateDraft === undefined || !canEdit)
           ? {}
           : {
               notices: (
                 <>
                   {refusal !== undefined && <Callout tone="danger">{refusal}</Callout>}
-                  {kit !== undefined && !canEdit && <Callout tone="info">{strings.readOnly}</Callout>}
                   {canEdit && kit.templateDraft !== undefined && (
-                    <>
-                      <PublishBar
-                        status="draft"
-                        changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
-                        onPublish={publishTemplate}
-                        onDiscard={discardTemplate}
-                      />
-                      <Callout tone="info">{strings.templatePublishNote}</Callout>
-                    </>
+                    <PublishBar
+                      status="draft"
+                      changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
+                      onPublish={publishTemplate}
+                      onDiscard={discardTemplate}
+                    />
                   )}
                 </>
               ),
@@ -256,9 +257,9 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
         }
       >
         {state.status === 'error' ? (
-          <EmptyState title={strings.failed} icon="palette">
-            <Button onPress={() => brand.kit(slug).retry()}>{strings.retry}</Button>
-          </EmptyState>
+          <Card>
+            <EmptyState tone="error" title={strings.failed} onRetry={() => brand.kit(slug).retry()} />
+          </Card>
         ) : (
           <>
             {/* Logo, Colour, then Template (critics A #11 and B #6, 5 November 2026): what the brand is first, then the

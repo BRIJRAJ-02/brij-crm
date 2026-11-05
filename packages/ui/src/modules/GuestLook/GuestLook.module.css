@@ -1,0 +1,52 @@
+/* The guest menu's look around a page. Each colour comes from the `--menu-*` custom properties the menu's look stylesheet
+   sets (a brand's accent is already in `--menu-accent`) and falls back to a token, the accent to the ink. Worked out on
+   the root and pointed at one level in, so no name refers to itself. Neither element draws a box. */
+@layer components {
+  .root {
+    --guest-surface: var(--menu-ground, var(--surface));
+    --guest-ground: var(--menu-ground, var(--surface-subtle));
+    --guest-card: var(--menu-card, var(--surface-raised));
+    --guest-chip: var(--menu-chip, var(--surface-sunken));
+    --guest-line: var(--menu-line, var(--border));
+    --guest-hairline: var(--menu-line, var(--border-subtle));
+    --guest-text: var(--menu-text, var(--text));
+    --guest-quiet: var(--menu-quiet, var(--text-secondary));
+    --guest-ink: var(--menu-accent, var(--surface-inverse));
+    --guest-on-ink: var(--menu-on-accent, var(--on-inverse));
+
+    display: contents;
+  }
+
+  .names {
+    --surface: var(--guest-surface);
+    --surface-subtle: var(--guest-ground);
+    --surface-raised: var(--guest-card);
+    --surface-sunken: var(--guest-chip);
+    --surface-hover: var(--guest-chip);
+    --surface-selected: var(--guest-chip);
+    --border: var(--guest-line);
+    --border-subtle: var(--guest-hairline);
+    --text: var(--guest-text);
+    --text-secondary: var(--guest-quiet);
+    --accent: var(--guest-ink);
+    /* Unmixed under the pointer too: a brand's accent is checked at 4.5:1 only as it is. */
+    --accent-hover: var(--guest-ink);
+    --accent-line: var(--guest-ink);
+    /* A soft edge and hover fill, as the app's light accent border is: never the ink, or a day under the pointer is
+       ink on ink. */
+    --accent-border: color-mix(in oklab, var(--guest-ink) 16%, var(--guest-card));
+    --accent-soft: var(--guest-chip);
+    --on-accent: var(--guest-on-ink);
+    --link: var(--guest-text);
+    /* The focus token's own shape in the ink: a field's edge and a button's ring carry the 3:1 mark. A solid ring here
+       filled a primary's gap, so a focused Continue only grew. */
+    --shadow-focus: 0 0 0 calc(var(--border-width-thick) + var(--border-width-hairline))
+      color-mix(in oklab, var(--guest-ink) 16%, transparent);
+    /* A focused section tab's or a list mark's inset line, solid in the ink: its 3:1 is its own. */
+    --shadow-focus-inset: inset 0 0 0 var(--border-width-hairline) var(--guest-ink);
+    /* A primary's faint drop in a control's neutral one: the token's is tinted blue. */
+    --shadow-primary: var(--shadow-control);
+
+    display: contents;
+  }
+}

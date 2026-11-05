@@ -20,8 +20,11 @@ export interface AvatarProps {
   readonly id?: string;
   /** A picture on our origin, `data:image` or `blob:`. Anything else, or a picture that fails, shows the initials. */
   readonly src?: string;
-  /** The tile's hue, or `ink` for the workspace's own mark. Defaults to a stable hash of `id` (or `name`). */
-  readonly hue?: Hue | 'ink';
+  /**
+   * The tile's hue, `ink` for the workspace's own mark, or `accent` for a public page's brand colour (a business
+   * page with no logo). Defaults to a stable hash of `id` (or `name`).
+   */
+  readonly hue?: Hue | 'ink' | 'accent';
   readonly size?: AvatarSize;
   /** `circle` for people (the default), `square` for companies and other records. */
   readonly shape?: 'circle' | 'square';
@@ -41,6 +44,11 @@ export interface AvatarProps {
    * may be a wide wordmark whose letters a crop would cut off (spec 0060).
    */
   readonly fit?: 'cover' | 'contain';
+  /**
+   * An empty slot waiting for its picture: no fill, a dashed edge and `mark` in the quiet text colour, at the tile's
+   * own size (a menu item with no photo yet, checklabs' dashed "+"). It shows no picture.
+   */
+  readonly isEmpty?: boolean;
 }
 
 /**
@@ -64,12 +72,13 @@ export function Avatar({
   isDecorative = false,
   mark,
   fit = 'cover',
+  isEmpty = false,
 }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
   const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
   const picture = useRef<HTMLImageElement>(null);
-  const image = safeImageSrc(src);
+  const image = isEmpty ? undefined : safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
   const fades = showImage && FADES_IN.has(size);
   // While a picture loads, its initials hold the tile at every size, so a company whose site has no icon keeps its
@@ -95,6 +104,7 @@ export function Avatar({
       // A loaded picture sits on a neutral plate, not the hue: a logo's clear parts (a transparent favicon) read on
       // a near white plate in both themes rather than on a coloured tile (spec 0059 follow up, 31 October 2026).
       data-picture={showImage && !isWaiting ? 'loaded' : undefined}
+      data-empty={isEmpty || undefined}
       {...(fit === 'contain' ? { 'data-fit': 'contain' } : {})}
       {...(isDecorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': name })}
     >

@@ -36,11 +36,13 @@ export interface QrCodeProps {
   /** A frame around the code with this label under it (AC-6124), up to 20 characters: "Scan me". */
   readonly frameLabel?: string;
   /**
+   * `paper` keeps the white ground in a dark app too (spec 0065 H2's print sheet): a code drawn to be printed is
+   * printed on white.
    * `drawn` (the default): the code paints its own light ground. `clear`: no ground on screen, for a caller that sets
    * the code on a light tile of its own (ReadyPanel's `share`), so the tile and the code read as one surface. A saved
    * copy still prints on the light surface (the caller writes the ground's fill in).
    */
-  readonly ground?: 'drawn' | 'clear';
+  readonly ground?: 'drawn' | 'clear' | 'paper';
 }
 
 /** The quiet margin around the modules, in modules, as scanners need. */

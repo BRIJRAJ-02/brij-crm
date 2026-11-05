@@ -5,6 +5,7 @@ import {
   ToggleButton as AriaToggleButton,
   type PressEvent,
 } from 'react-aria-components';
+import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
@@ -13,9 +14,23 @@ import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.ts
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
+import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { FOOTER_PRESS_ATTRIBUTE, useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
+import { strings } from './strings.ts';
+
+// The motion parts load with the first button that asks for them (spec 0068, AC-6806): every Button carries them
+// otherwise, and their styles would weigh on pages that never animate a label or an amount (the booking page's CSS).
+const LazyTextSwap = lazy(() => import('../TextSwap/TextSwap.tsx').then((module) => ({ default: module.TextSwap })));
+const LazyNumberPop = lazy(() =>
+  import('../NumberPop/NumberPop.tsx').then((module) => ({ default: module.NumberPop })),
+);
+// A toggle's colour dot is StatusDot's own (as SegmentedControl's `hue` draws it), loaded with the first chip that
+// wears one, so the plain buttons every first load draws never carry it.
+const LazyStatusDot = lazy(() =>
+  import('../StatusDot/StatusDot.tsx').then((module) => ({ default: module.StatusDot })),
+);
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours, `field` for a picker drawn as a Field's box among Fields (a form question's answer type), its `fieldName` inside. */
 export type ButtonVariant =
@@ -30,8 +45,8 @@ export type ButtonVariant =
   | 'warning'
   | 'field';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. */
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `public` is a hosted form's own button (Continue, OK, Send), the height of the form's fields (`size-input`, which the form raises to its public size) with room at the sides, so a short word never draws a square. `sheet` is the one action at a guest sheet's foot (the guest menu's Add to selection), 48px with a title sized label, after checklabs. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'public' | 'sheet';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;
@@ -63,12 +78,23 @@ interface ButtonLook {
    * alone (a link page's social links).
    */
   readonly isRound?: boolean;
+  /**
+   * Drawn at its size but pressed across 44px (WCAG 2.5.5): an invisible area round a small control a guest presses
+   * with a thumb (the guest menu's 26px and 30px + and steppers, after checklabs' sizes). `md`, `lg` and `xl` only:
+   * any other size ignores it (`sm` keeps its own 24px area; `touch` and `sheet` are 44px and more already).
+   */
+  readonly isTouchTarget?: boolean;
   readonly isDisabled?: boolean;
   /**
    * A second label the button may swap to, whose width it keeps from the start, so the swap never moves what is
    * beside it (CopyButton's "Copied").
    */
   readonly labelReserve?: string;
+  /**
+   * Draws a changed label through TextSwap: the old words rise out, the new ones rise in (Publish, then Published).
+   * For a label whose change is the news; pair it with `labelReserve` so the button keeps its width.
+   */
+  readonly animateLabel?: boolean;
   /**
    * A slot a parent fills, such as `close` inside a toast or a dialog. `null` opts out of the parent's slots: a
    * button of its own inside a calendar, whose only slots are its `previous` and `next` arrows.
@@ -93,6 +119,11 @@ interface LabelledFace {
    * visible label, so speech input can still say what it sees (WCAG 2.5.3).
    */
   readonly label?: string;
+  /**
+   * A worded amount after the label, already formatted ("£9.50"): its changed digits pop in (NumberPop), and in a
+   * full width button it sits at the end. Part of the button's name. A guest menu's Add to your picks · £9.50.
+   */
+  readonly amount?: string;
 }
 
 interface IconOnlyFace {
@@ -162,6 +193,17 @@ export type ToggleButtonProps = Omit<ButtonLook, 'kbd'> &
     readonly onChange?: (isSelected: boolean) => void;
     /** Its key inside a toggle group (ChoiceChips), which then holds whether it is selected. */
     readonly id?: string;
+    /**
+     * Held, it fills with the accent (on-accent words) instead of the soft accent tint: a public page's choice
+     * beside picks drawn that way (a reservation's party size beside its selected day and time).
+     */
+    readonly isSelectionStrong?: boolean;
+    /**
+     * A colour dot before the label, drawn by StatusDot in the label's own type and colour (as SegmentedControl's
+     * `hue` draws one): what the choice is coloured by elsewhere (a zone's colour on its chip, ChoiceChips' `dot`).
+     * Decorative; the label names the choice. With a label only.
+     */
+    readonly dot?: Hue;
   };
 
 /** The data attributes that pick a look from the CSS module. */
@@ -174,6 +216,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-collapsible': look.isLabelCollapsible === true || undefined,
     'data-icon-mark': ('isIconMark' in face && face.isIconMark === true) || undefined,
     'data-round': look.isRound === true || undefined,
+    'data-touch-target': look.isTouchTarget === true || undefined,
   };
 }
 
@@ -228,7 +271,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         <Icon
           name={face.icon}
           size={
-            ('isIconMark' in face && face.isIconMark === true) || look.size === 'touch'
+            ('isIconMark' in face && face.isIconMark === true) || look.size === 'touch' || look.size === 'sheet'
               ? 'md'
               : look.size === 'sm'
                 ? 'xs'
@@ -239,13 +282,28 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         face.provider !== undefined && (
           <ProviderMark
             provider={face.provider}
-            size={look.size === 'lg' || look.size === 'touch' || look.size === 'public' ? 'md' : 'sm'}
+            size={
+              look.size === 'lg' || look.size === 'touch' || look.size === 'public' || look.size === 'sheet'
+                ? 'md'
+                : 'sm'
+            }
             {...('markTone' in face && face.markTone !== undefined ? { tone: face.markTone } : {})}
           />
         )
       )}
       {face.children !== undefined &&
-        (look.labelReserve === undefined ? (
+        (look.animateLabel === true ? (
+          <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
+            <Suspense fallback={face.children}>
+              <LazyTextSwap>{face.children}</LazyTextSwap>
+            </Suspense>
+            {look.labelReserve === undefined ? null : (
+              <span className={styles.reserve} aria-hidden="true">
+                {look.labelReserve}
+              </span>
+            )}
+          </span>
+        ) : look.labelReserve === undefined ? (
           <span key={face.children} className={styles.label} {...swapped}>
             {face.children}
           </span>
@@ -259,6 +317,14 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
             </span>
           </span>
         ))}
+      {'amount' in face && face.amount !== undefined && (
+        <span className={styles.amount}>
+          <VisuallyHidden>{strings.amountSeparator}</VisuallyHidden>
+          <Suspense fallback={face.amount}>
+            <LazyNumberPop value={face.amount} />
+          </Suspense>
+        </span>
+      )}
       {keycaps(look.kbd, variant)}
       {look.iconRight !== undefined && <Icon name={look.iconRight} size="sm" />}
     </>
@@ -404,8 +470,17 @@ export function ToggleButton(props: ToggleButtonProps) {
       {...(slot === undefined ? {} : { slot })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...lookAttributes(props, face)}
+      {...(props.isSelectionStrong === true ? { 'data-selection': 'strong' } : {})}
     >
-      <Face face={face} look={props} isPending={false} />
+      {props.dot === undefined || face.children === undefined ? (
+        <Face face={face} look={props} isPending={false} />
+      ) : (
+        <Suspense fallback={face.children}>
+          <LazyStatusDot hue={props.dot} isInherited>
+            {face.children}
+          </LazyStatusDot>
+        </Suspense>
+      )}
     </AriaToggleButton>
   );
 }

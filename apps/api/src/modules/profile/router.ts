@@ -12,6 +12,7 @@ import {
   deleteProfileItem,
   getMyProfile,
   listProfileFormChoices,
+  listPlaceChoices,
   saveProfileTheme,
   readProfileLook,
   saveProfileAccent,
@@ -226,6 +227,10 @@ export const profileRouter = member.profile.router({
   ]),
   formChoices: member.profile.formChoices.handler(async ({ context }) => [
     ...(await listProfileFormChoices(context.scope)),
+  ]),
+  // The places a Menu or Reserve block can name (spec 0065, AC-6528): the caller's own workspace's, with facts.
+  placeChoices: member.profile.placeChoices.handler(async ({ context }) => [
+    ...(await listPlaceChoices(context.scope)),
   ]),
   saveTheme: member.profile.saveTheme.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => saveProfileTheme(context.scope, input.theme)),

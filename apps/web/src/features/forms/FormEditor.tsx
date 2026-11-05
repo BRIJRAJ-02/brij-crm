@@ -29,7 +29,6 @@ import {
   Button,
   ButtonLink,
   Callout,
-  Badge,
   EditorStatus,
   EmptyState,
   Field,
@@ -45,6 +44,7 @@ import {
   ToggleButton,
   Tooltip,
   TopBar,
+  ViewOnlyTag,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -823,9 +823,13 @@ export function FormEditor(props: FormEditorProps) {
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
-      // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10).
+      // A member who may only view a live form sees its answers, and says so in the bar (forms fix a10); a reader
+      // sees the form as it is: one tag by the name, never a note over the editor.
       meta={
-        viewOnly ? <Badge text={strings.viewOnly} isWhole /> : <EditorStatus tone={status.tone} text={status.text} />
+        <>
+          {!viewOnly && <EditorStatus tone={status.tone} text={status.text} />}
+          {!canManage && <ViewOnlyTag reason={strings.readOnlyText} />}
+        </>
       }
     >
       <EditorActions
@@ -926,11 +930,6 @@ export function FormEditor(props: FormEditorProps) {
       {current === 'form' && canManage && uploadsOffFor(target, draft) && (
         <Callout tone="warning" title={strings.uploadsOffTitle}>
           {strings.uploadsOffText}
-        </Callout>
-      )}
-      {!canManage && !viewOnly && (
-        <Callout tone="info" title={strings.readOnlyTitle}>
-          {strings.readOnlyText}
         </Callout>
       )}
       <RetargetFormDialog

@@ -48,6 +48,10 @@ describe('the permission catalog', () => {
       'schedule.manage',
       'schedule.manage.team',
       'routing.manage',
+      'hospitality.manage',
+      'hospitality.service',
+      'services.manage',
+      'services.calendar',
     ]);
   });
 
@@ -98,6 +102,10 @@ describe('the permission catalog', () => {
       'schedule.view.team',
       'schedule.manage',
       'schedule.manage.team',
+      'hospitality.manage',
+      'hospitality.service',
+      'services.manage',
+      'services.calendar',
     ]);
   });
 
@@ -150,6 +158,12 @@ describe('the role table', () => {
     'schedule.manage': ['owner', 'admin'],
     'schedule.manage.team': ['owner', 'admin'],
     'routing.manage': ['owner', 'admin'],
+    // Spec 0065, AC-6511: members hold neither until given a role that has them (Floor staff holds Run service).
+    'hospitality.manage': ['owner', 'admin'],
+    'hospitality.service': ['owner', 'admin'],
+    // Spec 0066: the same for business booking.
+    'services.manage': ['owner', 'admin'],
+    'services.calendar': ['owner', 'admin'],
   };
 
   it('holds exactly the table, row by row', () => {
@@ -205,7 +219,8 @@ describe('the key scope catalog', () => {
     expect(KEY_SCOPES).toContain('schema.manage');
     expect(KEY_SCOPES).toContain('records.export');
     expect(KEY_SCOPES.slice(-2)).toEqual([...KEY_DATA_SCOPES]);
-    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 14 + 2);
+    // Spec 0065, AC-6511, and spec 0066: the four Business permissions stay with people too, for now.
+    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 18 + 2);
   });
 });
 

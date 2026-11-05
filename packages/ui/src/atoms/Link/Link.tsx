@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
+import { Icon } from '../Icon/Icon.tsx';
+import type { IconName } from '../Icon/icons.ts';
 import { isAppPath, safeHref } from '../../lib/safe-href.ts';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Link.module.css';
@@ -22,6 +24,13 @@ export interface LinkProps {
    */
   readonly opensInNewTab?: boolean;
   /**
+   * A link standing on its own line rather than inside a sentence (a public page's Directions, its phone): a mark
+   * before the words, at the text's size.
+   */
+  readonly icon?: IconName;
+  /** `strong`: the words in the strong weight, for a link that is a page's action rather than a reference. */
+  readonly weight?: 'regular' | 'strong';
+  /**
    * `quiet`: in the text's own colour, its underline faint until hover or focus, for a link that is a fact as much
    * as a way in (a form card's "12 submissions", 5 November 2026). Default: link-coloured.
    */
@@ -36,16 +45,37 @@ export function linkTarget(href: string) {
 }
 
 /**
- * An inline text link. Paths in the app go through the router; links out open
+ * An inline text link (or, with `icon`, one on its own line). Paths in the app go through the router; links out open
  * in a new tab. A link that fails `safeHref` (a `javascript:` URL) renders as
  * plain text (AC-14).
  */
-export function Link({ href, children, onPress, opensInNewTab = false, tone, label }: LinkProps) {
-  const look = { className: styles.root, 'data-tone': tone, 'aria-label': label } as const;
+export function Link({
+  href,
+  children,
+  onPress,
+  opensInNewTab = false,
+  icon,
+  weight = 'regular',
+  tone,
+  label,
+}: LinkProps) {
+  const look = {
+    className: styles.root,
+    'data-weight': weight === 'strong' ? 'strong' : undefined,
+    'data-icon': icon === undefined ? undefined : '',
+    'data-tone': tone,
+    'aria-label': label,
+  };
+  const words = (
+    <>
+      {icon !== undefined && <Icon name={icon} />}
+      {children}
+    </>
+  );
   if (onPress !== undefined) {
     return (
       <AriaLink {...look} onPress={onPress}>
-        {children}
+        {words}
       </AriaLink>
     );
   }
@@ -54,14 +84,14 @@ export function Link({ href, children, onPress, opensInNewTab = false, tone, lab
   if (opensInNewTab) {
     return (
       <AriaLink {...look} href={safe} target="_blank" rel="noopener noreferrer">
-        {children}
-        <VisuallyHidden> {strings.newTab}</VisuallyHidden>
+        {words}
+        <VisuallyHidden isInline> {strings.newTab}</VisuallyHidden>
       </AriaLink>
     );
   }
   return (
     <AriaLink {...look} href={safe} {...linkTarget(safe)}>
-      {children}
+      {words}
     </AriaLink>
   );
 }

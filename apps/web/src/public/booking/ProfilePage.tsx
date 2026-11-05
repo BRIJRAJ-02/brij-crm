@@ -116,6 +116,11 @@ export interface ProfilePageProps {
    * is out. Left out, the page draws its loading shape until that read lands.
    */
   readonly initial?: PublicProfile;
+  /**
+   * The handle named no person: asks whether it names a business instead (spec 0066, B4), which then takes the page.
+   * Resolves `true` when it did; the page then says nothing more. Left out, the page goes straight to its offer.
+   */
+  readonly isBusiness?: () => Promise<boolean>;
 }
 
 type Loaded =
@@ -172,7 +177,7 @@ export function wornMode(theme: PublicProfile['theme']): 'light' | 'dark' | 'sys
 }
 
 /** The link page: the person, then their blocks a page at a time, with a search once there are many. */
-export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
+export function ProfilePage({ handle, initial, onMoved, isBusiness }: ProfilePageProps) {
   const client = useMemo(() => createHandleClient({ origin: globalThis.location.origin }), []);
   const [loaded, setLoaded] = useState<Loaded>(() =>
     initial === undefined
@@ -290,18 +295,20 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
   useEffect(() => {
     if (loaded.state !== 'checking') return;
     let isLive = true;
-    client.offer(handle).then(
-      (offer) => {
-        if (isLive) setLoaded({ state: offer.status === 'free' ? 'free' : 'gone' });
-      },
-      () => {
-        if (isLive) setLoaded({ state: 'gone' });
-      },
-    );
+    (isBusiness === undefined ? Promise.resolve(false) : isBusiness().catch(() => false))
+      .then((taken) => (taken ? undefined : client.offer(handle)))
+      .then(
+        (offer) => {
+          if (isLive && offer !== undefined) setLoaded({ state: offer.status === 'free' ? 'free' : 'gone' });
+        },
+        () => {
+          if (isLive) setLoaded({ state: 'gone' });
+        },
+      );
     return () => {
       isLive = false;
     };
-  }, [client, handle, loaded.state]);
+  }, [client, handle, loaded.state, isBusiness]);
   // A next times block neared the screen (AC-6110): its times are read once, in the visitor's own zone, and the
   // answer is cached for a minute by the api, so a page of blocks is a handful of light reads at most.
   const readTimes = useCallback(
@@ -497,10 +504,7 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
           }
         : {})}
       empty={
-        <EmptyState
-          title={isSearching ? strings.noMatchesTitle(searched) : strings.noLinksTitle}
-          icon={isSearching ? 'search' : 'link'}
-        >
+        <EmptyState title={isSearching ? strings.noMatchesTitle(searched) : strings.noLinksTitle}>
           {isSearching ? strings.noMatchesText : strings.noLinksText}
         </EmptyState>
       }

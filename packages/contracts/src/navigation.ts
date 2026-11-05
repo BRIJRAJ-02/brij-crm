@@ -120,6 +120,11 @@ export const NavState = z.object({
   top: z.array(NavPageKey),
   /** The Scheduling pages the member's role may open (AC-928): all four, none for a guest. */
   scheduling: z.array(NavPageKey),
+  /**
+   * The Hospitality pages (spec 0065, AC-6510): only the installed apps', and only for a member holding Manage
+   * hospitality or Run service. Empty when no app is installed.
+   */
+  hospitality: z.array(NavPageKey),
 });
 /** The member's sidebar, resolved. */
 export type NavState = z.infer<typeof NavState>;

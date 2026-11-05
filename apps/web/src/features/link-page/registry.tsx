@@ -11,6 +11,7 @@ import type {
   ProfileItem,
   ProfilePageChoice,
   ProfileFormFacts,
+  ProfilePlaceFacts,
   ProfilePageFacts,
 } from '@crm/data';
 import type { Hue, IconName, LinkPageBlock, LinkPageMark, SocialLinkItem } from '@crm/ui';
@@ -33,7 +34,21 @@ import {
   MediaEditor,
   SocialsEditor,
   TimesChooser,
+  MenuChooser,
+  ReserveChooser,
 } from './editors-reach.tsx';
+import { bentoStrings } from './bento-strings.ts';
+import {
+  AudioEditor,
+  EventsEditor,
+  LocationEditor,
+  LogosEditor,
+  ProfileCardEditor,
+  StatusEditor,
+  StepsEditor,
+  TimelineEditor,
+  WorkEditor,
+} from './editors-bento.tsx';
 import { reachStrings } from './reach-strings.ts';
 import { strings } from './strings.ts';
 
@@ -88,7 +103,8 @@ export interface AfterSave {
 }
 
 /** What a chooser knows of what was picked, for the row it shows at once. */
-export type ChosenFacts = { readonly page: ProfilePageFacts } | { readonly form: ProfileFormFacts };
+export type ChosenFacts =
+  { readonly page: ProfilePageFacts } | { readonly form: ProfileFormFacts } | { readonly place: ProfilePlaceFacts };
 
 /** How a block's row reads in the editor's list. */
 export interface BlockRowWords {
@@ -234,6 +250,23 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     Editor: TimesChooser,
     isEditable: true,
   },
+  // Spec 0065 (AC-6528): a place's menu and its reservation page, offered only while their apps are installed.
+  menu: {
+    label: reachStrings.addMenu,
+    description: reachStrings.addMenuText,
+    icon: 'utensils',
+    hue: 'orange',
+    Editor: MenuChooser,
+    isEditable: true,
+  },
+  reserve: {
+    label: reachStrings.addReserve,
+    description: reachStrings.addReserveText,
+    icon: 'calendar-check',
+    hue: 'green',
+    Editor: ReserveChooser,
+    isEditable: true,
+  },
   banner: {
     label: reachStrings.addBanner,
     description: reachStrings.addBannerText,
@@ -248,6 +281,79 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     icon: 'type',
     hue: 'gray',
     Editor: HeadingEditor,
+    isEditable: true,
+  },
+  // Spec 0068's bento cards (AC-6808).
+  profile: {
+    label: bentoStrings.addProfile,
+    description: bentoStrings.addProfileText,
+    icon: 'user-round',
+    hue: 'blue',
+    Editor: ProfileCardEditor,
+    isEditable: true,
+  },
+  status: {
+    label: bentoStrings.addStatus,
+    description: bentoStrings.addStatusText,
+    icon: 'zap',
+    hue: 'green',
+    Editor: StatusEditor,
+    isEditable: true,
+  },
+  audio: {
+    label: bentoStrings.addAudio,
+    description: bentoStrings.addAudioText,
+    icon: 'mic',
+    hue: 'orange',
+    Editor: AudioEditor,
+    isEditable: true,
+  },
+  timeline: {
+    label: bentoStrings.addTimeline,
+    description: bentoStrings.addTimelineText,
+    icon: 'activity',
+    hue: 'purple',
+    Editor: TimelineEditor,
+    isEditable: true,
+  },
+  logos: {
+    label: bentoStrings.addLogos,
+    description: bentoStrings.addLogosText,
+    icon: 'building',
+    hue: 'gray',
+    Editor: LogosEditor,
+    isEditable: true,
+  },
+  work: {
+    label: bentoStrings.addWork,
+    description: bentoStrings.addWorkText,
+    icon: 'briefcase',
+    hue: 'sky',
+    Editor: WorkEditor,
+    isEditable: true,
+  },
+  steps: {
+    label: bentoStrings.addSteps,
+    description: bentoStrings.addStepsText,
+    icon: 'list-checks',
+    hue: 'lime',
+    Editor: StepsEditor,
+    isEditable: true,
+  },
+  location: {
+    label: bentoStrings.addLocation,
+    description: bentoStrings.addLocationText,
+    icon: 'map-pin',
+    hue: 'red',
+    Editor: LocationEditor,
+    isEditable: true,
+  },
+  events: {
+    label: bentoStrings.addEvents,
+    description: bentoStrings.addEventsText,
+    icon: 'calendar-days',
+    hue: 'yellow',
+    Editor: EventsEditor,
     isEditable: true,
   },
 };
@@ -269,6 +375,18 @@ export const ADDABLE: readonly AddableKind[] = [
   'faq',
   'testimonial',
   'contact',
+  'menu',
+  'reserve',
+  // Spec 0068's cards, after the kinds people reach for first.
+  'profile',
+  'status',
+  'audio',
+  'work',
+  'timeline',
+  'steps',
+  'logos',
+  'location',
+  'events',
   'banner',
   'heading',
 ];
@@ -280,13 +398,33 @@ export function pageFacts(page: { readonly durations: readonly number[]; readonl
   );
 }
 
-/** A link's address as its row shows it: without the scheme for a web address. */
-function shownAddress(url: string): string {
-  return url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+/** A link's address as its row shows it: without its scheme (`https://`, `mailto:`, `tel:`), as people say it. */
+export function shownAddress(url: string): string {
+  return url.replace(/^(https?:\/\/|mailto:|tel:|sms:)/i, '').replace(/\/$/, '');
 }
 
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
+  // Spec 0068's cards: what each holds first, then what it is.
+  if (item.kind === 'profile') return { title: item.line ?? bentoStrings.profileRow, address: bentoStrings.profileRow };
+  if (item.kind === 'status') return { title: item.text, address: bentoStrings.statusRow };
+  if (item.kind === 'audio') return { title: item.title ?? bentoStrings.audioRow, address: bentoStrings.audioRow };
+  if (item.kind === 'timeline') {
+    return { title: item.title ?? bentoStrings.addTimeline, address: bentoStrings.timelineRow(item.items.length) };
+  }
+  if (item.kind === 'logos') {
+    return { title: item.title ?? bentoStrings.addLogos, address: bentoStrings.logosRow(item.images.length) };
+  }
+  if (item.kind === 'work')
+    return { title: item.title ?? bentoStrings.addWork, address: bentoStrings.workRow(item.items.length) };
+  if (item.kind === 'steps') {
+    return { title: item.title ?? bentoStrings.addSteps, address: bentoStrings.stepsRow(item.items.length) };
+  }
+  if (item.kind === 'location')
+    return { title: item.title ?? item.address, address: `${bentoStrings.locationRow} · ${item.address}` };
+  if (item.kind === 'events') {
+    return { title: item.title ?? bentoStrings.addEvents, address: bentoStrings.eventsRow(item.items.length) };
+  }
   // Spec 0061's kinds: what each is, in the words its Add tile uses, with what it holds after.
   if (item.kind === 'socials') return { title: reachStrings.socials, address: reachStrings.socialsRow };
   if (item.kind === 'media') {
@@ -333,6 +471,15 @@ export function rowWords(item: ProfileItem): BlockRowWords {
       : { title: item.label, address: line };
   }
   if (item.kind === 'contact') return { title: item.fullName, address: contactWords(item, true) };
+  if (item.kind === 'menu' || item.kind === 'reserve') {
+    const title = item.label ?? (item.kind === 'menu' ? reachStrings.menuTitle : reachStrings.reserveTitle);
+    if (item.place === undefined) return { title, address: reachStrings.placeGone, isOff: true };
+    const what =
+      item.kind === 'menu' ? reachStrings.menuRow(item.place.name) : reachStrings.reserveRow(item.place.name);
+    return item.place.status === 'live'
+      ? { title, address: what }
+      : { title, address: `${reachStrings.placeOff(item.place.reason)} · ${what}`, isOff: true };
+  }
   if (item.page === undefined) {
     // Unavailable leads the line, as Paused does, so a phone keeps the row on one line.
     return {
@@ -391,9 +538,11 @@ export function previewBlock(
   // Outside its window a visitor doesn't see it, so neither does the phone (AC-6111): its row's chip says when.
   if (more.now !== undefined && item.kind !== 'heading' && !isShownAt(item, more.now)) return undefined;
   const picture = more.picture;
+  const card = cardBlock(item, more);
+  if (card !== 'none') return card;
   if (item.kind === 'socials') {
     const links = more.socials ?? [];
-    return links.length === 0 ? undefined : { kind: 'socials', id: item.id, links };
+    return links.length === 0 ? undefined : { kind: 'socials', id: item.id, links, ...sized(item) };
   }
   if (item.kind === 'media') {
     return {
@@ -444,6 +593,7 @@ export function previewBlock(
       // The editor reads no times: the phone shows the block's title and More times, which is how it reads when
       // its times can't be read, and never a time that isn't real.
       times: { status: 'error' },
+      ...sized(item),
     };
   }
   if (item.kind === 'heading')
@@ -454,7 +604,13 @@ export function previewBlock(
       ...(item.group === undefined ? {} : { group: item.group }),
     };
   if (item.kind === 'text') {
-    return { kind: 'text', id: item.id, body: item.body, ...(item.title === undefined ? {} : { title: item.title }) };
+    return {
+      kind: 'text',
+      id: item.id,
+      body: item.body,
+      ...(item.title === undefined ? {} : { title: item.title }),
+      ...sized(item),
+    };
   }
   if (item.kind === 'testimonial') {
     return {
@@ -463,12 +619,21 @@ export function previewBlock(
       quote: item.quote,
       author: item.author,
       ...(item.role === undefined ? {} : { role: item.role }),
+      ...sized(item),
     };
   }
   if (item.kind === 'form') {
     // A form a visitor can't open now is left out of the phone, as a paused booking page is.
     if (item.form === undefined || item.form.status !== 'live') return undefined;
-    return { kind: 'form', id: item.id, title: item.label, href: `/f/${item.form.key}` };
+    return { kind: 'form', id: item.id, title: item.label, href: `/f/${item.form.key}`, ...sized(item) };
+  }
+  if (item.kind === 'menu' || item.kind === 'reserve') {
+    // As a visitor would see it now: a paused one (the app removed, the menu hidden, reservations off) is left out.
+    if (item.place?.status !== 'live' || item.place.path === undefined) return undefined;
+    const title = item.label ?? (item.kind === 'menu' ? reachStrings.menuTitle : reachStrings.reserveTitle);
+    return item.kind === 'menu'
+      ? { kind: 'menu', id: item.id, title, href: item.place.path, dishes: [] }
+      : { kind: 'reserve', id: item.id, title, href: item.place.path };
   }
   if (item.kind === 'faq') {
     return {
@@ -476,6 +641,7 @@ export function previewBlock(
       id: item.id,
       items: item.items,
       ...(item.title === undefined ? {} : { title: item.title }),
+      ...sized(item),
     };
   }
   if (item.kind === 'contact') {
@@ -486,6 +652,7 @@ export function previewBlock(
       title: item.fullName,
       href: contactHref(handle, item.id),
       ...(line === '' ? {} : { line }),
+      ...sized(item),
     };
   }
   if (item.kind === 'link') {
@@ -505,7 +672,7 @@ export function previewBlock(
       ...(item.size === undefined ? {} : { size: item.size }),
     };
   }
-  if (item.page?.status !== 'live') return undefined;
+  if (item.kind !== 'page' || item.page?.status !== 'live') return undefined;
   return {
     kind: 'page',
     id: item.id,
@@ -516,12 +683,96 @@ export function previewBlock(
   };
 }
 
+/** A block's span on a grid page, when it has one (spec 0068, AC-6808). */
+function sized(item: ProfileItem): { readonly size?: 'small' | 'wide' | 'large' } {
+  return 'size' in item && item.size !== undefined ? { size: item.size } : {};
+}
+
+/**
+ * One of spec 0068's cards as the preview draws it (AC-6808), `undefined` for one a visitor wouldn't see, or `none`
+ * for a block that is not a card. Pictures come through the owner's own copies; the audio intro too, though the
+ * phone is inert and never plays.
+ */
+function cardBlock(item: ProfileItem, more: PreviewMore): LinkPageBlock | undefined | 'none' {
+  const picture = more.picture;
+  const titled = (title: string | undefined) => (title === undefined ? {} : { title });
+  switch (item.kind) {
+    case 'profile':
+      return { kind: 'profile', id: item.id, ...(item.line === undefined ? {} : { line: item.line }), ...sized(item) };
+    case 'status':
+      return { kind: 'status', id: item.id, text: item.text, state: item.state ?? 'open', ...sized(item) };
+    case 'audio':
+      return {
+        kind: 'audio',
+        id: item.id,
+        src: more.audio?.(item.audio) ?? '',
+        ...titled(item.title),
+        ...(item.wave === undefined ? {} : { wave: item.wave }),
+        ...sized(item),
+      };
+    case 'timeline':
+      return { kind: 'timeline', id: item.id, items: item.items, ...titled(item.title), ...sized(item) };
+    case 'steps':
+      return { kind: 'steps', id: item.id, items: item.items, ...titled(item.title), ...sized(item) };
+    case 'location':
+      return {
+        kind: 'location',
+        id: item.id,
+        address: item.address,
+        directions: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`,
+        ...titled(item.title),
+        ...sized(item),
+      };
+    case 'logos':
+      if (picture === undefined) return undefined;
+      return {
+        kind: 'logos',
+        id: item.id,
+        images: item.images.map((logo) => ({ ...picture(logo.image), alt: logo.alt })),
+        ...titled(item.title),
+        ...sized(item),
+      };
+    case 'work':
+      return {
+        kind: 'work',
+        id: item.id,
+        items: item.items.map((piece) => ({
+          title: piece.title,
+          ...(piece.image === undefined || picture === undefined ? {} : { image: picture(piece.image) }),
+          ...(piece.body === undefined ? {} : { body: piece.body }),
+          ...(piece.url === undefined ? {} : { href: piece.url }),
+        })),
+        ...titled(item.title),
+        ...sized(item),
+      };
+    case 'events':
+      return {
+        kind: 'events',
+        id: item.id,
+        items: [...item.items]
+          .sort((one, other) => Date.parse(one.at) - Date.parse(other.at))
+          .map((event) => ({
+            title: event.title,
+            at: event.at,
+            ...(event.place === undefined ? {} : { place: event.place }),
+            ...(event.url === undefined ? {} : { href: event.url }),
+          })),
+        ...titled(item.title),
+        ...sized(item),
+      };
+    default:
+      return 'none';
+  }
+}
+
 /** What the phone needs beyond a block itself to draw spec 0061's kinds. */
 export interface PreviewMore {
   /** A stored picture as the owner's browser reads it. Without it, pictures are left out. */
   readonly picture?: (imageId: string) => { readonly src: string; readonly width: number; readonly height: number };
   /** The person's social links, for a socials row. */
   readonly socials?: readonly SocialLinkItem[];
+  /** A stored recording as the owner's browser plays it (spec 0068). */
+  readonly audio?: (audioId: string) => string;
   /** Now, for the window: a block outside its window is left out, as the public read leaves it out. */
   readonly now?: Date;
 }
@@ -557,7 +808,21 @@ export function figuresLine(counts: ProfileCounts): string {
   return said + strings.viewsSame(days);
 }
 
-/** A block's presses as its row's chip, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
+/**
+ * A block's presses as its row's quiet figure (owner, 5 November 2026: a chip under every row was noise): none for
+ * a block that can't be pressed, and none for zero, so a new page's list reads as its titles alone.
+ */
+export function pressesFigure(
+  item: ProfileItem,
+  counts: ProfileCounts | undefined,
+): { readonly text: string; readonly label: string } | undefined {
+  const [said] = pressesChip(item, counts);
+  if (said === undefined || counts === undefined) return undefined;
+  const presses = counts.presses.find((each) => each.id === item.id)?.presses ?? 0;
+  return presses === 0 ? undefined : { text: strings.figure(presses), label: said };
+}
+
+/** A block's presses as words, said as clicks: none for a heading (it can't be pressed), "No clicks yet" for zero. */
 export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined): readonly string[] {
   // A heading, a piece of writing and a set of questions have nowhere to go, so none of them counts a press
   // (AC-5207, AC-5211): a chip saying "No clicks yet" on one would read as a block nobody presses, not one
@@ -571,6 +836,11 @@ export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined
     // A socials row's presses are its links', a gallery's open a viewer, and a picture without a link goes nowhere.
     item.kind === 'socials' ||
     item.kind === 'gallery' ||
+    // Spec 0068's cards with nothing to press: a status, a timeline, logos and the steps' switcher.
+    item.kind === 'status' ||
+    item.kind === 'timeline' ||
+    item.kind === 'logos' ||
+    item.kind === 'steps' ||
     (item.kind === 'image' && item.url === undefined)
   ) {
     return [];

@@ -69,8 +69,6 @@ export const teamWeekStrings = {
   usualIs: (words: string) => `Usual: ${words}`,
   backToUsual: 'Back to usual',
   backToUsualAt: (words: string) => `Back to usual hours, ${words}`,
-  /** In the editor of a day away: the cell stays Away whatever hours the date keeps. */
-  awayFirst: 'Away this day. Time off comes first.',
   cancel: 'Cancel',
   save: 'Save',
   rowActions: (name: string) => `Actions for ${name}`,

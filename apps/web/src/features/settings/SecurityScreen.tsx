@@ -271,7 +271,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       >
         <Card>
           {groups.length === 0 ? (
-            <EmptyState icon="monitor" title={strings.noDevices} />
+            <EmptyState layout="row" title={strings.noDevices} />
           ) : (
             (isAllShown ? groups : groups.slice(0, DEVICES_SHOWN)).map(deviceRow)
           )}

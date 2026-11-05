@@ -25,6 +25,7 @@ import {
   Table,
   type TableColumn,
 } from '@crm/ui';
+import { useRouter } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
 import { conditionsLine, hiddenFieldFacts, type Fact } from './facts.ts';
 import { RuleDialog, type RuleSurface } from './RuleDialog.tsx';
@@ -60,7 +61,7 @@ export interface RulesCardProps {
   readonly waitsForPublish?: boolean;
   /** A member's name, for routes that narrow to people. */
   readonly nameOf: (memberId: string) => string;
-  /** Why there is nothing a condition could read yet ("Add a question first"). */
+  /** On a team page, why no condition can read anything: its fields failed to load (shown as a failure, with Try again). */
   readonly emptyFacts: string;
   /** Keeps the new list: a form's draft at once; a page's saved (rejecting with the refusal's words). */
   readonly onRulesChange: (rules: readonly RoutingRule[]) => Promise<void>;
@@ -124,6 +125,8 @@ function RulesCardBody({
   const readable = [...facts, ...hiddenFieldFacts(surface.kind)];
   // A form's rules can always read the visit's hidden fields; a team page with no fields to read has failed to load them.
   const noFacts = surface.kind === 'page' && facts.length === 0;
+  // That failure reads the route again (the fields come with it), so Try again never reloads the whole editor.
+  const router = useRouter();
   // So the picker's name says so on a form; a team page's "Question or field" already does.
   const pickerLabel = surface.kind === 'form' ? strings.questionOrHidden : factLabel;
 
@@ -257,9 +260,16 @@ function RulesCardBody({
             {strings.addRule}
           </Button>
         )}
-        {!isReadOnly && (rules.length >= RULES_MAX || noFacts) && (
-          <Callout tone="info">{rules.length >= RULES_MAX ? strings.ruleLimit : emptyFacts}</Callout>
+        {!isReadOnly && noFacts && (
+          <Callout
+            tone="danger"
+            isPolite
+            actions={<Button onPress={() => void router.invalidate()}>{strings.tryAgain}</Button>}
+          >
+            {emptyFacts}
+          </Callout>
         )}
+        {!isReadOnly && !noFacts && rules.length >= RULES_MAX && <Callout tone="info">{strings.ruleLimit}</Callout>}
         {report !== undefined && rules.length > 0 && (
           <RuleReport data={data} slug={slug} surface={report} rules={rules} />
         )}

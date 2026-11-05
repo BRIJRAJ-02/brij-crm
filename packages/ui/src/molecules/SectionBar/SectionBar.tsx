@@ -7,7 +7,8 @@ export interface SectionBarProps {
   readonly title?: string;
   /**
    * One quiet line after the heading, on its baseline (Home's greeting: "Thursday, 22 October"). It wraps under
-   * the heading on a narrow container.
+   * the heading on a narrow container. Without a `title` it stands alone, a quiet line with no heading: a list's
+   * count before its actions ("12 of 20 tables", Print), or a page's one line of help under its TopBar.
    */
   readonly description?: string;
   /** Controls before the heading (a view switch). */
@@ -54,6 +55,7 @@ export function SectionBar({
       data-quiet-title={isTitleQuiet || undefined}
     >
       {start !== undefined && <div className={styles.group}>{start}</div>}
+      {title === undefined && description !== undefined && <p className={styles.description}>{description}</p>}
       {title !== undefined &&
         (description === undefined ? (
           <h2 className={styles.title}>{title}</h2>

@@ -7,12 +7,19 @@
     "./records": "./src/records/index.ts",
     "./react": "./src/react.ts",
     "./navigation": "./src/navigation/index.ts",
+    "./hospitality": "./src/hospitality/index.ts",
+    "./menu": "./src/menu/index.ts",
+    "./services": "./src/services/index.ts",
+    "./menu-guest": "./src/menu/guest.ts",
     "./roster": "./src/scheduling/roster.ts",
     "./public-form": "./src/public-form/client.ts",
     "./forms": "./src/forms/builder.ts",
     "./imports": "./src/imports/index.ts",
     "./booking": "./src/booking/public.ts",
-    "./booking/manage": "./src/booking/manage.ts"
+    "./booking/manage": "./src/booking/manage.ts",
+    "./tables": "./src/tables/guest.ts",
+    "./business-page": "./src/booking/business.ts",
+    "./business-page/store": "./src/business-page/store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

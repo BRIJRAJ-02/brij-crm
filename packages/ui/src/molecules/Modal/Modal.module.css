@@ -29,6 +29,8 @@
   .scrim[data-holds-input],
   .scrim[data-variant='peek'],
   .scrim[data-variant='sheet'],
+  .scrim[data-variant='sheet-card'],
+  .scrim[data-variant='sheet-side'],
   .scrim[data-variant='palette'],
   .scrim[data-variant='drawer'] {
     background: var(--scrim);
@@ -414,6 +416,181 @@
     animation: slide-out var(--duration-exit) var(--ease-out) forwards;
   }
 
+  /* A public page's sheets (spec 0065, the guest menu, after the checklabs guest app, value for value): on a phone
+     both are a bottom sheet with 20px top corners, rising from the foot over 320ms (twice duration-press) on the
+     ease-out curve, over a lightly blurred scrim; the dish's at most 92% of the window's height, the selection's
+     80%. From 480px wide (the scrim's container) `sheet-card` floats 16px above the foot, centred across, 448px wide
+     (less the window's 16px sides) and at most 768px tall, every corner 20px; `sheet-side` stands at the end edge,
+     448px wide and the window's height, its start corners 20px, sliding in from the end. Neither draws a bar: the
+     body runs to the sheet's edges (the content pads itself, so a dish's photo bleeds), and Close floats at the top
+     end, 36px round: on a glass of the card over a dish's photo, on the chip colour on the selection's title row.
+     Their surface is the page's own (surface-raised, text), which the guest menu points at its look. The dish's scrim
+     blurs the page 3px and the selection's 2px, at seven eighths of the scrim's colour (checklabs' 35% black where the
+     dish's is 40%). */
+  .scrim[data-variant='sheet-card'] {
+    backdrop-filter: blur(calc(var(--space-2) + var(--border-width-hairline)));
+  }
+
+  .scrim[data-variant='sheet-side'] {
+    background: color-mix(in oklab, var(--scrim) 87.5%, transparent);
+    backdrop-filter: blur(var(--space-2));
+  }
+
+  .scrim:has(> .root[data-variant='sheet-card']),
+  .scrim:has(> .root[data-variant='sheet-side']) {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .root[data-variant='sheet-card'],
+  .root[data-variant='sheet-side'] {
+    --sheet-radius: calc(var(--radius-lg) * 2);
+    --sheet-motion: calc(var(--duration-press) * 2);
+
+    position: relative;
+    inline-size: 100%;
+    max-block-size: 92dvh;
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+  }
+
+  .root[data-variant='sheet-side'] {
+    max-block-size: 80dvh;
+  }
+
+  .root[data-variant='sheet-card'] .head,
+  .root[data-variant='sheet-side'] .head {
+    position: absolute;
+    inset-block-start: var(--space-12);
+    inset-inline-end: var(--space-12);
+    z-index: var(--z-raised);
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .root[data-variant='sheet-side'] .head {
+    inset-block-start: var(--space-16);
+    inset-inline-end: var(--space-20);
+  }
+
+  /* Close: a 36px round of glass (the card, a little clear, blurred) over a dish's photo; of the chip colour on the
+     selection's title row. Its X is 18px in the text colour, a little bolder (checklabs'), and the whole disc eases
+     down while held, to the guest menu's look's --menu-press-close (it stays still without the look), so the button
+     inside it keeps still. */
+  .root[data-variant='sheet-card'] .close,
+  .root[data-variant='sheet-side'] .close {
+    --size-icon-sm: calc(var(--size-icon) + var(--space-2));
+    --text-secondary: var(--text);
+    --icon-stroke: var(--icon-stroke-medium);
+    --scale-press: 1;
+
+    display: grid;
+    place-items: center;
+    inline-size: calc(var(--space-32) + var(--space-4));
+    block-size: calc(var(--space-32) + var(--space-4));
+    margin: 0;
+    border-radius: var(--radius-full);
+    transition: scale var(--duration-press) var(--ease-press, var(--ease-out));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .root[data-variant='sheet-card'] .close:has([data-pressed]),
+    .root[data-variant='sheet-side'] .close:has([data-pressed]) {
+      scale: var(--menu-press-close, 1);
+    }
+  }
+
+  .root[data-variant='sheet-card'] .close {
+    background: color-mix(in oklab, var(--surface-raised) 92%, transparent);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(var(--space-6));
+  }
+
+  .root[data-variant='sheet-side'] .close {
+    background: var(--surface-sunken);
+  }
+
+  .root[data-variant='sheet-card'] .body,
+  .root[data-variant='sheet-side'] .body {
+    gap: 0;
+    padding: 0;
+    overscroll-behavior: contain;
+  }
+
+  /* A choice reached by Tab lands clear of a dish's foot, which stays in view over the body. */
+  .root[data-variant='sheet-card'] .body {
+    scroll-padding-block-end: calc(var(--size-bar) * 2);
+  }
+
+  .root[data-variant='sheet-card'][data-entering],
+  .root[data-variant='sheet-side'][data-entering] {
+    animation: rise var(--sheet-motion) var(--ease-out);
+  }
+
+  .root[data-variant='sheet-card'][data-exiting],
+  .root[data-variant='sheet-side'][data-exiting] {
+    animation: sink var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  @container modal-scrim (width >= 480px) {
+    .root[data-variant='sheet-card'] {
+      align-self: end;
+      justify-self: center;
+      inline-size: min(calc(var(--size-dialog) - var(--space-32)), calc(100% - 2 * var(--space-16)));
+      max-block-size: min(92dvh, calc(var(--size-dialog-wide) - var(--space-12)));
+      margin-block-end: var(--space-16);
+      border-radius: var(--sheet-radius);
+    }
+
+    .root[data-variant='sheet-card'][data-entering] {
+      animation: card-in var(--sheet-motion) var(--ease-out);
+    }
+
+    .root[data-variant='sheet-card'][data-exiting] {
+      animation: card-out var(--duration-exit) var(--ease-out) forwards;
+    }
+
+    .root[data-variant='sheet-side'] {
+      justify-self: end;
+      align-self: stretch;
+      inline-size: calc(var(--size-dialog) - var(--space-32));
+      block-size: 100dvh;
+      max-block-size: none;
+      border-radius: var(--sheet-radius) 0 0 var(--sheet-radius);
+    }
+
+    .root[data-variant='sheet-side'][data-entering] {
+      animation: slide-in var(--sheet-motion) var(--ease-out);
+    }
+
+    .root[data-variant='sheet-side'][data-exiting] {
+      animation: slide-out var(--duration-exit) var(--ease-out) forwards;
+    }
+
+    .root[data-variant='sheet-side'] .dialog {
+      block-size: 100%;
+    }
+  }
+
+  /* The floating dish card rises in from below the foot, fading in over its first part (checklabs' slide up). */
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(100% + var(--space-16));
+    }
+
+    60% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes card-out {
+    to {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
   /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
   .root[data-opened-by='keyboard'][data-entering] {
@@ -501,6 +678,10 @@
     .root[data-variant='sheet'][data-exiting],
     .root[data-variant='drawer'][data-entering],
     .root[data-variant='drawer'][data-exiting],
+    .root[data-variant='sheet-card'][data-entering],
+    .root[data-variant='sheet-card'][data-exiting],
+    .root[data-variant='sheet-side'][data-entering],
+    .root[data-variant='sheet-side'][data-exiting],
     :dir(rtl) .root[data-variant='drawer'][data-entering],
     :dir(rtl) .root[data-variant='drawer'][data-exiting] {
       animation: none;

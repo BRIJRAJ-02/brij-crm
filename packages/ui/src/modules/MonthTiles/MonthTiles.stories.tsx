@@ -123,6 +123,35 @@ export const Loading: Story = {
   },
 };
 
+/**
+ * `tone="plain"` (a restaurant's reservation page, after checklabs): plain numbers in 36px rows, today ringed, the
+ * chosen day filled with the accent, an open day filling under the pointer.
+ */
+export const Plain: Story = {
+  args: { tone: 'plain', value: '2026-10-13' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-tone="plain"]')).not.toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /Friday, October 16/ }));
+    await expect(canvas.getByRole('button', { name: /Friday, October 16/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getByRole('button', { name: /Saturday, October 10/ })).toBeDisabled();
+  },
+};
+
+/** The plain month while the times load: the numbers wait in grey, and no day says it has no times. */
+export const PlainLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { tone: 'plain', openDays: new Set<string>(), isLoading: true, canPrevious: false, canNext: false },
+  render: (args) => (
+    <Stage width="narrow">
+      <MonthTiles {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByLabelText(/no times/i)).toBeNull();
+  },
+};
+
 /** The story's own state, in a component so the artifact's preview can render it too. */
 function Interactive(args: ComponentProps<typeof MonthTiles>) {
   const [value, setValue] = useState(args.value);

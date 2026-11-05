@@ -759,6 +759,7 @@ export function SubmissionsTab({
       )}
       {isEmpty ? (
         <EmptyState
+          layout="block"
           icon="inbox"
           title={strings.noSubmissions}
           actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
@@ -802,9 +803,10 @@ export function SubmissionsTab({
           }}
           emptyState={
             query.trim() !== '' ? (
-              <EmptyState icon="search" title={strings.noMatch(query.trim())} />
+              <EmptyState title={strings.noMatch(query.trim())} />
             ) : state === undefined ? (
               <EmptyState
+                layout="block"
                 icon="inbox"
                 title={strings.noSubmissions}
                 actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
@@ -812,7 +814,7 @@ export function SubmissionsTab({
                 {strings.noSubmissionsText}
               </EmptyState>
             ) : (
-              <EmptyState icon="inbox" title={strings.noneIn[state]} />
+              <EmptyState title={strings.noneIn[state]} />
             )
           }
         />

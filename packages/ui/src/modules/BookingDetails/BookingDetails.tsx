@@ -6,7 +6,7 @@ import {
   visibleQuestions,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -36,6 +36,19 @@ export interface BookingDetailsValues {
   readonly trap: string;
 }
 
+/**
+ * What a guest has typed so far, kept by the page while the step is away (a one page's Back, a time taken meanwhile)
+ * and handed back as `draft`, so nothing typed is lost.
+ */
+export interface BookingDetailsDraft {
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly note: string;
+  /** The page's own questions' answers, by key, as their controls hold them. */
+  readonly answers: Readonly<Record<string, unknown>>;
+}
+
 /** What sending the details answered, as the page's client words it. */
 export type BookingDetailsOutcome =
   /**
@@ -52,15 +65,48 @@ export type BookingDetailsOutcome =
   /** One line above the buttons ("Too many attempts just now."). */
   | { readonly kind: 'failed'; readonly message: string };
 
+/**
+ * The words a page may put in place of the built in ones: a table reservation (spec 0066 B7) confirms with
+ * "Reserve", not "Confirm booking". Anything left out keeps the built in copy.
+ */
+export interface BookingDetailsLabels {
+  /** The step's heading ("Your details"). */
+  readonly heading?: string;
+  /** The send button ("Confirm booking"). */
+  readonly confirm?: string;
+  /** The send button while it sends ("Booking"). */
+  readonly confirming?: string;
+  /** The send button once it went through ("Booked"). */
+  readonly done?: string;
+  /** The note's label ("Anything the host should know?"). */
+  readonly note?: string;
+  /** The note's placeholder: a reservation's "Dietary, high chair, accessibility…". */
+  readonly notePlaceholder?: string;
+  /** The name's label ("Your name"); a reservation's "Full name". */
+  readonly name?: string;
+  /** The phone's label ("Number to call"); a reservation's "Phone". */
+  readonly phone?: string;
+}
+
 /** Props for BookingDetails. */
 export interface BookingDetailsProps {
   /** The host confirms each booking first (spec 0062, AC-6203): the button says Send request, then Requested. */
   readonly isRequest?: boolean;
+  /** The page's own words for the heading, the send button and the note (see BookingDetailsLabels). */
+  readonly labels?: BookingDetailsLabels;
+  /**
+   * The page's own controls, drawn after the note and before the questions: a table reservation's occasion as
+   * ChoiceChips, held and sent by the page. The form neither reads nor checks them.
+   */
+  readonly extra?: ReactNode;
   /** Asks for a number to call: a phone page. */
   readonly needsPhone?: boolean;
   /** Filled in from the visitor's sign in or a form hand off. */
   readonly prefill?: { readonly name?: string; readonly email?: string };
-  /** The most guests a booking takes. */
+  /**
+   * The most guests a booking takes. `0` leaves the invites out altogether: a table reservation (spec 0066 B7)
+   * counts its party instead and invites nobody.
+   */
   readonly maxGuests?: number;
   /**
    * The page's own questions (spec 0057, AC-5709), drawn after the note with the hosted form's controls and checked
@@ -71,8 +117,38 @@ export interface BookingDetailsProps {
   readonly prefillAnswers?: Readonly<Record<string, string>>;
   /** The visitor's country, guessed: a phone question's code and a country question's start. */
   readonly countryGuess?: string;
-  readonly onBack: () => void;
+  /**
+   * Back to the times. Left out on a page that keeps the times and the details on one page (a table reservation,
+   * after checklabs' one page booking form): the send button stands alone, the width of the form.
+   */
+  readonly onBack?: () => void;
+  /**
+   * What the page still needs before anything is checked (a one page form's time not picked yet): words for the line
+   * above the button, the page moving focus itself; undefined lets the form check and send.
+   */
+  readonly blocked?: () => string | undefined;
   readonly onSubmit: (values: BookingDetailsValues) => Promise<BookingDetailsOutcome>;
+  /**
+   * A guest page's fields (a table reservation, after checklabs): `lg` draws every field at Field's 42px guest size.
+   * Left out, the booking page's own 30px fields.
+   */
+  readonly fieldSize?: 'md' | 'lg';
+  /** Asks for the phone straight after the name, before the email (checklabs' reservation order). */
+  readonly isPhoneFirst?: boolean;
+  /** One quiet line under the heading: a reservation's "We'll send your confirmation here. Free to cancel…". */
+  readonly intro?: string;
+  /**
+   * One quiet line under the send button, centred ("Free cancellation · No prepayment required"); the send button then
+   * takes the row beside Back.
+   */
+  readonly confirmNote?: string;
+  /**
+   * What the guest typed when the step was last open (see `onDraft`): every field starts there, with no "Booking as"
+   * line, since the guest typed it themselves. Wins over `prefill`.
+   */
+  readonly draft?: BookingDetailsDraft;
+  /** Each change to what is typed, so the page can keep it while the step is away and hand it back as `draft`. */
+  readonly onDraft?: (draft: BookingDetailsDraft) => void;
 }
 
 /** One `--duration-move`, read from the page so it follows the token, in milliseconds. */
@@ -134,6 +210,8 @@ function drawnErrors(
  */
 export function BookingDetails({
   isRequest = false,
+  labels,
+  extra,
   needsPhone = false,
   prefill,
   maxGuests = 10,
@@ -141,11 +219,22 @@ export function BookingDetails({
   prefillAnswers,
   countryGuess,
   onBack,
+  blocked,
   onSubmit,
+  fieldSize = 'md',
+  isPhoneFirst = false,
+  intro,
+  confirmNote,
+  draft,
+  onDraft,
 }: BookingDetailsProps) {
-  const [name, setName] = useState(prefill?.name ?? '');
-  const [email, setEmail] = useState(prefill?.email ?? '');
-  const [phone, setPhone] = useState('');
+  // The guest size only when asked for, so the booking page's fields carry no size at all, as before; its buttons
+  // are then a thumb's 44px, as the Book bar before them.
+  const sized = fieldSize === 'lg' ? { size: 'guest' as const } : {};
+  const actionSize = fieldSize === 'lg' ? 'touch' : 'lg';
+  const [name, setName] = useState(draft?.name ?? prefill?.name ?? '');
+  const [email, setEmail] = useState(draft?.email ?? prefill?.email ?? '');
+  const [phone, setPhone] = useState(draft?.phone ?? '');
   // Guests are chips (the owner, 1 November 2026): an address becomes one when Enter, a comma, a space or leaving the
   // field ends it, and whatever is still typed is taken on Confirm, so a guest is never dropped.
   const [guests, setGuestsState] = useState<readonly string[]>([]);
@@ -159,21 +248,23 @@ export function BookingDetails({
   const [guestDraft, setGuestDraft] = useState('');
   const [isAddingGuests, setAddingGuests] = useState(false);
   const [guestNote, setGuestNote] = useState('');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(draft?.note ?? '');
   const [trap, setTrap] = useState('');
   const countryNames = useMemo(
     () => new Map(countriesIn('en').map((country) => [country.code, country.name] as const)),
     [],
   );
   // Each question's answer as its control holds it: a form's hand off fills in what it asked by the same key.
-  const [held, setHeld] = useState<Readonly<Record<string, unknown>>>(() =>
-    Object.fromEntries(
-      questions.flatMap((question) => {
-        // As a hosted form takes a prefill: words for a text question, a choice by its words or key, nothing else.
-        const given = prefillAnswer(question, prefillAnswers?.[question.key]);
-        return given === undefined ? [] : [[question.key, given]];
-      }),
-    ),
+  const [held, setHeld] = useState<Readonly<Record<string, unknown>>>(
+    () =>
+      draft?.answers ??
+      Object.fromEntries(
+        questions.flatMap((question) => {
+          // As a hosted form takes a prefill: words for a text question, a choice by its words or key, nothing else.
+          const given = prefillAnswer(question, prefillAnswers?.[question.key]);
+          return given === undefined ? [] : [[question.key, given]];
+        }),
+      ),
   );
   // What each question sends, and which show now (Show when reads only earlier questions, as on a form).
   const given = Object.fromEntries(questions.map((question) => [question.key, answerOf(question, held[question.key])]));
@@ -208,8 +299,17 @@ export function BookingDetails({
   const doneTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => globalThis.clearTimeout(doneTimer.current), []);
   const [bookingAs, setBookingAs] = useState(
-    prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
+    draft === undefined && prefill?.name !== undefined && prefill.name !== '' ? prefill.name : undefined,
   );
+  // What is typed goes to the page as it changes (`onDraft`), read through a ref so a new callback each render never
+  // sends it again by itself.
+  const draftTo = useRef(onDraft);
+  useEffect(() => {
+    draftTo.current = onDraft;
+  });
+  useEffect(() => {
+    draftTo.current?.({ name, email, phone, note, answers: held });
+  }, [name, email, phone, note, held]);
   const form = useRef<HTMLFormElement>(null);
   const headingId = useId();
   const trapId = useId();
@@ -217,14 +317,17 @@ export function BookingDetails({
   // The first empty field takes focus as the step arrives, so a visitor at a keyboard just types (the owner,
   // 2 November 2026); under a finger the heading takes it instead, so a phone keeps its keyboard down until a field is
   // tapped.
+  // On a one page form (no Back) nothing arrives: the page keeps its own focus, at its top.
+  const isStep = onBack !== undefined;
   useEffect(() => {
+    if (!isStep) return;
     const first = globalThis.matchMedia('(pointer: fine)').matches
       ? [...(form.current?.querySelectorAll<HTMLInputElement>('input[name="name"], input[name="email"]') ?? [])].find(
           (input) => input.value === '',
         )
       : undefined;
     (first ?? heading.current)?.focus();
-  }, []);
+  }, [isStep]);
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
 
@@ -306,10 +409,11 @@ export function BookingDetails({
     }));
     const first = [
       'name',
+      ...(isPhoneFirst ? ['phone'] : []),
       'email',
       'guests',
       ...guests.map((_, index) => `guest-${String(index)}`),
-      'phone',
+      ...(isPhoneFirst ? [] : ['phone']),
       ...showing.map((question) => `${ANSWER_FIELD}${question.key}`),
     ].find((field) => found[field] !== undefined);
     if (first?.startsWith(ANSWER_FIELD) === true) {
@@ -326,6 +430,11 @@ export function BookingDetails({
   const submit = () => {
     if (isBusy) return;
     setLine('');
+    const missing = blocked?.();
+    if (missing !== undefined) {
+      setLine(missing);
+      return;
+    }
     // An address still in the guests field goes with the booking: taken now, never dropped.
     const pending = guestDraft.trim() === '' ? { taken: guests, left: '' } : takeGuests(guestDraft);
     const found = {
@@ -379,6 +488,27 @@ export function BookingDetails({
     );
   };
 
+  // A number to call, on a page that phones the visitor: after the guests, or straight after the name when asked.
+  const phoneField = needsPhone ? (
+    <div className={styles.shaker} data-shake={shakeOf('phone')}>
+      <Field
+        label={labels?.phone ?? strings.phone}
+        {...sized}
+        name="phone"
+        type="tel"
+        autoComplete="tel"
+        maxLength={40}
+        isRequired
+        value={phone}
+        onChange={(next) => {
+          setPhone(next);
+          clear('phone');
+        }}
+        {...(errors.phone === undefined ? {} : { error: errors.phone })}
+      />
+    </div>
+  ) : null;
+
   return (
     <form
       ref={form}
@@ -391,8 +521,9 @@ export function BookingDetails({
       }}
     >
       <h2 ref={heading} id={headingId} className={styles.heading} tabIndex={-1}>
-        {strings.heading}
+        {labels?.heading ?? strings.heading}
       </h2>
+      {intro !== undefined && <p className={styles.intro}>{intro}</p>}
       {bookingAs !== undefined && (
         <p className={styles.as}>
           {strings.bookingAs(bookingAs)}
@@ -412,7 +543,8 @@ export function BookingDetails({
       )}
       <div className={styles.shaker} data-shake={shakeOf('name')}>
         <Field
-          label={strings.name}
+          label={labels?.name ?? strings.name}
+          {...sized}
           name="name"
           autoComplete="name"
           maxLength={200}
@@ -426,9 +558,11 @@ export function BookingDetails({
           {...(errors.name === undefined ? {} : { error: errors.name })}
         />
       </div>
+      {isPhoneFirst && phoneField}
       <div className={styles.shaker} data-shake={shakeOf('email')}>
         <Field
           label={strings.email}
+          {...sized}
           name="email"
           type="email"
           autoComplete="email"
@@ -444,7 +578,7 @@ export function BookingDetails({
           {...(errors.email === undefined ? {} : { error: errors.email })}
         />
       </div>
-      {isAddingGuests || guests.length > 0 ? (
+      {maxGuests === 0 ? null : isAddingGuests || guests.length > 0 ? (
         <div
           className={styles.guests}
           data-shake={shakeOf('guests')}
@@ -524,28 +658,13 @@ export function BookingDetails({
           </Button>
         </div>
       )}
-      {needsPhone && (
-        <div className={styles.shaker} data-shake={shakeOf('phone')}>
-          <Field
-            label={strings.phone}
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            maxLength={40}
-            isRequired
-            value={phone}
-            onChange={(next) => {
-              setPhone(next);
-              clear('phone');
-            }}
-            {...(errors.phone === undefined ? {} : { error: errors.phone })}
-          />
-        </div>
-      )}
+      {!isPhoneFirst && phoneField}
       <div className={fillingKey === undefined ? styles.filling : styles.shaker}>
         <Field
           // Optional in its own words, in the label where it is read first (critics C14, A11).
-          label={strings.note}
+          label={labels?.note ?? strings.note}
+          {...sized}
+          {...(labels?.notePlaceholder === undefined ? {} : { placeholder: labels.notePlaceholder })}
           name="note"
           isMultiline
           isFilling={fillingKey === undefined}
@@ -554,6 +673,7 @@ export function BookingDetails({
           onChange={setNote}
         />
       </div>
+      {extra}
       {showing.map((question) => {
         const field = `${ANSWER_FIELD}${question.key}`;
         return (
@@ -594,13 +714,16 @@ export function BookingDetails({
         {line}
       </p>
       <div className={styles.actions} data-shake={shakeOf('actions')}>
-        {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar. */}
-        <Button size="lg" isDisabled={isBusy} onPress={onBack}>
-          {strings.back}
-        </Button>
+        {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar; a one
+            page form (a reservation's) has no Back. */}
+        {onBack !== undefined && (
+          <Button size={actionSize} isDisabled={isBusy} onPress={onBack}>
+            {strings.back}
+          </Button>
+        )}
         <Button
           variant="primary"
-          size="lg"
+          size={actionSize}
           isFullWidth="center"
           type="submit"
           isPending={isBusy && !isDone}
@@ -613,12 +736,13 @@ export function BookingDetails({
                 ? strings.requesting
                 : strings.request
             : isDone
-              ? strings.booked
+              ? (labels?.done ?? strings.booked)
               : isBusy
-                ? strings.confirming
-                : strings.confirm}
+                ? (labels?.confirming ?? strings.confirming)
+                : (labels?.confirm ?? strings.confirm)}
         </Button>
       </div>
+      {confirmNote !== undefined && <p className={styles.confirmNote}>{confirmNote}</p>}
     </form>
   );
 }

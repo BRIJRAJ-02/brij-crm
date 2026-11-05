@@ -10,6 +10,7 @@ import {
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
+  createSlotCache,
   twoFactorRequiredBy,
   type BookingCalendar,
   type JobRegistry,
@@ -45,6 +46,7 @@ import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
 import { mountBrandLogo } from './brand-logo.ts';
 import { mountLinkPageImages } from './link-page-images.ts';
+import { mountMenuPhotos } from './menu-photos.ts';
 import { mountLinkPagePictures } from './link-page-pictures.ts';
 import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
@@ -64,8 +66,13 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { mountPublicTables } from './public/tables.ts';
 import { mountBrandCss } from './public/brand-css.ts';
+import { mountPublicBusiness } from './public/business.ts';
+import { mountBusinessPagePhotos } from './business-page-photos.ts';
+import { mountStaffPhotos } from './staff-photos.ts';
 import { mountLook } from './public/look.ts';
+import { mountPublicMenu } from './public/menu.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { mountInsightShares } from './public/insights.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
@@ -219,6 +226,8 @@ export interface AppServices {
   readonly bookingCalendar?: BookingCalendar;
   /** The public booking routes' limiter (spec 0025, AC-643): this process's memory unless a test passes its own. */
   readonly bookingLimiter?: PublicLimiter;
+  /** The guest menu's limiter (spec 0065, H1): this process's memory unless a test passes its own. */
+  readonly menuLimiter?: PublicLimiter;
   /** The email preferences routes' limiter (the emails lane): this process's memory unless a test passes its own. */
   readonly emailPreferenceLimiter?: PublicLimiter;
   /** Fetches a host's account picture from Google's picture hosts (23 Oct 2026): the real one unless a test passes its own. */
@@ -332,6 +341,8 @@ export function createApp({
   const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
   // Home's metrics (spec 0041): each workspace's figures, kept a minute in this process.
   const homeMetrics = createHomeMetricsCache();
+  // The visit engine's offered times (spec 0066): 30 seconds per place and day, purged by any write at the place.
+  const visitSlots = createSlotCache();
   // Free and busy and the event writes (spec 0024): one service, so a member's change forgets its kept answers.
   const calendarEvents =
     calendar === undefined
@@ -468,6 +479,8 @@ export function createApp({
     const origin = c.get('origin');
     // A public booking page's own writes (book, chat, the guest page's changes) from the booking origin.
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
+    // A reservation page's own writes (reserve, change, cancel; spec 0066 B7) from the same public origin.
+    if (origin === bookingOrigin && c.req.path.startsWith('/api/public/tables/')) return next();
     // A link page's press beacon (spec 0051, AC-5125), from the public origin the page is served on; that one route.
     if (origin === bookingOrigin && LINK_PAGE_PRESS.test(c.req.path) && c.req.method === 'POST') return next();
     if (!origin || !allowedOrigins.has(origin)) {
@@ -516,6 +529,7 @@ export function createApp({
         isFreeDomain,
         bookingCalendar: booking,
         homeMetrics,
+        visitSlots,
         bookingLinkKey: linkKey,
         rules,
         mailer,
@@ -689,6 +703,18 @@ export function createApp({
   // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
   mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
+  // The guest menu (spec 0065, H1): a place's published snapshot, its look, logo and photos, edge cached by place.
+  mountPublicMenu(app, {
+    db,
+    files: pictureFiles,
+    limiter: services.menuLimiter ?? createMemoryLimiter(),
+    edgeCache,
+    rendered: edge.rendered,
+    visitorKey: visitors,
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
+  // The business page (spec 0066, B4 lite): the published page, its pictures and its brand, by the business handle.
+  mountPublicBusiness(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -750,6 +776,22 @@ export function createApp({
     ...(services.now === undefined ? {} : { now: services.now }),
   });
 
+  // Table seating's guest page (spec 0066 B7 lite): a place's public key, no session; writes passed the Origin check.
+  mountPublicTables(app, {
+    db,
+    busy: bookingBusy,
+    slotCache: visitSlots,
+    linkKey,
+    wakeRelay,
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    ics: {
+      uidDomain: new URL(env.APP_URL).hostname,
+      publicOrigin: bookingOrigin,
+      organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
+    },
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
+
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.
   mountSiteHits(app, {
     record: (visit) => identity.recordSiteVisit(visit),
@@ -782,8 +824,14 @@ export function createApp({
   };
   mountBrandLogo(app, { ...imageRoutes, edgeCache });
   mountLinkPageImages(app, imageRoutes);
+  // A menu item's photo at two widths (spec 0065, AC-6527), Manage hospitality only.
+  mountMenuPhotos(app, imageRoutes);
   // A link page's pictures and its Insights download (spec 0061), the same way.
   mountLinkPagePictures(app, imageRoutes);
+  // The business page's gallery pictures (spec 0066, B4 lite), the same way.
+  mountBusinessPagePhotos(app, imageRoutes);
+  // Staff photos (spec 0066 B1), the same way.
+  mountStaffPhotos(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

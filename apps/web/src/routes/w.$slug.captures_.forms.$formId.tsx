@@ -1,9 +1,9 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { EmptyState, LoadingNow, Table, TopBar } from '@crm/ui';
+import { ButtonLink, EmptyState, LoadingNow, Table, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
-import { FORM_TABS, type FormTab } from '../features/forms/paths.ts';
+import { FORM_TABS, formsHref, type FormTab } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -170,7 +170,20 @@ function FormRoute() {
         currentPage="captures"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
-          body: <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>,
+          body: (
+            <EmptyState
+              layout="block"
+              title={strings.missingTitle}
+              // A dead end gets a way back.
+              actions={
+                <ButtonLink href={formsHref(slug)} variant="secondary">
+                  {strings.backToForms}
+                </ButtonLink>
+              }
+            >
+              {strings.missingText}
+            </EmptyState>
+          ),
         }}
       />
     );
@@ -203,7 +216,12 @@ function FormError({ error }: ErrorComponentProps) {
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (
-          <EmptyState tone="error" title={strings.formFailedTitle} onRetry={() => void router.invalidate()}>
+          <EmptyState
+            layout="block"
+            tone="error"
+            title={strings.formFailedTitle}
+            onRetry={() => void router.invalidate()}
+          >
             {isDataError(error) ? error.message : strings.failedText}
           </EmptyState>
         ),

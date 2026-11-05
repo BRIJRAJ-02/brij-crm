@@ -161,6 +161,7 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
               </EmptyState>
             ) : (
               <EmptyState
+                layout="block"
                 icon="plug"
                 title={strings.emptyTitle}
                 actions={
@@ -725,7 +726,7 @@ function EndpointDialog({
               rows={log ?? []}
               getRowId={(delivery) => delivery.id}
               emptyState={
-                <EmptyState icon="inbox" title={strings.logEmpty} layout="row">
+                <EmptyState title={strings.logEmpty} layout="row">
                   {strings.logEmptyText}
                 </EmptyState>
               }

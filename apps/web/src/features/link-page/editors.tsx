@@ -687,7 +687,7 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
   const [author, setAuthor] = useState(editing?.author ?? '');
   const [role, setRole] = useState(editing?.role ?? '');
   const [problems, setProblems] = useState<BlockProblems>({});
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   const draft = () => {
     const kept = role.trim();
     return { kind: 'testimonial' as const, quote, author, ...(kept === '' ? {} : { role: kept }), ...extras.draft };
@@ -788,7 +788,7 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
   const [title, setTitle] = useState(editing?.title ?? '');
   const [body, setBody] = useState(editing?.body ?? '');
   const [problems, setProblems] = useState<BlockProblems>({});
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   const draft = () => {
     const kept = title.trim();
     return { kind: 'text' as const, body, ...(kept === '' ? {} : { title: kept }), ...extras.draft };
@@ -895,7 +895,7 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(editing === undefined ? ['q0'] : []));
   const [problems, setProblems] = useState<BlockProblems>({});
   const minted = useRef(asked.length);
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
 
   const draft = () => {
     const kept = title.trim();
@@ -1191,7 +1191,7 @@ export function ContactEditor({
     website: shownCount([editing?.website, editing?.website2, editing?.website3]),
   }));
   const [problems, setProblems] = useState<BlockProblems>({});
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   const sent = (value: PhoneFieldValue) => (value.national.trim() === '' ? '' : toE164(value.country, value.national));
   const draft: BlockDraft = {
     kind: 'contact',
@@ -1444,7 +1444,6 @@ function PageChoice({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockE
     body = (
       <EmptyState
         layout="row"
-        icon="calendar-clock"
         title={items.some((item) => item.kind === 'page') ? strings.noPages : strings.noPagesYet}
         actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
       />
@@ -1510,7 +1509,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
   const [touched, setTouched] = useState(editing !== undefined);
   const [problems, setProblems] = useState<BlockProblems>({});
   const [attempt, setAttempt] = useState(0);
-  const extras = useBlockExtras(editing, false);
+  const extras = useBlockExtras(editing, true);
   useEffect(() => {
     // Editing one: the form is already chosen, and only its label is open.
     if (editing !== undefined) return;
@@ -1581,7 +1580,6 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
     body = (
       <EmptyState
         layout="row"
-        icon="clipboard-list"
         title={items.some((each) => each.kind === 'form') ? strings.noForms : strings.noFormsYet}
         actions={<ButtonLink href={formsHref(slug)}>{strings.noFormsAction}</ButtonLink>}
       />

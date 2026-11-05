@@ -453,6 +453,7 @@ export function TeamDayView(props: TeamDayViewProps) {
   if (answer !== undefined && columns.length < 2 && !props.isFiltered && laneRows.length === 0) {
     return (
       <EmptyState
+        layout="block"
         icon="users"
         title={strings.teamNeedsTeam}
         actions={

@@ -10,6 +10,7 @@ import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useToastClearance } from '../../provider/toast-clearance.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 
 /** Props for ModalTrigger. */
@@ -46,9 +47,13 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * context first as a crumb and no title drawn (the page shows its own), and
  * the body a centred writing column; `drawer` for a long list or detail that belongs beside the page rather than
  * over it (a rotation's member table): a full height panel at the end edge with the standard title bar and
- * footer, that slides in from the end.
+ * footer, that slides in from the end. A public page's sheets (spec 0065, the guest menu): `sheet-card` is a bottom
+ * sheet on a phone and a floating card centred over the page from 480px wide (a dish); `sheet-side` is a bottom sheet
+ * on a phone and a panel at the end edge from 480px wide (a guest's picks). Both name themselves for screen readers
+ * only, as `sheet` does, and wear whatever surface the page around them sets.
  */
-export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet' | 'drawer';
+export type ModalVariant =
+  'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet' | 'drawer' | 'sheet-card' | 'sheet-side';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -203,10 +208,17 @@ export function Modal({
   onOpenChange,
 }: ModalProps) {
   const { isFocusVisible } = useFocusVisible();
+  // Toasts rise above this footer when they would cover it: a drawer's or a sheet's Save at the window's foot.
+  const keepToastsOff = useToastClearance();
   const isAlert = tone === 'danger';
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
-  const isTitleHidden = variant === 'palette' || variant === 'peek' || variant === 'sheet';
+  const isTitleHidden =
+    variant === 'palette' ||
+    variant === 'peek' ||
+    variant === 'sheet' ||
+    variant === 'sheet-card' ||
+    variant === 'sheet-side';
   // A confirm asks in its body: no title bar, the question over its one line of consequence.
   const isConfirm = variant === 'confirm';
   const bodyId = useId();
@@ -333,9 +345,22 @@ export function Modal({
                       </span>
                     )}
                     {headerActions}
-                    {isClosable && (
-                      <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
-                    )}
+                    {isClosable &&
+                      (variant === 'sheet-card' || variant === 'sheet-side' ? (
+                        // A guest's sheet: round, filling its 36px disc, pressed across 44px.
+                        <Button
+                          slot="close"
+                          variant="ghost"
+                          size="lg"
+                          icon="x"
+                          label={strings.close}
+                          isRound
+                          isTouchTarget
+                          isDisabled={isBusy}
+                        />
+                      ) : (
+                        <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
+                      ))}
                   </span>
                 )}
             </div>
@@ -353,7 +378,18 @@ export function Modal({
             body
           )}
           {actions !== undefined && (
-            <div className={styles.foot} ref={setFoot}>
+            <div
+              className={styles.foot}
+              // Both: toasts keep off the footer (its cleanup kept), and ⌘↵ finds the footer's primary.
+              ref={(foot: HTMLDivElement | null) => {
+                setFoot(foot);
+                const release = keepToastsOff(foot);
+                return () => {
+                  release?.();
+                  setFoot(null);
+                };
+              }}
+            >
               {footerStart !== undefined ? (
                 <div className={styles.footerStart}>{footerStart}</div>
               ) : (

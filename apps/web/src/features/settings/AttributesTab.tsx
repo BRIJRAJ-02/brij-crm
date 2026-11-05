@@ -6,7 +6,6 @@ import { isDataError, type AttributeDefinition, type MemberSummary, type ObjectS
 import {
   Badge,
   Button,
-  Callout,
   Card,
   Disclosure,
   EmptyState,
@@ -411,7 +410,6 @@ export function AttributesTab({
         ) : (
           <Meter label={strings.attributeLimit} value={meter.used} maxValue={meter.limit} />
         ))}
-      {!canManage && list === undefined && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {hasSearch && (
         <Field
           label={strings.searchAttributes}

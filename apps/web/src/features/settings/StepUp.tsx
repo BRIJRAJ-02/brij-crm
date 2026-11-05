@@ -123,7 +123,7 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   if (isNeeded && twoFactorOn) {
     fields = (
       <>
-        <Callout title={strings.stepUp.title}>
+        <Callout tone="info" title={strings.stepUp.title}>
           {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
         </Callout>
         {kind === 'totp' ? (
@@ -162,11 +162,15 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       </>
     );
   } else if (isNeeded && need.secondFactor === true) {
-    fields = <Callout title={strings.stepUp.title}>{strings.stepUp.secondFactorOnly}</Callout>;
+    fields = (
+      <Callout tone="info" title={strings.stepUp.title}>
+        {strings.stepUp.secondFactorOnly}
+      </Callout>
+    );
   } else if (isNeeded) {
     fields = (
       <>
-        <Callout title={strings.stepUp.title} isAnnounced>
+        <Callout tone="info" title={strings.stepUp.title} isAnnounced>
           {sent ? strings.stepUp.sent : strings.stepUp.withEmail}
         </Callout>
         {sent ? (

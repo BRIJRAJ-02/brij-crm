@@ -1,0 +1,539 @@
+/* Spec 0068's bento (AC-6808): the grid a group's cards sit on, and the new cards. Every card wears the template's
+   card (its surface, edge, radius and soft shadow, from the page's own custom properties, with the token each stands
+   in for as a fallback), the same padding, and a hover lift under a fine pointer; a card you press settles back. */
+@layer components {
+  /* The grid's own size container, so its columns follow the room the blocks have, not the window. */
+  .room {
+    container-type: inline-size;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* One card per cell, stretched to its row: a row is as tall as its tallest card, so no row leaves a hole. */
+  .cell {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  /* A tile or a picture holds a square's worth of room even beside short words. */
+  .cell:is([data-kind='link'], [data-kind='page'], [data-kind='image'], [data-kind='gallery'], [data-kind='media']) {
+    min-block-size: calc(var(--size-column-narrow) + var(--space-32) + var(--space-8));
+  }
+
+  @container (inline-size >= 480px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cell[data-span2='2'] {
+      grid-column: span 2;
+    }
+  }
+
+  /* Three columns on a wide page, where the grid has a tablet's room or more (the editor's phone never does). */
+  @media (width >= 1024px) {
+    @container (inline-size >= 480px) {
+      .grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .cell[data-span3] {
+        grid-column: span 1;
+      }
+
+      .cell[data-span3='2'] {
+        grid-column: span 2;
+      }
+
+      .cell[data-span3='3'] {
+        grid-column: span 3;
+      }
+    }
+  }
+
+  /* The cards enter once, one after another (spec 0068, AC-6803), on the live page only. */
+  .cell[data-enter] {
+    --enter-stagger: calc(var(--duration-press) / 4);
+
+    animation: card-in var(--duration-modal) var(--ease-out) both;
+    animation-delay: calc(var(--enter-stagger) * (var(--enter-place, 1) - 1));
+  }
+
+  .cell[data-enter='2'] {
+    --enter-place: 2;
+  }
+
+  .cell[data-enter='3'] {
+    --enter-place: 3;
+  }
+
+  .cell[data-enter='4'] {
+    --enter-place: 4;
+  }
+
+  .cell[data-enter='5'] {
+    --enter-place: 5;
+  }
+
+  .cell[data-enter='6'] {
+    --enter-place: 6;
+  }
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  .card {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    padding: var(--space-16);
+    border: var(--page-card-border-width, var(--border-width-hairline)) solid var(--page-card-border, var(--border));
+    border-radius: var(--page-radius-card, var(--radius-xl));
+    background: var(--page-card, var(--surface-raised));
+    box-shadow: var(--page-card-shadow, var(--shadow-xs));
+    color: var(--page-card-text, var(--text));
+    transition:
+      box-shadow var(--duration-hover) var(--ease-hover),
+      transform var(--duration-press) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(calc(var(--space-2) * -1));
+    }
+  }
+
+  /* A press settles the lifted card back onto the page. */
+  .card:active {
+    box-shadow: var(--page-card-shadow, var(--shadow-xs));
+    transform: none;
+  }
+
+  /* A card's small title: a quiet chip with its mark, as the references carry theirs. */
+  .chip {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-2) var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--page-accent-soft, var(--surface-subtle));
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .cardName {
+    color: var(--page-card-text, var(--text));
+    font: var(--text-note-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .quiet {
+    margin: 0;
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-body);
+    overflow-wrap: anywhere;
+  }
+
+  .rowTitle {
+    color: var(--page-card-text, var(--text));
+    font: var(--text-body-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .twoLines {
+    display: -webkit-box;
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-body);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin-block-start: auto;
+  }
+
+  /* The profile card: the face, then the name and line, then Book and Share at its foot. */
+  .profileFace {
+    display: flex;
+  }
+
+  .profileWords {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* A status: the dot and its words in the card's large type, at its foot, as the references' date cards sit. */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin-block-start: auto;
+  }
+
+  /* A card's own words at its foot, large, when the card holds little else (an audio intro's title). */
+  .footTitle {
+    margin-block-start: auto;
+    color: var(--page-card-text, var(--text));
+    font: var(--text-note-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+    overflow-wrap: anywhere;
+  }
+
+  .dot {
+    position: relative;
+    flex: none;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--success);
+  }
+
+  .dot[data-state='away'] {
+    background: var(--text-tertiary);
+  }
+
+  /* Open breathes: a soft ring grows from the dot and fades, at the pulse token's pace. */
+  .dot[data-state='open'] {
+    animation: breathe var(--duration-pulse) var(--ease-out) infinite;
+  }
+
+  @keyframes breathe {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 50%, transparent);
+    }
+
+    to {
+      box-shadow: 0 0 0 var(--space-6) transparent;
+    }
+  }
+
+  /* An audio intro: Play, the waveform, the time left. */
+  .player {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  .wave {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: calc(var(--space-2) / 2);
+    min-inline-size: 0;
+    block-size: var(--size-control);
+  }
+
+  .bar {
+    flex: 1;
+    min-inline-size: calc(var(--space-2) / 2);
+    block-size: calc(var(--bar, 1) / 31 * 100%);
+    border-radius: var(--radius-full);
+    background: var(--page-card-border, var(--border-strong));
+    transition: background-color var(--duration-move) var(--ease-out);
+  }
+
+  .bar[data-played] {
+    background: var(--page-link, var(--accent));
+  }
+
+  .time {
+    flex: none;
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A timeline: a hairline rail, a dot per row, the words beside it. */
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .railRow {
+    position: relative;
+    display: flex;
+    gap: var(--space-12);
+  }
+
+  .railRow:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    inset-block: var(--space-12) calc(var(--space-12) * -1);
+    inset-inline-start: calc(var(--space-4) - var(--border-width-hairline) / 2);
+    border-inline-start: var(--border-width-hairline) solid var(--page-card-border, var(--border));
+  }
+
+  .railDot {
+    flex: none;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    margin-block-start: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--page-card-text, var(--text));
+  }
+
+  .railWords {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Logos: a row that drifts sideways, its copy right behind it, held under the pointer and for reduced motion. */
+  .marquee {
+    margin-block: auto;
+    display: flex;
+    gap: var(--space-24);
+    overflow: hidden;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      currentcolor var(--space-24),
+      currentcolor calc(100% - var(--space-24)),
+      transparent
+    );
+  }
+
+  .track {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-24);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .track[data-drifts] {
+    /* Tokens only: a slow drift, many pulses long, so a logo is always readable as it passes. */
+    animation: drift calc(var(--duration-pulse) * 16) linear infinite;
+  }
+
+  .marquee:is(:hover, :focus-within, [data-paused]) .track {
+    animation-play-state: paused;
+  }
+
+  .marqueeControl {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @keyframes drift {
+    to {
+      translate: calc(-100% - var(--space-24)) 0;
+    }
+  }
+
+  .logo {
+    display: flex;
+    flex: none;
+  }
+
+  .logoImage {
+    inline-size: auto;
+    block-size: var(--size-control);
+    max-inline-size: var(--size-column-narrow);
+    object-fit: contain;
+  }
+
+  /* Work cards and events: rows of a picture or date tile, words, and the mark of where they go. */
+  .pieces {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pieceItem {
+    display: flex;
+  }
+
+  .piece {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    padding: var(--space-8);
+    border-radius: var(--radius-lg);
+    background: var(--page-surface, var(--surface-subtle));
+    color: inherit;
+    text-decoration: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .piece[data-pressable]:focus-visible {
+    outline: none;
+    box-shadow: var(--page-focus, var(--shadow-focus));
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .piece[data-pressable]:hover {
+      background: var(--page-card-hover, var(--surface-hover));
+    }
+  }
+
+  .pieceImage {
+    display: flex;
+    flex: none;
+    inline-size: calc(var(--size-row) * 2);
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-md);
+    background: var(--page-accent-soft, var(--surface-subtle));
+    overflow: hidden;
+  }
+
+  .pieceShot {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .pieceWords {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .pieceEnd {
+    display: flex;
+    flex: none;
+    color: var(--page-link, var(--link));
+  }
+
+  .dateTile {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--space-24) * 2);
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
+    background: var(--page-card, var(--surface-raised));
+  }
+
+  .dateMonth {
+    color: var(--page-link, var(--link));
+    font: var(--text-label);
+    text-transform: uppercase;
+  }
+
+  .dateDay {
+    color: var(--page-card-text, var(--text));
+    font: var(--text-title);
+  }
+
+  /* How I work: one step large, then the switcher. The step crossfades in as it changes. */
+  .step {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--space-4);
+    animation: step-in var(--duration-move) var(--ease-out);
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes step-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .stepTitle {
+    margin: 0;
+    color: var(--page-card-text, var(--text));
+    font: var(--text-note-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+  }
+
+  .stepNumber {
+    color: var(--page-card-quiet, var(--text-secondary));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stepBody {
+    margin: 0;
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-body);
+  }
+
+  .address {
+    color: var(--page-card-text, var(--text));
+    font: var(--text-body);
+    font-style: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell[data-enter],
+    .step {
+      animation-name: fade-in;
+    }
+
+    .track[data-drifts],
+    .dot[data-state='open'] {
+      animation: none;
+    }
+
+    .card,
+    .bar {
+      transition: none;
+    }
+
+    .card:hover {
+      transform: none;
+    }
+
+    /* Held still, the logos wrap instead of drifting out of view, drawn once, and nothing offers to pause them. */
+    .marquee,
+    .track {
+      flex-wrap: wrap;
+      mask-image: none;
+    }
+
+    .track[aria-hidden='true'],
+    .marqueeControl {
+      display: none;
+    }
+  }
+}

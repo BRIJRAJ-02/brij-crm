@@ -33,7 +33,6 @@ import {
   DescriptionList,
   EmptyState,
   Field,
-  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -898,6 +897,9 @@ export function MembersScreen({
   return (
     <SettingsPage
       title={strings.title}
+      // Who changes this page: a "View only" tag by the title (the owner's less-text rule), never a box over the
+      // list. A guest changes nothing here, and the read only table says so already.
+      {...(!canInvite && !isGuest ? { viewOnly: sharedStrings.ownersAndAdminsOnly } : {})}
       tabBody="table"
       // The entry's tab strip (Members · Teams): Members' own tab carries the count, the search at the strip's end.
       tabBar={{ count: page.total, end: searchField }}
@@ -905,9 +907,6 @@ export function MembersScreen({
       // role picker and on Roles and access, never a second button here (owner ask T12).
       actions={
         <>
-          {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
-              A guest changes nothing here, and the read only table says so already. */}
-          {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           {canInvite && inviteRoles.length > 0 && (
             <Button variant="primary" icon="user-plus" onPress={() => setInviting(true)}>
               {strings.invite}
@@ -1137,6 +1136,7 @@ export function MembersPending() {
   return (
     <SettingsPage
       title={strings.title}
+      {...(canInvite ? {} : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
       tabBody="table"
       tabBar={{
         end: (
@@ -1153,7 +1153,6 @@ export function MembersPending() {
       // The bar's actions hold their places while the page loads.
       actions={
         <>
-          {!canInvite && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           {canInvite && (
             <Button variant="primary" icon="user-plus" isDisabled>
               {strings.invite}

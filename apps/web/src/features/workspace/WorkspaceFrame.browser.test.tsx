@@ -49,6 +49,7 @@ const STORED: NavState = {
   favourites: [],
   top: ['tasks'],
   scheduling: ['bookings', 'captures'],
+  hospitality: [],
 };
 
 let snapshot: NavSnapshot = { status: 'ready', nav: STORED };

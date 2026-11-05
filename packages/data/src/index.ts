@@ -369,7 +369,115 @@ import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
+import type { HospitalityStore } from './hospitality/store.ts';
+import type { MenuStore } from './menu/store.ts';
+import type { MenuDraft as MenuDraftAnswer } from '@crm/contracts';
+import type { TablesStore } from './tables/store.ts';
+export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
+import type { BusinessPageStore } from './business-page/store.ts';
+import type { ServicesStore } from './services/store.ts';
+export type { NewBlock, NewTimeOff, ServicesStore, TeamCopy } from './services/store.ts';
+// Services, staff and shifts (spec 0066 B1): the shapes Settings › Services, Staff and Shifts show.
+export type {
+  AppointmentsSetup,
+  CatalogueCategory,
+  CatalogueService,
+  CatalogueView,
+  PriceTypeName,
+  ServiceFields,
+  ServiceNeed,
+  ServicePlace,
+  ServiceResource,
+  ServiceStaffRule,
+  ServiceTimesView,
+  ServiceVariantView,
+  SetupStepId,
+  StaffBlockView,
+  StaffFields,
+  StaffPlaceView,
+  StaffTeamView,
+  StaffTimeOffView,
+  StaffView,
+  VariantFields,
+} from '@crm/contracts';
+export type { BusinessPageStore, PhotoUpload } from './business-page/store.ts';
+// The business page's editor (spec 0066, B4 lite): the shapes Settings › Business › Page shows.
+export type {
+  BusinessAmenity,
+  BusinessPageContent,
+  BusinessPagePlace,
+  BusinessPageView,
+  BusinessPhoto,
+  BusinessPublishProblem,
+  UploadedBusinessPhoto,
+} from '@crm/contracts';
+export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
+export type { MenuPhotoBlobs, MenuStore } from './menu/store.ts';
+// The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
+export type {
+  AppsView,
+  AppState,
+  Area,
+  BusinessKind,
+  BusinessProfile,
+  BusinessProfileFields,
+  BusinessView,
+  Resource,
+  EarlyAccessFlag,
+  FirstBusiness,
+  HospitalityApp,
+  HoursException,
+  HoursRange,
+  Place,
+  PlaceFields,
+  PlaceFloor,
+  PlaceQrCodes,
+  TableQr,
+  PlaceHours,
+  ResourceKind,
+  WeekDay,
+} from '@crm/contracts';
+// The Menu app (spec 0065, H1): the editor's draft and the guest menu's answer.
+export type {
+  Allergen,
+  AllergenLevel,
+  DietMark,
+  ItemAllergen,
+  ItemFields,
+  Menu,
+  MenuDraft,
+  MenuItem,
+  MenuOption,
+  MenuPlace,
+  MenuSection,
+  MenuServing,
+  MenuSnapshot,
+  OptionGroup,
+  OptionRule,
+  PublicMenu,
+  SectionLayout,
+  SnapshotItem,
+  SnapshotMenu,
+  SnapshotSection,
+  SnapshotSubsection,
+} from '@crm/contracts';
+// Table seating (spec 0066 B7 lite): the setup, the Service day and a reservation's status.
+export type {
+  FreeTable,
+  FreeTablesView,
+  ServiceFloor,
+  TablePlace,
+  ServicePlaces,
+  ServiceTable,
+  ServiceDayView,
+  ServiceVisit,
+  TableRules,
+  TableSetupStep,
+  TableSetupView,
+  VisitStatus,
+} from '@crm/contracts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
+export type { BentoDraft } from './link-page/bento.ts';
 export { BRAND_QUICK_PICKS } from './brand/picks.ts';
 export type {
   DraftWindow,
@@ -743,6 +851,8 @@ export type {
   SkippedImportRow,
   PageTheme,
   ProfileFormChoice,
+  ProfilePlaceChoice,
+  ProfilePlaceFacts,
   ProfileFormFacts,
   ProfilePageChoice,
   ProfilePageFacts,
@@ -1586,6 +1696,7 @@ export function createDataLayer({
     page: (workspaceId, pageId, period) =>
       call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
     site: (period) => call((options) => api.operator.site({ period }, options)),
+    setEarlyAccess: (input) => call((options) => api.operator.setEarlyAccess(input, options)),
   });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
@@ -1724,6 +1835,18 @@ export function createDataLayer({
       made.clear();
     });
     void brand?.then((made) => {
+      made.clear();
+    });
+    void hospitality?.then((made) => {
+      made.clear();
+    });
+    void menus?.then((made) => {
+      made.clear();
+    });
+    void tables?.then((made) => {
+      made.clear();
+    });
+    void services?.then((made) => {
       made.clear();
     });
     socialLinks?.clear();
@@ -2345,6 +2468,16 @@ export function createDataLayer({
   // (Host away) read again, once for a burst, spread over 100 to 400 ms as schedules are. The event names nobody, so
   // every tab of the workspace hears it; only what a screen holds reads.
   const timeOffDue = new Set<string>();
+  // A place's visits changed (spec 0066 B7): every held day of those places reads again, once the store is loaded.
+  router.on('visits', (workspace, event) => {
+    void tables?.then((made) => {
+      made.placesChanged(workspace, event.placeIds);
+    });
+    // The catalogue and the team (spec 0066 B1): every held copy of the workspace reads again.
+    void services?.then((made) => {
+      made.placesChanged(workspace);
+    });
+  });
   router.on('time_off', (workspace) => {
     if (timeOffDue.has(workspace)) return;
     timeOffDue.add(workspace);
@@ -2935,6 +3068,14 @@ export function createDataLayer({
   // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
   // photos, loaded with the first screen that asks, never in the first load.
   let brand: Promise<BrandStore> | undefined;
+  // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
+  let hospitality: Promise<HospitalityStore> | undefined;
+  let menus: Promise<MenuStore> | undefined;
+  let tables: Promise<TablesStore> | undefined;
+  // Settings › Business › Page (spec 0066, B4 lite): the business page's editor, loaded with the first screen that asks.
+  let businessPage: Promise<BusinessPageStore> | undefined;
+  // Settings › Services, Staff and Shifts (spec 0066 B1), loaded with the first screen that asks.
+  let services: Promise<ServicesStore> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -6169,6 +6310,142 @@ export function createDataLayer({
             onLogo: (workspace, version) => {
               logoStamp += 1;
               setLogo(workspace, version ?? null);
+            },
+          }),
+        )),
+    },
+    /**
+     * The Hospitality suite's setup (spec 0065, H0): the Apps page, the business with its places and hours, and each
+     * place's floor. The store loads on first use; installing or removing an app reads the sidebar again, so its
+     * Hospitality section follows.
+     */
+    /**
+     * Table seating (spec 0066 B7 lite): a place's setup and Publish, its Service day and the status moves. The store
+     * loads on first use; a `visits` event reads every held day of the place again, and a shown day reads again every
+     * minute while live updates are paused or off.
+     */
+    tables: {
+      load: (): Promise<TablesStore> =>
+        (tables ??= import('./tables/store.ts').then(({ openTables }) =>
+          openTables({ api: api.tables, call, mintId, isLive: () => liveStatus === 'live' }),
+        )),
+    },
+    hospitality: {
+      load: (): Promise<HospitalityStore> =>
+        (hospitality ??= import('./hospitality/store.ts').then(({ openHospitality }) =>
+          openHospitality({
+            api: api.hospitality,
+            call,
+            mintId,
+            onAppsChanged: (workspace) => {
+              void loadNav()
+                .then((store) => store.reload(workspace))
+                .catch(() => undefined);
+            },
+          }),
+        )),
+    },
+    /**
+     * The Menu app's editor (spec 0065, H1): the workspace's whole menu draft, its edits, Publish, Discard, Sold out
+     * and photos. The store loads on first use. A photo goes to `/api/menu/items/<id>/photo` as two widths the screen
+     * drew again, with `x-crm-workspace`, and answers the whole draft.
+     */
+    menu: {
+      load: (): Promise<MenuStore> =>
+        (menus ??= import('./menu/store.ts').then(({ openMenus }) =>
+          openMenus({
+            api: api.menu,
+            call,
+            mintId,
+            sendPhoto: async (workspace, itemId, photo) => {
+              const body = new FormData();
+              body.set('large', photo.large, 'large');
+              body.set('small', photo.small, 'small');
+              const response = await fetch(
+                new URL(`/api/menu/items/${encodeURIComponent(itemId)}/photo`, origin).href,
+                {
+                  method: 'POST',
+                  headers: { 'x-crm-workspace': workspace },
+                  body,
+                  credentials: 'include',
+                },
+              ).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              if (!response.ok) {
+                const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+                throw toDataError({ ...fields, status: response.status });
+              }
+              return answer as MenuDraftAnswer;
+            },
+          }),
+        )),
+    },
+    /**
+     * The business page's editor (spec 0066, B4 lite): its address, draft, places' addresses, gallery pictures and
+     * Publish. The store loads on first use.
+     */
+    businessPage: {
+      load: (): Promise<BusinessPageStore> =>
+        (businessPage ??= import('./business-page/store.ts').then(({ openBusinessPage }) =>
+          openBusinessPage({
+            api: api.businessPage,
+            call,
+            mintId,
+            origin,
+            upload: async (workspace, body) => {
+              const response = await fetch(new URL('/api/business/page/photos', origin).href, {
+                method: 'POST',
+                headers: { 'x-crm-workspace': workspace, 'content-type': body.type },
+                body,
+                credentials: 'include',
+              }).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+              if (!response.ok) throw toDataError({ ...fields, status: response.status });
+              const { id, width, height } = fields;
+              if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+                throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
+              }
+              return { id, width, height };
+            },
+          }),
+        )),
+    },
+    /**
+     * Services, staff and shifts (spec 0066 B1): the catalogue, the team and their shifts, a profile's photo, and the
+     * desk's offered times. The store loads on first use; a `visits` event reads every held copy of the workspace again.
+     */
+    services: {
+      load: (): Promise<ServicesStore> =>
+        (services ??= import('./services/store.ts').then(({ openServices }) =>
+          openServices({
+            api: api.services,
+            call,
+            mintId,
+            origin,
+            upload: async (workspace, staffId, body) => {
+              const response = await fetch(
+                new URL(`/api/services/staff/${encodeURIComponent(staffId)}/photo`, origin).href,
+                {
+                  method: 'POST',
+                  headers: { 'x-crm-workspace': workspace, 'content-type': body.type },
+                  body,
+                  credentials: 'include',
+                },
+              ).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+              if (!response.ok) throw toDataError({ ...fields, status: response.status });
+              if (typeof fields.photo !== 'string') {
+                throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
+              }
+              return { photo: fields.photo };
             },
           }),
         )),

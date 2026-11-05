@@ -1,5 +1,5 @@
 // Words for managed booking pages (spec 0037, AC-1333 to AC-1336): the template editor, the choice in New, the
-// note a member sees on a page their workspace set, and the two opposite endings' questions. The two endings are
+// badge a member sees on a page their workspace set, and the two opposite endings' questions. The two endings are
 // the words that matter most: taking someone off deletes their page, deleting the template keeps every page, and
 // each question has to say which one it is without the reader having to work it out.
 import type { ManagedPart } from '@crm/data';
@@ -107,24 +107,9 @@ export const managedStrings = {
 
   /** What a member sees on a page their workspace set. */
   fromTemplate: 'Set by your workspace',
-  setByWorkspaceNote: (parts: readonly string[]) =>
-    parts.length === 1
-      ? `Your workspace sets ${lower(parts[0] ?? '')} on this page. Everything else is yours to change.`
-      : `Your workspace sets ${list(parts.map(lower))} on this page. Everything else is yours to change.`,
 
   /** Loading and failure. */
   failed: 'That managed page couldn’t be loaded.',
   notFound: 'That managed page doesn’t exist any more.',
   refused: 'Something went wrong.',
 } as const;
-
-/** A part's name mid sentence ("Title and description" → "the title and description"). */
-function lower(name: string): string {
-  return `the ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
-}
-
-/** A list in words: "a, b and c". */
-function list(parts: readonly string[]): string {
-  if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}`;
-}

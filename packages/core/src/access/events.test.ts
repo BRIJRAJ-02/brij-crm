@@ -97,10 +97,13 @@ describe('every kind has a rule', () => {
         'tasks',
         'time_off',
         'views',
+        // A place's visits (spec 0066 B7): place ids only.
+        'visits',
       ].sort(),
     );
     expect(eventFacts({ seq: 1, at, kind: 'schedules', scheduleIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'time_off' })).toEqual([]);
+    expect(eventFacts({ seq: 1, at, kind: 'visits', placeIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'bookings' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'automations' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'forms' })).toEqual([]);

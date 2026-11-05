@@ -76,7 +76,6 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
       <Card title={strings.title}>
         <EmptyState
           layout="row"
-          icon="link"
           title={strings.noHandle}
           actions={<ButtonLink href={linkPageHref(slug)}>{strings.claim}</ButtonLink>}
         >

@@ -106,7 +106,7 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
         </Card>
       )}
       {rows.some((row) => row.state === 'pending') && (
-        <Callout isAnnounced {...(asked === undefined ? {} : { title: strings.asked(asked) })}>
+        <Callout tone="info" isAnnounced {...(asked === undefined ? {} : { title: strings.asked(asked) })}>
           {strings.pendingNote}
         </Callout>
       )}

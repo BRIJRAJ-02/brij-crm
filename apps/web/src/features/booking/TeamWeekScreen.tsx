@@ -18,6 +18,7 @@ import {
 import { useScheduling } from '@crm/data/react';
 import { mondayOf, plusDays, TEAM_WEEK, weekDates } from '@crm/data/roster';
 import {
+  Badge,
   Button,
   Callout,
   EmptyState,
@@ -534,7 +535,6 @@ function Loaded({
             // clears in one press.
             <EmptyState
               title={words.noMatch}
-              icon="search"
               {...(query === ''
                 ? {}
                 : {
@@ -678,8 +678,8 @@ function DayEditor({
         isSingleDay
         onChange={(_, next) => setRanges(next.slice(0, TEAM_WEEK.rangesMax))}
       />
-      {/* Time off comes first: the cell stays Away whatever hours the date has. */}
-      {day.away !== undefined && <Callout tone="info">{words.awayFirst}</Callout>}
+      {/* Time off comes first: the cell stays Away whatever hours the date has, so the editor wears the same word. */}
+      {day.away !== undefined && <Badge text={words.away} dot="orange" isWhole />}
       <SectionBar
         start={
           // A change for this date only goes back to the usual week in one press, which saves and closes.

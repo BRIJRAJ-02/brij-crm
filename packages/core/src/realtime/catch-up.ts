@@ -54,7 +54,8 @@ type IdField =
   | 'scheduleIds'
   | 'memberIds'
   | 'jobIds'
-  | 'threadIds';
+  | 'threadIds'
+  | 'placeIds';
 
 /** A records event's made, deleted and restored ids: together at most `MAX_LIFECYCLE_IDS`, else the event goes coarse. */
 const LIFECYCLE: readonly IdField[] = ['createdIds', 'deletedIds', 'restoredIds'];
@@ -81,6 +82,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
   automations: [],
   forms: [],
   files: ['recordIds'],
+  visits: ['placeIds'],
 };
 
 /** The id lists a coarse event empties (past `CHANGE_CAP`, or a coarse row merged in); kinds with none never go coarse. */
@@ -105,6 +107,7 @@ const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
   automations: [],
   forms: [],
   files: ['recordIds'],
+  visits: [],
 };
 
 interface Group {

@@ -29,6 +29,12 @@ export interface MonthTilesProps {
    */
   readonly isLoading?: boolean;
   /**
+   * `tiles` (the default): every day a square tile, open days tinted (the booking page). `plain`: a compact month of
+   * plain numbers in 36px rows, as checklabs' reservation calendar draws it: an open day is plain text that fills under
+   * the pointer, today has a hairline ring, and the chosen day fills with the accent (a restaurant's reservation page).
+   */
+  readonly tone?: 'tiles' | 'plain';
+  /**
    * Every month the same height on a wide page: a month's rows share six weeks' height, so paging between a five and
    * a six week month moves nothing. For a page centred in the window, where a taller month would move everything.
    */
@@ -65,6 +71,7 @@ export function MonthTiles({
   canNext,
   focusesValue = false,
   isLoading = false,
+  tone = 'tiles',
   holdsHeight = false,
 }: MonthTilesProps) {
   const { locale, weekStart } = useFormatSettings();
@@ -119,7 +126,11 @@ export function MonthTiles({
   const touch = useRef<number | undefined>(undefined);
   const name = monthParts(month, locale);
   return (
-    <div className={styles.root} data-holds-height={holdsHeight || undefined}>
+    <div
+      className={styles.root}
+      data-tone={tone === 'plain' ? 'plain' : undefined}
+      data-holds-height={holdsHeight || undefined}
+    >
       <div className={styles.head}>
         <h2 className={styles.title}>
           {/* Keyed by the month, so a new month's name rolls in the way the arrows went, with the days. */}
@@ -132,6 +143,8 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-left"
             label={strings.previousMonth}
+            // A guest's thumb: the plain month's arrows press across 44px, drawn as before.
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canPrevious}
             onPress={() => onMonthChange(shiftMonth(month, -1))}
           />
@@ -139,6 +152,7 @@ export function MonthTiles({
             variant="ghost"
             icon="chevron-right"
             label={strings.nextMonth}
+            isTouchTarget={tone === 'plain'}
             isDisabled={!canNext}
             onPress={() => onMonthChange(shiftMonth(month, 1))}
           />

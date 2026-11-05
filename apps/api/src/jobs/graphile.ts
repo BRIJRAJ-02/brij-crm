@@ -45,6 +45,7 @@ import {
 } from './automation.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { PAGE_ROLLUP_CRONTAB, PAGE_ROLLUP_TASK } from './page-rollup.ts';
+import { VISIT_MAIL_TASK } from './visit-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
@@ -96,6 +97,7 @@ export const RUNNER_TASKS: readonly string[] = [
   LANES.light.task,
   DAILY_TASK,
   BOOKING_MAIL_TASK,
+  VISIT_MAIL_TASK,
   NOTIFICATION_EMAIL_TASK,
   DIGEST_TASK,
   SCHEDULING_NOTICE_TASK,
@@ -210,6 +212,8 @@ export interface JobRunnersOptions {
    * `crm_booking_mail`; it throws plainly for a retry.
    */
   readonly bookingMail?: (payload: unknown) => Promise<void>;
+  /** A reservation's guest email (spec 0066 B7 lite): the light runner takes `crm_visit_mail`. */
+  readonly visitMail?: (payload: unknown) => Promise<void>;
   /**
    * Queued email (the emails lane): one email's send (`runEmail` with the
    * worker's deps), told which try this is. With it, the light runner takes
@@ -681,6 +685,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const daily = lane === LANES.light ? options.daily : undefined;
       const calendar = lane === LANES.light ? options.calendar : undefined;
       const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
+      const visitMail = lane === LANES.light ? options.visitMail : undefined;
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
@@ -707,6 +712,9 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(bookingMail === undefined
                 ? {}
                 : { [BOOKING_MAIL_TASK]: counted((payload) => bookingMail(payload), inFlight, options.onActivity) }),
+              ...(visitMail === undefined
+                ? {}
+                : { [VISIT_MAIL_TASK]: counted((payload) => visitMail(payload), inFlight, options.onActivity) }),
               ...(email === undefined
                 ? {}
                 : { [EMAIL_TASK]: counted(emailTask(options, email), inFlight, options.onActivity) }),

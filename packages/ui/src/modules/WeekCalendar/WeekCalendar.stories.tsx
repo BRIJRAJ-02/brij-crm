@@ -844,6 +844,31 @@ export const DayView: Story = {
 };
 
 /**
+ * `drawnHours` and `visibleHours`: the day view given one day, drawn from 10:00 to midnight, eight hours at a time
+ * (Reservations' day calendar, after checklabs'): no head, the first hour labelled under the top line, nothing before.
+ */
+export const DayHours: Story = {
+  args: { label: 'Day calendar, Thursday 8 October', scrollToMinute: 10 * 60, visibleHours: 8 },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        view="day"
+        days={days().filter((day) => day.key === '2026-10-08')}
+        blocks={blocks().filter((block) => block.dayKey === '2026-10-08')}
+        drawnHours={{ startMinute: 10 * 60, endMinute: 24 * 60 }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('button[aria-pressed]')).toHaveLength(0);
+    await expect(canvas.getByText('10 AM')).toBeVisible();
+    await expect(canvas.queryByText('9 AM')).toBeNull();
+    await expect(canvas.getByRole('button', { name: /^Grace Hopper, / })).toBeVisible();
+  },
+};
+
+/**
  * An empty week with a way on (`emptyAction`): "Next booking: Tue 13 Oct" jumps to it, the one press the note takes.
  * Its button leaves with the empty week, so focus lands on the new week's chosen day.
  */

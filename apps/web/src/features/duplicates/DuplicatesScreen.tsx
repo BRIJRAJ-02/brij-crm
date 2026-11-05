@@ -103,12 +103,9 @@ export function DuplicatesScreen({ slug, object, recordId, pairs, attributes, me
 
   const empty =
     recordId === undefined ? (
-      <EmptyState icon="copy" title={strings.emptyTitle(object.pluralName)}>
-        {strings.emptyText}
-      </EmptyState>
+      <EmptyState title={strings.emptyTitle(object.pluralName)}>{strings.emptyText}</EmptyState>
     ) : (
       <EmptyState
-        icon="copy"
         title={strings.emptyRecord}
         actions={<Link href={duplicatesHref(slug, object.apiSlug)}>{strings.showAll}</Link>}
       />
@@ -117,7 +114,7 @@ export function DuplicatesScreen({ slug, object, recordId, pairs, attributes, me
   const body = (
     <PageColumn>
       {recordId !== undefined && state.pairs.length > 0 && (
-        <Callout actions={<Link href={duplicatesHref(slug, object.apiSlug)}>{strings.showAll}</Link>}>
+        <Callout tone="info" actions={<Link href={duplicatesHref(slug, object.apiSlug)}>{strings.showAll}</Link>}>
           {strings.narrowed}
         </Callout>
       )}

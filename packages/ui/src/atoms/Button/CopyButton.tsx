@@ -130,7 +130,9 @@ export function CopyButton({
           labelReserve={isCopied ? label : strings.copiedLabel}
           {...(isRound ? { isRound } : {})}
           {...(name !== undefined && !isCopied ? { label: name } : {})}
-          {...(isLabelCollapsible ? { isLabelCollapsible: true, label: isCopied ? strings.copiedLabel : label } : {})}
+          {...(isLabelCollapsible
+            ? { isLabelCollapsible: true, label: isCopied ? strings.copiedLabel : (name ?? label) }
+            : {})}
         >
           {isCopied ? strings.copiedLabel : label}
         </Button>

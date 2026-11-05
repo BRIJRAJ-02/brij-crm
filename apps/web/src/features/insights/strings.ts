@@ -170,7 +170,6 @@ export const strings = {
   sharedEmptyText: 'The numbers show here as soon as people visit.',
   sharePeriod: 'Period',
   sharePages: 'Pages',
-  shareRolling: 'A link always shows the latest period, counted back from the day it’s opened.',
   shareMakeAnother: 'Make another',
   shareMade: (day: string) => `made ${day}`,
 } as const;

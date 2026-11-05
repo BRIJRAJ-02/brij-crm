@@ -209,7 +209,6 @@ export function FilterBuilder(props: FilterBuilderProps) {
       <div ref={rootRef} className={styles.root} data-filter-adder="">
         <EmptyState
           title={strings.noFilters}
-          icon="list-filter"
           {...(isReadOnly
             ? {}
             : {

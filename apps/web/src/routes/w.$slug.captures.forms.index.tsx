@@ -32,7 +32,12 @@ export const Route = createFileRoute('/w/$slug/captures/forms/')({
 function FormsRoute() {
   const { isMissing } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  if (isMissing) return <EmptyState title={strings.missingTitle}>{strings.failedText}</EmptyState>;
+  if (isMissing)
+    return (
+      <EmptyState layout="block" title={strings.missingTitle}>
+        {strings.failedText}
+      </EmptyState>
+    );
   return <FormsScreen slug={slug} />;
 }
 
@@ -40,7 +45,7 @@ function FormsError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <PageColumn>
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
+      <EmptyState layout="block" tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     </PageColumn>

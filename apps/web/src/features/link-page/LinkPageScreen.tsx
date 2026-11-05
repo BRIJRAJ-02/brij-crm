@@ -20,7 +20,7 @@ import {
 import {
   BookingFoot,
   Button,
-  ButtonLink,
+  Callout,
   Card,
   CopyButton,
   EmptyState,
@@ -43,6 +43,7 @@ import {
   TopBar,
   usePhotoCrop,
   VisuallyHidden,
+  type AccentQuickPick,
   type LinkPageBlock,
   type LinkRow,
 } from '@crm/ui';
@@ -56,8 +57,8 @@ import { LinkPublishBar } from './LinkPublishBar.tsx';
 import { DraftLook } from './draft-look.tsx';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
-import { IdentityCard, identityOf, type PageIdentity } from './IdentityCard.tsx';
-import { SharingCard } from './SharingCard.tsx';
+import { IdentityFields, identityOf, type PageIdentity } from './IdentityFields.tsx';
+import { SharingFields } from './SharingFields.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
@@ -65,8 +66,7 @@ import {
   blockKindOf,
   BLOCK_KINDS,
   contactHref,
-  figuresLine,
-  pressesChip,
+  pressesFigure,
   previewBlock,
   rowWords,
   type AddableKind,
@@ -77,11 +77,10 @@ import { reachStrings } from './reach-strings.ts';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
-import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.tsx';
+import { LiveSwitch, useLinkPageLive, useWalletLink, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
-import { drawnQrStyle, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
+import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
-import { insightsHref } from '../insights/search.ts';
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
@@ -163,6 +162,10 @@ function shownItem(
     const form = facts !== undefined && 'form' in facts ? facts.form : undefined;
     return { ...block, id, ...(form === undefined ? {} : { form }), updatedAt };
   }
+  if (block.kind === 'menu' || block.kind === 'reserve') {
+    const place = facts !== undefined && 'place' in facts ? facts.place : undefined;
+    return { ...block, id, ...(place === undefined ? {} : { place }), updatedAt };
+  }
   if (block.kind === 'media') {
     // The server parses the link into its service and id and reads the title and poster once; until it answers,
     // the row names the service from the address and keeps what the saved block had.
@@ -225,12 +228,14 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
           <TopBar title={strings.title} icon="id-card">
             {handle === undefined ? undefined : (
               <HeaderActions
+                data={data}
                 live={live}
                 handle={handle}
                 workspaceName={profile.workspaceName}
                 linkPage={linkPage}
                 slug={slug}
                 personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
+                quickPicks={brand.quickPicks}
                 isEditing={isEditing}
                 onEditing={onEditing}
               />
@@ -264,21 +269,26 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
 }
 
 /**
- * The header's actions, as the owner's design draws them: the one Live or Private switch (spec 0058, AC-23), then,
- * once Live, the page's address as a pill that opens it, and Share, which opens the one Share modal (the QR, the
- * address and the two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
- * the one place that does, and the modal says when the page is private.
+ * The header's actions, the one place a link page is shared from (owner, 5 November 2026, after Linktree's bar): the
+ * one Live or Private switch (spec 0058, AC-23), then, once Live, the page's address as a pill that copies it in one
+ * press, and Share, which opens the one Share modal (the QR and Download, Open, Links for each place, Style the code
+ * and Add to Wallet). Sharing never changes whether the page is live: the switch is the one place that does, and the
+ * modal says when the page is private.
  */
 export function HeaderActions({
+  data,
   live,
   handle,
   workspaceName,
   linkPage,
   slug,
   personImage,
+  quickPicks,
   isEditing,
   onEditing,
 }: {
+  /** For the Wallet pass's link, read once Share opens. */
+  readonly data: DataLayer;
   readonly live: LinkPageLive;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
@@ -287,6 +297,8 @@ export function HeaderActions({
   readonly slug: string;
   /** The person's picture, when it shows on their pages: a styled code may carry it. */
   readonly personImage?: string | undefined;
+  /** The code's quick colour picks: the brand kit's nine. */
+  readonly quickPicks: readonly AccentQuickPick[];
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
@@ -294,7 +306,11 @@ export function HeaderActions({
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
   const [isMarking, setMarking] = useState(false);
+  const [isStyling, setStyling] = useState(false);
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
+  // The Wallet pass is read once Share has opened, not on every visit to the page.
+  const [hasShared, setShared] = useState(false);
+  const wallet = useWalletLink(data, slug, live.isLive && hasShared);
   return (
     <>
       <LiveSwitch live={live} />
@@ -302,31 +318,28 @@ export function HeaderActions({
           the address and Share wait for Live (an unpublished page offers no link, as Notion's and Webflow's do). */}
       {live.isLive && (
         <>
-          {/* On a phone's narrow bar the address and Share drop their words for their icons (the overview's card
-              shows the address in full), so the bar never runs past the screen (spec 0058, AC-1). */}
-          <ButtonLink
-            variant="secondary"
+          {/* The address copies in one press, as Linktree's does (owner, 5 November 2026); Open is in Share and the
+              preview. On a phone's narrow bar the address and Share drop their words for their icons, keeping their
+              names, so the bar never runs past the screen (spec 0058, AC-1). */}
+          <CopyButton
+            value={address}
+            label={shown}
+            name={strings.copyAddress(shown)}
+            announcement={strings.copied}
             isRound
             isLabelCollapsible
-            iconRight="external-link"
-            href={address}
-            isExternal
-            label={strings.openAddress(shown)}
+          />
+          <Button
+            icon="share"
+            isLabelCollapsible
+            label={strings.share}
+            onPress={() => {
+              setShared(true);
+              setSharing(true);
+            }}
           >
-            {shown}
-          </ButtonLink>
-          <Button icon="share" isLabelCollapsible label={strings.share} onPress={() => setSharing(true)}>
             {strings.share}
           </Button>
-          {/* Its views, presses and sources (spec 0067): Insights shows a member their own link page only. */}
-          <ButtonLink
-            icon="chart-line"
-            isLabelCollapsible
-            href={insightsHref(slug, { kind: 'link' })}
-            label={strings.insights}
-          >
-            {strings.insights}
-          </ButtonLink>
         </>
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
@@ -354,10 +367,25 @@ export function HeaderActions({
           setSharing(false);
           setMarking(true);
         }}
+        onStyle={() => {
+          setSharing(false);
+          setStyling(true);
+        }}
+        {...(wallet === undefined ? {} : { wallet })}
         isOpen={isSharing}
         onClose={() => setSharing(false)}
       />
       <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
+      <QrStyleModal
+        linkPage={linkPage}
+        slug={slug}
+        handle={handle}
+        address={address}
+        {...(personImage === undefined ? {} : { personImage })}
+        quickPicks={quickPicks}
+        isOpen={isStyling}
+        onClose={() => setStyling(false)}
+      />
     </>
   );
 }
@@ -551,6 +579,8 @@ function Blocks({
   const indexable = switched ?? profile.indexable ?? true;
   // Who the page is from (3 Nov 2026), as last saved, so the phone follows a change before the profile is read again.
   const [identity, setIdentity] = useState<PageIdentity>(() => identityOf(profile));
+  // Why the job title switch didn't save, said in the Details card's foot until it saves.
+  const [identityRefusal, setIdentityRefusal] = useState<string | undefined>(undefined);
   const chooseIndexable = (next: boolean) => {
     const was = indexable;
     setSwitched(next);
@@ -593,6 +623,8 @@ function Blocks({
   const items = useMemo(() => (state.status === 'ready' ? state.items : []), [state]);
   // Spec 0061: a stored picture as the owner's own browser reads it (live or not), and now, for each block's window.
   const picture = (imageId: string) => ({ src: linkPage.reach.pictureSrc(slug, imageId), width: 4, height: 3 });
+  // An audio intro plays from the owner's own copy (spec 0068); the phone is inert, so it never plays there.
+  const audio = (audioId: string) => linkPage.reach.audioSrc(slug, audioId);
   const now = useWindowClock(items);
   const { locale, timeZone } = useFormatSettings();
   const whenFormat = memoIntl(
@@ -792,7 +824,7 @@ function Blocks({
 
   const tileOf = (item: ProfileItem): LinkPageBlock => {
     // The row's tile draws the block whatever its window, so a scheduled block still reads as itself.
-    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials });
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, audio, socials: shownSocials });
     if (block !== undefined) return block;
     // A paused or unavailable page still shows its calendar tile in the list.
     return { kind: 'page', id: item.id, title: rowWords(item).title, href: '', facts: '' };
@@ -826,12 +858,14 @@ function Blocks({
       address: words.address,
       // Its presses over 30 days, once the figures are here (a pending block has none yet). The figures are read
       // apart from the blocks, so until they land the chip's line is held, and the row never grows under a thumb.
-      chips: isPending ? [] : [...windowChip(item), ...pressesChip(item, counts)],
+      chips: isPending ? [] : windowChip(item),
       // Outside its window a block has left the page, so its row reads as off, as a paused page's does (AC-6111).
       ...(isOutOfWindow(item) ? { isOff: true } : {}),
-      ...(isPending || counts !== undefined || (state.status === 'ready' && state.countsFailed === true)
-        ? {}
-        : { areChipsPending: true }),
+      // Its clicks over 30 days as one quiet number at its end, once the figures are here (none for zero).
+      ...(() => {
+        const figure = isPending ? undefined : pressesFigure(item, counts);
+        return figure === undefined ? {} : { figure };
+      })(),
       leading: <LinkPageTile block={tileOf(item)} />,
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),
@@ -848,30 +882,57 @@ function Blocks({
   // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
   // Email signup makes a form block, so what it needs room for is a form (`blockKindOf`), not a kind of its own.
   // Why a kind can't be added now: its limit's sentence, or, for Social icons, that there are no links to show yet.
+  // Menu and Reserve (spec 0065, AC-6528) are offered only where they can be placed: while Menu or Table seating is
+  // installed in this workspace, read once as the screen opens. Elsewhere the Add modal never mentions them.
+  const [placeKinds, setPlaceKinds] = useState<ReadonlySet<AddableKind>>(() => new Set());
+  useEffect(() => {
+    let isCurrent = true;
+    linkPage.placeChoices(slug).then(
+      (found) => {
+        if (!isCurrent) return;
+        setPlaceKinds(
+          new Set<AddableKind>([
+            ...(found.some((choice) => choice.menu !== undefined) ? (['menu'] as const) : []),
+            ...(found.some((choice) => choice.reserve !== undefined) ? (['reserve'] as const) : []),
+          ]),
+        );
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [linkPage, slug]);
+  const addable = ADDABLE.filter((kind) => (kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind));
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
     (kind === 'socials' && shownSocials.length === 0 ? reachStrings.socialsNone : undefined);
   const roomFor = (kind: AddableKind) => offReason(kind) === undefined;
   const openAdd = (kind: AddableKind) => {
-    const open = roomFor(kind) ? kind : ADDABLE.find(roomFor);
+    const open = roomFor(kind) ? kind : addable.find(roomFor);
     if (open !== undefined) setEditing({ kind: open, id: linkPage.newId() });
   };
-  const isFull = !ADDABLE.some(roomFor);
+  const isFull = !addable.some(roomFor);
+  // One Add, as Linktree and Bento have it (owner, 5 November 2026): the primary adds a block, and its menu beside
+  // holds the two other ways in, a new section and bringing an old page across (spec 0055, AC-5524).
   const addButtons = (
     <>
-      {/* Bringing a page across (spec 0055, AC-5524). Secondary, as Button's README puts Import with the view
-          controls: it is the thing a new arrival most wants, and a third weight in a row of three buttons made
-          it the hardest to see. The order carries the hierarchy instead. */}
-      <Button icon="download" isDisabled={state.status !== 'ready' || isFull} onPress={() => setImporting(true)}>
-        {strings.bringAcross}
-      </Button>
-      <Button
-        icon="list-plus"
-        isDisabled={state.status !== 'ready' || !roomFor('heading')}
-        onPress={() => openAdd('heading')}
-      >
-        {strings.newSection}
-      </Button>
+      <MenuTrigger>
+        <Button
+          variant="ghost"
+          icon="ellipsis"
+          label={strings.moreWaysToAdd}
+          isDisabled={state.status !== 'ready' || isFull}
+        />
+        <Menu label={strings.moreWaysToAdd}>
+          <MenuItem id="section" icon="list-plus" isDisabled={!roomFor('heading')} onAction={() => openAdd('heading')}>
+            {strings.newSection}
+          </MenuItem>
+          <MenuItem id="import" icon="download" onAction={() => setImporting(true)}>
+            {strings.bringAcross}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
       <Button
         variant="primary"
         icon="plus"
@@ -884,12 +945,13 @@ function Blocks({
   );
   // A full kind's tile is off and can't take focus, so why it is full is said in the footer's line too, where a
   // keyboard reaches it; with nothing full the line says where the block lands.
-  const fullReasons = [...new Set(ADDABLE.flatMap((kind) => linkPage.limit(items, blockKindOf(kind)) ?? []))];
+  const fullReasons = [...new Set(addable.flatMap((kind) => linkPage.limit(items, blockKindOf(kind)) ?? []))];
   const addHint = fullReasons.length === 0 ? strings.addHint : fullReasons.join(' ');
   // The kinds as a grid of icons with a short name each (spec 0058, AC-9), only while adding.
   const kindPicker =
     editing === undefined || editing.item !== undefined ? undefined : (
       <KindPicker
+        kinds={addable}
         value={editing.kind}
         fullReason={offReason}
         // The id is minted once and kept as the kind changes, so the save that follows is still the one add.
@@ -898,7 +960,7 @@ function Blocks({
     );
 
   const previewBlocks = items.flatMap((item) => {
-    const block = previewBlock(item, handle, linkPage.markOf, { picture, socials: shownSocials, now });
+    const block = previewBlock(item, handle, linkPage.markOf, { picture, audio, socials: shownSocials, now });
     return block === undefined ? [] : [block];
   });
   const preview = (
@@ -934,7 +996,7 @@ function Blocks({
       // Their own set of networks (the Social links card below), under the bio as visitors see it.
       {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
-        <EmptyState title={strings.empty} icon="link">
+        <EmptyState layout="block" title={strings.empty} icon="link">
           {strings.emptyText}
         </EmptyState>
       }
@@ -979,6 +1041,7 @@ function Blocks({
     const hasArchived = archived.length > 0;
     list = (
       <EmptyState
+        layout="block"
         illustration={<SpotIllustration kind="link-page" />}
         title={strings.empty}
         actions={
@@ -1032,7 +1095,6 @@ function Blocks({
     return (
       <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
         <LinkPageOverview
-          data={data}
           slug={slug}
           handle={handle}
           address={publicProfileUrl(handle)}
@@ -1047,7 +1109,6 @@ function Blocks({
           linkPage={linkPage}
           items={everyItem}
           personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
-          quickPicks={brand.quickPicks}
         />
       </PreviewLayout>
     );
@@ -1056,17 +1117,11 @@ function Blocks({
     <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
       {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
           content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
+      {/* No subtitle (owner, 5 November 2026): the views and clicks live in Insights, and the grips say drag. */}
       <Card
         title={strings.blocks}
-        description={[
-          // Whose page this is: each workspace has its own (spec 0056, AC-5617).
-          ...(profile.workspaceName === undefined ? [] : [strings.inWorkspace(profile.workspaceName)]),
-          counts !== undefined
-            ? `${strings.blocksText} ${figuresLine(counts)}`
-            : state.status === 'ready' && state.countsFailed === true
-              ? `${strings.blocksText} ${strings.countsFailed}`
-              : strings.blocksText,
-        ].join(' ')}
+        // The clicks are read apart from the blocks: when they fail, the rows' numbers can't say so themselves.
+        {...(state.status === 'ready' && state.countsFailed === true ? { footerNote: strings.countsFailed } : {})}
         {...(state.status === 'ready' && items.length === 0 ? {} : { footer: addButtons })}
         actions={
           // How the blocks lay out on the page (spec 0061, AC-6103): one column of rows, or tiles on a grid, whose
@@ -1157,24 +1212,31 @@ function Blocks({
           ...(sending === undefined ? {} : { sending }),
         }}
       />
-      <IdentityCard
-        data={data}
-        slug={slug}
-        jobTitle={profile.jobTitle}
-        identity={identity}
-        onSaved={(saved) => {
-          setIdentity(saved);
-          // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
-          linkPage.publication.changed();
-        }}
-      />
-      <SharingCard
-        indexable={indexable}
-        {...(shareImage === undefined ? {} : { shareImage })}
-        onShareImage={chooseShareImage}
-        onChange={chooseIndexable}
-        {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
-      />
+      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). */}
+      <Card title={strings.details}>
+        {/* Why the last switch didn't save, until the next try: the card has no footer to say it in. */}
+        {(identityRefusal ?? indexableRefusal?.message) !== undefined && (
+          <Callout tone="danger">{identityRefusal ?? indexableRefusal?.message}</Callout>
+        )}
+        <IdentityFields
+          data={data}
+          slug={slug}
+          jobTitle={profile.jobTitle}
+          identity={identity}
+          onSaved={(saved) => {
+            setIdentity(saved);
+            // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
+            linkPage.publication.changed();
+          }}
+          onSwitchRefused={setIdentityRefusal}
+        />
+        <SharingFields
+          indexable={indexable}
+          {...(shareImage === undefined ? {} : { shareImage })}
+          onShareImage={chooseShareImage}
+          onChange={chooseIndexable}
+        />
+      </Card>
       {Editor !== undefined && editing !== undefined && (
         // The draft wears the page's own look (spec 0060, AC-16), as the phone does.
         <DraftLook look={{ theme: worn, photos: lookPhotos, variables: lookVariables }}>

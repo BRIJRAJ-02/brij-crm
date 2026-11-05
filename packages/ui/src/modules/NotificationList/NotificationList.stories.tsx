@@ -151,7 +151,6 @@ function SampleInbox({
         {...(isFiltered
           ? {
               emptyTitle: 'No notifications match.',
-              emptyIcon: 'list-filter' as const,
               emptyActions: <Button>Clear filters</Button>,
             }
           : {})}

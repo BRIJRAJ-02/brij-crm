@@ -162,7 +162,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
   });
 
   if (state.status === 'unavailable') {
-    return <EmptyState icon="message-square" title={strings.unavailable} />;
+    return <EmptyState title={strings.unavailable} />;
   }
   if (state.status === 'error') {
     return (
@@ -207,11 +207,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
           {strings.earlierThreads}
         </Button>
       )}
-      {isEmpty && (
-        <EmptyState icon="message-square" title={strings.noComments}>
-          {canWrite ? strings.noCommentsText : undefined}
-        </EmptyState>
-      )}
+      {isEmpty && <EmptyState title={strings.noComments}>{canWrite ? strings.noCommentsText : undefined}</EmptyState>}
       {state.open.map((shown) => (
         <CommentThread key={shown.id} {...threadProps(shown)} />
       ))}

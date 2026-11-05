@@ -9,14 +9,12 @@ import { BRAND_QUICK_PICKS, type FormQuestion, type FormView } from '@crm/data';
 import {
   AccentPicker,
   Button,
-  Callout,
   Card,
   Code,
   DescriptionList,
   EmbedPreview,
   Field,
   InfoTip,
-  Link,
   Modal,
   SettingsStack,
   Switch,
@@ -27,7 +25,6 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { EMBED_TILES } from './embed-tiles.ts';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
-import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { ShareBlock } from './ShareBlock.tsx';
 import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
@@ -233,19 +230,6 @@ export function ShareTab({ slug, form, isReadOnly, onFormChange }: ShareTabProps
           />
         </TileGrid>
         <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
-        {/* Ask first, then book (the owner, 2 November 2026): the form already hands off to a booking page once it
-            is sent, and the embed carries that step with it, so nobody needs a second snippet. Said here because
-            the setting lives on another tab, where whoever is pasting the snippet will not see it. */}
-        {shown.after.kind === 'booking' ? (
-          <Callout tone="info">{strings.embedBooks}</Callout>
-        ) : (
-          <Callout
-            tone="info"
-            actions={<Link href={formHref(slug, form.id, 'settings')}>{strings.embedCouldBookLink}</Link>}
-          >
-            {strings.embedCouldBook}
-          </Callout>
-        )}
       </Card>
       {/* The developer material in one sheet (b10), opened from a card of its own like the rows above it: the prefill link, the site's own HTML, the sites that may
           post and signed posts, out of the way of everyone who only pastes the snippet. */}

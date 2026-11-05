@@ -22,6 +22,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
   'brandLogoFolder',
   'pageImageFolder',
+  // Where a workspace's menu photos are kept (spec 0065, H1): pure, a path from an id.
+  'menuPhotoFolder',
+  // Pure: what keeps a menu from publishing (spec 0065, H1).
+  'publishProblem',
   // Link page blocks and reach (spec 0061): pure, a share link read into a provider and id, the addresses built back
   // from them, a picture's bytes checked and cleaned, a page's own tags read, a view's facts, a block's window.
   'parseMediaLink',
@@ -110,6 +114,47 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'operatorPages',
   'operatorPage',
   'operatorSite',
+  // Its one write (spec 0065, AC-6502), behind the same gate, through crm_operator's one definer.
+  'setEarlyAccess',
+  // The Hospitality gate (spec 0065, AC-6504): it takes the caller's transaction, inside a service the door let in.
+  'appInstalled',
+  'requireApp',
+  'requireAnyApp',
+  // The visit engine (spec 0066, B0): the pure planner and its earliest day search, the slot cache factory, and the
+  // refusal's reader.
+  'planVisit',
+  'earliestStart',
+  'createSlotCache',
+  'isVisitTaken',
+  // Pure: Table seating's checklist and rules check.
+  'setupSteps',
+  'tableRulesProblem',
+  // Pure: a country's likely locale, and a place's hours read at an instant (spec 0065).
+  'localeForCountry',
+  'openAt',
+  'nextOpening',
+  'rangesOn',
+  // The business page (spec 0066, B4 lite): pure paths, and the public reads, whose only key is the business handle
+  // (crm_business_handle_owner), each reading one workspace's published page under its row level security; and the
+  // link page lockup's read, in the caller's workspace transaction.
+  'businessPhotoFolder',
+  'businessPhotoPath',
+  'businessPhotoSrc',
+  'enterBusinessPage',
+  'listSitemapBusinesses',
+  'NO_MENUS',
+  'publicBusinessBrand',
+  'publicBusinessPhoto',
+  'publishedBusinessHandle',
+  // The business's opaque edge cache tags (pure), the booking page's company lockup (read through the booking door's
+  // own entry), and the business page's menu (a MenuSource, run inside the page's own workspace transaction).
+  'businessCacheId',
+  'businessCacheTags',
+  'menuWorkspaceCacheTags',
+  // Where a staff profile's photos are stored (spec 0066 B1): a pure path prefix.
+  'staffPhotoFolder',
+  'bookingCompanyOf',
+  'businessMenuOf',
   'periodDays',
   // The team change's audience: read inside the change's own transaction, after its door (spec 0031, AC-825).
   'membersAffectedByTeamChange',
@@ -233,6 +278,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'moveBooking',
   'readMoveSlots',
   'prepareBookingMail',
+  // A reservation's mail job (spec 0066 B7 lite) runs as the system in the visit's workspace, like the booking's.
+  'prepareVisitMail',
   'markGuestsTold',
   'whenLine',
   // Round robin (spec 0029, AC-749): the booking mail job's needs_host step hands a leaving member's booking on, as

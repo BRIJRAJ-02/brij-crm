@@ -80,6 +80,12 @@
     }
   }
 
+  /* On paper (Menu QR's print sheet, spec 0065 H2): the light surface in either theme, as a saved PNG is, since a
+     printed code is printed on white. After the dark rules, at their weight, so it wins over them. */
+  .root[data-ground='paper'] .ground {
+    fill: var(--surface);
+  }
+
   /* Clear: the caller's tile is the ground (ReadyPanel's share), so the code paints none of its own in either theme.
      Last, so it outranks the dark theme's grey above at the same weight. */
   .root[data-ground='clear'] .ground {

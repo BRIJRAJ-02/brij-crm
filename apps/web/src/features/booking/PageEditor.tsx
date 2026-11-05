@@ -17,7 +17,6 @@ import {
   BOOKING_DRAFT_KEYS,
   BRAND_QUICK_PICKS,
   isDataError,
-  MANAGED_PARTS,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
@@ -59,6 +58,7 @@ import {
   Tabs,
   Tooltip,
   TopBar,
+  ViewOnlyTag,
   type SaveBarStatus,
   type SelectItem,
 } from '@crm/ui';
@@ -1034,7 +1034,10 @@ export function PageEditor({
                 {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
                 {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} isWhole />}
                 {/* Made from a managed template (AC-1334): where this page's settings come from, beside its status. */}
+                {/* Each field the workspace sets draws its own lock, so no note over the tabs names them again. */}
                 {workspaceSets.size > 0 && <Badge text={managedStrings.fromTemplate} isWhole />}
+                {/* A reader sees the page as it is: one tag by the title, never a note over the editor. */}
+                {isLocked && <ViewOnlyTag reason={strings.readOnlyText} />}
               </>
             }
           >
@@ -1343,24 +1346,6 @@ export function PageEditor({
                       >
                         {publishStrings.restoreText}
                       </Modal>
-                      {isLocked && (
-                        <Callout tone="info" title={strings.readOnlyTitle}>
-                          {strings.readOnlyText}
-                        </Callout>
-                      )}
-                      {/* What the workspace sets on this page, named once rather than on every field (AC-1334):
-                          each of those controls is read only, and a write to one is refused by the server as
-                          well. A page level note, so it sits with the other two rather than inside a tab. */}
-                      {workspaceSets.size > 0 && (
-                        <Callout tone="info" title={managedStrings.fromTemplate}>
-                          {managedStrings.setByWorkspaceNote(
-                            // In the template editor's order, so the page is described the same way on both sides.
-                            MANAGED_PARTS.filter((part) => workspaceSets.has(part)).map(
-                              (part) => managedStrings.partName[part],
-                            ),
-                          )}
-                        </Callout>
-                      )}
                     </>
                   }
                   footer={

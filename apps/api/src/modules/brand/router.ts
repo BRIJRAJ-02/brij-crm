@@ -1,5 +1,6 @@
 import { brandCacheTags, linkPageCacheTags } from '@crm/contracts';
 import {
+  businessCacheTags,
   discardBrandTemplate,
   getWorkspaceBrand,
   publishBrandTemplate,
@@ -22,8 +23,12 @@ export const brandRouter = member.brand.router({
         ...(input.template === undefined ? {} : { template: input.template }),
       }),
     );
-    // Once committed, the edge's copies of every page's brand stylesheet and logo are deleted (AC-21).
-    await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
+    // Once committed, the edge's copies of every page's brand stylesheet and logo are deleted (AC-21), and the business
+    // page's answer, which names its guest look's version (the accent is in it), so it never names an old one.
+    await context.edgeCache.forget([
+      ...brandCacheTags(context.scope.workspaceId),
+      ...businessCacheTags(context.scope.workspaceId),
+    ]);
     return saved;
   }),
   // The waiting template goes live (spec 0068): every public page's edge copies go once it has committed, the brand

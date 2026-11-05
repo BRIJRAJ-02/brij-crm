@@ -429,7 +429,6 @@ function Decisions({
           emptyState={
             state.status === 'ready' && state.hasMore ? undefined : isFiltered ? (
               <EmptyState
-                icon="git-branch"
                 title={strings.noMatch}
                 actions={
                   <Button
@@ -449,7 +448,7 @@ function Decisions({
                 }
               />
             ) : (
-              <EmptyState icon="git-branch" title={strings.noDecisions} />
+              <EmptyState title={strings.noDecisions} />
             )
           }
           renderCell={(decision, column) => {

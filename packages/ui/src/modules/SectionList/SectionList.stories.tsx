@@ -109,6 +109,8 @@ function Profile({
   const sections: SectionListSection[] = shown.map((group, at) => ({
     id: group.id,
     ...(group.title === undefined ? {} : { title: group.title }),
+    // The line under a title (a menu section's "2 items").
+    description: group.rows.length === 1 ? '1 page' : `${String(group.rows.length)} pages`,
     ...(isReadOnly || shown.length < 2 || group.title === undefined
       ? {}
       : { actions: sectionMenu(group.title, at, shown.length, (to) => moveSection(group.id, to)) }),
@@ -282,6 +284,56 @@ export const Narrow: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeVisible();
     await expect(canvas.getByText('45 min · 60 min')).toBeVisible();
+  },
+};
+
+/**
+ * Sections that fold (a menu's Structure, after checklabs' category chevron): a chevron at each header's end opens
+ * and closes what it holds; Support starts folded, its header alone.
+ */
+export const Folding: Story = {
+  render: () => {
+    function Folds() {
+      const [open, setOpen] = useState<ReadonlySet<string>>(new Set(['sales', 'none']));
+      const sections: SectionListSection[] = groups().map((group) => ({
+        id: group.id,
+        ...(group.title === undefined ? {} : { title: group.title }),
+        description: `${String(group.rows.length)} pages`,
+        isExpanded: open.has(group.id),
+        onExpandedChange: (isExpanded: boolean) =>
+          setOpen((was) => {
+            const next = new Set(was);
+            if (isExpanded) next.add(group.id);
+            else next.delete(group.id);
+            return next;
+          }),
+        content: (
+          <LinkList
+            label={group.title ?? 'Pages'}
+            rows={group.rows}
+            onOpen={() => undefined}
+            searchLabel="Search pages"
+            isToolbarHidden
+            density="compact"
+            placement="card"
+          />
+        ),
+      }));
+      return <SectionList label="Sections on your profile" sections={sections} />;
+    }
+    return (
+      <Stage width="fill">
+        <Folds />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    const support = canvas.getByRole('button', { name: 'Show Support' });
+    await expect(support).toHaveAttribute('aria-expanded', 'false');
+    await expect(canvas.queryByText('Help session')).toBeNull();
+    await userEvent.click(support);
+    await expect(canvas.getByRole('button', { name: 'Show Support' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(await canvas.findByText('Help session')).toBeInTheDocument();
   },
 };
 

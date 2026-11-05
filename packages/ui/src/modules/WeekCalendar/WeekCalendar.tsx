@@ -33,7 +33,7 @@ import {
   type MoveGeometry,
   type MoveSteps,
 } from './blockMove.ts';
-import { isOnHours, visibleHours, WHOLE_DAY, type HourRange } from './visibleHours.ts';
+import { isOnHours, visibleHours as workingHours, WHOLE_DAY, type HourRange } from './visibleHours.ts';
 import { MovableBlock, type BlockWire } from './MovableBlock.tsx';
 import { liftClosed, NEST_AFTER, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
@@ -283,6 +283,18 @@ export interface WeekCalendarProps {
    * column it draws the whole day. Drawing, moving and the keys stay inside the hours drawn.
    */
   readonly fitsHours?: boolean;
+  /**
+   * The stretch of each day the grid draws, rounded out to whole hours, whatever `fitsHours` says: Reservations' day
+   * calendar draws 10:00 to midnight, as checklabs' does (from the place's first service when that is earlier). Time
+   * outside it is clipped, and a span drawn or a block moved stays inside it, so the screen widens it to hold every
+   * block it shows.
+   */
+  readonly drawnHours?: WeekCalendarRange;
+  /**
+   * How many hours show before the grid scrolls (default 12): Reservations' day calendar shows 8, about checklabs'
+   * 560px, so the bookings list under it starts on the first screen. Ignored with `isFill`.
+   */
+  readonly visibleHours?: number;
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -392,19 +404,26 @@ export function WeekCalendar({
   view = 'week',
   move,
   fitsHours = false,
+  drawnHours,
+  visibleHours,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
-  // The hours drawn: the working day across every column shown, with what is on the grid (T13); else all 24.
-  const hours = useMemo(
-    () =>
-      fitsHours && openHours !== undefined
-        ? visibleHours(
-            days.map((day) => openHours(day.key)),
-            draft === undefined ? blocks : [...blocks, draft],
-          )
-        : WHOLE_DAY,
-    [fitsHours, openHours, days, blocks, draft],
-  );
+  // The hours drawn: the stretch the screen names; else the working day across every column shown, with what is on
+  // the grid (T13); else all 24.
+  const drawnStart = drawnHours?.startMinute;
+  const drawnEnd = drawnHours?.endMinute;
+  const hours = useMemo(() => {
+    if (drawnStart !== undefined && drawnEnd !== undefined) {
+      const from = Math.max(0, Math.min(23, Math.floor(drawnStart / 60)));
+      return { from, to: Math.max(from + 1, Math.min(24, Math.ceil(drawnEnd / 60))) };
+    }
+    return fitsHours && openHours !== undefined
+      ? workingHours(
+          days.map((day) => openHours(day.key)),
+          draft === undefined ? blocks : [...blocks, draft],
+        )
+      : WHOLE_DAY;
+  }, [drawnStart, drawnEnd, fitsHours, openHours, days, blocks, draft]);
   const bounds = boundsOf(hours);
   const bodyRef = useRef<HTMLDivElement>(null);
   const isTeam = view === 'team';
@@ -827,18 +846,25 @@ export function WeekCalendar({
         '--columns': String(Math.max(days.length, 1)),
         '--from': String(hours.from),
         '--hours': String(hours.to - hours.from),
+        ...(visibleHours === undefined ? {} : { '--visible-hours': String(Math.max(1, visibleHours)) }),
       }}
     >
-      {!isTeam && headRow}
+      {/* The day view given one day alone has no head: the page's own bar names the day and picks another. */}
+      {!isTeam && !(view === 'day' && days.length === 1) && headRow}
       <div ref={scroller} className={styles.scroller}>
         {isTeam && headRow}
         <div ref={bodyRef} className={styles.body}>
           <div className={styles.axis} aria-hidden="true">
-            {HOURS.map((hour) => (
-              <span key={hour} className={styles.hour}>
-                {hour <= hours.from || hour >= hours.to ? '' : hourLabel(hour)}
-              </span>
-            ))}
+            {HOURS.map((hour) => {
+              // A stretch the screen named labels its first hour under its line (the day's start is worth reading on a
+              // grid that starts at 10:00); midnight's label would sit on the top edge, so it is always left out.
+              const isFirstLabelled = drawnHours !== undefined && hour === hours.from && hour > 0;
+              return (
+                <span key={hour} className={styles.hour} data-first={isFirstLabelled || undefined}>
+                  {isFirstLabelled || (hour > hours.from && hour < hours.to) ? hourLabel(hour) : ''}
+                </span>
+              );
+            })}
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
               (now.label !== undefined || minuteLabel !== undefined) &&

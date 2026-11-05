@@ -46,7 +46,7 @@ function RoutingError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <PageColumn>
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
+      <EmptyState layout="block" tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     </PageColumn>

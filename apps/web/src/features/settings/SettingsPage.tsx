@@ -11,6 +11,7 @@ import {
   TabPanel,
   Tabs,
   TopBar,
+  ViewOnlyTag,
   type Crumb,
   type TabItem,
 } from '@crm/ui';
@@ -44,6 +45,11 @@ interface SettingsPageBase {
   readonly hue?: Hue;
   /** Beside the title: a Standard or Custom badge. */
   readonly meta?: ReactNode;
+  /**
+   * The viewer may look but not change anything here: a "View only" tag beside the title, whose lock gives this
+   * reason ("Only owners and admins can change this."). In place of a callout in the body.
+   */
+  readonly viewOnly?: string;
   /** The page's one primary action, at the bar's end ("New object", "Connect Google calendar"). */
   readonly actions?: ReactNode;
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
@@ -119,6 +125,7 @@ export function SettingsPage({
   icon,
   hue,
   meta,
+  viewOnly,
   actions,
   isLoading = false,
   hasTile = false,
@@ -135,11 +142,16 @@ export function SettingsPage({
   const { slug = '' } = useParams({ strict: false });
   const pathname = useLocation({ select: (location) => location.pathname });
   const page = settingsPageOf(pathname);
-  const group = settingsGroupOf(settingsNav(slug), page);
+  const group = settingsGroupOf(settingsNav(slug, { hasBusiness: true }), page);
   const access = useMyAccess();
   const navigate = useNavigate();
   // The navigation as this member sees it: the one source of a settings page's name and its trail's places.
-  const visible = visibleSettingsNav(settingsNav(slug), access?.permissions, false, access?.role === 'guest');
+  const visible = visibleSettingsNav(
+    settingsNav(slug, { hasBusiness: true }),
+    access?.permissions,
+    false,
+    access?.role === 'guest',
+  );
   // The entry this page is a tab of, as this member sees it, and only on the tab's own address (a role's page, under
   // Roles and access, has its trail instead).
   const entry = inFrame ? undefined : tabbedEntry(settingsEntryOf(visible, page), pathname);
@@ -184,11 +196,22 @@ export function SettingsPage({
         isLoading={isLoading}
         hasTile={hasTile}
         footer={footer}
+        // The frame owns the bar, so the tag heads the body instead.
+        {...(viewOnly === undefined ? {} : { viewOnly })}
       >
         {children}
       </SettingsLayout>
     );
   }
+  const barMeta =
+    viewOnly === undefined ? (
+      meta
+    ) : (
+      <>
+        {meta}
+        <ViewOnlyTag reason={viewOnly} />
+      </>
+    );
   return (
     <WorkspacePage
       page={{
@@ -210,7 +233,7 @@ export function SettingsPage({
                   {...(titleRef === undefined ? {} : { titleRef })}
                   {...(icon === undefined ? {} : { icon })}
                   {...(hue === undefined ? {} : { hue })}
-                  {...(meta === undefined ? {} : { meta })}
+                  {...(barMeta === undefined ? {} : { meta: barMeta })}
                 >
                   {actions}
                 </TopBar>,
@@ -310,6 +333,7 @@ export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'obj
   return (
     <SettingsPage title={strings.missingTitle} keepsTitle {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
       <EmptyState
+        layout="block"
         icon="search"
         title={strings.missingText}
         actions={
@@ -339,7 +363,7 @@ export function SettingsFailed({
 }) {
   return (
     <SettingsPage title={title}>
-      <EmptyState tone="error" title={heading} onRetry={onRetry}>
+      <EmptyState layout="block" tone="error" title={heading} onRetry={onRetry}>
         {text}
       </EmptyState>
     </SettingsPage>

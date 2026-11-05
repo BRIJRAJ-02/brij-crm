@@ -284,11 +284,7 @@ function LoadedPeek(
       <RecordPanel
         {...common}
         tabs={NO_TABS}
-        empty={
-          <EmptyState icon="search" title={strings.recordUnavailable}>
-            {strings.recordUnavailableText}
-          </EmptyState>
-        }
+        empty={<EmptyState title={strings.recordUnavailable}>{strings.recordUnavailableText}</EmptyState>}
       />
     );
   }

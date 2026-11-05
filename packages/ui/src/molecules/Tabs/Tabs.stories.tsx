@@ -444,3 +444,33 @@ export const WithAlert: Story = {
     await expect(canvas.getByRole('tab', { name: 'Page' })).toHaveAttribute('aria-selected', 'true');
   },
 };
+
+/** `pills`: a guest menu's categories, one at a time; the arrow keys move the fill and show each panel. */
+export const Pills: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Tabs
+        label="Sections"
+        variant="pills"
+        defaultSelectedKey="starters"
+        tabs={[
+          { id: 'starters', label: 'Starters' },
+          { id: 'mains', label: 'Mains' },
+          { id: 'desserts', label: 'Desserts' },
+          { id: 'drinks', label: 'Drinks' },
+        ]}
+      >
+        <TabPanel id="starters">Edamame, miso soup.</TabPanel>
+        <TabPanel id="mains">Katsu curry, ramen.</TabPanel>
+        <TabPanel id="desserts">Matcha ice cream.</TabPanel>
+        <TabPanel id="drinks">Green tea.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('tab', { name: 'Mains' })).toHaveAttribute('aria-selected', 'true');
+    await expect(canvas.getByRole('tabpanel')).toHaveTextContent('Katsu curry, ramen.');
+  },
+};

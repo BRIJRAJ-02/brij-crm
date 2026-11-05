@@ -32,6 +32,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 - `closeAs="back"` draws the close as Back (`arrow-left`, named by `backLabel`, "Back" by default) at the head's start, and no X at its end, for a panel that fills a phone's screen, where the way out is looked for at the top left (lane 3c). It still calls `onClose`. Why a prop: a screen could add a Back button in `leading`, but the X stayed, so the phone had two ways out of one panel.
 - `onStep` hears ↑ (`previous`) and ↓ (`next`) pressed inside the panel where nothing else owns the arrows (a field, contenteditable, tabs, a list, a grid, a menu, a radio group): the record panel steps through the list it was opened from (Twenty's side panel, the CRM flow pass, 31 October 2026). Why a prop: only the panel knows a key happened inside it, and a document listener would also hear keys meant for a dialog opened over it. The content swaps at once, with no motion, since it is a key pressed many times a day.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
+- Toasts keep off its `footer`: a toast that would sit over the footer's buttons rises above them, as it does for a Modal's (4 November 2026).
 
 ## States
 

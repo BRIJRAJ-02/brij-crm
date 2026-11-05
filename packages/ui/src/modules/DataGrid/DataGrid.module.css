@@ -232,12 +232,12 @@
     overflow-y: hidden;
   }
 
+  /* The body's place when there are no rows: a column the state fills. A row state (no matches, failed) sits at
+     the top, where the first row would be; a first run's fill grows to the height and centres itself. */
   .state {
     display: flex;
     flex: 1;
-    align-items: center;
-    justify-content: center;
-    padding-block: var(--space-32);
+    flex-direction: column;
     border: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface);
   }

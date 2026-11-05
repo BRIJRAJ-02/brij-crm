@@ -41,6 +41,14 @@ export const workspaces = pgTable(
     keepSubmissionsMonths: smallint('keep_submissions_months'),
     /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
     purgeAfter: timestamptz('purge_after'),
+    /**
+     * What Timefix opened early for the workspace (spec 0065, AC-6502): `business_apps` today. Written only by
+     * `crm_set_early_access`, the operator console's one write.
+     */
+    earlyAccess: text('early_access')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     ...auditColumns(),
   },
   (t) => [
@@ -52,6 +60,7 @@ export const workspaces = pgTable(
       'workspaces_keep_submissions',
       sql`${t.keepSubmissionsMonths} is null or ${t.keepSubmissionsMonths} in (12, 24)`,
     ),
+    check('workspaces_early_access', sql`${t.earlyAccess} <@ array['business_apps']::text[]`),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),

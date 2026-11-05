@@ -661,7 +661,6 @@ function ListTable(
           // Empty and unfiltered, a list opens on its first step (T11) for whoever may add to it: what it is for, with
           // Add <singular> opening the record picker and Import beside it. A reader is told only that it is empty.
           <EmptyState
-            icon={list.icon}
             title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.empty(object.pluralName)}
             {...(hasFilter || !list.canWrite ? {} : { children: strings.firstStep(object.pluralName) })}
             {...(hasFilter
@@ -874,6 +873,7 @@ function FirstStepBanner({
 }) {
   return (
     <Callout
+      tone="info"
       placement="banner"
       actions={
         <Button icon="plus" onPress={onAdd}>
@@ -901,7 +901,6 @@ function ListBoardBody(
   if (field === undefined) {
     return (
       <EmptyState
-        icon="kanban"
         title={strings.noGroupField(list.name)}
         {...(list.canManage
           ? {

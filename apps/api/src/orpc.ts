@@ -40,7 +40,7 @@ import { setRequestScope } from './monitoring/sentry.ts';
 import type { SignedOutNotice } from './realtime/signed-out.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
-import type { WebhookKey, WebhookUrlProblem } from '@crm/core';
+import type { SlotCache, WebhookKey, WebhookUrlProblem } from '@crm/core';
 import type { WebhookSender } from './jobs/webhook-deliver.ts';
 
 /** What every procedure receives. */
@@ -110,6 +110,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   bookingCalendar: BookingCalendar;
   /** Home's metrics (spec 0041): each workspace's figures, kept a minute per workspace and week in this process. */
   homeMetrics: HomeMetricsCache;
+  /** The visit engine's offered times cache (spec 0066), shared with the public table routes: writes purge it. */
+  visitSlots: SlotCache;
   /** The key a booking's guest page token derives from (`booking-link.ts`): Book someone in, Copy guest link. */
   bookingLinkKey: ManageLinkKey;
   /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */
@@ -326,11 +328,11 @@ export const requireMember = os
 /** How recently a super admin's session must have proved itself (spec 0047, AC-1618). */
 export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
 
-/** The id an operator read names, when it names one: the person or the booking page. */
+/** The id an operator call names, when it names one: the person, the booking page, or the workspace (a switch). */
 function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string; readonly q?: string } {
   if (typeof input !== 'object' || input === null) return {};
   const fields = input as Record<string, unknown>;
-  const target = [fields['userId'], fields['pageId']].find((value) => typeof value === 'string');
+  const target = [fields['userId'], fields['pageId'], fields['workspaceId']].find((value) => typeof value === 'string');
   const period = fields['period'];
   const q = fields['q'];
   return {

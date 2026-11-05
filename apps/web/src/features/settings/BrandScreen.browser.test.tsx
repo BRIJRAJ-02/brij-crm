@@ -96,7 +96,10 @@ describe('Settings › Brand', () => {
   it('shows a member the kit with no way to change it', async () => {
     const { brand } = store({ canEdit: false, template: 'classic' as const, accent: '#0fc27b' });
     await render(brand);
-    await expect.element(page.getByText('Only owners and admins change the brand.')).toBeInTheDocument();
+    // Who changes it is a "View only" tag in the page's header bar (which this harness doesn't mount), never a note
+    // over the editor.
+    await expect.element(page.getByText('#0fc27b', { exact: false })).toBeVisible();
+    expect(page.getByText('Only owners and admins change the brand.').elements()).toHaveLength(0);
     await expect.element(page.getByRole('button', { name: 'Any colour' })).not.toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'Add your logo' })).not.toBeInTheDocument();
     // Its colour is text, not swatches announced as radios a click can't move.

@@ -1,15 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState, type ComponentProps } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingChatGhost } from '../BookingChat/BookingChatGhost.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { BookingReceipt } from '../BookingReceipt/BookingReceipt.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
+import { GuestLook } from '../GuestLook/GuestLook.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
 import { VisitorBar } from '../VisitorBar/VisitorBar.tsx';
@@ -309,6 +312,17 @@ export const WithRole: Story = {
   },
 };
 
+/** A restaurant whose one place carries its name (spec 0066 B7): the name shows once, as the h1. */
+export const SameNameHost: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { host: { name: 'Somewhere' }, title: 'Somewhere' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Somewhere' })).toBeInTheDocument();
+    await expect(canvas.getAllByText('Somewhere', { exact: true })).toHaveLength(1);
+  },
+};
+
 /**
  * List over the month (25 October 2026): the month stays underneath, hidden and inert, and sets the card's size, so
  * switching views moves nothing; the views crossfade.
@@ -577,6 +591,30 @@ export const Failed: Story = {
   },
 };
 
+/** A reservation's manage link that opens nothing (spec 0066 B7): Try again, and a way on to find it by code. */
+export const FailedWithLink: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="Your reservation"
+        onRetry={fn()}
+        link={{ label: 'Find your reservation', href: '/r/somewhere/manage' }}
+        page="booking_manage"
+      >
+        This link doesn’t open a reservation.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Find your reservation' })).toHaveAttribute(
+      'href',
+      '/r/somewhere/manage',
+    );
+  },
+};
+
 /** A profile's address that names nobody: the same message, its Timefix link tagged as the profile's. */
 export const ProfileNotFound: Story = {
   parameters: { crm: { screenshot: false } },
@@ -691,6 +729,168 @@ export const ProfileEmpty: Story = {
 };
 
 /** The story's own state, in a component so the artifact's preview can render it too. */
+/** A restaurant's day: Lunch from 12:00 and Dinner from 18:00, a quarter hour apart, on the place's clock. */
+const SERVICES = [
+  { id: 'lunch', heading: 'Lunch', from: 12 * 60, count: 6 },
+  { id: 'dinner', heading: 'Dinner', from: 18 * 60, count: 9 },
+].map((service) => ({
+  id: service.id,
+  heading: service.heading,
+  slots: Array.from({ length: service.count }, (_, index) => {
+    const at = service.from + index * 15;
+    const label = `${String(Math.floor(at / 60)).padStart(2, '0')}:${String(at % 60).padStart(2, '0')}`;
+    return { id: `${service.id}-${label}`, label, name: `${label}, Fri 9 Oct` };
+  }),
+}));
+
+/**
+ * A restaurant's reservation page (5 November 2026, after checklabs): the guest menu's look (GuestLook, here with
+ * no look stylesheet, so its token fallbacks: the ink as the accent), the place's tile beside its name with Manage
+ * booking under its facts, the plain month, the day's Lunch and Dinner in one list, and the Book bar.
+ */
+export const Reservation: Story = {
+  args: {
+    host: { name: 'Somewhere' },
+    title: 'Reserve your table',
+    description: 'Pick a date and time at Somewhere.',
+    facts: [
+      { id: 'where', icon: 'map-pin', children: '1 Example Street, London' },
+      { id: 'phone', icon: 'phone', children: '020 7946 0000' },
+    ],
+    identity: 'tile',
+    railLink: { label: 'Manage booking', href: '/r/abcdefghijklmnop/manage' },
+  },
+  render: (args) => (
+    <GuestLook>
+      <Reserving {...args} />
+    </GuestLook>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Reserve your table' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Manage booking' })).toHaveAttribute(
+      'href',
+      '/r/abcdefghijklmnop/manage',
+    );
+    await expect(canvas.getByRole('button', { name: 'Pick a time' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: /^19:30/ }));
+    const book = canvas.getByRole('button', { name: 'Continue · Fri 9 Oct, 19:30' });
+    // The ink, never the app's blue: with no look stylesheet the Book bar takes the inverse surface (#18191d in light).
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(24, 25, 29)');
+    // The times and the month drew in while the play ran: settled, so the theme checks read their real colours.
+    await settleAnimations();
+  },
+};
+
+/** Checklabs' Nova values, light and dark, as `--menu-*`: a stand in for the look stylesheet, so axe reads both themes. */
+const MENU_LOOK = [
+  ['--menu-ground', 'light-dark(#ffffff, #141414)'],
+  ['--menu-card', 'light-dark(#ffffff, #1c1c1c)'],
+  ['--menu-chip', 'light-dark(#f5f1ea, #2b2824)'],
+  ['--menu-line', 'light-dark(#0000000f, #ffffff17)'],
+  ['--menu-text', 'light-dark(#1a1a1a, #f5f5f5)'],
+  ['--menu-quiet', 'light-dark(#6b6b6b, #a8a8a8)'],
+  ['--menu-accent', 'light-dark(#1a1a1a, #f5f5f5)'],
+  ['--menu-on-accent', 'light-dark(#ffffff, #141414)'],
+] as const;
+
+/** The reservation page with the menu's look stylesheet linked: the cream chips, the hairlines and the ink. */
+export const ReservationMenuLook: Story = {
+  args: Reservation.args,
+  render: (args) => (
+    <MenuLook>
+      <GuestLook>
+        <Reserving {...args} />
+      </GuestLook>
+    </MenuLook>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /^12:15/ }));
+    const book = canvas.getByRole('button', { name: 'Continue · Fri 9 Oct, 12:15' });
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(26, 26, 26)');
+    await settleAnimations();
+  },
+};
+
+/** Sets the menu's look on a wrapper, as its stylesheet sets it on the page's root. */
+function MenuLook({ children }: { readonly children: ReactNode }) {
+  return (
+    <div
+      ref={(element) => {
+        for (const [name, value] of MENU_LOOK) element?.style.setProperty(name, value);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** The reservation page's month view, then its details step, as the page drives them. */
+function Reserving(args: ComponentProps<typeof BookingFrame>) {
+  const [day, setDay] = useState('2026-10-09');
+  const [time, setTime] = useState<string | undefined>(undefined);
+  const [step, setStep] = useState<'pick' | 'details'>('pick');
+  const label = SERVICES.flatMap((service) => service.slots).find((slot) => slot.id === time)?.label;
+  return (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        {...args}
+        heading="Choose a date"
+        view={step}
+        {...(step === 'details'
+          ? {
+              cover: (
+                <BookingDetails
+                  needsPhone
+                  maxGuests={0}
+                  fieldSize="lg"
+                  isPhoneFirst
+                  labels={{ name: 'Full name', phone: 'Phone', confirm: `Confirm Fri 9 Oct at ${label ?? ''}` }}
+                  onBack={() => setStep('pick')}
+                  onSubmit={fn(() => Promise.resolve({ kind: 'done' as const }))}
+                />
+              ),
+              coverPlace: 'card' as const,
+              enter: 'forward' as const,
+            }
+          : {})}
+        aside={
+          <SlotList
+            heading="Friday 9 October"
+            badge={<Badge text="15 available" isWhole />}
+            slots={[]}
+            groups={SERVICES}
+            value={time}
+            onChange={setTime}
+          />
+        }
+        footer={
+          <Button
+            variant="primary"
+            size="lg"
+            isFullWidth="center"
+            isDisabled={time === undefined}
+            onPress={() => setStep('details')}
+          >
+            {label === undefined ? 'Pick a time' : `Continue · Fri 9 Oct, ${label}`}
+          </Button>
+        }
+      >
+        <MonthTiles
+          tone="plain"
+          month="2026-10"
+          today="2026-10-08"
+          openDays={OPEN}
+          value={day}
+          onChange={setDay}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext
+        />
+      </BookingFrame>
+    </Stage>
+  );
+}
+
 function Interactive(args: ComponentProps<typeof BookingFrame>) {
   const [day, setDay] = useState('2026-10-08');
   const [time, setTime] = useState<string | undefined>(undefined);

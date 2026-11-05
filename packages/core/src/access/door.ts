@@ -39,6 +39,7 @@ import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
 import { workspaceRules } from './stored-rules.ts';
+import { publicPlaceBlocks, type PublicPlaceBlock } from '../profile/place-blocks.ts';
 import { countPageVisit, finishPageVisit, type VisitOrigin } from '../insights/visits.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
@@ -1428,6 +1429,8 @@ export async function enterLinkPage(
   readonly identity: Pick<PublicProfile, 'role' | 'brand' | 'footLine'>;
   /** This is the owner's own Preview of their draft (spec 0068): never a view, never the published page. */
   readonly isDraft: boolean;
+  /** The Menu and Reserve blocks a visitor sees now, by block id (spec 0065, AC-6528); the rest are left out. */
+  readonly placeBlocks: ReadonlyMap<string, PublicPlaceBlock>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const reached = await shownOwner(deps.db, handle, {
@@ -1480,11 +1483,13 @@ export async function enterLinkPage(
     owner,
     rows.flatMap((row) => imageIdsOf(row.data)),
   );
-  // Read in the owner's own workspace, under its row level security: their job title and its name are its own.
-  const identity = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
-    publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
-  );
-  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft };
+  // Read in the owner's own workspace, under its row level security: their job title and its name are its own, and
+  // so are the places a Menu or Reserve block names (spec 0065, AC-6528), read only from what was published.
+  const [identity, placeBlocks] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
+    await publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
+    await publicPlaceBlocks(tx, owner.workspaceId, rows),
+  ]);
+  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft, placeBlocks };
 }
 
 /**
@@ -1540,15 +1545,19 @@ async function withinWorkspace(
 function imageIdsOf(data: unknown): readonly string[] {
   if (typeof data !== 'object' || data === null) return [];
   const record = data as Readonly<Record<string, unknown>>;
-  const one = [record.thumb, record.image, record.poster].filter((id): id is string => typeof id === 'string');
-  const gallery = Array.isArray(record.images)
-    ? (record.images as readonly unknown[]).flatMap((each) =>
-        typeof each === 'object' && each !== null && 'image' in each && typeof each.image === 'string'
-          ? [each.image]
-          : [],
-      )
-    : [];
-  return [...one, ...gallery];
+  const one = [record.thumb, record.image, record.poster, record.audio].filter(
+    (id): id is string => typeof id === 'string',
+  );
+  // A gallery's or a row of logos' pictures, and a work card's (spec 0068): `crm_profile_item_images` alike.
+  const inRows = (rows: unknown) =>
+    Array.isArray(rows)
+      ? (rows as readonly unknown[]).flatMap((each) =>
+          typeof each === 'object' && each !== null && 'image' in each && typeof each.image === 'string'
+            ? [each.image]
+            : [],
+        )
+      : [];
+  return [...one, ...inRows(record.images), ...inRows(record.items)];
 }
 
 /** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */
@@ -1870,4 +1879,51 @@ export async function enterEmailLink(deps: { readonly db: Database }, link: Emai
     actor: { type: 'member', id: found.member.id },
     access: emailLinkAccess(found.member.id),
   });
+}
+
+// Table seating's public door (spec 0066 B7 lite; spec 0065 AC-6550, AC-6557): a reservation page's key (the place's
+// public key) names a place through `crm_table_place_by_key`, then the guest acts as that place's narrow `booking`
+// actor. Here beside the other doors, since scopes are minted only in this file (AC-138); `table-door.ts` re-exports it.
+/** A place's public key: 16 URL safe characters. */
+export const TABLE_KEY_PATTERN = /^[A-Za-z0-9_-]{16}$/;
+
+/** What the table door answers: the guest's scope at the place, and whether Table seating is installed now. */
+export interface TableEntry {
+  readonly scope: EngineScope;
+  readonly placeId: string;
+  readonly key: string;
+  /** False once Table seating is removed: a reservation already made still opens, new ones refuse. */
+  readonly installed: boolean;
+}
+
+/**
+ * The reservation page's entry: a malformed key never reaches the database, and an unknown key, a deleted workspace,
+ * one without business apps, or one without both standard objects is NOT_FOUND, all one answer.
+ */
+export async function enterTablePage(deps: { readonly db: Database }, key: string): Promise<TableEntry> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!TABLE_KEY_PATTERN.test(key)) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string; place_id: string; installed: boolean }>(
+      sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${key})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const standard = await deps.db.withWorkspace(row.workspace_id, (tx) =>
+    tx
+      .select({ id: objects.id, key: objects.standardKey })
+      .from(objects)
+      .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt))),
+  );
+  const people = standard.find((object) => object.key === 'people')?.id;
+  const companies = standard.find((object) => object.key === 'companies')?.id;
+  if (people === undefined || companies === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.place_id },
+    access: bookingAccess(row.place_id, [people, companies]),
+  });
+  return { scope, placeId: row.place_id, key, installed: row.installed };
 }

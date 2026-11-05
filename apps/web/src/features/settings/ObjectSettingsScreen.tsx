@@ -149,6 +149,8 @@ export function ObjectSettingsScreen({
       icon={object.icon}
       hue={object.hue}
       meta={<ObjectBadges object={object} />}
+      // Attributes and Configuration are the schema's: one tag in the header says a reader can't change them.
+      {...(canManage || tab === 'access' ? {} : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
       {...(showsNew || !object.isArchived
         ? {
             actions: (
@@ -191,6 +193,7 @@ export function ObjectSettingsScreen({
               // An archived object's attributes come back with it.
               <SettingsStack>
                 <Callout
+                  tone="info"
                   {...(canManage
                     ? {
                         actions: (
@@ -228,7 +231,7 @@ export function ObjectSettingsScreen({
             (accessPage === undefined ? (
               <AccessTabPending />
             ) : accessPage === 'no-access' ? (
-              <EmptyState icon="lock" title={teamStrings.noAccessTitle}>
+              <EmptyState tone="locked" title={teamStrings.noAccessTitle}>
                 {teamStrings.noAccessText}
               </EmptyState>
             ) : accessPage === 'failed' ? (

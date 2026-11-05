@@ -1268,6 +1268,69 @@
       "when": 1795700001000,
       "tag": "0180_booking_meeting_link",
       "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1795700002000,
+      "tag": "0181_hospitality_apps",
+      "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1795700003000,
+      "tag": "0182_hospitality_menu",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1795700004000,
+      "tag": "0183_visits_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1795700005000,
+      "tag": "0184_table_service_door",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1795700006000,
+      "tag": "0185_reservation_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1795700007000,
+      "tag": "0186_business_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1795700008000,
+      "tag": "0187_menu_qr_and_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1795700009000,
+      "tag": "0188_staff_colour",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1795700010000,
+      "tag": "0189_link_bento",
+      "breakpoints": true
     }
   ]
 }

@@ -88,9 +88,10 @@ export interface TabsProps {
    * second bar, the row People's ViewBar takes under the TopBar: size-bar tall on the surface, the same padding
    * and hairline, kept in place while the page under it scrolls (Captures, Bookings). `feature`: a product's areas on
    * its own home page (the marketing site's first fold), equal columns with an icon tile, a label and a
-   * `description` each, the chosen one bright under a line that slides along their top.
+   * `description` each, the chosen one bright under a line that slides along their top. `pills`: a guest page's
+   * categories (the guest menu's sections), outlined pills in a row that scrolls sideways, the chosen one filled.
    */
-  readonly variant?: 'strip' | 'bar' | 'feature';
+  readonly variant?: 'strip' | 'bar' | 'feature' | 'pills';
   /**
    * `none` drops the strip's 16px inset at both ends, so the first tab's label
    * lines up with a full width Table's first column under it and the tools
@@ -189,7 +190,7 @@ export function Tabs({
               ) : (
                 <>
                   {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
-                  <span>{tab.label}</span>
+                  <span className={styles.label}>{tab.label}</span>
                 </>
               )}
               {tab.count !== undefined && (

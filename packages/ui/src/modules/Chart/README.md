@@ -22,7 +22,7 @@ import { Chart } from '@crm/ui/charts';
   formatTick={(value) => `$${String(value / 1000)}K`}
   status={state}
   onRetry={retry}
-/>
+/>;
 ```
 
 - The chart formats nothing: the screen hands every label and value already as words (`axisLabel`, `valueText`, `formatTick`), so money, dates and time zones stay with the provider's settings.

@@ -43,6 +43,41 @@
     border-radius: var(--radius-sm);
   }
 
+  /* A chip read on its own (a dish's allergens on its sheet): 4px taller, in the body's words. */
+  .root[data-size='chip-lg'] {
+    block-size: calc(var(--size-chip) + var(--space-4));
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-sm);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* As tall as its words, 4px over and under: a label inside a line of small type, whose words the line sets (the
+     guest menu's table, in its eyebrow's 11px semibold capitals). */
+  .root[data-size='fit'] {
+    block-size: auto;
+    padding: var(--space-4) var(--space-6);
+  }
+
+  /* Round: a pill, its sides half its height in less 2px (6px on a count, 10px on a 24px chip, 12px on a 28px one),
+     after checklabs' guest pills. */
+  .root[data-round] {
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-round][data-size='chip'] {
+    padding-inline: calc(var(--size-chip) / 2 - var(--space-2));
+  }
+
+  .root[data-round][data-size='chip-lg'] {
+    padding-inline: calc((var(--size-chip) + var(--space-4)) / 2 - var(--space-2));
+  }
+
+  .root[data-round][data-size='fit'] {
+    padding-inline: var(--space-8);
+  }
+
   .text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -96,6 +131,11 @@
   .root[data-tone='accent'] {
     background: var(--accent);
     color: var(--on-accent);
+  }
+
+  /* A label in the text colour on the neutral fill (a guest page's tags: checklabs' ink on cream). */
+  .root[data-tone='strong'] {
+    color: var(--text);
   }
 
   @media (forced-colors: active) {

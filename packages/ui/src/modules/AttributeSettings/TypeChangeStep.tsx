@@ -131,7 +131,7 @@ function TypeChangeBody({
         error={undefined}
         onChange={onConfigChange}
       />
-      {check === 'loading' && <Callout>{strings.checkingValues}</Callout>}
+      {check === 'loading' && <Callout tone="info">{strings.checkingValues}</Callout>}
       {check === 'error' && (
         <Callout
           tone="danger"

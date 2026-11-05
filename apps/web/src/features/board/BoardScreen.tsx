@@ -313,12 +313,12 @@ export function BoardScreen(props: BoardScreenProps) {
             layout={layoutSwitch}
           >
             {live === 'paused' && (
-              <Callout placement="bar" isAnnounced>
+              <Callout tone="info" placement="bar" isAnnounced>
                 {workspaceStrings.livePaused}
               </Callout>
             )}
             {outcome.kind === 'board' && outcome.isStandIn && (
-              <Callout placement="bar">{strings.standIn(outcome.groupBy.title)}</Callout>
+              <Callout tone="info" placement="bar">{strings.standIn(outcome.groupBy.title)}</Callout>
             )}
             {viewActions}
           </ViewBar>

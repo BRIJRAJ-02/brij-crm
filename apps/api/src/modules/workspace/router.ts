@@ -1,4 +1,6 @@
 import {
+  businessCacheTags,
+  menuWorkspaceCacheTags,
   countSubmissionsBeyond,
   deleteWorkspace,
   getWorkspaceSettings,
@@ -7,6 +9,7 @@ import {
   type WorkspaceRestoration,
 } from '@crm/core';
 import { renderWorkspaceDeleted, renderWorkspaceRestored } from '@crm/emails';
+import { forgetAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
@@ -129,6 +132,10 @@ export const workspaceRouter = member.workspace.router({
       deleteWorkspace(context.scope, { confirmName: input.confirmName }, hooks, sourceOf(context)),
     );
     await followInDirectory('delete', () => context.directory.setWorkspaceDeleted(context.scope.workspaceId, true));
+    // Its guest menus leave the edge at once (spec 0065, H1; the security review).
+    await forgetAfterCommit(context.edgeCache, menuWorkspaceCacheTags(context.scope.workspaceId));
+    // Its business page answers 404 now: the edge's copies go too (spec 0066, AC-6816).
+    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     // Each member is told (AC-823), after the commit and without holding up the answer; on Vercel the instance stays
     // up until the last one is sent.
     context.keepAlive(tellMembersDeleted(context, deletion));

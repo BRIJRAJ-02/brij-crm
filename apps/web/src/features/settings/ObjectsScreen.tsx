@@ -7,7 +7,6 @@ import { isDataError, type ObjectSummary, type Usage } from '@crm/data';
 import {
   Badge,
   Button,
-  Callout,
   Disclosure,
   EmptyState,
   Icon,
@@ -230,13 +229,12 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
               </>
             ),
           }
-        : {})}
+        : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
     >
       {/* The custom object meter only once the plan's room runs short (critic A #19): at 80% of it or more. */}
       {canManage && meter !== undefined && meter.used >= meter.limit * METER_FROM && (
         <Meter label={strings.customObjects} value={meter.used} maxValue={meter.limit} />
       )}
-      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {canManage ? (
         <Table
           {...liveTable}

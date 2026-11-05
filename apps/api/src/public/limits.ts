@@ -76,6 +76,24 @@ export const BOOKING_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /**
+ * The guest menu's reads (spec 0065, H1; security review, should-fix 4). A guest's own read counts against their
+ * address, as a booking page's does. The `/m/<key>` server render reads on a guest's behalf from one function
+ * address, so a read it vouches for (`EdgeGuard.rendered`) counts against the guest's forwarded address instead, and
+ * against the key it names: 600 a minute per key, so a spray of made up keys spends only those keys' windows, never
+ * the budget a real menu's renders draw on. The edge keeps the answer a day, so a real menu's renders rarely get here.
+ */
+export const MENU_LIMITS = {
+  readsPerAddress: BOOKING_LIMITS.readsPerAddress,
+  rendersPerKey: { max: 600, windowMs: 60_000 },
+  /**
+   * A table QR's code read (spec 0065, H2): a guest scans once and the page reads it once, so 20 a minute per address
+   * is plenty for a table of phones behind one router. No per key window: the key is printed on every table, and
+   * with 122 bit codes there is nothing to walk, so a key wide window would only let strangers switch scans off.
+   */
+  tablesPerAddress: { max: 20, windowMs: 60_000 },
+} as const satisfies Record<string, LimitRule>;
+
+/**
  * The part of a client address a limit keys on (B-02): an IPv4 address whole, an IPv6 address by its /64, since one
  * home or one server holds a whole /64 and would otherwise be a new visitor at every address in it. An IPv4 mapped
  * IPv6 address (`::ffff:192.0.2.1`) is its IPv4 address. Anything else is taken as given.

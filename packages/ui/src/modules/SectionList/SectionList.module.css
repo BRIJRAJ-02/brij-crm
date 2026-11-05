@@ -19,6 +19,11 @@
     border-radius: var(--radius-lg);
   }
 
+  /* A folding section's body: the region its chevron names, adding no box, so the Card lays its content out as before. */
+  .body {
+    display: contents;
+  }
+
   /* The section being moved (the drag wrapper sets data-dragging). */
   .item[data-dragging] {
     position: relative;

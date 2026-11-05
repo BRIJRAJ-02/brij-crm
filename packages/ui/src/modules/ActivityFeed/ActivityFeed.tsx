@@ -441,9 +441,7 @@ function FeedContent({
   });
 
   if (status === 'error') {
-    return (
-      <EmptyState tone="error" icon="activity" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
+    return <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   }
   if (status === 'no-access') {
     return (
@@ -461,7 +459,7 @@ function FeedContent({
     );
   }
   if (entries.count === 0) {
-    return <EmptyState icon="activity" title={strings.empty} />;
+    return <EmptyState title={strings.empty} />;
   }
 
   // Inline: the first entries in place, each at its own height, with nothing virtual.

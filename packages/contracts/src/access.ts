@@ -18,7 +18,15 @@ export const Role = z.enum(ROLES);
 export type Role = z.infer<typeof Role>;
 
 /** Where a permission sits on the role screens (spec 0037, the catalog). */
-export const PERMISSION_GROUPS = ['Workspace', 'People', 'Data', 'Scheduling', 'Integrations', 'Owner only'] as const;
+export const PERMISSION_GROUPS = [
+  'Workspace',
+  'People',
+  'Data',
+  'Scheduling',
+  'Business',
+  'Integrations',
+  'Owner only',
+] as const;
 /** One of the catalog's groups. */
 export type PermissionGroup = (typeof PERMISSION_GROUPS)[number];
 
@@ -265,6 +273,38 @@ export const PERMISSIONS = {
     group: 'Scheduling',
     grant: 'admin',
   },
+  // The Hospitality suite (spec 0065, AC-6511): setting the apps up, and running the floor. Members hold neither
+  // until given a role that has them; the first install seeds a "Floor staff" custom role with Run service.
+  'hospitality.manage': {
+    message: 'Your role can’t set up the Hospitality apps.',
+    label: 'Manage hospitality',
+    description: 'Set up the business, its places, tables, menus, reservation rules and QR codes.',
+    group: 'Business',
+    grant: 'any',
+  },
+  'hospitality.service': {
+    message: 'Your role can’t run service.',
+    label: 'Run service',
+    description: 'See today’s book, seat guests and walk ins, and mark dishes sold out.',
+    group: 'Business',
+    grant: 'any',
+  },
+  // Business booking (spec 0066, B0): the services catalogue, staff, shifts and resources, and everyone's calendar.
+  // Members hold neither until given a role that has them; a linked staff member acts on their own column without one.
+  'services.manage': {
+    message: 'Your role can’t set up services and staff.',
+    label: 'Manage services',
+    description: 'Set up services, prices, staff, shifts, resources and the business page.',
+    group: 'Business',
+    grant: 'any',
+  },
+  'services.calendar': {
+    message: 'Your role can’t see everyone’s calendar.',
+    label: 'Run the calendar',
+    description: 'See everyone’s appointments, book, move and change their status.',
+    group: 'Business',
+    grant: 'any',
+  },
 } as const satisfies Record<string, PermissionEntry>;
 
 /** Every permission's name, in catalog order. */
@@ -322,6 +362,12 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'schedule.manage.team',
   // Spec 0048: list definitions stay with people; a key reads and writes entries through `data.*`.
   'lists.manage',
+  // Spec 0065, AC-6511: the Hospitality apps stay with people for now (API keys later).
+  'hospitality.manage',
+  'hospitality.service',
+  // Spec 0066: business booking stays with people for now too.
+  'services.manage',
+  'services.calendar',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

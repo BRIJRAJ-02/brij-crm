@@ -42,6 +42,9 @@ export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 
+/** The Hospitality pages (spec 0065, AC-6510): Menus, QR codes and Reservations, each its app's home. */
+export const hospitalityHref = (slug: string, page: 'menus' | 'qr' | 'reservations') => `/w/${slug}/${page}`;
+
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens. */

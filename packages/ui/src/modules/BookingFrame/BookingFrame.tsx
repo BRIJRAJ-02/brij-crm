@@ -5,6 +5,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
@@ -139,12 +140,31 @@ export interface BookingFrameProps {
    * the same custom properties as `variables` instead. Nothing the page does changes with it.
    */
   readonly brand?: PageBrand;
+  /**
+   * `tile` (a place, not a person, 5 November 2026): the rail heads with the business's initials on a square ink tile
+   * (or its logo, when the brand has one) beside its name on one row, at every width, and the title under it in the
+   * heading's weight (a restaurant's "Reserve your table"). Left out, the host's round picture over their name.
+   */
+  readonly identity?: 'person' | 'tile';
+  /** A quiet link closing the rail's block, its arrow after it: a reservation's "Manage booking →". */
+  readonly railLink?: { readonly label: string; readonly href: string };
+  /**
+   * Stacked under the month (a phone), the times take their own height and run with the page, rather than scrolling
+   * in an eight row box (a restaurant's Lunch and Dinner, after checklabs' phone page). Beside the month they still
+   * take its height and scroll in it. Left out, the eight row box.
+   */
+  readonly isAsideGrowing?: boolean;
 }
 
 /** A booking page's or form's brand kit, as the library draws it (spec 0060, AC-4). */
 export interface PageBrand {
   /** The logo, on our own origin, and what it says (the workspace's name). */
   readonly logo?: { readonly src: string; readonly alt: string };
+  /**
+   * Where the logo leads: the company page on our own host (`/<company-handle>`, spec 0066 AC-6646), while one is
+   * published. The logo then names the company (its `alt` says where the link goes). Absent, it links nowhere.
+   */
+  readonly href?: string;
   /** The accent's custom properties, for an app preview (`brandProperties()`); the live page has a stylesheet. */
   readonly variables?: PageVariables;
   /**
@@ -152,6 +172,39 @@ export interface PageBrand {
    * Classic. Night pins dark and Studio light; Classic and Split follow the visitor.
    */
   readonly template?: PageTemplate;
+}
+
+/** A company page's path on our own host, the only place the rail's logo may lead (`/<company-handle>`). */
+const COMPANY_PATH = /^\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * The workspace's logo at the head of the rail; a link to the company page while one is published (spec 0066,
+ * AC-6646), named by the logo's `alt`. Inside a site's embed the link opens a tab of its own, never inside the frame.
+ */
+function BrandMark({
+  src,
+  alt,
+  href,
+  isEmbedded,
+  onError,
+}: {
+  readonly src: string;
+  readonly alt: string;
+  readonly href: string | undefined;
+  readonly isEmbedded: boolean;
+  readonly onError: () => void;
+}) {
+  const logo = <img className={styles.brandLogo} src={src} alt={alt} decoding="async" onError={onError} />;
+  if (href === undefined || alt === '' || !COMPANY_PATH.test(href)) return logo;
+  return (
+    <a
+      className={styles.brandLink}
+      href={href}
+      {...(isEmbedded ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+    >
+      {logo}
+    </a>
+  );
 }
 
 /** The web app's own wordmark files (apps/web/public/brand). */
@@ -192,7 +245,12 @@ export function BookingFrame({
   claimHref,
   logo = TIMEFIX_LOGO,
   brand,
+  identity = 'person',
+  railLink,
+  isAsideGrowing = false,
 }: BookingFrameProps) {
+  const isTile = identity === 'tile';
+  const railHref = railLink === undefined ? undefined : safeHref(railLink.href);
   const isLoading = host === undefined || title === undefined;
   const variables = usePageVariables(brand?.variables);
   // A logo that fails (a stale version, a removed file) leaves the rail rather than drawing a broken picture.
@@ -238,11 +296,11 @@ export function BookingFrame({
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
           {brandLogo !== undefined && brand?.logo !== undefined && (
-            <img
-              className={styles.brandLogo}
+            <BrandMark
               src={brandLogo}
               alt={brand.logo.alt}
-              decoding="async"
+              href={brand.href}
+              isEmbedded={isEmbedded}
               onError={() => {
                 setFailedLogo(brandLogo);
               }}
@@ -295,8 +353,22 @@ export function BookingFrame({
               </ul>
             </div>
           ) : (
-            <div className={styles.identity} data-arrived={openedLoading || undefined}>
-              {host.team === undefined ? (
+            <div
+              className={styles.identity}
+              data-arrived={openedLoading || undefined}
+              data-identity={isTile ? 'tile' : undefined}
+            >
+              {isTile ? (
+                // A place: its initials on a square ink tile (its logo already heads the rail when it has one) beside
+                // its name, on one row.
+                <div className={styles.tileRow}>
+                  {/* The page's accent behind the initials (the brand's, else the guest look's ink), as the business page. */}
+                  {brandLogo === undefined && (
+                    <Avatar name={host.name} shape="square" hue="accent" size="lg" isDecorative />
+                  )}
+                  <p className={styles.host}>{host.name}</p>
+                </div>
+              ) : host.team === undefined ? (
                 <Avatar
                   name={host.name}
                   size="xl"
@@ -312,10 +384,23 @@ export function BookingFrame({
                   size="lg"
                 />
               )}
-              <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
+              <div
+                className={styles.names}
+                data-team={host.team === undefined ? undefined : ''}
+                data-alone={
+                  isTile || (host.team === undefined && host.name.trim().toLowerCase() === title.trim().toLowerCase())
+                    ? ''
+                    : undefined
+                }
+              >
                 {/* A team page's title already names the workspace ("Intro call with Acme"). */}
-                {host.team === undefined && <p className={styles.host}>{host.name}</p>}
-                {host.team === undefined && host.role !== undefined && host.role !== '' && (
+                {/* A place named as its business (a restaurant's one place) says its name once, as the h1. */}
+                {!isTile &&
+                  host.team === undefined &&
+                  host.name.trim().toLowerCase() !== title.trim().toLowerCase() && (
+                    <p className={styles.host}>{host.name}</p>
+                  )}
+                {!isTile && host.team === undefined && host.role !== undefined && host.role !== '' && (
                   <p className={styles.hostRole}>{host.role}</p>
                 )}
                 <h1 className={styles.title}>{title}</h1>
@@ -345,6 +430,12 @@ export function BookingFrame({
                   moves, since the foot is pinned to the rail's end. */}
               {host.team === undefined && host.socials !== undefined && (
                 <SocialLinks links={host.socials} label={strings.socials(host.name)} />
+              )}
+              {railLink !== undefined && railHref !== undefined && (
+                <a className={styles.railLink} href={railHref}>
+                  {railLink.label}
+                  <Icon name="arrow-right" size="xs" />
+                </a>
               )}
             </div>
           )}
@@ -392,7 +483,11 @@ export function BookingFrame({
                   {/* A pane draws what it is given, loading or not: the page hands its own month and times, already
                       in their shape, so the card is the right height from the first paint. */}
                   <div className={styles.pane}>{children ?? <Skeleton shape="block" lines={6} />}</div>
-                  {aside !== undefined && <div className={styles.aside}>{aside}</div>}
+                  {aside !== undefined && (
+                    <div className={styles.aside} data-growing={isAsideGrowing || undefined}>
+                      {aside}
+                    </div>
+                  )}
                 </div>
                 {footer !== undefined && footBand(footer)}
               </div>
@@ -657,6 +752,11 @@ export interface BookingMessageProps {
   readonly children?: string;
   /** Shows Try again. */
   readonly onRetry?: () => void;
+  /**
+   * A way on beside Try again: the reservation page's manage link that opens nothing offers "Find your reservation"
+   * (spec 0066 B7), so a bad link is never a dead end.
+   */
+  readonly link?: { readonly label: string; readonly href: string };
   /** While the page's facts load: a skeleton in the card. */
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
@@ -676,6 +776,7 @@ export function BookingMessage({
   title,
   children,
   onRetry,
+  link,
   isLoading = false,
   page = 'booking_page',
   host,
@@ -721,11 +822,18 @@ export function BookingMessage({
                   </ButtonLink>
                 </div>
               )}
-              {onRetry !== undefined && (
-                <div>
-                  <Button icon="refresh-cw" onPress={onRetry}>
-                    {strings.retry}
-                  </Button>
+              {(onRetry !== undefined || link !== undefined) && (
+                <div className={styles.messageActions}>
+                  {onRetry !== undefined && (
+                    <Button icon="refresh-cw" onPress={onRetry}>
+                      {strings.retry}
+                    </Button>
+                  )}
+                  {link !== undefined && (
+                    <ButtonLink href={link.href} variant="ghost" icon="search">
+                      {link.label}
+                    </ButtonLink>
+                  )}
                 </div>
               )}
             </>

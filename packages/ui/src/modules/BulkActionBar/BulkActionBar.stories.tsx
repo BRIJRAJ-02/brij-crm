@@ -98,7 +98,14 @@ export const CappedOffer: Story = {
 
 /** Nothing selected (a change started from elsewhere, such as Empty trash): no count and no offer, only the note. */
 export const NothingSelected: Story = {
-  args: { count: 0, children: <Callout placement="bar">Nothing left to change.</Callout> },
+  args: {
+    count: 0,
+    children: (
+      <Callout tone="info" placement="bar">
+        Nothing left to change.
+      </Callout>
+    ),
+  },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Nothing left to change.')).toBeInTheDocument();
     await expect(canvas.queryByText(/selected/)).toBeNull();
@@ -302,7 +309,11 @@ export const SelectAllKeepsFocus: Story = {
 export const WithNote: Story = {
   args: {
     count: 620,
-    children: <Callout placement="bar">Nothing left to change.</Callout>,
+    children: (
+      <Callout tone="info" placement="bar">
+        Nothing left to change.
+      </Callout>
+    ),
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Nothing left to change.')).toBeInTheDocument();
@@ -314,7 +325,11 @@ export const WithNote: Story = {
 export const WithNoteNarrow: Story = {
   args: {
     count: 620,
-    children: <Callout placement="bar">You can view Opportunities but not change them.</Callout>,
+    children: (
+      <Callout tone="info" placement="bar">
+        You can view Opportunities but not change them.
+      </Callout>
+    ),
   },
   render: narrow,
   play: async ({ canvas }) => {

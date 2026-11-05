@@ -16,6 +16,7 @@ import {
   EMPTY_NAV_UNIVERSE,
   NAV_ITEM_KINDS,
   NAV_PAGES,
+  NAV_HOSPITALITY_PAGES,
   NAV_SCHEDULING_PAGES,
   NAV_SECTIONS,
   navKey,
@@ -35,7 +36,8 @@ import { readRecords } from '../engine/records.ts';
 import { refuse } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import { objectLevel } from '../access/policy.ts';
+import { can, objectLevel } from '../access/policy.ts';
+import { installedHospitalityApps } from '../hospitality/gate.ts';
 import { inWorkspace } from '../access/run.ts';
 import { memberOf, seesView } from '../views/views.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
@@ -251,6 +253,33 @@ function schedulingFor(scope: EngineScope): readonly NavPage[] {
   return scope.actor.type === 'member' && !isGuest(scope) ? SCHEDULING_PAGES_BUILT : [];
 }
 
+/** Each Hospitality page and the app that brings it (spec 0065, AC-6510). */
+const HOSPITALITY_PAGE_APP = {
+  menus: 'menu',
+  qr: 'menu_qr',
+  reservations: 'table_seating',
+  service: 'table_seating',
+} as const;
+
+/**
+ * The Hospitality pages the sidebar offers: Service left it (5 November 2026) when its day became the Reservations
+ * page, checklabs' one page for a restaurant's reservations; its address redirects there. A stored choice for it is
+ * skipped on read, as the Roster's is.
+ */
+const HOSPITALITY_PAGES_BUILT = NAV_HOSPITALITY_PAGES.filter((page) => page !== 'service');
+
+/**
+ * The Hospitality pages the caller has (spec 0065, AC-6510; Rules settled: Navigation): the installed apps' pages,
+ * in their order, for a member holding Manage hospitality or Run service; none for anyone else, or while early access
+ * is closed.
+ */
+async function hospitalityFor(tx: WorkspaceTx, scope: EngineScope): Promise<readonly NavPage[]> {
+  if (scope.actor.type !== 'member') return [];
+  if (!can(scope.access, 'hospitality.manage') && !can(scope.access, 'hospitality.service')) return [];
+  const installed = await installedHospitalityApps(tx, scope.workspaceId);
+  return HOSPITALITY_PAGES_BUILT.filter((page) => installed.has(HOSPITALITY_PAGE_APP[page]));
+}
+
 /** The changes `applyNavOp` reads the universe for. */
 const USES_UNIVERSE: ReadonlySet<NavOperation['op']> = new Set(['move', 'hide', 'show', 'star']);
 
@@ -270,6 +299,7 @@ async function universeOf(
       // Lists (spec 0048, AC-4804): the live ones over objects the caller reads.
       lists: [...(await readableLists(tx, scope, readable))],
       scheduling: schedulingFor(scope),
+      hospitality: await hospitalityFor(tx, scope),
       favourites: new Set(favourites.map(navKey)),
     },
     favourites,
@@ -284,7 +314,11 @@ function shown(universe: NavUniverse, item: NavItemPref): boolean {
     case 'list':
       return universe.lists.includes(item.id);
     case 'page':
-      return universe.top.includes(item.id as NavPage) || universe.scheduling.includes(item.id as NavPage);
+      return (
+        universe.top.includes(item.id as NavPage) ||
+        universe.scheduling.includes(item.id as NavPage) ||
+        universe.hospitality.includes(item.id as NavPage)
+      );
     case 'view':
     case 'record':
       return universe.favourites.has(navKey(item));
@@ -311,6 +345,7 @@ export async function readNav(scope: EngineScope): Promise<NavState> {
       favourites,
       top: [...universe.top],
       scheduling: [...universe.scheduling],
+      hospitality: [...universe.hospitality],
     };
   });
 }

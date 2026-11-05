@@ -9,6 +9,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { brandRowOf } from '../brand/brand.ts';
+import { publishedBusinessHandle } from '../hospitality/public-page.ts';
 
 const { members, workspaces } = schema;
 
@@ -94,10 +95,12 @@ export async function publicIdentityOf(
       .from(workspaces)
       .where(and(eq(workspaces.id, owner.workspaceId), isNull(workspaces.deletedAt)));
     const kit = await brandRowOf(tx, owner.workspaceId);
+    // The company page, while one is published, on the public host the link page is on (spec 0066, AC-6646).
+    const company = await publishedBusinessHandle(tx, owner.workspaceId);
     if (workspace !== undefined) {
       brand = {
         name: workspace.name,
-        site: identity.site,
+        site: company === undefined ? identity.site : `/${company}`,
         ...(typeof kit?.logoVersion === 'string' && typeof kit.logoPath === 'string'
           ? { logo: profileLogoPath(owner.handle, kit.logoVersion) }
           : {}),

@@ -211,7 +211,7 @@ export function SchedulingAccessScreen({
             </SettingsRow>
           );
         })}
-        {!roleReach && held.length === 0 && <EmptyState icon="calendar-clock" title={strings.onlyYours} />}
+        {!roleReach && held.length === 0 && <EmptyState layout="row" title={strings.onlyYours} />}
       </Card>
     );
   }

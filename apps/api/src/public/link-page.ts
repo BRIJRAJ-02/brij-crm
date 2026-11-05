@@ -24,6 +24,7 @@ import {
   enterTimesBlock,
   isUuid,
   listSitemapHandles,
+  listSitemapBusinesses,
   readPublicSlots,
   readTimesPage,
   type PublicBookingDeps,
@@ -31,6 +32,7 @@ import {
 import type { Database } from '@crm/db';
 import type { Context, Env, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
+import { audioResponse, loadStoredAudio } from '../link-page-pictures.ts';
 import type { EdgeCache } from '../edge-cache.ts';
 import type { FileStore } from '../storage/blob.ts';
 import type { LimitRule } from './limits.ts';
@@ -89,26 +91,39 @@ export function xmlText(text: string): string {
     .replaceAll("'", '&apos;');
 }
 
-/** A sitemap of handles (AC-6123): each page's address and its last change, a day. */
-export function sitemapXml(origin: string, rows: readonly { readonly handle: string; readonly changedAt: string }[]) {
+/**
+ * A sitemap of handles (AC-6123): each page's address and its last change, a day. A business (spec 0066, AC-6644)
+ * also lists each of its listed places' addresses, `/<handle>/<slug>`.
+ */
+export function sitemapXml(
+  origin: string,
+  rows: readonly { readonly handle: string; readonly changedAt: string; readonly places?: readonly string[] }[],
+) {
+  const url = (path: string, changedAt: string) =>
+    `<url><loc>${xmlText(`${origin}${path}`)}</loc><lastmod>${changedAt.slice(0, 10)}</lastmod></url>`;
   const urls = rows
-    .map(
-      (row) =>
-        `<url><loc>${xmlText(`${origin}/${encodeURIComponent(row.handle)}`)}</loc><lastmod>${row.changedAt.slice(0, 10)}</lastmod></url>`,
-    )
+    .flatMap((row) => [
+      url(`/${encodeURIComponent(row.handle)}`, row.changedAt),
+      ...(row.places ?? []).map((slug) =>
+        url(`/${encodeURIComponent(row.handle)}/${encodeURIComponent(slug)}`, row.changedAt),
+      ),
+    ])
     .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>\n`;
 }
 
 /** A sitemap index (AC-6123): one file per split, each named by the handle it starts after. */
-export function sitemapIndexXml(origin: string, afters: readonly (string | undefined)[]) {
+export function sitemapIndexXml(origin: string, afters: readonly (string | undefined)[], withBusinesses = false) {
+  const business = withBusinesses
+    ? `<sitemap><loc>${xmlText(`${origin}/sitemap-handles.xml?part=business`)}</loc></sitemap>`
+    : '';
   const files = afters
     .map((after) => {
       const address = `${origin}/sitemap-handles.xml${after === undefined ? '?part=first' : `?after=${encodeURIComponent(after)}`}`;
       return `<sitemap><loc>${xmlText(address)}</loc></sitemap>`;
     })
     .join('');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files}</sitemapindex>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files}${business}</sitemapindex>\n`;
 }
 
 /**
@@ -170,6 +185,34 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
     }
   });
 
+  // An audio intro's recording (spec 0068, AC-6808): exactly a picture's rule, through the same door (only while a
+  // published block of a page the visitor may see names it), served only as one of the four sound types.
+  app.get('/public/profiles/:handle/audio/:audioId', async (c) => {
+    const handle = c.req.param('handle');
+    const audioId = c.req.param('audioId');
+    if (!HANDLE_PATTERN.test(handle) || !isUuid(audioId)) return missing('There’s no recording here.');
+    if (new URL(c.req.url).search !== '') return missing('There’s no recording here.');
+    const refused = deps.limited([
+      [`link-page:image:${deps.addressOf(c)}`, LINK_PAGE_LIMITS.imagesPerAddress],
+      [`link-page:image-handle:${handle}`, LINK_PAGE_LIMITS.imagesPerHandle],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const viewer = await deps.signedInAs(c);
+      const found = await enterLinkImage({ db: deps.db }, handle, audioId, viewer === undefined ? {} : { viewer });
+      const stored = await loadStoredAudio(deps.files, found.path, found.type);
+      if (stored === undefined) return missing('There’s no recording here.');
+      if (found.owner.isShown) tagged(found.owner.handle, handle);
+      return audioResponse(
+        stored,
+        found.owner.isShown ? LINK_IMAGE_CACHE_CONTROL : PRIVATE_IMAGE_CACHE_CONTROL,
+        c.req.header('range'),
+      );
+    } catch {
+      return missing('There’s no recording here.');
+    }
+  });
+
   // A next times block's next open times (AC-6110): up to 6 starts over the next 14 days, for the page's first length,
   // in the visitor's zone (the chips are drawn there; the starts are UTC). The page's own rules decide, through the
   // same slots engine its booking page reads.
@@ -221,6 +264,10 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
       new Response(body, {
         headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': CRAWL_CACHE_CONTROL },
       });
+    // The business pages (spec 0066, AC-6644): their own file once the handles are split, else in the one file.
+    if (c.req.query('part') === 'business') {
+      return xml(sitemapXml(deps.publicOrigin, await listSitemapBusinesses({ db: deps.db }, { max: split })));
+    }
     if (after !== undefined || c.req.query('part') === 'first') {
       if (after !== undefined && !HANDLE_PATTERN.test(after)) return missing('There is no such sitemap.');
       const rows = await listSitemapHandles({ db: deps.db }, { ...(after === undefined ? {} : { after }), max: split });
@@ -228,7 +275,11 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
     }
     // The whole list in one file while it fits; past it, an index naming each file by where it starts.
     const first = await listSitemapHandles({ db: deps.db }, { max: split + 1 });
-    if (first.length <= split) return xml(sitemapXml(deps.publicOrigin, first));
+    const businesses = await listSitemapBusinesses({ db: deps.db }, { max: split + 1 });
+    if (first.length + businesses.length <= split) {
+      const rows = [...first, ...businesses].sort((a, b) => (a.handle < b.handle ? -1 : a.handle > b.handle ? 1 : 0));
+      return xml(sitemapXml(deps.publicOrigin, rows));
+    }
     const afters: (string | undefined)[] = [undefined];
     let last = first[split - 1]?.handle;
     while (last !== undefined) {
@@ -236,7 +287,7 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
       const next = await listSitemapHandles({ db: deps.db }, { after: last, max: split + 1 });
       last = next.length > split ? next[split - 1]?.handle : undefined;
     }
-    return xml(sitemapIndexXml(deps.publicOrigin, afters));
+    return xml(sitemapIndexXml(deps.publicOrigin, afters, businesses.length > 0));
   });
 
   app.get('/public/robots.txt', (c) => {

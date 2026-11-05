@@ -121,6 +121,18 @@
     min-inline-size: 0;
   }
 
+  /* The logo as a link to the company page (spec 0066, AC-6646): the picture's own size, a focus ring around it. */
+  .brandLink {
+    display: inline-flex;
+    align-self: flex-start;
+    border-radius: var(--radius-sm);
+  }
+
+  .brandLink:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
   /* The workspace's logo at the head of the rail (spec 0060, AC-4): a control's height, as wide as it needs up to a
      column, never cropped or stretched. */
   .brandLogo {
@@ -181,6 +193,28 @@
     overflow-wrap: anywhere;
   }
 
+  /* `tile` (a place): the business's initials on a square ink tile beside its name, on one row at every width, so the
+     rail is a line shorter on a phone; the title under it takes the heading's weight. */
+  .tileRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .tileRow > .host {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  /* A column at every width: its own row holds the tile and the name, and the title takes the line under them. */
+  .identity[data-identity='tile'] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-8);
+  }
+
   .title {
     margin: 0;
     color: var(--text-secondary);
@@ -189,8 +223,10 @@
     overflow-wrap: anywhere;
   }
 
-  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight. */
-  .names[data-team] > .title {
+  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight; so does a title
+     that is the host's own name (a restaurant's one place), shown once. */
+  .names[data-team] > .title,
+  .names[data-alone] > .title {
     color: var(--text);
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
@@ -456,6 +492,14 @@
     padding-block-start: 0;
   }
 
+  /* `isAsideGrowing` (a restaurant's times on a phone): stacked under the month, the times take their own height and
+     run with the page rather than scrolling in a box of their own. Beside the month they keep its height (below). */
+  .aside[data-growing] {
+    block-size: auto;
+    contain: none;
+    overflow: visible;
+  }
+
   .footer {
     display: flex;
     padding: var(--space-16) var(--space-20) var(--space-20);
@@ -582,6 +626,13 @@
     letter-spacing: var(--tracking-heading);
   }
 
+  /* Try again and a way on (Find your reservation), side by side, wrapping on a phone. */
+  .messageActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
   .messageTitle:focus,
   .offerTitle:focus {
     outline: none;
@@ -660,19 +711,32 @@
     display: none;
   }
 
-  .claim {
+  .claim,
+  .railLink {
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
-    font: var(--text-body);
     text-decoration: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
+  .claim {
+    font: var(--text-body);
+  }
+
+  /* The rail's closing link ("Manage booking →"): the claim link's quiet line (below), in the strong weight. */
+  .railLink {
+    align-self: flex-start;
+    margin-block-start: var(--space-4);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   .brand:focus-visible,
-  .claim:focus-visible {
+  .claim:focus-visible,
+  .railLink:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-thick);
   }
@@ -830,6 +894,11 @@
       border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
       contain: size;
     }
+
+    .root:not([data-compact]) .aside[data-growing] {
+      contain: size;
+      overflow-y: auto;
+    }
   }
 
   /* The four templates (spec 0068, AC-6801): the workspace's, from its brand kit, on this root as `data-template`
@@ -929,7 +998,8 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .claim:hover {
+    .claim:hover,
+    .railLink:hover {
       color: var(--text);
     }
   }

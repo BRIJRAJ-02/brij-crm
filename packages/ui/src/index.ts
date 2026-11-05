@@ -59,6 +59,8 @@ export { Reveal, type RevealProps } from './atoms/Reveal/Reveal.tsx';
 export { NumberPop, type NumberPopProps } from './atoms/NumberPop/NumberPop.tsx';
 /** The moment something is done: a check that draws itself (spec 0068, AC-6806). */
 export { SuccessCheck, type SuccessCheckProps } from './atoms/SuccessCheck/SuccessCheck.tsx';
+/** Words that change in place, the old rising out and the new rising in (spec 0068, AC-6806). */
+export { TextSwap, type TextSwapProps } from './atoms/TextSwap/TextSwap.tsx';
 export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 /** A booking link's colour from its id, the same on its card and its bookings on the week (grey and red left out). */
@@ -97,11 +99,15 @@ export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { focusLater } from './lib/focus-later.ts';
+/** A breakpoint token in pixels (`bp-page-compact`), for a screen's media query, so no width is written twice. */
+export { breakpointToken } from './lib/token-values.ts';
 /** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
 export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { strings as sharedStrings } from './lib/strings.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
+/** A country's currency (GB is GBP, DE is EUR), so a form can start from the one a place most likely uses. */
+export { currencyOfCountry } from './lib/region-defaults.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
 export {
@@ -122,7 +128,7 @@ export {
   type StoredSocialLink,
 } from './modules/SocialLinksEditor/draft.ts';
 export { FloatingBar, type FloatingBarProps } from './molecules/FloatingBar/FloatingBar.tsx';
-export { Card, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
+export { Card, CardTitleLevel, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
 export { CodeInput, type CodeInputProps, type CodeInputSize } from './molecules/CodeInput/CodeInput.tsx';
 export {
   DatePicker,
@@ -222,6 +228,8 @@ export {
   type SpotIllustrationProps,
 } from './molecules/SpotIllustration/SpotIllustration.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
+/** A count changed one at a time, − n + (the guest pages' steppers, after checklabs). */
+export { Stepper, type StepperProps, type StepperSize, type StepperTone } from './molecules/Stepper/Stepper.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
   SuggestionList,
@@ -279,6 +287,12 @@ export {
  * A screen hands it in so LinkList itself never loads dnd-kit: the public profile draws LinkList too.
  */
 export { LinkListRowOrder } from './modules/LinkList/RowOrder.tsx';
+/** The business page's gallery (spec 0066, B4 lite), which Settings › Business › Page previews as guests see it. */
+export {
+  BusinessGallery,
+  type BusinessGalleryProps,
+  type BusinessPhotoItem,
+} from './modules/BusinessPage/BusinessGallery.tsx';
 /** A person's link page (spec 0051): the public page at `/<handle>`, and the editor's phone preview of it. */
 export {
   LinkPage,
@@ -350,6 +364,8 @@ export {
 } from './modules/MeetingCard/MeetingCard.tsx';
 export {
   BookingDetails,
+  type BookingDetailsDraft,
+  type BookingDetailsLabels,
   type BookingDetailsOutcome,
   type BookingDetailsProps,
   type BookingDetailsValues,
@@ -389,6 +405,7 @@ export {
 export { BookingChatGhost } from './modules/BookingChat/BookingChatGhost.tsx';
 export {
   BookingChanges,
+  type BookingChangesLabels,
   type BookingChangesProps,
   type CancelOutcome,
   type GuestsOutcome,
@@ -400,9 +417,15 @@ export {
   type ReadyPanelProps,
   type ReadyPanelQrKind,
 } from './modules/ReadyPanel/ReadyPanel.tsx';
+/** A printable A4 sheet of table tent cards, each with its QR (Menu QR's print page, spec 0065 H2). */
+export { QrSheet, type QrSheetCard, type QrSheetLayout, type QrSheetProps } from './modules/QrSheet/QrSheet.tsx';
 export { EmbedPreview, type EmbedPreviewProps } from './modules/EmbedPreview/EmbedPreview.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
-export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
+/** The guest menu's look around a page (5 November 2026). */
+export { GuestLook, type GuestLookProps } from './modules/GuestLook/GuestLook.tsx';
+/** A reservation's party size (spec 0066 B7, after checklabs): the band with the shared Stepper. */
+export { PartyBand, type PartyBandProps } from './modules/PartyBand/PartyBand.tsx';
+export { SlotList, type Slot, type SlotGroup, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export { PhotoCrop, type PhotoCropProps, type PhotoShape } from './modules/PhotoCrop/PhotoCrop.tsx';
 export { usePhotoCrop, type PhotoCropping } from './modules/PhotoCrop/usePhotoCrop.tsx';
 export type { PhotoRect } from './lib/photo/crop-math.ts';
@@ -414,6 +437,8 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SampleTable, type SampleTableProps } from './molecules/SampleTable/SampleTable.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
+/** A long page's sections as pills that follow the reader, the current one's fill sliding to it (spec 0068, AC-6806). */
+export { SectionTabs, type SectionTab, type SectionTabsProps } from './molecules/SectionTabs/SectionTabs.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export {
   TileGrid,
@@ -535,6 +560,16 @@ export {
   type HostedFormPreviewProps,
   type PreviewTextChange,
 } from './modules/HostedFormPreview/HostedFormPreview.tsx';
+/** The guest menu (spec 0065, H1): a place's published menu as a guest reads it, and the editor's phone preview. */
+export { MenuList, type MenuListProps } from './modules/MenuList/MenuList.tsx';
+/** A dish's sheet and Your picks on the guest menu (spec 0065, H1). */
+export {
+  ItemSheet,
+  PicksSheet,
+  picksTotal,
+  type GuestPick,
+  type MenuPhotoHref,
+} from './modules/ItemSheet/ItemSheet.tsx';
 export {
   OptionsEditor,
   type OptionOutcome,
@@ -644,6 +679,8 @@ export {
   type SettingsSectionProps,
   type SettingsStackProps,
   type SettingsNavEntry,
+  ViewOnlyTag,
+  type ViewOnlyTagProps,
 } from './modules/SettingsLayout/SettingsLayout.tsx';
 export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';
 export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';

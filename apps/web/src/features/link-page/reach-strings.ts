@@ -22,6 +22,36 @@ export const reachStrings = {
   addTimesText: 'Your next open times, booked in two taps',
   addBanner: 'Banner',
   addBannerText: 'One line at the very top of your page',
+  // Spec 0065 (AC-6528): a place's menu and its reservation page, offered only while their apps are installed.
+  addMenu: 'Menu',
+  addMenuText: 'Your menu, with its first dishes',
+  addReserve: 'Reserve a table',
+  addReserveText: 'Your reservation page, while you take bookings online',
+  newMenu: 'Add a menu block',
+  editMenu: 'Edit the menu block',
+  newReserve: 'Add a Reserve a table block',
+  editReserve: 'Edit the Reserve a table block',
+  menuTitle: 'Our menu',
+  reserveTitle: 'Reserve a table',
+  place: 'Place',
+  placeSearch: 'Search places',
+  placeFixed: 'A block keeps its place. To show another, add a new block.',
+  label: 'Label (optional)',
+  menuRow: (place: string) => `Menu · ${place}`,
+  reserveRow: (place: string) => `Reserve a table · ${place}`,
+  placeGone: 'This place is gone, so visitors don’t see the block',
+  placeOff: (reason: 'app' | 'unpublished' | 'hidden' | 'offline' | undefined) =>
+    reason === 'app'
+      ? 'Hidden: the app is off'
+      : reason === 'unpublished'
+        ? 'Hidden until the menu is published'
+        : reason === 'hidden'
+          ? 'Hidden while the menu is hidden'
+          : 'Hidden: not taking reservations online',
+  placesFailed: 'Your places didn’t load.',
+  noPlacesTitle: 'Add your place first',
+  noPlacesText: 'Your menu and reservations belong to a place. Add it in Settings › Business.',
+  openBusiness: 'Add your place',
 
   // Each kind's Modal and row.
   newSocials: 'Add social icons',
@@ -107,7 +137,7 @@ export const reachStrings = {
   schedule: 'Schedule',
   sizeAndSchedule: 'Size and schedule',
   layout: 'Layout',
-  layoutList: 'List',
+  layoutList: 'Stack',
   layoutGrid: 'Grid',
   showFrom: 'Show from',
   hideAfter: 'Hide after',
@@ -115,14 +145,12 @@ export const reachStrings = {
   ends: (at: string) => `Ends ${at}`,
   ended: 'Ended',
 
-  // A tile's size on a grid page (AC-6103).
-  size: 'Size on a grid',
-  sizeSmall: 'Small',
-  sizeWide: 'Wide',
-  sizeLarge: 'Large',
-  sizeSmallText: 'One tile',
-  sizeWideText: 'Two tiles across',
-  sizeLargeText: 'Two by two',
+  // A card's span on a grid page (spec 0068, AC-6808): one column or two of the bento.
+  size: 'Width on a grid',
+  sizeSmall: 'One column',
+  sizeWide: 'Two columns',
+  sizeSmallText: 'A third of a wide screen; widens to close a gap in its row',
+  sizeWideText: 'Two thirds of a wide screen',
 
   // Insights (AC-6118 to AC-6120).
   insights: 'Insights',

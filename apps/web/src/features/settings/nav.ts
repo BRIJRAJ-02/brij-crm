@@ -19,6 +19,8 @@ import { strings as security } from './security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 import { navStrings as admin } from '../admin/nav-strings.ts';
+import { strings as hospitality } from '../hospitality/strings.ts';
+import { strings as services } from '../services/strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
@@ -55,6 +57,32 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 
 /** Settings › Workspace › Brand (spec 0060, AC-1): the logo, colour and template its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
+
+/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace installs (the Hospitality suite today). */
+export const appsSettingsHref = (slug: string) => `/w/${slug}/settings/apps`;
+
+/** Settings › Business › Places (spec 0065, AC-6507): the business profile and its places. */
+export const businessSettingsHref = (slug: string) => `/w/${slug}/settings/business`;
+/** Settings › Business › Page (spec 0066, B4 lite): the business's public page. */
+export const businessPageHref = (slug: string) => `/w/${slug}/settings/business/page`;
+
+/** Settings › Business › Services (spec 0066 B1): the catalogue clients book from. */
+export const servicesSettingsHref = (slug: string) => `/w/${slug}/settings/services`;
+/** Settings › Business › Staff (spec 0066 B1): the people clients book. */
+export const staffSettingsHref = (slug: string) => `/w/${slug}/settings/staff`;
+/** One staff member's profile (spec 0066 B1), by id. */
+export const staffProfileHref = (slug: string, staffId: string) => `/w/${slug}/settings/staff/${staffId}`;
+/** Settings › Business › Shifts (spec 0066 B1): who works when, per place and week (`?place=&week=`). */
+export const shiftsSettingsHref = (slug: string, query: { readonly place?: string; readonly week?: string } = {}) => {
+  const params = new URLSearchParams({
+    ...(query.place === undefined ? {} : { place: query.place }),
+    ...(query.week === undefined ? {} : { week: query.week }),
+  }).toString();
+  return `/w/${slug}/settings/shifts${params === '' ? '' : `?${params}`}`;
+};
+
+/** One place's tables and areas (spec 0065, AC-6509), under Settings › Business › Places. */
+export const placeTablesHref = (slug: string, placeId: string) => `/w/${slug}/settings/business/places/${placeId}`;
 
 /** Settings › People › Members (spec 0031): who is in the workspace, and (its second tab) the invitations out. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
@@ -106,6 +134,11 @@ export type SettingsPageId =
   | 'general'
   | 'brand'
   | 'history'
+  | 'apps'
+  | 'business'
+  | 'services'
+  | 'staff'
+  | 'shifts'
   | 'members'
   | 'teams'
   | 'roles'
@@ -124,7 +157,7 @@ export type SettingsPageId =
   | 'admin-website';
 
 /** The settings navigation's groups, in order (spec 0026, AC-682; regrouped on 5 November 2026). */
-export type SettingsGroupId = 'account' | 'workspace' | 'people' | 'scheduling' | 'data' | 'admin';
+export type SettingsGroupId = 'account' | 'workspace' | 'people' | 'scheduling' | 'business' | 'data' | 'admin';
 
 /** The icon an entry wears: each entry its own, so the phone's list never shows one twice. */
 export type SettingsIcon =
@@ -148,7 +181,12 @@ export type SettingsIcon =
   | 'chart-line'
   | 'users-round'
   | 'calendar-days'
-  | 'globe';
+  | 'globe'
+  | 'blocks'
+  | 'store'
+  | 'scissors'
+  | 'id-card'
+  | 'calendar-check';
 
 /** One tab of a settings entry that holds several pages (Members' Teams): its own page and address. */
 export interface SettingsTab {
@@ -198,14 +236,70 @@ export interface SettingsNavGroup {
 }
 
 /**
+ * Settings › Business (spec 0065, 0066 B1): its places, hours and tables for `hospitality.manage`, the catalogue and
+ * the profiles for `services.manage`, the shifts for `services.calendar` (the front desk sets the rota without the
+ * catalogue). Shown only while Appointments or Table seating is installed.
+ */
+function businessGroup(slug: string): SettingsNavGroup {
+  return {
+    id: 'business',
+    label: strings.business,
+    entries: [
+      {
+        id: 'business',
+        label: strings.places,
+        href: businessSettingsHref(slug),
+        icon: 'store',
+        requires: 'hospitality.manage',
+        keywords: ['business', 'profile', 'tables', 'opening hours', 'business page'],
+      },
+      {
+        id: 'services',
+        label: services.servicesTitle,
+        href: servicesSettingsHref(slug),
+        icon: 'scissors',
+        requires: 'services.manage',
+        keywords: ['catalogue', 'prices', 'treatments'],
+      },
+      {
+        id: 'staff',
+        label: services.staffTitle,
+        href: staffSettingsHref(slug),
+        icon: 'id-card',
+        requires: 'services.manage',
+        keywords: ['stylists', 'team', 'profiles'],
+      },
+      {
+        id: 'shifts',
+        label: services.shiftsTitle,
+        href: shiftsSettingsHref(slug),
+        icon: 'calendar-check',
+        requires: 'services.calendar',
+        keywords: ['rota', 'roster', 'working hours'],
+      },
+    ],
+  };
+}
+
+/**
  * The settings navigation (spec 0026, AC-682), as decided on 5 November 2026 (the owner delegates the call): Account
  * (the member's own, Calendars included), Workspace (what the whole workspace wears, and its History), People (who
  * is in it and what they may do), Scheduling (the screens Bookings' tabs show, so every setting is under Settings),
- * Data (Objects, Lists and Trash), then Super admin for operators. Webhooks, Automations, Developer and Background
+ * Business (only while Appointments or Table seating is installed), Data (Objects, Lists and Trash), then Super
+ * admin for operators. Webhooks, Automations, Developer and Background
  * jobs stay parked out of the navigation until each is built properly; their addresses redirect, or (jobs) stay
  * for the links already sent.
  */
-export function settingsNav(slug: string): readonly SettingsNavGroup[] {
+export function settingsNav(
+  slug: string,
+  options: {
+    /**
+     * Whether Appointments or Table seating is installed (spec 0065, 0066): only then does the Business group show
+     * (Places, Services, Staff and Shifts). Absent, the group is left out.
+     */
+    readonly hasBusiness?: boolean;
+  } = {},
+): readonly SettingsNavGroup[] {
   return [
     {
       id: 'account',
@@ -279,6 +373,15 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'clock',
           requires: 'audit.read',
           keywords: ['audit', 'log', 'changes', 'activity'],
+        },
+        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all.
+        {
+          id: 'apps',
+          label: hospitality.appsTitle,
+          href: appsSettingsHref(slug),
+          icon: 'blocks',
+          requires: 'workspace.manage',
+          keywords: ['hospitality', 'menu', 'qr', 'table seating', 'appointments', 'install'],
         },
       ],
     },
@@ -359,6 +462,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         },
       ],
     },
+    // The business, only while Appointments or Table seating is installed (`businessGroup`).
+    ...(options.hasBusiness === true ? [businessGroup(slug)] : []),
     {
       id: 'data',
       label: strings.data,
@@ -562,6 +667,11 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/calendars') return 'calendars';
   if (rest === 'general') return 'general';
   if (rest === 'brand') return 'brand';
+  if (rest === 'apps') return 'apps';
+  if (under('business')) return 'business';
+  if (rest === 'services') return 'services';
+  if (under('staff')) return 'staff';
+  if (rest === 'shifts') return 'shifts';
   if (under('history')) return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';

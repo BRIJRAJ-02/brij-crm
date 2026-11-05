@@ -6,6 +6,15 @@ export const strings = {
   browse: 'browse',
   /** Crops the picture there now again (`onAdjust`). */
   adjust: 'Adjust crop',
+  /** The row's button while nothing is there (`variant="row"`). */
+  upload: 'Upload',
+  /** The row's button while a picture is there. */
+  change: 'Change',
+  /** The row's buttons' fuller names, so two rows on one screen never share one ("Upload cover photo"). */
+  uploadNamed: (label: string) => `Upload ${label.toLowerCase()}`,
+  changeNamed: (label: string) => `Change ${label.toLowerCase()}`,
+  /** The row's trash button, named for what it takes away. */
+  remove: (label: string) => `Remove ${label.toLowerCase()}`,
   /** While what was picked is on its way (`isPending` on the zone). */
   sending: 'uploading…',
   upTo: (size: string) => `up to ${size}`,

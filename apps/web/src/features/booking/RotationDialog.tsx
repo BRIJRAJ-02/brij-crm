@@ -387,11 +387,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           />
           {/* People first (B-04): who shares the meetings is the one choice a new group needs; how it picks, the
               window, returning guests and each person's weight and limits fold under More options. */}
-          {isRoster ? (
-            <Callout tone="info">
-              {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
-            </Callout>
-          ) : (
+          {isRoster ? null : (
             <Select
               label={strings.people}
               selectionMode="multiple"

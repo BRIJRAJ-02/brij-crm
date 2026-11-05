@@ -228,6 +228,34 @@ export const TooLate: Story = {
   },
 };
 
+/** A table reservation (spec 0066 B7): no guests, its own words for change and cancel. */
+export const Reservation: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    title: 'Table for 4',
+    hostName: 'Somewhere',
+    maxGuests: 0,
+    labels: {
+      move: 'Change time',
+      cancel: 'Cancel reservation',
+      keep: 'Keep reservation',
+      cancelTitle: 'Cancel your table for 4 at Somewhere?',
+      cancelText: 'Your table goes to someone else. This can’t be undone here.',
+    },
+  },
+  render: (args) => <OnReceipt {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: 'Add guests' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Change time' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel reservation' }));
+    const dialog = within(
+      await within(document.body).findByRole('alertdialog', { name: 'Cancel your table for 4 at Somewhere?' }),
+    );
+    await expect(dialog.getByRole('button', { name: /^Keep reservation/ })).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: /^Keep reservation/ }));
+  },
+};
+
 /** On the guest's receipt, where the page puts it, with its guests kept as the page keeps them. */
 function OnReceipt(args: BookingChangesProps & { readonly notice?: string }) {
   const [guests, setGuests] = useState(args.guests);

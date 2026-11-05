@@ -36,11 +36,12 @@
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover),
       color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      scale var(--duration-press) var(--ease-press, var(--ease-out));
   }
 
   /* Held, a button eases to --scale-press: the token's 1 in the app (nothing shrinks, 20 October 2026), 0.97 inside a
-     public booking page, which sets it on its own root (1 November 2026). */
+     public booking page, which sets it on its own root (1 November 2026). It eases on --ease-press when a page sets
+     one (the guest menu's overshoot, after checklabs), else ease-out. */
   .root[data-pressed]:not([data-disabled]) {
     scale: var(--scale-press);
   }
@@ -75,6 +76,14 @@
 
   .reserve {
     visibility: hidden;
+  }
+
+  /* An amount after the label (Add to your picks · £9.50): steady figures, so a changing price never shifts the
+     label. A full width button's label takes the room, so the amount sits at the end. */
+  .amount {
+    display: inline-flex;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .keys {
@@ -161,6 +170,49 @@
     padding-inline: 0;
   }
 
+  /* The one action at a guest sheet's foot (the guest menu's Add to selection, after checklabs' 48px pill): 48px,
+     the title's 15px semibold label. Inside the app, nothing is this size. */
+  .root[data-size='sheet'] {
+    gap: var(--space-8);
+    block-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: var(--space-16);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .root[data-icon-only][data-size='sheet'] {
+    inline-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: 0;
+  }
+
+  /* Drawn small, pressed across 44px: an invisible area round the button (a public page's 26px, 30px or 36px control
+     under a thumb, the guest menu's + and steppers). Nothing drawn changes. */
+  .root[data-touch-target]:is([data-size='md'], [data-size='lg'], [data-size='xl']) {
+    --touch-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+
+    position: relative;
+  }
+
+  /* The inset counts from inside the border, so the hairline comes off too: 44px from edge to edge. */
+  .root[data-touch-target][data-size='md']::after {
+    position: absolute;
+    inset: calc((var(--size-control) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
+  .root[data-touch-target][data-size='lg']::after {
+    inset: calc((var(--size-input) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-touch-target][data-size='xl']::after {
+    position: absolute;
+    inset: calc((var(--size-input) + var(--space-6) - var(--touch-size)) / 2 - var(--border-width-hairline));
+    border-radius: var(--radius-full);
+    content: '';
+  }
+
   /* Fully rounded: a pill with a label, a circle when the icon or mark stands alone (a link page's social links). */
   .root[data-round] {
     border-radius: var(--radius-full);
@@ -194,6 +246,11 @@
 
   .root[data-icon-only][data-size='lg'] {
     inline-size: var(--size-input);
+  }
+
+  /* An icon alone at 36px: square, round with `isRound` (a Stepper's party size buttons). */
+  .root[data-icon-only][data-size='xl'] {
+    inline-size: calc(var(--size-input) + var(--space-6));
   }
 
   .root[data-icon-only][data-size='sm'] {
@@ -333,6 +390,13 @@
     background: var(--accent-soft);
     box-shadow: none;
     color: var(--text);
+  }
+
+  /* A strong selection (isSelectionStrong): the accent fill a selected day or time wears beside it. */
+  .root[data-selected][data-selection='strong'] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   /* An open danger disclosure (Cancel booking with its confirm open) keeps its red, on a faint danger tint. */

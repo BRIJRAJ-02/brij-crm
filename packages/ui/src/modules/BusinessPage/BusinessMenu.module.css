@@ -1,0 +1,87 @@
+/* The business page's menu (spec 0066, AC-6642), drawn as the guest menu's rows (5 November 2026, after checklabs):
+   sections a heading apart, each dish a row between hairlines, its name, its description on two lines at most and its
+   price under them, and its photo in large corners at the row's end when it has one. */
+@layer components {
+  .root {
+    --photo: calc(var(--space-32) * 2 + var(--space-24));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .heading {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--text);
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-16);
+    padding-block: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .item:last-child {
+    border-block-end: 0;
+  }
+
+  .words {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .name {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    color: var(--text);
+  }
+
+  /* Two lines at most, as the guest menu's rows: the whole of it is a tap away on the guest menu. */
+  .description {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-inline-size: var(--size-column-max);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text-secondary);
+  }
+
+  .price {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .photo {
+    flex: none;
+    inline-size: var(--photo);
+    block-size: var(--photo);
+    border-radius: var(--radius-xl);
+    background: var(--surface-sunken);
+    object-fit: cover;
+  }
+}

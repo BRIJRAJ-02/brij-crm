@@ -284,6 +284,18 @@ export const TimeOffEvent = z.object({
 });
 
 /**
+ * A place's visits changed (spec 0066 B7): a reservation made, changed, cancelled or moved on the Service list. Names
+ * the places only, so every audience may hear it; a screen holding one of those places' day (the Service list, the
+ * floor) reads it again, through the permission checked read.
+ */
+export const VisitsEvent = z.object({
+  ...place,
+  kind: z.literal('visits'),
+  placeIds: ids,
+  mutationId,
+});
+
+/**
  * Bookings changed (B-17): one made on a public page or in chat, moved or cancelled by its guest or a member, or
  * answered by its host. Names nothing, so every audience may hear it, as time off does; a screen holding Bookings (its
  * lists, its week, a Team day, Home's today) reads again what it may, in place.
@@ -354,6 +366,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   NavEvent,
   CalendarsEvent,
   TimeOffEvent,
+  VisitsEvent,
   BookingsEvent,
   AutomationsEvent,
   FormsEvent,
@@ -387,6 +400,7 @@ export const CHANGE_EVENT_KINDS = [
   'automations',
   'forms',
   'files',
+  'visits',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

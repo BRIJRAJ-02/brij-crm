@@ -171,7 +171,9 @@ export function InviteDialog({
           </Callout>
         )}
         {sent.refused.length > 0 && (
-          <Callout isAnnounced>{strings.alreadyMembers(sent.refused.map((each) => each.email).join(', '))}</Callout>
+          <Callout tone="info" isAnnounced>
+            {strings.alreadyMembers(sent.refused.map((each) => each.email).join(', '))}
+          </Callout>
         )}
         {sent.unsent.length > 0 && <Callout tone="danger">{strings.unsent(sent.unsent.join(', '))}</Callout>}
       </Modal>
@@ -236,7 +238,11 @@ export function InviteDialog({
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {notice !== undefined && <Callout isAnnounced>{notice}</Callout>}
+      {notice !== undefined && (
+        <Callout tone="info" isAnnounced>
+          {notice}
+        </Callout>
+      )}
       <InviteRows
         {...invite.rowsProps}
         // The dialog opens to invite: its first email is what the press asked for.

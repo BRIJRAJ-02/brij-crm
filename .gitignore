@@ -29,6 +29,8 @@ playwright-report/
 
 # The booking shell the build writes beside the handle Function (spec 0055), never committed.
 apps/web/api/shell.generated.mjs
+# The guest menu's shell, the same way (spec 0065, H1).
+apps/web/api/menu-shell.generated.mjs
 # The api's function bundle the build writes beside api/index.mjs, never committed.
 apps/web/api/api.generated.mjs
 # Screenshots the shot tests draw on demand (VITE_*_SHOTS=1), for a lane's own eyes, never committed.

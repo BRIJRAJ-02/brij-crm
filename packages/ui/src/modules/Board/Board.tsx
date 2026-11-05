@@ -126,9 +126,7 @@ export function Board({
   // A press that ends a drag never opens the card it dropped.
   const isMovingRef = useRef(false);
   if (status === 'error') {
-    return (
-      <EmptyState tone="error" icon="kanban" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
+    return <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   }
   if (status === 'no-access') {
     return (
@@ -152,8 +150,9 @@ export function Board({
     );
   }
   if (columns.length === 0 && addColumn === undefined) {
+    // The board is the whole surface, so its having no columns says so in its middle.
     return (
-      <EmptyState icon="kanban" title={strings.noColumns}>
+      <EmptyState layout="block" title={strings.noColumns}>
         {strings.noColumnsBody}
       </EmptyState>
     );

@@ -325,9 +325,11 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     <SettingsStack>
       {preview.banner}
       {/* The result is said as the grid changes, so a screen reader hears what the tick did. */}
-      <Callout isAnnounced>{summary}</Callout>
+      <Callout tone="info" isAnnounced>
+        {summary}
+      </Callout>
       {less !== undefined && (
-        <Callout isAnnounced>
+        <Callout tone="warning" isAnnounced>
           <FieldGroup label={strings.lessTitle} layout="row">
             <Badge size="chip" text={strings.lessPeople(less.people)} dot="orange" />
             {less.views > 0 && <Badge size="chip" text={strings.lessViews(less.views)} dot="orange" />}

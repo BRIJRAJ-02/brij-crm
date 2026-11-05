@@ -7,6 +7,7 @@ import {
   Avatar,
   Badge,
   Button,
+  Callout,
   EmptyState,
   formatDay,
   memoIntl,
@@ -132,10 +133,11 @@ export function WorkspaceChangesTab({ log, now = clock }: WorkspaceChangesTabPro
         </SettingsSection>
       ))}
       {state.status === 'more-failed' && (
-        // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it.
-        <EmptyState layout="row" tone="error" title={strings.failedMore}>
+        // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it:
+        // a polite line, not an empty state (which brings its own Try again).
+        <Callout tone="danger" isPolite title={strings.failedMore}>
           {state.message}
-        </EmptyState>
+        </Callout>
       )}
       {state.hasMore && (
         <Button

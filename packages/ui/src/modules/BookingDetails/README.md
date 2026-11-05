@@ -21,9 +21,18 @@ A page with its own questions (spec 0057) passes `questions` (the hosted form's 
 
 `onSubmit` answers `{ kind: 'done' }`, `{ kind: 'invalid', fields, message }` (errors by `name`, `email`, `phone`, `guest-<n>` or `answers.<key>`) or `{ kind: 'failed', message }`. In `guest-<n>`, n counts the guests sent, blanks left out, and the form moves the error to that guest's row. When no field in `fields` is one the form draws an error on (a time zone, a phone the page never asked for, the note, the guest list as a whole), `message` goes in the line above the buttons instead (without one, "That did not go through. Try again in a moment."), and everything typed stays. The heading takes focus as the step arrives, so a phone keeps its keyboard down.
 
+A table reservation (spec 0066 B7) passes `maxGuests={0}`: it counts its party on an earlier step, so the invites (Add guests) are left out altogether.
+
+`labels` puts the page's own words in place of the built in ones, each optional: `heading`, `confirm`, `confirming`, `done` (the send button's three states) and `note`. A reservation page sends with "Reserve". `extra` draws the page's own controls after the note and before the questions (a reservation's occasion as ChoiceChips by key); the page holds and sends what they pick, and the form neither reads nor checks them. Story: Reservation.
+
+- `onBack` left out (a table reservation's one page, after checklabs) draws no Back: the send button stands alone at the form's width, and nothing takes focus as the form shows (it is no step arriving; the page keeps its focus at its top). `blocked` says what the page still needs before any field is checked (the reservation's time): its words go in the line above the button. Story: OnePage. Why a prop: the reservation page keeps its times and details on one page, so there is no step to go back to.
+
+- A restaurant's details step after checklabs (5 November 2026) opts into its guest look, each prop left out keeping the booking page as it was: `fieldSize="lg"` draws every field at Field's 42px guest size; `isPhoneFirst` asks for the phone straight after the name (Full name, Phone, Email, Special requests), and a refused Confirm focuses them in that order; `intro` is one quiet line under the heading ("We'll send your confirmation here. Free to cancel — no prepayment needed."); `confirmNote` one quiet line centred under the send button ("Free cancellation · No prepayment required"), the send button then taking the row beside Back; `labels.name`, `labels.phone` and `labels.notePlaceholder` word the name, the phone and the note's placeholder. Why props: the reservation page shows the same form, checks and states in checklabs' order and words. Story: GuestReservation.
+- `onDraft` hands the page what is typed as it changes, and `draft` starts every field from it (the questions' answers too) with no "Booking as" line: the reservation page keeps the guest's words while the step is away (Back to change the time, or a time taken meanwhile), so nothing typed is lost. `draft` wins over `prefill`. Story: KeepsTheDraft.
+
 ## States
 
-Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
+Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed, one page (no Back, the send at full width, no arrival focus, a page's `blocked` line).
 
 ## Motion
 

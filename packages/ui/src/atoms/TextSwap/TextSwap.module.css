@@ -1,0 +1,60 @@
+/* TextSwap (spec 0068, AC-6806): transitions.dev's text states swap. The old words rise space-4 out and fade in
+   duration-exit; the new ones wait that long, then rise space-4 in from below in duration-popover, on the ease in out
+   curve. Tokens only: no blur until the artifact has a blur token. Both sit in one grid cell, so the wider sets the
+   width while they cross. Reduced motion crossfades. */
+@layer components {
+  .root {
+    display: inline-grid;
+    justify-items: start;
+    vertical-align: bottom;
+  }
+
+  .words {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+  }
+
+  .words[data-leaving] {
+    animation: words-out var(--duration-exit) var(--ease-in-out) forwards;
+  }
+
+  .words[data-arriving] {
+    animation: words-in var(--duration-popover) var(--ease-in-out) var(--duration-exit) backwards;
+  }
+
+  @keyframes words-out {
+    to {
+      opacity: 0;
+      translate: 0 calc(var(--space-4) * -1);
+    }
+  }
+
+  @keyframes words-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
+  }
+
+  @keyframes words-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes words-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .words[data-leaving] {
+      animation-name: words-fade-out;
+    }
+
+    .words[data-arriving] {
+      animation: words-fade-in var(--duration-popover) var(--ease-in-out) backwards;
+    }
+  }
+}

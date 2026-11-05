@@ -56,6 +56,7 @@ import {
   DateNav,
   usePhoneWidth,
   Skeleton,
+  ViewOnlyTag,
   WeekCalendar,
   type BookingListGroup,
   type Hue,
@@ -634,7 +635,9 @@ export function BookingCard({
     (isConfirmed && (booking.eventFailed || booking.needsHost || booking.hostAway === true));
   const notices = hasNotice ? (
     <>
-      {isSeeOnly && <Callout tone="info">{strings.seeOnly(booking.hostName)}</Callout>}
+      {/* A booking the reader may see but not change: one tag at the card's head (a booking has no bar of its own),
+          its lock saying whose it is. */}
+      {isSeeOnly && <ViewOnlyTag reason={strings.seeOnly(booking.hostName)} />}
       {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
       {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
       {booking.needsHost && isConfirmed && (

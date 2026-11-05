@@ -159,6 +159,21 @@
     flex: 1;
   }
 
+  /* A page's line under the heading (a reservation's "We'll send your confirmation here…"), pulled up to it. */
+  .intro {
+    margin: calc(-1 * var(--space-8)) 0 0;
+    color: var(--text-secondary);
+  }
+
+  /* The quiet line under the send button ("Free cancellation · No prepayment required"), centred under it. */
+  .confirmNote {
+    margin: calc(-1 * var(--space-8)) 0 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: center;
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .inline:hover {
       text-decoration: underline;

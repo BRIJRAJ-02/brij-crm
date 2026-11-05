@@ -13,7 +13,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BrandedFormPreview } from '../features/forms/FormBrand.tsx';
-import { formHref } from '../features/forms/paths.ts';
+import { formHref, formsHref } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
 
 // A draft opened in a new tab to try (spec 0023, The editor: layout): the hosted page's own renderer, checking answers
@@ -53,7 +53,21 @@ function PreviewRoute() {
   const [device, setDevice] = useState<Device>('desktop');
   // Whether the editor opened this tab (its Preview), read once: then Back closes the tab.
   const [opener] = useState(() => globalThis.opener !== null && globalThis.opener !== undefined);
-  if (form === undefined) return <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>;
+  if (form === undefined)
+    return (
+      <EmptyState
+        layout="block"
+        title={strings.missingTitle}
+        // A dead end gets a way back.
+        actions={
+          <ButtonLink href={formsHref(slug)} variant="secondary">
+            {strings.backToForms}
+          </ButtonLink>
+        }
+      >
+        {strings.missingText}
+      </EmptyState>
+    );
   const shown = previewOf(form.draft, { key: form.publicKey });
   return (
     <main>

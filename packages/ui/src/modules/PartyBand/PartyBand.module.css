@@ -1,0 +1,75 @@
+/* A reservation's party size, after checklabs' booking form: a soft band (the chip colour, large corners) with the
+   caps label and its quiet line at the start and the stepper at the end; under it, at the most, one quiet line. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-16);
+    border-radius: var(--radius-lg);
+    background: var(--surface-sunken);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  /* checklabs' caps overline: small, strong, spaced. */
+  .label {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
+  }
+
+  .line {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* The way to book a bigger table, under the band at the most; nothing while it is empty. */
+  .more {
+    margin: 0;
+    padding-inline: var(--space-16);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .more:not(:empty) {
+    margin-block-start: var(--space-6);
+    animation: more-in var(--duration-move) var(--ease-out) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .more:not(:empty) {
+      animation-name: more-fade;
+    }
+  }
+
+  @keyframes more-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(-1 * var(--space-4));
+    }
+  }
+
+  @keyframes more-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
