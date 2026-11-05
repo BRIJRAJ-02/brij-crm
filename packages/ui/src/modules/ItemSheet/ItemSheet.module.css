@@ -72,6 +72,7 @@
   }
 
   .price {
+    color: var(--menu-highlight, inherit);
     margin: 0;
     font: var(--text-title);
     font-family: inherit;

@@ -45,6 +45,23 @@ export async function prepareMenuPhoto(
   }
 }
 
+/** The look's cover (`PhotoCrop` shape `cover`, the page's 3:1 banner) at both widths, ready to send. */
+export async function prepareMenuCover(
+  source: Blob | string,
+  crop?: PhotoRect,
+): Promise<{ readonly large: Blob; readonly small: Blob }> {
+  const kept = await preparePhoto(source, 'cover', crop);
+  const bitmap = await createImageBitmap(kept.blob);
+  try {
+    return {
+      large: await drawAt(bitmap, MENU_PHOTO_WIDTHS.large),
+      small: await drawAt(bitmap, MENU_PHOTO_WIDTHS.small),
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
 /** A draft photo as the editor shows it: the member's own copy, from the api's own route, versioned. */
 export const draftPhotoHref = (slug: string, photoId: string, size: 'large' | 'small', version: string): string =>
   `/api/menu/photos/${encodeURIComponent(photoId)}/${size}?${new URLSearchParams({ workspace: slug, v: version }).toString()}`;

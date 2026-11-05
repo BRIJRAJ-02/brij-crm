@@ -10,7 +10,15 @@
 // The global Origin check refuses a write from anywhere but the app. Nothing here logs a photo or its path.
 import { createHash, randomUUID } from 'node:crypto';
 import { MENU_LIMITS, MENU_PHOTO_WIDTHS, matchesContent, pictureTypeOf, UPLOAD_WORKSPACE_HEADER } from '@crm/contracts';
-import { attachMenuPhoto, menuPhotoFolder, readMenuDraftLook, readMenuPhotoFile, requireMenuEditor } from '@crm/core';
+import {
+  addMenuCover,
+  attachMenuPhoto,
+  menuPhotoFolder,
+  readMenuDraftLook,
+  readMenuPhotoFile,
+  requireMenuEditor,
+  type MenuPhotoFile,
+} from '@crm/core';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import {
@@ -62,6 +70,40 @@ async function checkedFile(file: unknown, maxWidth: number): Promise<CheckedFile
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** The request's two widths checked and in the private store, as a photo row takes them; or the refusal to send. */
+async function storeBothWidths(
+  c: Context<{ Variables: ImageVariables }>,
+  workspaceId: string,
+  files: NonNullable<ImageRouteDeps['files']>,
+  errorResponse: ImageRouteDeps['errorResponse'],
+): Promise<MenuPhotoFile | Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return errorResponse('INPUT_INVALID', 'Choose a picture.');
+  }
+  const large = await checkedFile(body['large'], MENU_PHOTO_WIDTHS.large);
+  if (typeof large === 'string') return errorResponse('INPUT_INVALID', large);
+  const small = await checkedFile(body['small'], MENU_PHOTO_WIDTHS.small);
+  if (typeof small === 'string') return errorResponse('INPUT_INVALID', small);
+  // Both widths are one drawing: the same type, or it isn't what the browser made.
+  if (small.type !== large.type) return errorResponse('INPUT_INVALID', NOT_AN_IMAGE);
+  const version = createHash('sha256').update(large.bytes).update(small.bytes).digest('hex').slice(0, 12);
+  const stem = `${menuPhotoFolder(workspaceId)}${randomUUID()}`;
+  const largePath = `${stem}-large.${large.extension}`;
+  const smallPath = `${stem}-small.${small.extension}`;
+  try {
+    await files.put(largePath, large.bytes, large.type);
+    await files.put(smallPath, small.bytes, small.type);
+  } catch (error) {
+    log.error('menu.photo.store_failed', { requestId: c.get('requestId'), ...errorFields(error) });
+    await files.remove([largePath, smallPath]).catch(() => undefined);
+    return errorResponse('API_UNAVAILABLE', 'The photo couldn’t be saved. Try again in a moment.');
+  }
+  return { largePath, smallPath, type: large.type, version };
+}
+
 /** Mounts the menu photo upload. */
 export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: ImageRouteDeps): void {
   const { files, limiter, errorResponse } = deps;
@@ -111,6 +153,38 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
       },
     });
   });
+  // A cover for the guest look (spec 0065, AC-6570 as amended): the same checks as a dish's photo, in the same order,
+  // answering the photo's id and version for the Design page to name in the look it saves.
+  app.post(
+    '/menu/look/cover',
+    bodyLimit({
+      maxSize: MENU_LIMITS.photoMaxBytes + 64 * 1024,
+      onError: () => errorResponse('PAYLOAD_TOO_LARGE', TOO_LARGE),
+    }),
+    async (c: Context<{ Variables: ImageVariables }>) => {
+      const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
+      if (entered instanceof Response) return entered;
+      const { scope, session } = entered;
+      try {
+        requireMenuEditor(scope);
+      } catch (error) {
+        return refusalResponse(error, errorResponse);
+      }
+      if (files === undefined) return errorResponse('API_UNAVAILABLE', 'Photos can’t be uploaded here yet.');
+      const decision = limiter(`menu-photo:${session.user.id}`, { ...IMAGE_UPLOAD_LIMIT, max: 60 });
+      if (!decision.allowed) return errorResponse('RATE_LIMITED', 'That’s a lot of photos at once. Try again shortly.');
+      const stored = await storeBothWidths(c, scope.workspaceId, files, errorResponse);
+      if (stored instanceof Response) return stored;
+      try {
+        const cover = await addMenuCover(scope, { photo: stored });
+        log.info('menu.cover.uploaded', { requestId: c.get('requestId'), type: stored.type });
+        return c.json(cover);
+      } catch (error) {
+        await files.remove([stored.largePath, stored.smallPath]).catch(() => undefined);
+        return refusalResponse(error, errorResponse);
+      }
+    },
+  );
   app.post(
     '/menu/items/:itemId/photo',
     // Both widths together, as drawn by the browser: well under the 4 MB a photo may come in at.
@@ -132,41 +206,16 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
       if (files === undefined) return errorResponse('API_UNAVAILABLE', 'Photos can’t be uploaded here yet.');
       const decision = limiter(`menu-photo:${session.user.id}`, { ...IMAGE_UPLOAD_LIMIT, max: 60 });
       if (!decision.allowed) return errorResponse('RATE_LIMITED', 'That’s a lot of photos at once. Try again shortly.');
-      let body: Record<string, unknown>;
-      try {
-        body = await c.req.parseBody();
-      } catch {
-        return errorResponse('INPUT_INVALID', 'Choose a picture.');
-      }
-      const large = await checkedFile(body['large'], MENU_PHOTO_WIDTHS.large);
-      if (typeof large === 'string') return errorResponse('INPUT_INVALID', large);
-      const small = await checkedFile(body['small'], MENU_PHOTO_WIDTHS.small);
-      if (typeof small === 'string') return errorResponse('INPUT_INVALID', small);
-      // Both widths are one drawing: the same type, or it isn't what the browser made.
-      if (small.type !== large.type) return errorResponse('INPUT_INVALID', NOT_AN_IMAGE);
-      const version = createHash('sha256').update(large.bytes).update(small.bytes).digest('hex').slice(0, 12);
-      const stem = `${menuPhotoFolder(scope.workspaceId)}${randomUUID()}`;
-      const largePath = `${stem}-large.${large.extension}`;
-      const smallPath = `${stem}-small.${small.extension}`;
-      try {
-        await files.put(largePath, large.bytes, large.type);
-        await files.put(smallPath, small.bytes, small.type);
-      } catch (error) {
-        log.error('menu.photo.store_failed', { requestId: c.get('requestId'), ...errorFields(error) });
-        await files.remove([largePath, smallPath]).catch(() => undefined);
-        return errorResponse('API_UNAVAILABLE', 'The photo couldn’t be saved. Try again in a moment.');
-      }
+      const stored = await storeBothWidths(c, scope.workspaceId, files, errorResponse);
+      if (stored instanceof Response) return stored;
       try {
         // Like the logo, no record changes, so no change event: the editor takes the draft this answers.
-        const draft = await attachMenuPhoto(scope, {
-          itemId: itemId.toLowerCase(),
-          photo: { largePath, smallPath, type: large.type, version },
-        });
-        log.info('menu.photo.uploaded', { requestId: c.get('requestId'), type: large.type });
+        const draft = await attachMenuPhoto(scope, { itemId: itemId.toLowerCase(), photo: stored });
+        log.info('menu.photo.uploaded', { requestId: c.get('requestId'), type: stored.type });
         return c.json(draft);
       } catch (error) {
         // Nothing points at them: the store keeps no orphan.
-        await files.remove([largePath, smallPath]).catch(() => undefined);
+        await files.remove([stored.largePath, stored.smallPath]).catch(() => undefined);
         return refusalResponse(error, errorResponse);
       }
     },

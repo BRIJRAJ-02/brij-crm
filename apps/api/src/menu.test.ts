@@ -224,6 +224,50 @@ describe('menu photos (AC-6527)', () => {
     }
   });
 
+  it('takes a look’s cover from Manage hospitality only, serves what the look names, and lets go of a replaced one', async () => {
+    const { m, place } = await menuWorkspace();
+    await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
+    const { cookie: memberCookie, email } = await signIn(app);
+    const [user] = await testQuery<{ id: string }>(ownerUrl, 'select id from auth."user" where email = $1', [email]);
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+       select id, $2, $3, 'Plain', $4, 'member', 'system', 'system' from workspaces where slug = $1`,
+      [m.slug, newId(), user?.id, email],
+    );
+    const before = kept.size;
+    const upload = (cookie: string, body: FormData) =>
+      send('/api/menu/look/cover', { method: 'POST', cookie, workspace: m.slug, body });
+    // A plain member is refused before any byte is kept; so is a file that isn't a picture.
+    expect((await upload(memberCookie, photoBody())).status).toBe(403);
+    expect(kept.size).toBe(before);
+    expect((await upload(m.cookie, photoBody(new Uint8Array([1, 2, 3])))).status).toBe(400);
+    expect(kept.size).toBe(before);
+
+    const answered = await upload(m.cookie, photoBody());
+    expect(answered.status).toBe(200);
+    const cover = (await answered.json()) as { id: string; version: string };
+    expect(kept.size).toBe(before + 2);
+    const look = { preset: 'noir', heading: 'grotesk', body: 'grotesk', radius: 'square' } as const;
+    const path = `/api/public/menu/${place.menuKey}/photos/${cover.id}/large?v=${cover.version}`;
+    // Nothing shows it until a saved look names it.
+    expect((await send(path)).status).toBe(404);
+    await m.client.menu.saveLook({ workspace: m.slug, look: { ...look, cover }, mutationId: newId() });
+    expect((await send(path)).status).toBe(200);
+    const page = (await (await send(`/api/public/menu/${place.menuKey}`)).json()) as {
+      cover?: unknown;
+      scheme?: string;
+      look?: string;
+    };
+    expect(page).toMatchObject({ cover, scheme: 'dark' });
+    const css = await (await send(`/api/public/menu/${place.menuKey}/look.css?v=${page.look ?? ''}`)).text();
+    expect(css).toContain('--menu-ground:#0a0a0a');
+    // Taken off, its files go at once.
+    await m.client.menu.saveLook({ workspace: m.slug, look, mutationId: newId() });
+    expect(kept.size).toBe(before);
+    expect((await send(path)).status).toBe(404);
+  });
+
   it('takes both widths from Manage hospitality only, cleaned, and serves only what the live snapshot shows', async () => {
     const { m, place, itemId } = await menuWorkspace();
     // A plain member is refused before any byte is kept.

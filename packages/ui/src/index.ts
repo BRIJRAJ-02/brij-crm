@@ -174,6 +174,7 @@ export {
 export { HuePicker, type HuePickerProps } from './molecules/HuePicker/HuePicker.tsx';
 /** Any colour, picked by sight: a brand kit's or a link page's accent (spec 0060). */
 export { AccentPicker, type AccentPickerProps, type AccentQuickPick } from './molecules/AccentPicker/AccentPicker.tsx';
+export { ContrastBadge, type ContrastBadgeProps } from './molecules/AccentPicker/ContrastBadge.tsx';
 export { IconPicker, type IconPickerProps } from './molecules/IconPicker/IconPicker.tsx';
 export {
   ContextMenu,
@@ -560,6 +561,7 @@ export {
 } from './modules/HostedFormPreview/HostedFormPreview.tsx';
 /** The guest menu (spec 0065, H1): a place's published menu as a guest reads it, and the editor's phone preview. */
 export { MenuList, type MenuListProps } from './modules/MenuList/MenuList.tsx';
+export { MenuLookThumbnail, type MenuLookThumbnailProps } from './modules/MenuList/MenuLookThumbnail.tsx';
 /** A dish's sheet and Your picks on the guest menu (spec 0065, H1). */
 export {
   ItemSheet,

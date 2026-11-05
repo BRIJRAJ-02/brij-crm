@@ -1,0 +1,55 @@
+/* A look's tile: the guest menu's own custom properties, on a small card that fills the tile's picture. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    padding: var(--space-8);
+    background: var(--menu-ground, var(--surface));
+    color: var(--menu-text, var(--text));
+    font-family: var(--menu-face, var(--font-sans));
+    text-align: start;
+  }
+
+  .heading {
+    font: var(--text-title);
+    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
+  }
+
+  .words {
+    display: block;
+    inline-size: 70%;
+    block-size: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--menu-quiet, var(--text-secondary));
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-block-start: auto;
+  }
+
+  .price {
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--menu-chip, var(--surface-sunken));
+    color: var(--menu-highlight, var(--text));
+    font: var(--text-label-strong);
+    font-family: var(--menu-face, var(--font-sans));
+  }
+
+  .button {
+    display: block;
+    inline-size: var(--space-20);
+    block-size: var(--space-12);
+    /* The + and the pills are round whatever the corners are. */
+    border-radius: var(--radius-full);
+    background: var(--menu-accent, var(--accent));
+  }
+}

@@ -3,6 +3,7 @@
 // how they format and parse, serving times read on the place's own clock, the public paths and cache tags. The Zod
 // schemas and the contract live in `menu.ts`. A place's hours helpers ride along (`hospitality-hours.ts`), so the
 // guest page reads "open now" by the rules the server uses.
+import { brandVariables, BRAND_HEX_PATTERN, contrastRatio, CONTROL_CONTRAST, TEXT_CONTRAST } from './brand-colour.ts';
 import { WEEK_DAYS, type PlaceHoursShape, type WeekDay } from './hospitality-model.ts';
 import { nextOpening, openAt } from './hospitality-hours.ts';
 
@@ -373,7 +374,7 @@ export const menuPagePath = (key: string): string => `/m/${key}`;
 /** The guest menu's read on our origin. */
 export const menuReadPath = (key: string): string => `/api/public/menu/${key}`;
 
-/** The guest menu's look (its brand's accent and the Warm preset's variables), versioned. */
+/** The guest menu's look (its preset, palette, faces and corners, as custom properties), versioned. */
 export const menuLookPath = (key: string, version: string): string => `/api/public/menu/${key}/look.css?v=${version}`;
 
 /** The business's logo on a guest menu, versioned. */
@@ -446,6 +447,7 @@ export const WARM_PRESET = {
     onBar: '#ffffff',
     onBarQuiet: '#cfcfcf',
     barAccent: '#f0a37c',
+    highlight: '#1a1a1a',
     scrim: '#00000066',
   },
   dark: {
@@ -464,6 +466,7 @@ export const WARM_PRESET = {
     onBar: '#141414',
     onBarQuiet: '#4d4d4d',
     barAccent: '#f0a37c',
+    highlight: '#f5f5f5',
     scrim: '#000000a6',
   },
 } as const;
@@ -520,5 +523,328 @@ export const MENU_LOOK_PROPERTIES = {
   onBar: '--menu-on-bar',
   onBarQuiet: '--menu-on-bar-quiet',
   barAccent: '--menu-bar-accent',
+  highlight: '--menu-highlight',
   scrim: '--menu-scrim',
 } as const;
+
+/** The presets the Design page offers, in the order they show (spec 0065, AC-6570 as amended). Warm is the default. */
+export const MENU_PRESETS = ['warm', 'clean', 'night', 'linen', 'noir', 'ronin'] as const;
+/** One preset. */
+export type MenuPreset = (typeof MENU_PRESETS)[number];
+
+/**
+ * The faces a guest look may draw in: the device's own, and the brand kit's font pack (`PAGE_FONTS`, spec 0060, every
+ * face self hosted). A closed list: nothing a person types ever reaches a font's name.
+ */
+export const MENU_FONTS = [
+  'device',
+  'sans',
+  'mono',
+  'grotesk',
+  'editorial',
+  'classic',
+  'friendly',
+  'geometric',
+  'display',
+] as const;
+/** One face of the guest look. */
+export type MenuFont = (typeof MENU_FONTS)[number];
+
+/** What each face writes as `--menu-face` or `--menu-display-face`: a constant, never anything typed. */
+export const MENU_FONT_FACES: Readonly<Record<MenuFont, string>> = {
+  device: MENU_FACE,
+  sans: 'var(--font-sans)',
+  mono: 'var(--font-mono)',
+  grotesk: 'var(--font-pack-grotesk)',
+  editorial: 'var(--font-pack-editorial)',
+  classic: 'var(--font-pack-classic)',
+  friendly: 'var(--font-pack-friendly)',
+  geometric: 'var(--font-pack-geometric)',
+  display: 'var(--font-pack-display)',
+};
+
+/** How round a guest look's corners are. */
+export const MENU_RADII = ['square', 'soft', 'round'] as const;
+/** One corner choice. */
+export type MenuRadius = (typeof MENU_RADII)[number];
+
+/** What each corner choice writes as `--menu-round`: a number the library's own radii are multiplied by. */
+export const MENU_RADIUS_SCALES: Readonly<Record<MenuRadius, string>> = { square: '0.25', soft: '1', round: '1.5' };
+
+/** The four colours an owner picks: the page, its words, its buttons and its prices. */
+export const MENU_PALETTE_ROLES = ['surface', 'ink', 'brand', 'highlight'] as const;
+/** One of the four. */
+export type MenuPaletteRole = (typeof MENU_PALETTE_ROLES)[number];
+/** The four colours, each a checked hex. */
+export type MenuPalette = Readonly<Record<MenuPaletteRole, string>>;
+
+/** A guest look's choices, as saved (`MenuLook` in `menu.ts` is the schema); a role left out of `palette` is the preset's. */
+export interface MenuLookChoice {
+  readonly preset: MenuPreset;
+  readonly palette?: Readonly<Partial<Record<MenuPaletteRole, string>>> | undefined;
+  readonly heading: MenuFont;
+  readonly body: MenuFont;
+  readonly radius: MenuRadius;
+  readonly cover?: { readonly id: string; readonly version: string } | undefined;
+}
+
+/** Whether a page draws on its visitor's light or dark, or always one of them. */
+export type MenuScheme = 'follow' | 'light' | 'dark';
+
+/** A preset: its palette (and its dark one, when it follows the visitor), faces, corners and scheme. */
+interface MenuPresetLook {
+  readonly palette: MenuPalette;
+  readonly darkPalette?: MenuPalette;
+  readonly heading: MenuFont;
+  readonly body: MenuFont;
+  readonly radius: MenuRadius;
+  readonly scheme: MenuScheme;
+  /** Whether the brand kit's accent takes the buttons, unless the owner picked their own Brand colour. */
+  readonly takesBrandAccent: boolean;
+}
+
+/**
+ * The six presets (AC-6570 as amended): Warm after checklabs' guest look, Clean in the app's own neutrals, Night for
+ * bars, and Linen, Noir and Ronin after checklabs' retired palettes with their font pairs restated in our pack (Inter
+ * for the body; Fraunces and Cormorant, which we don't host, become Editorial and Classic). Linen's and Ronin's
+ * highlights are moved until they read at 4.5:1 as prices. `menu-model.test.ts` proves each passes AA in its own colours.
+ */
+export const MENU_PRESET_LOOKS: Readonly<Record<MenuPreset, MenuPresetLook>> = {
+  warm: {
+    palette: { surface: '#ffffff', ink: '#1a1a1a', brand: '#1a1a1a', highlight: '#1a1a1a' },
+    darkPalette: { surface: '#141414', ink: '#f5f5f5', brand: '#f5f5f5', highlight: '#f5f5f5' },
+    heading: 'device',
+    body: 'device',
+    radius: 'soft',
+    scheme: 'follow',
+    takesBrandAccent: true,
+  },
+  clean: {
+    palette: { surface: '#ffffff', ink: '#18191c', brand: '#18191c', highlight: '#18191c' },
+    darkPalette: { surface: '#18191c', ink: '#f4f5f7', brand: '#f4f5f7', highlight: '#f4f5f7' },
+    heading: 'sans',
+    body: 'sans',
+    radius: 'soft',
+    scheme: 'follow',
+    takesBrandAccent: true,
+  },
+  night: {
+    palette: { surface: '#12141a', ink: '#f2f2f0', brand: '#f2f2f0', highlight: '#f0a37c' },
+    heading: 'geometric',
+    body: 'sans',
+    radius: 'soft',
+    scheme: 'dark',
+    takesBrandAccent: true,
+  },
+  linen: {
+    palette: { surface: '#f8f6f1', ink: '#1f1d1a', brand: '#1f2937', highlight: '#8f5a30' },
+    heading: 'editorial',
+    body: 'sans',
+    radius: 'soft',
+    scheme: 'light',
+    takesBrandAccent: false,
+  },
+  noir: {
+    palette: { surface: '#0a0a0a', ink: '#fafafa', brand: '#d4af37', highlight: '#d4af37' },
+    heading: 'grotesk',
+    body: 'grotesk',
+    radius: 'square',
+    scheme: 'dark',
+    takesBrandAccent: false,
+  },
+  ronin: {
+    palette: { surface: '#0a0a0a', ink: '#ffffff', brand: '#dc2626', highlight: '#f87171' },
+    heading: 'classic',
+    body: 'sans',
+    radius: 'round',
+    scheme: 'dark',
+    takesBrandAccent: false,
+  },
+};
+
+/** A preset's own look, as the Design page sets it when that preset is chosen; a saved cover stays. */
+export function presetLook(preset: MenuPreset, cover?: MenuLookChoice['cover']): MenuLookChoice {
+  const { heading, body, radius } = MENU_PRESET_LOOKS[preset];
+  return { preset, heading, body, radius, ...(cover === undefined ? {} : { cover }) };
+}
+
+/** The look of a workspace that never saved one: Warm. */
+export const DEFAULT_MENU_LOOK: MenuLookChoice = presetLook('warm');
+
+/** A colour's red, green and blue. */
+const rgbOf = (hex: string): readonly [number, number, number] => [
+  Number.parseInt(hex.slice(1, 3), 16),
+  Number.parseInt(hex.slice(3, 5), 16),
+  Number.parseInt(hex.slice(5, 7), 16),
+];
+
+/** `one` moved `share` of the way to `other`, in sRGB: a quiet step, never a new hue of its own. */
+function mixHex(one: string, other: string, share: number): string {
+  const [from, to] = [rgbOf(one), rgbOf(other)];
+  const channel = (index: 0 | 1 | 2) =>
+    Math.round(from[index] + (to[index] - from[index]) * share)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+/** Black or white, whichever reads better on `hex`: always at least 4.58:1, so a button's label is never unreadable. */
+const labelOn = (hex: string): string =>
+  contrastRatio('#000000', hex) >= contrastRatio('#ffffff', hex) ? '#000000' : '#ffffff';
+
+/** The least contrast of `hex` on any of `surfaces`. */
+const leastOn = (hex: string, surfaces: readonly string[]): number =>
+  Math.min(...surfaces.map((surface) => contrastRatio(hex, surface)));
+
+/**
+ * `hex` as it is when it reads at `least` on every surface; otherwise moved step by step towards black or white,
+ * whichever reads better there, until it does. An owner's colour that can't be read is never drawn as it is.
+ */
+function readableOn(hex: string, surfaces: readonly string[], least: number): string {
+  if (leastOn(hex, surfaces) >= least) return hex;
+  const target = leastOn('#000000', surfaces) >= leastOn('#ffffff', surfaces) ? '#000000' : '#ffffff';
+  for (let step = 1; step < 20; step += 1) {
+    const moved = mixHex(hex, target, step / 20);
+    if (leastOn(moved, surfaces) >= least) return moved;
+  }
+  return target;
+}
+
+/** The colours one look draws, by the name of the custom property each sets (`MENU_LOOK_PROPERTIES`). */
+export type MenuLookRoles = Readonly<Record<keyof typeof MENU_LOOK_PROPERTIES, string>>;
+
+/** Every role worked out from four colours: each that carries words is checked against what it sits on. */
+function rolesOfPalette(palette: MenuPalette): MenuLookRoles {
+  const ground = palette.surface;
+  const chip = mixHex(ground, palette.ink, 0.07);
+  const surfaces = [ground, chip];
+  const text = readableOn(palette.ink, surfaces, TEXT_CONTRAST);
+  const accent = readableOn(palette.brand, [ground], CONTROL_CONTRAST);
+  const onInk = labelOn(text);
+  return {
+    ground,
+    card: ground,
+    chip,
+    line: `${text}1a`,
+    glass: `${ground}b8`,
+    text,
+    quiet: readableOn(mixHex(text, ground, 0.35), surfaces, TEXT_CONTRAST),
+    ink: text,
+    onInk,
+    accent,
+    onAccent: labelOn(accent),
+    bar: text,
+    onBar: onInk,
+    onBarQuiet: readableOn(mixHex(onInk, text, 0.2), [text], TEXT_CONTRAST),
+    barAccent: readableOn(palette.highlight, [text], CONTROL_CONTRAST),
+    highlight: readableOn(palette.highlight, surfaces, TEXT_CONTRAST),
+    scrim: '#00000066',
+  };
+}
+
+/** The brand kit's accent pair, as a guest look reads it. */
+export interface MenuLookAccents {
+  readonly accent?: string | undefined;
+  readonly accentDark?: string | undefined;
+}
+
+/** Whether the owner picked their own page or words colour, which pins the page to one scheme. */
+const repaints = (look: MenuLookChoice): boolean =>
+  look.palette?.surface !== undefined || look.palette?.ink !== undefined;
+
+/** The four colours a look starts from, in one mode: the owner's where they picked one, else the preset's. */
+export function menuLookPalette(look: MenuLookChoice, mode: 'light' | 'dark'): MenuPalette {
+  const preset = MENU_PRESET_LOOKS[look.preset];
+  const base = mode === 'dark' && !repaints(look) ? (preset.darkPalette ?? preset.palette) : preset.palette;
+  return { ...base, ...look.palette };
+}
+
+/**
+ * The scheme a look draws on: a preset's own; picking the page's or the words' colour pins it to the side that colour
+ * reads as, since one picked colour has no second value for the other side.
+ */
+export function menuLookScheme(look: MenuLookChoice): MenuScheme {
+  if (!repaints(look)) return MENU_PRESET_LOOKS[look.preset].scheme;
+  const surface = menuLookPalette(look, 'light').surface;
+  return contrastRatio('#ffffff', surface) > contrastRatio('#000000', surface) ? 'dark' : 'light';
+}
+
+/**
+ * Every colour a look draws in one mode (spec 0065, AC-6570 as amended). Warm alone keeps its table, value for value;
+ * every other look works its roles out of the four colours. Words are held to 4.5:1 on what they sit on and a button
+ * to 3:1 on the page, whatever the owner picked, and a button's label is black or white, whichever reads better. The
+ * brand kit's accent takes the buttons on a preset that takes it, through the contrast guard, unless the owner picked
+ * their own Brand colour. Runs on the server for the stylesheet and in the editor for the preview, so they agree.
+ */
+export function menuLookRoles(look: MenuLookChoice, accents: MenuLookAccents, mode: 'light' | 'dark'): MenuLookRoles {
+  const palette = menuLookPalette(look, mode);
+  const preset = MENU_PRESET_LOOKS[look.preset];
+  const derived = rolesOfPalette(palette);
+  const roles: MenuLookRoles =
+    look.preset === 'warm' && !repaints(look)
+      ? {
+          ...WARM_PRESET[mode],
+          ...(look.palette?.brand === undefined ? {} : { accent: derived.accent, onAccent: derived.onAccent }),
+          ...(look.palette?.highlight === undefined
+            ? {}
+            : { highlight: derived.highlight, barAccent: derived.barAccent }),
+        }
+      : derived;
+  const accent = accents.accent;
+  if (!preset.takesBrandAccent || look.palette?.brand !== undefined || accent === undefined) return roles;
+  if (!BRAND_HEX_PATTERN.test(accent)) return roles;
+  const drawn = brandVariables({
+    accent,
+    ...(accents.accentDark === undefined ? {} : { accentDark: accents.accentDark }),
+  })[mode];
+  const onPage = readableOn(drawn.accent, [roles.ground], CONTROL_CONTRAST);
+  return { ...roles, accent: onPage, onAccent: onPage === drawn.accent ? drawn.onAccent : labelOn(onPage) };
+}
+
+/** One colour's check on the Design page: the ratio, and whether it passes AA for what that colour does. */
+export interface MenuContrast {
+  readonly ratio: number;
+  readonly passes: boolean;
+}
+
+/**
+ * The badges on the Design page, of the colours as picked, before anything is moved to keep them readable: the words
+ * on the page (4.5:1), a button on the page (3:1) and the prices on the page (4.5:1). The page itself carries no badge.
+ */
+export function menuLookContrast(
+  palette: MenuPalette,
+): Readonly<Record<Exclude<MenuPaletteRole, 'surface'>, MenuContrast>> {
+  const check = (hex: string, least: number): MenuContrast => {
+    const ratio = contrastRatio(hex, palette.surface);
+    return { ratio, passes: ratio >= least };
+  };
+  return {
+    ink: check(palette.ink, TEXT_CONTRAST),
+    brand: check(palette.brand, CONTROL_CONTRAST),
+    highlight: check(palette.highlight, TEXT_CONTRAST),
+  };
+}
+
+/** The faces and the corners, which don't change with the mode: `[name, value]` pairs of constants. */
+export function menuLookShape(look: MenuLookChoice): readonly (readonly [string, string])[] {
+  return [
+    ['--menu-face', MENU_FONT_FACES[look.body]],
+    ['--menu-display-face', MENU_FONT_FACES[look.heading]],
+    ['--menu-round', MENU_RADIUS_SCALES[look.radius]],
+  ];
+}
+
+/**
+ * The colours in one mode, as `[name, value]` pairs: what the stylesheet writes and what the preview sets. A value
+ * that isn't a whole hex is left out, so nothing else can ever reach CSS.
+ */
+export function menuLookColours(
+  look: MenuLookChoice,
+  accents: MenuLookAccents,
+  mode: 'light' | 'dark',
+): readonly (readonly [string, string])[] {
+  const roles = menuLookRoles(look, accents, mode);
+  return (Object.keys(MENU_LOOK_PROPERTIES) as (keyof typeof MENU_LOOK_PROPERTIES)[])
+    .filter((name) => /^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(roles[name]))
+    .map((name) => [MENU_LOOK_PROPERTIES[name], roles[name]] as const);
+}

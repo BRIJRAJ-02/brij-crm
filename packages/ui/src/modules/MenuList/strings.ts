@@ -2,6 +2,9 @@
 export const strings = {
   /** A photo or logo beside words that already name it: decoration. */
   decorative: '',
+  /** A look's tile: a heading and a price to show its faces and colours on, hidden from screen readers. */
+  thumbnailHeading: 'Aa',
+  thumbnailPrice: '12',
   openNow: 'Open now',
   openUntil: (time: string) => `Open until ${time}`,
   opensAt: (when: string) => `Opens ${when}`,

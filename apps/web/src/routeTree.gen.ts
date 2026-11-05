@@ -50,6 +50,7 @@ import { Route as WSlugBookingsRoutingRouteImport } from './routes/w.$slug.booki
 import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
 import { Route as WSlugListsListRouteImport } from './routes/w.$slug.lists.$list.tsx'
+import { Route as WSlugMenusDesignRouteImport } from './routes/w.$slug.menus_.design.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugQrPrintRouteImport } from './routes/w.$slug.qr_.print.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
@@ -328,6 +329,11 @@ const WSlugFormsSplatRoute = WSlugFormsSplatRouteImport.update({
 const WSlugListsListRoute = WSlugListsListRouteImport.update({
   id: '/lists/$list',
   path: '/lists/$list',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugMenusDesignRoute = WSlugMenusDesignRouteImport.update({
+  id: '/menus_/design',
+  path: '/menus/design',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
@@ -785,6 +791,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
+  '/w/$slug/menus/design': typeof WSlugMenusDesignRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/qr/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
@@ -897,6 +904,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
+  '/w/$slug/menus/design': typeof WSlugMenusDesignRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/qr/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
@@ -1014,6 +1022,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
+  '/w/$slug/menus_/design': typeof WSlugMenusDesignRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/qr_/print': typeof WSlugQrPrintRoute
   '/w/$slug/settings/apps': typeof WSlugSettingsAppsRoute
@@ -1132,6 +1141,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
+    | '/w/$slug/menus/design'
     | '/w/$slug/objects/$object'
     | '/w/$slug/qr/print'
     | '/w/$slug/settings/apps'
@@ -1244,6 +1254,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
+    | '/w/$slug/menus/design'
     | '/w/$slug/objects/$object'
     | '/w/$slug/qr/print'
     | '/w/$slug/settings/apps'
@@ -1360,6 +1371,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
+    | '/w/$slug/menus_/design'
     | '/w/$slug/objects/$object'
     | '/w/$slug/qr_/print'
     | '/w/$slug/settings/apps'
@@ -1738,6 +1750,13 @@ declare module '@tanstack/react-router' {
       path: '/lists/$list'
       fullPath: '/w/$slug/lists/$list'
       preLoaderRoute: typeof WSlugListsListRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/menus_/design': {
+      id: '/w/$slug/menus_/design'
+      path: '/menus/design'
+      fullPath: '/w/$slug/menus/design'
+      preLoaderRoute: typeof WSlugMenusDesignRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/objects/$object': {
@@ -2445,6 +2464,7 @@ interface WSlugRouteChildren {
   WSlugBookingPagesSplatRoute: typeof WSlugBookingPagesSplatRoute
   WSlugFormsSplatRoute: typeof WSlugFormsSplatRoute
   WSlugListsListRoute: typeof WSlugListsListRoute
+  WSlugMenusDesignRoute: typeof WSlugMenusDesignRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
   WSlugQrPrintRoute: typeof WSlugQrPrintRoute
   WSlugBookingsAvailabilityScheduleIdRoute: typeof WSlugBookingsAvailabilityScheduleIdRoute
@@ -2484,6 +2504,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugBookingPagesSplatRoute: WSlugBookingPagesSplatRoute,
   WSlugFormsSplatRoute: WSlugFormsSplatRoute,
   WSlugListsListRoute: WSlugListsListRoute,
+  WSlugMenusDesignRoute: WSlugMenusDesignRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
   WSlugQrPrintRoute: WSlugQrPrintRoute,
   WSlugBookingsAvailabilityScheduleIdRoute:

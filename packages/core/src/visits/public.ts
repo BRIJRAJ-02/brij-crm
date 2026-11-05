@@ -19,7 +19,7 @@ import { sql } from 'drizzle-orm';
 import type { TableEntry } from '../access/table-door.ts';
 import { inWorkspace } from '../access/run.ts';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
-import { guestMenuPathOf, menuLookVersion } from '../hospitality/public-menu.ts';
+import { guestMenuPathOf, menuLookPin, menuLookVersion } from '../hospitality/public-menu.ts';
 import { buildBookingIcs } from '../booking/ics.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
@@ -106,7 +106,13 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
   });
 }
 
-/** The reservation page's look (the menu's Warm look, the workspace's accent in it), for its stylesheet route. */
+/** The side the look pins the page to, as the answer says it: nothing while it follows the visitor. */
+function pinnedScheme(brand: PageBrand): { readonly scheme?: 'light' | 'dark' } {
+  const pin = menuLookPin(brand);
+  return pin === undefined ? {} : { scheme: pin };
+}
+
+/** The reservation page's look (the guest look saved on the Design page), for its stylesheet route. */
 export async function readTableLook(
   entry: TableEntry,
 ): Promise<{ readonly brand: PageBrand; readonly version: string }> {
@@ -147,6 +153,7 @@ export async function readTablePage(
     ...(extras.areas.length === 0 || !(entry.installed && rules?.online === true) ? {} : { areas: extras.areas }),
     ...(extras.menuPath === undefined ? {} : { menuPath: extras.menuPath }),
     look: menuLookVersion(extras.brand),
+    ...pinnedScheme(extras.brand),
   };
 }
 

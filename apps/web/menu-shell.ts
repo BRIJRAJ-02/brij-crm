@@ -163,7 +163,11 @@ export function withMenu(shell: string, boot: MenuBoot): string {
       : `    <link rel="stylesheet" id="crm-menu-look" href="${escapeHtml(menuLookPath(boot.key, boot.menu.look))}" />\n`;
   const title = `    <title>${escapeHtml(`${boot.menu.business.name} · Menu`)}</title>\n`;
   const head = `${look}    <script type="application/json" id="${MENU_BOOT_ID}">${json}</script>\n`;
-  const withHead = `${shell.slice(0, headEnd).replace(/\s*<title>[^<]*<\/title>\n?/, '\n')}${title}${head}${shell.slice(headEnd)}`;
+  const headed = `${shell.slice(0, headEnd).replace(/\s*<title>[^<]*<\/title>\n?/, '\n')}${title}${head}${shell.slice(headEnd)}`;
+  // A look pinned to one side (Noir, Linen, a picked page colour) reads that side from the first paint.
+  const scheme = boot.menu.scheme;
+  const withHead =
+    scheme === 'light' || scheme === 'dark' ? headed.replace(/<html\b/, `<html data-theme="${scheme}"`) : headed;
   const at = withHead.indexOf(rootOpen[0]) + rootOpen[0].length;
   return `${withHead.slice(0, at)}${menuHtml(boot.menu)}${withHead.slice(at)}`;
 }

@@ -13,6 +13,7 @@ import {
   brandProperties,
   brandVariables,
   lookImagePath,
+  MenuLook,
   type PageImageSlot,
   type PublicBrand,
   type PublicLook,
@@ -26,7 +27,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { brandRowOf, templateOf, type BrandRow } from './brand.ts';
 import { lookRowOf, type LookRow } from './look.ts';
 
-const { bookingPages } = schema;
+const { bookingPages, businessProfiles } = schema;
 
 /** The accent pair a page wears, both checked, or none for the product's own. */
 interface Accents {
@@ -65,6 +66,8 @@ export interface PageBrand {
   readonly logo?: { readonly path: string; readonly type: string; readonly version: string };
   /** What the public answer carries (`PublicBrand`), absent when the page wears nothing of its own. */
   readonly answer?: PublicBrand;
+  /** A guest page's look, as the Design page saved it (spec 0065, AC-6570 as amended); absent is the default, Warm. */
+  readonly menuLook?: MenuLook;
 }
 
 function pageBrandOf(accents: Accents, brand: BrandRow | undefined): PageBrand {
@@ -123,7 +126,13 @@ export async function readFormBrand(entry: { readonly scope: EngineScope }): Pro
  */
 export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
   const brand = await brandRowOf(tx, workspaceId);
-  return pageBrandOf(accentsOf(undefined, brand), brand);
+  const [profile] = await tx
+    .select({ look: businessProfiles.look })
+    .from(businessProfiles)
+    .where(eq(businessProfiles.workspaceId, workspaceId));
+  // Checked again on the way out, as every value here is: a row that somehow held anything else wears the default.
+  const look = MenuLook.safeParse(profile?.look);
+  return { ...pageBrandOf(accentsOf(undefined, brand), brand), ...(look.success ? { menuLook: look.data } : {}) };
 }
 
 /**
