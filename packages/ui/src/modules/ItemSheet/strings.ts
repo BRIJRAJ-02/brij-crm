@@ -28,11 +28,11 @@ export const strings = {
   contains: 'Contains:',
   mayContain: 'May contain:',
   mayContainChip: (name: string) => `May contain ${name}`,
-  delta: (price: string) => `(${price})`,
+  /** A choice's price beside it, as checklabs writes it: "+£1.50". */
+  delta: (price: string) => price,
   picksPill: (total: string) => `Your selection · ${total}`,
   quantityOf: (name: string) => `How many ${name}`,
   allergens: 'Allergens',
-  noAllergens: 'No allergens listed. Ask your server if unsure.',
   kcal: (kcal: number) => `${String(kcal)} kcal`,
   addToPicks: 'Add to your selection',
   required: 'Required',

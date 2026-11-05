@@ -30,8 +30,8 @@ const LazyNumberPop = lazy(() =>
 export type ButtonVariant =
   'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link' | 'warning';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs. */
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label; `touch` is a public page's control under a thumb (a link page's Save contact, Share and social links), 44px, the size a finger needs; `sheet` is the one action at a guest sheet's foot (the guest menu's Add to your selection), 48px with a title sized label, after checklabs. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl' | 'touch' | 'sheet';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;
@@ -61,7 +61,7 @@ interface ButtonLook {
   /**
    * Drawn at its size but pressed across 44px (WCAG 2.5.5): an invisible area round a small control a guest presses
    * with a thumb (the guest menu's 26px and 30px + and steppers, after checklabs' sizes). `md`, `lg` and `xl` only:
-   * any other size ignores it (`sm` keeps its own 24px area; `touch` is 44px already).
+   * any other size ignores it (`sm` keeps its own 24px area; `touch` and `sheet` are 44px and more already).
    */
   readonly isTouchTarget?: boolean;
   readonly isDisabled?: boolean;
@@ -242,7 +242,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         <Icon
           name={face.icon}
           size={
-            ('isIconMark' in face && face.isIconMark === true) || look.size === 'touch'
+            ('isIconMark' in face && face.isIconMark === true) || look.size === 'touch' || look.size === 'sheet'
               ? 'md'
               : look.size === 'sm'
                 ? 'xs'
@@ -253,7 +253,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
         face.provider !== undefined && (
           <ProviderMark
             provider={face.provider}
-            size={look.size === 'lg' || look.size === 'touch' ? 'md' : 'sm'}
+            size={look.size === 'lg' || look.size === 'touch' || look.size === 'sheet' ? 'md' : 'sm'}
             {...('markTone' in face && face.markTone !== undefined ? { tone: face.markTone } : {})}
           />
         )

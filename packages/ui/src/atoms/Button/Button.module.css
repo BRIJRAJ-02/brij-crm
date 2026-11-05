@@ -156,6 +156,21 @@
     padding-inline: 0;
   }
 
+  /* The one action at a guest sheet's foot (the guest menu's Add to your selection, after checklabs' 48px pill): 48px,
+     the title's 15px semibold label. Inside the app, nothing is this size. */
+  .root[data-size='sheet'] {
+    gap: var(--space-8);
+    block-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: var(--space-16);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .root[data-icon-only][data-size='sheet'] {
+    inline-size: calc(var(--size-bar) + var(--space-2));
+    padding-inline: 0;
+  }
+
   /* Drawn small, pressed across 44px: an invisible area round the button (a public page's 26px, 30px or 36px control
      under a thumb, the guest menu's + and steppers). Nothing drawn changes. */
   .root[data-touch-target]:is([data-size='md'], [data-size='lg'], [data-size='xl']) {

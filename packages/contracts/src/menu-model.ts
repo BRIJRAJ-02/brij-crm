@@ -421,48 +421,59 @@ export function choicesAllowed(
 }
 
 /**
- * The Warm preset (spec 0065, AC-6570; H1 builds it alone, H5 adds Clean and Night): after the checklabs guest look,
- * a near white ground, near black text and ink (checklabs' monochrome: black pills, black + and selection bar), cream
- * chips and a glass bar, light and dark. Every pair passes AA (text on
- * ground and chip at 4.5:1 or more). The look stylesheet writes these as `--menu-*` custom properties; the brand's
- * accent, when it has one, takes `accent` and `onAccent`.
+ * The Warm preset (spec 0065, AC-6570; H1 builds it alone, H5 adds Clean and Night): checklabs' guest look ("Nova",
+ * which its guest app hard codes in `menu.module.css`; its saved themes never reach the guest), value for value. A
+ * white ground and cards, cream chips (`#f5f1ea`), one near black (`#1a1a1a`) for the words, the pills, the + and the
+ * selection bar, a mid grey (`#6b6b6b`) for the quiet words, a 6% black hairline, a 72% white glass bar and a 40%
+ * black scrim. Every text pair passes AA (the grey is 5.3:1 on white, 4.8:1 on the cream). Dark is ours (checklabs
+ * has none): the same roles on a near black, and it never changes the light look. The look stylesheet writes these
+ * as `--menu-*` custom properties; the brand's accent, when it has one, takes `accent` and `onAccent`.
  */
 export const WARM_PRESET = {
   light: {
-    ground: '#fffdfa',
+    ground: '#ffffff',
     card: '#ffffff',
-    chip: '#f3ede4',
-    line: '#ebe4da',
-    glass: '#fffdfae0',
-    text: '#1c1915',
-    quiet: '#655b50',
-    ink: '#1c1915',
-    onInk: '#fffdf9',
-    accent: '#1c1915',
-    onAccent: '#fffdf9',
-    bar: '#1c1915',
-    onBar: '#f6f1ea',
-    onBarQuiet: '#cbbfb1',
+    chip: '#f5f1ea',
+    line: '#0000000f',
+    glass: '#ffffffb8',
+    text: '#1a1a1a',
+    quiet: '#6b6b6b',
+    ink: '#1a1a1a',
+    onInk: '#ffffff',
+    accent: '#1a1a1a',
+    onAccent: '#ffffff',
+    bar: '#1a1a1a',
+    onBar: '#ffffff',
+    onBarQuiet: '#cfcfcf',
     barAccent: '#f0a37c',
+    scrim: '#00000066',
   },
   dark: {
-    ground: '#171411',
-    card: '#221e1a',
-    chip: '#2e2823',
-    line: '#3a332c',
-    glass: '#171411e0',
-    text: '#f4eee6',
-    quiet: '#b9ad9f',
-    ink: '#f4eee6',
-    onInk: '#171411',
-    accent: '#f4eee6',
-    onAccent: '#171411',
-    bar: '#0e0c0a',
-    onBar: '#f4eee6',
-    onBarQuiet: '#b9ad9f',
+    ground: '#141414',
+    card: '#1c1c1c',
+    chip: '#2b2824',
+    line: '#ffffff17',
+    glass: '#141414b8',
+    text: '#f5f5f5',
+    quiet: '#a8a8a8',
+    ink: '#f5f5f5',
+    onInk: '#141414',
+    accent: '#f5f5f5',
+    onAccent: '#141414',
+    bar: '#f5f5f5',
+    onBar: '#141414',
+    onBarQuiet: '#4d4d4d',
     barAccent: '#f0a37c',
+    scrim: '#000000a6',
   },
 } as const;
+
+/**
+ * The guest menu's face (checklabs' guest app draws in the device's own UI face: its Tailwind default names a font
+ * variable nobody sets, so every browser falls back to `ui-sans-serif, system-ui`). The look stylesheet writes it as
+ * `--menu-face`, once, for both themes.
+ */
+export const MENU_FACE = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 /** The custom property each preset colour sets. */
 export const MENU_LOOK_PROPERTIES = {
@@ -481,4 +492,5 @@ export const MENU_LOOK_PROPERTIES = {
   onBar: '--menu-on-bar',
   onBarQuiet: '--menu-on-bar-quiet',
   barAccent: '--menu-bar-accent',
+  scrim: '--menu-scrim',
 } as const;

@@ -8,6 +8,7 @@ import {
   BRAND_HEX_PATTERN,
   brandVariables,
   isMenuKey,
+  MENU_FACE,
   MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
   MenuSnapshot,
@@ -189,7 +190,7 @@ export async function readMenuPhoto(
 }
 
 /** Which look the Warm preset's stylesheet is at: a new preset table or accent is a new path. */
-const WARM_LOOK = 'warm-1';
+const WARM_LOOK = 'warm-2';
 
 /** The version the menu's look stylesheet is served at: the preset and the brand's accent pair. */
 export function menuLookVersion(brand: PageBrand): string {
@@ -203,8 +204,8 @@ export function menuLookVersion(brand: PageBrand): string {
 const isHex = (value: string) => /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value);
 
 /**
- * The guest menu's look (spec 0065, AC-6570, Warm only in H1): the preset's colours as `--menu-*` custom properties,
- * light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast adjusted by
+ * The guest menu's look (spec 0065, AC-6570, Warm only in H1): the device's own UI face as `--menu-face` (checklabs'
+ * guest face, `MENU_FACE`, a constant) and the preset's colours as `--menu-*` custom properties, light by default and dark under the visitor's dark scheme, with the brand's accent pair (contrast adjusted by
  * `brandVariables`) taking the accent when the workspace has one. Every value is a checked hex.
  */
 export function menuLookStylesheet(brand: PageBrand): string {
@@ -229,7 +230,7 @@ export function menuLookStylesheet(brand: PageBrand): string {
       .join(';');
   };
   return [
-    `:root{${block('light')}}`,
+    `:root{--menu-face:${MENU_FACE};${block('light')}}`,
     `@media (prefers-color-scheme: dark){:root:not([data-theme='light']){${block('dark')}}}`,
     `:root[data-theme='dark']{${block('dark')}}`,
     '',

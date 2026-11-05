@@ -1,18 +1,18 @@
 # MenuList
 
-A place's published menu as a guest reads it on a phone (spec 0065, H1, AC-6528 to AC-6533). The layout, flow and
-words follow the checklabs guest app faithfully (owner, 4 and 5 November 2026), rebuilt from library parts and tokens:
-one centred column at every width, a glass bar with the brand mark alone, the brand block, the menus when the link
-holds several, the sections as pills one at a time, each section's dishes as rows or a photo grid, the allergens foot,
-a dish's sheet, and Your selection.
+A place's published menu as a guest reads it on a phone (spec 0065, H1, AC-6528 to AC-6533). The layout, flow, words
+and look follow the checklabs guest app ("Nova", which its guest app hard codes) value for value (owner, 4 and 5
+November 2026: "the same exact menu theme"), rebuilt from library parts and tokens: one 448px column at every width, a
+glass bar with the brand mark (and the menus when the link holds several), the brand block, the sections as pills one
+at a time, each section's dishes as rows or a photo grid, the allergens foot, a dish's sheet, and Your selection.
 
 ## Why it exists
 
 Nothing in the library draws a public menu: LinkPage is one column of links, BookingFrame a booking. Spec 0065's
 "Build on what exists" allows two new modules for the guest menu, this and ItemSheet; everything else is the library's
-own (Tabs `variant="pills"` for the sections, SegmentedControl switches the menus, Modal `sheet-card` and `sheet-side`
-hold the dish and the selection, Button, Icon, NumberPop, Reveal, and the public pages' BookingProvider and
-BookingFoot). It is used by the public `/m/:key` page and by the Menus editor's phone preview, which renders the draft
+own (Tabs `variant="pills"` for the sections, a MenuTrigger and Menu switch the menus, Modal `sheet-card` and
+`sheet-side` hold the dish and the selection, Stepper, Button, Icon, NumberPop, Reveal, and the public pages'
+BookingProvider and BookingFoot). It is used by the public `/m/:key` page and by the Menus editor's phone preview, which renders the draft
 through the same component.
 
 ## Use
@@ -31,44 +31,53 @@ through the same component.
 ```
 
 - `menu` is `GET /api/public/menu/:key`'s answer: the snapshot, the items sold out now and the header.
-- One column (`size-dialog` wide) centred at every width, as checklabs' 448px column.
-- The bar: the logo (`logoHref`, never cropped), or without one a tile in the brand's colour (the menu's ink when the
-  brand has none) with the business's first letter. Nothing else (checklabs').
-- The brand block: the place's name as an uppercase eyebrow with the table a QR code named (`table`, "Table 4", from
-  `tableDisplayName`) after a "·" as an accent Badge; the current menu's name as the h1; the business's line.
-- The menus (serving now first; the rest say "Serving from 18:00") in a SegmentedControl, only when the link holds two
-  or more.
-- The sections as outlined pills (Tabs `pills`), one section at a time, the first chosen; a section with no dish to
-  show gets no pill. The pill shows the section's name, so its h2 stays for screen readers only; its sub sections
+- One 448px column (`size-dialog` less `space-32`) with 20px gutters, centred at every width, as checklabs'.
+- The bar (50px, glass): the logo (`logoHref`, 24px tall and up to 176px wide, never framed or cropped), or without one
+  a 36px squircle in the brand's colour (the menu's ink when the brand has none) with the business's first letter; at
+  its end, only when the link holds two or more menus with dishes, a compact "Dinner ▾" that opens the menus (serving
+  now first; the rest say "Serving from 18:00"). A published menu with no dish to show is left out.
+- The brand block: the place's name as a 12px uppercase eyebrow with the table a QR code named (`table`, "Table 4",
+  from `tableDisplayName`) after a "·" as an accent Badge; the current menu's name as the h1 (26px semibold); then
+  checklabs' line under it: the business's own words, else the menu's note, else its address. The note moves to the
+  foot only when the business's words took that line (it may carry the rates: "Prices include 5% tax.").
+- The sections as outlined 38px pills (Tabs `pills`), one section at a time, the first chosen, even when there is only
+  one (as checklabs'); the row runs to the window's edges with the first pill in line with the words. A section with no
+  dish to show gets no pill. The pill shows the section's name, so its h2 stays for screen readers only; its sub sections
   follow under their h3s, a hairline between blocks. A link to `#h-<section or sub section id>` opens its pill and
   brings it into view clear of the bar with focus on it (the chosen pill for a section, the heading for a sub
   section; owner, 5 November 2026), on load and on every hash change, never when the menu redraws under the guest.
-- A dish row: its name (Popular, Sold out with a red dot), two lines of its words, the price on its own line, its marks
-  as chip Badges (the look's cream chip),
-  then an 88px photo at the end with a round + in the ink on its corner (or the + at the row's end without a photo). A
-  grid card: a square photo first, the + on its corner; two columns at every width. A sold out dish keeps its place,
+- A dish row: its name (16px semibold; Popular, Sold out with a red dot), two lines of its words (13px), the price on
+  its own line (14px medium), its marks as 24px chip Badges (the look's cream chip), then an 88px photo at 14px corners
+  at the end with a 26px + in the ink in a 2px ring of the ground on its corner (or a 32px + at the row's end without a
+  photo); a hairline between rows; pressed, the row takes the cream. A grid card: a square photo at 20px corners
+  first, a 32px + of the card in its corner, then the name, the price and the words; two columns at every width. A sold out dish keeps its place,
   its photo dimmed and its name and price quiet, with no +.
-- The +: a dish with nothing to choose (one price, no option groups) adds one at once, and its + becomes a white
-  hairline stepper (− n +); any other dish opens its sheet. Focus follows the swap both ways (the stepper's + after
-  the first add, the + again after the last remove), so a keyboard never drops to the top of the page.
-  A dish with choices, once in the selection, shows its count before its + (n +; the + opens the sheet again, and
-  taking one away is Your selection's). The + and the stepper's buttons are Button's `touch` size (44px), since a
-  guest presses them with a thumb (review, 5 November 2026). Each add and remove is said politely to a screen reader
-  ("Added Flat white. 2 in your selection.") through a status line, since the count changes without a word.
-- The foot: ALLERGENS, the allergens this menu's dishes name in the EU list's order, and "Tell your server about any
-  allergy before you order.", then the page's foot.
+- The +: a dish with nothing to choose (one price, no option groups) adds one at once, and its + becomes a 30px
+  Stepper (− n +) in the same corner; any other dish opens its sheet. Focus follows the swap both ways (the stepper's
+  - after the first add, the + again after the last remove), so a keyboard never drops to the top of the page.
+    A dish with choices, once in the selection, shows its count before its + (Stepper `isFewerHidden`; the + opens the
+    sheet again, and taking one away is Your selection's). The + and the stepper's buttons are drawn at checklabs' sizes
+    and pressed across 44px (Button `isTouchTarget`), since a guest presses them with a thumb. Each add and remove is said politely to a screen reader
+    ("Added Flat white. 2 in your selection.") through a status line, since the count changes without a word.
+- The foot: over a hairline, ALLERGENS (12px semibold caps), the allergens this menu's dishes contain in the EU
+  list's order (13px; a "may contain" stays on the dish's sheet, as checklabs lists only what its dishes carry), and
+  "Tell your server about any allergy before you order.", then the page's foot.
 - A dish opens ItemSheet in a `Modal` `sheet-card` (a bottom sheet on a phone, a card centred over a wider screen),
   and the selection bar opens PicksSheet in a `sheet-side`. Both are real dialogs: focus held, Escape closes, focus
   returns.
-- The selection bar ("View selection … £65.36") rises from the foot with the first pick, a pill in the ink; its total
-  pops as it changes (NumberPop). The total adds each menu's service and holds its tax (`picksBill`).
-- Colours: the root reads the `--menu-*` custom properties the menu's look stylesheet sets (ground, card, chip, line,
-  glass, text, quiet, accent, on accent), each falling back to a token, and one level in points the library's own
-  names (surface-raised, text, accent, focus) at them. The Warm preset is checklabs' monochrome (a near white ground,
-  cream chips, the accent in the ink); a brand colour takes the accent. The dish's sheet and the selection open inside
+- The selection bar ("View selection … £65.36", 15px semibold) rises from the foot over 320ms with the first pick, a
+  pill in the ink 16px from the sides and the foot; its total pops as it changes (NumberPop). The total adds each menu's service and holds its tax (`picksBill`).
+- The look: the root reads the `--menu-*` custom properties the menu's look stylesheet sets (ground, card, chip, line,
+  glass, text, quiet, accent, on accent, scrim, and the face), each falling back to a token, and one level in points
+  the library's own names (surfaces, text, accent, focus, scrim, the text styles, `size-chip`) at them, so every
+  library part inside speaks in the menu's face at checklabs' sizes. The Warm preset is checklabs' Nova: a white
+  ground, `#f5f1ea` chips, `#1a1a1a` ink and words, `#6b6b6b` quiet words, a 6% black hairline, the device's own UI
+  face; a brand colour takes the accent. Checklabs' sizes (26, 22, 16, 15, 14, 13 and 12px type with its line heights
+  and tracking; 14px and 20px corners; the 88px photo) are built from tokens in the module. The dish's sheet and the selection open inside
   the module's own root (React Aria's portal provider), so they wear the look in both themes. The module never writes
   a colour.
-- Focus rings are the full ink (a 40% mix of the ink fell under 3:1 on the near white ground).
+- Focus rings are two rings, the ground then the full ink, so focus shows on the ink's own controls (the +, the
+  chosen pill) as well as on the ground.
 - Motion (spec 0068, AC-6803, AC-6806): `hasEntrance` (the live page only, never the editor's preview) lets the
   heading, its line and the first dishes rise in once, a stagger apart (Reveal); rows and the selection bar ease down
   when pressed (the public pages' press, as BookingFrame's, spec 0068 AC-6806); the pill fill slides between sections. Reduced motion keeps fades and drops movement.
@@ -76,12 +85,18 @@ through the same component.
 
 ## Deviations from checklabs, and why
 
-- The menus switcher: our link publishes several menus; checklabs lists them on a venue page we don't have.
+- The menus switch at the bar's end: our link publishes several menus; checklabs lists them on a venue page we don't
+  have.
 - "Not serving now / Serving from 18:00": our menus and sections have serving times.
 - Sold out and Popular chips: both are set by the owner in our editor.
 - Every dietary mark as a pill (checklabs derives only vegan and vegetarian): our model stores the marks.
 - No Order now in the selection: we send no orders; it says "Show this to your server."
-- A dark theme (checklabs has none), from the same look properties.
+- A dark theme (checklabs has none), from the same look properties; it never changes the light look.
+- The allergens foot keeps "Tell your server about any allergy before you order." (a safety line checklabs lacks).
+- The row stepper's count is 14px medium (the look's strong body style), not checklabs' 13px semibold, and its
+  buttons 26px, not 24px: the library's Button sizes. The + glyph is 14px, not 16px.
+- The pills' chosen shadow and checklabs' springy press curve (an overshoot) aren't drawn: no token holds either;
+  presses use the ease-out curve.
 - Gone from ours (were in it before): search, dietary filter chips, the cover photo, the open now, address and phone
   line in the header (kept on a hidden menu, where Call is the way left), the bar's name fade in.
 

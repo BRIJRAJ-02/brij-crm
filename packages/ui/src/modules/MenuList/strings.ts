@@ -10,6 +10,7 @@ export const strings = {
   servingFrom: (when: string) => `Serving from ${when}`,
   notServing: 'Not serving right now',
   menus: 'Menus',
+  switchMenu: (name: string) => `${name}, change menu`,
   sections: 'Sections',
   soldOut: 'Sold out',
   featured: 'Popular',

@@ -32,7 +32,7 @@ A form's layout in miniature, for the editor's Layout tiles (TileGrid's `choice`
 />
 ```
 
-`rows` draws a *particular* form's answers instead of the layout's own one line fields, as shapes rather than controls (spec 0063, AC-6323): `field` a one line box, `long` a taller box, `choices` a stack of lines, `rating` five round marks, `scale` a row of boxes across the width, `date` a short box, `upload` a dashed box. That is what a template's tile shows, so a glance tells a feedback form from a signup one; without it the layout decides, which is what the three Layout tiles want.
+`rows` draws a _particular_ form's answers instead of the layout's own one line fields, as shapes rather than controls (spec 0063, AC-6323): `field` a one line box, `long` a taller box, `choices` a stack of lines, `rating` five round marks, `scale` a row of boxes across the width, `date` a short box, `upload` a dashed box. That is what a template's tile shows, so a glance tells a feedback form from a signup one; without it the layout decides, which is what the three Layout tiles want.
 
 ```tsx
 <FormLayoutThumbnail layout="classic" rows={['field', 'rating', 'long']} />

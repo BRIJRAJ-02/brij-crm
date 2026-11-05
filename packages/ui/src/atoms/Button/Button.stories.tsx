@@ -655,12 +655,13 @@ export const Disclosure: Story = {
   },
 };
 
-/** An amount after the label: a full width primary with the price at its end, as the guest menu's Add to your picks. */
+/** An amount after the label: a full width primary with the price at its end, as the guest menu's Add to your picks
+ * (the `sheet` size, 48px with a title sized label). */
 export const WithAmount: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
     <Stage width="phone">
-      <Button variant="primary" size="touch" isFullWidth amount="£9.50">
+      <Button variant="primary" size="sheet" isRound isFullWidth amount="£9.50">
         Add to your picks
       </Button>
     </Stage>
