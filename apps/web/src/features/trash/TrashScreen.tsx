@@ -75,6 +75,9 @@ const ALL = 'all';
 /** Rows a Show more adds: the trash store's block, so each press reads one block. */
 const PAGE = 100;
 
+/** The most rows the table draws (it holds every row it shows): past it, the filter or Select all matching. */
+const MOST_SHOWN = 1000;
+
 /**
  * The trash as a settings table (5 November 2026: the records grid's look was clipped in Settings): the record, its
  * kind, who deleted it and when, then Restore. On a phone each row reads as two lines.
@@ -237,7 +240,9 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       toasts.toast({ tone: 'danger', message: bulkStrings.tooManyIds });
       return;
     }
-    setPicked({ kind: 'some', ids: next });
+    // Ticks on rows not drawn just now (a block reading again after a restore) stay ticked.
+    const unseen = [...picked.ids].filter((id) => !loadedIds.includes(id));
+    setPicked({ kind: 'some', ids: new Set([...unseen, ...next]) });
   };
   /** The selection as a job's target: the ids, or the trash of the filter less those left out. */
   const target = (): BulkTarget =>
@@ -625,24 +630,27 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
           onSelectedChange={pick}
           getSelectLabel={(row) => row.item.display.name}
           // While more wait, how many show and the next block; the bar's badge says the whole count.
-          {...(end < total
+          {...(rows.length < total
             ? {
                 footer: (
                   <>
                     {strings.shownOf(rows.length, total, state.count.atLeast)}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onPress={() => {
-                        setHeld((before) => ({
-                          ...before,
-                          view,
-                          shown: (before.view === view ? before.shown : PAGE) + PAGE,
-                        }));
-                      }}
-                    >
-                      {strings.showMore}
-                    </Button>
+                    {rows.length < MOST_SHOWN ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => {
+                          const next = Math.min(shown + PAGE, MOST_SHOWN);
+                          setHeld((before) => ({ ...before, view, shown: next }));
+                          // Asked outright too: a block that failed is read again even when the range stays the same.
+                          onRangeChange({ start: 0, end: Math.min(next, source.count) });
+                        }}
+                      >
+                        {strings.showMore}
+                      </Button>
+                    ) : (
+                      strings.narrowToSeeMore
+                    )}
                   </>
                 ),
               }

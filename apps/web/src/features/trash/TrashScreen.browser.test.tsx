@@ -185,6 +185,17 @@ describe('Settings › Trash', () => {
     });
   });
 
+  it('keeps the foot while rows are missing, and asks again for a block that failed', async () => {
+    const { onRangeChange, view } = viewOf([CY], 2);
+    await render(view);
+    await page.getByRole('button', { name: 'Show more' }).click();
+    await page.getByRole('button', { name: 'Show more' }).click();
+    expect(onRangeChange).toHaveBeenLastCalledWith({ start: 0, end: 2 });
+    expect(
+      onRangeChange.mock.calls.filter(([range]) => (range as { readonly end: number }).end === 2).length,
+    ).toBeGreaterThan(1);
+  });
+
   it('says it is empty in one block, with no filter and no table', async () => {
     const { view } = viewOf([]);
     await render(view);

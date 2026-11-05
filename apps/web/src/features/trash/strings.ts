@@ -45,6 +45,8 @@ export const strings = {
     return `${format.format(shown)} of ${format.format(total)}${isAtLeast ? '+' : ''} records`;
   },
   showMore: 'Show more',
+  /** Past the most the table draws: the rest are reached by kind, or by Select all matching. */
+  narrowToSeeMore: 'Filter by kind to see the rest.',
   /** No selected record's object is one the person may change (AC-534), or restore or delete (AC-538). */
   viewOnly: 'View only.',
   /** Over the 500 a restore or Delete forever sends at once; Select all runs more as a background change. */
