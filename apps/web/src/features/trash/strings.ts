@@ -3,15 +3,12 @@ export const strings = {
   title: 'Trash',
   /** The count beside the title, as a screen reader hears it: "1 record", "1,234 records" (Q98). */
   countLabel: (count: number) => (count === 1 ? 'record' : 'records'),
-  objectFilter: 'Object',
-  allObjects: 'All objects',
   /** The table's filter (5 November 2026): by the kind of record, every kind first. */
   kindFilter: 'Kind',
   allKinds: 'All kinds',
   /** A record of an archived object, in the Kind column. */
   archivedKind: (singularName: string) => `${singularName} (archived)`,
   archived: (pluralName: string) => `${pluralName} (archived)`,
-  filterLabel: 'Trash filter',
   columns: {
     name: 'Name',
     object: 'Object',
@@ -30,7 +27,7 @@ export const strings = {
   /** The object filter matching nothing. */
   emptyObject: (pluralName: string) => `No deleted ${pluralName.toLowerCase()}`,
   emptyObjectText: (pluralName: string) => `Deleted ${pluralName.toLowerCase()} stay here for 30 days.`,
-  showAll: 'Show all objects',
+  showAll: 'Show all kinds',
   retry: 'Retry',
   restore: 'Restore',
   /** A row's Restore, named for its record. */
@@ -38,16 +35,14 @@ export const strings = {
   rowActions: (name: string) => `More for ${name}`,
   /** A restore the server refused (its email taken by another record since): the row says so, its reason in a tip. */
   notRestored: 'Not restored',
-  whyNotRestored: (name: string) => `Why ${name} wasn’t restored`,
+  /** The tip's subject: its button reads "About Cy Lane not restored". */
+  notRestoredFor: (name: string) => `${name} not restored`,
   /** A record of an object the person may only read: no Restore on its row. */
   viewOnlyBadge: 'View only',
-  /** The table's foot: how many show of how many, and the next block. */
+  /** The table's foot while more wait: how many show of how many, beside the next block. */
   shownOf: (shown: number, total: number, isAtLeast: boolean) => {
     const format = new Intl.NumberFormat();
-    const all = `${format.format(total)}${isAtLeast ? '+' : ''}`;
-    return shown >= total
-      ? `${all} ${total === 1 ? 'record' : 'records'}`
-      : `${format.format(shown)} of ${all} records`;
+    return `${format.format(shown)} of ${format.format(total)}${isAtLeast ? '+' : ''} records`;
   },
   showMore: 'Show more',
   /** No selected record's object is one the person may change (AC-534), or restore or delete (AC-538). */

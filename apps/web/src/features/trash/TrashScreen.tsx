@@ -20,11 +20,13 @@ import {
   Button,
   Callout,
   EmptyState,
+  focusLater,
   InfoTip,
   Menu,
   MenuItem,
   MenuTrigger,
   Modal,
+  PreviewFooter,
   Select,
   sharedStrings,
   Table,
@@ -37,7 +39,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import { BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
+import { BULK_EXCEPT_MAX, BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
 import { useBulkJob, type NotesIn } from '../workspace/useBulkJob.ts';
 import { strings } from './strings.ts';
 import {
@@ -78,7 +80,8 @@ const PAGE = 100;
  * kind, who deleted it and when, then Restore. On a phone each row reads as two lines.
  */
 const COLUMNS: readonly TableColumn[] = [
-  { id: TRASH_COLUMNS.name, label: strings.columns.name, isRowHeader: true, phone: 'title' },
+  // Inline: a refused restore's words sit beside the name it is about.
+  { id: TRASH_COLUMNS.name, label: strings.columns.name, isRowHeader: true, isInline: true, phone: 'title' },
   { id: TRASH_COLUMNS.object, label: strings.columns.kind },
   { id: TRASH_COLUMNS.deletedBy, label: strings.columns.deletedBy },
   { id: TRASH_COLUMNS.deletedAt, label: strings.columns.deletedAt },
@@ -97,6 +100,13 @@ type Picked =
   | { readonly kind: 'all-matching'; readonly except: ReadonlySet<string>; readonly asOf: string };
 
 const NONE: Picked = { kind: 'some', ids: new Set() };
+
+/** Delete forever waiting for its confirm: picked records, or one row's, named in its words. */
+interface Asked {
+  readonly ids: readonly string[];
+  /** The one record a row's own Delete forever asks about. */
+  readonly name?: string;
+}
 
 /**
  * The trash while its route loads, in Settings: the bar with its trail and title, the filter's place and the table's
@@ -187,6 +197,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const clear = () => {
     bulkJob.forget();
     untick();
+    // The Clear in use goes with the bar.
+    focusTitle();
   };
   /** Keeps these rows ticked (refused ones, back with their reasons), so "2 selected" shows where they are. */
   const keepTicked = (recordIds: readonly string[]) => {
@@ -197,8 +209,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     });
   };
   // Delete forever of picked records waiting for its confirm, and the last one asked, so it closes with its words.
-  const [asking, setAsking] = useState<readonly string[] | undefined>(undefined);
-  const [lastAsked, setLastAsked] = useState<readonly string[]>([]);
+  const [asking, setAsking] = useState<Asked | undefined>(undefined);
+  const [lastAsked, setLastAsked] = useState<Asked>({ ids: [] });
   if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
   // A counted change's confirm, opened by Review: never by itself.
   const [isReviewing, setReviewing] = useState(false);
@@ -214,6 +226,10 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     if (picked.kind === 'all-matching') {
       const except = new Set([...picked.except, ...loadedIds.filter((id) => !next.has(id))]);
       for (const id of next) except.delete(id);
+      if (except.size > BULK_EXCEPT_MAX) {
+        toasts.toast({ tone: 'danger', message: bulkStrings.tooManyExcept });
+        return;
+      }
       setPicked(except.size >= total ? NONE : { ...picked, except });
       return;
     }
@@ -246,18 +262,20 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const deleters = useMemo(() => deletedByOf(members), [members]);
   const dayOf = useMemo(() => dayFormatter(timeZone), [timeZone]);
 
-  /** Restores these records; the toast says what came back, with Retry when the failure passes on its own. */
-  const restoreIds = (recordIds: readonly string[], onlyName: string | undefined) => {
+  /**
+   * Restores these records; the toast says what came back, with Retry when the failure passes on its own. The rows
+   * leave at once, the control in use with them, so focus goes to the page's title now. From the bar, those refused
+   * stay ticked with their reasons; a row's own Restore leaves the ticks alone.
+   */
+  const restoreIds = (recordIds: readonly string[], onlyName: string | undefined, fromBar = false) => {
+    focusTitle();
     data.trash.restore(slug, recordIds).then(
       (summary) => {
-        // The ones kept in the trash stay ticked, each with its reason on its row.
-        if (summary.kind === 'done') keepTicked(summary.refusedIds);
+        if (fromBar && summary.kind === 'done') keepTicked(summary.refusedIds);
         const toast = restoreToast(summary, onlyName, () => {
-          restoreIds(recordIds, onlyName);
+          restoreIds(recordIds, onlyName, fromBar);
         });
         if (toast !== undefined) toasts.toast(toast);
-        // The row that held the control went with it: focus to the page's title.
-        if (summary.kind === 'done' && summary.restored > 0) focusTitle();
       },
       () => {
         toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
@@ -275,20 +293,27 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     const [only] = ids.length === 1 ? ids : [];
     const onlyName = only === undefined ? undefined : view.row(only)?.item.display.name;
     setPicked(NONE);
-    restoreIds(ids, onlyName);
+    restoreIds(ids, onlyName, true);
   };
 
-  /** Deletes these records forever; the toast says how many went, and the refused ones stay ticked with why. */
-  const purgeIds = (recordIds: readonly string[]) => {
-    setPicked(NONE);
+  /**
+   * Deletes these records forever; the toast says how many went. From the bar the ticks clear, the refused ones ticked
+   * again with why; a row's own Delete forever leaves them alone. Focus goes to the title once the confirm has gone.
+   */
+  const purgeIds = (recordIds: readonly string[], fromBar: boolean) => {
+    if (fromBar) setPicked(NONE);
+    // Once the confirm has gone, or its focus return would win.
+    focusLater(() => {
+      focusTitle();
+      return null;
+    });
     data.trash.deleteForever(slug, recordIds).then(
       (summary) => {
-        if (summary.kind === 'done') keepTicked(summary.refusedIds);
+        if (fromBar && summary.kind === 'done') keepTicked(summary.refusedIds);
         const toast = purgeToast(summary, () => {
-          purgeIds(recordIds);
+          purgeIds(recordIds, fromBar);
         });
         if (toast !== undefined) toasts.toast(toast);
-        if (summary.kind === 'done' && summary.purged > 0) focusTitle();
       },
       () => {
         toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
@@ -302,7 +327,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       void startJob('purge', target());
       return;
     }
-    setAsking(ids);
+    setAsking({ ids });
   };
 
   const emptyTrash = () => {
@@ -368,6 +393,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     );
   const bar = isBarShown ? (
     <BulkActionBar
+      placement="footer"
       isOpen={isWanted}
       onLeft={() => {
         setBarShown(false);
@@ -404,17 +430,10 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   /** One record's Restore, or why it can't come back (a refused restore's reason, kept while the page shows). */
   const rowActions = (row: TrashRow): ReactNode => {
     const name = row.item.display.name;
-    const reason = state.cellErrors.get(`${row.id}:${TRASH_COLUMNS.name}`);
     // Only an object the person may change restores (AC-534); otherwise the row says so and offers nothing.
     const mayChange = byId.get(row.item.objectId)?.access === 'write';
     return (
       <>
-        {reason !== undefined && (
-          <>
-            <Badge text={strings.notRestored} dot="red" isWhole />
-            <InfoTip label={strings.whyNotRestored(name)}>{reason}</InfoTip>
-          </>
-        )}
         {mayChange ? (
           <Button
             size="sm"
@@ -433,7 +452,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
             <Menu
               label={strings.rowActions(name)}
               onAction={(key) => {
-                if (key === 'purge') setAsking([row.id]);
+                if (key === 'purge') setAsking({ ids: [row.id], name });
               }}
             >
               <MenuItem id="purge" icon="trash" isDanger>
@@ -458,13 +477,23 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     if (attribute === undefined) return null;
     const by = column === TRASH_COLUMNS.deletedBy ? deleters(row) : undefined;
     const display = column === TRASH_COLUMNS.name ? row.item.display : by === undefined ? undefined : [by];
-    return (
+    const value = (
       <AttributeDisplay
         attribute={attribute}
         value={cellValue(row, column, byId, dayOf) as never}
         {...(display === undefined ? {} : { display })}
         surface="cell"
       />
+    );
+    // A refused restore's reason, on the name it is about (kept until the person leaves), so no other column moves.
+    const reason = column === TRASH_COLUMNS.name ? state.cellErrors.get(`${row.id}:${TRASH_COLUMNS.name}`) : undefined;
+    if (reason === undefined) return value;
+    return (
+      <>
+        {value}
+        <Badge text={strings.notRestored} dot="red" isWhole />
+        <InfoTip label={strings.notRestoredFor(row.item.display.name)}>{reason}</InfoTip>
+      </>
     );
   };
 
@@ -487,7 +516,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
       ? // Restoring says it all in its title; the buttons name the count.
         undefined
       : strings.confirmPurgeText;
-  const purgeWords = recordsWord(lastAsked.length, names);
+  const purgeWords = lastAsked.name ?? recordsWord(lastAsked.ids.length, names);
   // Nothing in the trash (or in this kind's): one block EmptyState on the page, as every settings page's empty
   // state reads.
   const isEmpty = state.status === 'ready' && total === 0;
@@ -595,30 +624,33 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
           selected={ticked}
           onSelectedChange={pick}
           getSelectLabel={(row) => row.item.display.name}
-          // How many there are, and the next block while more wait.
-          footer={
-            <>
-              {strings.shownOf(rows.length, total, state.count.atLeast)}
-              {end < total && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => {
-                    setHeld((before) => ({
-                      ...before,
-                      view,
-                      shown: (before.view === view ? before.shown : PAGE) + PAGE,
-                    }));
-                  }}
-                >
-                  {strings.showMore}
-                </Button>
-              )}
-            </>
-          }
+          // While more wait, how many show and the next block; the bar's badge says the whole count.
+          {...(end < total
+            ? {
+                footer: (
+                  <>
+                    {strings.shownOf(rows.length, total, state.count.atLeast)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => {
+                        setHeld((before) => ({
+                          ...before,
+                          view,
+                          shown: (before.view === view ? before.shown : PAGE) + PAGE,
+                        }));
+                      }}
+                    >
+                      {strings.showMore}
+                    </Button>
+                  </>
+                ),
+              }
+            : {})}
         />
       )}
-      {bar}
+      {/* At the view's foot however long the list, as a form's Submissions: never a scroll away from the ticks. */}
+      {bar !== undefined && <PreviewFooter>{bar}</PreviewFooter>}
       {/* Delete forever of up to 500 picked records asks first (AC-535). */}
       <Modal
         title={strings.confirmPurgeTitle(purgeWords)}
@@ -637,7 +669,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
               onPress={() => {
                 const confirmed = asking;
                 setAsking(undefined);
-                if (confirmed !== undefined) purgeIds(confirmed);
+                if (confirmed !== undefined) purgeIds(confirmed.ids, confirmed.name === undefined);
               }}
             >
               {strings.deleteRecordsForever(purgeWords)}

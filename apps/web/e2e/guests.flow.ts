@@ -122,8 +122,16 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   await expect(gus.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
   await expect(gus.getByRole('link', { name: 'Scheduling access' })).toHaveCount(0);
   await expect(gus.getByRole('link', { name: 'Teams' })).toHaveCount(0);
-  await expect(gus.getByRole('columnheader', { name: 'Email' })).toHaveCount(0);
   await expect(gus.getByText(`ada-${tag}@example.com`)).toHaveCount(0);
+  // Nor in a row's details, which hold no Email and none of what only owners and admins are told.
+  await gus.getByRole('rowheader').first().click();
+  const details = gus.getByRole('dialog');
+  await expect(details.getByText('Joined', { exact: true })).toBeVisible();
+  for (const term of ['Email', 'Two factor', 'Calendar', 'Scheduling access']) {
+    await expect(details.getByText(term, { exact: true })).toHaveCount(0);
+  }
+  await expect(details.getByText(`ada-${tag}@example.com`)).toHaveCount(0);
+  await gus.keyboard.press('Escape');
   await check(gus, 'guests-members');
 
   // The owner shares Companies with Guests, to view: Can edit stays off for them.

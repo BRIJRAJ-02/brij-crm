@@ -36,7 +36,7 @@ export const strings = {
   status: {
     active: 'Active',
     invited: 'Invited',
-    expired: 'Invite expired',
+    expired: 'Invitation expired',
     asking: 'Asks to join',
   },
   /** An invitation's quiet line, under its address. */
@@ -55,6 +55,8 @@ export const strings = {
     invitedBy: 'Invited by',
     requested: 'Requested',
     copyEmail: 'Copy email',
+    /** The first item of a row's menu: what a click on the row opens. */
+    menu: 'Details',
   },
   /** A row's details on a phone, where they fill the screen: their way back to the list. */
   backToMembers: 'Members',
@@ -68,6 +70,8 @@ export const strings = {
   searchNamePlaceholder: 'Name',
   noMatches: 'No members match',
   showMore: 'Show more members',
+  /** The table's foot while more members wait: how many of them show. */
+  shownOf: (shown: number, total: number) => `${String(shown)} of ${String(total)} members`,
   roleFor: (name: string) => `Role for ${name}`,
   rowActions: (name: string) => `Actions for ${name}`,
   remove: 'Remove from workspace',
@@ -97,7 +101,7 @@ export const strings = {
   noInvitations: 'No pending invitations',
   expired: 'Expired',
   resend: 'Resend',
-  revoke: 'Revoke invite',
+  revoke: 'Revoke invitation',
   invitationActions: (email: string) => `Actions for the invitation to ${email}`,
   resent: (email: string) => `Invitation sent again to ${email}.`,
   resentUnsent: (email: string) =>
@@ -265,6 +269,8 @@ export const strings = {
   bulkRoleLabel: (count: number) => `Change role for ${String(count)} ${count === 1 ? 'person' : 'people'}`,
   bulkRoleTitle: (count: number, role: string) => `Make ${String(count)} ${count === 1 ? 'person' : 'people'} ${role}?`,
   bulkRoleText: 'Some of them will lose access they have now.',
+  /** Several people given more: it still asks, since a click on a row ticks it while others are ticked. */
+  bulkRoleGiveText: 'They can do what this role allows straight away.',
   bulkRoleChanged: (count: number, role: string) =>
     `${String(count)} ${count === 1 ? 'person is' : 'people are'} now ${role}.`,
   roleCustomDown: (name: string) => `${name} will lose some of what they can do now.`,

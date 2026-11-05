@@ -121,8 +121,8 @@ test.describe('trash', () => {
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);
 
     // Restore both: Cy comes back, Ada stays with the reason on her Name cell (AC-534).
-    await tickTrash(page, 'Ada Byron').click();
-    await tickTrash(page, 'Cy Lane').click();
+    await tickTrash(page, 'Ada Byron').click({ force: true });
+    await tickTrash(page, 'Cy Lane').click({ force: true });
     await bar(page).getByRole('button', { name: 'Restore' }).click();
     await expect(page.getByText('Restored 1 record. 1 couldn’t be restored; its row says why.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/]);

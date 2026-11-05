@@ -40,6 +40,7 @@ import {
   MenuTrigger,
   Panel,
   PersonLine,
+  PreviewFooter,
   RelativeTime,
   Select,
   SettingsSection,
@@ -69,7 +70,6 @@ import {
   useCalendarHealth,
   useSchedulingStore,
 } from '../booking/CalendarHealth.tsx';
-import { calendarHealthStrings } from '../booking/calendar-health-strings.ts';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { CapabilitiesDialog } from './CapabilitiesDialog.tsx';
 import { reachOf, roleTakesAway } from './roles.ts';
@@ -273,7 +273,13 @@ export function MembersScreen({
   const opened = people.find((row) => row.id === openId);
   const [lastOpened, setLastOpened] = useState<PersonRow | undefined>(opened);
   if (opened !== undefined && opened.id !== lastOpened?.id) setLastOpened(opened);
+  // A row that went (a removal, a search that hides it) is forgotten, so its details never reopen by themselves.
+  if (openId !== undefined && opened === undefined) setOpenId(undefined);
   const shown = opened ?? lastOpened;
+  const isSelecting = ticked.size > 0;
+  // The bar stays mounted while it sinks out, until its onLeft.
+  const [isBarShown, setBarShown] = useState(isSelecting);
+  if (isSelecting && !isBarShown) setBarShown(true);
 
   const showMore = () => {
     const { cursor } = held;
@@ -413,16 +419,14 @@ export function MembersScreen({
         setBulkBusy(false);
       }
     };
-    if (!picked.some((member) => roleTakesAway(overview.roles, roleIdOf(member), role))) {
-      run().catch((error: unknown) => {
-        toasts.toast({ tone: 'danger', message: messageOf(error) });
-      });
-      return;
-    }
+    // Always asked (5 November 2026): while anyone is ticked a click on a row ticks it too (React Aria's toggle), so
+    // a click meant to look could otherwise hand someone more access unseen.
+    const takesAway = picked.some((member) => roleTakesAway(overview.roles, roleIdOf(member), role));
     setQuestion({
       title: strings.bulkRoleTitle(picked.length, labelOf(role)),
-      text: strings.bulkRoleText,
+      text: takesAway ? strings.bulkRoleText : strings.bulkRoleGiveText,
       action: strings.roleDownAction(labelOf(role)),
+      ...(takesAway ? {} : { tone: 'default' as const }),
       run,
     });
   };
@@ -591,7 +595,7 @@ export function MembersScreen({
   };
 
   /** A member's row menu: What can Priya do, Ask to reconnect, Transfer ownership, Remove from workspace. */
-  const memberMenu = (member: MemberView) => {
+  const memberMenu = (member: MemberView, inDetails = false) => {
     const { mayTransfer, mayRemove, calendar, mayAsk, mayExplain } = powersOver(member);
     // No menu at all for a row the reader can't act on, rather than a locked one.
     if (!mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
@@ -602,12 +606,19 @@ export function MembersScreen({
         <Menu
           label={strings.rowActions(member.name)}
           onAction={(key) => {
+            if (key === 'details') setOpenId(member.id);
             if (key === 'explain') setExplaining(member);
             if (key === 'transfer') transfer(member);
             if (key === 'remove') remove(member);
             if (key === 'ask-reconnect') askReconnect(healthStore, slug, member.id, member.name);
           }}
         >
+          {/* What a click on the row opens, named where people look for more. */}
+          {!inDetails && (
+            <MenuItem id="details" icon="info">
+              {strings.details.menu}
+            </MenuItem>
+          )}
           {mayExplain && (
             <MenuItem id="explain" icon="id-card">
               {strings.capabilities.menu(first)}
@@ -635,7 +646,7 @@ export function MembersScreen({
   /** Whether the reader may resend or revoke an invitation: only an owner manages an owner's, as only an owner sends one. */
   const managesInvitation = (invitation: InvitationView) => invitation.role !== 'owner' || actor === 'owner';
 
-  /** An invitation's row menu: Resend, then Revoke invite (asked first). */
+  /** An invitation's row menu: Details, Resend, then Revoke invitation (asked first). */
   const invitationMenu = (invitation: InvitationView) => {
     // No menu, rather than a locked one.
     if (!managesInvitation(invitation)) return null;
@@ -650,10 +661,14 @@ export function MembersScreen({
         <Menu
           label={strings.invitationActions(invitation.email)}
           onAction={(key) => {
+            if (key === 'details') setOpenId(`invitation:${invitation.id}`);
             if (key === 'resend') resend(invitation);
             if (key === 'revoke') revoke(invitation);
           }}
         >
+          <MenuItem id="details" icon="info">
+            {strings.details.menu}
+          </MenuItem>
           <MenuItem id="resend" icon="send">
             {strings.resend}
           </MenuItem>
@@ -690,9 +705,9 @@ export function MembersScreen({
     </ButtonGroup>
   );
 
-  /** A row's status as a dot and a word: green Active, blue Invited, orange when it waits on someone here. */
+  /** A row's status: Active as plain words, so the exceptions stand out, a blue dot Invited, orange when it waits on someone here. */
   const statusOf = (row: PersonRow) => {
-    if (row.kind === 'member') return <Badge text={strings.status.active} dot="green" isWhole />;
+    if (row.kind === 'member') return strings.status.active;
     if (row.kind === 'request') return <Badge text={strings.status.asking} dot="orange" isWhole />;
     return row.invitation.isExpired ? (
       <Badge text={strings.status.expired} dot="orange" isWhole />
@@ -733,8 +748,8 @@ export function MembersScreen({
       case 'role':
         if (row.kind === 'member') return roleOf(row.member);
         if (row.kind === 'invitation') return row.invitation.roleLabel ?? labelOf(row.invitation.role);
-        // Someone asking joins with the role new people get, which is the server's to pick: nothing to say yet.
-        return null;
+        // Someone asking joins with the role new people get (spec 0037, AC-1237), as the server's approval gives it.
+        return labelOf(roles.defaultRole);
       case 'status':
         return statusOf(row);
       default:
@@ -748,7 +763,7 @@ export function MembersScreen({
   const detailsOf = (row: PersonRow) => {
     if (row.kind === 'member') {
       const { member } = row;
-      const { mayRemove, mayExplain, calendar } = powersOver(member);
+      const { mayRemove, mayExplain } = powersOver(member);
       const first = member.name.trim().split(/\s+/)[0] ?? member.name;
       const items: DescriptionItem[] = [
         ...(member.email === undefined
@@ -794,25 +809,13 @@ export function MembersScreen({
           />
         ),
         items,
-        footer: (
-          <>
-            {/* Ask to reconnect (spec 0037, AC-1309), as the row's menu offers it: once asked, said and off. */}
-            {calendar?.status === 'ready' && offersAsk(calendar) && (
-              <Button
-                icon="mail"
-                isDisabled={calendar.asked}
-                onPress={() => askReconnect(healthStore, slug, member.id, member.name)}
-              >
-                {calendar.asked ? calendarHealthStrings.asked : calendarHealthStrings.ask}
-              </Button>
-            )}
-            {mayExplain && (
-              <Button icon="id-card" onPress={() => setExplaining(member)}>
-                {strings.capabilities.menu(first)}
-              </Button>
-            )}
-          </>
-        ),
+        // Everything the row's menu holds (Transfer ownership, Ask to reconnect among them), in the head.
+        actions: memberMenu(member, true),
+        footer: mayExplain ? (
+          <Button icon="id-card" onPress={() => setExplaining(member)}>
+            {strings.capabilities.menu(first)}
+          </Button>
+        ) : null,
         footerStart: mayRemove ? (
           <Button variant="danger" icon="user-x" onPress={() => remove(member)}>
             {strings.remove}
@@ -857,6 +860,7 @@ export function MembersScreen({
           description: request.email,
           copy: { value: request.email, label: strings.details.copyEmail },
         },
+        { term: strings.details.role, description: labelOf(roles.defaultRole) },
         { term: strings.details.status, description: statusOf(row) },
         { term: strings.details.requested, description: <RelativeTime value={request.requestedAt} /> },
       ] satisfies DescriptionItem[],
@@ -923,7 +927,21 @@ export function MembersScreen({
         // On a phone each row reads as two lines: the person, then their role and status, nothing scrolling sideways.
         phoneLayout="rows"
         emptyState={<EmptyState icon="search" title={strings.noMatches} />}
-        {...(canManage
+        // How many show of how many, and the next page, while more wait.
+        {...(held.cursor === undefined
+          ? {}
+          : {
+              footer: (
+                <>
+                  {strings.shownOf(members.length, page.total)}
+                  <Button variant="ghost" size="sm" onPress={showMore} isPending={isLoadingMore}>
+                    {strings.showMore}
+                  </Button>
+                </>
+              ),
+            })}
+        // Checkboxes only while someone here can take a new role, so Select all never ticks nothing.
+        {...(canManage && members.some(mayRechange)
           ? {
               selected: ticked,
               // Only the people the reader may give a role to tick (never themself, an owner only for an owner, nobody
@@ -941,35 +959,6 @@ export function MembersScreen({
             }
           : {})}
       />
-      {canManage && ticked.size > 0 && (
-        <BulkActionBar
-          count={ticked.size}
-          total={members.length}
-          onClear={() => {
-            setSelected(new Set());
-          }}
-        >
-          <Select
-            savesOnPick
-            label={strings.bulkRoleLabel(ticked.size)}
-            isLabelHidden
-            placeholder={strings.bulkRole}
-            items={optionsFor(grantableRoles(actor, 'member')).map(itemOf)}
-            optionDescription="below"
-            // Always the placeholder: a pick is an action, and a cancelled confirm leaves nothing chosen.
-            value={null}
-            isDisabled={isBulkBusy}
-            onChange={(chosen) => {
-              if (chosen !== null) askBulkRole(chosen);
-            }}
-          />
-        </BulkActionBar>
-      )}
-      {held.cursor !== undefined && (
-        <Button variant="ghost" onPress={showMore} isPending={isLoadingMore}>
-          {strings.showMore}
-        </Button>
-      )}
       {/* Set once, so after the list (and never among a search's matches): the invite link, then the company email, a
           Card each, so each way reads apart; a breath under the table's last row. */}
       {canInvite && search === '' && (link !== undefined || domains !== undefined) && (
@@ -1010,6 +999,38 @@ export function MembersScreen({
           </SettingsSection>
         </SettingsStack>
       )}
+      {/* Change role for those ticked, at the view's foot however long the list, as Trash's and a form's Submissions'. */}
+      {canManage && isBarShown && (
+        <PreviewFooter>
+          <BulkActionBar
+            placement="footer"
+            isOpen={isSelecting}
+            onLeft={() => {
+              setBarShown(false);
+            }}
+            count={ticked.size}
+            total={members.length}
+            onClear={() => {
+              setSelected(new Set());
+            }}
+          >
+            <Select
+              savesOnPick
+              label={strings.bulkRoleLabel(ticked.size)}
+              isLabelHidden
+              placeholder={strings.bulkRole}
+              items={optionsFor(grantableRoles(actor, 'member')).map(itemOf)}
+              optionDescription="below"
+              // Always the placeholder: a pick is an action, and a cancelled confirm leaves nothing chosen.
+              value={null}
+              isDisabled={isBulkBusy}
+              onChange={(chosen) => {
+                if (chosen !== null) askBulkRole(chosen);
+              }}
+            />
+          </BulkActionBar>
+        </PreviewFooter>
+      )}
       {/* A row's details beside the list, the page narrowing for them: closed by Esc, its close button, or its row
           going (a removal, a revoke, an approval). */}
       <Panel
@@ -1027,8 +1048,14 @@ export function MembersScreen({
         }}
         isStacked
         pushesPage
-        {...(details?.footer === undefined || details.footer === null ? {} : { footer: details.footer })}
-        {...(details?.footerStart === undefined || details.footerStart === null
+        // Actions only while it is open: nothing to press on a row already gone as the panel leaves.
+        {...(opened === undefined || details?.actions === undefined || details.actions === null
+          ? {}
+          : { actions: details.actions })}
+        {...(opened === undefined || details?.footer === undefined || details.footer === null
+          ? {}
+          : { footer: details.footer })}
+        {...(opened === undefined || details?.footerStart === undefined || details.footerStart === null
           ? {}
           : { footerStart: details.footerStart })}
       >
@@ -1060,7 +1087,8 @@ export function MembersScreen({
         }}
         onDone={(message) => {
           setRemoving(undefined);
-          void reload();
+          // Their row, its menu and any details went with them: focus to the page's title.
+          void reload().then(focusTitle);
           toasts.toast({ tone: 'success', message });
         }}
       />

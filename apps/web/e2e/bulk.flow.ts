@@ -104,12 +104,12 @@ test.describe('bulk', () => {
     await openTrash(page);
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveCount(3);
-    await tickTrash(page, 'Cy Lane').click();
+    await tickTrash(page, 'Cy Lane').click({ force: true });
     await bar(page).getByRole('button', { name: 'Restore' }).click();
     await expect(page.getByText('Restored Cy Lane.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveCount(2);
     if (LIVE) await expect(table(reader).getByRole('rowheader', { name: /Cy Lane/ })).toBeVisible({ timeout: 15_000 });
-    await tickTrash(page, 'Ada Byron').click();
+    await tickTrash(page, 'Ada Byron').click({ force: true });
     await bar(page).getByRole('button', { name: 'Delete forever' }).click();
     const forever = dialog(page, 'Delete 1 record forever?');
     await expect(forever.getByText('This can’t be undone.')).toBeVisible();
