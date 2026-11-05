@@ -48,6 +48,7 @@ describe('@crm/ui', () => {
       'CalendarList',
       'Callout',
       'Card',
+      'CardTitleLevel',
       'Checkbox',
       'ChoiceChips',
       'Code',

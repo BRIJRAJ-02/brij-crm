@@ -117,8 +117,9 @@ describe('the reservation page (checklabs’ one page form)', () => {
   it('shows a strip of days on a phone, with the full calendar a press away', async () => {
     await show(390);
     await expect.element(page.getByRole('button', { name: 'Full calendar' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Full calendar' })).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(page.getByRole('button', { name: 'Full calendar' }));
-    await expect.element(page.getByRole('button', { name: 'Fewer days' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Full calendar' })).toHaveAttribute('aria-expanded', 'true');
   });
 
   for (const width of [1280, 390]) {

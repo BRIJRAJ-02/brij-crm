@@ -332,6 +332,7 @@ export function ReservePage({
           }
         }}
         tone="strong"
+        isSelectionStrong
         labelAside={strings.largerPartyShort(page.partyMax)}
       />
       {!isWide && !isFullCalendar ? (
@@ -367,8 +368,16 @@ export function ReservePage({
         />
       )}
       {!isWide && (
-        <Button variant="ghost" size="sm" icon="calendar" onPress={() => setFullCalendar((shown) => !shown)}>
-          {isFullCalendar ? strings.fewerDays : strings.fullCalendar}
+        // One name both ways, its state said by aria-expanded (a label that flipped to Fewer days read as a second
+        // control to a screen reader).
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="calendar"
+          isExpanded={isFullCalendar}
+          onPress={() => setFullCalendar((shown) => !shown)}
+        >
+          {strings.fullCalendar}
         </Button>
       )}
     </BookingFrame>

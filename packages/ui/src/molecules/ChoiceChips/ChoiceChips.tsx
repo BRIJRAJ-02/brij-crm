@@ -39,6 +39,8 @@ export interface ChoiceChipsProps {
   readonly labelAside?: string | undefined;
   /** `strong` for a form's question, as a radio group's question reads (a hosted form's Scale and Multi select). */
   readonly tone?: 'label' | 'strong';
+  /** The held chip fills with the accent, as a selected day and time beside it do (a reservation's party size). */
+  readonly isSelectionStrong?: boolean;
 }
 
 /**
@@ -58,6 +60,7 @@ export function ChoiceChips({
   ends,
   isLabelHidden = false,
   labelAside,
+  isSelectionStrong = false,
   tone = 'label',
 }: ChoiceChipsProps) {
   const labelId = useId();
@@ -100,7 +103,7 @@ export function ChoiceChips({
           }}
         >
           {choices.map((choice) => (
-            <ToggleButton key={choice.id} id={choice.id}>
+            <ToggleButton key={choice.id} id={choice.id} isSelectionStrong={isSelectionStrong}>
               {choice.label}
             </ToggleButton>
           ))}

@@ -19,6 +19,10 @@ export const strings = {
   addAnother: (name: string) => `Add another ${name}`,
   removeOne: (name: string) => `Remove one ${name}`,
   quantityOf: (name: string) => `How many ${name}`,
+  /** Said politely after an add or a remove. */
+  added: (name: string, count: number) => `Added ${name}. ${String(count)} in your selection.`,
+  removed: (name: string, count: number) =>
+    count === 0 ? `Removed ${name}. None left in your selection.` : `Removed one ${name}. ${String(count)} left.`,
   allergens: 'Allergens',
   allergenAsk: 'Tell your server about any allergy before you order.',
   yourPicks: 'Your selection',

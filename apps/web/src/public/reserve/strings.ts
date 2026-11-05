@@ -11,7 +11,6 @@ export const strings = {
   timesLoading: 'The times are still loading.',
   takenShort: 'That time was just taken. Choose another above.',
   fullCalendar: 'Full calendar',
-  fewerDays: 'Fewer days',
   guests: 'Guests',
   guestsCount: (party: number) => (party === 1 ? '1 guest' : `${String(party)} guests`),
   largerParty: (max: number, phone: string | undefined) =>

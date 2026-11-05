@@ -284,6 +284,13 @@
     color: var(--text);
   }
 
+  /* A strong selection (isSelectionStrong): the accent fill a selected day or time wears beside it. */
+  .root[data-selected][data-selection='strong'] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
   /* An open danger disclosure (Cancel booking with its confirm open) keeps its red, on a faint danger tint. */
   .root[data-variant='danger'][data-expanded] {
     background: var(--tag-red-bg);

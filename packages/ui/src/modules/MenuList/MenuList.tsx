@@ -15,6 +15,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
@@ -210,9 +211,15 @@ export function MenuList({
   const pickCount = chosen.reduce((sum, pick) => sum + pick.quantity, 0);
   const bill = picksBill(menu, chosen);
 
+  // What the last add or remove did, said politely to a screen reader (the stepper's count changes without a word).
+  const [said, setSaid] = useState('');
+  const itemCount = (itemId: string) =>
+    chosen.reduce((sum, each) => sum + (each.itemId === itemId ? each.quantity : 0), 0);
+  const nameOf = (itemId: string) => menu.menu.items[itemId]?.name ?? '';
   /** Adds a pick, onto the line with the same choices when there is one. */
   const addPick = (pick: Omit<GuestPick, 'key'>) => {
     if (onPicksChange === undefined) return;
+    setSaid(strings.added(nameOf(pick.itemId), itemCount(pick.itemId) + pick.quantity));
     const key = pickKey(pick);
     const same = chosen.find((each) => each.key === key);
     onPicksChange(
@@ -229,6 +236,7 @@ export function MenuList({
   /** Takes one of a plain pick (no choices) away, the line with it at its last. */
   const removeOne = (itemId: string) => {
     if (onPicksChange === undefined) return;
+    setSaid(strings.removed(nameOf(itemId), Math.max(0, itemCount(itemId) - 1)));
     const key = pickKey(plainPick(itemId));
     onPicksChange(
       chosen.flatMap((each) =>
@@ -296,6 +304,7 @@ export function MenuList({
                               <AddControl
                                 item={item}
                                 count={isQuickAdd(item) ? plainCount(item.id) : 0}
+                                chosenCount={isQuickAdd(item) ? 0 : itemCount(item.id)}
                                 onAdd={() =>
                                   isQuickAdd(item) ? addPick({ ...plainPick(item.id), quantity: 1 }) : open(item.id)
                                 }
@@ -318,6 +327,9 @@ export function MenuList({
 
   return (
     <div className={styles.root} data-menu-list="">
+      <span role="status">
+        <VisuallyHidden>{said}</VisuallyHidden>
+      </span>
       <div className={styles.look} ref={setHost}>
         <UNSAFE_PortalProvider getContainer={() => host}>
           {/* The glass bar: the brand, and nothing else (checklabs'). */}
@@ -555,11 +567,14 @@ function SectionHead({
 function AddControl({
   item,
   count,
+  chosenCount = 0,
   onAdd,
   onRemove,
 }: {
   readonly item: SnapshotItem;
   readonly count: number;
+  /** A dish with choices: how many are in the selection, shown beside its + (which opens the sheet again). */
+  readonly chosenCount?: number;
   readonly onAdd: () => void;
   readonly onRemove: () => void;
 }) {
@@ -571,12 +586,27 @@ function AddControl({
     <span
       ref={setHost}
       className={styles.add}
-      data-stepper={count === 0 ? undefined : ''}
-      {...(count === 0 ? {} : { role: 'group', 'aria-label': strings.quantityOf(item.name) })}
+      data-stepper={count === 0 && chosenCount === 0 ? undefined : ''}
+      {...(count === 0 && chosenCount === 0 ? {} : { role: 'group', 'aria-label': strings.quantityOf(item.name) })}
     >
-      {count === 0 ? (
+      {chosenCount > 0 ? (
+        <>
+          <span className={styles.addCount} data-alone="">
+            <NumberPop value={String(chosenCount)} />
+          </span>
+          <Button
+            variant="ghost"
+            size="touch"
+            icon="plus"
+            isRound
+            label={strings.addAnother(item.name)}
+            onPress={onAdd}
+          />
+        </>
+      ) : count === 0 ? (
         <Button
           variant="primary"
+          size="touch"
           icon="plus"
           isRound
           label={strings.addOne(item.name)}
@@ -589,6 +619,7 @@ function AddControl({
         <>
           <Button
             variant="ghost"
+            size="touch"
             icon="minus"
             isRound
             label={strings.removeOne(item.name)}
@@ -600,7 +631,14 @@ function AddControl({
           <span className={styles.addCount}>
             <NumberPop value={String(count)} />
           </span>
-          <Button variant="ghost" icon="plus" isRound label={strings.addAnother(item.name)} onPress={onAdd} />
+          <Button
+            variant="ghost"
+            size="touch"
+            icon="plus"
+            isRound
+            label={strings.addAnother(item.name)}
+            onPress={onAdd}
+          />
         </>
       )}
     </span>

@@ -427,7 +427,7 @@ describe('Tables, after checklabs’ Tables page', () => {
         applyTheme(theme);
         await expect.element(page.getByRole('heading', { name: 'Tables', level: 1 })).toBeInTheDocument();
         await expect.element(page.getByRole('radio', { name: 'All (6)' })).toBeInTheDocument();
-        await expect.element(page.getByRole('heading', { name: 'Terrace' })).toBeInTheDocument();
+        await expect.element(page.getByRole('heading', { name: 'Terrace', level: 2 })).toBeInTheDocument();
         await expect.element(page.getByRole('heading', { name: 'No area' })).toBeInTheDocument();
         expect(await axeViolations()).toEqual([]);
         await shoot('tables', theme, width);

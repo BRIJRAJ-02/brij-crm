@@ -285,6 +285,7 @@ function Stepper({
     <span className={styles.stepper} role="group" aria-label={label}>
       <Button
         variant="ghost"
+        size="touch"
         icon={fewerIcon}
         label={fewerLabel}
         isRound
@@ -296,6 +297,7 @@ function Stepper({
       </output>
       <Button
         variant="ghost"
+        size="touch"
         icon="plus"
         label={strings.more}
         isRound

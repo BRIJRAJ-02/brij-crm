@@ -167,6 +167,11 @@ export type ToggleButtonProps = Omit<ButtonLook, 'kbd'> &
     readonly onChange?: (isSelected: boolean) => void;
     /** Its key inside a toggle group (ChoiceChips), which then holds whether it is selected. */
     readonly id?: string;
+    /**
+     * Held, it fills with the accent (on-accent words) instead of the soft accent tint: a public page's choice
+     * beside picks drawn that way (a reservation's party size beside its selected day and time).
+     */
+    readonly isSelectionStrong?: boolean;
   };
 
 /** The data attributes that pick a look from the CSS module. */
@@ -424,6 +429,7 @@ export function ToggleButton(props: ToggleButtonProps) {
       {...(slot === undefined ? {} : { slot })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...lookAttributes(props, face)}
+      {...(props.isSelectionStrong === true ? { 'data-selection': 'strong' } : {})}
     >
       <Face face={face} look={props} isPending={false} />
     </AriaToggleButton>

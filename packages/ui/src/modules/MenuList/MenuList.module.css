@@ -420,8 +420,11 @@
   }
 
   /* The + : a round button in the ink with a ring of the card round it, on the photo's corner or at the row's end.
-     Once picked, a white hairline pill stepper (− n +) takes its place. */
+     Once picked, a white hairline pill stepper (− n +) takes its place. Each is Button's `touch` size, a thumb's 44px,
+     since a guest presses them on a phone. */
   .add {
+    --add-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+
     z-index: var(--z-raised);
     display: inline-flex;
     flex: none;
@@ -431,7 +434,7 @@
   }
 
   .add[data-stepper] {
-    gap: var(--space-2);
+    gap: 0;
     border: var(--border-width-hairline) solid var(--look-line);
     background: var(--look-card);
     box-shadow: var(--shadow-xs);
@@ -439,7 +442,7 @@
 
   .item[data-has-photo] .add {
     position: absolute;
-    inset-block-start: calc(var(--space-16) + var(--thumb) - var(--size-control) - var(--space-6));
+    inset-block-start: calc(var(--space-16) + var(--thumb) - var(--add-size) - var(--space-6));
     inset-inline-end: var(--space-6);
   }
 
@@ -447,6 +450,12 @@
     position: absolute;
     inset-block-start: var(--space-8);
     inset-inline-end: var(--space-8);
+  }
+
+  /* A dish with choices, once in the selection: its count before the + (no −, since which pick to take away is the
+     selection's call), with room on the pill's start. */
+  .addCount[data-alone] {
+    padding-inline-start: var(--space-12);
   }
 
   .addCount {

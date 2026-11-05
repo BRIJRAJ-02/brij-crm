@@ -51,6 +51,10 @@ through the same component.
 - The +: a dish with nothing to choose (one price, no option groups) adds one at once, and its + becomes a white
   hairline stepper (− n +); any other dish opens its sheet. Focus follows the swap both ways (the stepper's + after
   the first add, the + again after the last remove), so a keyboard never drops to the top of the page.
+  A dish with choices, once in the selection, shows its count before its + (n +; the + opens the sheet again, and
+  taking one away is Your selection's). The + and the stepper's buttons are Button's `touch` size (44px), since a
+  guest presses them with a thumb (review, 5 November 2026). Each add and remove is said politely to a screen reader
+  ("Added Flat white. 2 in your selection.") through a status line, since the count changes without a word.
 - The foot: ALLERGENS, the allergens this menu's dishes name in the EU list's order, and "Tell your server about any
   allergy before you order.", then the page's foot.
 - A dish opens ItemSheet in a `Modal` `sheet-card` (a bottom sheet on a phone, a card centred over a wider screen),
@@ -102,4 +106,3 @@ Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
 ## Unavailable (Live or Hidden)
 
 A menu its owner has hidden (`menu.hidden`) draws as the same page, in the menu's look with its bar, header (name, address, phone) and foot, and one card in place of the dishes: "This menu isn't available right now", with the ways still open: Reserve a table (only an `/r/<key>` path the answer carries, while the place takes reservations online) and Call (the place's phone). No menu switcher or pills. A variant, not a new component: the look, the header and the foot are MenuList's own, and a separate page would draw them twice.
-

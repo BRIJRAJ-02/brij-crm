@@ -14,6 +14,7 @@ import {
   ButtonLink,
   Callout,
   Card,
+  CardTitleLevel,
   Code,
   ChoiceChips,
   CopyButton,
@@ -624,62 +625,65 @@ function TablesByArea({
           onChange={(next) => onArea(next[0] ?? 'all')}
         />
       )}
-      {shown.map((group) => (
-        <Card key={group.id} title={group.name} description={strings.tablesCount(group.tables.length)}>
-          <Table
-            label={group.name}
-            columns={isNarrow ? NARROW_COLUMNS : COLUMNS}
-            rows={group.tables}
-            getRowId={(table) => table.id}
-            onRowAction={onShow}
-            renderCell={(table, column) => {
-              const resource = resources.get(table.id);
-              if (column === 'table') return tableDisplayName(table.label);
-              if (column === 'seats')
-                return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
-              if (column === 'code') return <Code>{table.code.slice(0, 6)}</Code>;
-              if (column === 'scans') return String(table.scans);
-              const name = tableDisplayName(table.label);
-              return (
-                <ButtonGroup label={strings.actionsFor(name)}>
-                  <Button
-                    variant="ghost"
-                    icon="qr-code"
-                    onPress={() => onShow(table.id)}
-                    label={strings.showCodeFor(name)}
-                  />
-                  <MenuTrigger>
-                    <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
-                    <Menu
-                      label={strings.actionsFor(name)}
-                      onAction={(key) => {
-                        if (key === 'renew') onRenew(table);
-                        else if (resource === undefined) return;
-                        else if (key === 'edit') onEdit(resource);
-                        else if (key === 'delete') onDelete(resource);
-                      }}
-                    >
-                      {resource === undefined ? null : (
-                        <MenuItem id="edit" icon="pencil">
-                          {strings.edit}
+      {/* The area cards sit straight under the TopBar's h1, so their titles are h2s. */}
+      <CardTitleLevel value={2}>
+        {shown.map((group) => (
+          <Card key={group.id} title={group.name} description={strings.tablesCount(group.tables.length)}>
+            <Table
+              label={group.name}
+              columns={isNarrow ? NARROW_COLUMNS : COLUMNS}
+              rows={group.tables}
+              getRowId={(table) => table.id}
+              onRowAction={onShow}
+              renderCell={(table, column) => {
+                const resource = resources.get(table.id);
+                if (column === 'table') return tableDisplayName(table.label);
+                if (column === 'seats')
+                  return resource === undefined ? '' : strings.seatsRange(resource.minCapacity, resource.maxCapacity);
+                if (column === 'code') return <Code>{table.code.slice(0, 6)}</Code>;
+                if (column === 'scans') return String(table.scans);
+                const name = tableDisplayName(table.label);
+                return (
+                  <ButtonGroup label={strings.actionsFor(name)}>
+                    <Button
+                      variant="ghost"
+                      icon="qr-code"
+                      onPress={() => onShow(table.id)}
+                      label={strings.showCodeFor(name)}
+                    />
+                    <MenuTrigger>
+                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
+                      <Menu
+                        label={strings.actionsFor(name)}
+                        onAction={(key) => {
+                          if (key === 'renew') onRenew(table);
+                          else if (resource === undefined) return;
+                          else if (key === 'edit') onEdit(resource);
+                          else if (key === 'delete') onDelete(resource);
+                        }}
+                      >
+                        {resource === undefined ? null : (
+                          <MenuItem id="edit" icon="pencil">
+                            {strings.edit}
+                          </MenuItem>
+                        )}
+                        <MenuItem id="renew" icon="refresh-cw" isDanger>
+                          {strings.newCode}
                         </MenuItem>
-                      )}
-                      <MenuItem id="renew" icon="refresh-cw" isDanger>
-                        {strings.newCode}
-                      </MenuItem>
-                      {resource === undefined ? null : (
-                        <MenuItem id="delete" icon="trash" isDanger>
-                          {strings.delete}
-                        </MenuItem>
-                      )}
-                    </Menu>
-                  </MenuTrigger>
-                </ButtonGroup>
-              );
-            }}
-          />
-        </Card>
-      ))}
+                        {resource === undefined ? null : (
+                          <MenuItem id="delete" icon="trash" isDanger>
+                            {strings.delete}
+                          </MenuItem>
+                        )}
+                      </Menu>
+                    </MenuTrigger>
+                  </ButtonGroup>
+                );
+              }}
+            />
+          </Card>
+        ))}
+      </CardTitleLevel>
     </>
   );
 }

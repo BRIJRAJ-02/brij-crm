@@ -31,7 +31,7 @@ ChoiceChips can't carry a price beside each choice.
   allowed yet (`choicesAllowed`: its min, its max) holds Add off with one line saying why ("Choose your sides to add
   this."). Without `onPick` (the editor's preview), for a sold out dish or one with no price there is no foot.
 - `PicksSheet`: Your selection and their count, one row per line (thumb, name, chosen size and options, line price, a
-  stepper where − at 1 is a bin that removes it), grouped under their menu's name when they come from more than one
+  stepper where − at 1 is a bin that removes it, its buttons at Button's `touch` size, a thumb's 44px), grouped under their menu's name when they come from more than one
   menu. A removal or Clear all leaves one line with Undo, which puts the picks back as they were. Then the bill: the
   subtotal (when service is added), "Includes 20% tax" (the tax inside the prices), "Service 12.5%" on top, and the
   total, which pops as it changes; then "Show this to your server. Nothing is sent from this page." No picks: an

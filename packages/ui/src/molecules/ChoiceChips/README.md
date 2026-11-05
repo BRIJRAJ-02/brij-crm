@@ -37,3 +37,5 @@ Tab reaches the group; arrows move between chips; Space or Enter toggles one.
 ## Differences from the artifact
 
 Not in the artifact.
+
+`isSelectionStrong` fills the held chip with the accent (Button's ToggleButton `isSelectionStrong`), where the chips sit beside an accent filled day and time: a reservation's party size (5 November 2026).

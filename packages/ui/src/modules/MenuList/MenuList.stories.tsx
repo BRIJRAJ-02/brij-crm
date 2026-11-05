@@ -107,6 +107,32 @@ export const PicksOpen: Story = {
 };
 
 /**
+ * Counts and words: a plain dish's stepper says each add politely, and a dish with choices (the wine, by the glass or
+ * bottle) shows how many are in the selection beside its +.
+ */
+export const CountsAndAnnouncements: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone" height="page">
+      <WithPicks initial={SOME_PICKS} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add another Burrata, blood orange, chilli' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent('Added Burrata, blood orange, chilli. 2 in your selection.'),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove one Burrata, blood orange, chilli' }));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Removed one Burrata'));
+    await userEvent.click(canvas.getByRole('tab', { name: 'Wine' }));
+    const wine = await canvas.findByRole('group', { name: /^How many / });
+    await expect(wine).toHaveTextContent('1');
+    await expect(within(wine).queryByRole('button', { name: /^Remove one/ })).toBeNull();
+  },
+};
+
+/**
  * The stageshow demo (spec 0068, AC-6807): a guest opens a wine, picks the bottle, the price on Add pops to the
  * bottle's, and Add puts it in their picks, the bar rising with the total. One interaction, at a phone's width.
  */
