@@ -17,7 +17,8 @@ import { NumberPop } from '../../atoms/NumberPop/NumberPop.tsx';
 import { Reveal } from '../../atoms/Reveal/Reveal.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
+import { Stepper } from '../../molecules/Stepper/Stepper.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import {
   ItemSheet,
@@ -132,12 +133,17 @@ export function MenuList({
   const minute = Math.floor(now.getTime() / 60_000);
   const menus = useMemo(() => {
     const at = new Date(minute * 60_000);
-    const serving = menu.menu.menus.map((each) => ({
+    // A published menu with no dish to show (nothing placed yet) is left out, as checklabs lists only menus with
+    // dishes.
+    const shown = menu.menu.menus.filter((each) =>
+      each.sections.some((section) => sectionItems(section).some((id) => menu.menu.items[id] !== undefined)),
+    );
+    const serving = shown.map((each) => ({
       menu: each,
       serving: servingAt(each.serving, at, place.timeZone),
     }));
     return [...serving.filter((each) => each.serving.now), ...serving.filter((each) => !each.serving.now)];
-  }, [menu.menu.menus, place.timeZone, minute]);
+  }, [menu.menu.menus, menu.menu.items, place.timeZone, minute]);
   const [menuId, setMenuId] = useState<string | undefined>(menus[0]?.menu.id);
   const current = menus.find((each) => each.menu.id === menuId) ?? menus[0];
 
@@ -152,6 +158,10 @@ export function MenuList({
   const status = openAt(place.hours, now, place.timeZone);
   const next = status.open ? undefined : nextOpening(place.hours, now, place.timeZone);
   const address = [place.addressLine, place.city, place.postcode].filter((part) => part !== undefined).join(', ');
+  // The line under the name, as checklabs chooses it: the business's own words, else the menu's note (its
+  // description), else where it is. A hidden menu shows its address and phone below instead.
+  const menuNote = isUnavailable ? undefined : current?.menu.note;
+  const subtitle = business.description ?? menuNote ?? (isUnavailable ? '' : address);
 
   // A section with no dish left to show gets no pill (it would open on nothing).
   const sections = useMemo(
@@ -201,10 +211,13 @@ export function MenuList({
     setTarget(undefined);
   }, [target, shownSection?.id]);
   const headingId = useId();
-  // The allergens this menu's dishes name, in the EU list's order (ported from checklabs' allergen footer).
+  // The allergens this menu's dishes contain, in the EU list's order (checklabs' allergen footer lists the allergens
+  // its dishes carry; a "may contain" stays on the dish's own sheet).
   const menuAllergens = EU_ALLERGENS.filter((code) =>
     sections.some((section) =>
-      sectionItems(section).some((id) => menu.menu.items[id]?.allergens.some((each) => each.code === code) === true),
+      sectionItems(section).some(
+        (id) => menu.menu.items[id]?.allergens.some((each) => each.code === code && each.level === 'contains') === true,
+      ),
     ),
   );
   const chosen = picks ?? [];
@@ -290,7 +303,7 @@ export function MenuList({
                   const canAdd =
                     onPicksChange !== undefined && !isOut && (item.priceMinor !== undefined || item.sizes.length > 0);
                   return (
-                    <li key={item.id} className={styles.cell}>
+                    <li key={item.id} className={styles.cell} data-layout={block.layout}>
                       {entering(
                         <ItemCard
                           item={item}
@@ -303,6 +316,13 @@ export function MenuList({
                             canAdd ? (
                               <AddControl
                                 item={item}
+                                placement={
+                                  block.layout === 'grid'
+                                    ? 'grid'
+                                    : item.photo !== undefined && photoHref !== undefined
+                                      ? 'photo'
+                                      : 'row'
+                                }
                                 count={isQuickAdd(item) ? plainCount(item.id) : 0}
                                 chosenCount={isQuickAdd(item) ? 0 : itemCount(item.id)}
                                 onAdd={() =>
@@ -342,6 +362,49 @@ export function MenuList({
               ) : (
                 <img className={styles.logo} src={logoHref} alt={strings.decorative} width={64} height={64} />
               )}
+              {/* The menus, when the link holds several: a compact switch at the bar's end (serving now first). */}
+              {!isUnavailable && menus.length > 1 && current !== undefined ? (
+                <MenuTrigger>
+                  <Button
+                    size="lg"
+                    isRound
+                    isTouchTarget
+                    iconRight="chevron-down"
+                    label={strings.switchMenu(current.menu.name)}
+                  >
+                    {current.menu.name}
+                  </Button>
+                  <Menu
+                    label={strings.menus}
+                    placement="bottom end"
+                    selectionMode="single"
+                    selectedKeys={[current.menu.id]}
+                    onSelectionChange={(keys) => {
+                      const [id] = [...keys];
+                      if (id === undefined) return;
+                      setMenuId(String(id));
+                      setSectionId(undefined);
+                    }}
+                  >
+                    {menus.map(({ menu: each, serving }) => (
+                      <MenuItem
+                        key={each.id}
+                        id={each.id}
+                        {...(serving.now
+                          ? {}
+                          : {
+                              description:
+                                serving.next === undefined
+                                  ? strings.notServing
+                                  : strings.servingFrom(when(serving.next)),
+                            })}
+                      >
+                        {each.name}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </MenuTrigger>
+              ) : null}
             </div>
           </div>
 
@@ -359,9 +422,7 @@ export function MenuList({
               <h1 className={styles.name} id={headingId}>
                 {entering(isUnavailable || current === undefined ? business.name : current.menu.name, 1, 'inline')}
               </h1>
-              {business.description === undefined ? null : (
-                <p className={styles.about}>{entering(business.description, 2, 'inline')}</p>
-              )}
+              {subtitle === '' ? null : <p className={styles.about}>{entering(subtitle, 2, 'inline')}</p>}
             </div>
             {/* A hidden menu keeps the ways to reach the place: its address, and Call. */}
             {isUnavailable ? (
@@ -393,18 +454,6 @@ export function MenuList({
                   </a>
                 )}
               </p>
-            ) : null}
-            {!isUnavailable && menus.length > 1 ? (
-              <SegmentedControl
-                label={strings.menus}
-                segments={menus.map(({ menu: each }) => ({ value: each.id, label: each.name }))}
-                value={current?.menu.id ?? ''}
-                onChange={(id) => {
-                  setMenuId(id);
-                  setSectionId(undefined);
-                }}
-                isFitted
-              />
             ) : null}
           </header>
 
@@ -439,9 +488,7 @@ export function MenuList({
               <div className={styles.empty}>
                 <p>{strings.noMenu}</p>
               </div>
-            ) : sections.length === 1 || shownSection === undefined ? (
-              sections.map((section) => <div key={section.id}>{sectionBody(section, false)}</div>)
-            ) : (
+            ) : shownSection === undefined ? null : (
               <div ref={pillsRef} className={styles.pills}>
                 <Tabs
                   label={strings.sections}
@@ -452,20 +499,19 @@ export function MenuList({
                 >
                   {sections.map((section) => (
                     <TabPanel key={section.id} id={section.id}>
-                      {sectionBody(section, true)}
+                      <div className={styles.panel}>{sectionBody(section, true)}</div>
                     </TabPanel>
                   ))}
                 </Tabs>
               </div>
             )}
-            {isUnavailable || current?.menu.note === undefined ? null : (
-              <p className={styles.note}>{current.menu.note}</p>
-            )}
+            {/* The note stays at the foot only when the business's own words took the line under the name. */}
+            {menuNote === undefined || subtitle === menuNote ? null : <p className={styles.note}>{menuNote}</p>}
             {isUnavailable || menuAllergens.length === 0 ? null : (
               <p className={styles.allergenFoot}>
                 <span className={styles.allergenLabel}>{strings.allergens}</span>
                 <span>{menuAllergens.map((code) => strings.allergen[code]).join(', ')}</span>
-                <span>{strings.allergenAsk}</span>
+                <span className={styles.allergenAsk}>{strings.allergenAsk}</span>
               </p>
             )}
           </main>
@@ -540,8 +586,9 @@ function SectionHead({
 }) {
   const Heading = level === 2 ? 'h2' : 'h3';
   const serving = servingAt(section.serving, now, menu.place.timeZone);
+  const isBare = !isNamed && section.description === undefined && serving.now;
   return (
-    <div className={styles.sectionHead}>
+    <div className={styles.sectionHead} data-hidden={isBare ? '' : undefined}>
       {/* Under the pills the pill shows the section's name, so its heading is there for screen readers only. */}
       <Heading
         className={styles.heading}
@@ -563,15 +610,18 @@ function SectionHead({
   );
 }
 
-/** A dish's + : adds one (a dish with no choices), or opens its sheet; once picked, a small stepper takes its place. */
+/** A dish's + : adds one (a dish with no choices), or opens its sheet; once picked, a Stepper takes its place. */
 function AddControl({
   item,
+  placement,
   count,
   chosenCount = 0,
   onAdd,
   onRemove,
 }: {
   readonly item: SnapshotItem;
+  /** On a row's photo (a 26px disc in a ring), at a row's end (32px), or on a grid card's photo (32px, the card's). */
+  readonly placement: 'photo' | 'row' | 'grid';
   readonly count: number;
   /** A dish with choices: how many are in the selection, shown beside its + (which opens the sheet again). */
   readonly chosenCount?: number;
@@ -582,33 +632,26 @@ function AddControl({
   // now in that place (the stepper's +, or the + again), so a keyboard never drops to the page's top.
   const [host, setHost] = useState<HTMLSpanElement | null>(null);
   const refocus = () => focusLater(() => host?.querySelector<HTMLElement>('button:last-of-type'));
+  const isPlain = count === 0 && chosenCount === 0;
   return (
-    <span
-      ref={setHost}
-      className={styles.add}
-      data-stepper={count === 0 && chosenCount === 0 ? undefined : ''}
-      {...(count === 0 && chosenCount === 0 ? {} : { role: 'group', 'aria-label': strings.quantityOf(item.name) })}
-    >
+    <span ref={setHost} className={styles.add} data-placement={placement} data-stepper={isPlain ? undefined : ''}>
       {chosenCount > 0 ? (
-        <>
-          <span className={styles.addCount} data-alone="">
-            <NumberPop value={String(chosenCount)} />
-          </span>
-          <Button
-            variant="ghost"
-            size="touch"
-            icon="plus"
-            isRound
-            label={strings.addAnother(item.name)}
-            onPress={onAdd}
-          />
-        </>
+        <Stepper
+          label={strings.quantityOf(item.name)}
+          isLabelHidden
+          value={chosenCount}
+          isFewerHidden
+          isCountAnnounced={false}
+          moreLabel={strings.addAnother(item.name)}
+          onChange={onAdd}
+        />
       ) : count === 0 ? (
         <Button
-          variant="primary"
-          size="touch"
+          variant={placement === 'grid' ? 'secondary' : 'primary'}
+          size={placement === 'photo' ? 'md' : 'lg'}
           icon="plus"
           isRound
+          isTouchTarget
           label={strings.addOne(item.name)}
           onPress={() => {
             onAdd();
@@ -616,30 +659,22 @@ function AddControl({
           }}
         />
       ) : (
-        <>
-          <Button
-            variant="ghost"
-            size="touch"
-            icon="minus"
-            isRound
-            label={strings.removeOne(item.name)}
-            onPress={() => {
-              onRemove();
-              if (count === 1) refocus();
-            }}
-          />
-          <span className={styles.addCount}>
-            <NumberPop value={String(count)} />
-          </span>
-          <Button
-            variant="ghost"
-            size="touch"
-            icon="plus"
-            isRound
-            label={strings.addAnother(item.name)}
-            onPress={onAdd}
-          />
-        </>
+        <Stepper
+          label={strings.quantityOf(item.name)}
+          isLabelHidden
+          value={count}
+          isCountAnnounced={false}
+          fewerLabel={strings.removeOne(item.name)}
+          moreLabel={strings.addAnother(item.name)}
+          onChange={(next) => {
+            if (next > count) {
+              onAdd();
+              return;
+            }
+            onRemove();
+            if (count === 1) refocus();
+          }}
+        />
       )}
     </span>
   );

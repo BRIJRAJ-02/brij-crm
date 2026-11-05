@@ -215,6 +215,7 @@ describe('@crm/ui', () => {
       'SpotIllustration',
       'Stats',
       'StatusDot',
+      'Stepper',
       'Steps',
       'SubmenuTrigger',
       'SuccessCheck',

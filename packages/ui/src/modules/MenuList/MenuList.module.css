@@ -1,13 +1,15 @@
-/* The guest menu (spec 0065, H1), after the checklabs guest app's layout: one centred column at every width; a glass
-   bar stuck to the top with the brand mark alone; the brand block (place and table, the menu's name, its line); the
-   sections as outlined pills, one at a time; each section's dishes as rows (words, the price under them, then a rounded
-   photo at the end with a round + on its corner) or a two column photo grid; the allergens foot; and the selection in
-   a pill bar at the foot.
+/* The guest menu (spec 0065, H1), after checklabs' guest app ("Nova"), value for value: one 448px column with 20px
+   gutters at every width; a glass bar stuck to the top with the brand mark (and the menus, when the link holds
+   several); the brand block (place and table, the menu's name 26px, its line); the sections as outlined pills, one
+   at a time; each block's dishes as rows (the name 16px semibold, two lines of words 13px, the price 14px medium,
+   then an 88px photo with a round + on its corner) or a two column photo grid; the allergens foot; and the selection
+   in a pill bar at the foot.
 
-   The look (AC-6570): the root reads the `--menu-*` custom properties the menu's look stylesheet sets (the Warm preset
-   and the brand), each falling back to a token, as `--look-*`. One level in, `.look` points the library's own names
-   (surface-raised, text, accent and the rest) at those, so every library part inside, and the dish's sheet and Your
-   picks, which open inside `.look`, wear the menu's warm surfaces in both themes. */
+   The look (AC-6570): the root reads the `--menu-*` custom properties the menu's look stylesheet sets (the Warm
+   preset's colours, the device's face and the brand), each falling back to a token, as `--look-*`. One level in,
+   `.look` points the library's own names (surface-raised, text, accent, the text styles and the rest) at those, so
+   every library part inside, and the dish's sheet and the selection, which open inside `.look`, wear the menu's look
+   in both themes. The sizes are checklabs', built from tokens. */
 @layer components {
   .root {
     --look-ground: var(--menu-ground, var(--surface-subtle));
@@ -19,6 +21,32 @@
     --look-quiet: var(--menu-quiet, var(--text-secondary));
     --look-accent: var(--menu-accent, var(--accent));
     --look-on-accent: var(--menu-on-accent, var(--on-accent));
+    --look-scrim: var(--menu-scrim, var(--scrim));
+    --look-face: var(--menu-face, var(--font-sans));
+
+    /* Checklabs' geometry: a 448px column with 20px gutters, 14px squircles (thumbs, the logo tile), 20px cards
+       (grid photos) and an 88px row photo. */
+    --look-gutter: var(--space-20);
+    --look-column: calc(var(--size-dialog) - var(--space-32));
+    --look-squircle: calc(var(--radius-xl) + var(--space-2));
+    --look-card-radius: calc(var(--radius-lg) * 2);
+    --look-thumb: calc(var(--space-32) * 2 + var(--space-24));
+
+    /* Its type sizes and tracking. */
+    --look-type-12: var(--space-12);
+    --look-type-13: calc(var(--space-12) + var(--border-width-hairline));
+    --look-type-14: calc(var(--space-12) + var(--space-2));
+    --look-type-15: calc(var(--space-16) - var(--border-width-hairline));
+    --look-type-16: var(--space-16);
+    --look-type-17: calc(var(--space-16) + var(--border-width-hairline));
+    --look-type-22: calc(var(--space-20) + var(--space-2));
+    --look-type-26: calc(var(--space-24) + var(--space-2));
+    --track-snug: calc(var(--tracking-heading) / 2);
+    --track-tight: var(--tracking-heading);
+    --track-tighter: calc(var(--tracking-heading) * 1.5);
+    --track-open: calc(var(--tracking-kbd) / 2);
+    --track-caps: calc(var(--tracking-kbd) * 2);
+    --track-caps-wide: calc(var(--tracking-kbd) * 3);
 
     /* A public page's motion (as BookingFrame's): presses ease down and a changed Button label resolves in. */
     --scale-press: var(--scale-enter);
@@ -27,7 +55,7 @@
     min-block-size: 100dvh;
     background: var(--look-ground);
     color: var(--look-text);
-    font-family: var(--menu-face, var(--font-sans));
+    font-family: var(--look-face);
   }
 
   .look {
@@ -48,14 +76,35 @@
     --accent-hover: var(--look-accent);
     --accent-line: var(--look-accent);
     --accent-border: var(--look-accent);
-    --accent-soft: color-mix(in oklab, var(--look-accent) 12%, var(--look-card));
+    /* A chosen card (a dish's size) takes the cream, as checklabs' chosen option row. */
+    --accent-soft: var(--look-chip);
     --on-accent: var(--look-on-accent);
     --link: var(--look-accent);
     --focus-ring: var(--look-accent);
-    /* The ring in the full ink (the Warm accent is the ink, so a 40% mix fell under 3:1 on the near white ground). */
-    --shadow-focus: 0 0 0 var(--border-width-thick) var(--look-accent);
+    --scrim: var(--look-scrim);
+    /* Two rings, the ground then the full ink, so focus shows on the ink's own controls (the +, the chosen pill) as
+       well as on the ground (a 40% mix of the ink fell under 3:1 on the white ground). */
+    --shadow-focus:
+      0 0 0 var(--border-width-thick) var(--look-ground), 0 0 0 calc(var(--border-width-thick) * 2) var(--look-accent);
+    /* Every library part inside (pills, Buttons, chips, the sheets' rows) speaks in the menu's face, at checklabs'
+       sizes for the roles they play here: a pill's or a button's 14px medium label, a chip's 12px medium, 24px tall,
+       a sheet's 15px semibold action and 22px semibold heading. */
+    --text-body: 400 var(--look-type-13) / var(--space-20) var(--look-face);
+    --text-body-strong: 500 var(--look-type-14) / var(--space-20) var(--look-face);
+    --text-label: 400 var(--look-type-12) / var(--space-16) var(--look-face);
+    --text-label-strong: 500 var(--look-type-12) / var(--space-16) var(--look-face);
+    --text-title: 600 var(--look-type-15) / var(--space-20) var(--look-face);
+    --text-title-regular: 400 var(--look-type-15) / var(--space-20) var(--look-face);
+    --text-heading: 600 var(--look-type-22) / calc(var(--look-type-22) * 1.2) var(--look-face);
+    --tracking-body-strong: var(--track-tight);
+    --tracking-title: var(--track-snug);
+    --tracking-heading: var(--track-tight);
+    /* A chip's height inside the menu (a dish's marks and allergens, checklabs' 24px tags): Badge, Tag and the chip
+       Skeleton take it here; nothing else inside the menu draws at it. */
+    --size-chip: var(--space-24);
 
     padding-block-end: calc(var(--size-bar) * 2);
+    font-feature-settings: 'ss01', 'ss03';
   }
 
   .barTop,
@@ -64,56 +113,60 @@
   .foot {
     box-sizing: border-box;
     inline-size: 100%;
-    max-inline-size: var(--size-dialog);
+    max-inline-size: var(--look-column);
     margin-inline: auto;
-    padding-inline: var(--space-16);
+    padding-inline: var(--look-gutter);
   }
 
-  /* The glass bar: the brand mark alone (checklabs'). */
+  /* The glass bar: the brand mark, and the menus at the end when the link holds several; 50px, 8px above and below. */
   .bar {
     position: sticky;
     inset-block-start: 0;
     z-index: var(--z-sticky);
     border-block-end: var(--border-width-hairline) solid var(--look-line);
     background: var(--look-glass);
-    backdrop-filter: saturate(1.4) blur(var(--space-16));
+    backdrop-filter: saturate(1.8) blur(var(--space-20));
   }
 
   .barTop {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--space-8);
-    min-block-size: var(--size-bar);
+    min-block-size: calc(var(--size-bar) + var(--space-4));
+    padding-block: var(--space-8);
   }
 
-  .mark,
-  .logo {
-    flex: none;
-    inline-size: var(--space-32);
-    block-size: var(--space-32);
-    border-radius: var(--radius-lg);
-  }
-
-  /* No logo: a tile in the brand's colour (the menu's ink when the brand has none) with the name's first letter. */
+  /* No logo: a 36px squircle in the brand's colour (the menu's ink when the brand has none) with the first letter. */
   .mark {
     display: grid;
+    flex: none;
     place-items: center;
+    inline-size: calc(var(--space-32) + var(--space-4));
+    block-size: calc(var(--space-32) + var(--space-4));
+    border-radius: var(--look-squircle);
     background: var(--look-accent);
     color: var(--look-on-accent);
-    font: var(--text-body-strong);
+    font: var(--text-title);
+    font-size: var(--look-type-17);
+    letter-spacing: var(--track-tight);
   }
 
+  /* A logo: its own shape, 24px tall and up to 176px wide, never framed or cropped. */
   .logo {
+    flex: none;
+    inline-size: auto;
+    max-inline-size: calc(var(--size-menu) - var(--space-32) * 2);
+    block-size: var(--space-24);
     object-fit: contain;
-    background: var(--look-card);
   }
 
-  /* The header: the place (and table) as an eyebrow, the menu's name and its line, the menus when there are several. */
+  /* The brand block: the place (and table) as an eyebrow, the menu's name and its line; 24px above and below. */
   .head {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
-    padding-block: var(--space-24) var(--space-8);
+    padding-block: var(--space-24);
   }
 
   .titles {
@@ -127,24 +180,29 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
-    margin: 0;
+    margin: 0 0 var(--space-4);
     color: var(--look-quiet);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-label);
+    line-height: var(--look-type-12);
+    letter-spacing: var(--track-caps);
     text-transform: uppercase;
   }
 
   .name {
     margin: 0;
-    font: var(--text-note-title);
-    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
-    letter-spacing: var(--tracking-note-title);
+    font: var(--text-heading);
+    font-family: var(--menu-display-face, var(--look-face));
+    font-size: var(--look-type-26);
+    line-height: calc(var(--look-type-26) * 1.15);
+    letter-spacing: var(--track-tight);
   }
 
   .about {
     margin: 0;
     color: var(--look-quiet);
     font: var(--text-body);
+    font-size: var(--look-type-14);
+    line-height: calc(var(--look-type-14) * 1.35);
   }
 
   .facts {
@@ -187,17 +245,15 @@
     container-type: inline-size;
     display: flex;
     flex-direction: column;
-    gap: var(--space-32);
-    padding-block: var(--space-16) var(--space-32);
   }
 
   .notice {
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    margin: 0;
+    margin: 0 0 var(--space-8);
     padding: var(--space-12) var(--space-16);
-    border-radius: var(--radius-lg);
+    border-radius: var(--look-squircle);
     background: var(--look-chip);
     font: var(--text-body-strong);
   }
@@ -205,21 +261,31 @@
   .section {
     display: flex;
     flex-direction: column;
-    gap: var(--space-24);
     scroll-margin-block-start: calc(var(--size-bar) * 2);
   }
 
+  /* A block (a section's own dishes, or a sub section): 28px above, 24px below, a hairline between blocks. */
   .block,
   .sub {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    padding-block: calc(var(--space-24) + var(--space-4)) var(--space-24);
+  }
+
+  .sub {
+    border-block-start: var(--border-width-hairline) solid var(--look-line);
   }
 
   .sectionHead {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+    padding-block: var(--space-4) var(--space-16);
+  }
+
+  /* Under the pills a section's own block draws no heading (the pill names it). */
+  .sectionHead[data-hidden] {
+    padding: 0;
   }
 
   /* A link's target (a sub section's heading) lands clear of the glass bar. */
@@ -227,8 +293,8 @@
     margin: 0;
     scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
     font: var(--text-heading);
-    font-family: var(--menu-display-face, var(--menu-face, var(--font-sans)));
-    letter-spacing: var(--tracking-heading);
+    font-family: var(--menu-display-face, var(--look-face));
+    letter-spacing: var(--track-tighter);
   }
 
   /* Under the pills the pill shows the section's name: the heading stays for screen readers only. */
@@ -246,15 +312,19 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* The pills' row, a hash link's target: it lands clear of the glass bar. */
+  /* The pills' row, 10px above and below, running to the window's edges with the first pill in line with the words;
+     a hash link's target lands clear of the glass bar. */
   .pills {
+    --pills-inset: var(--look-gutter);
+
+    margin-inline: calc(var(--look-gutter) * -1);
+    padding-block-start: calc(var(--space-8) + var(--space-2));
     scroll-margin-block-start: calc(var(--size-bar) + var(--space-8));
   }
 
-  /* A sub section's name: a heading of its own over a hairline, as checklabs' sub category. */
-  .sub {
-    padding-block-start: var(--space-24);
-    border-block-start: var(--border-width-hairline) solid var(--look-line);
+  .panel {
+    padding-block-start: calc(var(--space-8) + var(--space-2));
+    padding-inline: var(--look-gutter);
   }
 
   .sectionAbout,
@@ -262,6 +332,8 @@
     margin: 0;
     color: var(--look-quiet);
     font: var(--text-body);
+    font-size: var(--look-type-14);
+    line-height: calc(var(--look-type-14) * 1.35);
   }
 
   .sectionNote {
@@ -285,34 +357,33 @@
     list-style: none;
   }
 
+  /* A grid: two columns at every width, 16px between rows and 14px between columns. */
   .items[data-layout='grid'] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-16) var(--space-12);
-    padding-block-start: var(--space-12);
+    gap: var(--space-16) calc(var(--space-12) + var(--space-2));
   }
 
   .cell {
     min-inline-size: 0;
   }
 
-  /* A dish. A row: its words, then an 88px photo at the end, a hairline under it; the + sits on the photo's corner,
-     or at the row's end when there is no photo. A grid card: the photo on top (4:3), the + on its corner. */
-  .item {
-    --thumb: calc(var(--space-32) * 2 + var(--space-24));
+  /* Rows: a hairline over every row but the first, which sits 4px under its heading (16px above the others). */
+  .cell:first-child {
+    --row-top: var(--space-4);
+  }
 
+  .cell[data-layout='list'] + .cell {
+    border-block-start: var(--border-width-hairline) solid var(--look-line);
+  }
+
+  /* A dish. A row: its words, then an 88px photo at the end; the + sits on the photo's corner, or at the row's end
+     when there is no photo, 4px from the words. A grid card: a square photo on top, the + in its corner. */
+  .item {
     position: relative;
     display: flex;
-    align-items: flex-end;
-    gap: var(--space-12);
-  }
-
-  .item[data-layout='list'] {
-    border-block-end: var(--border-width-hairline) solid var(--look-line);
-  }
-
-  .item[data-layout='list']:not([data-has-photo]) {
     align-items: center;
+    gap: var(--space-4);
   }
 
   .item[data-layout='grid'] {
@@ -323,16 +394,18 @@
     display: flex;
     flex: 1;
     align-items: flex-start;
-    gap: var(--space-16);
+    gap: calc(var(--space-12) + var(--space-2));
     min-inline-size: 0;
-    padding: var(--space-16) 0;
+    padding: var(--row-top, var(--space-16)) 0 var(--space-16);
     border: 0;
-    border-radius: var(--radius-lg);
+    border-radius: 0;
     background: transparent;
     color: inherit;
     font: inherit;
     text-align: start;
-    transition: scale var(--duration-press) var(--ease-out);
+    transition:
+      scale var(--duration-press) var(--ease-out),
+      background-color var(--duration-press) var(--ease-out);
   }
 
   .press:focus-visible {
@@ -340,26 +413,35 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* Pressed, a dish eases down (reduced motion keeps it still). */
-  @media (prefers-reduced-motion: no-preference) {
-    .press:active {
-      scale: var(--scale-press);
-    }
-  }
-
   .item[data-layout='grid'] .press {
     flex-direction: column;
-    gap: var(--space-8);
+    gap: 0;
     inline-size: 100%;
     padding: 0;
+  }
+
+  /* Pressed, a row takes the cream and eases down a little (0.985); a grid card eases down more. Reduced motion
+     keeps the fill and drops the movement. */
+  .item[data-layout='list'] .press:active {
+    background: var(--look-chip);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .item[data-layout='list'] .press:active {
+      scale: calc(1 - (1 - var(--scale-enter)) / 2);
+    }
+
+    .item[data-layout='grid'] .press:active {
+      scale: var(--scale-press);
+    }
   }
 
   .thumb {
     flex: none;
     order: 1;
-    inline-size: var(--thumb);
-    block-size: var(--thumb);
-    border-radius: var(--radius-xl);
+    inline-size: var(--look-thumb);
+    block-size: var(--look-thumb);
+    border-radius: var(--look-squircle);
     object-fit: cover;
     background: var(--look-chip);
   }
@@ -369,7 +451,7 @@
     inline-size: 100%;
     block-size: auto;
     aspect-ratio: 1;
-    border-radius: var(--radius-xl);
+    border-radius: var(--look-card-radius);
   }
 
   .item[data-sold-out] .thumb {
@@ -380,8 +462,11 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-4);
     min-inline-size: 0;
+  }
+
+  .item[data-layout='grid'] .itemText {
+    padding: calc(var(--space-8) + var(--space-2)) var(--space-4) 0;
   }
 
   .itemName {
@@ -390,6 +475,14 @@
     align-items: center;
     gap: var(--space-6);
     font: var(--text-title);
+    font-size: var(--look-type-16);
+    line-height: calc(var(--look-type-16) * 1.25);
+    letter-spacing: var(--track-snug);
+  }
+
+  .item[data-layout='grid'] .itemName {
+    font-size: var(--look-type-15);
+    line-height: calc(var(--look-type-15) * 1.25);
   }
 
   .itemAbout {
@@ -397,16 +490,35 @@
     overflow: hidden;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    margin-block-start: var(--space-4);
     color: var(--look-quiet);
-    font: var(--text-label);
+    font: var(--text-body);
+    font-size: var(--look-type-13);
+    line-height: calc(var(--look-type-13) * 1.4);
+  }
+
+  /* A grid card: the price right under the name, then the words. */
+  .item[data-layout='grid'] .itemAbout {
+    order: 1;
+    font-size: var(--look-type-12);
+    line-height: calc(var(--look-type-12) * 1.4);
   }
 
   .price {
-    font: var(--text-body-strong);
+    margin-block-start: var(--space-8);
     color: var(--look-text);
+    font: var(--text-body-strong);
+    font-size: var(--look-type-14);
+    line-height: normal;
+    letter-spacing: 0;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+
+  .item[data-layout='grid'] .price {
+    margin-block-start: var(--space-2);
+  }
+
   /* Sold out reads as such on the words too, not only the photo. */
   .item[data-sold-out] .itemName,
   .item[data-sold-out] .price {
@@ -416,52 +528,55 @@
   .marks {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-4);
+    gap: var(--space-6);
+    margin-block-start: calc(var(--space-8) + var(--space-2));
   }
 
-  /* The + : a round button in the ink with a ring of the card round it, on the photo's corner or at the row's end.
-     Once picked, a white hairline pill stepper (− n +) takes its place. Each is Button's `touch` size, a thumb's 44px,
-     since a guest presses them on a phone. */
-  .add {
-    --add-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+  .item[data-layout='grid'] .marks {
+    order: 2;
+  }
 
+  /* The + (each pressed across 44px). On a row photo: a 26px disc of the ink in a 2px ring of the ground, 30px
+     across, 6px over the photo's corner. Without a photo: a 32px disc of the ink at the row's end (a 30px Button in a
+     hairline of its own colour). On a grid photo: a 32px disc of the card with the ink's glyph, 8px in from its top
+     corner. Once picked, a Stepper takes its place, keeping its corner. */
+  .add {
     z-index: var(--z-raised);
     display: inline-flex;
     flex: none;
     align-items: center;
     border-radius: var(--radius-full);
-    box-shadow: 0 0 0 var(--border-width-thick) var(--look-card);
   }
 
-  .add[data-stepper] {
-    gap: 0;
-    border: var(--border-width-hairline) solid var(--look-line);
-    background: var(--look-card);
+  .add[data-placement='photo'] {
+    position: absolute;
+    inset-block-start: calc(var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) - var(--size-control));
+    inset-inline-end: calc(-1 * var(--space-4));
+    box-shadow:
+      0 0 0 var(--border-width-thick) var(--look-ground),
+      var(--shadow-md);
+  }
+
+  .add[data-placement='photo'][data-stepper] {
+    inset-block-start: calc(var(--row-top, var(--space-16)) + var(--look-thumb) + var(--space-4) - var(--size-input));
+  }
+
+  .add[data-placement='row']:not([data-stepper]) {
+    padding: var(--border-width-hairline);
+    background: var(--look-accent);
     box-shadow: var(--shadow-xs);
   }
 
-  .item[data-has-photo] .add {
-    position: absolute;
-    inset-block-start: calc(var(--space-16) + var(--thumb) - var(--add-size) - var(--space-6));
-    inset-inline-end: var(--space-6);
-  }
-
-  .item[data-layout='grid'] .add {
+  .add[data-placement='grid'] {
     position: absolute;
     inset-block-start: var(--space-8);
     inset-inline-end: var(--space-8);
+    box-shadow: var(--shadow-md);
   }
 
-  /* A dish with choices, once in the selection: its count before the + (no −, since which pick to take away is the
-     selection's call), with room on the pill's start. */
-  .addCount[data-alone] {
-    padding-inline-start: var(--space-12);
-  }
-
-  .addCount {
-    min-inline-size: var(--space-12);
-    font: var(--text-body-strong);
-    text-align: center;
+  .add[data-placement='grid']:not([data-stepper]) {
+    padding: var(--border-width-hairline);
+    background: var(--look-card);
   }
 
   .empty {
@@ -474,27 +589,37 @@
     text-align: center;
   }
 
+  /* The foot: 40px below the page's own foot. */
   .foot {
-    padding-block: var(--space-16);
+    padding-block: 0 calc(var(--space-32) + var(--space-8));
   }
 
-  /* The allergens this menu names: a small caps label and the list (checklabs' allergen foot). */
+  /* ALLERGENS, then the list this menu names (checklabs' allergen foot): 36px under the dishes, over a hairline. */
   .allergenFoot {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-    margin: 0;
-    padding-block-start: var(--space-16);
+    gap: var(--space-8);
+    margin: calc(var(--space-12) + var(--space-2)) 0 var(--space-32);
+    padding-block-start: var(--space-24);
     border-block-start: var(--border-width-hairline) solid var(--look-line);
-    color: var(--look-quiet);
-    font: var(--text-label);
+    color: var(--look-text);
+    font: var(--text-body);
+    font-size: var(--look-type-13);
+    line-height: calc(var(--look-type-13) * 1.5);
   }
 
   .allergenLabel {
-    color: var(--look-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    margin-block-end: var(--space-6);
+    color: var(--look-quiet);
+    font: var(--text-title);
+    font-size: var(--look-type-12);
+    line-height: normal;
+    letter-spacing: var(--track-caps-wide);
     text-transform: uppercase;
+  }
+
+  .allergenAsk {
+    color: var(--look-quiet);
   }
 
   /* A hidden menu (Live or Hidden): the menu's own look and header, one quiet card saying so, and the ways open. */
@@ -506,7 +631,7 @@
     margin-block: var(--space-16);
     padding: var(--space-32) var(--space-20);
     border: var(--border-width-hairline) solid var(--look-line);
-    border-radius: var(--radius-xl);
+    border-radius: var(--look-card-radius);
     background: var(--look-card);
     color: var(--look-quiet);
     text-align: center;
@@ -537,7 +662,8 @@
     margin-block-start: var(--space-8);
   }
 
-  /* Your picks: a pill in the accent at the foot of the screen, rising in with the first pick. */
+  /* The selection bar: a pill in the ink 16px from the sides and the foot, as wide as the column, 14px over and under
+     its 15px semibold words; it rises in with the first pick over checklabs' 320ms (twice duration-press). */
   .picksDock {
     position: fixed;
     inset-inline: 0;
@@ -546,6 +672,7 @@
     display: flex;
     justify-content: center;
     padding: var(--space-16);
+    padding-block-end: calc(var(--space-16) + env(safe-area-inset-bottom, 0));
     pointer-events: none;
   }
 
@@ -553,25 +680,26 @@
     display: flex;
     flex: 1;
     align-items: center;
-    gap: var(--space-12);
-    max-inline-size: calc(var(--size-dialog) - var(--space-32));
-    min-block-size: var(--size-bar);
-    padding-inline: var(--space-20);
+    justify-content: space-between;
+    gap: calc(var(--space-12) + var(--space-2));
+    max-inline-size: var(--look-column);
+    padding: calc(var(--space-12) + var(--space-2)) var(--space-20);
     border: 0;
     border-radius: var(--radius-full);
     background: var(--look-accent);
     color: var(--look-on-accent);
     box-shadow: var(--shadow-lg);
-    font: var(--text-body-strong);
+    font: var(--text-title);
+    line-height: normal;
     pointer-events: auto;
     transition:
       scale var(--duration-press) var(--ease-out),
-      translate var(--duration-modal) var(--ease-drawer),
-      opacity var(--duration-modal) var(--ease-out);
+      translate calc(var(--duration-press) * 2) var(--ease-out),
+      opacity calc(var(--duration-press) * 2) var(--ease-out);
 
     @starting-style {
       opacity: 0;
-      translate: 0 calc(var(--size-bar) + var(--space-16));
+      translate: 0 calc(100% + var(--space-32));
     }
   }
 
@@ -581,27 +709,28 @@
   }
 
   .picksLabel {
-    flex: 1;
+    letter-spacing: var(--track-open);
     text-align: start;
   }
 
   .picksTotal {
+    opacity: calc(1 - (1 - var(--opacity-busy)) / 3);
     font-variant-numeric: tabular-nums;
   }
 
   @media (prefers-reduced-motion: no-preference) {
     .picksBar:active {
-      scale: var(--scale-press);
+      scale: calc(1 - (1 - var(--scale-enter)) * 2 / 3);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .press {
-      transition: none;
+      transition: background-color var(--duration-press) var(--ease-out);
     }
 
     .picksBar {
-      transition: opacity var(--duration-modal) var(--ease-out);
+      transition: opacity calc(var(--duration-press) * 2) var(--ease-out);
 
       @starting-style {
         translate: 0 0;

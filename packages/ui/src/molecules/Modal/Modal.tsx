@@ -324,9 +324,22 @@ export function Modal({
                       </span>
                     )}
                     {headerActions}
-                    {isClosable && (
-                      <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
-                    )}
+                    {isClosable &&
+                      (variant === 'sheet-card' || variant === 'sheet-side' ? (
+                        // A guest's sheet: round, filling its 36px disc, pressed across 44px.
+                        <Button
+                          slot="close"
+                          variant="ghost"
+                          size="lg"
+                          icon="x"
+                          label={strings.close}
+                          isRound
+                          isTouchTarget
+                          isDisabled={isBusy}
+                        />
+                      ) : (
+                        <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
+                      ))}
                   </span>
                 )}
             </div>

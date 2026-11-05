@@ -319,19 +319,21 @@
 
   /* A guest page's categories (the guest menu, after checklabs): outlined pills, size-bar tall less a little, in a
      row that scrolls sideways; the chosen one filled in the text colour, the fill (the indicator) sliding between
-     them under the words. No hairline under the row. */
+     them under the words. No hairline under the row, and no space of its own under it: the page spaces it. */
   .bar[data-variant='pills'] {
-    margin-block-end: var(--space-16);
+    margin-block-end: 0;
     border-block-end: none;
   }
 
-  /* A ring's width of room at the ends, so the first and last pill's focus ring isn't cut by the scroller. */
+  /* A ring's width of room at the ends, so the first and last pill's focus ring isn't cut by the scroller. A page
+     that runs the row to the window's edges sets --pills-inset to its gutter, so the pills start in line with its
+     words and scroll out to the edge (the guest menu). */
   .bar[data-variant='pills'] .list {
     align-items: center;
     gap: var(--space-8);
     padding-block: var(--space-2);
-    padding-inline: var(--border-width-thick);
-    scroll-padding-inline: var(--border-width-thick);
+    padding-inline: var(--pills-inset, var(--border-width-thick));
+    scroll-padding-inline: var(--pills-inset, var(--border-width-thick));
   }
 
   .bar[data-variant='pills'] .tab {

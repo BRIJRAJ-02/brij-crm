@@ -283,7 +283,13 @@ describe('the editor’s preview look', () => {
     expect(look.status).toBe(200);
     expect(look.headers.get('content-type')).toContain('text/css');
     expect(look.headers.get('cache-control')).toContain('private');
-    expect(await look.text()).toContain('--menu-ground:#fffdfa');
+    const css = await look.text();
+    // Checklabs' guest look, value for value: the device's face, a white ground, cream chips, near black ink.
+    expect(css).toContain('--menu-face:ui-sans-serif, system-ui');
+    expect(css).toContain('--menu-ground:#ffffff');
+    expect(css).toContain('--menu-chip:#f5f1ea');
+    expect(css).toContain('--menu-text:#1a1a1a');
+    expect(css).toContain('--menu-scrim:#00000066');
     expect((await send(`/api/menu/look.css?workspace=${m.slug}`)).status).toBe(401);
     const { cookie: stranger } = await signIn(app);
     expect((await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: stranger })).status).toBe(404);
