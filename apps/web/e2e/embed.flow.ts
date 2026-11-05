@@ -102,7 +102,9 @@ async function readyFrame(page: Page): Promise<Frame> {
 
 /** No sideways spill on the host, the frame inside its column, no scroll inside, and its height its content's. */
 async function expectFits(page: Page, frame: Frame, label: string): Promise<void> {
-  // Let the last height land.
+  // The page inside has its content: a booking page's facts and times load after its frame first says a height, and
+  // on a slow runner they landed after the wait below (CI's WebKit, 112 px short at 320). Then let the last height land.
+  await expect(frame.locator('[aria-busy="true"]'), `${label}: still loading`).toHaveCount(0, { timeout: 30_000 });
   await page.waitForTimeout(300);
   const host = await page.evaluate(() => {
     const frameElement = document.querySelector('[data-timefix-embed]')?.shadowRoot?.querySelector('iframe');

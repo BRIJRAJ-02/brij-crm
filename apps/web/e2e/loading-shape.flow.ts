@@ -21,6 +21,8 @@ interface Screen {
   readonly target: (page: Page) => Locator;
   /** A step before the timed one, on the page the move starts from: opening the record panel the target sits in. */
   readonly prepare?: (page: Page) => Promise<void>;
+  /** Walked only where the app offers it: the target is looked for once `prepare` has drawn the page, never waited on. */
+  readonly isOffered?: (page: Page) => Promise<boolean>;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
@@ -71,11 +73,21 @@ const ALL_SCREENS: readonly Screen[] = [
   // The Roster, a tab of its own from 31 October 2026: its week's bar and the grid's skeleton rows.
   { name: 'bookings roster', start: at('bookings/calendar'), target: tab('Roster') },
   { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
-  { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
+  // Calendars leaves the strip where the deployment has calendar sync off and nothing is connected (the bookings
+  // critique, A2), as the flows' stack has; with sync on it is walked like the rest.
+  {
+    name: 'bookings calendars',
+    start: at('bookings/calendar'),
+    target: tab('Calendars'),
+    isOffered: async (page) => {
+      await tab('List')(page).waitFor({ timeout: 60_000 });
+      return (await tab('Calendars')(page).count()) > 0;
+    },
+  },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
-  { name: 'form editor', start: at('captures/forms'), target: card('Untitled form') },
+  { name: 'form editor', start: at('captures/forms'), target: card('Contact us') },
   {
     name: 'settings preferences',
     start: at('tasks'),
@@ -151,6 +163,7 @@ test('every screen’s loading state stands where its loaded page will', async (
     // A fresh app each time, on the page the move starts from, so the screen's own data isn't held yet.
     await page.goto(screen.start(workspace));
     await screen.prepare?.(page);
+    if (screen.isOffered !== undefined && !(await screen.isOffered(page))) continue;
     // The page the move starts from has drawn what is clicked, before any call is held.
     const target = screen.target(page);
     await target.waitFor({ timeout: 60_000 });
@@ -170,8 +183,10 @@ test('every screen’s loading state stands where its loaded page will', async (
 // A booking page (25 October 2026, the owner: switching views "must not move ANYTHING", and a page opening on chat
 // "shifts a little and then prints the UI"). The card's month sets its size in every view and List and Book by chat
 // draw over it, so a switch between any two views, from any view the page opens on, leaves the rail, the card, its
-// heading row and its body where they were, and the page's height with them. And a page opened on chat draws its
-// loading card in the loaded card's place, with the composer's place at its foot.
+// heading row and its body where they were, and the page's height with them. On a phone, List and Book by chat set
+// the card's height instead (owner review, 4 and 5 November 2026: no stretch of empty card under them), so there
+// only the heights of the card, its body and the page may change; every place and width still holds. And a page
+// opened on chat draws its loading card in the loaded card's place, with the composer's place at its foot.
 
 /** A UUID v7, as the app mints them. */
 function uuidv7(): string {
@@ -188,7 +203,8 @@ const BOOKING_REGIONS = {
   head: 'main .ws-booking-frame-head',
   stage: 'main .ws-booking-frame-stage',
   foot: 'main .ws-booking-frame-foot[data-placement="page"]',
-  composer: 'main .ws-booking-chat-composer, main .ws-booking-frame-cover-body > [data-shape]:last-child',
+  // The loaded chat's prompt box, or BookingChatGhost's place for it while the page loads (4 November 2026).
+  composer: 'main .ws-booking-chat-composer, main .ws-booking-chat-ghost-composer',
 } as const;
 
 /** Where each booking region is now, and the page's height. */
@@ -302,8 +318,12 @@ test.describe('a booking page', () => {
           // Only the chat has a composer: every other region is held.
           const { composer: _before, ...was } = before;
           const { composer: _after, ...now } = after;
-          for (const difference of bookingDifferences(was, now))
+          // On a phone each view is as tall as it is (BookingFrame's `width < 1024px` rule): heights alone may move.
+          const isPhone = viewport.width < 1024;
+          for (const difference of bookingDifferences(was, now)) {
+            if (isPhone && /^(card|stage|page)\.height /.test(difference)) continue;
             problems.push(`${String(viewport.width)} ${start} → ${target}: ${difference}`);
+          }
           await context.close();
         }
       }
@@ -343,12 +363,17 @@ test.describe('a booking page', () => {
     };
     for (const viewport of WIDTHS) {
       const { context, page } = await visit(browser, viewport);
+      // On a phone the chat sets the card's height (owner review, 4 November 2026), which a loading card can't know:
+      // there the card, its body, the page and the prompt box's place under them may move; every place above holds.
+      const isPhone = viewport.width < 1024;
+      const held = (line: string) => !(isPhone && /^((card|stage|page)\.height|composer\.y) /.test(line));
       // A first visit can't know the host's default before the facts come, so it draws the month, which sets the
       // card's size in every view: the chat arrives over it and moves nothing (it has no composer's place yet).
-      for (const difference of (await open(page)).filter((line) => !line.startsWith('composer')))
+      for (const difference of (await open(page)).filter((line) => !line.startsWith('composer') && held(line)))
         problems.push(`${String(viewport.width)} chat, first visit: ${difference}`);
       // Back again, the page remembers it opened on chat: the composer's place is there from the first frame.
-      for (const difference of await open(page)) problems.push(`${String(viewport.width)} chat, again: ${difference}`);
+      for (const difference of (await open(page)).filter(held))
+        problems.push(`${String(viewport.width)} chat, again: ${difference}`);
       await context.close();
     }
     expect(problems).toEqual([]);

@@ -105,9 +105,9 @@ test.describe('availability schedules', () => {
 
     // Availability opens the default in its editor; New schedule asks for a name and opens the new one there.
     await page.goto(`/w/${slug}/bookings/availability`);
-    // The switcher: the open schedule's name, then ", default" on the default, then what it does.
-    const switcher = (name: string) =>
-      page.getByRole('button', { name: new RegExp(`^${name}(, default)?, switch schedule$`) });
+    // The switcher is one Select (962dc4e48): its trigger reads the open schedule's name, its Default badge on the
+    // default, then its own label, Schedule.
+    const switcher = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}( Default)? Schedule$`) });
     await expect(switcher('Working hours')).toBeVisible();
     await expect(page.getByText('Default', { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: 'New schedule' }).click();
@@ -154,14 +154,15 @@ test.describe('availability schedules', () => {
     });
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
     // The page's Hours tab edits the schedule's week in place, saved by the page's own Save (the owner, 22 October
-    // 2026), and says which other pages the change reaches; the Share tab opens the live page in a new tab.
+    // 2026), and says which other pages the change reaches; the Share tab shares the live page's address.
     // Its live address: `/b/<key>` until its host holds a handle, and `/<handle>/<slug>` once they do, which every
     // membership now does (26 October 2026, a link page made with the membership).
+    // The link card (the forms Share redesign) has no Open link; its Email link carries the address as its body.
     await page.goto(`${pageUrl}?tab=share`);
-    await expect(page.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute(
-      'href',
-      new RegExp(`(/b/${key ?? ''}|/[a-z0-9-]+/[a-z0-9-]+)$`),
-    );
+    const byEmail = page.getByRole('group', { name: 'Send the link' }).getByRole('link', { name: 'Email' });
+    await expect(byEmail).toHaveAttribute('href', /body=/);
+    const shared = new URL((await byEmail.getAttribute('href')) ?? '').searchParams.get('body') ?? '';
+    expect(shared).toMatch(new RegExp(`(/b/${key ?? ''}|/[a-z0-9-]+/[a-z0-9-]+)$`));
     await page.goto(`${pageUrl}?tab=hours`);
     await setAllDays(page, '6:00 PM', '9:00 PM');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -173,12 +174,13 @@ test.describe('availability schedules', () => {
     await readerContext.close();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 21));
 
-    // Deleting from the switcher asks first, naming the page it moves; Cancel changes nothing.
+    // Deleting from the open schedule's ⋯ asks first, naming the page it moves; Cancel changes nothing.
     await page.goto(editorUrl);
     // Used by is rows now (availfix): a grid of the pages, each opening its editor.
     await expect(page.getByRole('grid', { name: 'Used by' })).toContainText('Intro call');
     const remove = async () => {
-      await switcher('Evenings').click();
+      await expect(switcher('Evenings')).toBeVisible();
+      await page.getByRole('button', { name: 'Actions for Evenings' }).click();
       await page.getByRole('menuitem', { name: 'Delete' }).click();
       return page.getByRole('alertdialog', { name: 'Delete the Evenings schedule?' });
     };
@@ -196,7 +198,9 @@ test.describe('availability schedules', () => {
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
     await expect(switcher('Working hours')).toBeVisible();
     await switcher('Working hours').click();
-    await expect(page.getByRole('menuitemradio', { name: /Evenings/ })).toHaveCount(0);
+    const choices = page.getByRole('listbox', { name: 'Schedule', exact: true });
+    await expect(choices.getByRole('option', { name: /Working hours/ })).toBeVisible();
+    await expect(choices.getByRole('option', { name: /Evenings/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
   });

@@ -3,8 +3,8 @@
 // adding many submissions to the CRM in a plain one. Cancel (or Escape)
 // changes nothing and sends nothing; each press of the commit sends one call;
 // a refusal says why inside the dialog, which stays open to try again.
-// Pausing and resuming are reversible, so they act at once with Undo in
-// their toast (the owner, 22 October 2026).
+// Pausing asks first too, from the list or the editor (lane 3c); resuming
+// acts at once, and a pause's toast offers Undo.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -104,18 +104,31 @@ test.describe('confirms on forms', () => {
       mutationId: randomUUID(),
     });
 
-    // Turning the form off from its card pauses it at once (it's reversible), with Undo in its toast.
+    // Pausing from its card's ⋯ asks first (it ends something, lane 3c): Escape is Cancel and sends nothing;
+    // Pause form pauses it, once, with Undo in its toast.
     const setStatus = calls(page, 'forms/setStatus');
     await page.goto(`/w/${slug}/captures/forms`);
-    const accepting = page.getByRole('switch', { name: `${live.name} is live` });
-    await expect(accepting).toBeChecked();
-    await accepting.press('Space');
-    await expect(accepting).not.toBeChecked();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const listed = page.getByRole('article', { name: live.name });
+    await expect(listed.getByText('Live', { exact: true })).toBeVisible();
+    const pause = async () => {
+      await listed.getByRole('button', { name: `More for ${live.name}` }).click();
+      await page.getByRole('menuitem', { name: 'Pause' }).click();
+      const asking = page.getByRole('dialog', { name: `Pause “${live.name}”?` });
+      await expect(asking).toBeVisible();
+      return asking;
+    };
+    const pausing = await pause();
+    await page.keyboard.press('Escape');
+    await expect(pausing).toBeHidden();
+    await expect(listed.getByText('Live', { exact: true })).toBeVisible();
+    expect(setStatus()).toBe(0);
+    await (await pause()).getByRole('button', { name: 'Pause form' }).click();
+    await expect(pausing).toBeHidden();
+    await expect(listed.getByText('Paused', { exact: true })).toBeVisible();
     await expect.poll(setStatus).toBe(1);
     // Undo turns it back on, with one more call.
     await page.getByRole('button', { name: 'Undo' }).first().click();
-    await expect(accepting).toBeChecked();
+    await expect(listed.getByText('Live', { exact: true })).toBeVisible();
     await expect.poll(setStatus).toBe(2);
 
     // Adding many to the CRM at once asks first and counts them; Escape is Cancel and sends nothing.
@@ -154,22 +167,30 @@ test.describe('confirms on forms', () => {
         }),
       { times: 1 },
     );
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    // Delete sits in the panel's ⋯ at the footer's start (lane 3c), so the footer's end keeps one primary.
+    const deleteOpen = async () => {
+      await page.getByRole('dialog').getByRole('button', { name: 'More actions' }).click();
+      await page.getByRole('menuitem', { name: 'Delete' }).click();
+    };
+    await deleteOpen();
     await expect(page.getByText('Try again in a moment.')).toBeVisible();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     expect(deleteSubmission()).toBe(1);
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await deleteOpen();
     await expect(page.getByRole('row').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
     expect(deleteSubmission()).toBe(2);
     await page.getByRole('button', { name: 'Undo' }).first().click();
     await expect(page.getByRole('row').filter({ hasText: 'Grace Hopper' }).first()).toBeVisible();
     expect(restoreSubmission()).toBe(1);
 
-    // The editor's Pause acts at once too, its toast offering Undo, which resumes it.
+    // The editor's Pause asks first too, as the list does (lane 3c); Pause form pauses it once, its toast offering
+    // Undo, which resumes it.
     await page.goto(`/w/${slug}/captures/forms/${live.id}`);
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Pause' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const pausingHere = page.getByRole('dialog', { name: `Pause “${live.name}”?` });
+    await pausingHere.getByRole('button', { name: 'Pause form' }).click();
+    await expect(pausingHere).toBeHidden();
     await expect.poll(setStatus).toBe(3);
     await page.getByRole('button', { name: 'Undo' }).first().click();
     await expect.poll(setStatus).toBe(4);
@@ -199,7 +220,7 @@ test.describe('confirms on forms', () => {
     // Deleting the form from its card asks first; Cancel keeps it; Delete form removes it, once.
     const deleteForm = calls(page, 'forms/delete');
     await page.goto(`/w/${slug}/captures/forms`);
-    const card = page.getByRole('link', { name: live.name });
+    const card = page.getByRole('link', { name: live.name, exact: true });
     await expect(card).toBeVisible();
     await page.getByRole('button', { name: `More for ${live.name}` }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
