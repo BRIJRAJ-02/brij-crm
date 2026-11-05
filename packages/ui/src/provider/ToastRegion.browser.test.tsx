@@ -32,7 +32,7 @@ describe('ToastRegion beside a drawer', () => {
     // The story's play opens the drawer, presses Save and checks the rectangles itself.
     await DrawerWithToast.run();
     const toast = document.querySelector('[data-toast-region] [role="alertdialog"]');
-    const save = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Save');
+    const save = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.startsWith('Save'));
     const foot = save?.parentElement;
     if (!(toast instanceof HTMLElement) || foot === null || foot === undefined) throw new Error('nothing to measure');
     expect(overlaps(toast.getBoundingClientRect(), foot.getBoundingClientRect())).toBe(false);
@@ -52,7 +52,7 @@ describe('ToastRegion beside a drawer', () => {
     // The story's play presses Save and fails if the toast lands on the footer.
     await SheetWithToast.run();
     const toast = document.querySelector('[data-toast-region] [role="alertdialog"]');
-    const save = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Save');
+    const save = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.startsWith('Save'));
     const foot = save?.parentElement;
     if (!(toast instanceof HTMLElement) || foot === null || foot === undefined) throw new Error('nothing to measure');
     expect(overlaps(toast.getBoundingClientRect(), foot.getBoundingClientRect())).toBe(false);

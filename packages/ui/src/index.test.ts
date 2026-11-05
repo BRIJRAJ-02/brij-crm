@@ -310,6 +310,7 @@ describe('@crm/ui', () => {
       'useNow',
       'usePhoneWidth',
       'usePhotoCrop',
+      'useToasts',
       'weekRangeLabel',
     ]);
   });

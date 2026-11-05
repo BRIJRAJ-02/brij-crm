@@ -248,7 +248,7 @@ export function SlotList({
           {isLoading && heading === '' ? <Skeleton shape="text" width="short" /> : heading}
         </p>
       ) : (
-        <div className={styles.head}>
+        <div className={styles.head} data-grouped={groups === undefined ? undefined : ''}>
           {/* Only once there is a day: a heading with nothing in it is an empty heading, and `.head` holds the
               row's height either way. The heading stays mounted as the day changes and only its words swap
               (critic C8), so the row never blanks. */}

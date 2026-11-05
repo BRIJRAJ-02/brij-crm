@@ -27,8 +27,8 @@
     min-block-size: var(--size-control);
   }
 
-  /* Without a heading the clock switch still sits at the row's end (a heading alone stays at the start). */
-  .head > :only-child:not(.heading) {
+  /* Without a heading the clock switch still sits at the row's end; a heading alone goes there too, but in groups. */
+  .head:not([data-grouped]) > :only-child {
     margin-inline-start: auto;
   }
 

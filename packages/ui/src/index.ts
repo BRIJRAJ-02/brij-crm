@@ -26,6 +26,8 @@ export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.t
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
 /** Button's `touchTarget`: pressed across 44px. */
 export { TOUCH_TARGET } from './atoms/Button/touch-target.ts';
+/** The toast queue the provider holds: for what a screen's own context can't reach. */
+export { useToasts } from './provider/context.ts';
 /** A Checkbox as a full width row with its price at the end: a dish's add-ons. */
 export { CheckboxRow } from './atoms/Checkbox/CheckboxRow.tsx';
 export { Code, type CodeProps, type CodeVariant } from './atoms/Code/Code.tsx';
