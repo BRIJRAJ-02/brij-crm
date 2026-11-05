@@ -284,9 +284,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       <>
         {picker}
         <MenuTrigger>
-          <Button variant="ghost" icon={draft.hidden ? 'eye-off' : 'eye'} iconRight="chevron-down">
-            {statusText}
-          </Button>
+          {/* At a phone's width the status is its eye alone, so the bar's actions keep their room. */}
+          <Button
+            variant="ghost"
+            icon={draft.hidden ? 'eye-off' : 'eye'}
+            iconRight="chevron-down"
+            {...(isNarrow ? { label: statusText } : { children: statusText })}
+          />
           <Menu
             label={strings.visibility}
             selectionMode="single"
@@ -316,6 +320,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   // The header's ⋯ (checklabs': Duplicate menu, Discard changes, Delete): only what can be done here. Duplicate menu
   // has no write yet, so it isn't offered.
   const moreItems = [
+    // At a phone's width Settings joins ⋯ rather than taking a button of its own in a full bar.
+    ...(isNarrow && current !== undefined ? (['settings'] as const) : []),
     ...(draft.canEdit && isLive && draft.changes > 0 ? (['discard'] as const) : []),
     ...(draft.canEdit && current !== undefined ? (['delete'] as const) : []),
   ];
@@ -359,14 +365,15 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
         {/* Settings in the header, as checklabs' editor has it; its view keeps `?tab=settings`. */}
-        {current === undefined ? null : (
+        {current === undefined || isNarrow ? null : (
           <ToggleButton
             variant="ghost"
             icon="settings"
-            {...(isNarrow ? { label: strings.tabSettings } : { children: strings.tabSettings })}
             isSelected={tab === 'settings'}
             onChange={(isOn) => go({ tab: isOn ? 'settings' : 'structure' })}
-          />
+          >
+            {strings.tabSettings}
+          </ToggleButton>
         )}
         {moreItems.length === 0 ? null : (
           <MenuTrigger>
@@ -374,11 +381,17 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             <Menu
               label={strings.more}
               onAction={(key) => {
-                if (key === 'discard') setOpen({ kind: 'discard' });
+                if (key === 'settings') go({ tab: tab === 'settings' ? 'structure' : 'settings' });
+                else if (key === 'discard') setOpen({ kind: 'discard' });
                 else if (key === 'delete' && current !== undefined)
                   setOpen({ kind: 'deleteMenu', menuId: current.id, name: current.name });
               }}
             >
+              {moreItems.includes('settings') ? (
+                <MenuItem id="settings" icon="settings">
+                  {tab === 'settings' ? strings.backToMenu : strings.tabSettings}
+                </MenuItem>
+              ) : null}
               {moreItems.includes('discard') ? (
                 <MenuItem id="discard" icon="undo-2">
                   {strings.discardChanges}
