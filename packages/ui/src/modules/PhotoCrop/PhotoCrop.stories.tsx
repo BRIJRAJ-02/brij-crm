@@ -112,6 +112,19 @@ export const Keyboard: Story = {
   },
 };
 
+/** The way out by keyboard: Cancel shows ESC, and Esc from the photo leaves with nothing used. */
+export const Escape: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args }) => {
+    const dialog = await opened();
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toHaveAttribute('aria-keyshortcuts', 'Escape');
+    dialog.getByRole('application', { name: 'Photo position' }).focus();
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await expect(args.onDone).not.toHaveBeenCalled();
+  },
+};
+
 /** A file the browser can't read: said in the stage, and Use photo stays off. */
 export const Unreadable: Story = {
   args: { source: 'data:image/png;base64,AAAA', shape: 'square' },

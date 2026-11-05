@@ -122,7 +122,9 @@ export function PhotoCrop({ source, shape, isOpen, title = strings.title, onCanc
       }
       actions={
         <>
-          <Button onPress={onCancel}>{strings.cancel}</Button>
+          {/* The footer's close, as every dialog's Cancel is: it shows ESC, and it leaves the way Esc and the close
+              button do, through `onOpenChange`, so `onCancel` is called once whichever way out is taken. */}
+          <Button slot="close">{strings.cancel}</Button>
           <Button
             variant="primary"
             isDisabled={crop === undefined}
