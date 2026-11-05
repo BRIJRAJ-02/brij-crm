@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -413,13 +414,17 @@ function usePhoneFit(device: Device = 'phone') {
  */
 function useContentHeight(screen: RefObject<HTMLDivElement | null>, isOn: boolean): number | undefined {
   const [height, setHeight] = useState<number | undefined>(undefined);
-  useEffect(() => {
+  // A layout effect, measured once at once: a ResizeObserver first answers after the first paint, so the frame drew
+  // at the room's full height for a frame and then shrank to its form, a layout shift on every opening.
+  useLayoutEffect(() => {
     const element = screen.current;
     if (!isOn || element === null) return;
-    const sizes = new ResizeObserver(() => {
+    const measure = () => {
       const content = element.firstElementChild;
       if (content instanceof HTMLElement) setHeight(Math.ceil(content.scrollHeight));
-    });
+    };
+    measure();
+    const sizes = new ResizeObserver(measure);
     // A preview whose root is swapped (a branded preview for the plain one) is watched again.
     const watch = () => {
       sizes.disconnect();

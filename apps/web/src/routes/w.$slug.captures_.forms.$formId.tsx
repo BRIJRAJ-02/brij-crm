@@ -124,6 +124,8 @@ function FormPending() {
       <EditorPending
         title={strings.forms}
         icon="clipboard-list"
+        // The phone in two fifths of the width, as FormEditor draws it, so it shows from the same width.
+        previewShare="wide"
         // Submissions loads as its table does (forms fix a6), not as the Form tab's cards.
         {...(tab === 'submissions'
           ? {
@@ -143,8 +145,8 @@ function FormPending() {
               ),
             }
           : {})}
-        // The Form tab opens with the draft's name, then Layout (spec 0063), above the questions.
-        cards={tab === 'form' ? [strings.name, strings.layoutTitle] : [strings.name]}
+        // The Form tab opens with its one title card; Layout under it is a segmented control now (T17), not a card.
+        cards={[strings.name]}
         tabs={{
           label: strings.tabs,
           items: FORM_TABS.filter((id) => published || id === 'form' || id === 'settings').map((id) => ({
