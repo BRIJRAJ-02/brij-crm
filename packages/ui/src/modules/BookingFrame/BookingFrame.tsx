@@ -312,10 +312,7 @@ export function BookingFrame({
                   size="lg"
                 />
               )}
-              <div
-                className={styles.names}
-                data-team={host.team === undefined || host.team.people.length === 0 ? undefined : ''}
-              >
+              <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
                 {/* A team page names nobody before booking: its faces and the page's own title. */}
                 {host.team === undefined && <p className={styles.host}>{host.name}</p>}
                 {host.team === undefined && host.role !== undefined && host.role !== '' && (

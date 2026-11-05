@@ -557,7 +557,7 @@ export const TeamPage: Story = {
     const stack = canvas.getByRole('group', { name: 'Team of 6' });
     await expect(stack).toHaveTextContent('SL');
     await expect(stack).toHaveTextContent('+2');
-    await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call with Acme' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call' })).toBeInTheDocument();
   },
 };
 
