@@ -1,10 +1,9 @@
 // Brief
-// Purpose: the open schedule in the Availability tab (spec 0035, AC-970): its weekly hours, its time zone, its days off and the booking pages that use it.
+// Purpose: the open schedule in the Availability tab (spec 0035, AC-970): its weekly hours, its time zone, its days off (inside the Time off card) and the booking pages that use it.
 // Main task: change the hours (add, remove or copy a day's ranges), the zone or the days off, then Save in the Unsaved changes bar (or Discard), as in the booking page editor.
 // Leaves out: which schedule is open and what to do with it (the switcher, in the tab strip), and which schedule a page uses (each page picks in its own editor).
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
 import {
-  Button,
   Card,
   EmptyState,
   HoursEditor,
@@ -17,7 +16,7 @@ import {
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
-import { DaysOff } from './DaysOff.tsx';
+import type { DaysOffSlot } from './DaysOff.tsx';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
@@ -45,8 +44,11 @@ export interface ScheduleEditorProps {
   readonly isReadOnly?: boolean;
   /** Above the week: whose hours these are and who is told, and who changed them last (AC-1265, AC-1268). */
   readonly notice?: ReactNode;
-  /** The member's time off (spec 0037, AC-1286), first in the aside: it closes every page, not one schedule. */
-  readonly timeOff?: ReactNode;
+  /**
+   * The member's time off (spec 0037, AC-1286), first in the aside: it closes every page, not one schedule. Given
+   * this schedule's days off, so the one Time off card lists and adds both (critic A15).
+   */
+  readonly timeOff?: (daysOff: DaysOffSlot) => ReactNode;
 }
 
 /**
@@ -95,8 +97,7 @@ export function ScheduleEditor({
         }
         aside={
           <>
-            {timeOff}
-            <DaysOff availability={shown} onChange={() => undefined} isReadOnly />
+            {timeOff?.({ availability: shown, onChange: () => undefined, isReadOnly: true })}
             <UsedBy slug={slug} schedule={schedule} />
           </>
         }
@@ -127,8 +128,7 @@ export function ScheduleEditor({
       }
       aside={
         <>
-          {timeOff}
-          <DaysOff availability={shown} onChange={change} />
+          {timeOff?.({ availability: shown, onChange: change })}
           <UsedBy slug={slug} schedule={schedule} />
         </>
       }
@@ -297,14 +297,8 @@ export function ScheduleEditorPending({ timeOff }: { readonly timeOff?: ReactNod
       week={<WeekCardPending />}
       aside={
         <>
+          {/* Time off in its loaded anatomy, the days off inside it. */}
           {timeOff}
-          {/* Days off in its loaded anatomy: a row's place, then Add day off under it. */}
-          <Card title={strings.daysOff} isBusy>
-            <EmptyState layout="row" isLoading title={strings.daysOffLoading} />
-            <Button icon="plus" isDisabled>
-              {strings.addDayOff}
-            </Button>
-          </Card>
           {/* The rows Used by draws once loaded, in their loading shape. */}
           <Card title={scheduleStrings.usedByLabel}>
             <LinkList

@@ -17,13 +17,18 @@ export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}
 export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
 
 /** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
-export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'limits'] as const;
+export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'share', 'bookings', 'insights'] as const;
 /** One of the editor's tabs, as `?tab=` holds it. */
 export type PageTab = (typeof PAGE_TABS)[number];
 
 /** A `?tab=` value as the editor's tab: Page for anything else. */
 export const pageTabOf = (value: unknown): PageTab =>
-  typeof value === 'string' && (PAGE_TABS as readonly string[]).includes(value) ? (value as PageTab) : 'page';
+  // Limits joined Hours as Availability (the bookings area, 4 November 2026): an old `?tab=limits` link lands there.
+  value === 'limits'
+    ? 'hours'
+    : typeof value === 'string' && (PAGE_TABS as readonly string[]).includes(value)
+      ? (value as PageTab)
+      : 'page';
 
 /** One page's editor, optionally at a tab (`?tab=hours`); Page, the first, needs none. */
 export const pageEditorHref = (slug: string, pageId: string, tab?: PageTab) =>

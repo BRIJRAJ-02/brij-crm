@@ -29,6 +29,7 @@ import {
   MAX_RESCHEDULES,
   moveBooking,
   readMoveSlots,
+  setMeetingLink,
 } from './change.ts';
 import { bookAsHost } from './host.ts';
 import { listWorkspaceBookings, readBookingsCalendar } from './list.ts';
@@ -359,6 +360,31 @@ describe('the host moves and cancels (AC-640)', () => {
     expect(await refusalOf(moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 90 }))).toMatchObject({
       code: 'SLOT_TAKEN',
     });
+  });
+
+  it('adds a meeting link by hand and emails the guest once; a stranger can’t, nor on a cancelled booking', async () => {
+    const s = await setup();
+    const booked = await s.book();
+    const url = 'https://meet.example.com/abc-defg-hij';
+    const stranger = await s.addMember('Bo', 'member');
+    expect(await refusalOf(setMeetingLink(hostTarget(stranger, booked.bookingId), { url }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await setMeetingLink(hostTarget(s.host, booked.bookingId), { url }, NOW)).toEqual({ videoUrl: url });
+    // The same link again changes nothing and emails nobody.
+    await setMeetingLink(hostTarget(s.host, booked.bookingId), { url }, NOW);
+    const kinds = (await queued(booked.bookingId)).map((each) => each.kind);
+    expect(kinds.filter((kind) => kind === 'meeting_link')).toHaveLength(1);
+    const found = await db.withWorkspace(s.workspaceId, (tx) =>
+      tx.execute<{ video_url: string | null }>(
+        sql`select video_url from bookings where id = ${booked.bookingId}::uuid`,
+      ),
+    );
+    expect(found.rows[0]?.video_url).toBe(url);
+    await cancelBooking(hostTarget(s.host, booked.bookingId), s.deps, {});
+    expect(
+      await refusalOf(setMeetingLink(hostTarget(s.host, booked.bookingId), { url: `${url}x` }, NOW)),
+    ).toMatchObject({ code: 'BOOKING_CLOSED' });
   });
 
   it('copies the guest link with the guest’s token', async () => {

@@ -41,7 +41,11 @@ const readProfile = (origin) => async (handle, signal) => {
   return await answer.json();
 };
 
-/** Reads one of a person's booking pages, by the handle and the slug apart: neither is joined into a path here. */
+/**
+ * Reads one of a person's booking pages, by the handle and the slug apart: neither is joined into a path here. The
+ * address names the page's key; the page's own public facts (its title, host, lengths and kind of place) then make
+ * the share preview (critic C3). Facts that miss leave the address alone, which still boots the page.
+ */
 const readPage = (origin) => async (handle, slug, signal) => {
   const answer = await fetch(`${origin}/api/public/handles/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`, {
     signal,
@@ -49,7 +53,26 @@ const readPage = (origin) => async (handle, slug, signal) => {
   });
   if (answer.status === 404) return undefined;
   if (!answer.ok) throw new Error(`page read answered ${String(answer.status)}`);
-  return await answer.json();
+  const address = await answer.json();
+  if (typeof address?.publicKey !== 'string') return address;
+  try {
+    const facts = await fetch(`${origin}/api/public/booking/${encodeURIComponent(address.publicKey)}`, {
+      signal,
+      headers: { accept: 'application/json' },
+    });
+    if (!facts.ok) return address;
+    const page = await facts.json();
+    return {
+      ...address,
+      title: page?.title,
+      description: page?.description,
+      hostName: page?.hostName,
+      durations: page?.durations,
+      location: page?.location,
+    };
+  } catch {
+    return address;
+  }
 };
 
 /** Reads a business's published page (spec 0066, B4), by its handle and maybe a place's slug, never joined from a path. */

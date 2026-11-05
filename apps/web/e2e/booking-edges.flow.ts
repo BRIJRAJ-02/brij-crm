@@ -40,12 +40,19 @@ async function withPage(page: Page, kind: string): Promise<{ slug: string; pageI
   return { slug, pageId: made.id };
 }
 
-/** The page's public address, from its editor's View page. */
-async function publicAddress(page: Page, slug: string, pageId: string): Promise<string> {
-  await page.goto(`/w/${slug}/captures/links/${pageId}`);
-  const href = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+/** The page's public address as its editor's Share tab opens it (the bookings area, 4 November 2026). */
+async function sharedAddress(page: Page): Promise<string> {
+  await page.getByRole('tab', { name: 'Share', exact: true }).click();
+  const href = await page.getByRole('link', { name: 'Open', exact: true }).getAttribute('href');
+  await page.getByRole('tab', { name: 'Page', exact: true }).click();
   expect(href).not.toBeNull();
   return href ?? '';
+}
+
+/** The page's public address, from its editor, which is then left on its Page tab. */
+async function publicAddress(page: Page, slug: string, pageId: string): Promise<string> {
+  await page.goto(`/w/${slug}/captures/links/${pageId}`);
+  return sharedAddress(page);
 }
 
 /** A visitor, signed in to nothing, in a browser of their own. */
@@ -89,8 +96,8 @@ test.describe('the booking journey’s edges', () => {
     await page.goto(`/w/${slug}/bookings/list`);
     await page.getByText('Intro call').first().click();
     const panel = page.getByRole('dialog', { name: /Booking/ });
-    await panel.getByRole('button', { name: 'More for this booking' }).click();
-    await page.getByRole('menuitem', { name: 'Cancel booking' }).click();
+    // Cancel sits beside Reschedule (B-06).
+    await panel.getByRole('button', { name: 'Cancel booking' }).click();
     // Asked first, in a dialog, naming who it is with.
     const confirm = page.getByRole('alertdialog', { name: 'Cancel Intro call with Vera Visitor?' });
     await expect(confirm).toBeVisible();
@@ -170,7 +177,7 @@ test.describe('the booking journey’s edges', () => {
     await field.fill('first-call');
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
-    const after = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+    const after = await sharedAddress(page);
     expect(after).toMatch(/\/first-call$/);
 
     const visitor = await visitorAt(browser);
@@ -236,7 +243,7 @@ test.describe('the booking journey’s edges', () => {
     await expect(page.getByText(/Old address stops working on save/)).toBeVisible();
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
-    const after = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+    const after = await sharedAddress(page);
     expect(after).toMatch(/\/b\/[A-Za-z0-9_-]+$/);
 
     const visitor = await visitorAt(browser);
@@ -244,7 +251,7 @@ test.describe('the booking journey’s edges', () => {
     await visitor.goto(before.replace(/\/[^/]+$/, ''));
     await expect(visitor.getByText('Intro call')).toHaveCount(0);
     // Its own link books.
-    await book(visitor, after ?? '', 'Lia Link', `lia-${pageId.slice(-6)}@example.com`);
+    await book(visitor, after, 'Lia Link', `lia-${pageId.slice(-6)}@example.com`);
     await visitor.context().close();
   });
 
@@ -260,10 +267,10 @@ test.describe('the booking journey’s edges', () => {
       .getByRole('link', { name: 'Captures', exact: true })
       .click();
     await page.getByRole('button', { name: /^New booking page/ }).click();
-    const create = page.getByRole('dialog', { name: 'Add a booking page' });
+    const create = page.getByRole('dialog', { name: 'New booking page' });
     await create.getByLabel('Title').fill('Team call');
-    await create.getByText('Round robin group', { exact: true }).click();
-    await expect(create.getByText(/^Make a round robin group first\./)).toBeVisible();
+    await create.getByText('Round robin', { exact: true }).click();
+    await expect(create.getByText('No round robin groups yet.')).toBeVisible();
     // Settings opens beside it, so the title typed here isn't lost on the way (B8).
     const [settings] = await Promise.all([
       page.context().waitForEvent('page'),

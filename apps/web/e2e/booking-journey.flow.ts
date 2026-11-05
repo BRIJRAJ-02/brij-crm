@@ -28,14 +28,13 @@ test.describe('the booking journey', () => {
       .getByRole('link', { name: 'Captures', exact: true })
       .click();
     await page.getByRole('button', { name: /^New booking page/ }).click();
-    const create = page.getByRole('dialog', { name: 'Add a booking page' });
+    const create = page.getByRole('dialog', { name: 'New booking page' });
     await expect(create.getByLabel('Title')).toBeFocused();
     await create.getByLabel('Title').fill('Intro call');
     await create.getByRole('button', { name: 'Create page' }).click();
-    // The Ready panel shows the link (spec 0058, AC-5); Edit page goes on to the editor.
-    await page.getByRole('button', { name: 'Edit page' }).click();
+    // Create page goes straight on to the editor, the page a draft until Publish (the bookings area).
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
-    await expect(page.getByText('Live').first()).toBeVisible();
+    await expect(page.getByText('Draft').first()).toBeVisible();
 
     // Questions: answers go to People, and a required question is filed on a new People attribute.
     await page.getByRole('tab', { name: 'Questions' }).click();
@@ -55,7 +54,11 @@ test.describe('the booking journey', () => {
     await expect(page.getByText('Added 1 field to Person.')).toBeVisible();
     // Saved means saved: the bar leaves once the question is filed (late trap #58).
     await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
-    const address = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+    // A new page is a draft (the bookings area, 4 November 2026): Publish puts it live and ends on its link.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    const live = page.getByRole('dialog', { name: /is live$/ });
+    const address = await live.getByRole('link', { name: 'Open' }).getAttribute('href');
+    await live.getByRole('button', { name: 'Done' }).click();
     expect(address).not.toBeNull();
 
     // The visitor: a browser of their own, signed in to nothing.

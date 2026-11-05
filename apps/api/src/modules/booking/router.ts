@@ -34,6 +34,7 @@ import {
   listRequests,
   linkBookingRecord,
   markNoShow,
+  setMeetingLink,
   routingDecision,
   routingTest,
   createSkill,
@@ -115,6 +116,7 @@ export const bookingPagesRouter = member.bookingPages.router({
           ...(input.kind === undefined ? {} : { kind: input.kind }),
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
+          ...(input.isDraft === undefined ? {} : { isDraft: input.isDraft }),
         }),
       );
     } catch (error) {
@@ -130,8 +132,9 @@ export const bookingPagesRouter = member.bookingPages.router({
         ...(input.routing === undefined ? {} : { routing: input.routing }),
       }),
     );
-    // A save of what guests see goes live at once outside the draft (spec 0068): the link page's copies go too.
-    if (BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined))
+    // A save of what guests see goes live at once outside the draft (spec 0068): the link page's copies go too, as
+    // they do when the page goes live or stops (a draft's first Publish, Pause, Resume).
+    if (input.settings.status !== undefined || BOOKING_DRAFT_KEYS.some((key) => input.settings[key] !== undefined))
       await forgetLinkPage(context, saved.handle);
     return saved;
   }),
@@ -246,12 +249,12 @@ export const bookingsRouter = member.bookings.router({
   ),
   // Changing a booking (AC-640): its host, a co-host, the page's owner or an admin moves or cancels it (`seen.ts`); the
   // guest is emailed.
-  // Bookings write no change event: the screen reads its lists again after the change.
+  // A change stores one `bookings` row naming nothing (B-17), with this write's mutation id: other tabs read again.
   cancel: member.bookings.cancel.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       cancelBooking(
         hostTarget(context.scope, input.bookingId),
-        { calendar: context.bookingCalendar, log },
+        { calendar: context.bookingCalendar, log, hooks },
         { reason: input.reason },
       ),
     ),
@@ -270,11 +273,17 @@ export const bookingsRouter = member.bookings.router({
       linkBookingRecord(context.scope, { bookingId: input.bookingId, recordId: input.recordId }),
     ),
   ),
-  move: member.bookings.move.handler(({ context, input }) =>
+  // A meeting link added by hand (B-07): through the booking's target, as a cancel; the guest is emailed it.
+  setMeetingLink: member.bookings.setMeetingLink.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
+      setMeetingLink(hostTarget(context.scope, input.bookingId), { url: input.url }),
+    ),
+  ),
+  move: member.bookings.move.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       moveBooking(
         hostTarget(context.scope, input.bookingId),
-        { calendar: context.bookingCalendar, log },
+        { calendar: context.bookingCalendar, log, hooks },
         { start: new Date(input.start), ...(input.minutes === undefined ? {} : { minutes: input.minutes }) },
       ),
     ),
@@ -578,13 +587,13 @@ export const bookingFlowRouter = member.bookingFlow.router({
   ),
   requests: member.bookingFlow.requests.handler(({ context, input }) => listRequests(context.scope, input)),
   confirm: member.bookingFlow.confirm.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      confirmBooking(hostTarget(context.scope, input.bookingId), {}),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      confirmBooking(hostTarget(context.scope, input.bookingId), { hooks }),
     ),
   ),
   decline: member.bookingFlow.decline.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      declineBooking(hostTarget(context.scope, input.bookingId), {}, { reason: input.reason }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      declineBooking(hostTarget(context.scope, input.bookingId), { hooks }, { reason: input.reason }),
     ),
   ),
 });

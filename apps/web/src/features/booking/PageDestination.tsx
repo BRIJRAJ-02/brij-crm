@@ -4,7 +4,7 @@
 // Leaves out: the member's own default (Settings › Calendars), and the calendar for anyone but the owner, who reads "Set by Bea" only (spec 0037, AC-1273).
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@crm/data';
 import { useCalendarList, usePageDestination } from '@crm/data/react';
-import { Badge, ButtonLink, Card, FieldGroup, Select } from '@crm/ui';
+import { Badge, ButtonLink, Card, Select, SettingsRow } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
 import { DEFAULT_DESTINATION, destinationChoice, destinationHint } from './destination.ts';
 import { strings } from './strings.ts';
@@ -23,6 +23,11 @@ export interface PageDestinationProps {
   readonly onChange: (calendarId: string | null) => void;
   /** Settings › Calendars, where an owner with no calendar connects one. */
   readonly settingsHref: string;
+  /**
+   * Calendar sync is on for this deployment (`data.calendar.view`'s `enabled`, as Settings › Calendars reads it):
+   * without it there is nothing to connect, so the row says so and offers no Connect calendar.
+   */
+  readonly canConnect: boolean;
 }
 
 const DEFAULT = DEFAULT_DESTINATION;
@@ -39,23 +44,47 @@ export function PageDestination({
   ownerName,
   onChange,
   settingsHref,
+  canConnect,
 }: PageDestinationProps) {
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
+  // One row in the Card, as every other group of the editor (the bookings area, 5 November 2026: the bare card
+  // with its line on the card's bottom edge read cramped).
   if (held.status === 'ready' && held.destination.isOwner && list.status === 'ready' && list.accounts.length === 0) {
     return (
-      <Card
-        title={strings.calendarSection}
-        description={strings.noCalendars}
-        actions={
-          <ButtonLink href={settingsHref} size="sm" icon="plus">
-            {strings.connectCalendar}
-          </ButtonLink>
-        }
-      />
+      <Card title={strings.calendarSection}>
+        <NoCalendarRow title={strings.addBookingsTo} canConnect={canConnect} settingsHref={settingsHref} />
+      </Card>
     );
   }
-  return <Card title={strings.calendarSection}>{destinationField(held, list, isReadOnly, onChange, ownerName)}</Card>;
+  return (
+    <Card title={strings.calendarSection}>
+      <SettingsRow title={strings.addBookingsTo} control="field">
+        {destinationField(held, list, isReadOnly, onChange, ownerName)}
+      </SettingsRow>
+    </Card>
+  );
+}
+
+/** With no calendar connected: the row says so, with Connect calendar, or that sync isn't on here. */
+function NoCalendarRow({
+  title,
+  canConnect,
+  settingsHref,
+}: {
+  readonly title: string;
+  readonly canConnect: boolean;
+  readonly settingsHref: string;
+}) {
+  return (
+    <SettingsRow title={title} description={canConnect ? strings.noCalendars : strings.calendarSyncOff}>
+      {canConnect && (
+        <ButtonLink href={settingsHref} icon="plus">
+          {strings.connectCalendar}
+        </ButtonLink>
+      )}
+    </SettingsRow>
+  );
 }
 
 /** The section's one field, in each of its states. */
@@ -68,11 +97,21 @@ function destinationField(
 ) {
   // A failed read keeps the field in place, saying so, rather than leaving a gap.
   if (held.status === 'error' || (held.status === 'ready' && held.destination.isOwner && list.status === 'error')) {
-    return <Select label={strings.addBookingsTo} items={[]} isDisabled error={strings.destinationFailed} />;
+    return (
+      <Select label={strings.addBookingsTo} isLabelHidden items={[]} isDisabled error={strings.destinationFailed} />
+    );
   }
   if (held.status === 'loading' || (held.destination.isOwner && list.status === 'loading')) {
     // Its place, while it reads: the card under it never moves.
-    return <Select label={strings.addBookingsTo} items={[]} placeholder={strings.destinationLoading} isDisabled />;
+    return (
+      <Select
+        label={strings.addBookingsTo}
+        isLabelHidden
+        items={[]}
+        placeholder={strings.destinationLoading}
+        isDisabled
+      />
+    );
   }
   const { calendarId, status, isOwner } = held.destination;
   const choice = destinationChoice(held.destination);
@@ -82,6 +121,7 @@ function destinationField(
     return (
       <Select
         label={strings.addBookingsTo}
+        isLabelHidden
         items={[
           {
             id: picked,
@@ -133,6 +173,7 @@ function destinationField(
     <Select
       savesOnPick
       label={strings.addBookingsTo}
+      isLabelHidden
       items={items}
       optionStyle="dot"
       optionDescription="below"
@@ -155,6 +196,8 @@ export interface PageConflictsProps {
   readonly calendars: CalendarsHeld<CalendarListState>;
   /** Settings › Calendars, where each calendar's Check for conflicts lives. */
   readonly settingsHref: string;
+  /** Calendar sync is on for this deployment: without it, no Connect calendar. */
+  readonly canConnect: boolean;
 }
 
 /**
@@ -162,7 +205,7 @@ export interface PageConflictsProps {
  * with Manage to Settings › Calendars, where that switch lives (never per page). With none connected, it says so and
  * offers to connect one. Colleagues see none of the owner's calendars, so it shows to the owner only.
  */
-export function PageConflicts({ destination, calendars, settingsHref }: PageConflictsProps) {
+export function PageConflicts({ destination, calendars, settingsHref, canConnect }: PageConflictsProps) {
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
   if (held.status !== 'ready' || !held.destination.isOwner || list.status !== 'ready') return null;
@@ -170,15 +213,9 @@ export function PageConflicts({ destination, calendars, settingsHref }: PageConf
   // Badges in one row.
   if (list.accounts.length === 0) {
     return (
-      <Card
-        title={strings.conflicts}
-        description={strings.noCalendars}
-        actions={
-          <ButtonLink href={settingsHref} size="sm" icon="plus">
-            {strings.connectCalendar}
-          </ButtonLink>
-        }
-      />
+      <Card title={strings.conflicts}>
+        <NoCalendarRow title={strings.checksConflictsIn} canConnect={canConnect} settingsHref={settingsHref} />
+      </Card>
     );
   }
   const checked = calendarOptions({ accounts: list.accounts, include: (calendar) => calendar.checkConflicts });
@@ -191,15 +228,15 @@ export function PageConflicts({ destination, calendars, settingsHref }: PageConf
         </ButtonLink>
       }
     >
-      <FieldGroup
-        label={strings.checksConflictsIn}
-        layout="row"
-        {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
+      {/* One row in every state, as the Calendar card above (design review, 5 November 2026). */}
+      <SettingsRow
+        title={strings.checksConflictsIn}
+        {...(checked.length === 0 ? { description: strings.noneChecked } : {})}
       >
         {checked.map((item) => (
           <Badge key={item.id} size="chip" text={item.label} dot={item.hue ?? 'gray'} />
         ))}
-      </FieldGroup>
+      </SettingsRow>
     </Card>
   );
 }

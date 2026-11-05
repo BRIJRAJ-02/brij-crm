@@ -57,7 +57,10 @@ const digestOf = (text: string) => createHash('sha256').update(text).digest('hex
 function kept(page: PageAudited, field: PageAuditField): PageAuditValue {
   switch (field) {
     case 'location':
-      return page.location.type;
+      // A host's own meeting link counts as a change by its host only, never the whole address (critic B-07).
+      return page.location.type === 'video' && 'link' in page.location && typeof page.location.link === 'string'
+        ? `video:${URL.canParse(page.location.link) ? new URL(page.location.link).host : 'link'}`
+        : page.location.type;
     case 'questions':
       return page.questions.length;
     case 'description':

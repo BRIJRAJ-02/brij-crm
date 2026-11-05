@@ -290,6 +290,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // request's wait and the worker's Confirm step run as the system in its workspace (flow-rules.test.ts).
   'confirmBooking',
   'declineBooking',
+  // A meeting link added by hand (B-07, bookings lane O) takes the target hostTarget made, as a cancel does.
+  'setMeetingLink',
   'expireRequest',
   'queueConfirmation',
   // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and

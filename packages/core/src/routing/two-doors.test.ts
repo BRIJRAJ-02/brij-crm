@@ -176,7 +176,8 @@ async function submit(publicKey: string, input: SubmitBody, busy: BusyReader = a
 /** The submission and page a booking next step hands over (the test's token is `<submission>.<page>`). */
 function handedOver(next: SubmitNext): { readonly submissionId: string; readonly pageId: string } {
   if (next.kind !== 'booking') throw new Error(`Expected a booking, got ${next.kind}.`);
-  const token = new URL(next.url, 'https://book.example').searchParams.get('p') ?? '';
+  // The token rides in the address's fragment (`#p=`), which no request log keeps.
+  const token = new URLSearchParams(new URL(next.url, 'https://book.example').hash.slice(1)).get('p') ?? '';
   const [submissionId = '', pageId = ''] = token.split('.');
   return { submissionId, pageId };
 }

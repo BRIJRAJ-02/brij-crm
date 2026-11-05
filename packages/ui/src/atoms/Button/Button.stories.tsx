@@ -333,7 +333,8 @@ export const FieldVariant: Story = {
     await userEvent.click(type);
     await expect(type).toHaveAttribute('aria-expanded', 'true');
     await userEvent.keyboard('{Escape}');
-    await expect(type).toHaveFocus();
+    // Focus comes back once the menu has gone, which can be a frame after Escape on a busy runner.
+    await waitFor(() => expect(type).toHaveFocus());
   },
 };
 

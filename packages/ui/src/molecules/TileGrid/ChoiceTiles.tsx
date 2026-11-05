@@ -98,6 +98,13 @@ export interface ChoiceSelectProps extends ChoiceTilesBase {
    * Use <name> is the dialog's primary): the same as pressing that primary. Left out, Enter does nothing, as a radio.
    */
   readonly onConfirm?: (id: string) => void;
+  /**
+   * Shows `label` over the tiles in a Field's label style, and names the group by it (`aria-labelledby`), so a form
+   * reads Title, Type, Duration down one rhythm with the group named once: New booking page's Type (5 November
+   * 2026), where a FieldGroup around the grid named it twice for screen readers ("Type, group, Type"). Why a prop:
+   * the label belongs to the group, as SegmentedControl's `isLabelVisible` does.
+   */
+  readonly isLabelVisible?: boolean;
 }
 
 /** A choice grid whose tiles each start something at once (a block kind adds that block). */
@@ -323,6 +330,7 @@ function SelectTile({
  * `action` is a group of buttons. Internal: reached through `TileGrid variant="choice"`.
  */
 export function ChoiceTiles(props: ChoiceTilesProps) {
+  const labelId = useId();
   const showsDescription = props.showsDescription ?? false;
   const keepsPicture = props.keepsPicture ?? false;
   if (props.mode === 'action') {
@@ -349,19 +357,20 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     );
   }
   const { label, tiles, value, defaultValue, onChange } = props;
+  const isLabelVisible = props.isLabelVisible === true;
   // The tile `autoFocus` lands on: the chosen one, else the first that can be picked.
   const focusId =
     props.autoFocus === true
       ? (value ?? defaultValue ?? tiles.find((tile) => tile.isDisabled !== true)?.id)
       : undefined;
   const isLarge = props.pictureSize === 'large' && showsDescription && keepsPicture;
-  return (
+  const group = (
     <RadioGroup
       className={styles.root}
       data-large={isLarge || undefined}
       data-wide={(showsDescription && props.tileWidth !== undefined) || undefined}
       data-full={(showsDescription && props.tileWidth === 'full') || undefined}
-      aria-label={label}
+      {...(isLabelVisible ? { 'aria-labelledby': labelId } : { 'aria-label': label })}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(onChange === undefined ? {} : { onChange })}
@@ -380,5 +389,14 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
         </WithTip>
       ))}
     </RadioGroup>
+  );
+  if (!isLabelVisible) return group;
+  return (
+    <div className={styles.labelled}>
+      <span id={labelId} className={styles.title}>
+        {label}
+      </span>
+      {group}
+    </div>
   );
 }

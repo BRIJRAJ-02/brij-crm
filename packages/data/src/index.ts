@@ -182,6 +182,7 @@ import { createPreview, type PreviewSource } from './computed/preview.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
+import { followBookings } from './bookings/live.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import {
   createBookingsStore,
@@ -245,6 +246,8 @@ export {
   type DuplicatePairsList,
   type DuplicatePairsState,
 } from './duplicates/store.ts';
+/** A booking a guest made, as Bookings' arrival toast hears it (B-12). */
+export type { BookingArrival } from './bookings/arrivals.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
 /** The settings Settings changes live on a form (forms fixes 2). */
 export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
@@ -550,6 +553,7 @@ import type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
+import { createBookingArrivals, type BookingArrival } from './bookings/arrivals.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -1803,6 +1807,7 @@ export function createDataLayer({
       store.clear();
     });
     unreadCounts.clear();
+    bookingArrivals.clear();
     trashedLookups.clear();
     void trash?.then((held) => {
       held.clear();
@@ -2484,6 +2489,33 @@ export function createDataLayer({
       100 + Math.round(random() * 300),
     );
   });
+  // A booking made, moved, cancelled or answered (B-17), on a public page, in chat or by a member in another tab:
+  // Bookings' held reads read again in place, once for a burst (`bookings/live.ts`).
+  followBookings(router, (workspace) => {
+    refreshBookings(workspace);
+  });
+  // The same event may bring a new booking for this member: Bookings' "New booking" toast reads its notices (B-12),
+  // coalesced with the host's `notifications` event from the same write into one read.
+  router.on('bookings', (workspace) => {
+    bookingArrivals.changed(workspace);
+  });
+  /**
+   * A member's booking write under a mutation id this tab knows (B-17): its `bookings` echo (and, for a booking made
+   * here, its person's `records` echo, `echoes`) is skipped, since each such write reads every held Bookings view
+   * again on its answer.
+   */
+  const bookingWrite = async <T>(echoes: number, send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations.answered(mutationId, echoes);
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
+  };
   // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
   router.on('automations', (workspace) => {
     automationsLoaded?.changed(workspace);
@@ -2545,6 +2577,8 @@ export function createDataLayer({
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
       unreadCounts.refresh(workspace);
+      // A guest's booking tells its host here (B-12): Bookings' "New booking" toast (the lists read on `bookings`).
+      bookingArrivals.changed(workspace);
       void inbox?.then((store) => {
         store.changed(workspace, event);
       });
@@ -2580,6 +2614,8 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     schedules.changed(workspace);
+    // Bookings hear of changes by their own event now (B-17): a reset reads what Bookings holds again.
+    refreshBookings(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
     automationsLoaded?.changed(workspace);
@@ -2902,6 +2938,19 @@ export function createDataLayer({
     meetings.refreshHeld(workspace);
     homeReads.teamChanged(workspace);
   };
+  // New bookings as they arrive (B-12, `bookings/arrivals.ts`): heard through the host's booking notice.
+  const bookingArrivals = createBookingArrivals({
+    read: (workspace) =>
+      beforeRead(workspace)
+        .then(() =>
+          call((options) =>
+            api.notifications.list({ workspace, status: 'inbox', kind: 'booking', unreadOnly: true }, options),
+          ),
+        )
+        .then((page) => page.items),
+    watch,
+    // No `refresh`: the same write's `bookings` event reads the held lists in place (`followBookings`), once.
+  });
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
     bookingsLists.reloadAll(workspace);
@@ -4487,16 +4536,25 @@ export function createDataLayer({
       requests: (workspace: string, pageId: string): Promise<BookingRequestView[]> =>
         call((options) => api.bookingFlow.requests({ workspace, pageId }, options)),
       confirm: (workspace: string, bookingId: string): Promise<boolean> =>
-        call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId: mintId() }, options)).then(
-          (answer) => answer.confirmed,
-        ),
+        bookingWrite(1, (mutationId) =>
+          call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId }, options)),
+        ).then((answer) => {
+          // Its own echo is skipped, so this tab's held Bookings views read the answer now.
+          refreshBookings(workspace);
+          return answer.confirmed;
+        }),
       decline: (workspace: string, bookingId: string, reason?: string): Promise<boolean> =>
-        call((options) =>
-          api.bookingFlow.decline(
-            { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId: mintId() },
-            options,
+        bookingWrite(1, (mutationId) =>
+          call((options) =>
+            api.bookingFlow.decline(
+              { workspace, bookingId, ...(reason === undefined ? {} : { reason }), mutationId },
+              options,
+            ),
           ),
-        ).then((answer) => answer.declined),
+        ).then((answer) => {
+          refreshBookings(workspace);
+          return answer.declined;
+        }),
     },
     bookingPages: {
       /** A new page's id: mint it once per New page, and send the same one again on a retry. */
@@ -4527,6 +4585,20 @@ export function createDataLayer({
           pageRules.receive(workspace, page);
           return page;
         }),
+      /**
+       * A live page's open times, as its guests see them (the public page's own read, so what the host picks is
+       * what a guest can book): Share specific times (the bookings area, 5 November 2026). The public client loads
+       * with `import()`, never in the first load. A draft or paused page answers as the public page does.
+       */
+      openTimes: async (
+        publicKey: string,
+        query: { readonly from: string; readonly to: string; readonly duration: number; readonly tz: string },
+        signal?: AbortSignal,
+      ): Promise<readonly string[]> => {
+        const { createBookingClient } = await import('./booking/public.ts');
+        const answer = await createBookingClient({ origin, fetch }).slots(publicKey, query, signal);
+        return answer.slots.map((slot) => slot.start);
+      },
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,
@@ -4540,6 +4612,8 @@ export function createDataLayer({
           /** `workspace`: the workspace's own link (`booking.admin`), booking everyone on the roster unless `hosts` says. */
           scope?: 'workspace';
           hosts?: TeamHosts;
+          /** Made as a draft: paused until its first Publish (the editor's Publish sets it live). */
+          isDraft?: boolean;
         },
       ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
@@ -5097,6 +5171,12 @@ export function createDataLayer({
       recents: (workspace: string): HomeHeld<HomeRecentsState> => homeReads.recents(workspace),
     },
     bookings: {
+      /**
+       * Hears each booking a guest makes on one of the member's pages while it listens (B-12): the Bookings screens'
+       * "New booking" toast. Bookings' held reads read again as one arrives. The answer stops listening.
+       */
+      arrivals: (workspace: string, listener: (arrival: BookingArrival) => void): (() => void) =>
+        bookingArrivals.listen(workspace, listener),
       /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */
       assignments: (workspace: string, bookingId: string): Promise<BookingAssignment[]> =>
         call((options) => api.bookings.assignments({ workspace, bookingId }, options)),
@@ -5236,8 +5316,9 @@ export function createDataLayer({
         workspace: string,
         input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
       ): Promise<{ bookingId: string; notInCrm?: string }> => {
-        const booked = await call((options) =>
-          api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
+        // Two echoes: the person it filed (`records`) and the `bookings` row.
+        const booked = await bookingWrite(2, (mutationId) =>
+          call((options) => api.bookings.bookAsHost({ ...input, workspace, mutationId }, options)),
         );
         reloadBookings(workspace);
         return booked;
@@ -5260,6 +5341,25 @@ export function createDataLayer({
       link: (workspace: string, bookingId: string, record: LinkedRecordDisplay | null): Promise<void> =>
         linkBooking(workspace, bookingId, record),
       /**
+       * Adds or changes a booking's meeting link by hand (B-07): its Join shows at once in every list, range and page
+       * of meetings, and goes back on a refusal (`BOOKING_CLOSED` once it started or was cancelled, `INPUT_INVALID` for
+       * an address that isn't https), which it throws on. The guest is emailed the link.
+       */
+      setMeetingLink: async (workspace: string, bookingId: string, url: string): Promise<void> => {
+        const edit = (booking: BookingListItem): BookingListItem => ({ ...booking, videoUrl: url });
+        const weeks = bookingsLists.patchBooking(workspace, bookingId, edit);
+        const list = meetings.patchBooking(workspace, bookingId, edit);
+        try {
+          await call((options) =>
+            api.bookings.setMeetingLink({ workspace, bookingId, url, mutationId: mintId() }, options),
+          );
+        } catch (error) {
+          weeks();
+          list();
+          throw error;
+        }
+      },
+      /**
        * Cancels a booking (AC-640): shown cancelled at once, back on a
        * refusal; the guest is emailed, with the reason when there is one.
        * Every list and range is read again once the server has it.
@@ -5272,10 +5372,9 @@ export function createDataLayer({
           ...(reason === '' ? {} : { cancelReason: reason }),
         }));
         try {
-          await call((options) =>
-            api.bookings.cancel(
-              { workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.cancel({ workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId }, options),
             ),
           );
         } catch (error) {
@@ -5305,10 +5404,12 @@ export function createDataLayer({
           };
         });
         try {
-          await call((options) =>
-            api.bookings.move(
-              { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId: mintId() },
-              options,
+          await bookingWrite(1, (mutationId) =>
+            call((options) =>
+              api.bookings.move(
+                { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId },
+                options,
+              ),
             ),
           );
         } catch (error) {

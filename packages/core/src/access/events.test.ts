@@ -79,6 +79,7 @@ describe('every kind has a rule', () => {
       [
         'access',
         'automations',
+        'bookings',
         'calendars',
         'comments',
         'definitions',
@@ -103,6 +104,7 @@ describe('every kind has a rule', () => {
     expect(eventFacts({ seq: 1, at, kind: 'schedules', scheduleIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'time_off' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'visits', placeIds: [] })).toEqual([]);
+    expect(eventFacts({ seq: 1, at, kind: 'bookings' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'automations' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'forms' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'files', recordIds: [] })).toEqual([]);

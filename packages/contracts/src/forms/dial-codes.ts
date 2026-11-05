@@ -63,3 +63,26 @@ export function countryOfE164(number: string): string | undefined {
   }
   return undefined;
 }
+
+/** An international number: `+`, a code that can't start with 0, and 7 to 15 digits in all. */
+const E164 = /^\+[1-9]\d{6,14}$/;
+
+/** A typed number with its spaces, brackets, dots and dashes taken out. */
+export function compactPhone(text: string): string {
+  return text.replace(/[\s().-]/g, '');
+}
+
+/**
+ * A number typed in its international form (`+44 20 7946 0958`) as E.164 with the country it dials, or undefined
+ * when it isn't one: the one check a form's typed phone answer and a booking page's number to call share.
+ */
+export function internationalPhone(text: string): { readonly number: string; readonly country: string } | undefined {
+  const compact = compactPhone(text);
+  const country = E164.test(compact) ? countryOfE164(compact) : undefined;
+  return country === undefined ? undefined : { number: compact, country };
+}
+
+/** True for an E.164 number (`+` and 7 to 15 digits). */
+export function isE164(number: string): boolean {
+  return E164.test(number);
+}

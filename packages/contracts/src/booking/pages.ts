@@ -83,8 +83,11 @@ export const BookingPageView = BookingPageSettings.extend({
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
   scheduleName: z.string(),
-  /** Why a paused page is paused when the system paused it: its last host was removed (spec 0031, AC-814). */
-  pausedReason: z.literal('host_removed').optional(),
+  /**
+   * Why a paused page is paused, when the person didn't pause it: its last host was removed (spec 0031, AC-814), or
+   * it was made as a draft and has never been published (`draft`, the bookings area, 4 November 2026).
+   */
+  pausedReason: z.enum(['host_removed', 'draft']).optional(),
   /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
   hosts: TeamHosts.optional(),
   /**
@@ -170,6 +173,11 @@ export const CreateBookingPageInput = WorkspaceScoped.extend({
    */
   scope: BookingPageScope.optional(),
   hosts: TeamHosts.optional(),
+  /**
+   * Makes the page as a draft (the bookings area, 4 November 2026): paused with `pausedReason: 'draft'`, so guests
+   * can't book it until its first Publish, which is setting its status to `live` (every go live check runs then).
+   */
+  isDraft: z.boolean().optional(),
   mutationId: Uuid,
 });
 /** A new page. */
@@ -595,6 +603,22 @@ export const MarkNoShowInput = WorkspaceScoped.extend({ bookingId: Uuid, noShow:
 /** Marking a booking as a no show. */
 export type MarkNoShowInput = z.infer<typeof MarkNoShowInput>;
 
+/**
+ * The meeting's link, added by hand from the booking's panel (B-07: a video call no calendar made a link for): an
+ * https address, at most 2,000 characters. The guest and their guests are emailed it.
+ */
+export const SetMeetingLinkInput = WorkspaceScoped.extend({
+  bookingId: Uuid,
+  url: z
+    .string()
+    .trim()
+    .max(2000, 'Keep the link to 2,000 characters.')
+    .pipe(z.url({ protocol: /^https$/, hostname: z.regexes.domain, error: 'Paste the meeting’s https link.' })),
+  mutationId: Uuid,
+});
+/** Adding a booking's meeting link by hand. */
+export type SetMeetingLinkInput = z.infer<typeof SetMeetingLinkInput>;
+
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
   listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
@@ -622,6 +646,8 @@ export const bookingsContract = {
   markNoShow: oc.input(MarkNoShowInput).output(z.object({ noShow: z.boolean() })),
   /** Link a booking to a record by hand, or take the link off (polish F2): its host, the page's owner or an admin. */
   link: oc.input(LinkBookingRecordInput).output(LinkedBookingRecord),
+  /** Add or change the meeting's link by hand (B-07): its host, a co-host, the page's owner or an admin; the guest is emailed. */
+  setMeetingLink: oc.input(SetMeetingLinkInput).output(z.object({ videoUrl: z.string() })),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

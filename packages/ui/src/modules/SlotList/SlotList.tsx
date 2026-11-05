@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -18,6 +18,11 @@ export interface Slot {
   readonly isBest?: boolean;
   /** The visitor's own calendar is busy then (shown only when they ask to see every time). */
   readonly isBusy?: boolean;
+  /**
+   * A quieter second line under the time: the same time on another clock (a host's Reschedule shows the guest's,
+   * "03:30 London"). Read out through `name`, so the screen puts it there too.
+   */
+  readonly detail?: string;
 }
 
 /** Props for SlotList. */
@@ -28,6 +33,11 @@ export interface SlotListProps {
   /** The picked time's id. */
   readonly value: string | undefined;
   readonly onChange: (id: string) => void;
+  /**
+   * Enter on a time picks it and then moves on (critic C7, QA B-14): the page puts focus on Book, so a keyboard
+   * never tabs through the rest of the day's times to reach it. A pointer's pick stays put.
+   */
+  readonly onCommit?: (id: string) => void;
   readonly hour12?: boolean;
   /** Shows the 12h or 24h switch beside the heading; left out, there is none (the chat's offers). */
   readonly onHour12Change?: (hour12: boolean) => void;
@@ -62,18 +72,30 @@ export interface SlotListProps {
  */
 const GHOST_SLOTS = 16;
 
+/** How many columns a list's grid lays out now, read off its own style, so Up and Down move a row. */
+function columnsOf(list: HTMLElement | null): number {
+  if (list === null) return 1;
+  const tracks = globalThis
+    .getComputedStyle(list)
+    .gridTemplateColumns.split(' ')
+    .filter((track) => track !== '');
+  return Math.max(1, tracks.length);
+}
+
 /**
  * The times of one day on a booking page (spec 0025, AC-666 to AC-669): the
  * day, the 12h or 24h switch, then the times. Picking a time never moves on;
  * the picked one fills, and the page's Book bar names it. A Best time carries
  * a tag; a time the visitor is busy for reads quieter, and can still be
- * picked.
+ * picked. One time is in the tab order (the picked one, else the first) and
+ * the arrows move among them, as the days do (critic C7).
  */
 export function SlotList({
   heading,
   slots,
   value,
   onChange,
+  onCommit,
   hour12 = true,
   onHour12Change,
   variant = 'picker',
@@ -84,6 +106,43 @@ export function SlotList({
   drawKey,
   answered,
 }: SlotListProps) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const isLocked = variant === 'offers' && answered !== undefined;
+  // The tab stop: the picked time, else the one the keyboard last stood on, else the first (review, 5 Nov 2026: tabbing
+  // away and back returned to the first time).
+  const [lastFocused, setLastFocused] = useState<string | undefined>(undefined);
+  const has = (id: string | undefined) => id !== undefined && slots.some((slot) => slot.id === id);
+  const tabbable = has(value) ? value : has(lastFocused) ? lastFocused : slots[0]?.id;
+  const slotButton = (id: string) =>
+    [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-slot]') ?? [])].find(
+      (button) => button.dataset.slot === id,
+    );
+  const onKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const index = slots.findIndex((slot) => slot.id === event.currentTarget.dataset.slot);
+    if (index < 0) return;
+    if (event.key === 'Enter' && !isLocked) {
+      event.preventDefault();
+      const id = slots[index]?.id;
+      if (id === undefined) return;
+      onChange(id);
+      onCommit?.(id);
+      return;
+    }
+    const across = columnsOf(listRef.current);
+    const moves: Readonly<Record<string, number>> = {
+      ArrowRight: index + 1,
+      ArrowLeft: index - 1,
+      ArrowDown: index + across,
+      ArrowUp: index - across,
+      Home: 0,
+      End: slots.length - 1,
+    };
+    const to = moves[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    const next = slots[Math.min(Math.max(to, 0), slots.length - 1)];
+    if (next !== undefined) slotButton(next.id)?.focus();
+  };
   return (
     <div
       className={styles.root}
@@ -99,10 +158,13 @@ export function SlotList({
       ) : (
         <div className={styles.head}>
           {/* Only once there is a day: a heading with nothing in it is an empty heading, and `.head` holds the
-              row's height either way. */}
+              row's height either way. The heading stays mounted as the day changes and only its words swap
+              (critic C8), so the row never blanks. */}
           {heading !== '' && (
-            <h2 key={heading} className={styles.heading}>
-              {heading}
+            <h2 className={styles.heading}>
+              <span key={heading} className={styles.headingWords}>
+                {heading}
+              </span>
             </h2>
           )}
           {onHour12Change !== undefined && (
@@ -134,7 +196,7 @@ export function SlotList({
       ) : slots.length === 0 && empty !== undefined ? (
         <div className={styles.empty}>{empty}</div>
       ) : (
-        <ul key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
+        <ul ref={listRef} key={drawKey} className={styles.list} aria-label={strings.times(heading)}>
           {slots.map((slot, index) => {
             const isPicked = variant === 'picker' && slot.id === value;
             const isAnswer = variant === 'offers' && answered !== undefined && slot.id === answered;
@@ -150,6 +212,10 @@ export function SlotList({
                 <button
                   type="button"
                   className={styles.slot}
+                  data-slot={slot.id}
+                  tabIndex={slot.id === tabbable ? 0 : -1}
+                  onKeyDown={onKey}
+                  onFocus={() => setLastFocused(slot.id)}
                   data-busy={slot.isBusy === true ? '' : undefined}
                   {...(variant === 'picker' ? { 'aria-pressed': isPicked } : {})}
                   {...(variant === 'offers' && answered !== undefined
@@ -181,6 +247,11 @@ export function SlotList({
                   {slot.isBusy === true && (
                     <span className={styles.busy} aria-hidden="true">
                       {strings.busyTag}
+                    </span>
+                  )}
+                  {slot.detail !== undefined && (
+                    <span className={styles.detail} aria-hidden="true">
+                      {slot.detail}
                     </span>
                   )}
                 </button>

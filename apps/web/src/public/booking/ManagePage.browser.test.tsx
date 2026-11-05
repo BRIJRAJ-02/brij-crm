@@ -51,8 +51,8 @@ describe('ManagePage', () => {
       .mockResolvedValueOnce(answer(500, { code: 'INTERNAL', message: 'Something went wrong.' }))
       .mockResolvedValue(answer(404, { code: 'NOT_FOUND', message: 'Not found.' }));
     show();
-    await expect.element(page.getByRole('heading', { level: 1, name: 'This page didn’t load' })).toBeVisible();
-    expect(document.title).toBe('This page didn’t load · Timefix');
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Couldn’t reach this page' })).toBeVisible();
+    expect(document.title).toBe('Couldn’t reach this page · Timefix');
     await page.getByRole('button', { name: 'Try again' }).click();
     await expect
       .element(page.getByRole('heading', { level: 1, name: 'This link doesn’t open a booking' }))
@@ -86,5 +86,32 @@ describe('ManagePage', () => {
     await expect.element(heading).toBeVisible();
     await expect.poll(() => document.activeElement).toBe(heading.element());
     expect(document.title).toBe('Your booking · Timefix');
+  });
+
+  it('says a long ended booking ended, with its time and title and no empty guest rows (B-13)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      answer(200, {
+        state: 'past',
+        aged: true,
+        publicKey: 'k123',
+        title: 'Intro call',
+        hostName: 'Ada Lovelace',
+        start: '2026-08-03T10:00:00.000Z',
+        end: '2026-08-03T10:30:00.000Z',
+        timeZone: 'UTC',
+        location: { type: 'video' },
+        visitorName: '',
+        visitorEmail: '',
+        guests: [],
+        workspaceSlug: 'acme',
+        canChange: false,
+        canMove: false,
+      }),
+    );
+    show();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'This booking ended' })).toBeVisible();
+    await expect.element(page.getByText('Intro call', { exact: true })).toBeVisible();
+    expect(host?.textContent).not.toContain('Who');
+    expect(document.title).toBe('This booking ended · Timefix');
   });
 });

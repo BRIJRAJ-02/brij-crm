@@ -9,7 +9,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
-import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices, withBookingTicket } from '../testing.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
@@ -94,15 +94,18 @@ function turn(
       origin: init.origin ?? APP_URL,
     },
     body: JSON.stringify(
-      init.body ?? {
-        conversationId: init.conversationId ?? newId(),
-        duration: 30,
-        timeZone: 'UTC',
-        hour12: true,
-        messages: lines,
-        startedAt: NOW.getTime() - 60_000,
-        ...init.extra,
-      },
+      withBookingTicket(
+        `${publicKey}/chat`,
+        init.body ?? {
+          conversationId: init.conversationId ?? newId(),
+          duration: 30,
+          timeZone: 'UTC',
+          hour12: true,
+          messages: lines,
+          startedAt: NOW.getTime() - 60_000,
+          ...init.extra,
+        },
+      ),
     ),
   });
 }
@@ -220,7 +223,7 @@ describe('booking by chat (AC-1513 to AC-1522)', () => {
       { role: 'visitor', text: "I'm Ann Lee, ann@example.com" },
     ];
     const conversationId = newId();
-    // Sent the instant the page loaded: the bot checks hold the booking back.
+    // Sent with no fill ticket (B-04), whatever its own clock says: the bot checks hold the booking back.
     const instant = await turn(page.publicKey, [...forged, { role: 'visitor', text: 'yes' }], {
       body: {
         conversationId,
@@ -228,7 +231,8 @@ describe('booking by chat (AC-1513 to AC-1522)', () => {
         timeZone: 'UTC',
         hour12: true,
         messages: [...forged, { role: 'visitor', text: 'yes' }],
-        startedAt: NOW.getTime(),
+        startedAt: 0,
+        ticket: undefined,
       },
     });
     expect(((await instant.json()) as Reply).booked).toBeUndefined();

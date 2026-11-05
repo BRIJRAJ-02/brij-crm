@@ -68,6 +68,7 @@ export interface OutboxEvent {
     | 'notifications'
     | 'calendars'
     | 'time_off'
+    | 'bookings'
     | 'automations'
     | 'files'
     | 'visits'
@@ -385,6 +386,8 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   if (change.visits.length > 0) {
     rows.push({ kind: 'visits', ...NO_IDS, itemIds: [...new Set(change.visits)].sort(byId), coarse: false });
   }
+  // Bookings changed (B-17): one row naming nothing, so a held Bookings screen reads again in every tab.
+  if (change.bookings.length > 0) rows.push({ kind: 'bookings', ...NO_IDS, coarse: false });
   // An automation or a run's outcome changed (parity #53): one row naming nothing.
   if (change.automations.length > 0) rows.push({ kind: 'automations', ...NO_IDS, coarse: false });
   // A form's status changed (forms fixes 3): one row naming nothing, so open editors and the Forms list read again.

@@ -44,7 +44,7 @@ test('a visitor books by chat and the host sees the conversation (spec 0042)', a
   // The radio is a hidden input under its segment's icon, so the press goes to the segment, as a visitor's does.
   await chat.locator('label', { has: chat.getByRole('radio', { name: 'Book by chat' }) }).click();
   const log = chat.getByRole('log', { name: 'Conversation' });
-  await expect(log).toContainText('Hi, I’m Ada. When suits you for a 30 min Intro call?');
+  await expect(log).toContainText('Hi, I can book you a 30 min Intro call with Ada. When suits you?');
 
   // A tapped time goes as words the chat reads back to the same time.
   const firstDay = log.getByRole('list').first();

@@ -98,7 +98,7 @@ export const ReadBack: Story = {
     ]);
     return (
       <Stage width="fill">
-        <BookingChat {...args} lines={lines} visitorName="Grace Hopper" />
+        <BookingChat {...args} lines={lines} />
       </Stage>
     );
   },
@@ -311,7 +311,6 @@ export const Extras: Story = {
             suggestions: ['Add a guest', 'Add a note', 'Your role', 'That’s all'],
           },
         ]}
-        visitorName="Grace Hopper"
       />
     </Stage>
   ),

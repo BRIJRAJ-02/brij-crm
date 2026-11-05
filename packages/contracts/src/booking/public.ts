@@ -12,6 +12,7 @@ import { PublicBrand } from '../workspace-brand.ts';
 import { PublicProfileItem } from './link-page.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 import { PublicQuestion } from '../forms/public.ts';
+import { compactPhone, internationalPhone } from '../forms/dial-codes.ts';
 
 /** A page's public key: 16 URL safe characters. */
 export const PublicKey = z.string().regex(/^[A-Za-z0-9_-]{16}$/, { error: 'That booking link isn’t right.' });
@@ -59,6 +60,11 @@ export const PublicBookingPage = z.object({
   hostTimeZone: z.string(),
   /** How many days ahead a slot may start. */
   windowDays: z.number().int(),
+  /**
+   * How soon a time may start, in minutes, when the page keeps any notice (bookings fix, 5 Nov 2026): the rail says
+   * it plainly. The slots read's own number (a private page none, a request page at least an hour). Left out: none.
+   */
+  minNoticeMinutes: z.number().int().positive().optional(),
   /**
    * The view the page opens in (owner, 25 Oct 2026), travelling with the page's other facts so the first paint is
    * already the right one. A visitor's own remembered choice on this browser wins over it.
@@ -264,6 +270,19 @@ export type PublicProfileQuery = z.infer<typeof PublicProfileQuery>;
 /** The longest range one slots read covers: 62 days, two months of the month view. */
 export const PUBLIC_SLOTS_MAX_DAYS = 62;
 
+/**
+ * The longest span a slots read may name, in milliseconds: 62 days plus two hours (B-01). The page reads from one
+ * local midnight to another, and 62 calendar days holding a clock going back are an hour longer than 62 × 24 hours
+ * (two at most, Lord Howe's half hour inside it), so a range across the end of summer time is still one read.
+ */
+export const PUBLIC_SLOTS_MAX_SPAN_MS = PUBLIC_SLOTS_MAX_DAYS * 86_400_000 + 2 * 3_600_000;
+
+/** Whether a slots read's range is forwards and no longer than `PUBLIC_SLOTS_MAX_SPAN_MS`. */
+function slotsSpanOk({ from, to }: { readonly from: string; readonly to: string }): boolean {
+  const span = Date.parse(to) - Date.parse(from);
+  return span > 0 && span <= PUBLIC_SLOTS_MAX_SPAN_MS;
+}
+
 /** `GET /api/public/booking/:publicKey/slots?from&to&duration&tz`. */
 export const PublicSlotsQuery = z
   .object({
@@ -277,14 +296,17 @@ export const PublicSlotsQuery = z
     tz: TimeZoneName,
     /** A form's signed hand off (spec 0043, AC-1609): the slots of the hosts its routing chose. */
     p: z.string().max(2_000).optional(),
+    /**
+     * A one off link's token hashed (spec 0062, AC-6204; B-10), as the page read sends it: an invitation only page
+     * offers its times only beside an open link. The token itself never leaves the address's fragment.
+     */
+    o: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional()
+      .catch(undefined),
   })
-  .refine(
-    ({ from, to }) => {
-      const span = Date.parse(to) - Date.parse(from);
-      return span > 0 && span <= PUBLIC_SLOTS_MAX_DAYS * 86_400_000;
-    },
-    { error: `Ask for a range of at most ${String(PUBLIC_SLOTS_MAX_DAYS)} days.` },
-  );
+  .refine(slotsSpanOk, { error: `Ask for a range of at most ${String(PUBLIC_SLOTS_MAX_DAYS)} days.` });
 /** A slots read. */
 export type PublicSlotsQuery = z.infer<typeof PublicSlotsQuery>;
 
@@ -354,6 +376,82 @@ export type PublicViewerAnswer = z.infer<typeof PublicViewerAnswer>;
 export const VISITOR_NAME_MAX = 200;
 
 /**
+ * Whether a code unit is never part of a name or a number: a C0 or C1 control or DEL (a CR or LF would reach a mail
+ * header), or an invisible character that can disguise what a name says in "<name> invited you" (a zero width space,
+ * a byte order mark, and the bidirectional overrides and isolates that reverse text).
+ */
+const isHidden = (code: number): boolean =>
+  code < 0x20 ||
+  (code >= 0x7f && code <= 0x9f) ||
+  // A zero width space; the joiners (emoji, Persian and Indic names) and the marks right to left text needs pass.
+  code === 0x200b ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2066 && code <= 0x2069) ||
+  code === 0xfeff;
+
+/** Whether `text` holds a control or invisible character (`isHidden`). */
+function hasControl(text: string): boolean {
+  for (let at = 0; at < text.length; at += 1) if (isHidden(text.charCodeAt(at))) return true;
+  return false;
+}
+
+/**
+ * A web address in a name (B-06): a scheme, `www.`, a host followed by a path, or a host on a common top level
+ * domain, its dot a full stop or a full width or ideographic one (which some mail clients link too). A person's name
+ * never needs one, and the guest invitation reads "<name> invited you", so one would turn a booking into a link sent
+ * from our domain. Initials ("J.R.R. Tolkien") and a name with a dot before a word no domain uses ("St.John") pass.
+ * A denylist can't name every domain: the mail templates draw the name as plain text, which is the real guard.
+ */
+const WEB_ADDRESS =
+  /(?:[a-z][a-z0-9+.-]*:\/\/|\bwww[.。．]|[\p{L}\p{N}-]+[.。．][a-z]{2,}\/|[\p{L}\p{N}-]+[.。．](?:com|net|org|io|co|info|biz|xyz|ru|cn|app|dev|link|site|online|top|me|ly|gl|to|shop|click|live|tk|ml|ga|cf|gq|de|uk|eu|us|ai|cc|ws|su|page|club|vip|icu|buzz|work|fun|store|tech|space|website|win|bid|loan|pw|zip|mov)\b)/iu;
+
+/**
+ * Why a visitor's name can't be taken, or undefined when it can: no control characters (B-07), no web address
+ * (B-06). The book input and the chat's heard name share it, so neither door takes what the other refuses.
+ */
+export function visitorNameProblem(name: string): string | undefined {
+  if (hasControl(name)) return 'Give your name as plain text.';
+  if (WEB_ADDRESS.test(name)) return 'Give your name without a web address.';
+  return undefined;
+}
+
+/** A visitor's name: trimmed, 1 to 200 characters, plain text with no web address. */
+export const VisitorName = z
+  .string()
+  .trim()
+  .min(1, 'Give your name.')
+  .max(VISITOR_NAME_MAX, 'Keep your name to 200 characters.')
+  .superRefine((name, context) => {
+    // Too long is already said; the web address scan is quadratic in the length, so a huge name never reaches it.
+    if (name.length > VISITOR_NAME_MAX) return;
+    const problem = visitorNameProblem(name);
+    if (problem !== undefined) context.addIssue({ code: 'custom', message: problem });
+  });
+
+/**
+ * An email address a visitor types (B-12): trimmed and lower cased before the check, so a phone keyboard's trailing
+ * space is taken from any caller, not only the page's own form.
+ */
+export function visitorEmail(message: string) {
+  return z
+    .string({ error: message })
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: message }).max(254, { error: message }));
+}
+
+/**
+ * Whether a number to call is one (B-08): the forms' international check (`+`, a known country code, 7 to 15
+ * digits), or a national number of 7 to 15 digits with only spaces, brackets, dots and dashes between them. Never
+ * words, markup or control characters.
+ */
+export function isNumberToCall(text: string): boolean {
+  if (hasControl(text)) return false;
+  if (internationalPhone(text) !== undefined) return true;
+  return /^\d{7,15}$/.test(compactPhone(text));
+}
+
+/**
  * `POST /api/public/booking/:publicKey/book`. `idempotencyKey` is minted once
  * per chosen slot, so a retry, a double click or a second tab answers the
  * first booking. `company_url` is the honeypot (spec 0023's name) (a field people never see, which
@@ -371,14 +469,19 @@ export const PublicBookInput = z.object({
   idempotencyKey: Uuid,
   start: Timestamp,
   duration: BookingDuration,
-  name: z.string().trim().min(1, 'Give your name.').max(VISITOR_NAME_MAX, 'Keep your name to 200 characters.'),
-  email: z.email({ error: 'Give an email address such as name@example.com.' }).trim().toLowerCase().max(254),
+  name: VisitorName,
+  email: visitorEmail('Give an email address such as name@example.com.'),
   timeZone: TimeZoneName,
-  /** The visitor's number, for a phone location. */
-  phone: z.string().trim().max(40, { error: 'Keep the phone number to 40 characters.' }).optional(),
+  /** The visitor's number, for a phone location: one `isNumberToCall` takes (B-08). */
+  phone: z
+    .string()
+    .trim()
+    .max(40, { error: 'Keep the phone number to 40 characters.' })
+    .refine(isNumberToCall, { error: 'Give a phone number, such as +44 20 7946 0958.' })
+    .optional(),
   /** More people to invite, at most 10. */
   guests: z
-    .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+    .array(visitorEmail('Give each guest’s email address.'))
     .max(10, { error: 'Invite at most 10 guests.' })
     .optional(),
   /** Anything else the host should know. */
@@ -498,7 +601,7 @@ export const PublicChatInput = z
      * questions' answers, sent with each turn and booked with the yes, checked as the details step's are.
      */
     guests: z
-      .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+      .array(visitorEmail('Give each guest’s email address.'))
       .max(10, { error: 'Invite at most 10 guests.' })
       .optional(),
     note: z.string().trim().max(2000, { error: 'Keep the note to 2,000 characters.' }).optional(),
@@ -559,8 +662,13 @@ export const PublicManagedBooking = z.object({
   /** The zone the visitor booked in. */
   timeZone: z.string(),
   location: PublicLocation,
-  /** The calendar event's video link, once the event exists. */
+  /** The calendar event's video link, once the event exists, and only while the booking is confirmed (B-15). */
   videoUrl: z.string().optional(),
+  /**
+   * A link to a meeting over, cancelled or declined more than 30 days ago (B-13): only its state, time, title and
+   * page are answered, and `visitorName`, `visitorEmail` and `guests` come back empty.
+   */
+  aged: z.literal(true).optional(),
   visitorName: z.string(),
   visitorEmail: z.string(),
   guests: z.array(z.string()),
@@ -584,13 +692,9 @@ export const PublicManagedBooking = z.object({
 export type PublicManagedBooking = z.infer<typeof PublicManagedBooking>;
 
 /** `GET /api/public/booking/manage/:token/slots?from&to&tz`: where the booking could move, its own length. */
-export const PublicMoveSlotsQuery = z.object({ from: Timestamp, to: Timestamp, tz: TimeZoneName }).refine(
-  ({ from, to }) => {
-    const span = Date.parse(to) - Date.parse(from);
-    return span > 0 && span <= PUBLIC_SLOTS_MAX_DAYS * 86_400_000;
-  },
-  { error: `Ask for a range of at most ${String(PUBLIC_SLOTS_MAX_DAYS)} days.` },
-);
+export const PublicMoveSlotsQuery = z
+  .object({ from: Timestamp, to: Timestamp, tz: TimeZoneName })
+  .refine(slotsSpanOk, { error: `Ask for a range of at most ${String(PUBLIC_SLOTS_MAX_DAYS)} days.` });
 /** A move's slots read. */
 export type PublicMoveSlotsQuery = z.infer<typeof PublicMoveSlotsQuery>;
 
@@ -616,7 +720,7 @@ export type PublicCancelInput = z.infer<typeof PublicCancelInput>;
 /** `POST /api/public/booking/manage/:token/guests`: more people to invite, at most 10 guests in all. */
 export const PublicGuestsInput = z.object({
   emails: z
-    .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+    .array(visitorEmail('Give each guest’s email address.'))
     .min(1, { error: 'Add at least one email address.' })
     .max(10, { error: 'Invite at most 10 guests.' }),
 });
@@ -625,7 +729,7 @@ export type PublicGuestsInput = z.infer<typeof PublicGuestsInput>;
 
 /** `POST /api/public/booking/manage/:token/guests/remove`: one guest to take off. */
 export const PublicRemoveGuestInput = z.object({
-  email: z.email({ error: 'That isn’t an email address.' }).trim().toLowerCase().max(254),
+  email: visitorEmail('That isn’t an email address.'),
 });
 /** A guest's removal. */
 export type PublicRemoveGuestInput = z.infer<typeof PublicRemoveGuestInput>;

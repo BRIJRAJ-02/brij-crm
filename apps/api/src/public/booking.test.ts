@@ -10,7 +10,7 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
-import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices, withBookingTicket } from '../testing.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
@@ -97,7 +97,7 @@ function visit(
   return app.request(`/api/public/booking/${path}`, {
     method: init.method ?? 'GET',
     headers,
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    ...(init.body === undefined ? {} : { body: JSON.stringify(withBookingTicket(path, init.body)) }),
   });
 }
 
@@ -410,7 +410,12 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     const trapped = await visit(path, { method: 'POST', body: booking({ company_url: 'spam.example' }) });
     expect(trapped.status).toBe(400);
     expect(await trapped.json()).toMatchObject({ code: 'INPUT_INVALID', message: BOT_REFUSED });
-    expect((await visit(path, { method: 'POST', body: booking({ startedAt: NOW.getTime() - 500 }) })).status).toBe(400);
+    // Too fast by the server's clock: a fill ticket half a second old, or none at all whatever `startedAt` says (B-04).
+    const fresh = withBookingTicket(path, booking(), 500);
+    expect((await visit(path, { method: 'POST', body: fresh })).status).toBe(400);
+    expect((await visit(path, { method: 'POST', body: booking({ ticket: undefined, startedAt: 0 }) })).status).toBe(
+      400,
+    );
     const bad = await visit(path, { method: 'POST', body: booking({ email: 'not an email' }) });
     expect(bad.status).toBe(400);
     expect(await bad.json()).toMatchObject({
@@ -427,7 +432,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(slotsQuery.status).toBe(400);
   });
 
-  it('limits one address to 5 bookings and 60 reads a minute (429 with Retry-After)', async () => {
+  it('limits one address to 5 bookings and 120 reads a minute (429 with Retry-After)', async () => {
     const m = await memberWithWorkspace(app);
     const page = await pageOf(m);
     const ip = newIp();
@@ -447,7 +452,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     });
     expect(sixth.status).toBe(429);
     expect(Number(sixth.headers.get('retry-after'))).toBeGreaterThan(0);
-    for (let read = 0; read < 60; read += 1) expect((await visit(page.publicKey, { ip })).status).toBe(200);
+    for (let read = 0; read < 120; read += 1) expect((await visit(page.publicKey, { ip })).status).toBe(200);
     expect((await visit(page.publicKey, { ip })).status).toBe(429);
   });
 });

@@ -317,7 +317,13 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** A record link row names the booking only: the record is never named or sent. */
   entry(
-    ['booking.no_show', 'booking.no_show_undone', 'booking.record_linked', 'booking.record_unlinked'],
+    [
+      'booking.no_show',
+      'booking.no_show_undone',
+      'booking.record_linked',
+      'booking.record_unlinked',
+      'booking.meeting_link_set',
+    ],
     booking,
     NoParams,
   ),

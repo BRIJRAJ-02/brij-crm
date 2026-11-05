@@ -1,5 +1,6 @@
-// Settings › Round robin in Chromium: New group shows once (the empty state's while there are no groups, then the
-// bar's, SS-R2); the group dialog's name error goes as soon as a name is typed (SS-R3); who can join is said in the
+// Settings › Round robin in Chromium: New group is always the bar's (A5), and the empty state's one action too while
+// there are no groups; a group on no page offers Make a booking page on its card (B-04); the group dialog leads with
+// People and folds the rest under More options (B-04); its name error goes as soon as a name is typed (SS-R3); who can join is said in the
 // member picker's hint, as plain text, and the server's refusal of someone who can't offers to remove them and their
 // hours in a new tab, for the member that was sent even after the draft changes; a refusal of someone no longer
 // active offers only the remove (SS-R1); a member removed from the refusal or their row hands focus to Save or the
@@ -131,6 +132,9 @@ function layerWith(
       distribution: () => new Promise(() => undefined),
     },
     routing: { skills: { view: () => heldSkills(skills) } },
+    // Make a booking page (B-04) opens New booking page, which mints its page's id as it opens.
+    bookingPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p1' },
+    managedPages: { newId: () => '0199a6f2-0000-7000-8000-0000000000p2' },
     // Sharing (spec 0037, AC-1331): the group's editors, held, and set at once.
     editors: {
       view: () => editorsView,
@@ -203,12 +207,13 @@ async function renderDialog(data: DataLayer, rotation?: RotationView) {
 
 const newGroup = () => page.getByRole('button', { name: strings.newRotation, exact: true });
 
-describe('New group, once', () => {
-  it('is the empty state’s one action while there are no groups', async () => {
+describe('New group, always in the bar', () => {
+  it('is the bar’s and the empty state’s one action while there are no groups (A5)', async () => {
     await renderRoundRobin([]);
     await expect.element(page.getByText(strings.emptyTitle)).toBeVisible();
-    expect(newGroup().elements()).toHaveLength(1);
-    expect(bar?.contains(newGroup().element())).toBe(false);
+    const buttons = newGroup().elements();
+    expect(buttons).toHaveLength(2);
+    expect(buttons.filter((button) => bar?.contains(button) === true)).toHaveLength(1);
   });
 
   it('is the bar’s once a group exists', async () => {
@@ -218,11 +223,20 @@ describe('New group, once', () => {
     expect(bar?.contains(newGroup().element())).toBe(true);
     // The card's line, in plain words.
     await expect.element(page.getByText('Fair · last 30 days · 1 booking page')).toBeVisible();
+    // A group already on a page keeps Make a booking page in its More menu, not on its head.
+    expect(page.getByRole('button', { name: strings.makePage }).elements()).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: strings.rowActions('Sales') }));
+    await expect.element(page.getByRole('menuitem', { name: strings.makePage })).toBeVisible();
   });
 
-  it('says a group on no booking page in the same small letters', async () => {
+  it('says a group on no booking page in the same small letters, and offers to make one (B-04)', async () => {
     await renderRoundRobin([{ ...SALES, pages: 0 }]);
     await expect.element(page.getByText('Fair · last 30 days · not on a booking page yet')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: strings.makePage }));
+    // The bookings area's New booking page, on Round robin with this group (the bookings combine).
+    const dialog = page.getByRole('dialog', { name: 'New booking page' });
+    await expect.element(dialog).toBeVisible();
+    await expect.element(dialog.getByRole('radio', { name: /Round robin/ })).toBeChecked();
   });
 
   // AC-1382: the column arrives with the workspace's first skill, and only then. Asserted because the harness used
@@ -305,8 +319,20 @@ describe('the group dialog', () => {
     await renderDialog(layerWith([SALES]), SALES);
     await expect.element(page.getByText(strings.membersHint(2))).toBeVisible();
     expect(page.getByRole('link').elements()).toEqual([]);
-    // The window's help.
+    // The window's help, folded under More options with the rest of the rules (B-04).
+    expect(page.getByRole('button', { name: `About ${strings.window}` }).elements()).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: strings.moreOptions }));
     await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
+  });
+
+  it('leads with People, and folds how it picks and each person’s weight under More options (B-04)', async () => {
+    await renderDialog(layerWith([]));
+    await expect.element(page.getByRole('button', { name: new RegExp(strings.people) })).toBeVisible();
+    expect(page.getByRole('radiogroup', { name: strings.strategy }).elements()).toEqual([]);
+    const more = page.getByRole('button', { name: strings.moreOptions });
+    await expect.element(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    await expect.element(page.getByRole('radiogroup', { name: strings.strategy })).toBeVisible();
   });
 
   it('offers to remove a refused member, for the member that was sent, and never a way to their hours', async () => {
@@ -344,6 +370,8 @@ describe('the group dialog', () => {
     await expect.element(alert).toBeVisible();
     // Missing hours is never why (a member who saved none books weekdays 9 to 5): no link away from the group.
     expect(alert.getByRole('link').elements()).toEqual([]);
+    // Each person's row, with its remove, is under More options.
+    await userEvent.click(page.getByRole('button', { name: strings.moreOptions }));
 
     // Ada leaves the draft from above Maya: the refusal still names Maya. Focus moves on to the next row's remove.
     await userEvent.click(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }));

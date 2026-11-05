@@ -141,6 +141,43 @@ export const Grid: Story = {
   ),
 };
 
+/** A host's Reschedule: each time with the guest's own under it, quieter. */
+export const GuestClock: Story = {
+  args: {
+    layout: 'grid',
+    slots: slots(6).map((slot) => ({ ...slot, detail: '03:30 London', name: `${slot.name}, 03:30 in London` })),
+    value: undefined,
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <SlotList {...args} />
+    </Stage>
+  ),
+};
+
+/**
+ * The keyboard (critic C7, QA B-14): one time is in the tab order, the arrows move along the times, and Enter picks
+ * the time and hands it on (`onCommit`), where a page puts focus on Book.
+ */
+export const KeyboardRoving: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onCommit: fn(), onHour12Change: undefined },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ args, canvas }) => {
+    const times = canvas.getAllByRole('button').filter((button) => button.hasAttribute('data-slot'));
+    await expect(times.filter((button) => button.tabIndex === 0)).toHaveLength(1);
+    await userEvent.tab();
+    await expect(times[0]).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(times[1]).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    await expect(times.at(-1)).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(times.at(-1)).toHaveAttribute('aria-pressed', 'true');
+    await expect(args.onCommit).toHaveBeenCalledWith('2026-10-08T12:30');
+  },
+};
+
 /** The 24 hour clock. */
 export const TwentyFourHours: Story = {
   parameters: { crm: { screenshot: false } },

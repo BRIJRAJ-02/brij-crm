@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { Fragment, useId, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -39,6 +39,15 @@ export interface MeetingCardRow {
   readonly children?: ReactNode;
 }
 
+/** A titled group of the card's people and facts (Guest, Location, Answers, History). */
+export interface MeetingCardSection {
+  readonly id: string;
+  /** The group's heading in a panel ("Guest"); in a popover the group runs on unlabelled, as one card. */
+  readonly label: string;
+  readonly people?: readonly MeetingCardPerson[];
+  readonly rows?: readonly MeetingCardRow[];
+}
+
 /** Props for MeetingCard. */
 export interface MeetingCardProps {
   /** What the meeting is, the card's heading ("Grace Hopper · Intro call"). */
@@ -66,6 +75,80 @@ export interface MeetingCardProps {
    * level 3) pass 4, beside one with none (a popover) 3.
    */
   readonly headingLevel?: 2 | 3 | 4;
+  /**
+   * After `people` and `rows`: titled groups of them. In a `panel` each has its heading; in a `popover` they run on
+   * as the card's rows, unlabelled.
+   */
+  readonly sections?: readonly MeetingCardSection[];
+  /**
+   * `popover` (the default): the week's card, its title on the text column beside the gutter and the actions in a
+   * footer. `panel` (Bookings › List's side panel, after Calendly's): the title and each section's heading start at
+   * the panel's own edge, under its heading, and the actions sit right under the title, where they are seen first.
+   */
+  readonly variant?: 'popover' | 'panel';
+}
+
+/** One person a row: their avatar in the gutter, their name (a link with `href`) and a quieter detail. */
+function PeopleList({ people, label }: { readonly people: readonly MeetingCardPerson[]; readonly label: string }) {
+  return (
+    <ul className={styles.list} aria-label={label}>
+      {people.map((person) => (
+        <li key={person.id} className={styles.row}>
+          <span className={styles.lead}>
+            <Avatar name={person.name} id={person.id} size="md" isDecorative />
+          </span>
+          <span className={styles.content}>
+            <span className={styles.value}>
+              {person.href === undefined ? person.name : <Link href={person.href}>{person.name}</Link>}
+            </span>
+            {person.detail !== undefined && (
+              <span className={styles.detailLine}>
+                <span className={styles.detail}>{person.detail}</span>
+                {person.isDetailCopyable === true && (
+                  <span className={styles.copy}>
+                    <Tooltip content={strings.copy(person.detail)}>
+                      <CopyButton
+                        value={person.detail}
+                        label={strings.copy(person.detail)}
+                        isIconOnly
+                        variant="ghost"
+                      />
+                    </Tooltip>
+                  </span>
+                )}
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The facts, a real `<dl>`: each row's icon in the gutter (its label read in its place), the value and its action. */
+function RowList({ rows }: { readonly rows: readonly MeetingCardRow[] }) {
+  return (
+    <dl className={styles.list}>
+      {rows.map((row) => (
+        <div key={row.id} className={styles.row}>
+          <dt className={styles.lead}>
+            <Icon name={row.icon} />
+            <VisuallyHidden>{row.label}</VisuallyHidden>
+          </dt>
+          <dd className={styles.content}>
+            <span className={styles.line}>
+              <span className={styles.lineText}>
+                <span className={styles.value}>{row.value}</span>
+                {row.detail !== undefined && <span className={styles.detail}>{row.detail}</span>}
+              </span>
+              {row.action !== undefined && <span className={styles.rowAction}>{row.action}</span>}
+            </span>
+            {row.children}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /**
@@ -86,11 +169,22 @@ export function MeetingCard({
   actions,
   endAction,
   headingLevel = 2,
+  sections = [],
+  variant = 'popover',
 }: MeetingCardProps) {
   const id = useId();
   const Heading = headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : 'h4';
+  const SectionHeading = headingLevel === 2 ? 'h3' : headingLevel === 3 ? 'h4' : 'h5';
+  const isPanel = variant === 'panel';
+  const hasActions = actions !== undefined || endAction !== undefined;
+  const actionBar = hasActions ? (
+    <footer className={styles.foot}>
+      <div className={styles.actions}>{actions}</div>
+      {endAction}
+    </footer>
+  ) : undefined;
   return (
-    <article className={styles.root} aria-labelledby={`${id}-title`}>
+    <article className={styles.root} aria-labelledby={`${id}-title`} data-variant={isPanel ? variant : undefined}>
       <header className={styles.inset}>
         <Heading id={`${id}-title`} className={styles.title}>
           {title}
@@ -100,68 +194,31 @@ export function MeetingCard({
           {status !== undefined && <StatusDot hue={status.hue}>{status.label}</StatusDot>}
         </p>
       </header>
+      {isPanel && actionBar}
       {notices !== undefined && <div className={styles.inset}>{notices}</div>}
-      {people.length > 0 && (
-        <ul className={styles.list} aria-label={peopleLabel}>
-          {people.map((person) => (
-            <li key={person.id} className={styles.row}>
-              <span className={styles.lead}>
-                <Avatar name={person.name} id={person.id} size="md" isDecorative />
-              </span>
-              <span className={styles.content}>
-                <span className={styles.value}>
-                  {person.href === undefined ? person.name : <Link href={person.href}>{person.name}</Link>}
-                </span>
-                {person.detail !== undefined && (
-                  <span className={styles.detailLine}>
-                    <span className={styles.detail}>{person.detail}</span>
-                    {person.isDetailCopyable === true && (
-                      <span className={styles.copy}>
-                        <Tooltip content={strings.copy(person.detail)}>
-                          <CopyButton
-                            value={person.detail}
-                            label={strings.copy(person.detail)}
-                            isIconOnly
-                            variant="ghost"
-                          />
-                        </Tooltip>
-                      </span>
-                    )}
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {rows.length > 0 && (
-        <dl className={styles.list}>
-          {rows.map((row) => (
-            <div key={row.id} className={styles.row}>
-              <dt className={styles.lead}>
-                <Icon name={row.icon} />
-                <VisuallyHidden>{row.label}</VisuallyHidden>
-              </dt>
-              <dd className={styles.content}>
-                <span className={styles.line}>
-                  <span className={styles.lineText}>
-                    <span className={styles.value}>{row.value}</span>
-                    {row.detail !== undefined && <span className={styles.detail}>{row.detail}</span>}
-                  </span>
-                  {row.action !== undefined && <span className={styles.rowAction}>{row.action}</span>}
-                </span>
-                {row.children}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {(actions !== undefined || endAction !== undefined) && (
-        <footer className={styles.foot}>
-          <div className={styles.actions}>{actions}</div>
-          {endAction}
-        </footer>
-      )}
+      {people.length > 0 && <PeopleList people={people} label={peopleLabel} />}
+      {rows.length > 0 && <RowList rows={rows} />}
+      {sections.map((section) => {
+        const lists = (
+          <>
+            {section.people !== undefined && section.people.length > 0 && (
+              <PeopleList people={section.people} label={section.label} />
+            )}
+            {section.rows !== undefined && section.rows.length > 0 && <RowList rows={section.rows} />}
+          </>
+        );
+        return isPanel ? (
+          <section key={section.id} className={styles.section} aria-labelledby={`${id}-${section.id}`}>
+            <SectionHeading id={`${id}-${section.id}`} className={styles.sectionLabel}>
+              {section.label}
+            </SectionHeading>
+            {lists}
+          </section>
+        ) : (
+          <Fragment key={section.id}>{lists}</Fragment>
+        );
+      })}
+      {!isPanel && actionBar}
     </article>
   );
 }

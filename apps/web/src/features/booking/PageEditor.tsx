@@ -39,24 +39,19 @@ import {
   CopyButton,
   DescriptionList,
   EditorStatus,
+  EmptyState,
+  focusLater,
   Field,
-  FieldGroup,
   InfoTip,
-  Link,
   Modal,
   PreviewFrame,
   PreviewLayout,
-  PublishBar,
-  PublishBarSkeleton,
-  type PublishBarStatus,
-  type PublishBarVersion,
   Popover,
-  Radio,
-  RadioGroup,
   SaveBar,
   SegmentedControl,
   Select,
   SettingsRow,
+  SettingsStack,
   Skeleton,
   Switch,
   TabPanel,
@@ -80,7 +75,7 @@ import { linkPageHref } from '../link-page/nav-strings.ts';
 import { objectSettingsHref, profileHref } from '../settings/nav.ts';
 import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { managedStrings } from './managed-strings.ts';
-import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
+import { ShareBlock } from '../forms/ShareBlock.tsx';
 import { noVideoLinkReason } from './destination.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
@@ -124,10 +119,14 @@ import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 import { publishStrings } from './publish-strings.ts';
+import { insightsHref } from '../insights/search.ts';
+import { activityStrings } from './activity-strings.ts';
+import { PageBookingsTab, PageInsightsTab } from './PageActivityTabs.tsx';
+import { ShareTimesCard } from './ShareTimesCard.tsx';
+import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { strings as socialsStrings } from './socials-strings.ts';
-import { insightsHref } from '../insights/search.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -162,6 +161,8 @@ export interface PageEditorProps {
 const QUESTIONS_MAX = 20;
 
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
+/** Location's "I'll send a link": video with no link, the host sending it (critic B-07). */
+const SEND_LINK = 'send-link';
 
 const minutesItems = (values: readonly number[]): SelectItem[] =>
   values.map((value) => ({ id: String(value), label: value === 0 ? strings.none : strings.minutes(value) }));
@@ -172,6 +173,8 @@ const NOTICE: SelectItem[] = [
   ...[1, 2, 4, 12].map((value) => ({ id: String(value * 60), label: strings.hoursCount(value) })),
   ...[1, 2, 3, 7, 14].map((value) => ({ id: String(value * 1440), label: strings.days(value) })),
 ];
+/** How close to the start a guest may still cancel or move: Any time, or a cutoff (critic A23: not "None"). */
+const CUTOFF: SelectItem[] = [{ id: '0', label: strings.anyTime }, ...NOTICE.slice(1)];
 const WINDOW: SelectItem[] = [7, 14, 30, 60, 90, 180, 365].map((value) => ({
   id: String(value),
   label: strings.days(value),
@@ -188,17 +191,35 @@ const STEPS: SelectItem[] = [
 /** Whether a setting waits in the draft for Publish (spec 0068, AC-6810), as against one that goes live on save. */
 const isDraftedKey = (key: string): boolean => (BOOKING_DRAFT_KEYS as readonly string[]).includes(key);
 
-/** How long "Published" stays in the bar before it says the page is live. */
-const PUBLISHED_MS = 1600;
+/** One published version, as the Versions dialog lists it. */
+interface PageVersionRow {
+  readonly version: number;
+  readonly isCurrent: boolean;
+  readonly label: string;
+}
+
+/**
+ * Where the page stands, as the header's one status says it (the bookings area, 4 November 2026, as a form's does):
+ * Draft until its first Publish, Paused, Live · edited while guests don't see some changes yet, else Live.
+ */
+function statusOf(
+  page: BookingPageView,
+  hasUnpublished: boolean,
+): { readonly tone: 'live' | 'changed' | 'draft' | 'paused'; readonly text: string } {
+  if (isDraftPage(page)) return { tone: 'draft', text: publishStrings.statusDraft };
+  if (page.status === 'paused') return { tone: 'paused', text: strings.statusOff };
+  if (hasUnpublished) return { tone: 'changed', text: publishStrings.statusChanged };
+  return { tone: 'live', text: strings.statusLive };
+}
 
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   slug: 'page',
-  profileSection: 'page',
-  profilePosition: 'page',
+  profileSection: 'share',
+  profilePosition: 'share',
   description: 'page',
   isPrivate: 'page',
-  showSocials: 'page',
+  showSocials: 'share',
   defaultView: 'page',
   questions: 'questions',
   answersObjectId: 'questions',
@@ -208,19 +229,19 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   redirectUrl: 'meeting',
   sendBookingDetails: 'meeting',
   requiresConfirmation: 'meeting',
-  cancelCutoffMinutes: 'limits',
-  moveCutoffMinutes: 'limits',
+  cancelCutoffMinutes: 'hours',
+  moveCutoffMinutes: 'hours',
   title: 'meeting',
   durations: 'meeting',
   location: 'meeting',
   rescheduleHost: 'hosts',
   scheduleId: 'hours',
-  bufferBefore: 'limits',
-  bufferAfter: 'limits',
-  minNoticeMinutes: 'limits',
-  windowDays: 'limits',
-  dailyLimit: 'limits',
-  slotStep: 'limits',
+  bufferBefore: 'hours',
+  bufferAfter: 'hours',
+  minNoticeMinutes: 'hours',
+  windowDays: 'hours',
+  dailyLimit: 'hours',
+  slotStep: 'hours',
 };
 
 /** The settings the preview's times come from, read from the server: it shows them only once saved. */
@@ -283,12 +304,21 @@ function slugProblem(value: string): string | undefined {
 }
 
 /** Whether a draft is fine to send: the server would refuse it otherwise. */
+/** A host's own meeting link that can't be saved: empty, or not an https address (critic B-07). */
+function meetingLinkProblem(location: BookingPageSettings['location']): string | undefined {
+  if (location.type !== 'video' || location.link === undefined) return undefined;
+  const link = location.link.trim();
+  if (link === '') return strings.meetingLinkRequired;
+  return URL.canParse(link) && new URL(link).protocol === 'https:' ? undefined : strings.meetingLinkInvalid;
+}
+
 function sendable(draft: BookingPageSettings): boolean {
   return (
     draft.title.trim() !== '' &&
     slugProblem(draft.slug) === undefined &&
     draft.durations.length > 0 &&
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '') &&
+    meetingLinkProblem(draft.location) === undefined &&
     redirectProblem(draft) === undefined
   );
 }
@@ -340,22 +370,32 @@ export function PageEditor({
   const [draft, setDraft] = useState(saved);
   // The address's shape is said once the person leaves the field, not at every key.
   const [isSlugLeft, setSlugLeft] = useState(false);
+  // The meeting link's error waits until the field is left, as the address's does.
+  const [isLinkLeft, setLinkLeft] = useState(false);
   // The redirect address's error waits until the field is left, as the address's does.
   const [isRedirectLeft, setRedirectLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   // Publish (spec 0068, AC-6810 to AC-6812): Save keeps the guest facing settings as the page's draft, and the bar at
   // the head says what guests don't see yet until Publish. What stays instant (AC-6813) is saved as before.
-  const [publishing, setPublishing] = useState<PublishBarStatus | undefined>(undefined);
+  const [isPublishing, setPublishing] = useState(false);
+  // The first Publish's moment, "<page> is live" with its link (the forms' live dialog, the same share part).
+  const [liveShown, setLiveShown] = useState<BookingPageView | undefined>(undefined);
+  // Publish pressed with unsaved changes: they save first, and the save that lands publishes.
+  const publishAfterSave = useRef(false);
+  const [isVersionsOpen, setVersionsOpen] = useState(false);
+  const [isVersionsFailed, setVersionsFailed] = useState(false);
+  // The header's ⋯: where focus goes once Publish or the live dialog has left (as the forms editor's `moreRef`).
+  const moreRef = useRef<HTMLButtonElement>(null);
+  // Preview pressed over unsaved changes: the tab it opened, which goes to the preview once the save lands.
+  const previewAfterSave = useRef<Window | undefined>(undefined);
+  const [isDiscardAsked, setDiscardAsked] = useState(false);
   const [publishProblem, setPublishProblem] = useState<
     { readonly message: string; readonly field?: string } | undefined
   >(undefined);
-  const [versions, setVersions] = useState<readonly PublishBarVersion[] | undefined>(undefined);
+  const [versions, setVersions] = useState<readonly PageVersionRow[] | undefined>(undefined);
   // A version picked while the draft holds changes waits for a yes (spec 0068, AC-6812): restoring replaces them.
   const [restoreAsked, setRestoreAsked] = useState<number | undefined>(undefined);
-  // "Published" goes back to the page's state after a moment; a timer left when the editor closes is cleared.
-  const publishedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(publishedTimer.current), []);
   // The route shows its cached read first and reads again behind it (and again on any live change), so a newer
   // read arrives as a new `loaded`: the handle just claimed in Profile (owner, 23 Oct 2026: Copy link kept giving
   // /b/<key>), a pause from the Links card, the editor's own last save. The editor takes it unless it is older
@@ -428,11 +468,10 @@ export function PageEditor({
   };
   // When the editor opened: the zone's offset ("GMT+5:30") is read for then.
   const [openedAt] = useState(() => Date.now());
-  // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
+  // The reader's own calendar connections (spec 0024): Location's video line reads them. With none, Meeting's
+  // Calendar card and Availability's Conflicts card each say so where it matters, with Connect calendar; there is
+  // no page level notice (the bookings area, 4 November 2026).
   const calendar = useCalendar(data.calendar.view(slug));
-  // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
-  const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
-  const [isNoteDismissed, setNoteDismissed] = useState(() => readDismissed(slug));
   // Video with no live calendar makes no link, and Location says so (Q57, Q77): `noVideoLinkReason` says when.
   const destination = usePageDestination(data.calendar.pageDestination(slug, page.id));
   const noLinkReason = noVideoLinkReason({
@@ -440,14 +479,9 @@ export function PageEditor({
     isOwner: destination.status === 'ready' ? destination.destination.isOwner : undefined,
     connections: calendar.status === 'ready' ? calendar.connections.map((connection) => connection.status) : undefined,
   });
-  const noLinkHint =
-    noLinkReason === 'reconnect'
-      ? strings.noVideoLinkReconnect
-      : noLinkReason === 'none'
-        ? calendar.status === 'ready' && !calendar.enabled
-          ? strings.noVideoLinkNoSync
-          : strings.noVideoLink
-        : undefined;
+  // No calendar of the owner's makes a video link (or theirs needs reconnecting): Location offers "I'll send a link"
+  // and Video asks for the host's own link (critic B-07).
+  const makesNoLink = noLinkReason !== undefined;
   // A custom length typed in minutes, added to the page's lengths on Add or Enter.
   const [lengthText, setLengthText] = useState('');
   const [lengthError, setLengthError] = useState<string | undefined>(undefined);
@@ -690,26 +724,44 @@ export function PageEditor({
     setDraft((current) => draftAfterSave(settingsOf(next), current));
     setVersions(undefined);
   };
-  const publish = () => {
-    setPublishing('publishing');
+  /**
+   * Publish, as a form's (the bookings area, 4 November 2026): the draft goes to guests, and a page made as a draft
+   * goes live too, its first Publish ending on "<page> is live" with its link; a later one says Published in a toast.
+   * Called with the page a save just answered, so a Publish pressed over unsaved changes publishes what was saved.
+   */
+  const publish = (current: BookingPageView = page) => {
+    publishAfterSave.current = false;
+    if (isPublishing) return;
+    setPublishing(true);
     setPublishProblem(undefined);
-    data.bookingPages.publish(slug, page.id).then(
-      (next) => {
-        takePage(next);
-        setPublishing('published');
-        // "Published" stays a moment, then the bar says the page is live.
-        clearTimeout(publishedTimer.current);
-        publishedTimer.current = setTimeout(() => setPublishing(undefined), PUBLISHED_MS);
-      },
-      (error: unknown) => {
-        setPublishing('error');
-        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
-        setPublishProblem({
-          message: isDataError(error) ? error.message : strings.somethingWrong,
-          ...(field === undefined ? {} : { field }),
-        });
-      },
-    );
+    const wasDraft = isDraftPage(current);
+    data.bookingPages
+      .publish(slug, current.id)
+      .then((published) => {
+        // What was published shows at once, so a refused go live below never leaves changes on screen that are gone.
+        takePage(published);
+        return wasDraft ? data.bookingPages.update(slug, current.id, { status: 'live' }) : published;
+      })
+      .then(
+        (next) => {
+          takePage(next);
+          setPublishing(false);
+          if (wasDraft) setLiveShown(next);
+          else {
+            toasts.toast({ tone: 'success', message: publishStrings.published(next.title) });
+            // Publish has left the header: focus goes to ⋯ rather than falling to the page, as a form's does.
+            focusLater(() => moreRef.current);
+          }
+        },
+        (error: unknown) => {
+          setPublishing(false);
+          const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+          setPublishProblem({
+            message: isDataError(error) ? error.message : strings.somethingWrong,
+            ...(field === undefined ? {} : { field }),
+          });
+        },
+      );
   };
   /** The page as Discard or Restore left it: the editor shows exactly that, with nothing of its own kept over it. */
   const resetTo = (next: typeof page) => {
@@ -725,6 +777,8 @@ export function PageEditor({
       .then(resetTo, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
   };
   const readVersions = () => {
+    setVersions(undefined);
+    setVersionsFailed(false);
     data.bookingPages.versions(slug, page.id).then(
       (list) =>
         setVersions(
@@ -734,7 +788,7 @@ export function PageEditor({
             label: publishStrings.versionLabel(one.publishedBy, new Date(one.publishedAt)),
           })),
         ),
-      () => toasts.toast({ tone: 'danger', message: publishStrings.versionsFailed }),
+      () => setVersionsFailed(true),
     );
   };
   const restore = (version: number) => {
@@ -752,7 +806,6 @@ export function PageEditor({
     else restore(version);
   };
   const changes = page.publication?.changes ?? [];
-  const publishStatus: PublishBarStatus = publishing ?? (changes.length > 0 ? 'draft' : 'live');
   const problemTab = publishProblem?.field === undefined ? undefined : FIELD_TABS[publishProblem.field];
 
   const save = (patch: Partial<BookingPageSettings>) => {
@@ -778,8 +831,15 @@ export function PageEditor({
             action: { label: questionStrings.undo, onAction: () => undoAttributes(made) },
           });
         }
-        if (status === undefined) setJustSaved(true);
-        else
+        if (status === undefined) {
+          setJustSaved(true);
+          // Publish pressed over unsaved changes: the save landed, so what it saved goes out now.
+          if (publishAfterSave.current) publish(next);
+          // Preview pressed over unsaved changes: its tab shows them now.
+          const opened = previewAfterSave.current;
+          previewAfterSave.current = undefined;
+          if (opened !== undefined) opened.location.href = pagePreviewHref(slug, next.id);
+        } else
           toasts.toast({
             tone: 'success',
             message:
@@ -789,6 +849,12 @@ export function PageEditor({
       },
       (error: unknown) => {
         setSaving(false);
+        // A refused save publishes nothing: the bar says why, and Publish waits for the next press. A preview tab
+        // opened for it shows what is saved.
+        publishAfterSave.current = false;
+        const opened = previewAfterSave.current;
+        previewAfterSave.current = undefined;
+        if (opened !== undefined) opened.location.href = pagePreviewHref(slug, page.id);
         // Pause and Resume aren't part of the save bar's changes: their failure says so in a toast.
         if (patch.status !== undefined) {
           setDraft((current) => ({ ...current, status: page.status }));
@@ -818,6 +884,9 @@ export function PageEditor({
         ? 'unsaved'
         : 'error';
   const location = draft.location;
+  // What Location's Select shows: "I'll send a link" is video with no link while no calendar makes one.
+  const locationChoice =
+    location.type === 'video' && location.link === undefined && makesNoLink ? SEND_LINK : location.type;
   // The Sharing section's address: the saved link (the one that works now), and the /b/ link a Link only page keeps.
   const savedLink = publicBookingUrl(page);
   const bLink = publicBookingUrl({ ...page, isPrivate: true });
@@ -829,15 +898,6 @@ export function PageEditor({
   // The phone shows the unsaved words and lengths, but its times come from the server: while the hours or limits
   // have unsaved changes it says so.
   const isTimesStale = isWeekDirty || TIME_KEYS.some((key) => key in dirty);
-  // Open, as the header's View page: a real link to a new tab, waiting while the address shown isn't saved.
-  const openButton = (href: string, isWaiting: boolean) => {
-    const button = (
-      <ButtonLink href={href} isExternal icon="external-link" isDisabled={isWaiting}>
-        {strings.openLink}
-      </ButtonLink>
-    );
-    return isWaiting ? <Tooltip content={strings.saveAddressFirst}>{button}</Tooltip> : button;
-  };
   const isTeam = page.kind === 'round_robin';
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
@@ -848,11 +908,16 @@ export function PageEditor({
     .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })))
     .filter((member, at, all) => all.findIndex((each) => each.id === member.id) === at);
   // The tabs: Hosts on a round robin page only. A tab shown that this page doesn't have falls back to Page.
-  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || isTeam);
+  // Hosts on a round robin page only; Bookings and Insights for whoever may change the page (its own figures).
+  const tabs: readonly PageTab[] = PAGE_TABS.filter(
+    (each) => (each !== 'hosts' || isTeam) && ((each !== 'bookings' && each !== 'insights') || !isLocked),
+  );
   const shown: PageTab = tabs.includes(tab) ? tab : 'page';
   // The tabs whose fields hold an error now: what's marked red on them, and a refusal's field from the server.
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
-  const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
+  const isWhereMissing =
+    ((location.type === 'address' || location.type === 'custom') && location.value.trim() === '') ||
+    meetingLinkProblem(location) !== undefined;
   const hasError: Readonly<Record<PageTab, boolean>> = {
     page: refusedTab === 'page' || slugProblem(draft.slug) !== undefined,
     meeting:
@@ -865,16 +930,60 @@ export function PageEditor({
     questions: refusedTab === 'questions' || shownProblem !== undefined,
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
-    limits: refusedTab === 'limits',
+    share: refusedTab === 'share',
+    bookings: false,
+    insights: false,
   };
   const tabLabel: Readonly<Record<PageTab, string>> = {
     page: strings.page,
     meeting: strings.meeting,
     questions: questionStrings.questions,
     hosts: strings.hostsTab,
-    hours: strings.hours,
-    limits: strings.limits,
+    hours: strings.availabilityTab,
+    share: strings.shareTab,
+    bookings: activityStrings.bookingsTab,
+    insights: activityStrings.insightsTab,
   };
+  // What Save can't send yet, said in the bar and by Publish: a field on this tab or another that needs a fix.
+  const blockedReason =
+    sendable(draft) && (!isWeekDirty || week.isValid)
+      ? undefined
+      : tabs.some((id) => hasError[id] && id !== shown)
+        ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
+        : strings.fixPage;
+  /** Saves every unsaved change (the bar's Save and ⌘S); false when nothing of the page's could go. */
+  const saveAll = (): boolean => {
+    // A question that would break the public page waits, shown on its tab, as a form's publish does.
+    if (isPageDirty && dirty.questions !== undefined && questionProblem !== undefined) {
+      setProblemAsked(true);
+      onTabChange('questions');
+      return false;
+    }
+    setProblemAsked(false);
+    if (isPageDirty) saveWithAttributes(dirty);
+    if (isWeekDirty) week.save();
+    return isPageDirty;
+  };
+  /** The header's Publish: unsaved changes save first, and the save that lands publishes (as a form's flush does). */
+  const publishNow = () => {
+    if (isPublishing || isSaving) return;
+    if (blockedReason !== undefined) {
+      toasts.toast({ tone: 'danger', message: blockedReason });
+      return;
+    }
+    if (isPageDirty) {
+      publishAfterSave.current = true;
+      if (!saveAll()) publishAfterSave.current = false;
+      return;
+    }
+    if (isWeekDirty) week.save();
+    publish();
+  };
+  const hasUnpublished = changes.length > 0 || isDraftDirty;
+  const status = statusOf(page, hasUnpublished);
+  const isDraft = isDraftPage(page);
+  /** A row's word of help, in a tip beside its label (critic A8: help in tooltips, never a line under it). */
+  const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
   const limitRow = (
     title: string,
     help: { readonly text: string; readonly example: string },
@@ -914,13 +1023,10 @@ export function PageEditor({
             title={draft.title.trim() === '' ? strings.listLabel : draft.title}
             icon="link"
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
-            // Live or Paused, as a form's; the ⋯ menu's Pause or Resume changes it.
+            // One status, as a form's (the bookings area, 4 November 2026): Draft, Live, Live · edited or Paused.
             meta={
               <>
-                <EditorStatus
-                  tone={page.status === 'live' ? 'live' : 'paused'}
-                  text={page.status === 'live' ? strings.statusLive : strings.statusOff}
-                />
+                <EditorStatus tone={status.tone} text={status.text} />
                 {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
                 {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} isWhole />}
                 {/* Made from a managed template (AC-1334): where this page's settings come from, beside its status. */}
@@ -932,22 +1038,80 @@ export function PageEditor({
             }
           >
             <EditorActions
-              link={publicBookingUrl(page)}
-              viewHref={publicBookingUrl(page)}
-              // Its visits, bookings and where people stop (spec 0067).
-              insightsHref={insightsHref(slug, { kind: 'booking', page: page.id })}
-              {...(isLocked
-                ? {}
-                : {
-                    menu: {
-                      status: page.status === 'live' ? ('live' as const) : ('paused' as const),
-                      onPause: () => setLive('paused'),
-                      onResume: () => setLive('live'),
-                      ...(page.ownerName === undefined && page.isEditor !== true ? { onDuplicate: duplicate } : {}),
-                      // An editor changes the page but never deletes it (AC-1331).
-                      ...(page.isEditor === true ? {} : { onDelete: () => setDeleting(true) }),
-                      deleteLabel: strings.deletePage,
-                      extra: [
+              // A draft has no link guests can use yet: Copy link shows from the first Publish, as a form's does.
+              {...(isDraft ? {} : { link: publicBookingUrl(page) })}
+              // The page as the draft has it, in a new tab (what guests will see once published).
+              preview={
+                <Button
+                  icon="eye"
+                  isLabelCollapsible
+                  label={publishStrings.preview}
+                  onPress={() => {
+                    // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
+                    const opened = window.open('', '_blank');
+                    if (opened === null) return;
+                    opened.opener = null;
+                    if (isPageDirty && blockedReason === undefined) {
+                      previewAfterSave.current = opened;
+                      if (saveAll()) return;
+                      previewAfterSave.current = undefined;
+                    }
+                    opened.location.href = pagePreviewHref(slug, page.id);
+                  }}
+                >
+                  {publishStrings.preview}
+                </Button>
+              }
+              // Publish, the page's one primary, while there is something guests don't see yet.
+              {...(!isLocked && (isDraft || hasUnpublished)
+                ? {
+                    publish: (
+                      <Button variant="primary" onPress={publishNow} isPending={isPublishing}>
+                        {isPublishing ? publishStrings.publishing : publishStrings.publish}
+                      </Button>
+                    ),
+                  }
+                : {})}
+              // The rest under ⋯ (the owner, 4 November 2026: Copy link and Preview in the header, nothing more).
+              menu={{
+                ...(isLocked || isDraft
+                  ? {}
+                  : { status: page.status === 'live' ? ('live' as const) : ('paused' as const) }),
+                onPause: () => setLive('paused'),
+                onResume: () => setLive('live'),
+                ...(!isLocked && page.ownerName === undefined && page.isEditor !== true
+                  ? { onDuplicate: duplicate }
+                  : {}),
+                // An editor changes the page but never deletes it (AC-1331).
+                ...(isLocked || page.isEditor === true ? {} : { onDelete: () => setDeleting(true) }),
+                deleteLabel: strings.deletePage,
+                triggerRef: moreRef,
+                extra: [
+                  ...(isDraft || page.status !== 'live'
+                    ? []
+                    : [
+                        {
+                          id: 'view',
+                          label: publishStrings.viewPage,
+                          icon: 'external-link' as const,
+                          onAction: () => {
+                            globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
+                          },
+                        },
+                      ]),
+                  // Its Insights: a tab for whoever changes the page, this for whoever may only see it.
+                  ...(isLocked
+                    ? [
+                        {
+                          id: 'insights',
+                          label: publishStrings.insights,
+                          icon: 'chart-line' as const,
+                          onAction: () => {
+                            void navigate({ href: insightsHref(slug, { kind: 'booking', page: page.id }) });
+                          },
+                        },
+                      ]
+                    : [
                         {
                           id: 'sharing',
                           label: sharingStrings.menuItem,
@@ -957,9 +1121,34 @@ export function PageEditor({
                             setSharing(true);
                           },
                         },
-                      ],
-                    },
-                  })}
+                      ]),
+                  ...(isLocked || isDraft
+                    ? []
+                    : [
+                        {
+                          id: 'versions',
+                          label: publishStrings.versions,
+                          icon: 'clock' as const,
+                          onAction: () => {
+                            setVersionsOpen(true);
+                            readVersions();
+                          },
+                        },
+                      ]),
+                  // Back to what guests see, once there is something unpublished to lose (it asks first).
+                  ...(!isLocked && !isDraft && changes.length > 0
+                    ? [
+                        {
+                          id: 'discard',
+                          label: publishStrings.discard,
+                          icon: 'undo-2' as const,
+                          isDanger: true,
+                          onAction: () => setDiscardAsked(true),
+                        },
+                      ]
+                    : []),
+                ],
+              }}
             />
           </TopBar>
         ),
@@ -1007,61 +1196,127 @@ export function PageEditor({
               selectedKey={shown}
               onSelectionChange={(id) => onTabChange(pageTabOf(id))}
             >
-              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. Each tab's
-                  sections fill the width beside the phone (the owner, 23 Oct 2026). */}
+              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. The forms
+                  editor's frame (critic A6, 4 Nov 2026): the phone pinned beside the settings from a laptop's width, in
+                  the same two fifths, and each tab's rows held to the forms Settings tab's readable width. */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
+                  previewShare="wide"
+                  bodyLayout="stack"
                   {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
-                  // The page in a phone beside every tab (the owner, 22 Oct 2026), showing the unsaved edits.
-                  preview={
-                    <PreviewFrame
-                      src={`/b/${page.publicKey}`}
-                      title={page.title}
-                      // The page's save, or a save of the schedule it books by, draws it again with the new times.
-                      version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
-                      draft={{
-                        title: draft.title,
-                        description: draft.description,
-                        durations: draft.durations,
-                        location: draft.location,
-                        // The owner's links as they are now, while the draft shows them (booking socials).
-                        ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
-                        defaultView: draft.defaultView,
-                      }}
-                    />
-                  }
+                  // The page in a phone beside every settings tab (the owner, 22 Oct 2026), showing the unsaved edits;
+                  // Bookings and Insights take the whole width, as a form's Submissions and Analytics do.
+                  {...(shown === 'bookings' || shown === 'insights'
+                    ? {}
+                    : {
+                        preview: (
+                          <PreviewFrame
+                            src={`/b/${page.publicKey}`}
+                            title={page.title}
+                            // The page's save, or a save of the schedule it books by, draws it again with the new times.
+                            version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
+                            draft={{
+                              title: draft.title,
+                              description: draft.description,
+                              durations: draft.durations,
+                              location: draft.location,
+                              // The owner's links as they are now, while the draft shows them (booking socials).
+                              ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
+                              defaultView: draft.defaultView,
+                            }}
+                          />
+                        ),
+                      })}
                   notices={
                     <>
-                      {/* What guests don't see yet, and Publish (spec 0068, AC-6811): the page's own, so not on a
-                          page the reader can't change. */}
-                      {!isLocked && (
-                        <PublishBar
-                          status={publishStatus}
-                          changes={changes}
-                          {...(publishProblem === undefined
+                      {/* A refused Publish says why where it happened, with the way to the setting to fix. The
+                          page's state is the header's status, never a bar here (the bookings area). */}
+                      {publishProblem !== undefined && (
+                        <Callout
+                          tone="danger"
+                          title={publishStrings.publishRefused}
+                          isAnnounced
+                          {...(problemTab === undefined
                             ? {}
                             : {
-                                problem: {
-                                  message: publishProblem.message,
-                                  ...(problemTab === undefined
-                                    ? {}
-                                    : {
-                                        fix: {
-                                          label: publishStrings.goTo(tabLabel[problemTab]),
-                                          onFix: () => onTabChange(problemTab),
-                                        },
-                                      }),
-                                },
+                                actions: (
+                                  <Button onPress={() => onTabChange(problemTab)}>
+                                    {publishStrings.goTo(tabLabel[problemTab])}
+                                  </Button>
+                                ),
                               })}
-                          onPublish={publish}
-                          onDiscard={discardDraft}
-                          {...(versions === undefined ? {} : { versions })}
-                          onVersions={readVersions}
-                          onRestore={askRestore}
-                          isPaused={page.status === 'paused'}
-                          previewHref={pagePreviewHref(slug, page.id)}
-                        />
+                        >
+                          {publishProblem.message}
+                        </Callout>
                       )}
+                      <LiveDialog
+                        slug={slug}
+                        page={liveShown}
+                        onClose={() => {
+                          setLiveShown(undefined);
+                          focusLater(() => moreRef.current);
+                        }}
+                        onPutOnSite={() => {
+                          setLiveShown(undefined);
+                          onTabChange('share');
+                        }}
+                      />
+                      <Modal
+                        title={publishStrings.versionsTitle}
+                        isOpen={isVersionsOpen}
+                        onOpenChange={setVersionsOpen}
+                        actions={<Button slot="close">{publishStrings.close}</Button>}
+                      >
+                        {isVersionsFailed ? (
+                          <EmptyState tone="error" title={publishStrings.versionsFailed} onRetry={readVersions} />
+                        ) : versions === undefined ? (
+                          <Skeleton lines={3} />
+                        ) : versions.length === 0 ? (
+                          <EmptyState title={publishStrings.versionsNone} icon="clock" />
+                        ) : (
+                          <SettingsStack variant="plain">
+                            {versions.map((one) => (
+                              <SettingsRow key={one.version} title={one.label}>
+                                {one.isCurrent ? (
+                                  <Badge text={publishStrings.versionLive} isWhole />
+                                ) : (
+                                  <Button
+                                    onPress={() => {
+                                      setVersionsOpen(false);
+                                      askRestore(one.version);
+                                    }}
+                                  >
+                                    {publishStrings.restore}
+                                  </Button>
+                                )}
+                              </SettingsRow>
+                            ))}
+                          </SettingsStack>
+                        )}
+                      </Modal>
+                      <Modal
+                        title={publishStrings.discardTitle}
+                        variant="confirm"
+                        tone="danger"
+                        isOpen={isDiscardAsked}
+                        onOpenChange={setDiscardAsked}
+                        actions={
+                          <>
+                            <Button slot="close">{publishStrings.discardKeep}</Button>
+                            <Button
+                              variant="danger-solid"
+                              onPress={() => {
+                                setDiscardAsked(false);
+                                discardDraft();
+                              }}
+                            >
+                              {publishStrings.discardConfirm}
+                            </Button>
+                          </>
+                        }
+                      >
+                        {publishStrings.discardText}
+                      </Modal>
                       <Modal
                         title={publishStrings.restoreTitle(restoreAsked ?? 0)}
                         variant="confirm"
@@ -1087,19 +1342,6 @@ export function PageEditor({
                       >
                         {publishStrings.restoreText}
                       </Modal>
-                      {/* The publish bar says Paused for a page its reader can change; a locked page has no bar. */}
-                      {page.status === 'paused' && isLocked && <Callout tone="info">{strings.pausedNote}</Callout>}
-                      {/* The note is about the reader's own calendar: not on a colleague's page. */}
-                      {hasNoCalendar && !isNoteDismissed && page.ownerName === undefined && (
-                        <CalendarNote
-                          slug={slug}
-                          canConnect={calendar.enabled}
-                          onDismiss={() => {
-                            setNoteDismissed(true);
-                            writeDismissed(slug);
-                          }}
-                        />
-                      )}
                     </>
                   }
                   footer={
@@ -1108,23 +1350,9 @@ export function PageEditor({
                         status={barStatus}
                         {...(isDraftDirty ? { saveLabel: publishStrings.saveDraft } : {})}
                         {...(barError === undefined ? {} : { error: barError })}
-                        {...(sendable(draft) && (!isWeekDirty || week.isValid)
-                          ? {}
-                          : {
-                              blockedReason: tabs.some((id) => hasError[id] && id !== shown)
-                                ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
-                                : strings.fixPage,
-                            })}
+                        {...(blockedReason === undefined ? {} : { blockedReason })}
                         onSave={() => {
-                          // A question that would break the public page waits, shown on its tab, as a form's publish does.
-                          if (isPageDirty && dirty.questions !== undefined && questionProblem !== undefined) {
-                            setProblemAsked(true);
-                            onTabChange('questions');
-                            return;
-                          }
-                          setProblemAsked(false);
-                          if (isPageDirty) saveWithAttributes(dirty);
-                          if (isWeekDirty) week.save();
+                          saveAll();
                         }}
                         onDiscard={() => {
                           week.discard();
@@ -1143,26 +1371,34 @@ export function PageEditor({
                   }
                 >
                   {shown === 'page' && (
-                    <>
+                    // Plain rows under small group headers, as a form's Settings tab (critic A8, 4 Nov 2026): a label on
+                    // the left with its help in a tip, the control on the right.
+                    <SettingsStack width="readable" rows="inline">
                       <Card title={strings.details}>
-                        <Field
-                          label={strings.description}
-                          value={draft.description}
-                          placeholder={strings.descriptionPlaceholder}
-                          isMultiline
-                          maxLength={2000}
-                          showCounter
-                          isReadOnly={readOnly('details')}
-                          onChange={(description) => change({ description })}
-                        />
-                        {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a
-                          visitor's own remembered choice still wins over. A FieldGroup, as Who can book is, so the
-                          line under it is read with the choices; the phone beside this switches to the view at once. */}
-                        <FieldGroup label={strings.opensIn}>
-                          <RadioGroup
-                            label={strings.opensIn}
+                        <SettingsRow title={strings.description} control="field">
+                          <Field
+                            label={strings.description}
                             isLabelHidden
-                            orientation="horizontal"
+                            value={draft.description}
+                            placeholder={strings.descriptionPlaceholder}
+                            isMultiline
+                            maxLength={2000}
+                            showCounter
+                            isReadOnly={readOnly('details')}
+                            onChange={(description) => change({ description })}
+                          />
+                        </SettingsRow>
+                        {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a visitor's
+                            own remembered choice still wins over; the phone beside this switches to it at once. */}
+                        <SettingsRow title={strings.opensIn} meta={tip(strings.opensIn, strings.opensInHelp)}>
+                          <SegmentedControl
+                            label={strings.opensIn}
+                            size="compact"
+                            segments={[
+                              { value: 'month', label: strings.opensInViews.month },
+                              { value: 'list', label: strings.opensInViews.list },
+                              { value: 'chat', label: strings.opensInViews.chat },
+                            ]}
                             value={draft.defaultView}
                             isReadOnly={isLocked}
                             onChange={(value) => {
@@ -1170,81 +1406,103 @@ export function PageEditor({
                                 change({ defaultView: value });
                               }
                             }}
-                          >
-                            <Radio value="month">{strings.opensInViews.month}</Radio>
-                            <Radio value="list">{strings.opensInViews.list}</Radio>
-                            <Radio value="chat">{strings.opensInViews.chat}</Radio>
-                          </RadioGroup>
-                        </FieldGroup>
+                          />
+                        </SettingsRow>
                       </Card>
-                      <Card
-                        title={strings.sharing}
-                        {...(isWorkspace ? { description: strings.workspaceLinkSharing } : {})}
-                      >
-                        {/* The address, privacy and the profile skip the draft (spec 0068, AC-6813): said once here. */}
-                        <Callout tone="info">{publishStrings.goesLive}</Callout>
+                      <Card title={strings.linkSection}>
                         {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
-                          // The full address, the part after the owner's handle editable (22 Oct 2026); Copy and
-                          // Open take the saved link, so they wait while the address has unsaved changes.
-                          <Field
-                            label={strings.address}
-                            value={draft.slug}
-                            prefix={`${addressHost}/${page.handle}/`}
-                            {...(isSlugUnsaved && page.status === 'live' && !page.isPrivate
-                              ? { hint: strings.slugChanging }
-                              : {})}
-                            maxLength={60}
-                            isRequired
-                            isReadOnly={readOnly('address')}
-                            onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
-                            onBlur={() => setSlugLeft(true)}
-                            {...(isSlugLeft && slugProblem(draft.slug) !== undefined
-                              ? { error: slugProblem(draft.slug) }
-                              : failure?.field === 'slug'
-                                ? { error: failure.message }
+                          // The full address, the part after the owner's handle editable (22 Oct 2026); Copy takes the
+                          // saved link, so it waits while the address has unsaved changes.
+                          <SettingsRow
+                            title={strings.address}
+                            meta={tip(strings.address, strings.addressHelp)}
+                            control="field"
+                          >
+                            <Field
+                              label={strings.address}
+                              isLabelHidden
+                              value={draft.slug}
+                              prefix={`${addressHost}/${page.handle}/`}
+                              {...(isSlugUnsaved && page.status === 'live' && !page.isPrivate
+                                ? { hint: strings.slugChanging }
                                 : {})}
-                            suffix={
-                              isAddressUnsaved ? (
-                                <Tooltip content={strings.saveAddressFirst}>
-                                  <CopyButton
-                                    value={savedLink}
-                                    label={strings.copyLink}
-                                    variant="ghost"
-                                    isIconOnly
-                                    isDisabled
-                                  />
-                                </Tooltip>
-                              ) : (
-                                <CopyButton value={savedLink} label={strings.copyLink} variant="ghost" isIconOnly />
-                              )
-                            }
-                            after={openButton(savedLink, isAddressUnsaved)}
-                          />
+                              maxLength={60}
+                              isRequired
+                              isReadOnly={readOnly('address')}
+                              onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                              onBlur={() => setSlugLeft(true)}
+                              {...(isSlugLeft && slugProblem(draft.slug) !== undefined
+                                ? { error: slugProblem(draft.slug) }
+                                : failure?.field === 'slug'
+                                  ? { error: failure.message }
+                                  : {})}
+                              // Copy inside the field, at the field's size (one control shape in the row).
+                              {...(isDraft
+                                ? {}
+                                : {
+                                    suffix: isAddressUnsaved ? (
+                                      <Tooltip content={strings.saveAddressFirst}>
+                                        <CopyButton
+                                          value={savedLink}
+                                          label={strings.copyLink}
+                                          variant="ghost"
+                                          isIconOnly
+                                          isDisabled
+                                        />
+                                      </Tooltip>
+                                    ) : (
+                                      <CopyButton
+                                        value={savedLink}
+                                        label={strings.copyLink}
+                                        variant="ghost"
+                                        isIconOnly
+                                      />
+                                    ),
+                                  })}
+                            />
+                          </SettingsRow>
                         ) : (
-                          // No handle yet, or a Link only page: its /b/ link, which only those who have it can use.
-                          <Field
-                            label={strings.address}
-                            variant="copy"
-                            copyLabel={strings.copyLink}
-                            value={bLink}
-                            after={openButton(bLink, false)}
-                          />
+                          // No handle yet, a workspace link or a Link only page: its /b/ link, read only.
+                          <SettingsRow
+                            title={strings.address}
+                            meta={tip(
+                              strings.address,
+                              isWorkspace ? strings.workspaceLinkSharing : strings.bAddressHelp,
+                            )}
+                            control="field"
+                          >
+                            {isDraft ? (
+                              <Field label={strings.address} isLabelHidden value={bLink} isReadOnly />
+                            ) : (
+                              <Field
+                                label={strings.address}
+                                isLabelHidden
+                                variant="copy"
+                                copyLabel={strings.copyLink}
+                                value={bLink}
+                              />
+                            )}
+                          </SettingsRow>
                         )}
                         {/* The reader's own handle: on a colleague's page their Profile can't change this address. */}
                         {page.handle === undefined && !draft.isPrivate && isOwnPage && (
-                          <Link href={profileHref(slug)}>{strings.setHandle}</Link>
+                          <SettingsRow title={strings.handleRow}>
+                            <ButtonLink href={profileHref(slug)} icon="at-sign">
+                              {strings.setHandleShort}
+                            </ButtonLink>
+                          </SettingsRow>
                         )}
                         {!isWorkspace && (
-                          <FieldGroup
-                            label={strings.whoCanBook}
+                          <SettingsRow
+                            title={strings.whoCanBook}
+                            meta={tip(strings.whoCanBook, strings.linkOnlyHint)}
                             // Switching a public page to Link only retires the address people already have: said
                             // before Save, not found out later by a visitor on Page not found (flow walks, B10).
-                            {...(draft.isPrivate
-                              ? { hint: page.isPrivate ? strings.linkOnlyHint : strings.linkOnlyChanging }
-                              : {})}
+                            {...(draft.isPrivate && !page.isPrivate ? { description: strings.linkOnlyChanging } : {})}
                           >
                             <SegmentedControl
                               label={strings.whoCanBook}
+                              size="compact"
                               segments={[
                                 { value: 'public', label: strings.publicPage },
                                 { value: 'link', label: strings.linkOnly },
@@ -1253,15 +1511,15 @@ export function PageEditor({
                               isReadOnly={isLocked}
                               onChange={(value) => {
                                 const isPrivate = value === 'link';
-                                // Link only hides the address: one it can't save goes back to the saved one, so nothing
-                                // hidden blocks Save.
+                                // Link only hides the address: one it can't save goes back to the saved one, so
+                                // nothing hidden blocks Save.
                                 change({
                                   isPrivate,
                                   ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
                                 });
                               }}
                             />
-                          </FieldGroup>
+                          </SettingsRow>
                         )}
                       </Card>
                       {/* Requests waiting for a Confirm (spec 0062, AC-6203): shown while any wait, even once
@@ -1273,8 +1531,38 @@ export function PageEditor({
                         isReadOnly={isLocked}
                         isAlwaysShown={page.requiresConfirmation}
                       />
-                      {/* The snippet for someone else's site (spec 0062, L3), under Sharing, since it is one more
-                          way to hand the page out rather than a setting of the page. */}
+                    </SettingsStack>
+                  )}
+                  {shown === 'share' && (
+                    // Every way to hand the page out, in one place (critic A21, 4 Nov 2026): its link through the
+                    // forms' own share part, then the snippet, one-time links, the social links and the link page.
+                    <SettingsStack width="readable" rows="inline">
+                      <Card title={strings.shareLinkSection}>
+                        {isDraft ? (
+                          <SettingsRow title={strings.notPublished} description={strings.publishToShare}>
+                            {!isLocked && (
+                              <Button onPress={publishNow} isPending={isPublishing}>
+                                {publishStrings.publish}
+                              </Button>
+                            )}
+                          </SettingsRow>
+                        ) : (
+                          <ShareBlock name={page.title} link={savedLink} />
+                        )}
+                      </Card>
+                      {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
+                      {!isLocked && (
+                        <ShareTimesCard
+                          data={data}
+                          publicKey={page.publicKey}
+                          title={page.title}
+                          duration={page.durations[0] ?? 30}
+                          link={savedLink}
+                          isLive={page.status === 'live'}
+                          isPaused={page.status === 'paused' && !isDraft}
+                        />
+                      )}
+                      {/* The snippet for someone else's site (spec 0062, L3). */}
                       <EmbedCard
                         script={data.forms.embedUrl()}
                         publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
@@ -1282,7 +1570,7 @@ export function PageEditor({
                         isLive={page.status === 'live'}
                         quickPicks={BRAND_QUICK_PICKS}
                       />
-                      {/* One-time links (AC-6204): one more way to hand the page out, beside the snippet. */}
+                      {/* One-time links (AC-6204). */}
                       <OneOffLinksCard
                         data={data}
                         slug={slug}
@@ -1308,71 +1596,80 @@ export function PageEditor({
                         // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
                         // itself, and its place and heading are set on the link page, with the rest of the page.
                         <Card title={strings.linkPage}>
-                          <SettingsRow title={strings.onLinkPage} description={strings.onLinkPageLine}>
+                          <SettingsRow
+                            title={strings.onLinkPage}
+                            meta={tip(strings.onLinkPage, strings.onLinkPageLine)}
+                          >
                             <ButtonLink href={linkPageHref(slug)} icon="pencil">
                               {strings.editLinkPage}
                             </ButtonLink>
                           </SettingsRow>
                         </Card>
                       )}
-                    </>
+                    </SettingsStack>
                   )}
                   {shown === 'meeting' && (
-                    <>
+                    <SettingsStack width="readable" rows="inline">
                       <Card title={strings.meeting}>
-                        <Field
-                          label={strings.title}
-                          value={draft.title}
-                          maxLength={120}
-                          isRequired
-                          isReadOnly={readOnly('details')}
-                          onChange={(title) => change({ title })}
-                          {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
-                        />
+                        <SettingsRow title={strings.title} control="field">
+                          <Field
+                            label={strings.title}
+                            isLabelHidden
+                            value={draft.title}
+                            maxLength={120}
+                            isRequired
+                            isReadOnly={readOnly('details')}
+                            onChange={(title) => change({ title })}
+                            {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
+                          />
+                        </SettingsRow>
                         {readOnly('durations') ? (
-                          // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
-                          <DescriptionList
-                            items={[
-                              {
-                                term: strings.durations,
-                                description: draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
-                              },
-                            ]}
+                          // Read only: the chosen lengths as words, which a viewer can reach and read.
+                          <SettingsRow
+                            title={strings.durations}
+                            description={draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', ')}
                           />
                         ) : (
-                          <ChoiceChips
-                            label={strings.durations}
-                            choices={lengths.map((minutes) => ({
-                              id: String(minutes),
-                              label: strings.minutesShort(minutes),
-                            }))}
-                            selected={draft.durations.map(String)}
-                            onChange={(ids) => {
-                              const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
-                              // A fifth is refused here as the server would: the public page shows four.
-                              if (durations.length > LENGTHS_MAX) {
-                                setChipsError(strings.lengthsFull);
-                                return;
+                          <SettingsRow
+                            title={strings.durations}
+                            meta={tip(strings.durations, strings.durationsHelp)}
+                            control="field"
+                          >
+                            <ChoiceChips
+                              label={strings.durations}
+                              isLabelHidden
+                              choices={lengths.map((minutes) => ({
+                                id: String(minutes),
+                                label: strings.minutesShort(minutes),
+                              }))}
+                              selected={draft.durations.map(String)}
+                              onChange={(ids) => {
+                                const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                                // A fifth is refused here as the server would: the public page shows four.
+                                if (durations.length > LENGTHS_MAX) {
+                                  setChipsError(strings.lengthsFull);
+                                  return;
+                                }
+                                setChipsError(undefined);
+                                change({ durations });
+                              }}
+                              {...(chipsError === undefined
+                                ? draft.durations.length === 0
+                                  ? { error: strings.durationRequired }
+                                  : {}
+                                : { error: chipsError })}
+                              end={
+                                <Button
+                                  ref={customRef}
+                                  variant="dashed"
+                                  icon="plus"
+                                  onPress={() => setAddingLength(true)}
+                                >
+                                  {strings.durationCustom}
+                                </Button>
                               }
-                              setChipsError(undefined);
-                              change({ durations });
-                            }}
-                            {...(chipsError === undefined
-                              ? draft.durations.length === 0
-                                ? { error: strings.durationRequired }
-                                : {}
-                              : { error: chipsError })}
-                            end={
-                              <Button
-                                ref={customRef}
-                                variant="dashed"
-                                icon="plus"
-                                onPress={() => setAddingLength(true)}
-                              >
-                                {strings.durationCustom}
-                              </Button>
-                            }
-                          />
+                            />
+                          </SettingsRow>
                         )}
                         {!readOnly('durations') && (
                           <Popover
@@ -1413,31 +1710,76 @@ export function PageEditor({
                             />
                           </Popover>
                         )}
-                      </Card>
-                      <Card title={strings.location}>
-                        <Select
-                          label={strings.location}
-                          isLabelHidden
-                          items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
-                          value={location.type}
-                          isReadOnly={readOnly('location')}
-                          {...(location.type === 'video' && noLinkHint !== undefined ? { hint: noLinkHint } : {})}
-                          onChange={(type) => {
-                            if (type === 'video' || type === 'phone') change({ location: { type } });
-                            if (type === 'address' || type === 'custom')
-                              change({ location: { type, value: 'value' in location ? location.value : '' } });
-                          }}
-                        />
-                        {(location.type === 'address' || location.type === 'custom') && (
-                          <Field
-                            label={location.type === 'address' ? strings.addressOrRoom : strings.where}
-                            value={location.value}
-                            maxLength={500}
-                            isRequired
+                        <SettingsRow title={strings.location} control="field">
+                          <Select
+                            label={strings.location}
+                            isLabelHidden
+                            // With no calendar to make a video link (critic B-07, 5 Nov 2026): "I'll send a link" is
+                            // video with no link, the page's default, and Video asks for the host's own link below.
+                            // With one, Video is the calendar's link, or the host's own when the page keeps one.
+                            items={[
+                              ...(makesNoLink ? [{ id: SEND_LINK, label: strings.locations.sendLink }] : []),
+                              ...LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] })),
+                            ]}
+                            value={locationChoice}
                             isReadOnly={readOnly('location')}
-                            {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
-                            onChange={(value) => change({ location: { type: location.type, value } })}
+                            // Only the reconnect case still needs a word: the field below asks for the rest.
+                            // A calendar that needs reconnecting makes no link: said under "I'll send a link".
+                            {...(locationChoice === SEND_LINK && noLinkReason === 'reconnect'
+                              ? { hint: strings.noVideoLinkReconnect }
+                              : {})}
+                            onChange={(type) => {
+                              if (type === SEND_LINK) change({ location: { type: 'video' } });
+                              // Video with nothing to make a link: the host's own, asked for right here.
+                              if (type === 'video')
+                                change({ location: makesNoLink ? { type: 'video', link: '' } : { type: 'video' } });
+                              if (type === 'phone') change({ location: { type } });
+                              if (type === 'address' || type === 'custom')
+                                change({ location: { type, value: 'value' in location ? location.value : '' } });
+                            }}
                           />
+                        </SettingsRow>
+                        {location.type === 'video' && location.link !== undefined && (
+                          <SettingsRow
+                            title={strings.meetingLink}
+                            meta={tip(strings.meetingLink, strings.meetingLinkHelp)}
+                            control="field"
+                          >
+                            <Field
+                              label={strings.meetingLink}
+                              isLabelHidden
+                              type="url"
+                              inputMode="url"
+                              placeholder={strings.meetingLinkPlaceholder}
+                              value={location.link}
+                              maxLength={2048}
+                              isRequired
+                              isReadOnly={readOnly('location')}
+                              // Said once the field is left (or Save is tried), not before anything is typed.
+                              {...(meetingLinkProblem(location) === undefined || (!isLinkLeft && failure === undefined)
+                                ? {}
+                                : { error: meetingLinkProblem(location) })}
+                              onBlur={() => setLinkLeft(true)}
+                              onChange={(link) => change({ location: { type: 'video', link } })}
+                            />
+                          </SettingsRow>
+                        )}
+                        {(location.type === 'address' || location.type === 'custom') && (
+                          <SettingsRow
+                            title={location.type === 'address' ? strings.addressOrRoom : strings.where}
+                            control="field"
+                          >
+                            <Field
+                              label={location.type === 'address' ? strings.addressOrRoom : strings.where}
+                              isLabelHidden
+                              value={location.value}
+                              maxLength={500}
+                              isRequired
+                              isReadOnly={readOnly('location')}
+                              {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
+                              onChange={(value) => change({ location: { type: location.type, value } })}
+                            />
+                          </SettingsRow>
                         )}
                       </Card>
                       <PageDestination
@@ -1447,29 +1789,38 @@ export function PageEditor({
                         {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
                         settingsHref={calendarsHref(slug)}
+                        canConnect={calendar.status === 'ready' && calendar.enabled}
                       />
                       {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
-                          October 2026): under a question's settings nobody found it. The same switch a form's
-                          Settings has, in its words: it applies to every booking. */}
+                          October 2026). One row per setting (critic A1: two switches had shared one row). */}
                       <Card title={strings.afterBooking}>
-                        <Switch
-                          label={strings.addToCrm}
-                          isSelected={draft.fileToCrm}
-                          isReadOnly={readOnly('on_booking')}
-                          onChange={(fileToCrm) => change({ fileToCrm })}
-                        />
+                        <SettingsRow title={strings.addToCrm} meta={tip(strings.addToCrm, strings.addToCrmHelp)}>
+                          <Switch
+                            label={strings.addToCrm}
+                            isLabelHidden
+                            isSelected={draft.fileToCrm}
+                            isReadOnly={readOnly('on_booking')}
+                            onChange={(fileToCrm) => change({ fileToCrm })}
+                          />
+                        </SettingsRow>
                         {/* Spec 0062, L1: the host confirms each booking first (AC-6203), and where the visitor goes
                             once they have booked (AC-6201). */}
-                        <Switch
-                          label={strings.confirmFirst}
-                          description={strings.confirmFirstHint}
-                          isSelected={draft.requiresConfirmation}
-                          isReadOnly={isLocked}
-                          onChange={(requiresConfirmation) => change({ requiresConfirmation })}
-                        />
-                        <FieldGroup label={strings.thenShow}>
+                        <SettingsRow
+                          title={strings.confirmFirst}
+                          meta={tip(strings.confirmFirst, strings.confirmFirstHint)}
+                        >
+                          <Switch
+                            label={strings.confirmFirst}
+                            isLabelHidden
+                            isSelected={draft.requiresConfirmation}
+                            isReadOnly={isLocked}
+                            onChange={(requiresConfirmation) => change({ requiresConfirmation })}
+                          />
+                        </SettingsRow>
+                        <SettingsRow title={strings.thenShow}>
                           <SegmentedControl
                             label={strings.thenShow}
+                            size="compact"
                             segments={[
                               { value: 'confirmation', label: strings.afterChoices.confirmation },
                               { value: 'redirect', label: strings.afterChoices.redirect },
@@ -1484,36 +1835,44 @@ export function PageEditor({
                               )
                             }
                           />
-                        </FieldGroup>
+                        </SettingsRow>
                         {draft.afterBooking === 'redirect' && (
                           <>
-                            <Field
-                              label={strings.redirectUrl}
-                              type="url"
-                              inputMode="url"
-                              placeholder={strings.redirectPlaceholder}
-                              value={draft.redirectUrl ?? ''}
-                              isReadOnly={isLocked}
-                              {...(isRedirectLeft && redirectProblem(draft) !== undefined
-                                ? { error: redirectProblem(draft) }
-                                : {})}
-                              onBlur={() => setRedirectLeft(true)}
-                              onChange={(value) => change({ redirectUrl: value })}
-                            />
-                            <Switch
-                              label={strings.sendDetails}
-                              description={strings.sendDetailsHint}
-                              isSelected={draft.sendBookingDetails}
-                              isReadOnly={isLocked}
-                              onChange={(sendBookingDetails) => change({ sendBookingDetails })}
-                            />
+                            <SettingsRow title={strings.redirectUrl} control="field">
+                              <Field
+                                label={strings.redirectUrl}
+                                isLabelHidden
+                                type="url"
+                                inputMode="url"
+                                placeholder={strings.redirectPlaceholder}
+                                value={draft.redirectUrl ?? ''}
+                                isReadOnly={isLocked}
+                                {...(isRedirectLeft && redirectProblem(draft) !== undefined
+                                  ? { error: redirectProblem(draft) }
+                                  : {})}
+                                onBlur={() => setRedirectLeft(true)}
+                                onChange={(value) => change({ redirectUrl: value })}
+                              />
+                            </SettingsRow>
+                            <SettingsRow
+                              title={strings.sendDetails}
+                              meta={tip(strings.sendDetails, strings.sendDetailsHint)}
+                            >
+                              <Switch
+                                label={strings.sendDetails}
+                                isLabelHidden
+                                isSelected={draft.sendBookingDetails}
+                                isReadOnly={isLocked}
+                                onChange={(sendBookingDetails) => change({ sendBookingDetails })}
+                              />
+                            </SettingsRow>
                           </>
                         )}
                       </Card>
-                    </>
+                    </SettingsStack>
                   )}
                   {shown === 'questions' && (
-                    <>
+                    <SettingsStack width="readable" rows="inline">
                       {targets === undefined && !isLocked && (
                         <Callout
                           tone="danger"
@@ -1570,6 +1929,30 @@ export function PageEditor({
                       )}
                       {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsks}</Callout>}
                       <QuestionsSection
+                        // What every guest is asked before these (critic A7): shown first, locked, so the count and
+                        // the list say what a guest really meets.
+                        fixed={[
+                          {
+                            id: 'fixed-name',
+                            label: strings.fixedName,
+                            typeLabel: questionStrings.answerTypes.short_text,
+                            typeIcon: 'type',
+                            isRequired: true,
+                          },
+                          {
+                            id: 'fixed-email',
+                            label: strings.fixedEmail,
+                            typeLabel: questionStrings.answerTypes.email,
+                            typeIcon: 'mail',
+                            isRequired: true,
+                          },
+                          {
+                            id: 'fixed-notes',
+                            label: strings.fixedNotes,
+                            typeLabel: questionStrings.answerTypes.long_text,
+                            typeIcon: 'file-text',
+                          },
+                        ]}
                         questions={draft.questions}
                         onChange={(update) => {
                           setJustSaved(false);
@@ -1589,10 +1972,10 @@ export function PageEditor({
                         isReadOnly={readOnly('questions')}
                         {...(shownProblem === undefined ? {} : { problem: shownProblem })}
                       />
-                    </>
+                    </SettingsStack>
                   )}
                   {isTeam && shown === 'hosts' && (
-                    <>
+                    <SettingsStack width="readable" rows="inline">
                       <Callout tone="info">{publishStrings.goesLive}</Callout>
                       <HostsCard
                         data={data}
@@ -1641,12 +2024,11 @@ export function PageEditor({
                           onNotice?.(routingStrings.saved);
                         }}
                       />
-                    </>
+                    </SettingsStack>
                   )}
                   {shown === 'hours' && (
-                    <>
-                      {/* A schedule's week and days off are shared by every page that books by it (AC-6813). */}
-                      <Callout tone="info">{publishStrings.hoursLive}</Callout>
+                    // Hours and Limits as one Availability tab (critic A6, 4 Nov 2026), the forms Settings width.
+                    <SettingsStack width="readable" rows="inline">
                       {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
                           reserved time and conflicts, each a section with its heading. */}
                       {isTeam ? (
@@ -1655,9 +2037,13 @@ export function PageEditor({
                         <Card
                           title={scheduleStrings.schedule}
                           actions={
-                            <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
-                              {strings.manageSchedules}
-                            </ButtonLink>
+                            <>
+                              {/* A schedule's week and days off are shared by every page that books by it (AC-6813). */}
+                              <InfoTip label={scheduleStrings.schedule}>{publishStrings.hoursLive}</InfoTip>
+                              <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
+                                {strings.manageSchedules}
+                              </ButtonLink>
+                            </>
                           }
                         >
                           <Select
@@ -1736,11 +2122,9 @@ export function PageEditor({
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
                         settingsHref={calendarsHref(slug)}
+                        canConnect={calendar.status === 'ready' && calendar.enabled}
                       />
-                    </>
-                  )}
-                  {shown === 'limits' && (
-                    <>
+
                       <Card title={strings.limitGroups.buffers}>
                         {limitRow(
                           strings.bufferBefore,
@@ -1774,14 +2158,14 @@ export function PageEditor({
                         {limitRow(
                           strings.cancelCutoff,
                           strings.limitHelp.cancelCutoff,
-                          NOTICE,
+                          CUTOFF,
                           String(draft.cancelCutoffMinutes),
                           (id) => change({ cancelCutoffMinutes: Number(id ?? 0) }),
                         )}
                         {limitRow(
                           strings.moveCutoff,
                           strings.limitHelp.moveCutoff,
-                          NOTICE,
+                          CUTOFF,
                           String(draft.moveCutoffMinutes),
                           (id) => change({ moveCutoffMinutes: Number(id ?? 0) }),
                         )}
@@ -1802,8 +2186,10 @@ export function PageEditor({
                           (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
                         )}
                       </Card>
-                    </>
+                    </SettingsStack>
                   )}
+                  {shown === 'bookings' && <PageBookingsTab data={data} slug={slug} pageId={page.id} />}
+                  {shown === 'insights' && <PageInsightsTab data={data} slug={slug} pageId={page.id} />}
                 </PreviewLayout>
               </TabPanel>
             </Tabs>
@@ -1811,6 +2197,53 @@ export function PageEditor({
         ),
       }}
     />
+  );
+}
+
+/**
+ * The first Publish's moment (the bookings area, 4 November 2026): "<page> is live", its link through the forms' own
+ * share part (`ShareBlock`: the link with Copy and Open, its QR code, Email, WhatsApp and the share sheet), a quiet way
+ * to the embed, and Done. The same anatomy as a form's live dialog (`ReadyDialog` in forms/PublishDialog.tsx), which
+ * takes a form, so it is drawn here from the same parts rather than forked.
+ */
+function LiveDialog({
+  slug,
+  page,
+  onClose,
+  onPutOnSite,
+}: {
+  readonly slug: string;
+  readonly page: BookingPageView | undefined;
+  readonly onClose: () => void;
+  readonly onPutOnSite: () => void;
+}) {
+  // The last page stays while the Modal plays its exit.
+  const [last, setLast] = useState(page);
+  if (page !== undefined && page !== last) setLast(page);
+  const live = page ?? last;
+  if (live === undefined) return null;
+  return (
+    <Modal
+      title={publishStrings.liveTitle(live.title)}
+      variant="form"
+      isOpen={page !== undefined}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+      actions={
+        // Copy link is the dialog's one primary; Done only closes it, and focus starts there, as a form's does.
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        <Button key="done" slot="close" autoFocus>
+          {publishStrings.done}
+        </Button>
+      }
+    >
+      <ShareBlock
+        name={live.title}
+        link={publicBookingUrl(live)}
+        onward={{ label: publishStrings.putOnSite, href: pageEditorHref(slug, live.id, 'share'), onPress: onPutOnSite }}
+      />
+    </Modal>
   );
 }
 
@@ -1828,12 +2261,14 @@ export interface PageEditorPendingProps {
  * whether it has them; Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  page: [strings.details, strings.sharing, socialsStrings.title],
-  meeting: [strings.meeting, strings.location, strings.calendarSection, strings.afterBooking],
+  page: [strings.details, strings.linkSection],
+  meeting: [strings.meeting, strings.calendarSection, strings.afterBooking],
   questions: [questionStrings.questions],
   hosts: [rotationStrings.hosts, routingStrings.routing],
-  hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff],
-  limits: [strings.limitGroups.buffers, strings.limitGroups.window, strings.limitGroups.pace],
+  hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
+  share: [strings.shareLinkSection, socialsStrings.title],
+  bookings: [activityStrings.upcoming],
+  insights: [activityStrings.insightsTab],
 };
 
 /**
@@ -1849,8 +2284,10 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
     meeting: strings.meeting,
     questions: questionStrings.questions,
     hosts: strings.hostsTab,
-    hours: strings.hours,
-    limits: strings.limits,
+    hours: strings.availabilityTab,
+    share: strings.shareTab,
+    bookings: activityStrings.bookingsTab,
+    insights: activityStrings.insightsTab,
   };
   return (
     <WorkspacePage
@@ -1867,21 +2304,18 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
           >
             <TabPanel id={shown} variant="fill">
               <PreviewLayout
-                preview={<Skeleton shape="block" />}
-                // The publish bar's place first, as the editor draws it on a page its reader can change (the usual
-                // case: a colleague's locked page has none), then the notices already known.
-                notices={
-                  <>
-                    <PublishBarSkeleton />
-                    {notices}
-                  </>
-                }
+                previewShare="wide"
+                bodyLayout="stack"
+                {...(shown === 'bookings' || shown === 'insights' ? {} : { preview: <Skeleton shape="block" /> })}
+                {...(notices === undefined ? {} : { notices })}
               >
-                {PENDING_SECTIONS[shown].map((title) => (
-                  <Card key={title} title={title} isBusy>
-                    <Skeleton lines={3} />
-                  </Card>
-                ))}
+                <SettingsStack width="readable" rows="inline">
+                  {PENDING_SECTIONS[shown].map((title) => (
+                    <Card key={title} title={title} isBusy>
+                      <Skeleton lines={3} />
+                    </Card>
+                  ))}
+                </SettingsStack>
               </PreviewLayout>
             </TabPanel>
           </Tabs>

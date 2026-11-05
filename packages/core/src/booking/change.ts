@@ -30,6 +30,8 @@ import { visibleRecords } from '../access/visibility.ts';
 import { checkId } from '../engine/ids.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { outboxHook } from '../engine/outbox.ts';
+import { changeOf, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar, BusyReader, EventRef } from './calendar.ts';
 import { chooseHosts, lockRotations } from '../rotation/assign.ts';
 import { changedSeats, liveSeats, recordSeats, syncHosts } from '../rotation/reseat.ts';
@@ -70,6 +72,11 @@ export interface ChangeDeps {
     };
   readonly now?: () => Date;
   readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
+  /**
+   * The write's hooks (`commitWrite`'s, so the `bookings` row carries the member's mutation id and their own tab skips
+   * its echo, B-17). A guest's change, which has none, stores the row through the outbox hook itself.
+   */
+  readonly hooks?: readonly AfterWrite[];
 }
 
 /**
@@ -150,6 +157,21 @@ async function readTarget(
  * A booking moved or cancelled by a member other than its host (spec 0037, AC-1263): one `booking.changed_for` row
  * naming the actor and the host, in the change's transaction. A guest's own change, and a host's, write none.
  */
+/**
+ * Tells every tab that bookings changed (B-17): one `bookings` outbox row naming nothing, stored last in the change's
+ * own transaction, so an owner's open Bookings screen reads again without leaving the page.
+ */
+export async function announceBookings(
+  tx: WorkspaceTx,
+  scope: Pick<EngineScope, 'workspaceId' | 'actor'>,
+  bookingIds: readonly string[],
+  hooks: readonly AfterWrite[] = [outboxHook()],
+): Promise<void> {
+  if (bookingIds.length === 0) return;
+  const change = changeOf(scope, { bookings: bookingIds });
+  for (const hook of hooks) await hook(change, tx);
+}
+
 async function auditChangedFor(
   tx: WorkspaceTx,
   target: ChangeTarget,
@@ -513,6 +535,7 @@ export async function moveBooking(
       await enqueueBookingMail(tx, updated.id, ['moved', 'reminder_24h', 'reminder_1h']);
       await queueBookingWebhook(tx, 'booking.rescheduled', updated.id);
       await auditChangedFor(tx, target, row, 'moved');
+      await announceBookings(tx, target.scope, [row.id], deps.hooks);
       return updated;
     } catch (error) {
       // The lock should make this unreachable: a write that skipped it, refused by the database.
@@ -636,6 +659,8 @@ async function moveTeamBooking(
         'reminder_1h',
       ]);
       await queueBookingWebhook(tx, 'booking.rescheduled', updated.id);
+      // Last: the outbox takes the workspace's counter row, which every other write in it then waits for.
+      await announceBookings(tx, target.scope, [row.id], deps.hooks);
       return { updated, organiserChanged };
     } catch (error) {
       if (postgresError(error)?.code === '23P01') {
@@ -693,6 +718,7 @@ export async function cancelBooking(
     // heard of (spec 0062, AC-6203) is cancelled in silence.
     if (row.approval !== 'pending') await queueBookingWebhook(tx, 'booking.cancelled', updated.id);
     await auditChangedFor(tx, target, row, 'cancelled');
+    await announceBookings(tx, target.scope, [row.id], deps.hooks);
     return updated;
   });
   if (cancelled === undefined) return { cancelled: false };
@@ -735,6 +761,15 @@ export async function addGuests(
   const changed = await inWorkspace(target.scope, async (tx) => {
     const { row, page } = await readTarget(tx, target, true);
     checkChangeable(row, now, 'changed');
+    // A request invites nobody until the host confirms it (B-11): a meeting that may never happen sends no mail.
+    if (row.approval === 'pending') {
+      throw refuse(
+        'BOOKING_CLOSED',
+        target.by === 'guest'
+          ? 'This request is waiting for the host. Add guests once it’s confirmed.'
+          : 'Confirm this request before inviting guests.',
+      );
+    }
     const before = guestsOf(row.answers);
     const on = new Set([row.visitorEmail, ...before]);
     const fresh = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))].filter(
@@ -793,6 +828,15 @@ export async function removeGuest(
   const changed = await inWorkspace(target.scope, async (tx) => {
     const { row, page } = await readTarget(tx, target, true);
     checkChangeable(row, now, 'changed');
+    // A request invites nobody until the host confirms it (B-11): a meeting that may never happen sends no mail.
+    if (row.approval === 'pending') {
+      throw refuse(
+        'BOOKING_CLOSED',
+        target.by === 'guest'
+          ? 'This request is waiting for the host. Add guests once it’s confirmed.'
+          : 'Confirm this request before inviting guests.',
+      );
+    }
     const before = guestsOf(row.answers);
     if (!before.includes(email)) return { row, removed: false, guests: before };
     const guests = before.filter((guest) => guest !== email);
@@ -867,6 +911,42 @@ export async function markNoShow(
     });
     if (input.noShow) await queueBookingWebhook(tx, 'booking.no_show', row.id);
     return { noShow: input.noShow };
+  });
+}
+
+/**
+ * Adds or changes a booking's meeting link by hand (B-07: a video call no calendar made a link for), from Bookings:
+ * its host, a co-host, the page's owner or `booking.admin`, as any change (`hostTarget`; a booking they can't change
+ * answers NOT_FOUND, one they may only See FORBIDDEN). A cancelled booking, or one already started, is
+ * BOOKING_CLOSED. The guest and their guests are emailed the link (`meeting_link`), in the same transaction; the same
+ * link again changes nothing and emails nobody. The address is checked by the contract (https, a host name).
+ */
+export async function setMeetingLink(
+  target: ChangeTarget,
+  input: { readonly url: string },
+  now: Date = new Date(),
+): Promise<{ readonly videoUrl: string }> {
+  const { principal } = target.scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member adds a meeting link from Bookings.');
+  return inWorkspace(target.scope, async (tx) => {
+    const { row, page } = await readTarget(tx, target, true);
+    checkChangeable(row, now, 'changed');
+    // A request the host hasn't answered has no meeting yet: its guest would get a link for a time not agreed.
+    if (row.approval === 'pending') throw refuse('BOOKING_CLOSED', 'Confirm or decline this request first.');
+    if (row.videoUrl === input.url) return { videoUrl: input.url };
+    await tx
+      .update(bookings)
+      .set({ videoUrl: input.url, ...updatedBy(actorOf(target, page)) })
+      .where(eq(bookings.id, row.id));
+    // Audited (security review): the link goes out to an outside guest as if from the host. The row names the
+    // booking only, never the link.
+    await writeAudit(tx, target.scope.workspaceId, target.scope.actor, {
+      action: 'booking.meeting_link_set',
+      targetType: 'booking',
+      targetId: row.id,
+    });
+    await enqueueBookingMail(tx, row.id, ['meeting_link']);
+    return { videoUrl: input.url };
   });
 }
 
@@ -986,7 +1066,7 @@ async function checkLinkableRecord(tx: WorkspaceTx, scope: EngineScope, recordId
  */
 export async function confirmBooking(
   target: ChangeTarget,
-  deps: Pick<ChangeDeps, 'now'>,
+  deps: Pick<ChangeDeps, 'now' | 'hooks'>,
 ): Promise<{ readonly confirmed: boolean }> {
   const now = deps.now?.() ?? new Date();
   return inWorkspace(target.scope, async (tx) => {
@@ -1002,6 +1082,7 @@ export async function confirmBooking(
     // Subscribers hear of a request once it is a booking (spec 0064, AC-6422).
     await queueBookingWebhook(tx, 'booking.created', row.id);
     await auditChangedFor(tx, target, row, 'confirmed');
+    await announceBookings(tx, target.scope, [row.id], deps.hooks);
     return { confirmed: true };
   });
 }
@@ -1012,7 +1093,7 @@ export async function confirmBooking(
  */
 export async function declineBooking(
   target: ChangeTarget,
-  deps: Pick<ChangeDeps, 'now'>,
+  deps: Pick<ChangeDeps, 'now' | 'hooks'>,
   input: { readonly reason?: string | undefined },
 ): Promise<{ readonly declined: boolean }> {
   const now = deps.now?.() ?? new Date();
@@ -1023,6 +1104,7 @@ export async function declineBooking(
     const actor = actorOf(target, page);
     await declineRow(tx, row, now, actor.memberId, reason === undefined || reason === '' ? null : reason, actor);
     await auditChangedFor(tx, target, row, 'declined');
+    await announceBookings(tx, target.scope, [row.id], deps.hooks);
     return { declined: true };
   });
 }
@@ -1037,6 +1119,8 @@ export async function expireRequest(scope: EngineScope, bookingId: string, now: 
     const [row] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
     if (row?.approval !== 'pending' || row.status !== 'confirmed') return false;
     await declineRow(tx, row, now, null, null, { type: 'booking', id: row.pageId, memberId: null });
+    // The wait ran out (B-17): an open Bookings screen shows it declined.
+    await announceBookings(tx, scope, [row.id]);
     return true;
   });
 }

@@ -245,6 +245,7 @@ describe('the meetings outbox row (AC-610)', () => {
     schedules: [],
     timeOff: [],
     visits: [],
+    bookings: [],
     automations: [],
     forms: [],
     nav: [],

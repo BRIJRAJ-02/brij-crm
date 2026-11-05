@@ -36,8 +36,9 @@ async function withBooking(page: Page, kind: string, browser: Browser) {
     timeZone: 'UTC',
     mutationId: randomUUID(),
   });
-  await page.goto(`/w/${slug}/captures/links/${made.id}`);
-  const address = (await page.getByRole('link', { name: 'View page' }).getAttribute('href')) ?? '';
+  // The live link, as the editor's Share tab opens it (the bookings area, 4 November 2026).
+  await page.goto(`/w/${slug}/captures/links/${made.id}?tab=share`);
+  const address = (await page.getByRole('link', { name: 'Open', exact: true }).getAttribute('href')) ?? '';
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const visitor = await context.newPage();
   await visitor.goto(address);

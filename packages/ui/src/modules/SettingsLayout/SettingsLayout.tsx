@@ -310,6 +310,14 @@ export interface SettingsStackProps {
    * some 850px from its switch at 1440. The default fills the page, as every settings page's Cards do.
    */
   readonly width?: 'full' | 'readable';
+  /**
+   * `inline` keeps every row's label on the left and its control on the right, however narrow the column, until the
+   * row's container is under 480px (a phone), where an input drops under its label as always: an editor's settings
+   * beside its preview (the booking page editor, 5 November 2026), whose ~550px Cards otherwise put a Field or a wide
+   * SegmentedControl under its label while a Switch two rows down sat on the right. The label gives way first; a
+   * Field keeps `size-column-wide` (the forms Settings tab's field width) down to `size-column`.
+   */
+  readonly rows?: 'wrap' | 'inline';
   readonly children: ReactNode;
 }
 
@@ -317,12 +325,13 @@ export interface SettingsStackProps {
  * The page body's rhythm inside a tab's panel: sections (Cards, Tables, a
  * Callout) stacked `space-16` apart, as they are directly in the body.
  */
-export function SettingsStack({ variant = 'default', width = 'full', children }: SettingsStackProps) {
+export function SettingsStack({ variant = 'default', width = 'full', rows = 'wrap', children }: SettingsStackProps) {
   return (
     <div
       className={styles.stack}
       data-variant={variant === 'default' ? undefined : variant}
       data-width={width === 'full' ? undefined : width}
+      data-rows={rows === 'wrap' ? undefined : rows}
     >
       {children}
     </div>

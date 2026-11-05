@@ -44,6 +44,25 @@ export const Copied: Story = {
   },
 };
 
+/** Copied from a read (a guest's link, read only on the press): the clipboard takes the read, then says Copied. */
+export const CopiedFromRead: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <CopyButton {...args} value={() => Promise.resolve('https://timefix.app/b/k3x9/manage?t=key')} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const write = spyOn(navigator.clipboard, 'write').mockResolvedValue(undefined);
+    const writeText = spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    await userEvent.click(canvas.getByRole('button', { name: 'Copy link' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Copied' })).toBeInTheDocument());
+    await expect(write.mock.calls.length + writeText.mock.calls.length).toBe(1);
+    write.mockRestore();
+    writeText.mockRestore();
+  },
+};
+
 /** Icon only: the check stands in for the copy icon; the name stays. */
 export const IconOnly: Story = {
   args: { isIconOnly: true },

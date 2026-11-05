@@ -32,6 +32,18 @@ import { computeSlots, type BookedSpan, type DateOverride, type Span, type Weekl
 
 const { bookingHosts, bookingPageMembers, bookingPages, bookings } = schema;
 
+/**
+ * The notice a page's times keep, in minutes: its own minimum notice, none on a private page (spec 0027, AC-707), and
+ * never under an hour on a page that confirms each booking first (spec 0062, AC-6203: a request needs time to be
+ * answered before it starts). The slots read and the public page's facts say the same number.
+ */
+export function noticeMinutesOf(
+  page: Pick<PageRecord, 'requiresConfirmation' | 'isPrivate' | 'minNoticeMinutes'>,
+): number {
+  const own = page.isPrivate ? 0 : page.minNoticeMinutes;
+  return page.requiresConfirmation ? Math.max(60, own) : own;
+}
+
 /** A page as the services read it: its row, the settings parsed, and the hours it books by. */
 export interface PageRecord extends BookingPageSettings {
   /**
@@ -64,8 +76,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
-  /** Paused by the system because its last host was removed (spec 0031, AC-814); absent otherwise. */
-  readonly pausedReason?: 'host_removed';
+  /** Paused by the system because its last host was removed (spec 0031, AC-814), or a draft never published; absent otherwise. */
+  readonly pausedReason?: 'host_removed' | 'draft';
   /** A round robin page's routing rules (spec 0043, AC-1608); a stored list that doesn't parse reads as none. */
   readonly routingRules?: readonly RoutingRule[];
   /**
@@ -162,7 +174,7 @@ export function pageOf(
     moveCutoffMinutes: row.moveCutoffMinutes,
     requiresConfirmation: row.requiresConfirmation,
     linksOnly: row.linksOnly,
-    ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
+    ...(row.pausedReason === 'host_removed' || row.pausedReason === 'draft' ? { pausedReason: row.pausedReason } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     ...(row.draft === null || row.draftChangedAt === null
       ? {}
@@ -460,13 +472,7 @@ export function pageSlots(
     now: input.now,
     from: input.from,
     to: input.to,
-    // A page that confirms each booking first offers nothing sooner than an hour (spec 0062, AC-6203): a request
-    // needs time to be answered before it starts.
-    minNoticeMinutes: page.requiresConfirmation
-      ? Math.max(60, page.isPrivate ? 0 : page.minNoticeMinutes)
-      : page.isPrivate
-        ? 0
-        : page.minNoticeMinutes,
+    minNoticeMinutes: noticeMinutesOf(page),
     windowDays: page.windowDays,
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
     ...(input.stepMinutes !== undefined

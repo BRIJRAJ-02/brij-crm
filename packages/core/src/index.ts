@@ -635,6 +635,7 @@ export {
   readMoveSlots,
   confirmBooking,
   declineBooking,
+  setMeetingLink,
   type ChangeDeps,
 } from './booking/change.ts';
 // A page's flow rules (spec 0062, L1): its one off links (AC-6204) and its requests (AC-6203).

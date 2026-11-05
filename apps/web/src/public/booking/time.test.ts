@@ -69,6 +69,8 @@ describe('the month, the zone and the clock', () => {
     const now = Date.parse('2026-11-02T08:00:00Z');
     expect(relativeLabel('2026-11-02T08:03:00.000Z', now, 'UTC', 'en')).toBe('In 3 minutes');
     expect(relativeLabel('2026-11-03T09:00:00.000Z', now, 'UTC', 'en')).toBe('Tomorrow morning');
+    // Midnight and the small hours are tonight, not tomorrow morning (critic B-17).
+    expect(relativeLabel('2026-11-03T00:00:00.000Z', now, 'UTC', 'en')).toBe('Tonight, after midnight');
     expect(relativeLabel('2026-11-07T09:00:00.000Z', now, 'UTC', 'en')).toBe('In 5 days');
   });
 });

@@ -15,8 +15,12 @@ export function stableHue(id: string, among: readonly Hue[] = HUES): Hue {
   return among[(hash >>> 0) % among.length] ?? 'gray';
 }
 
-/** The hues a link may take from its id: every data hue but grey (neutral) and red (an error). */
-const LINK_HUES = HUES.filter((hue) => hue !== 'gray' && hue !== 'red');
+/**
+ * The hues a link may take from its id: every data hue but grey (neutral), red (an error), and orange and yellow,
+ * which mean waiting or needing someone (a booking with no host, one awaiting confirmation), so a confirmed booking
+ * in its page's colour never reads as pending (the bookings critique, A19).
+ */
+const LINK_HUES = HUES.filter((hue) => hue !== 'gray' && hue !== 'red' && hue !== 'orange' && hue !== 'yellow');
 
 /**
  * A link's colour when it has none of its own (a booking page today): the same hue its LinkCard's edge takes and

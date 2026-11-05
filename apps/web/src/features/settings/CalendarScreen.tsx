@@ -600,8 +600,10 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
   }
 
   // The one Connect, in whichever bar this frame has: Settings' own TopBar takes it as an action, and the Bookings
-  // frame takes it through the slot its layout lends the chosen tab.
-  const action = connectButton !== undefined && hasList ? connectButton : undefined;
+  // frame takes it through the slot its layout lends the chosen tab. In the Bookings frame it is there even with
+  // nothing connected (the bookings critique, A5: a tab's primary always sits in the TopBar), beside the empty
+  // state's own two buttons.
+  const action = connectButton !== undefined && (hasList || inFrame) ? connectButton : undefined;
   return (
     <SettingsPage
       title={strings.title}

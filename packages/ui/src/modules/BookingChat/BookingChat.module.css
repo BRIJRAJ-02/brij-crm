@@ -163,14 +163,10 @@
     align-self: flex-end;
   }
 
+  /* The offered times are the picker's own time buttons and the quick replies the page's own chips (critics C5, A9):
+     one look for a time, whichever view offers it. */
   .offers,
   .suggestions {
-    /* The visitor's possible answers wear the accent, outlined, as the replies they become: the times as round chips,
-       through SlotList's and Button's own colour names. */
-    --border: var(--accent-line);
-    --text: var(--link);
-    --radius-md: var(--radius-full);
-
     interpolate-size: allow-keywords;
     animation: line-drop var(--duration-modal) var(--ease-out) backwards;
     animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-popover));

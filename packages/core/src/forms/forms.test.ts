@@ -1863,7 +1863,7 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
     });
     expect(first.next).toEqual({
       kind: 'booking',
-      url: `/b/${page.publicKey}?p=signed-token`,
+      url: `/b/${page.publicKey}#p=signed-token`,
       countdownSeconds: 3,
       text: 'Thanks, Ada.',
     });

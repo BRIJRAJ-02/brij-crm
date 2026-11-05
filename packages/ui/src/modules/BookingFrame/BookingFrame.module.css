@@ -46,28 +46,18 @@
        resolves in. The app keeps the tokens' 1 and no swap. */
     --scale-press: 0.97;
     /* A calmer pace for this page (the owner, 2 November 2026: "a bit slower, too fast, smoother"): the library's
-       motion tokens run about half as long again in here, so every part on the page (the view switch's thumb, the
-       times, the days, the month, Book) eases rather than snaps, while the app keeps the tokens' own pace. The
-       page's own moments sit on transitions.dev's scale, a step slower: a label swap, a step's slide, a reveal.
-       Literals until the artifact carries a public page pace. */
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-hover: 180ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-press: 220ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-exit: 200ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-popover: 280ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-move: 340ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --duration-modal: 380ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --label-swap: 260ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --slide-duration: 420ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
-    --reveal-duration: 600ms;
+       motion tokens stand in for the public pages' own pace (the `duration-public-*` tokens), so every part on the
+       page (the view switch's thumb, the times, the days, the month, Book) eases rather than snaps, while the app
+       keeps the tokens' own pace. A step slides at the public slide and a new fact reveals at the public reveal. */
+    --duration-hover: var(--duration-public-hover);
+    --duration-press: var(--duration-public-press);
+    --duration-exit: var(--duration-public-exit);
+    --duration-popover: var(--duration-public-popover);
+    --duration-move: var(--duration-public-move);
+    --duration-modal: var(--duration-public-modal);
+    --label-swap: var(--duration-public-move);
+    --slide-duration: var(--duration-public-slide);
+    --reveal-duration: var(--duration-public-reveal);
     /* The blur a heading and a new fact resolve out of (transitions.dev's text reveal), a literal until the artifact
        has a blur token. A whole step slides without one: a blurred pane that size costs WebKit a full offscreen
        buffer for every frame, which is jank on a phone and ran CI's WebKit page out of memory. */
@@ -267,6 +257,21 @@
     overflow-wrap: anywhere;
   }
 
+  /* A fact's quiet second part, as the time zone picker draws its offset and clock beside the zone's name. */
+  .factAside {
+    margin-inline-start: var(--space-6);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* A rule the page states plainly (the notice it needs, how far ahead it books): quiet, under the facts. */
+  .fact[data-quiet] {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   /* A fact's place while the page loads: a real fact is sized by the control
      in it (the length switch, the zone), so its placeholder has to be told to
      take the row, or the row would stand at the icon's width alone. */
@@ -359,43 +364,17 @@
     flex-direction: column;
   }
 
-  /* The details step takes the whole card, the heading row with it, and the card is as tall as the taller of the
-     month and the step: the step lies over the heading row and the month in one grid area, so a long form (a phone,
-     guests) grows the card once rather than scrolling inside it. What it covers goes at once: the 8 px slide is the
-     move, with nothing showing through. */
-  .card[data-place='card'] {
-    display: grid;
-    grid-template-rows: auto 1fr;
-  }
-
-  .stage[data-place='card'] {
-    display: contents;
-  }
-
-  .card[data-place='card'] > .head {
-    grid-area: 1 / 1;
-  }
-
-  .stage[data-place='card'] > .under {
-    grid-area: 2 / 1;
+  /* A step that takes the whole card (the details, the receipt) is the card's height, hugging its content (critics
+     C14, A11; first in a site's embed, 3 November 2026): kept at the month's height it left a screen of empty card
+     above Confirm. What the step covers leaves the layout at once (the 8 px slide is the move), instead of only going
+     out of sight; the month keeps its state and comes back with Back. */
+  .card[data-place='card'] > .head[inert],
+  .stage[data-place='card'] > .under[inert] {
+    display: none;
   }
 
   .stage[data-place='card'] > .cover {
     position: static;
-    grid-area: 1 / 1 / -1 / -1;
-  }
-
-  .head[inert],
-  .stage[data-place='card'] > .under[inert] {
-    transition: none;
-  }
-
-  /* In a site's embed the card follows the step it shows (3 November 2026): the frame is sized to the page, so a
-     details step kept at the month's height left a screen of empty card above Confirm. What the step covers leaves
-     the layout instead of only going out of sight; the month keeps its state and comes back with Back. */
-  .card[data-embedded] > .head[inert],
-  .card[data-embedded] .under[inert] {
-    display: none;
   }
 
   .stage[data-moved] .cover {
@@ -456,6 +435,12 @@
     padding: var(--space-20);
   }
 
+  /* The List view's days and times read top down, the times right under the days: spaced apart, the strip and the
+     times stood a gap of empty card apart (critic A4). */
+  .stage[data-view='list'] .coverBody {
+    justify-content: flex-start;
+  }
+
   /* On a phone the chat sets the card's height rather than borrowing the month's (owner review, 4 November 2026): the
      month leaves the layout and the chat flows, so the page is its one scroller. */
   @media (width < 1024px) {
@@ -466,16 +451,22 @@
     .stage[data-view='chat'] > .cover {
       position: static;
     }
+
+    /* The List view too: its days and times set the card's height, rather than a stretch of empty card under the
+       last time where the month's height used to be (review, 5 November 2026). */
+    .stage[data-view='list'] > .under {
+      display: none;
+    }
+
+    .stage[data-view='list'] > .cover {
+      position: static;
+    }
   }
 
-  /* Stacked under the month, the times scroll in a box of their own, eight rows tall (four rows of times and the next one's top): the card
-     is the same height whichever day is open and however many times it has. */
+  /* Stacked under the month (a phone), the times run on down the page with it: no box of their own and no second
+     scroller inside the page's (bookings critics C2, A3, 4 November 2026). */
   .aside {
-    block-size: calc(var(--size-row) * 8);
     padding-block-start: 0;
-    contain: size;
-    /* Times in groups (a restaurant's Lunch and Dinner, spec 0066 B7) scroll here together, never out of the card. */
-    overflow-y: auto;
   }
 
   .footer {
@@ -488,6 +479,35 @@
   .footer > * {
     flex: 1;
     min-block-size: calc(var(--size-row) + var(--space-8));
+  }
+
+  /* Nothing chosen yet: a quiet line holds the band where Book will be, rather than a disabled bar that outweighed
+     everything else on the card (critic A10). */
+  .footerHint {
+    display: grid;
+    place-items: center;
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  /* Stacked (a phone, or a narrow frame), Book is a bar held to the window's foot, clear of the home indicator, once
+     a time is picked, and nowhere until then (critics C2, B-03): Calendly's and Cal.com's phone pages keep their
+     Next in reach the same way. It rises in as it arrives. */
+  @media (width < 1024px) {
+    .footer {
+      position: sticky;
+      inset-block-end: 0;
+      z-index: var(--z-sticky);
+      padding-block-end: calc(var(--space-16) + env(safe-area-inset-bottom));
+      border-end-start-radius: var(--radius-xl);
+      border-end-end-radius: var(--radius-xl);
+      background: var(--surface-raised);
+      animation: footer-rise var(--duration-move) var(--ease-out);
+    }
+
+    .footer[data-waiting] {
+      display: none;
+    }
   }
 
   .message {
@@ -595,10 +615,6 @@
     gap: var(--space-8);
   }
 
-  .foot[data-placement='rail'] {
-    display: none;
-  }
-
   .brand {
     display: flex;
     flex-direction: column;
@@ -685,8 +701,10 @@
      narrow that is not a frame of its own, so a media query would read the window and lay out two columns in a
      phone. First run's preview of a page that doesn't exist yet, and so can't be shown in a PreviewFrame. */
   @media (width >= 1024px) {
+    /* From the top, not centred: the card now hugs each step (the details, the receipt), and centred it jumped up and
+       down the page between steps with the rail beside it (review, 5 November 2026). */
     .root {
-      align-items: center;
+      align-items: flex-start;
       padding-block: var(--space-32);
     }
 
@@ -695,19 +713,27 @@
       padding-block: var(--space-24) var(--space-32);
     }
 
+    /* The rail's Timefix card comes after the card in the reading order (critic C7) and is drawn at the rail's foot:
+       the rail over it in the first column, the card spanning both rows of the second. */
     .root:not([data-compact]) .layout {
       display: grid;
       grid-template-columns: var(--size-measure) minmax(0, 1fr);
-      gap: var(--space-32);
+      grid-template-rows: auto 1fr;
+      gap: var(--space-24) var(--space-32);
     }
 
     .root:not([data-compact]) .rail {
-      justify-content: space-between;
+      grid-area: 1 / 1;
       padding-block-start: var(--space-8);
     }
 
+    .root:not([data-compact]) .main {
+      grid-area: 1 / 2 / span 2;
+    }
+
     .root:not([data-compact]) .foot[data-placement='rail'] {
-      display: flex;
+      grid-area: 2 / 1;
+      align-self: end;
       align-items: stretch;
       padding: var(--space-12) var(--space-16);
       border: var(--border-width-hairline) solid var(--border);
@@ -723,10 +749,6 @@
       justify-content: space-between;
       padding-block-start: var(--space-8);
       border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    }
-
-    .root:not([data-compact]) .foot[data-placement='page'] {
-      display: none;
     }
 
     .root:not([data-compact]) .panes[data-panes='two'] {
@@ -747,12 +769,37 @@
       padding: var(--space-16) var(--space-24) var(--space-24);
     }
 
-    /* The times take the month's height and scroll inside it, behind a hairline. */
+    /* The times take the month's height and scroll inside it, behind a hairline, fading out at the foot. */
     .root:not([data-compact]) .aside {
-      block-size: auto;
+      --slot-list-mask: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
+
       margin-block: var(--space-24);
       padding-block: 0;
       border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      contain: size;
+    }
+
+    /* Waiting for a time, the band says so quietly instead of drawing Book disabled. */
+    .footer[data-waiting] > .footerHint {
+      min-block-size: calc(var(--size-row) + var(--space-8));
+    }
+  }
+
+  /* Inside a site's embed the frame is the window: from a tablet's width the month and the day's times sit side by
+     side, the host's block above them, rather than a phone's column stretched across a wide frame (critic B-11). */
+  /* 700px is the `bp-page-frame` token: a media query can't read a custom property, so it is written out here. */
+  @media (700px <= width < 1024px) {
+    .root[data-embedded]:not([data-compact]) .panes[data-panes='two'] {
+      grid-template-columns: minmax(0, 1fr) var(--size-column-wide);
+    }
+
+    .root[data-embedded]:not([data-compact]) .aside {
+      --slot-list-mask: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
+
+      margin-block: var(--space-20);
+      padding-block: 0;
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      contain: size;
     }
   }
 
@@ -795,17 +842,6 @@
     box-shadow: var(--frame-glow);
   }
 
-  /* Night's Book while no time is chosen: the accent at half strength on the dark card left its words under 3:1, so
-     the waiting button turns neutral (a raised fill, its edge, secondary words) and dims less. It reads as waiting,
-     not as the action, and its words hold 4.5:1. */
-  .root[data-template='night'] .footer:has([data-variant='primary'][data-disabled]) {
-    --accent: var(--surface-raised);
-    --accent-hover: var(--border);
-    --on-accent: var(--text-secondary);
-    --shadow-primary: none;
-    --opacity-disabled: var(--opacity-busy);
-  }
-
   /* Split: on a wide page the rail is a sticky panel on the page's own ground (no card of its own: no border, no
      shadow), so the logo, who you book and the facts stay in view as the times scroll; one column on a phone. */
   @media (width >= 1024px) {
@@ -813,6 +849,13 @@
       position: sticky;
       inset-block-start: var(--space-32);
       align-self: start;
+    }
+  }
+
+  @keyframes footer-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-16);
     }
   }
 
@@ -845,6 +888,10 @@
 
   /* Reduced motion keeps the fade and drops the slide. */
   @media (prefers-reduced-motion: reduce) {
+    .footer {
+      animation-name: cover-in;
+    }
+
     .stage[data-moved][data-enter='forward'] .cover,
     .stage[data-moved][data-enter='back'] .cover,
     .stage[data-enter='back'] .under:not([inert]) {

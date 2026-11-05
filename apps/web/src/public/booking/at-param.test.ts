@@ -1,7 +1,7 @@
 // A next times chip's hand off (spec 0061, AC-6110): what the booking page takes from `?at=` and `&len=`, and all
 // the shapes it refuses without ever saying so, since both arrive in a public address anybody can write.
 import { describe, expect, it } from 'vitest';
-import { openingOf, readAt } from './at-param.ts';
+import { openingOf, readAt, readTimes } from './at-param.ts';
 
 const now = Date.parse('2026-11-03T10:00:00.000Z');
 const at = (query: string) => new URL(`https://timefix.com/ada/intro${query}`);
@@ -51,5 +51,33 @@ describe('openingOf', () => {
       result: 'connected',
     });
     expect(openingOf(at('?at=nonsense'), now, dayOf)).toEqual({ chosen: {} });
+  });
+});
+
+describe('readTimes (Share specific times, 5 Nov 2026)', () => {
+  it('reads up to five instants, sorted and once each, and drops what does not fit', () => {
+    const times =
+      '2026-11-05T10:00:00.000Z,2026-11-04T09:00:00.000Z,2026-11-04T09:00:00.000Z,soon,2099-01-01T09:00:00.000Z';
+    expect(readTimes(at(`?times=${encodeURIComponent(times)}&len=30`), now)).toEqual([
+      '2026-11-04T09:00:00.000Z',
+      '2026-11-05T10:00:00.000Z',
+    ]);
+    const many = Array.from({ length: 8 }, (_, day) => `2026-11-1${String(day)}T09:00:00.000Z`).join(',');
+    expect(readTimes(at(`?times=${encodeURIComponent(many)}`), now)).toHaveLength(5);
+    expect(readTimes(at('?times='), now)).toBeUndefined();
+    expect(readTimes(at('?times=nonsense'), now)).toBeUndefined();
+    // A time already gone is no offer: an old link opens on the next shared time, never a past day.
+    expect(
+      readTimes(at(`?times=${encodeURIComponent('2026-11-02T09:00:00.000Z,2026-11-06T09:00:00.000Z')}`), now),
+    ).toEqual(['2026-11-06T09:00:00.000Z']);
+  });
+
+  it('opens on the first shared time’s day, at the shared length, offering only those times', () => {
+    const times = '2026-11-05T10:00:00.000Z,2026-11-04T09:00:00.000Z';
+    const dayOf = (startMs: number) => new Date(startMs).toISOString().slice(0, 10);
+    expect(openingOf(at(`?times=${encodeURIComponent(times)}&len=45`), now, dayOf)).toEqual({
+      chosen: { day: '2026-11-04', duration: 45 },
+      times: ['2026-11-04T09:00:00.000Z', '2026-11-05T10:00:00.000Z'],
+    });
   });
 });

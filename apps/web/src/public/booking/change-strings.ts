@@ -13,7 +13,11 @@ export const changeStrings = {
   poweredBy: 'Powered by Timefix (opens in a new tab)',
   pickNewTime: 'Pick a new time',
   timesIn: (zone: string) => `Times in ${zone}`,
-  moveTo: (time: string, day: string) => `Move to ${time} on ${day}`,
+  moveTo: (time: string) => `Move to ${time}`,
+  /** Inside a site's embed: the guest page, opened in a tab of its own (critic B-01). */
+  manage: 'Manage booking',
+  /** Moving is closed for this booking (critic B-09). */
+  moveClosed: (host: string) => `${host} isn’t taking new times here right now. You can still cancel.`,
   moving: 'Moving',
   finding: (host: string) => `Finding ${host}’s free times…`,
   noTimes: (host: string) =>

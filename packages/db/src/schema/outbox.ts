@@ -39,6 +39,7 @@ export const outboxKind = pgEnum('outbox_kind', [
   'notifications',
   'calendars',
   'time_off',
+  'bookings',
   'automations',
   'files',
   'visits',

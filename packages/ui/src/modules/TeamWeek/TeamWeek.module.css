@@ -12,7 +12,7 @@
     min-inline-size: 0;
   }
 
-  /* A day's header: the weekday beside its date; today's date in an accent circle, as WeekCalendar marks it. */
+  /* A day's header: the weekday beside its date; today's date in WeekCalendar's ring. */
   .heading {
     display: inline-flex;
     align-items: center;
@@ -43,9 +43,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Today: the one today mark, WeekCalendar's (and DatePicker's and MonthTiles'): the link colour inside a hairline
+     accent ring (the bookings critique, A13; it was a filled accent circle here only). */
   .heading[data-today] .date {
-    background: var(--accent);
-    color: var(--on-accent);
+    color: var(--link);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   .person {

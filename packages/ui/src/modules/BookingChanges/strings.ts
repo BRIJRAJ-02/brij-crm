@@ -9,6 +9,8 @@ export const strings = {
   /** Names the booking, as the host's confirm does: "Cancel Intro call with Ada Lovelace?" */
   cancelTitle: (title: string, host: string) => `Cancel ${title} with ${host}?`,
   cancelText: (host: string) => `${host} will be told, and it comes off both calendars.`,
+  /** With no calendar event behind the booking (critic B-18): nothing about calendars. */
+  cancelTextPlain: (host: string) => `${host} will be told, and the invite is withdrawn.`,
   reason: 'Reason',
   reasonHint: (host: string) => `Optional. ${host} sees it.`,
   confirmCancel: 'Cancel booking',

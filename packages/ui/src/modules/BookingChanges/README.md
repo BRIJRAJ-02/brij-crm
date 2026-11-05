@@ -43,3 +43,8 @@ Guests are GuestChips (2 November 2026), the same chips the booking form adds gu
 `canCancel` (true by default) leaves Cancel booking out inside the page's cancel cutoff, as `canMove` does for Move.
 `lockedNote` is one quiet line under the row saying why ("Too close to cancel here. Reply to the email."), so a
 missing button never reads as a bug. Guests stay: adding one is not a change to the time.
+
+## Bookings fix pass (5 November 2026)
+
+- `isOnCalendar`: only a booking with a calendar event behind it is said to "come off both calendars" (critic B-18); otherwise the confirm says the host is told and the invite withdrawn.
+- The dialogs' dismiss buttons show no ESC keycap (critic A26): a guest isn't reading shortcuts.

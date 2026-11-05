@@ -27,6 +27,8 @@ export const strings = {
     'Each booking goes to a free teammate, shared fairly.',
   ],
   createPage: 'Create a booking page',
+  /** On a group's card: a team page that books this group (B-04: the group no longer ends in a dead end). */
+  makePage: 'Make a booking page',
   failedTitle: 'Round robin didn’t load',
   failedText: 'Check your connection and try again.',
   summary: (strategy: 'fair' | 'priority' | 'even', days: number, pages: number) =>
@@ -82,6 +84,11 @@ export const strings = {
   days: (count: number) => `${String(count)} days`,
   addMember: 'Add a member',
   addMemberPlaceholder: 'Search people',
+  /** The dialog's first choice after the name: who shares the meetings (B-04: people first, the rules folded). */
+  people: 'People',
+  peoplePlaceholder: 'Pick 2 or more teammates',
+  /** The fold holding how it picks, the window, returning guests and each person's weight and limits. */
+  moreOptions: 'More options',
   /** On the server's refusal of one member: save the group without them. Short, so a long name never widens it. */
   removeFromGroup: 'Remove from group',
   /** Remove from group's name: its visible words first (WCAG 2.5.3), then the member it removes. */
@@ -172,22 +179,8 @@ export const strings = {
   rescheduleSame: 'Same host when they are free',
   rescheduleRotation: 'Through the group again',
   // New booking page.
-  whoBooks: 'Who it books',
-  bookMe: 'Me',
-  bookRotation: 'Round robin group',
-  bookEveryone: 'Workspace link',
-  /** The one help for Who it books, in its InfoTip. */
-  whoBooksInfo:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile.',
-  /** Who it books' tip when the Team link is offered too. */
-  whoBooksInfoTeamLink:
-    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile. Team link: a form asks what they want, then books the right team page.',
   // The Team link (spec 0037, AC-1353): a form in front of the team pages.
-  teamLink: 'Team link',
   teamLinkName: 'Book a call',
-  teamLinkLine: 'A form asks what they want, then books the right team page.',
-  teamLinkNone: 'Make a team page or the workspace link first.',
-  addTeamLink: 'Add a team link',
   createTeamLink: 'Create team link',
   everyoneSwitch: 'Everyone in the workspace, including people who join later',
   everyoneSwitchOn: (on: number) => `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns.`,

@@ -26,7 +26,11 @@ export interface CapturesCreate {
   readonly isPending: boolean;
 }
 
-const CapturesCreateContext = createContext<CapturesCreate | undefined>(undefined);
+/**
+ * The chosen tab's New. Exported for Bookings › Pages, which draws the same Links list outside Captures and gives it
+ * Bookings' own New booking page.
+ */
+export const CapturesCreateContext = createContext<CapturesCreate | undefined>(undefined);
 
 /** The chosen tab's New, inside the Captures layout; undefined outside it. */
 export const useCapturesCreate = () => useContext(CapturesCreateContext);
@@ -52,8 +56,10 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   // New form opens the template gallery (spec 0063, AC-6323), which makes the draft and hands it back: nobody
   // starts from an empty page any more, and Blank is still one press away as its first tile.
   const [isPickingTemplate, setPickingTemplate] = useState(false);
-  // Routing's "New team link" arrives as `?new=team-link` (spec 0037, AC-1353): the dialog opens on the Team link.
+  // The header's Team links (the bookings area, 4 November 2026): `?new=team-link` (spec 0037, AC-1353) opens the
+  // dialog as New team link, and `?new=workspace` as New workspace link; neither is a page type in New any more.
   const isAskedTeamLink = tab === 'links' && search.new === 'team-link' && canManageForms;
+  const isAskedWorkspace = tab === 'links' && search.new === 'workspace' && canBookTeams;
   // New › Managed page (`?new=managed`, spec 0037, AC-1333): `booking.admin`'s, as the template itself is.
   const isAskedManaged = tab === 'links' && search.new === 'managed' && canBookTeams;
   // The command menu's New form arrives as `?new=form` (forms critique c): the template gallery opens over Forms.
@@ -88,9 +94,9 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         data={data}
         slug={slug}
         canBookTeams={canBookTeams}
-        isOpen={isAddingPage || isAskedLinkOnly || isAskedTeamLink || isAskedManaged}
+        isOpen={isAddingPage || isAskedLinkOnly || isAskedTeamLink || isAskedWorkspace || isAskedManaged}
         isLinkOnly={isAskedLinkOnly}
-        isTeamLinkAsked={isAskedTeamLink}
+        kind={isAskedTeamLink ? 'team-link' : isAskedWorkspace ? 'workspace' : 'page'}
         {...(canManageForms
           ? {
               onTeamLink: (formId: string) => {
@@ -109,7 +115,7 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
           : {})}
         onClose={() => {
           setAddingPage(false);
-          if (isAskedLinkOnly || isAskedTeamLink || isAskedManaged) {
+          if (isAskedLinkOnly || isAskedTeamLink || isAskedWorkspace || isAskedManaged) {
             void navigate({ href: linksHref(slug), replace: true });
           }
         }}

@@ -35,6 +35,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { submissionNotices } from '../forms/submissions.ts';
 import { linkedDisplays, readTaskViews } from '../tasks/tasks.ts';
 import { hostOf } from '../webhooks/addresses.ts';
+import { bookingAccess, bookingReaderOf, pageManagerOf } from '../booking/seen.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
 /** What a notification id that isn't the caller's (or doesn't exist) answers. */
@@ -107,6 +108,18 @@ interface NotificationRow extends Record<string, unknown> {
   /** A webhook endpoint turned off (spec 0064, AC-6423): the endpoint, and its address while it is still there. */
   readonly webhook_endpoint_id: string | null;
   readonly webhook_url: string | null;
+  /** A guest's booking (migration 0179, B-12): the booking, its page's title, the guest and the start, while it lives. */
+  readonly booking_id: string | null;
+  readonly booking_title: string | null;
+  readonly booking_guest: string | null;
+  readonly booking_starts_at: string | null;
+  readonly booking_status: 'confirmed' | 'cancelled' | null;
+  /** Who may still reach that booking, read again on every list (security review): its host, page and co-hosts. */
+  readonly booking_host: string | null;
+  readonly booking_page_id: string | null;
+  readonly booking_page_scope: string | null;
+  readonly booking_page_owner: string | null;
+  readonly booking_cohosts: readonly string[] | null;
   /** The sort moment for the cursor: made (inbox) or done (done), with microseconds. */
   readonly at: string;
 }
@@ -118,7 +131,13 @@ const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor
   n.join_request_id::text as join_request_id, jr.name as join_name, n.automation_id::text as automation_id,
   jsonb_path_query_first(au.actions, '$[*] ? (@.kind == "notify").message') #>> '{}' as automation_message,
   n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title,
-  n.webhook_endpoint_id::text as webhook_endpoint_id, whe.url as webhook_url`;
+  n.webhook_endpoint_id::text as webhook_endpoint_id, whe.url as webhook_url,
+  bk.id::text as booking_id, bkp.title as booking_title, bk.visitor_name as booking_guest,
+  ${millis('bk.starts_at')} as booking_starts_at, bk.status as booking_status,
+  bk.host_member_id::text as booking_host, bk.page_id::text as booking_page_id, bkp.scope as booking_page_scope,
+  bkp.owner_member_id::text as booking_page_owner,
+  (select array_agg(bh.member_id::text) from booking_hosts bh
+    where bk.id is not null and bh.workspace_id = bk.workspace_id and bh.booking_id = bk.id) as booking_cohosts`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
@@ -128,7 +147,9 @@ const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id
     and jr.status = 'open'
   left join automations au on au.workspace_id = n.workspace_id and au.id = n.automation_id and au.deleted_at is null
   left join tasks dtk on dtk.workspace_id = n.workspace_id and dtk.id = n.due_task_id and dtk.deleted_at is null
-  left join webhook_endpoints whe on whe.workspace_id = n.workspace_id and whe.id = n.webhook_endpoint_id`;
+  left join webhook_endpoints whe on whe.workspace_id = n.workspace_id and whe.id = n.webhook_endpoint_id
+  left join bookings bk on bk.workspace_id = n.workspace_id and bk.id = n.booking_id
+  left join booking_pages bkp on bkp.workspace_id = bk.workspace_id and bkp.id = bk.page_id`;
 
 /**
  * The rows among `rows` the reader may see, as views, in order (AC-1166): a
@@ -194,6 +215,41 @@ async function visibleViews(
           webhookEndpointId: row.webhook_endpoint_id,
           // The host alone: an endpoint's path can hold a receiver's own token, which no inbox needs to show.
           excerpt: excerptOf(hostOf(row.webhook_url), NOTIFICATION_EXCERPT),
+        },
+      ];
+    }
+    if (row.kind === 'booking') {
+      // A guest booked one of the reader's pages (B-12): the reader is its host, told in the booking's own write, so
+      // it is theirs to see while the booking lives; the guest's person only when it reads for them.
+      if (row.booking_id === null || row.booking_starts_at === null || row.booking_status === null) return [];
+      // Read again on every list (hidden means absent): a host the booking was reassigned away from, or a member who
+      // lost `booking.manage` or their reach, no longer sees who booked what. The one booking rule (`seen.ts`).
+      if (!can(scope.access, 'booking.manage') || row.booking_host === null || row.booking_page_scope === null) {
+        return [];
+      }
+      const reach = bookingAccess(bookingReaderOf(scope.access), {
+        hostMemberId: row.booking_host,
+        ...(row.booking_page_id === null ? {} : { pageId: row.booking_page_id }),
+        ownerMemberId:
+          row.booking_page_owner === null
+            ? undefined
+            : pageManagerOf({ scope: row.booking_page_scope, ownerMemberId: row.booking_page_owner }),
+        coHostIds: row.booking_cohosts ?? [],
+      });
+      if (reach === undefined) return [];
+      const record = row.record_id === null ? undefined : records.get(row.record_id);
+      return [
+        {
+          ...base,
+          bookingId: row.booking_id,
+          booking: {
+            pageTitle: row.booking_title ?? '',
+            guestName: row.booking_guest ?? '',
+            startsAt: row.booking_starts_at,
+            status: row.booking_status,
+          },
+          ...(record === undefined ? {} : { record }),
+          excerpt: excerptOf(row.booking_title ?? '', NOTIFICATION_EXCERPT),
         },
       ];
     }

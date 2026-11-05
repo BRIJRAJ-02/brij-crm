@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { ChoiceChips } from '../../molecules/ChoiceChips/ChoiceChips.tsx';
@@ -68,6 +67,8 @@ export interface BookingChatCard {
   readonly when: string;
   /** "Grace Hopper · grace@example.com". */
   readonly who: string;
+  /** What else the booking carries, folded into the card (critic B-10): "2 guests · Note: about the API". */
+  readonly more?: string;
 }
 
 /** A failed turn: the sentence, and what the visitor can do about it. */
@@ -86,8 +87,6 @@ export interface BookingChatProps {
   readonly lines: readonly BookingChatLine[];
   /** Who speaks: their face at the foot of each run of their messages, their name over its first. */
   readonly host: BookingChatHost;
-  /** The visitor's name once the chat has heard it: their initials beside their messages, a person mark before. */
-  readonly visitorName?: string;
   /** The page's times are still loading: a skeleton, and the field waits. */
   readonly isLoading?: boolean;
   /** A turn is out: the field waits and the thread says so. */
@@ -107,18 +106,13 @@ export interface BookingChatProps {
   readonly maxLength?: number;
 }
 
-/** The face beside a run's last message: the host's (the rail's picture or initials), or the visitor's. */
-function faceOf(role: BookingChatLine['role'], host: BookingChatHost, visitorName: string | undefined) {
-  if (role === 'assistant')
-    return (
-      <Avatar name={host.name} size="md" isDecorative {...(host.image === undefined ? {} : { src: host.image })} />
-    );
-  // The visitor's initials once the chat knows their name; until then a plain person mark, never a guessed face.
-  return visitorName === undefined || visitorName.trim() === '' ? (
-    <Avatar name={strings.you} size="md" hue="gray" isDecorative mark={<Icon name="user-round" size="sm" />} />
-  ) : (
-    <Avatar name={visitorName} size="md" isDecorative />
-  );
+/**
+ * The face beside a run's last message: the host's (the rail's picture or initials). The visitor's own lines carry no
+ * face (critic C16): their side of the thread is plainly theirs, and a generic person mark said nothing.
+ */
+function faceOf(role: BookingChatLine['role'], host: BookingChatHost) {
+  if (role !== 'assistant') return undefined;
+  return <Avatar name={host.name} size="md" isDecorative {...(host.image === undefined ? {} : { src: host.image })} />;
 }
 
 /** The prompt box's keyboard and autofill for what it is asked for; plain text otherwise. */
@@ -165,7 +159,6 @@ function Written({ text }: { text: string }) {
 export function BookingChat({
   lines,
   host,
-  visitorName,
   isLoading = false,
   isWaiting = false,
   error,
@@ -256,13 +249,16 @@ export function BookingChat({
               style={{ '--words': String(Math.min(line.text.split(/\s+/).length, STAGGERED_WORDS)) }}
             >
               <VisuallyHidden>{strings.said(line.role === 'visitor' ? strings.you : host.label)}</VisuallyHidden>
-              {isRunStart && line.role === 'assistant' && (
+              {/* The host's name once, over the conversation's first line, not over every run (critic C16). */}
+              {index === 0 && line.role === 'assistant' && (
                 <span className={styles.who} aria-hidden="true">
                   {host.label}
                 </span>
               )}
               <div className={styles.said}>
-                <span className={styles.face}>{isRunEnd && faceOf(line.role, host, visitorName)}</span>
+                {line.role === 'assistant' && (
+                  <span className={styles.face}>{isRunEnd && faceOf(line.role, host)}</span>
+                )}
                 <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
               </div>
               {isLive && line.choice !== undefined && (
@@ -313,9 +309,12 @@ export function BookingChat({
                         <span className={styles.cardTitle}>{line.card.title}</span>
                         <span className={styles.cardWhen}>{line.card.when}</span>
                         <span className={styles.cardWho}>{line.card.who}</span>
+                        {line.card.more !== undefined && <span className={styles.cardWho}>{line.card.more}</span>}
                       </span>
                     </div>
                   )}
+                  {/* Quick replies are actions, so they stay buttons (review, 5 Nov 2026: toggle chips announced a
+                      pressed state for something that sends), in the secondary round look of a chip. */}
                   <div
                     className={styles.suggestions}
                     data-confirm={line.confirm === undefined ? undefined : ''}
@@ -359,7 +358,7 @@ export function BookingChat({
             aria-busy="true"
           >
             <div className={styles.said}>
-              <span className={styles.face}>{faceOf('assistant', host, visitorName)}</span>
+              <span className={styles.face}>{faceOf('assistant', host)}</span>
               <p className={styles.bubble}>
                 <VisuallyHidden>{strings.waiting}</VisuallyHidden>
                 <span className={styles.typing} aria-hidden="true">

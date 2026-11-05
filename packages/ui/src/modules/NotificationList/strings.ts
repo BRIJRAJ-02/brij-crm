@@ -19,7 +19,11 @@ export const strings = {
     scheduling_changed: (actor: string) => `${actor} changed your scheduling`,
     /** Never read: a webhook endpoint turning off leads with the endpoint, through `webhookOff` (spec 0064). */
     webhook_off: (_actor: string) => 'A webhook endpoint turned off',
+    /** A guest booked one of the reader's pages, its page unknown (`booked` names it when it is). */
+    booking: (actor: string) => `${actor} booked a time`,
   },
+  /** A guest booked one of the reader's pages: "Ada Lovelace booked Intro call"; the excerpt is when. */
+  booked: (guest: string, page: string) => `${guest} booked ${page}`,
   /**
    * A webhook endpoint turned off after 3 days of failed deliveries (spec 0064, AC-6423), its host first as a
    * submission leads with its form: nobody turned it off, so naming an actor would read as blame.

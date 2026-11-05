@@ -1,6 +1,6 @@
-// Availability's Limits section in Chromium (spec 0037, AC-1299): each limit's Switch and number with its count
-// ("4 of 20 this week"), turning one on saves a starting number, a number saves on Enter and a bad one says why
-// without saving, See reads them with nothing to change, and no axe violations in either theme. With LIMITS_SHOTS
+// Availability's Limits section in Chromium (spec 0037, AC-1299): each limit a settings row with its Select and its
+// count ("4 of 20 this week"), a pick saves, No limit clears, See reads them with nothing to change, and no axe
+// violations in either theme. With LIMITS_SHOTS
 // set it saves the section at 390 and 1280 wide, light and dark.
 import '@crm/ui/styles.css';
 import type { DataLayer, LimitsDraft, LimitsHeld, LimitsState, MeetingLimits } from '@crm/data';
@@ -82,62 +82,44 @@ const mine = (over: Partial<MeetingLimits> = {}): MeetingLimits => ({
   ...over,
 });
 
-/** The day's Switch, pressed: its label hidden, the Switch's own hit area sits over the input. */
-const toggleDay = () => {
-  (page.getByRole('switch', { name: 'Limit meetings a day' }).element() as HTMLElement).click();
-};
+/** A limit's Select, by its row's name. */
+const limitSelect = (name: string) => page.getByRole('button', { name: new RegExp(name) });
 
 describe('Meeting limits', () => {
-  it('shows each limit with this day’s and week’s count beside it (AC-1299)', async () => {
+  it('shows each limit with this day’s and week’s count under it (AC-1299)', async () => {
     await render(mine({ perWeek: 20 }));
-    await expect.element(page.getByRole('switch', { name: 'Limit meetings a week' })).toBeChecked();
-    await expect.element(page.getByRole('textbox', { name: 'Meetings a week' })).toHaveValue('20');
+    await expect.element(limitSelect('Meetings a week')).toHaveTextContent('20');
     await expect.element(page.getByText('4 of 20 this week')).toBeVisible();
-    await expect.element(page.getByRole('switch', { name: 'Limit meetings a day' })).not.toBeChecked();
-    await expect.element(page.getByText('2 meetings today, no limit.')).toBeVisible();
+    await expect.element(limitSelect('Meetings a day')).toHaveTextContent('No limit');
+    await expect.element(page.getByText('2 meetings today')).toBeVisible();
   });
 
-  it('turns a limit on with a starting number, saves a typed one on Enter, and refuses one out of range', async () => {
+  it('saves a number picked in the Select, and No limit clears it', async () => {
     const made = await render(mine());
-    toggleDay();
-    expect(made.saved).toEqual([{ perDay: 8, perWeek: undefined }]);
-    const field = page.getByRole('textbox', { name: 'Meetings a day' });
-    await expect.element(field).toHaveValue('8');
-    await field.fill('60');
-    await userEvent.keyboard('{Enter}');
-    await expect.element(page.getByText('Use a whole number from 1 to 50.')).toBeVisible();
-    expect(made.saved).toHaveLength(1);
-    await field.fill('5');
-    await userEvent.keyboard('{Enter}');
-    expect(made.saved.at(-1)).toEqual({ perDay: 5, perWeek: undefined });
+    await userEvent.click(limitSelect('Meetings a day'));
+    await userEvent.click(page.getByRole('option', { name: '5', exact: true }));
+    expect(made.saved).toEqual([{ perDay: 5, perWeek: undefined }]);
     await expect.element(page.getByText('2 of 5 today')).toBeVisible();
-    // Off clears it.
-    toggleDay();
+    await userEvent.click(limitSelect('Meetings a day'));
+    await userEvent.click(page.getByRole('option', { name: 'No limit' }));
     expect(made.saved.at(-1)).toEqual({ perDay: undefined, perWeek: undefined });
   });
 
-  it('saves when focus leaves, and Escape puts the saved number back', async () => {
-    const made = await render(mine({ perWeek: 20 }));
-    const field = page.getByRole('textbox', { name: 'Meetings a week' });
-    await field.fill('25');
-    await userEvent.keyboard('{Escape}');
-    await expect.element(field).toHaveValue('20');
-    expect(made.saved).toEqual([]);
-    await field.fill('12');
-    await userEvent.keyboard('{Tab}');
-    expect(made.saved).toEqual([{ perDay: undefined, perWeek: 12 }]);
-    await expect.element(page.getByText('4 of 12 this week')).toBeVisible();
+  it('keeps offering a stored number outside the choices', async () => {
+    await render(mine({ perWeek: 120 }));
+    await expect.element(limitSelect('Meetings a week')).toHaveTextContent('120');
   });
 
-  it('says a day at its limit is closed', async () => {
+  it('says a day at its limit is full', async () => {
     await render(mine({ perDay: 2 }));
-    await expect.element(page.getByText('2 of 2 today. Pages offer no more times today.')).toBeVisible();
+    await expect.element(page.getByText('2 of 2 today. Full for today.')).toBeVisible();
   });
 
   it('shows a colleague the reader may only See read only, saying why', async () => {
     await render(mine({ memberId: SAM, perDay: 3, canChange: false }), { id: SAM, name: 'Sam Lee' });
     await expect.element(page.getByText(/You can see Sam’s meeting limits but not change them\./)).toBeVisible();
-    await expect.element(page.getByRole('textbox', { name: 'Meetings a day' })).toHaveAttribute('readonly');
+    // Read only, the Select shows its value with no list to open.
+    await expect.element(page.getByRole('button', { name: /Meetings a day/ })).not.toBeInTheDocument();
     await expect.element(page.getByText('2 of 3 today')).toBeVisible();
   });
 

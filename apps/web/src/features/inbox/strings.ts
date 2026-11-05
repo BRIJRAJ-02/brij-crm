@@ -14,6 +14,11 @@ export const strings = {
   /** Tasks of theirs due today (migration 0135). */
   dueToday: 'Due today',
   submissions: 'Form submissions',
+  bookings: 'Bookings',
+  /** A booking whose guest's name didn't come with it. */
+  someGuest: 'A guest',
+  /** A booked time that has since been cancelled: "Thu 5 Nov, 10:00 · Cancelled". */
+  bookingCancelled: (when: string) => `${when} · Cancelled`,
   /** A submission's form whose name didn't come with it. */
   someForm: 'A form',
   unreadOnly: 'Unread only',

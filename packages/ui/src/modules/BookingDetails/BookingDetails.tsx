@@ -570,9 +570,8 @@ export function BookingDetails({
         </div>
       )}
       <Field
+        // Optional in its own words, in the label where it is read first (critics C14, A11).
         label={labels?.note ?? strings.note}
-        // Beside the page's own questions, the note says it is optional as they do; alone, it keeps its hint.
-        {...(questions.length === 0 ? { hint: strings.optional } : { labelAside: WORDS.optional })}
         name="note"
         isMultiline
         maxLength={2000}
@@ -615,12 +614,14 @@ export function BookingDetails({
         {line}
       </p>
       <div className={styles.actions} data-shake={shakeOf('actions')}>
-        <Button variant="ghost" isDisabled={isBusy} onPress={onBack}>
+        {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar. */}
+        <Button size="lg" isDisabled={isBusy} onPress={onBack}>
           {strings.back}
         </Button>
         <Button
           variant="primary"
           size="lg"
+          isFullWidth="center"
           type="submit"
           isPending={isBusy && !isDone}
           {...(isDone ? { icon: 'check' as const } : {})}

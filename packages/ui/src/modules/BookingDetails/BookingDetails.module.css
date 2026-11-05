@@ -21,6 +21,11 @@
     inline-size: 100%;
   }
 
+  /* The fields stop at a form's width (critic A11): an email box 770px wide read as a document, not a form. */
+  .root > :not(.actions) {
+    max-inline-size: var(--size-dialog-form);
+  }
+
   /* One of the page's own questions (spec 0057): its control sits in the column as any field does. */
   .question {
     display: contents;
@@ -128,8 +133,18 @@
     margin-block-start: auto;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: var(--space-8);
+    padding-block-start: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* Confirm takes the band as Book did, at a time's height; Back keeps its words' width. */
+  .actions > * {
+    min-block-size: calc(var(--size-row) + var(--space-8));
+  }
+
+  .actions > :last-child {
+    flex: 1;
   }
 
   @media (hover: hover) and (pointer: fine) {

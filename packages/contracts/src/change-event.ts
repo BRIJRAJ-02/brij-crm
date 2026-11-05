@@ -296,6 +296,17 @@ export const VisitsEvent = z.object({
 });
 
 /**
+ * Bookings changed (B-17): one made on a public page or in chat, moved or cancelled by its guest or a member, or
+ * answered by its host. Names nothing, so every audience may hear it, as time off does; a screen holding Bookings (its
+ * lists, its week, a Team day, Home's today) reads again what it may, in place.
+ */
+export const BookingsEvent = z.object({
+  ...place,
+  kind: z.literal('bookings'),
+  mutationId,
+});
+
+/**
  * An automation, or a run's outcome, changed (parity #53): names nothing, and only an audience whose members all hold
  * `automations.manage` receives it (any other gets the stub). A screen holding the automations or their run log reads
  * them again.
@@ -356,6 +367,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   CalendarsEvent,
   TimeOffEvent,
   VisitsEvent,
+  BookingsEvent,
   AutomationsEvent,
   FormsEvent,
   CommentsEvent,
@@ -384,6 +396,7 @@ export const CHANGE_EVENT_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'bookings',
   'automations',
   'forms',
   'files',

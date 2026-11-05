@@ -628,7 +628,8 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'booking.no_show_undone':
     case 'booking.record_linked':
     case 'booking.record_unlinked':
-      // A record link names the booking only: the record's id stays in the row, unread (it may be hidden).
+    case 'booking.meeting_link_set':
+      // A record link, and a meeting link, name the booking only: the record's id stays in the row, unread (it may be hidden).
       return { ...base, action, target: bookingTarget(), params: {}, changes: [] };
     case 'delegation.granted':
     case 'delegation.changed':

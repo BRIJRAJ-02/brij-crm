@@ -98,3 +98,31 @@ describe('someone changed the reader’s scheduling (spec 0037, AC-1264)', () =>
     expect(targetOf('acme', changed, slugs)).toEqual({ kind: 'href', href: '/w/acme/bookings/availability' });
   });
 });
+
+describe('a guest’s booking (B-12)', () => {
+  const booked: NotificationView = {
+    id: ID,
+    kind: 'booking',
+    actor: { type: 'booking', id: THREAD },
+    createdAt: '2026-11-04T09:00:00.000Z',
+    bookingId: THREAD,
+    booking: {
+      pageTitle: 'Intro call',
+      guestName: 'Ada Lovelace',
+      startsAt: '2026-11-05T10:00:00.000Z',
+      status: 'confirmed',
+    },
+    excerpt: 'Intro call',
+  };
+
+  it('is the guest’s doing, says when, and opens the booking on the List', () => {
+    expect(toNotificationItem(booked, [], () => 'Thu 5 Nov, 10:00')).toMatchObject({
+      kind: 'booking',
+      actor: { type: 'booking', name: 'Ada Lovelace' },
+      pageTitle: 'Intro call',
+      excerpt: 'Thu 5 Nov, 10:00',
+    });
+    expect(targetOf('acme', booked, slugs)).toEqual({ kind: 'href', href: `/w/acme/bookings/list?open=${THREAD}` });
+    expect(notificationKind(inboxSearch({ kind: 'bookings' }).kind)).toBe('booking');
+  });
+});

@@ -65,7 +65,8 @@ export function embedOf(place: FramePlace): Embed | undefined {
 /** A message the frame sends its host, in the one shape the embed script takes. */
 export type FrameMessage =
   | { readonly timefix: 1; readonly type: 'height'; readonly fid: string; readonly height: number }
-  | { readonly timefix: 1; readonly type: 'close'; readonly fid: string };
+  | { readonly timefix: 1; readonly type: 'close'; readonly fid: string }
+  | { readonly timefix: 1; readonly type: 'booked'; readonly fid: string };
 
 /** Where the frame's messages go. */
 export type PostToHost = (message: FrameMessage, targetOrigin: string) => void;
@@ -91,6 +92,15 @@ export function reportHeight(
   const stop = watch(send);
   send();
   return stop;
+}
+
+/**
+ * Tells the site its booking page just booked (critic B-01, 4 November 2026), so it can thank the visitor or count
+ * it: the message names nothing about the booking or the guest (no name, email, time or token), and goes to the
+ * framing page's own origin only, where the site hears it as a `message` event (`data.timefix === 1`, `data.type === 'booked'`).
+ */
+export function postBooked(embed: Embed, post: PostToHost): void {
+  post({ timefix: 1, type: 'booked', fid: embed.frameId }, embed.hostOrigin);
 }
 
 /** In the script's dialog, Escape inside the frame closes it, unless an open list or popover took the key. */

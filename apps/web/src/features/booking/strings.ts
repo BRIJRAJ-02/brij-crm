@@ -34,6 +34,17 @@ export const strings = {
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   /** A workspace link's kind on its card, in place of Round robin. */
   workspaceLink: 'Workspace link',
+  /** The Links header's Team links menu (the bookings area, 4 November 2026): links that aren't page types. */
+  teamLinks: 'Team links',
+  workspaceLinkLine: 'Books whoever in the workspace is free.',
+  copyWorkspaceLink: 'Copy workspace link',
+  editWorkspaceLink: 'Edit workspace link',
+  editWorkspaceLinkLine: 'Its hours, hosts and limits.',
+  workspaceLinkCopied: 'Workspace link copied.',
+  copyFailed: 'Couldn’t copy the link. Try again.',
+  teamLink: 'Team link',
+  teamLinkLine: 'A form asks what they want, then books the right team page.',
+  addTeamLink: 'New team link',
   /** A workspace link a member may copy and open, not change. */
   viewOnly: 'View only',
   /** Captures › Links' groups, when the workspace has a link of its own. */
@@ -76,13 +87,21 @@ export const strings = {
   cancel: 'Cancel',
   somethingWrong: 'Something went wrong. Try again.',
   // New booking page.
-  addPage: 'Add a booking page',
+  addPage: 'New booking page',
+  addWorkspaceLink: 'New workspace link',
+  /** The page's type (the bookings area, 4 November 2026): a mark, a name and one plain line each. */
+  typeLabel: 'Type',
+  typeMe: 'Just me',
+  typeMeLine: 'Guests book time with you.',
+  typeRoundRobin: 'Round robin',
+  typeRoundRobinLine: 'Whoever on the team is free.',
+  moreTypes: 'More types',
+  typeManagedLine: 'You set it up once; each person gets their own copy.',
+  noGroupsYet: 'No round robin groups yet.',
   title: 'Title',
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
-  /** Above a paused page's editor: what visitors see, and how to turn it back on. */
-  pausedNote: 'Paused. Visitors see it closed.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -92,6 +111,25 @@ export const strings = {
   addLength: 'Add a length',
   /** The editor's tabs (22 Oct 2026): one per group, the chosen one in `?tab=`. */
   tabsLabel: 'Booking page settings',
+  /** Hours and Limits as one tab, and the ways to hand the page out as another (the bookings area, 4 November 2026). */
+  /** The editor's rows (critic A8, 4 Nov 2026): each row's help, in its tip. */
+  linkSection: 'Link',
+  addressHelp: 'Guests book at this address. Changing it goes live when saved.',
+  bAddressHelp: 'Only people you send this link to can book it.',
+  handleRow: 'Short address',
+  setHandleShort: 'Set your handle',
+  shareLinkSection: 'Share the link',
+  notPublished: 'Not published yet',
+  publishToShare: 'Publish the page to get its link.',
+  durationsHelp: 'Guests pick one. Up to four.',
+  addToCrmHelp: 'Each guest is found or added in the CRM.',
+  opensInHelp: 'The view guests see first. They can switch.',
+  /** The Questions tab's locked rows (critic A7): what every guest is asked first. */
+  fixedName: 'Your name',
+  fixedEmail: 'Your email',
+  fixedNotes: 'Anything else the host should know',
+  availabilityTab: 'Availability',
+  shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */
   needsFix: 'needs a fix',
@@ -100,11 +138,6 @@ export const strings = {
   minutesUnit: 'min',
   createPage: 'Create page',
   creating: 'Creating',
-  /** The Ready panel after Create page (spec 0058, AC-5): the one heading, one line, and the way on to the editor. */
-  readyTitle: 'Your booking page is ready',
-  readyMessage: 'Anyone with the link can book.',
-  readyEdit: 'Edit page',
-  readyPreview: 'Preview of the booking page',
   // The editor.
   live: 'Live',
   page: 'Page',
@@ -207,11 +240,20 @@ export const strings = {
   chatAsks: 'Book by chat asks these too: required ones in turn, optional ones if the visitor taps them.',
   durations: 'Durations',
   location: 'Location',
-  locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
-  /** Under Location's Video when the page's owner has no live calendar, so no video link is made (Q57, Q77). */
-  noVideoLink: 'No video link: no calendar connected.',
-  /** The same, where calendars can't be connected here (calendar sync off). */
-  noVideoLinkNoSync: 'No video link. Send one yourself.',
+  locations: {
+    video: 'Video',
+    address: 'In person',
+    phone: 'Phone',
+    custom: 'Somewhere else',
+    /** Video with no link made: the host sends it (critic B-07), the default while no calendar makes one. */
+    sendLink: 'I’ll send a link',
+  },
+  /** Video's own link, asked for while no calendar makes one (critic B-07). */
+  meetingLink: 'Meeting link',
+  meetingLinkHelp: 'Guests get it in their confirmation, never on the page.',
+  meetingLinkPlaceholder: 'https://zoom.us/j/…',
+  meetingLinkRequired: 'Paste the meeting link, or pick I’ll send a link.',
+  meetingLinkInvalid: 'Give the meeting link, starting https://.',
   /** The same, when their calendar's account has expired and needs reconnecting in Settings › Calendars. */
   noVideoLinkReconnect: 'No video link: reconnect your calendar.',
   addressOrRoom: 'Address or room',
@@ -245,6 +287,8 @@ export const strings = {
   manage: 'Manage',
   checksConflictsIn: 'Checks for conflicts in',
   noCalendars: 'No calendars connected',
+  /** Calendar sync isn't on for this deployment (the Calendars tab's "off" state): nothing to connect. */
+  calendarSyncOff: 'Calendar sync isn’t available here',
   noneChecked: 'None, so this page can double book.',
   reservedTime: 'Reserved time',
   /** The Hours and Meeting tabs' sections (22 Oct 2026). */
@@ -336,6 +380,8 @@ export const strings = {
   step: 'Start times every',
   stepDuration: 'Meeting length',
   none: 'None',
+  /** A cancel or move cutoff of 0 (critic B-15): guests may change a booking any time before it starts. */
+  anyTime: 'Any time',
   minutes: (count: number) => `${String(count)} minutes`,
   hoursCount: (count: number) => (count === 1 ? '1 hour' : `${String(count)} hours`),
   days: (count: number) => (count === 1 ? '1 day' : `${String(count)} days`),
@@ -381,9 +427,7 @@ export const strings = {
   /** The editor's header on someone else's page (spec 0037, AC-1273). */
   editingFor: (name: string) => `${firstOf(name)}’s page`,
   destinationLoading: 'Loading calendars',
-  noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
-  notNow: 'Not now',
   statusLive: 'Live',
   statusOff: 'Paused',
   noCalendar: 'Other meetings don’t block times until you connect one.',
@@ -400,6 +444,8 @@ export const strings = {
   /** A day off row's remove button: the day opens again by the weekly hours. */
   removeDayOff: (date: string) => `Remove the day off on ${date}`,
   noDaysOff: 'No days off yet',
+  /** A day off with no note, in Availability's Time off card: what the row is, beside time off's reasons. */
+  dayOff: 'Day off',
   /** Days off while the schedules load, for screen readers. */
   daysOffLoading: 'Loading days off',
   pickDate: 'Pick the day to close.',

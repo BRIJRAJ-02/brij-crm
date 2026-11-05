@@ -70,9 +70,16 @@ export interface BookingClient {
       readonly tz: string;
       /** A form's hand off (spec 0043, AC-1609): a team page then offers only the hosts its routing chose. */
       readonly p?: string;
+      /** A one off link's token hashed (spec 0062, B-10): an invitation only page offers times only beside one. */
+      readonly o?: string;
     },
     signal?: AbortSignal,
   ): Promise<PublicSlots>;
+  /**
+   * A fill ticket for the page (spec 0023, B-04): the server's note of when the page loaded, which a booking and a
+   * chat turn that books carry. Undefined when it can't be had; the booking is then refused as too fast.
+   */
+  ticket(publicKey: string): Promise<string | undefined>;
   /** Books; the answer carries the guest page's token. */
   book(publicKey: string, input: PublicBookInput): Promise<PublicBooked>;
   /** One turn of the booking chat (spec 0042); a turn that booked carries the guest page's token. */
@@ -166,16 +173,25 @@ export function publicCaller(
   return { base, call, post };
 }
 
+/**
+ * The header a form's hand off travels in (security review, 4 Nov 2026): never the query string, which request logs
+ * keep. The api reads it on the page, prefill and slots reads.
+ */
+const HANDOFF_HEADER = 'x-crm-handoff';
+
+/** The hand off as request headers, or none. */
+const handoffHeaders = (handoff: string | undefined): Record<string, string> =>
+  handoff === undefined ? {} : { [HANDOFF_HEADER]: handoff };
+
 /** The client, on `origin` (the page's own), with `fetch` passed in for tests. */
 export function createBookingClient(options: PublicClientOptions): BookingClient {
   const { base, call } = publicCaller(options);
   return {
     page: (publicKey, handoff, linkHash) => {
-      const query = new URLSearchParams({
-        ...(handoff === undefined ? {} : { p: handoff }),
-        ...(linkHash === undefined ? {} : { o: linkHash }),
-      }).toString();
-      return call<PublicBookingPage>(`${encodeURIComponent(publicKey)}${query === '' ? '' : `?${query}`}`);
+      const query = new URLSearchParams(linkHash === undefined ? {} : { o: linkHash }).toString();
+      return call<PublicBookingPage>(`${encodeURIComponent(publicKey)}${query === '' ? '' : `?${query}`}`, {
+        headers: handoffHeaders(handoff),
+      });
     },
     slots: (publicKey, query, signal) =>
       call<PublicSlots>(
@@ -185,10 +201,24 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
           // Left out, the page's first length (the page's first read, sent beside its facts).
           ...(query.duration === undefined ? {} : { duration: String(query.duration) }),
           tz: query.tz,
-          ...(query.p === undefined ? {} : { p: query.p }),
+          ...(query.o === undefined ? {} : { o: query.o }),
         }).toString()}`,
-        { credentials: 'same-origin', ...(signal === undefined ? {} : { signal }) },
+        {
+          credentials: 'same-origin',
+          headers: handoffHeaders(query.p),
+          ...(signal === undefined ? {} : { signal }),
+        },
       ),
+    ticket: async (publicKey) => {
+      try {
+        const answer = await call<unknown>(`${encodeURIComponent(publicKey)}/ticket`);
+        return typeof answer === 'object' && answer !== null && 'ticket' in answer && typeof answer.ticket === 'string'
+          ? answer.ticket
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     book: (publicKey, input) =>
       call<PublicBooked>(`${encodeURIComponent(publicKey)}/book`, {
         method: 'POST',
@@ -212,7 +242,7 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
       await call<unknown>('connect/forget', { method: 'POST', credentials: 'same-origin' });
     },
     prefill: (publicKey, token) =>
-      call<PublicPrefill>(`${encodeURIComponent(publicKey)}/prefill?${new URLSearchParams({ p: token }).toString()}`),
+      call<PublicPrefill>(`${encodeURIComponent(publicKey)}/prefill`, { headers: handoffHeaders(token) }),
     event: (publicKey, body) => {
       const url = `${base}/${encodeURIComponent(publicKey)}/events`;
       const text = JSON.stringify(body);

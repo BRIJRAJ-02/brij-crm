@@ -27,6 +27,8 @@ import { DeletePageDialog } from './DeletePageDialog.tsx';
 import { managedStrings } from './managed-strings.ts';
 import { managedPageHref, pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { sharingStrings } from './sharing-strings.ts';
+import { publishStrings } from './publish-strings.ts';
+import { isDraftPage } from './draft-page.ts';
 import { strings } from './strings.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
@@ -165,7 +167,6 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     groupId: MANAGED_GROUP,
     title: template.title,
     href: managedPageHref(slug, template.id),
-    colourKey: template.id,
     facts: [managedStrings.memberBadge(template.members.length)],
     badge: managedStrings.badge,
     isPending: templateList.status === 'ready' && templateList.pendingIds.has(template.id),
@@ -190,33 +191,39 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     const isOff = page.status === 'paused';
     // A member sees the workspace's links to copy and open (owner, 30 Oct 2026): no editor, switch or menu.
     const isViewOnly = page.scope === 'workspace' && !page.canChange;
+    // Made as a draft and never published (the bookings area): its editor's Publish puts it live, not a switch.
+    const isDraft = isDraftPage(page);
     return {
       id: page.id,
       groupId: groupOf(page),
       title: page.title,
       ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
-      // Pages have no colour of their own yet: the card takes a stable one from the page's id.
-      colourKey: page.id,
+      // No colour dot (the bookings critique, A22, B-16): a dot before the title read as a status. The state is a
+      // badge, as on a form's card, and the switch.
       // What the page looks like to a guest, small: its month, its open days in its colour.
       picture: pictureOf(page),
       facts: factsOf(page),
       // The link Copy link copies, as a path.
-      address: publicBookingPath(page),
-      // Off shows in the muted title and the switch; the badge is for what they can't say.
+      ...(isDraft ? {} : { address: publicBookingPath(page) }),
+      // Off shows in the muted title, the switch and a Paused badge (as a paused form's); the rest are what they can't say.
       ...(isPending
         ? { badge: strings.copying }
-        : isViewOnly
-          ? { badge: strings.viewOnly }
-          : page.pausedReason === 'host_removed'
-            ? { badge: strings.hostRemoved }
-            : page.isPrivate
-              ? { badge: strings.linkOnly }
-              : page.isEditor === true
-                ? { badge: sharingStrings.editorBadge }
-                : {}),
+        : isDraft
+          ? { badge: publishStrings.statusDraft }
+          : isViewOnly
+            ? { badge: strings.viewOnly }
+            : page.pausedReason === 'host_removed'
+              ? { badge: strings.hostRemoved }
+              : isOff
+                ? { badge: strings.notTakingBookings }
+                : page.isPrivate
+                  ? { badge: strings.linkOnly }
+                  : page.isEditor === true
+                    ? { badge: sharingStrings.editorBadge }
+                    : {}),
       isOff,
       isPending,
-      ...(isViewOnly
+      ...(isViewOnly || isDraft
         ? {}
         : {
             toggle: {
@@ -230,7 +237,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
             },
           }),
-      copyValue: publicBookingUrl(page),
+      ...(isDraft ? {} : { copyValue: publicBookingUrl(page) }),
       // Beside the link it copies, an icon: the foot holds the address, Copy, Open and ⋯ on one quiet line.
       isCopyQuiet: true,
       actions: (

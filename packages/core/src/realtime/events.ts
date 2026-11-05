@@ -123,6 +123,8 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
       return { ...place, kind: 'time_off' };
     case 'visits':
       return { ...place, kind: 'visits', placeIds: copy(row.itemIds) };
+    case 'bookings':
+      return { ...place, kind: 'bookings' };
     case 'automations':
       return { ...place, kind: 'automations' };
     case 'forms':

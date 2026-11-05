@@ -34,6 +34,8 @@ import {
   PageColumn,
   SectionBar,
   Select,
+  DateNav,
+  weekRangeLabel,
   Tooltip,
   TeamWeek,
   TopBar,
@@ -125,14 +127,9 @@ function weekDays(monday: string, locale: string, today: string, footer?: Week['
   }));
 }
 
-/** "2 – 8 Nov 2026" for a week. */
+/** "2 – 8 November 2026" for a week: the Calendar's format (DateNav's weekRangeLabel). */
 function rangeWords(monday: string, locale: string): string {
-  const at = (date: string) => {
-    const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day));
-  };
-  const format = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return format.formatRange(at(monday), at(plusDays(monday, 6)));
+  return weekRangeLabel(monday, locale);
 }
 
 /** The zone's offset now, in minutes from UTC, for the reader's own zone. */
@@ -209,7 +206,9 @@ function extraOf(
   state: CalendarHealthState | undefined,
   link: ReactNode | undefined,
 ): { readonly extra?: ReactNode } {
-  const troubled = state?.status === 'ready' && state.health.status !== 'connected';
+  // Only trouble earns a line in a person's cell (the bookings critique, A23: three line cells): no calendar at all
+  // is not news on the Roster, and with calendar sync off it is everyone.
+  const troubled = state?.status === 'ready' && state.health.status !== 'connected' && state.health.status !== 'none';
   if (!troubled) return link === undefined ? {} : { extra: link };
   return {
     extra:
@@ -462,34 +461,27 @@ function Loaded({
       variant="bar"
       start={
         <>
-          {/* Never off, as the Calendar's Today, and one label at one width, so the arrows after it never move under
-              the pointer; the week's dates beside them say where you are. */}
-          <Button
-            variant="secondary"
-            onPress={() => {
-              if (thisWeek !== undefined && thisWeek !== week) go(thisWeek);
+          {/* The Calendar's stepper (DateNav, the bookings critique A13): Today, never off, then the arrows; the
+              week's dates beside them say where you are, in the Calendar's format. */}
+          <DateNav
+            today={{
+              label: words.today,
+              hint: words.goToThisWeek,
+              onPress: () => {
+                if (thisWeek !== undefined && thisWeek !== week) go(thisWeek);
+              },
             }}
-          >
-            {words.thisWeek}
-          </Button>
-          <Tooltip content={words.previousWeek}>
-            <Button
-              variant="ghost"
-              icon="chevron-left"
-              label={words.previousWeek}
-              isDisabled={shown === undefined || week <= shown.earliest}
-              onPress={() => go(plusDays(week, -7))}
-            />
-          </Tooltip>
-          <Tooltip content={words.nextWeek}>
-            <Button
-              variant="ghost"
-              icon="chevron-right"
-              label={words.nextWeek}
-              isDisabled={shown === undefined || week >= shown.latest}
-              onPress={() => go(plusDays(week, 7))}
-            />
-          </Tooltip>
+            previous={{
+              label: words.previousWeek,
+              isDisabled: shown === undefined || week <= shown.earliest,
+              onPress: () => go(plusDays(week, -7)),
+            }}
+            next={{
+              label: words.nextWeek,
+              isDisabled: shown === undefined || week >= shown.latest,
+              onPress: () => go(plusDays(week, 7)),
+            }}
+          />
         </>
       }
       title={range}
@@ -904,13 +896,11 @@ export function TeamWeekPending({ week }: { readonly week?: string | undefined }
             <SectionBar
               variant="bar"
               start={
-                <>
-                  <Button variant="secondary" isDisabled>
-                    {words.thisWeek}
-                  </Button>
-                  <Button variant="ghost" icon="chevron-left" label={words.previousWeek} isDisabled />
-                  <Button variant="ghost" icon="chevron-right" label={words.nextWeek} isDisabled />
-                </>
+                <DateNav
+                  today={{ label: words.today, hint: words.goToThisWeek, isDisabled: true, onPress: () => undefined }}
+                  previous={{ label: words.previousWeek, isDisabled: true, onPress: () => undefined }}
+                  next={{ label: words.nextWeek, isDisabled: true, onPress: () => undefined }}
+                />
               }
               title={range}
               isTitleQuiet

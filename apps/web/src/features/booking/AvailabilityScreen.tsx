@@ -31,6 +31,7 @@ import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
 import { LimitsCard, LimitsCardPending } from './LimitsCard.tsx';
 import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
 import type { StandinChoice } from './TimeOffDialog.tsx';
+import type { DaysOffSlot } from './DaysOff.tsx';
 import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
 import { SCHEDULES_MAX, showsViewing } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -153,8 +154,9 @@ export function AvailabilityScreen({
     );
   };
   const whose = member === undefined || owner === undefined ? undefined : { id: member, name: owner };
-  // Time off (spec 0037, AC-1286) and meeting limits (AC-1299): the person's, beside whichever schedule is open.
-  const timeOff = (
+  // Time off (spec 0037, AC-1286), with the open schedule's days off inside it (critic A15), and meeting limits
+  // (AC-1299): the person's, beside whichever schedule is open.
+  const timeOff = (daysOff?: DaysOffSlot) => (
     <>
       <TimeOffCard
         data={data}
@@ -165,6 +167,7 @@ export function AvailabilityScreen({
         people={people}
         onNotice={toast}
         onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
+        daysOff={daysOff}
       />
       <LimitsCard data={data} slug={slug} member={whose} />
     </>
@@ -180,7 +183,6 @@ export function AvailabilityScreen({
         isReadOnly={!canChange}
         triggerRef={switcherRef}
         onOpen={(schedule) => open(schedule.id)}
-        onCreate={() => setCreating(true)}
         onRename={() => setRenaming(current)}
         onSetDefault={() => setDefault(current)}
         onDuplicate={() => duplicate(current)}
@@ -236,7 +238,7 @@ export function AvailabilityScreen({
                 </EmptyState>
               </PageColumn>
             ) : current === undefined ? (
-              <ScheduleEditorPending timeOff={timeOff} />
+              <ScheduleEditorPending timeOff={timeOff()} />
             ) : (
               <ScheduleEditor
                 // One editor per schedule, so unsaved hours never cross from one to another; the virtual default
@@ -363,12 +365,18 @@ function AccessNotice({
   );
 }
 
-/** The switcher's place while the schedules load: a disabled button the width of a name. */
+/** The switcher's place while the schedules load: the Select, disabled, the width of a name. */
 function SwitcherPending() {
   return (
-    <Button variant="ghost" iconRight="chevron-down" isDisabled>
-      {scheduleStrings.schedule}
-    </Button>
+    <Select
+      label={scheduleStrings.switchSchedule}
+      isLabelHidden
+      size="sm"
+      isDisabled
+      items={[{ id: 'loading', label: scheduleStrings.schedule }]}
+      value="loading"
+      onChange={() => undefined}
+    />
   );
 }
 

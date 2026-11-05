@@ -27,6 +27,8 @@ export const BOOKING_MAIL_KINDS = [
   'approved',
   'declined',
   'pending_expire',
+  // A meeting link added by hand (B-07, migration 0189): the guest and their guests get it.
+  'meeting_link',
 ] as const;
 
 /** One kind of booking email. */
@@ -50,18 +52,35 @@ export async function recordEvent(
   tx: WorkspaceTx,
   bookingId: string,
   written: WrittenEvent | undefined,
+  /** The page's own meeting link (critic B-07): the booking's link when the calendar made none. */
+  ownLink?: string,
 ): Promise<void> {
   await tx
     .update(bookings)
     .set(
       written === undefined
-        ? { eventFailedAt: sql`now()` }
+        ? { eventFailedAt: sql`now()`, ...(ownLink === undefined ? {} : { videoUrl: ownLink, updatedAt: sql`now()` }) }
         : {
             meetingId: written.meetingId ?? null,
-            videoUrl: written.videoUrl ?? null,
+            videoUrl: written.videoUrl ?? ownLink ?? null,
             eventFailedAt: null,
             updatedAt: sql`now()`,
           },
     )
     .where(eq(bookings.id, bookingId));
+}
+
+/**
+ * A location as anyone who hasn't booked may see it: a host's own meeting link left out (critic B-07), for the public
+ * page, a member who may only see the page, and a booking seen over its host.
+ */
+export function withoutMeetingLink<Location extends { readonly type: string }>(
+  location: Location,
+): Location | { readonly type: 'video' } {
+  return location.type === 'video' ? { type: 'video' } : location;
+}
+
+/** A video page's own meeting link, when its host gave one (critic B-07). */
+export function ownMeetingLink(location: { readonly type: string; readonly link?: string }): string | undefined {
+  return location.type === 'video' ? location.link : undefined;
 }

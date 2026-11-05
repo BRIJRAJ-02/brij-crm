@@ -17,7 +17,7 @@ export const strings = {
   guestNotEmail: (text: string) => `“${text}” isn’t an email address. Fix it, or remove it.`,
   guestsMax: (max: number) => `Up to ${String(max)} guests.`,
   phone: 'Number to call',
-  note: 'Anything the host should know?',
+  note: 'Anything the host should know? (optional)',
   optional: 'Optional',
   trap: 'Leave this empty',
   back: 'Back',

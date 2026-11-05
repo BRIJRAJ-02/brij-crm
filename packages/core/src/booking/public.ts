@@ -80,6 +80,7 @@ import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseAll, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { notifyBooking } from '../notifications/notify.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
   BUSY_MARGIN_MS,
@@ -88,6 +89,7 @@ import {
   membersBusy,
   membersClosed,
   membersOf,
+  noticeMinutesOf,
   pageSlots,
   pickHost,
   type MembersBusy,
@@ -120,7 +122,7 @@ import {
   routeBooking,
   type BookingRouting,
 } from '../routing/booking.ts';
-import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { enqueueBookingMail, ownMeetingLink, recordEvent, withoutMeetingLink } from './mail-queue.ts';
 import { checkOneOffLink, oneOffStateOf, oneOffTokenHash, useOneOffLink } from './one-off-links.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { queueBookingWebhook } from '../webhooks/queue.ts';
@@ -182,7 +184,9 @@ async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecor
 function liveOf(page: PageRecord | undefined): PageRecord {
   // A managed template is not a page (spec 0037, AC-1333): it holds settings for its members' pages, and its own
   // public link answers as a deleted page does, so nobody ever books the template.
-  if (page === undefined || page.isDeleted || page.kind === 'managed') {
+  // A draft, never published (the bookings area, 4 November 2026), answers as no page at all: a guessed address
+  // never learns that an unpublished page exists.
+  if (page === undefined || page.isDeleted || page.kind === 'managed' || page.pausedReason === 'draft') {
     throw refuse('NOT_FOUND', 'This page is no longer available.');
   }
   if (page.status !== 'live') throw refuse('BOOKING_CLOSED', 'This page isn’t taking bookings right now.');
@@ -258,9 +262,9 @@ function initialsOf(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
-/** The location a visitor may see. */
+/** The location a visitor may see: a host's own meeting link is never on the page, only in a booking's emails. */
 function publicLocation(page: PageRecord): PublicLocation {
-  return page.location;
+  return page.location.type === 'video' ? { type: 'video' } : withoutMeetingLink(page.location);
 }
 
 /** Reads account pictures (schema auth, through the identity login): the public page's host picture. */
@@ -298,6 +302,9 @@ export async function getPublicBookingPage(
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
+      // The notice its times keep, so the page can say it plainly ("Can't be booked within 4 hours"): a page
+      // setting, the same number the slots read uses, never anything about a visitor. None, nothing sent.
+      ...(noticeMinutesOf(page) > 0 ? { minNoticeMinutes: noticeMinutesOf(page) } : {}),
       // The view the host chose, beside the rest of the facts, so the page's first paint is already that view. Book by
       // chat asks a page's questions too now (4 Nov 2026), so a page with required ones opens in chat when set to.
       defaultView: page.defaultView,
@@ -409,8 +416,8 @@ export async function readAddressedPage(entry: BookingEntry & { readonly handle:
   checkEntry(entry);
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
-    // A managed template has no address of its own (AC-1333).
-    if (page === undefined || page.isDeleted || page.kind === 'managed') {
+    // A managed template has no address of its own (AC-1333), and a draft has none yet.
+    if (page === undefined || page.isDeleted || page.kind === 'managed' || page.pausedReason === 'draft') {
       throw refuse('NOT_FOUND', 'This page is no longer available.');
     }
     return { publicKey: page.publicKey, handle: entry.handle, slug: page.slug };
@@ -1073,6 +1080,11 @@ export async function readPublicSlots(
   query: PublicSlotsQuery,
   /** A verified form hand off (spec 0043, AC-1609): a team page then offers only the times of the hosts it chose. */
   link?: { readonly submissionId: string },
+  /**
+   * A one off link's token hashed (spec 0062, AC-6204): an invitation only page offers its times only beside an open
+   * link (B-10), as it books only with one.
+   */
+  oneOff?: { readonly hash: string },
 ): Promise<PublicSlots> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
@@ -1083,8 +1095,11 @@ export async function readPublicSlots(
     // Left out, the page's first length: the one the page opens on (PublicSlotsQuery).
     const length = query.duration ?? live.durations[0] ?? 0;
     checkDuration(live, length);
-    // Only through a form (AC-1388): without a hand off, no times.
-    if (await formOnlyShut(tx, live, link))
+    // Only through a form (AC-1388): without a hand off, no times. Only by invitation (B-10): without an open one off
+    // link, no times either, so the plain address never shows the host's free hours.
+    const invitationShut =
+      live.linksOnly && (oneOff === undefined || (await oneOffStateOf(tx, live.id, oneOff.hash, now)) !== 'open');
+    if (invitationShut || (await formOnlyShut(tx, live, link)))
       return { page: live, team: undefined, memberIds: [], shut: true, duration: length };
     const loaded = await loadTeam(tx, live);
     const handed =
@@ -1182,7 +1197,7 @@ function eventDescription(page: PageRecord, input: PublicBookInput): string {
 function eventLocation(page: PageRecord, input: PublicBookInput): string | undefined {
   switch (page.location.type) {
     case 'video':
-      return undefined;
+      return page.location.link;
     case 'phone':
       return input.phone === undefined || input.phone === '' ? undefined : `Phone: ${input.phone}`;
     default:
@@ -1519,6 +1534,8 @@ export async function bookPublicSlot(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        // Every tab's Bookings reads again (B-17): the hooks' outbox row, in this write's transaction.
+        context.record({ bookings: [row.id] });
         if (routing !== undefined) {
           await recordBookingRouting(tx, { workspaceId, pageId: page.id, bookingId, routing, narrowed });
         }
@@ -1654,6 +1671,9 @@ export async function bookPublicSlot(
             .where(eq(bookings.id, bookingId));
         }
       }
+      // Its hosts hear of it in their Inbox (B-12), in this write, after the guest's person is filed so the notice can
+      // name them; the outbox's `notifications` row tells their open screens at once.
+      await notifyBooking(context, { bookingId, memberIds: [...new Set([host, ...hosts])] });
       return {
         bookingId,
         replayed: false,
@@ -1716,7 +1736,8 @@ export async function bookPublicSlot(
             .filter((guest) => guest !== input.email)
             .map((guest) => ({ email: guest, name: guest })),
         ],
-        video: page.location.type === 'video',
+        // A host's own meeting link stands in for one the calendar would make (critic B-07).
+        video: page.location.type === 'video' && ownMeetingLink(page.location) === undefined,
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
       });
     } catch (error) {
@@ -1729,7 +1750,7 @@ export async function bookPublicSlot(
   }
   // The outcome, and the emails (after the event, so the confirmation knows whether the calendar already invited them).
   await inWorkspace(entry.scope, async (tx) => {
-    await recordEvent(tx, booked.bookingId, written);
+    await recordEvent(tx, booked.bookingId, written, ownMeetingLink(page.location));
     await enqueueBookingMail(tx, booked.bookingId, ['confirmed']);
   });
   return booked;
@@ -1882,6 +1903,21 @@ export async function readManagedBooking(
     const cancelTooLate = canChange && left < page.cancelCutoffMinutes * 60_000;
     const moveTooLate = canChange && left < page.moveCutoffMinutes * 60_000;
     const isRequest = row.approval === 'pending';
+    const state: PublicManagedBooking['state'] =
+      row.approval === 'declined'
+        ? 'declined'
+        : row.status === 'cancelled'
+          ? 'cancelled'
+          : row.endsAt.getTime() <= now.getTime()
+            ? 'past'
+            : isRequest
+              ? 'requested'
+              : 'confirmed';
+    // An old guest link (B-13): a meeting over, cancelled or declined more than 30 days ago answers its state, time
+    // and title only. A forwarded confirmation stops showing the visitor's email, guests and note a month on.
+    const closedAt = Math.max(row.endsAt.getTime(), row.cancelledAt?.getTime() ?? 0, row.decidedAt?.getTime() ?? 0);
+    const aged =
+      state !== 'confirmed' && state !== 'requested' && now.getTime() - closedAt > MANAGE_DETAILS_DAYS * DAY_MS;
     return {
       workspaceSlug: workspace?.slug ?? '',
       canChange,
@@ -1895,23 +1931,17 @@ export async function readManagedBooking(
       ...(cancelTooLate ? { cancelTooLate: true as const } : {}),
       ...(moveTooLate && !isRequest ? { moveTooLate: true as const } : {}),
       // A decline's reason is the host's to the visitor; any other cancel keeps its own.
-      ...(row.approval === 'declined'
-        ? row.declineReason === null
-          ? {}
-          : { cancelReason: row.declineReason }
-        : row.cancelReason === null
-          ? {}
-          : { cancelReason: row.cancelReason }),
-      state:
-        row.approval === 'declined'
-          ? 'declined'
-          : row.status === 'cancelled'
-            ? 'cancelled'
-            : row.endsAt.getTime() <= now.getTime()
-              ? 'past'
-              : isRequest
-                ? 'requested'
-                : 'confirmed',
+      ...(aged
+        ? {}
+        : row.approval === 'declined'
+          ? row.declineReason === null
+            ? {}
+            : { cancelReason: row.declineReason }
+          : row.cancelReason === null
+            ? {}
+            : { cancelReason: row.cancelReason }),
+      state,
+      ...(aged ? { aged: true as const } : {}),
       publicKey: page.publicKey,
       title: page.title,
       hostName: await bookingHostName(tx, page, row),
@@ -1919,11 +1949,12 @@ export async function readManagedBooking(
       end: row.endsAt.toISOString(),
       timeZone: row.visitorTimeZone,
       location: publicLocation(page),
-      ...(row.videoUrl === null ? {} : { videoUrl: row.videoUrl }),
-      visitorName: row.visitorName,
-      visitorEmail: row.visitorEmail,
-      guests: [...answers.guests],
-      ...(answers.note === undefined ? {} : { note: answers.note }),
+      // The video link only while the meeting is on (B-15): a cancelled, declined or past one's room stays closed.
+      ...(row.videoUrl === null || state !== 'confirmed' ? {} : { videoUrl: row.videoUrl }),
+      visitorName: aged ? '' : row.visitorName,
+      visitorEmail: aged ? '' : row.visitorEmail,
+      guests: aged ? [] : [...answers.guests],
+      ...(answers.note === undefined || aged ? {} : { note: answers.note }),
     };
   });
 }
@@ -1961,12 +1992,17 @@ export async function managedBookingIcs(
     url: `${origin.publicOrigin ?? origin.appOrigin}${managePath(booking.publicKey, token)}`,
     organizerEmail: origin.organizerEmail,
     organizerName: origin.organizerName,
-    attendees: [{ name: booking.visitorName, email: booking.visitorEmail }],
+    // An old link's file names nobody (B-13).
+    attendees: booking.visitorEmail === '' ? [] : [{ name: booking.visitorName, email: booking.visitorEmail }],
     // Grows with each download, so a calendar holding an earlier copy takes this one (a move's new time).
     sequence: Math.floor(now.getTime() / 1000),
     now,
   });
 }
+
+/** How long a finished booking's guest link keeps showing the visitor, guests and note (B-13). */
+const MANAGE_DETAILS_DAYS = 30;
+const DAY_MS = 86_400_000;
 
 /** What a page that books only through one-time links says to a visitor without one (spec 0062, AC-6204). */
 const INVITATION_ONLY = 'This page books by invitation.';

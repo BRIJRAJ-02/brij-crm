@@ -233,6 +233,7 @@ const SENTENCES: SentenceTemplates = {
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
   'booking.record_unlinked': (entry, w) => actor(`unlinked a record from ${w.booking(entry.target)}`),
+  'booking.meeting_link_set': (entry, w) => actor(`added a meeting link to ${w.booking(entry.target)}`),
   // Scheduling access (spec 0037, AC-1257): "Ada let Priya manage Bea’s scheduling".
   'delegation.granted': (entry, w) =>
     actor(

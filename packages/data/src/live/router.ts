@@ -24,6 +24,7 @@ export const LIVE_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'bookings',
   'automations',
   'forms',
   'files',

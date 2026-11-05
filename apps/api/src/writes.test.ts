@@ -2109,15 +2109,24 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const bookingId = await hostBooking(m);
     await testQuery(ownerUrl, `update bookings set approval = 'pending' where id = $1`, [bookingId]);
     await m.client.bookingFlow.confirm({ workspace: m.slug, bookingId, mutationId });
-    // The booking's person, filed before the case's write (as a cancel's).
-    return [{ kind: 'records', object_id: m.people.id }];
+    // The booking's person and its `bookings` row (B-17), filed before the case's write (as a cancel's), then the
+    // answer's own `bookings` row.
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+      { kind: 'bookings', item_ids: [], mutation_id: mutationId },
+    ];
   },
   'bookingFlow.decline': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     await testQuery(ownerUrl, `update bookings set approval = 'pending' where id = $1`, [bookingId]);
     await m.client.bookingFlow.decline({ workspace: m.slug, bookingId, reason: 'Away that day', mutationId });
-    // The booking's person, filed before the case's write (as a cancel's).
-    return [{ kind: 'records', object_id: m.people.id }];
+    // The booking's person and its `bookings` row (B-17), filed before the case's write, then the answer's own.
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+      { kind: 'bookings', item_ids: [], mutation_id: mutationId },
+    ];
   },
   'bookingPages.update': async (m, mutationId) => {
     const page = await m.client.bookingPages.create({
@@ -2345,12 +2354,20 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       guests: [],
       mutationId,
     });
-    return [{ kind: 'records', object_id: m.people.id, mutation_id: mutationId }];
+    // The person filed, and one `bookings` row naming nothing (B-17), both the write's own.
+    return [
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
+      { kind: 'bookings', item_ids: [], mutation_id: mutationId },
+    ];
   },
   'bookings.cancel': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     await m.client.bookings.cancel({ workspace: m.slug, bookingId, reason: 'Clash', mutationId });
-    return [{ kind: 'records', object_id: m.people.id }];
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+      { kind: 'bookings', item_ids: [], mutation_id: mutationId },
+    ];
   },
   // A no show (spec 0043): on a booking moved into the past by hand; settings like a cancel's, but no record changes.
   'bookings.markNoShow': async (m, mutationId) => {
@@ -2362,8 +2379,27 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       [bookingId],
     );
     await m.client.bookings.markNoShow({ workspace: m.slug, bookingId, noShow: true, mutationId });
-    // Only the booking's own row (its person filed by the host's booking): the mark itself stores none.
-    return [{ kind: 'records', object_id: m.people.id }];
+    // Only the booking's own rows (its person filed by the host's booking, and its `bookings` row): the mark itself
+    // stores none.
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+    ];
+  },
+  // A meeting link added by hand (B-07): settings like a no show; the link stores no row of its own.
+  'bookings.setMeetingLink': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await m.client.bookings.setMeetingLink({
+      workspace: m.slug,
+      bookingId,
+      url: 'https://meet.example.com/abc-defg-hij',
+      mutationId,
+    });
+    // The booking's own rows, as a no show's (its person, and its `bookings` row from the server lane, B-17).
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+    ];
   },
   // A booking linked to a deal by hand (polish F2): settings like a no show, so the link stores no row of its own.
   'bookings.link': async (m, mutationId) => {
@@ -2382,6 +2418,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.link({ workspace: m.slug, bookingId, recordId, mutationId });
     return [
       { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
       { kind: 'records', object_id: deals.id },
     ];
   },
@@ -2397,7 +2434,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const start = slots[0]?.start;
     if (start === undefined) throw new Error('The page offers no time to move to.');
     await m.client.bookings.move({ workspace: m.slug, bookingId, start, mutationId });
-    return [{ kind: 'records', object_id: m.people.id }];
+    return [
+      { kind: 'records', object_id: m.people.id },
+      { kind: 'bookings', item_ids: [] },
+      { kind: 'bookings', item_ids: [], mutation_id: mutationId },
+    ];
   },
   'bookings.blocks.create': async (m, mutationId) => {
     await m.client.bookings.blocks.create({
@@ -3543,6 +3584,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,
+  'bookings.setMeetingLink': 3,
   // The page, the booking and the deal, then the link.
   'bookings.link': 4,
   'bookings.move': 3,

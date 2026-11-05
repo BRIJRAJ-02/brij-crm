@@ -20,7 +20,16 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { freshBusiness, freshProfile, readBoot } from './boot.ts';
 import { BookingPage, LoadingBooking } from './BookingPage.tsx';
-import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
+import {
+  closeOnEscape,
+  embedOf,
+  naturalHeight,
+  postBooked,
+  reportHeight,
+  watchTree,
+  type PostToHost,
+} from '../frame.ts';
+import { pageLocale } from './locale.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
 import { keepRedirect, oneOffTokenOf, safeRedirect } from './one-off.ts';
 import { strings, tabTitle } from './strings.ts';
@@ -46,7 +55,8 @@ const handled = path === null ? handleAddressOf(address.pathname) : undefined;
 const isManage = path?.[2] !== undefined;
 // The guest page right after booking (`?welcome=1`), whose Timefix link is tagged as the confirmation.
 const isWelcome = address.searchParams.get('welcome') === '1';
-const locale = navigator.languages[0] ?? 'en-US';
+// One language per page (critic B-13): the copy is English, so dates and times are English with the visitor's region.
+const locale = pageLocale(navigator.languages[0]);
 const now = () => Date.now();
 // A form's hand off leaves the address at once, kept in the tab's session storage (prefill.ts).
 const storage = ((): HandoffStorage | undefined => {
@@ -92,11 +102,12 @@ const embed = embedOf({
   // Firefox has no ancestor list.
   ancestorOrigins: 'ancestorOrigins' in globalThis.location ? [...globalThis.location.ancestorOrigins] : undefined,
 });
+/** Posts to the page that framed this one, at the origin `embedOf` settled on, never `*`. */
+const post: PostToHost = (message, targetOrigin) => {
+  globalThis.parent.postMessage(message, targetOrigin);
+};
 if (embed !== undefined) {
   const page = root;
-  const post: PostToHost = (message, targetOrigin) => {
-    globalThis.parent.postMessage(message, targetOrigin);
-  };
   closeOnEscape(embed, post, globalThis.window);
   reportHeight(
     embed,
@@ -178,6 +189,21 @@ function renderBooking(publicKey: string) {
                 }
               : {})}
             {...(oneOffToken === undefined ? {} : { oneOffToken })}
+            // Booked, the receipt drawn in the card (critic C1): the address becomes the guest page's, so a reload
+            // or a bookmark keeps it. Inside a site's embed the frame keeps its own address, tells the site it booked
+            // (its origin only, no one's details: critic B-01), and the receipt's one action opens the guest page in
+            // a tab of its own.
+            onBookedHere={(token) => {
+              forgetHandoff(publicKey, storage);
+              if (embed !== undefined) {
+                postBooked(embed, post);
+                return;
+              }
+              globalThis.history.replaceState(globalThis.history.state, '', manageAddress(publicKey, token));
+            }}
+            {...(embed === undefined
+              ? {}
+              : { manageHrefOf: (token: string) => manageAddress(publicKey, token, { isWelcome: false }) })}
             onBooked={(token, redirectUrl) => {
               forgetHandoff(publicKey, storage);
               // A redirect page (spec 0062, AC-6201). Inside a site's embed the site's own window goes there at once:
@@ -189,7 +215,7 @@ function renderBooking(publicKey: string) {
                 return;
               }
               if (next !== undefined) keepRedirect(storage, token, next);
-              const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
+              const manage = manageAddress(publicKey, token);
               // The guest page arrives with its own rise, so no page crossfade first: it would land on its loading card
               // and then rise again.
               globalThis.addEventListener('pageswap', skipPageCrossfade, { once: true });
@@ -239,6 +265,12 @@ async function tryBusiness(handle: string, slug?: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** The guest page's address for a booking: `/b/<key>/manage?t=<token>`, with `welcome=1` right after booking. */
+function manageAddress(publicKey: string, token: string, options: { readonly isWelcome?: boolean } = {}): string {
+  const query = new URLSearchParams({ t: token, ...(options.isWelcome === false ? {} : { welcome: '1' }) });
+  return `/b/${encodeURIComponent(publicKey)}/manage?${query.toString()}`;
 }
 
 /** A whole page message, in the provider, with the tab saying the same (QA Q76). */

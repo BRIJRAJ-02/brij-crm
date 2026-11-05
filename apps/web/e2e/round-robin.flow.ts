@@ -80,10 +80,12 @@ test.describe('round robin', () => {
     await page.getByRole('button', { name: 'New group' }).first().click();
     const group = page.getByRole('dialog', { name: 'New group' });
     await group.getByLabel('Name').fill('Sales team');
+    // People first (B-04): one list that stays open while three are checked.
+    await group.getByRole('button', { name: /People/ }).click();
     for (let added = 0; added < 3; added += 1) {
-      await group.getByRole('button', { name: /Add a member/ }).click();
-      await page.getByRole('option').first().click();
+      await page.getByRole('option').nth(added).click();
     }
+    await page.keyboard.press('Escape');
     await group.getByRole('button', { name: 'Create group' }).click();
     await expect(page.getByText('Made Sales team.')).toBeVisible();
     await expect(group).toHaveCount(0);
@@ -91,13 +93,16 @@ test.describe('round robin', () => {
     // The page, on the only group without picking it.
     await page.goto(`/w/${slug}/captures/links`);
     await page.getByRole('button', { name: /^New booking page/ }).click();
-    const create = page.getByRole('dialog', { name: 'Add a booking page' });
+    const create = page.getByRole('dialog', { name: 'New booking page' });
     await create.getByLabel('Title').fill('Sales intro');
-    await create.getByText('Round robin group', { exact: true }).click();
+    await create.getByText('Round robin', { exact: true }).click();
     await create.getByRole('button', { name: 'Create page' }).click();
-    await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
-    const address = await page.getByRole('link', { name: 'View page' }).getAttribute('href');
+    // A new page is a draft (the bookings area, 4 November 2026): Publish puts it live and ends on its link.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    const live = page.getByRole('dialog', { name: /is live$/ });
+    const address = await live.getByRole('link', { name: 'Open' }).getAttribute('href');
+    await live.getByRole('button', { name: 'Done' }).click();
     expect(address).not.toBeNull();
 
     // Three visitors, three hosts: the fewest meetings goes first, so nobody gets two.
@@ -147,8 +152,9 @@ test.describe('round robin', () => {
       .getByRole('region', { name: /^Upcoming meetings/ })
       .getByRole('listitem')
       .filter({ hasText: `Visitor ${String(moved)}` });
-    await expect(row).toContainText(`${was} and`);
-    await row.getByRole('button', { name: 'Sales intro' }).click();
+    // A colleague's booking names its host beside the page ("Sales intro · Sam").
+    await expect(row).toContainText(`· ${was}`);
+    await row.getByRole('button', { name: `Visitor ${String(moved)}` }).click();
     await page.getByRole('button', { name: 'More for this booking' }).click();
     await page.getByRole('menuitem', { name: 'Reassign' }).click();
     await page
@@ -156,6 +162,6 @@ test.describe('round robin', () => {
       .getByRole('button', { name: 'Reassign', exact: true })
       .click();
     await expect(page.getByText('Reassigned. Guest and hosts are emailed.')).toBeVisible();
-    await expect(row).not.toContainText(`${was} and`, { timeout: 10_000 });
+    await expect(row).not.toContainText(`· ${was}`, { timeout: 10_000 });
   });
 });

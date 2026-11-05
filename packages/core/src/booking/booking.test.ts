@@ -4,13 +4,14 @@
 // the race: several visitors booking one slot at once get exactly one booking.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { PublicBookInput } from '@crm/contracts';
+import { BookingLocation, type PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterBookingByToken, enterBookingPage, enterPublicForm, type BookingEntry } from '../access/door.ts';
 import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { newId } from '../engine/ids.ts';
+import { listNotifications } from '../notifications/inbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -217,6 +218,8 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       location: { type: 'video' },
       hostTimeZone: 'UTC',
       windowDays: 60,
+      // A new page's 4 hours' notice (lane O), which the public page says (lane P).
+      minNoticeMinutes: 240,
       defaultView: 'month',
     });
     expect(JSON.stringify(facts)).not.toContain('@');
@@ -224,6 +227,91 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'BOOKING_CLOSED' });
     expect(await refusalOf(enterBookingPage({ db }, 'AAAAAAAAAAAAAAAA'))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(enterBookingPage({ db }, 'not a key'))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps a host’s own meeting link off the page and puts it on the booking (critic B-07, 5 Nov 2026)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/ada-intro';
+    const { page, entry } = await livePage(w, { location: { type: 'video', link } });
+    expect(page.location).toEqual({ type: 'video', link });
+    // The page a guest reads says video, never the link: that comes with a booking.
+    expect((await getPublicBookingPage(entry)).location).toEqual({ type: 'video' });
+    const booked = await bookPublicSlot(entry, deps(), bookInput());
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ video_url: string | null }>(sql`select video_url from bookings where id = ${booked.bookingId}`),
+    );
+    expect(stored.rows[0]?.video_url).toBe(link);
+    // The contract takes https only, with no name or password in it, and no longer than a booking's video_url holds.
+    expect(BookingLocation.safeParse({ type: 'video', link: 'http://meet.example.com/x' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'javascript:alert(1)' }).success).toBe(false);
+    expect(BookingLocation.safeParse({ type: 'video', link: 'https://ada:secret@meet.example.com/x' }).success).toBe(
+      false,
+    );
+    const long = `https://meet.example.com/${'a'.repeat(2_000)}`;
+    expect(BookingLocation.safeParse({ type: 'video', link: long }).success).toBe(false);
+    // Kept as one spelling.
+    expect(BookingLocation.parse({ type: 'video', link: 'HTTPS://Meet.Example.com/x' })).toEqual({
+      type: 'video',
+      link: 'https://meet.example.com/x',
+    });
+  });
+
+  it('keeps a host’s own meeting link from a member who may only see the page (critic B-07)', async () => {
+    const w = await workspace();
+    const link = 'https://meet.example.com/team-room';
+    const made = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Talk to us',
+        timeZone: 'UTC',
+        scope: 'workspace',
+        settings: { durations: [30], location: { type: 'video', link } },
+      },
+      NOW,
+    );
+    expect(made.location).toEqual({ type: 'video', link });
+    const bea = await w.addMember('Bea', 'member');
+    const seen = (await listBookingPages(bea, NOW)).find((page) => page.id === made.id);
+    expect(seen?.canChange).toBe(false);
+    expect(seen?.location).toEqual({ type: 'video' });
+  });
+
+  it('answers a guest on a draft as if there were no page, and pausing a draft keeps it a draft (4 Nov 2026)', async () => {
+    const w = await workspace();
+    const page = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'Secret plans', timeZone: 'UTC', isDraft: true },
+      NOW,
+    );
+    const entry = await enterBookingPage({ db }, page.publicKey);
+    // Nothing of it reaches a guest, not even that it exists: its facts and its times both answer NOT_FOUND.
+    expect(await refusalOf(getPublicBookingPage(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(mondaySlots(entry))).toMatchObject({ code: 'NOT_FOUND' });
+    // Paused from the list, it is still a draft; only going live publishes it.
+    const paused = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'paused' } });
+    expect(paused.pausedReason).toBe('draft');
+    const live = await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } });
+    expect(live.pausedReason).toBeUndefined();
+    expect((await getPublicBookingPage(entry)).title).toBe('Secret plans');
+  });
+
+  it('says the notice its times keep, as the slots read keeps it, and nothing when there is none', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w);
+    // A new page keeps 4 hours' notice (bookings lane O), and the public page says so before any edit.
+    expect(await getPublicBookingPage(entry)).toMatchObject({ minNoticeMinutes: 240 });
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { minNoticeMinutes: 240 } });
+    const facts = await getPublicBookingPage(entry);
+    expect(facts).toMatchObject({ minNoticeMinutes: 240, windowDays: 60 });
+    // A page that confirms each booking first keeps at least an hour, as its times do (spec 0062, AC-6203).
+    await updateBookingPage(w.owner, {
+      pageId: page.id,
+      settings: { minNoticeMinutes: 0, requiresConfirmation: true },
+    });
+    expect((await getPublicBookingPage(entry)).minNoticeMinutes).toBe(60);
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { requiresConfirmation: false } });
+    expect(await getPublicBookingPage(entry)).not.toHaveProperty('minNoticeMinutes');
   });
 
   it('opens in the view its host chose, and in Month until one is chosen (owner, 25 Oct 2026)', async () => {
@@ -417,6 +505,51 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     );
     expect(stored.rows[0]?.meeting_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('tells its host in their Inbox, once, naming the booking and the guest, already emailed (B-12)', async () => {
+    const w = await workspace();
+    const { entry } = await livePage(w);
+    const input = bookInput();
+    const booked = await bookPublicSlot(entry, deps(), input);
+    // A retry of the same attempt answers the first booking and tells nobody again.
+    await bookPublicSlot(entry, deps(), input);
+    const inbox = await listNotifications(w.owner, { status: 'inbox', kind: 'booking' });
+    expect(inbox.items).toEqual([
+      expect.objectContaining({
+        kind: 'booking',
+        actor: { type: 'booking', id: booked.bookingId },
+        bookingId: booked.bookingId,
+        booking: { pageTitle: 'Intro call', guestName: 'Grace Hopper', startsAt: MONDAY_9, status: 'confirmed' },
+        record: expect.objectContaining({ name: 'Grace Hopper' }) as unknown,
+      }),
+    ]);
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ emailed: boolean }>(sql`select emailed_at is not null as emailed from notifications`),
+    );
+    expect(stored.rows).toEqual([{ emailed: true }]);
+  });
+
+  it('stops showing a booking’s notice once its reader lost the booking or booking.manage (hidden means absent)', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('Bea', 'member');
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea call', timeZone: 'UTC', settings: {} }, NOW);
+    const booked = await bookPublicSlot(await enterBookingPage({ db }, page.publicKey), deps(), bookInput());
+    const beaInbox = () => listNotifications(bea, { status: 'inbox', kind: 'booking' });
+    expect((await beaInbox()).items.map((item) => item.bookingId)).toEqual([booked.bookingId]);
+    // Demoted to a guest (no booking.manage): the notice is absent, not shown as locked.
+    expect(
+      (await listNotifications(rescope(bea, { role: 'guest' }), { status: 'inbox', kind: 'booking' })).items,
+    ).toEqual([]);
+    // The owner's booking, its notice moved to a member with no reach to it (a reassign away): absent too.
+    const owners = await livePage(w);
+    const theirs = await bookPublicSlot(owners.entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }));
+    const cal = await w.addMember('Cal', 'member');
+    const calId = cal.actor.id ?? '';
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update notifications set member_id = ${calId} where booking_id = ${theirs.bookingId}`),
+    );
+    expect((await listNotifications(cal, { status: 'inbox', kind: 'booking' })).items).toEqual([]);
   });
 
   it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {

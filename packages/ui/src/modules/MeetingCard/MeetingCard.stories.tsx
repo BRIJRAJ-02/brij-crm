@@ -335,3 +335,70 @@ export const ClosedTime: Story = {
     await expect(canvas.getByRole('button', { name: 'Remove every Wednesday' })).toBeInTheDocument();
   },
 };
+
+/**
+ * In Bookings › List's side panel (`variant="panel"`, after Calendly's booking panel): the title at the panel's edge,
+ * Reschedule · Cancel · More first, then the Guest, Location and History sections, each headed.
+ */
+export const Panel: Story = {
+  parameters: { crm: { preview: true } },
+  render: (args) => (
+    <Stage>
+      <MeetingCard
+        {...args}
+        variant="panel"
+        headingLevel={3}
+        status={{ label: 'Confirmed', hue: 'green' }}
+        actions={
+          <>
+            <Button size="lg" icon="calendar-clock">
+              Reschedule
+            </Button>
+            <Button size="lg" variant="danger" label="Cancel booking">
+              Cancel
+            </Button>
+            <Button size="lg" variant="ghost" icon="ellipsis" label="More for this booking" />
+          </>
+        }
+        sections={[
+          {
+            id: 'guest',
+            label: 'Guest',
+            people: [{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true }],
+            rows: [{ id: 'their-time', icon: 'globe', label: 'Their time', value: 'Their time: 03:30 London' }],
+          },
+          {
+            id: 'location',
+            label: 'Location',
+            rows: [
+              {
+                ...where,
+                value: 'Video call',
+                detail: 'No link yet.',
+                action: (
+                  <Button variant="ghost" icon="plus">
+                    Add meeting link
+                  </Button>
+                ),
+              },
+            ],
+          },
+          {
+            id: 'history',
+            label: 'History',
+            rows: [{ id: 'booked', icon: 'calendar-check', label: 'Booked', value: 'Booked 2 Nov, 14:03' }],
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Each section is headed by its label, and the actions come before them.
+    for (const name of ['Guest', 'Location', 'History']) {
+      await expect(canvas.getByRole('heading', { name })).toBeInTheDocument();
+    }
+    const reschedule = canvas.getByRole('button', { name: 'Reschedule' });
+    const guest = canvas.getByRole('heading', { name: 'Guest' });
+    await expect(reschedule.compareDocumentPosition(guest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  },
+};

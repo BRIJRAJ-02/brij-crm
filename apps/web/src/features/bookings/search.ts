@@ -20,6 +20,8 @@ export interface RawBookingsSearch {
   readonly src?: 'bookings' | 'calendar';
   readonly link?: string;
   readonly cal?: string;
+  /** List: the booking whose card shows (an email's and the Inbox's link to one booking, B-20). */
+  readonly open?: string;
 }
 
 /** What the screens read: the week and day, the tab, the source and the filters. */
@@ -60,6 +62,7 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
     ...(search.src === 'bookings' || search.src === 'calendar' ? { src: search.src } : {}),
     ...(typeof search.link === 'string' && /^[0-9a-f-]{36}$/i.test(search.link) ? { link: search.link } : {}),
     ...(typeof search.cal === 'string' && search.cal.length <= 4_000 ? { cal: search.cal } : {}),
+    ...(typeof search.open === 'string' && /^[0-9a-f-]{36}$/i.test(search.open) ? { open: search.open } : {}),
   };
 }
 

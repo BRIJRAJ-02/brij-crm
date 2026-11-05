@@ -102,15 +102,16 @@ test.describe('a form that sends its visitor on to book', () => {
     await expect(visitor.getByRole('heading', { name: 'Thanks, we got it.' })).toBeVisible();
     await expect(visitor.getByRole('button', { name: 'Book a time' })).toBeVisible();
 
-    // On to the booking page (by its key, or by its owner's handle) with the signed hand off and nothing else in the
-    // address; then the page takes the hand off out of the address.
-    const handedOff = () => landed.find((url) => new URL(url).searchParams.get('p')?.startsWith('fb1.') === true);
+    // On to the booking page (by its key, or by its owner's handle) with the signed hand off in the fragment, which no
+    // request log keeps, and nothing in the query; then the page takes the hand off out of the address.
+    const tokenIn = (url: string) => new URLSearchParams(new URL(url).hash.slice(1)).get('p');
+    const handedOff = () => landed.find((url) => tokenIn(url)?.startsWith('fb1.') === true);
     await expect.poll(handedOff, { timeout: 30_000 }).toBeDefined();
     const arrived = new URL(handedOff() ?? '');
     expect(arrived.pathname).toMatch(new RegExp(`^/(b/${booking.publicKey}|[a-z0-9-]+/[a-z0-9-]+)$`));
-    expect([...arrived.searchParams.keys()]).toEqual(['p']);
-    const handoff = arrived.searchParams.get('p') ?? '';
-    await expect.poll(() => new URL(visitor.url()).searchParams.has('p')).toBe(false);
+    expect(arrived.search).toBe('');
+    const handoff = tokenIn(arrived.href) ?? '';
+    await expect.poll(() => tokenIn(visitor.url())).toBeNull();
 
     // Pick the first open time, then the details start filled in.
     await visitor
@@ -125,11 +126,12 @@ test.describe('a form that sends its visitor on to book', () => {
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
     await expect(visitor).toHaveURL(/\/manage\?/);
 
-    // A forged token names nobody: the API reads only what it signed for this page.
+    // The page's reads send the hand off in a header: the real one names the visitor, a forged one nobody, since the
+    // API reads only what it signed for this page.
+    const prefill = (token: string) =>
+      visitor.request.get(`/api/public/booking/${booking.publicKey}/prefill`, { headers: { 'x-crm-handoff': token } });
+    expect(await (await prefill(handoff)).json()).toMatchObject({ name: 'Ada Lovelace' });
     const forged = `${handoff.slice(0, -4)}AAAA`;
-    const answer = await visitor.request.get(
-      `/api/public/booking/${booking.publicKey}/prefill?p=${encodeURIComponent(forged)}`,
-    );
-    expect(await answer.json()).toEqual({});
+    expect(await (await prefill(forged)).json()).toEqual({});
   });
 });

@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createApp } from '../app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
-import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../testing.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices, withBookingTicket } from '../testing.ts';
 import { MAILPIT_URL, newIp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace } from '../../test/workspace.ts';
 import { createMemoryLimiter } from './limits.ts';
@@ -82,7 +82,7 @@ function visit(path: string, body?: unknown, cookie?: string) {
       origin: APP_URL,
       ...(cookie === undefined ? {} : { cookie }),
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: JSON.stringify(withBookingTicket(path, body)) }),
   });
 }
 
