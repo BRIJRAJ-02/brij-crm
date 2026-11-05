@@ -3,7 +3,7 @@
 // violations in either theme.
 import '@crm/ui/styles.css';
 import { BRAND_QUICK_PICKS } from '@crm/data';
-import { PageColumn } from '@crm/ui';
+import { BookingPagePicture, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
@@ -29,6 +29,14 @@ async function show(isLive = true) {
           title="Intro call"
           isLive={isLive}
           quickPicks={BRAND_QUICK_PICKS}
+          picture={
+            <BookingPagePicture
+              title="Intro call"
+              lengths="30 min"
+              openDays={[true, true, true, true, true, false, false]}
+              hue="blue"
+            />
+          }
         />
       </PageColumn>
     ),

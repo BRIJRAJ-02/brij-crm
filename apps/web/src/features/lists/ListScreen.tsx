@@ -51,7 +51,7 @@ import {
   type GridSelection,
 } from '@crm/ui/grid';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { refsOf } from '../records/details.ts';
 import { useMemberPicker } from '../records/members.ts';
 import { copyName } from '../views/edits.ts';
@@ -658,12 +658,12 @@ function ListTable(
         }}
         {...(list.canWrite ? { addRow: { label: strings.add(object.singularName), onAdd } } : {})}
         emptyState={
-          // Empty and unfiltered, a list opens on its first step (T11): add the records it tracks, with Add <singular>
-          // opening the record picker, and Import beside it.
+          // Empty and unfiltered, a list opens on its first step (T11) for whoever may add to it: what it is for, with
+          // Add <singular> opening the record picker and Import beside it. A reader is told only that it is empty.
           <EmptyState
             icon={list.icon}
-            title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.firstStep(object.pluralName)}
-            {...(hasFilter ? {} : { children: strings.firstStepText(object.pluralName) })}
+            title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.empty(object.pluralName)}
+            {...(hasFilter || !list.canWrite ? {} : { children: strings.firstStep(object.pluralName) })}
             {...(hasFilter
               ? {
                   actions: (
@@ -860,8 +860,8 @@ function ListTable(
 }
 
 /**
- * An empty board's first step (T11): what to do, and what the list is for, as a banner under the view's bars, with
- * Add <singular> opening the record picker.
+ * An empty board's first step (T11): what the list is for, in one sentence with Add <singular> (the record picker),
+ * as a banner under the view's bars, as a view's other banners are.
  */
 function FirstStepBanner({
   plural,
@@ -875,14 +875,13 @@ function FirstStepBanner({
   return (
     <Callout
       placement="banner"
-      title={strings.firstStep(plural)}
       actions={
         <Button icon="plus" onPress={onAdd}>
           {addLabel}
         </Button>
       }
     >
-      {strings.firstStepText(plural)}
+      {strings.firstStep(plural)}
     </Callout>
   );
 }
@@ -957,15 +956,17 @@ function ListBoardColumns(
   }>({ on: state.columns, to: new Map() });
   const moved = moves.on === state.columns ? moves.to : new Map<string, string>();
   // No card anywhere and no filter narrowing it: the screen shows the first step over the board (T11). Said to the
-  // screen, which holds the bars; leaving the board (the Table, another grouping) takes the step away with it.
+  // screen, which holds the bars; leaving the board (the Table, another grouping) takes the step away with it. Said
+  // before the browser paints (a layout effect), so the step and the board's first ready frame arrive together and
+  // the columns never drop under it a frame later.
   const isEmpty =
     state.status === 'ready' &&
     (query.filter?.conditions.length ?? 0) === 0 &&
     state.columns.every((column) => column.count === 0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     onEmptyChange(isEmpty);
   }, [isEmpty, onEmptyChange]);
-  useEffect(
+  useLayoutEffect(
     () => () => {
       onEmptyChange(false);
     },

@@ -22,10 +22,10 @@ import {
   Switch,
   Table,
   TileGrid,
-  type ChoiceTile,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { EMBED_TILES } from './embed-tiles.ts';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
@@ -40,18 +40,6 @@ export interface ShareTabProps {
   readonly isReadOnly: boolean;
   readonly onFormChange: (view: FormView) => void;
 }
-
-/**
- * The three ways a site shows the form, as tiles picked by sight (spec 0058, AC-11), in `EMBED_MODES` order: each a
- * small picture and a name, what the visitor sees in its tooltip. The Install tab and the first publish's Ready panel
- * draw the same tiles. The pictures are marks the icon registry already holds (each new mark costs every page's first
- * load).
- */
-export const EMBED_TILES: readonly (ChoiceTile & { readonly id: EmbedMode })[] = [
-  { id: 'inline', name: strings.embedInline, icon: 'file-text', description: strings.embedInlineHint },
-  { id: 'popup', name: strings.embedPopup, icon: 'layers', description: strings.embedPopupHint },
-  { id: 'floating', name: strings.embedFloating, icon: 'message-square', description: strings.embedFloatingHint },
-];
 
 /**
  * The corner button's quick colours: the brand picks less blue, which the first swatch (Accent, the product's own
