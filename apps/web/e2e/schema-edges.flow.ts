@@ -19,7 +19,8 @@ test.describe('the schema’s edges', () => {
     await newWorkspace(page, `owner-${tag}@${domain}`, slug);
     await page.goto(`/w/${slug}/settings/members`);
     // Company email sits under the list, in Other ways to join (owner ask T12: no tab of its own).
-    await page.getByRole('switch', { name: `Let @${domain} ask to join` }).click();
+    // The label a person presses: the input is hidden inside it, so a click on the input itself never lands.
+    await page.getByRole('switch', { name: `Let @${domain} ask to join` }).locator('xpath=ancestor::label').click();
     await expect(page.getByText(`People at @${domain} can now ask to join.`)).toBeVisible();
 
     // Someone at the same domain asks, in a browser of their own.
@@ -66,7 +67,7 @@ test.describe('the schema’s edges', () => {
     await attributes.getByRole('row').filter({ hasText: 'Priority' }).click();
     const edit = page.getByRole('dialog', { name: 'Edit attribute' });
     for (const level of ['Low', 'Medium', 'High']) {
-      await expect(edit.getByRole('textbox', { name: new RegExp(level) }).first()).toBeVisible();
+      await expect(edit.getByRole('row', { name: level }).getByRole('textbox')).toHaveValue(level);
     }
   });
 
@@ -98,7 +99,7 @@ test.describe('the schema’s edges', () => {
     await page.getByRole('button', { name: 'New attribute' }).click();
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Suppliers');
-    await dialog.getByRole('button', { name: /^Type/ }).click();
+    await dialog.getByRole('button', { name: / Type$/ }).click();
     await page.getByRole('option', { name: 'Relationship' }).click();
 
     // Back returns to the attribute form with the name kept.
@@ -107,17 +108,19 @@ test.describe('the schema’s edges', () => {
     await expect(page.getByRole('dialog', { name: 'New attribute' }).getByLabel('Name', { exact: true })).toHaveValue(
       'Suppliers',
     );
-    await page.getByRole('dialog', { name: 'New attribute' }).getByRole('button', { name: /^Type/ }).click();
+    await page.getByRole('dialog', { name: 'New attribute' }).getByRole('button', { name: / Type$/ }).click();
     await page.getByRole('option', { name: 'Relationship' }).click();
 
     // The related object doesn't exist yet: New object… makes it and comes back with it chosen.
-    await step.getByRole('button', { name: /^Related object/ }).click();
+    // The Select, not the help beside its label, whose name ends the same way.
+    const related = step.getByRole('button', { name: /Related object$/ }).and(page.locator('[aria-haspopup="listbox"]'));
+    await related.click();
     await page.getByRole('option', { name: 'New object…' }).click();
     const create = page.getByRole('dialog', { name: 'New object' });
     await create.getByLabel('Name', { exact: true }).fill('Vendor');
     await create.getByRole('button', { name: 'Create object' }).click();
     await expect(create).toBeHidden();
-    await expect(step.getByRole('button', { name: /^Related object/ })).toContainText('Vendors');
+    await expect(related).toContainText('Vendors');
     await step.getByRole('button', { name: 'Create relationship' }).click();
     await expect(step).toBeHidden();
   });
@@ -153,7 +156,7 @@ test.describe('the schema’s edges', () => {
     await page.goto(`/w/${slug}/settings/objects/people/attributes`);
     await page.getByRole('button', { name: 'New attribute' }).click();
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
-    const type = dialog.getByRole('button', { name: /^Type/ });
+    const type = dialog.getByRole('button', { name: / Type$/ });
     await dialog.getByLabel('Name', { exact: true }).fill('Work email');
     await expect(type).toContainText('Email');
     await dialog.getByLabel('Name', { exact: true }).fill('Due date');
