@@ -69,7 +69,12 @@ const MENU = [
   {
     name: 'Small plates',
     items: [
-      { name: 'Burnt garlic edamame', description: 'Chilli oil, sea salt.', price: '₹320' },
+      {
+        name: 'Burnt garlic edamame',
+        description: 'Chilli oil, sea salt.',
+        price: '₹320',
+        photo: photo('#7a9a52', '#3f5a2a', undefined, 400, 400).src,
+      },
       { name: 'Ghee roast mushrooms', description: 'Mangalore spice, curry leaves.', price: '₹380' },
       { name: 'Crispy okra fries', price: '₹290' },
     ],
@@ -374,6 +379,11 @@ export const Menu: Story = {
       <BusinessMenu sections={MENU} />
     </Stage>
   ),
+  play: async ({ canvas, canvasElement }) => {
+    // The guest menu's rows: the name, the description, then the price; a dish's photo at the row's end.
+    await expect(canvas.getByText('Burnt garlic edamame')).toBeInTheDocument();
+    await expect(canvasElement.querySelectorAll('img')).toHaveLength(1);
+  },
 };
 
 /** The page's one action: Reserve a table once open; until then Call to book, or Directions with no phone. */

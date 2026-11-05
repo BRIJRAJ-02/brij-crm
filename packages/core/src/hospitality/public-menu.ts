@@ -8,6 +8,7 @@ import {
   BRAND_HEX_PATTERN,
   brandVariables,
   isMenuKey,
+  menuPhotoPath,
   MENU_LOOK_PROPERTIES,
   MENU_PHOTO_WIDTHS,
   MenuSnapshot,
@@ -281,6 +282,10 @@ export async function businessMenuOf(
           name: item.name,
           ...(item.description === undefined ? {} : { description: item.description }),
           ...(price === undefined ? {} : { price }),
+          // Its list photo on the guest menu's own route (the live snapshot's version), as the guest menu's rows show it.
+          ...(item.photo === undefined || !isMenuKey(place.menuKey)
+            ? {}
+            : { photo: menuPhotoPath(place.menuKey, item.photo.id, 'small', item.photo.version) }),
         },
       ];
     }),

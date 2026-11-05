@@ -143,6 +143,8 @@ export interface BusinessPageMenuSection {
     readonly description?: string | undefined;
     /** Formatted in the place's locale and the workspace's currency ("₹450"), or absent. */
     readonly price?: string | undefined;
+    /** The dish's list photo on the guest menu's own route (`/api/public/menu/<key>/photos/<id>/small?v=`), if any. */
+    readonly photo?: string | undefined;
   }[];
 }
 
@@ -198,6 +200,11 @@ export interface PublicBusinessPage {
   readonly reservePath?: string | undefined;
   /** The workspace's brand kit versions: its accent stylesheet's and its logo's (`/brand.css?v=`, `/logo?v=`). */
   readonly brand?: { readonly version?: string | undefined; readonly logo?: string | undefined } | undefined;
+  /**
+   * The guest look's version (5 November 2026): the guest menu's look stylesheet with the brand's accent in it, at
+   * `/api/public/business/<handle>/look/menu.css?v=<look>`, which the page wears in place of the brand's own.
+   */
+  readonly look?: string | undefined;
   /** Whether search engines may list this address (AC-6644: a place can be hidden). */
   readonly indexable: boolean;
   /** When the page was last published. */

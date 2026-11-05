@@ -67,7 +67,7 @@ export function Link({ href, children, onPress, opensInNewTab = false, icon, wei
     return (
       <AriaLink {...look} href={safe} target="_blank" rel="noopener noreferrer">
         {words}
-        <VisuallyHidden> {strings.newTab}</VisuallyHidden>
+        <VisuallyHidden isInline> {strings.newTab}</VisuallyHidden>
       </AriaLink>
     );
   }

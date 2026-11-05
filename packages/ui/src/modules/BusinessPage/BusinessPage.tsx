@@ -273,11 +273,20 @@ const prefersReducedMotion = () =>
   typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** "Open now · Closes at 23:00", with its dot, on the place's own clock. */
-function OpenLine({ place, locale }: { readonly place: BusinessPagePlace; readonly locale: string }) {
+function OpenLine({
+  place,
+  locale,
+  where,
+}: {
+  readonly place: BusinessPagePlace;
+  readonly locale: string;
+  /** `head`: the header's, which a wide page with a panel leaves to the panel; `panel`: the panel's own. */
+  readonly where?: 'head' | 'panel';
+}) {
   const now = useNow();
   const status = openStatus(place.hours, now, place.timeZone, locale);
   return (
-    <span className={styles.open}>
+    <span className={styles.open} data-where={where}>
       <StatusDot hue={status.isOpen ? 'green' : 'gray'}>{status.state}</StatusDot>
       {status.detail !== undefined && <span className={styles.detail}>{status.detail}</span>}
     </span>
@@ -335,7 +344,13 @@ export function BusinessPage(props: BusinessPageProps) {
   const phone = action?.kind === 'reserve' ? place.phone : undefined;
   return (
     <div className={styles.root}>
-      <div className={styles.frame}>
+      <div
+        className={styles.frame}
+        // No gallery: the header starts a step under the top on a phone, never flush against it.
+        data-bare={photos.length === 0 || undefined}
+        // A panel to carry whether it is open on a wide page, so the header leaves it out there.
+        data-panel={action === undefined ? undefined : ''}
+      >
         <BusinessGallery photos={photos} name={name} />
         <header className={styles.head}>
           {/* The logo, or the name's initials on the brand's colour: the name beside it says whose it is. */}
@@ -354,7 +369,7 @@ export function BusinessPage(props: BusinessPageProps) {
           </div>
           <p className={styles.facts}>
             <span>{kind}</span>
-            <OpenLine place={place} locale={locale} />
+            <OpenLine place={place} locale={locale} where="head" />
           </p>
           {description !== undefined && <p className={styles.description}>{description}</p>}
           {address !== '' && (
@@ -449,6 +464,8 @@ export function BusinessPage(props: BusinessPageProps) {
           {action !== undefined && (
             <aside className={styles.panel} aria-label={name}>
               <div className={styles.panelCard}>
+                {/* Whether it is open, and when it opens or closes (checklabs' rail card): the header leaves it here. */}
+                <OpenLine place={place} locale={locale} where="panel" />
                 <BusinessReserve action={action} />
                 {phone !== undefined && phone !== '' && (
                   <p className={styles.panelLink}>

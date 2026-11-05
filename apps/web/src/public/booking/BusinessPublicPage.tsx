@@ -80,16 +80,21 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
     if (path !== globalThis.location.pathname) onMoved(path);
     document.title = tabTitle(page.name);
   }, [page, onMoved]);
-  // The workspace's accent, from its brand kit (spec 0060), through our own api.
+  // The guest look (the guest menu's, with the workspace's accent in it), through our own api; an answer from before
+  // the look carries only the brand's accent (spec 0060), which the page wears as before.
   const brandVersion = page?.brand?.version;
+  const lookVersion = page?.look;
   useEffect(() => {
     if (page === undefined) return;
+    const base = `/api/public/business/${encodeURIComponent(page.handle)}/look`;
     const href =
-      brandVersion !== undefined && VERSION.test(brandVersion)
-        ? `/api/public/business/${encodeURIComponent(page.handle)}/look/brand.css?v=${brandVersion}`
-        : undefined;
+      lookVersion !== undefined && VERSION.test(lookVersion)
+        ? `${base}/menu.css?v=${lookVersion}`
+        : brandVersion !== undefined && VERSION.test(brandVersion)
+          ? `${base}/brand.css?v=${brandVersion}`
+          : undefined;
     void wearStylesheet(document, href);
-  }, [page, brandVersion]);
+  }, [page, brandVersion, lookVersion]);
   if (loaded.state === 'loading') return <BusinessPage {...EMPTY} isLoading />;
   if (loaded.state === 'gone') {
     return (

@@ -20,7 +20,7 @@ import {
   publicBusinessPhoto,
   type MenuSource,
 } from '@crm/core';
-import { brandStylesheet } from '@crm/core/public';
+import { brandStylesheet, menuLookStylesheet, menuLookVersion } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
@@ -90,6 +90,19 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     return stylesheetResponse(brandStylesheet(found.brand));
   });
 
+  // The guest look (5 November 2026): the guest menu's look stylesheet with the workspace's accent, so the business
+  // page, the menu and the reservation page read as one product; only the version the page's answer names.
+  app.get('/public/business/:handle/look/menu.css', async (c) => {
+    const handle = c.req.param('handle');
+    if (!HANDLE_PATTERN.test(handle)) return nothing();
+    const spent = limited(c, handle);
+    if (spent !== undefined) return spent;
+    const found = await publicBusinessBrand({ db: deps.db }, handle);
+    if (found === undefined || !asksFor(c, menuLookVersion(found.brand))) return nothing();
+    deps.edgeCache?.tag(businessCacheTags(found.workspaceId));
+    return stylesheetResponse(menuLookStylesheet(found.brand));
+  });
+
   app.get('/public/business/:handle/look/logo', async (c) => {
     const handle = c.req.param('handle');
     if (!HANDLE_PATTERN.test(handle)) return nothing();
@@ -128,13 +141,17 @@ export function mountPublicBusiness(app: Hono<{ Variables: Variables }>, deps: P
     try {
       const entry = await enterBusinessPage({ db: deps.db, menus: deps.menus ?? businessMenuOf }, handle, slug);
       deps.edgeCache?.tag(entry.page.tags);
-      return Response.json(entry.page, {
-        headers: {
-          'cache-control': BUSINESS_CACHE_CONTROL,
-          'x-content-type-options': 'nosniff',
-          ...(entry.page.indexable ? {} : { 'x-robots-tag': 'noindex' }),
+      // The guest look's version: the stylesheet route above answers only this one.
+      return Response.json(
+        { ...entry.page, look: menuLookVersion(entry.brand) },
+        {
+          headers: {
+            'cache-control': BUSINESS_CACHE_CONTROL,
+            'x-content-type-options': 'nosniff',
+            ...(entry.page.indexable ? {} : { 'x-robots-tag': 'noindex' }),
+          },
         },
-      });
+      );
     } catch (error) {
       if (toApiError(error).expected) return nothing();
       throw error;

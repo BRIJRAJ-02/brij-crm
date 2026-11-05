@@ -54,4 +54,6 @@ export const strings = {
   viewPlace: (name: string) => `View ${name}`,
   /** Loading. */
   loading: 'Loading the page',
+  /** A dish's photo beside its name: decoration, so an empty name. */
+  decorative: '',
 } as const;
