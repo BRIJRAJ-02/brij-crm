@@ -108,6 +108,19 @@ describe('Settings › Brand', () => {
     await expect.element(page.getByText('#0fc27b', { exact: false })).toBeVisible();
   });
 
+  // Critics A #11 and B #6 (5 November 2026): Logo, Colour, then Template, each its own section.
+  it('reads Logo, Colour, then Template, the four templates in one grid', async () => {
+    const { brand } = store({ canEdit: true, template: 'classic' as const });
+    await render(brand);
+    await expect.element(page.getByRole('region', { name: 'Template' })).toBeInTheDocument();
+    const sections = [...document.querySelectorAll('section[aria-labelledby]')].map(
+      (section) => document.getElementById(section.getAttribute('aria-labelledby') ?? '')?.textContent,
+    );
+    expect(sections).toEqual(['Logo', 'Colour', 'Template']);
+    await expect.element(page.getByRole('radio', { name: /^Classic/ })).toBeChecked();
+    expect(page.getByRole('radiogroup', { name: 'Template' }).getByRole('radio').all()).toHaveLength(4);
+  });
+
   it.each(THEMES)('is clean under axe in %s', async (theme) => {
     applyTheme(theme);
     const { brand } = store({ canEdit: true, template: 'classic' as const, accent: '#e8590c' });

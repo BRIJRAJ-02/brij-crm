@@ -1,12 +1,11 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Calendars moved from Settings to Bookings (25 October 2026): connecting one is what makes every other Bookings
-// tab work, and it sat three levels into Settings. Links, emails and bookmarks still open it, with the same
-// search, so a provider's callback (`?calendar=`) lands where it always did and is read once.
+// The old Settings › Scheduling › Calendars address: Settings › Account › Calendars now (5 November 2026). Links,
+// emails and bookmarks still open it, with the same search, so a provider's `?calendar=` is read once where it lands.
 export const Route = createFileRoute('/w/$slug/settings/scheduling/calendars')({
   beforeLoad: ({ params, search }) => {
     throw redirect({
-      to: '/w/$slug/bookings/calendars',
+      to: '/w/$slug/settings/account/calendars',
       params: { slug: params.slug },
       search: search as Record<string, unknown>,
       replace: true,

@@ -8,7 +8,27 @@ export const strings = {
   leaveSettings: 'Leave settings',
   account: 'Account',
   workspace: 'Workspace',
+  people: 'People',
+  scheduling: 'Scheduling',
+  business: 'Business',
+  data: 'Data',
+  /** Settings › Business's first entry: the business profile and its places (spec 0065). */
+  places: 'Places',
   preferences: 'Preferences',
+  calendars: 'Calendars',
+  availability: 'Availability',
+  roundRobin: 'Round robin',
+  routing: 'Routing',
+  rolesAndAccess: 'Roles and access',
+  signInRules: 'Sign in rules',
+  invitations: 'Invitations',
+  /** The settings sidebar's search (the owner, 5 November 2026): filters the entries, Enter opens the first. */
+  findSetting: 'Find a setting',
+  noSettingFound: 'No setting matches',
+  /** Said to a screen reader as the matches change. */
+  settingsFound: (count: number) => (count === 1 ? '1 setting' : `${String(count)} settings`),
+  /** The phone's settings list (under 480px): the way back from a page to the list. */
+  allSettings: 'All settings',
   /** The settings navigation's entries. */
   objects: 'Objects',
   trash: 'Trash',

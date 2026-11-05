@@ -50,8 +50,12 @@ export const hospitalityHref = (slug: string, page: 'menus' | 'qr' | 'reservatio
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens. */
 export const settingsHref = (slug: string) => `/w/${slug}/settings/objects`;
-/** Where Settings opens (spec 0026, AC-686): Account › Preferences. The sidebar's Settings, the workspace menu's and ⌘, go here. */
-export const settingsHomeHref = (slug: string) => `/w/${slug}/settings/account/preferences`;
+/**
+ * Where Settings opens (5 November 2026): Settings' own address, which is the list of every setting on a phone and
+ * opens its first entry, Account › Profile, on a wider screen. The sidebar's Settings, the workspace menu's and ⌘, go
+ * here.
+ */
+export const settingsHomeHref = (slug: string) => `/w/${slug}/settings`;
 
 /** A workspace's home (spec 0031, AC-801): the workspace menu's switcher opens it. */
 export const workspaceHref = (slug: string) => `/w/${slug}`;

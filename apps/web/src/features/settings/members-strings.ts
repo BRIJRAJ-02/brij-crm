@@ -9,8 +9,7 @@ export const strings = {
   title: 'Members',
   membersTab: 'Members',
   /** Everyone on their way in: requests to join, pending invitations, and the link and company email (SW1). */
-  joiningTab: 'Joining',
-  tabsLabel: 'Members and people joining',
+  joiningTab: 'Invitations',
   askingSection: 'Asking to join',
   pendingSection: 'Pending invitations',
   otherWaysSection: 'Other ways to join',
@@ -41,9 +40,6 @@ export const strings = {
   searchNamePlaceholder: 'Name',
   noMatches: 'No members match',
   showMore: 'Show more members',
-  // A lone member: the one quiet nudge toward inviting.
-  aloneTitle: 'Just you so far',
-  aloneText: 'Invite your team to work together.',
   roleFor: (name: string) => `Role for ${name}`,
   rowActions: (name: string) => `Actions for ${name}`,
   remove: 'Remove from workspace',
@@ -132,7 +128,7 @@ export const strings = {
   inviteLinkCopied: 'Link copied.',
   inviteLinkOnCopied: 'Link on and copied.',
   inviteLinkCopyFailed: sharedStrings.couldntCopy,
-  inviteLinkSpent: 'The invite link has run out. Reset it in Members › Joining.',
+  inviteLinkSpent: 'The invite link has run out. Reset it in Members › Invitations.',
   linkDescription: 'Anyone with the link can join as a member.',
   linkField: 'Link',
   linkCopy: 'Copy link',
@@ -216,7 +212,7 @@ export const strings = {
   alreadyMembers: (list: string) => `Already members: ${list}.`,
   inviteMore: 'Invite more',
   done: 'Done',
-  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Joining tab.`,
+  unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Invitations tab.`,
   // The invite dialog opened outside Settings › Members (InviteTeamDialog), when its first read fails.
   inviteLoadFailed: 'Couldn’t load your team. Check your connection, then try again.',
   inviteTryAgain: 'Try again',

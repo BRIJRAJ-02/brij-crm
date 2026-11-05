@@ -592,7 +592,7 @@ export const strings = {
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
       : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
-  jobFailed: (label: string) => `${label} didn’t finish. See why in Settings › Background jobs.`,
+  jobFailed: (label: string) => `${label} didn’t finish. Try again.`,
   syncStarted: 'Syncing earlier submissions. You can keep working.',
   syncDone: (done: number, refused: number) =>
     refused === 0

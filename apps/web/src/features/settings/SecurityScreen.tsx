@@ -1,6 +1,6 @@
 // Brief
-// Purpose: Settings › Account › Sign in and devices (spec 0033): how this account signs in, the devices signed in to it, and what happened lately.
-// Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
+// Purpose: Settings › Account › Sign in and security (spec 0033): how this account signs in, the devices signed in to it, and its sign ins lately (the one place they show).
+// Main task: see each device (browser and system, rough place, last use; one row per browser, five first) and sign one out, or every other one, after a confirm.
 // Leaves out: signing this device out (the account menu does).
 import { type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
@@ -18,7 +18,14 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
-import { currentFirst, deviceIcon, deviceName, devicePlace } from './security-lines.ts';
+import {
+  DEVICES_SHOWN,
+  deviceGroups,
+  deviceIcon,
+  deviceName,
+  devicePlace,
+  type DeviceGroup,
+} from './security-lines.ts';
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { useStepUp } from './StepUp.tsx';
@@ -66,7 +73,7 @@ export function SecurityLoading() {
         <BusyRows rows={1} />
       </SettingsSection>
       <DevicesLoading />
-      <SettingsSection title={strings.activity.section} description={strings.activity.description}>
+      <SettingsSection title={strings.activity.section}>
         {/* Activity rows have no control, as its own loading rows don't. */}
         <BusyRows rows={3} hasControl={false} />
       </SettingsSection>
@@ -111,10 +118,10 @@ export interface SecurityScreenProps {
   readonly onActivityRetry?: () => void;
 }
 
-/** Which confirm is showing: one device's sign out, or every other device's. */
-type Confirm = { readonly kind: 'one'; readonly session: AccountSession } | { readonly kind: 'others' };
+/** Which confirm is showing: one device row's sign out (all its sessions), or every other device's. */
+type Confirm = { readonly kind: 'one'; readonly group: DeviceGroup } | { readonly kind: 'others' };
 
-/** Settings › Account › Sign in and devices: each section a Card of rows, each ending asked first in a danger Modal. */
+/** Settings › Account › Sign in and security: each section a Card of rows, each ending asked first in a danger Modal. */
 export function SecurityScreen({ data, toasts, activity, onActivityRetry = () => undefined }: SecurityScreenProps) {
   const view = data.account.sessions();
   const state = useAccountSessions(view);
@@ -123,6 +130,8 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   const [confirm, setConfirm] = useState<Confirm>({ kind: 'others' });
   const [isOpen, setIsOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  // This device and the four most recent others, then Show more (critic A #12).
+  const [isAllShown, setAllShown] = useState(false);
   // Signing a device out needs a recent check (AC-896): asked inline in the confirm when this session isn't fresh.
   const security = useAccountSecurity(data.account.security());
   // A complete code in the confirm runs it, as its button would.
@@ -156,17 +165,18 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     }, CONFIRM_EXIT_MS);
   };
 
-  const signOutOne = async (session: AccountSession) => {
+  const signOutOne = async (group: DeviceGroup) => {
     setIsBusy(true);
     const proven = await stepUp.prove();
     setIsBusy(false);
     if (!proven) return;
     setIsOpen(false);
     focusDevices();
-    // Gone from the table at once; a refusal puts it back with a toast from the data layer.
-    void data.account.signOut(session.id).then((landed) => {
-      if (!landed) return;
-      toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
+    // Every session the row stands for, gone from the list at once; a refusal puts its own back with a toast from the
+    // data layer.
+    void Promise.all(group.sessions.map((session) => data.account.signOut(session.id))).then((landed) => {
+      if (!landed.some(Boolean)) return;
+      toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(group.latest)) });
       onActivityRetry();
     });
   };
@@ -195,16 +205,23 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   const hasOthers =
     state.status === 'ready' && (state.items.some((each) => !each.current) || state.nextCursor !== undefined);
 
-  // One row per device, as GitHub's sessions list them: its kind's icon, its name, where and when, and Sign out.
-  const deviceRow = (session: AccountSession) => {
+  // One row per browser, system and place, as GitHub's sessions list them: its kind's icon, its name, where and when,
+  // how many sessions it stands for, and Sign out.
+  const deviceRow = (group: DeviceGroup) => {
+    const session = group.latest;
     const place = devicePlace(session);
+    const count = group.sessions.length;
     return (
       <SettingsRow
-        key={session.id}
+        key={group.id}
         leading={<Icon name={deviceIcon(session)} tone="muted" />}
         leadingAlign="center"
         title={deviceName(session)}
-        {...(session.current ? { meta: <Badge text={strings.thisDevice} isWhole /> } : {})}
+        {...(session.current
+          ? { meta: <Badge text={strings.thisDevice} isWhole /> }
+          : count > 1
+            ? { meta: <Badge text={strings.sessions(count)} isWhole /> }
+            : {})}
         description={<DeviceLine session={session} />}
       >
         {!session.current && (
@@ -213,7 +230,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
             variant="secondary"
             // Two devices can share a name: the place tells them apart for a screen reader too.
             label={strings.signOutLabel(place === undefined ? deviceName(session) : `${deviceName(session)}, ${place}`)}
-            onPress={() => ask({ kind: 'one', session })}
+            onPress={() => ask({ kind: 'one', group })}
           >
             {strings.signOut}
           </Button>
@@ -222,6 +239,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     );
   };
 
+  const groups = state.status === 'ready' ? deviceGroups(state.items) : [];
   let body;
   if (state.status === 'loading') {
     body = <DevicesLoading />;
@@ -252,14 +270,21 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
           : {})}
       >
         <Card>
-          {state.items.length === 0 ? (
+          {groups.length === 0 ? (
             <EmptyState layout="row" title={strings.noDevices} />
           ) : (
-            currentFirst(state.items).map(deviceRow)
+            (isAllShown ? groups : groups.slice(0, DEVICES_SHOWN)).map(deviceRow)
           )}
         </Card>
-        {state.nextCursor !== undefined && (
-          <Button isPending={state.loadingMore} onPress={() => view.loadMore()}>
+        {((!isAllShown && groups.length > DEVICES_SHOWN) || state.nextCursor !== undefined) && (
+          <Button
+            variant="ghost"
+            isPending={state.loadingMore}
+            onPress={() => {
+              if (!isAllShown) setAllShown(true);
+              else view.loadMore();
+            }}
+          >
             {strings.showMore}
           </Button>
         )}
@@ -267,13 +292,14 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     );
   }
 
-  const one = confirm.kind === 'one' ? confirm.session : undefined;
+  const oneGroup = confirm.kind === 'one' ? confirm.group : undefined;
+  const one = oneGroup?.latest;
   // A complete code in the confirm, or its button, runs the sign out the confirm asks about.
   useEffect(() => {
     commit.current = () => {
       if (isBusy) return;
-      if (one === undefined) void signOutOthers();
-      else void signOutOne(one);
+      if (oneGroup === undefined) void signOutOthers();
+      else void signOutOne(oneGroup);
     };
   });
   const onePlace = one === undefined ? undefined : devicePlace(one);

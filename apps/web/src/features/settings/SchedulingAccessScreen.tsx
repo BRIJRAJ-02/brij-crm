@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Settings › Account › Scheduling access (spec 0037, AC-1266): who can see or manage my scheduling, and whose
+// Purpose: Settings › Scheduling › Scheduling access (spec 0037, AC-1266): who can see or manage my scheduling, and whose
 // I can reach, timefix's "Sees all calendars" made personal (decision 9: a member picks their own assistant).
 // Main task: add a colleague with See or Manage, change their level, or take it back (asked first, AC-1445).
 // Leaves out: team leads' reach (custom roles), roles (Settings › Members), the reach of other people (the Members page's column).
@@ -48,7 +48,7 @@ const levelBadge = (level: SchedulingLevel) => (
   <Badge text={level === 'manage' ? strings.manage : strings.see} isWhole />
 );
 
-/** Settings › Account › Scheduling access. */
+/** Settings › Scheduling › Scheduling access. */
 export function SchedulingAccessScreen({
   scheduling,
   toasts,
@@ -162,7 +162,6 @@ export function SchedulingAccessScreen({
             </SettingsRow>
           );
         })}
-        {over.length === 0 && <EmptyState layout="row" title={strings.nobodyOverMe} />}
       </Card>
     );
     const roleReach = roleManagesEveryone(access.role);
@@ -221,7 +220,7 @@ export function SchedulingAccessScreen({
     <SettingsPage title={strings.title}>
       <SettingsSection
         title={strings.overMe}
-        description={strings.overMeDescription}
+        // No line under the heading (the owner's less-text rule): each level says what it allows in its Select.
         // The page's one primary, on the section it adds to, so it is there on every width.
         actions={
           <Button
@@ -278,7 +277,7 @@ function SchedulingAccessLoadingCard() {
 export function SchedulingAccessLoading() {
   return (
     <>
-      <SettingsSection title={strings.overMe} description={strings.overMeDescription}>
+      <SettingsSection title={strings.overMe}>
         <SchedulingAccessLoadingCard />
       </SettingsSection>
       <SettingsSection title={strings.mine} description={strings.mineDescription}>

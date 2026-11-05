@@ -974,6 +974,35 @@ export const TemplateThumbnails: Story = {
   },
 };
 
+/**
+ * The template picker in the app's own theme (Settings › Brand, 5 November 2026): `mode="light"` draws Classic and
+ * Split light, as a visitor most often meets them, while Night keeps its dark and Studio its light.
+ */
+export const TemplatesInTheirOwnMode: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Template"
+        defaultValue="classic"
+        keepsPicture
+        pictureSize="large"
+        tiles={(['classic', 'studio', 'night', 'split'] as const).map((template) => ({
+          id: template,
+          name: template,
+          thumbnail: <LinkPageThumbnail theme={{ ...PLAIN, template }} size="large" mode="light" />,
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const modes = [...canvasElement.querySelectorAll('[data-thumbnail]')].map((thumb) =>
+      thumb.getAttribute('data-page-mode'),
+    );
+    await expect(modes).toEqual(['light', 'light', 'dark', 'light']);
+  },
+};
+
 /** A navy brand, as `brandProperties(brandVariables({ accent: '#1f2a5a' }))` makes it: dark, lifted for dark pages. */
 const NAVY_BRAND = [
   ['--brand-accent', '#1f2a5a'],

@@ -1,15 +1,14 @@
-// Settings › Account › Sign in and devices: the page's copy (spec 0033), apart from the other settings pages' own.
+// Settings › Account › Sign in and security: the page's copy (spec 0033), apart from the other settings pages' own.
 
-/** Settings › Account › Sign in and devices: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
+/** Settings › Account › Sign in and security: the page's copy (spec 0033, AC-890, AC-891, AC-896). */
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   /** Not "Security": that is the workspace's page, and the sidebar showed it twice (the owner, 22 October 2026). */
-  title: 'Sign in and devices',
+  title: 'Sign in and security',
   devices: 'Signed in devices',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {
     section: 'Recent activity',
-    description: 'Last 90 days.',
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
@@ -34,12 +33,17 @@ export const strings = {
     showMore: 'Show more',
   },
   unknownDevice: 'Unknown device',
+  /** A session whose browser the server didn't know, by its system. */
+  unknownBrowserOn: (system: string) => `Unknown browser on ${system}`,
+  /** Beside a row that stands for several sessions of one browser. */
+  sessions: (count: number) => `${String(count)} sessions`,
   thisDevice: 'This device',
   /** A device's line under its name: where, then when it was last used. */
   activeNow: 'Active now',
   active: 'Active',
   signOut: 'Sign out',
   signOutLabel: (device: string) => `Sign out ${device}`,
+  showFewer: 'Show fewer',
   signOutOthers: 'Sign out of all other devices',
   showMore: 'Show more',
   failedTitle: 'Couldn’t load your devices',

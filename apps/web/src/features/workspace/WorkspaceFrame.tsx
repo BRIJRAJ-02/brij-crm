@@ -18,6 +18,8 @@ import {
   AppShell,
   AppShellContext,
   Avatar,
+  EmptyState,
+  Field,
   FileLinksContext,
   GRID_SHORTCUTS,
   Menu,
@@ -30,6 +32,7 @@ import {
   ProviderMark,
   ShortcutHelp,
   Sidebar,
+  VisuallyHidden,
   type Toasts,
 } from '@crm/ui';
 import { useLocation, useNavigate } from '@tanstack/react-router';
@@ -37,13 +40,14 @@ import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { LazyNewListModal } from '../lists/LazyNewListModal.tsx';
 import { listHref } from '../lists/paths.ts';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
+import { searchSettings, settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
 import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
 import { WEEK_KEYS } from '../bookings/week-keys.ts';
 import { strings as commandStrings } from '../command/frame-strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
+import { useHasBusiness } from '../settings/useHasBusiness.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { useWorkspaceFavicon } from './favicon.ts';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
@@ -88,6 +92,9 @@ const NO_NAV: NavSource = {
 
 /** Bookings › Calendars' own address, the one page the stopped calendar banner stays off. */
 const CALENDARS_TAB = /\/bookings\/calendars\/?$/;
+
+/** Settings' own address, with no page named: on a phone, the list of every setting (5 November 2026). */
+const SETTINGS_HOME = /^\/w\/[^/]+\/settings\/?$/;
 
 /** Bookings › Calendar's address, whose single keys the shortcut help lists. */
 const CALENDAR_TAB = /\/bookings\/calendar\/?$/;
@@ -218,8 +225,13 @@ export function WorkspaceFrame({
   // Read off the address rather than through the tabs module, which the frame would otherwise pull into the first
   // load for one comparison; `frame.flow.ts` walks the tab and holds the two together.
   const isOnCalendars = useLocation({
-    select: (location) => currentPage === 'bookings' && CALENDARS_TAB.test(location.pathname),
+    select: (location) =>
+      (currentPage === 'bookings' && CALENDARS_TAB.test(location.pathname)) || settings?.current === 'calendars',
   });
+  // On a phone (5 November 2026) Settings is a list that pushes into each page: the list alone on Settings' own
+  // address, each page alone (its TopBar's chevron the way back) everywhere else in Settings.
+  const isSettingsHome = useLocation({ select: (location) => SETTINGS_HOME.test(location.pathname) });
+  const phoneSidebar = settings === undefined ? 'rail' : isSettingsHome ? 'full' : 'hidden';
   // Bookings › Calendar: the shortcut help adds its single keys, the ones its buttons' tooltips teach.
   const isOnCalendar = useLocation({
     select: (location) => currentPage === 'bookings' && CALENDAR_TAB.test(location.pathname),
@@ -279,6 +291,7 @@ export function WorkspaceFrame({
     () =>
       settings !== undefined ? (
         <SettingsNavigation
+          data={data}
           slug={slug}
           settings={settings}
           permissions={permissions}
@@ -456,6 +469,7 @@ export function WorkspaceFrame({
         // page is a tab of Bookings since 25 October 2026, so the tab is what the check reads.
         banner={isMissing || isOnCalendars ? undefined : <CalendarBanner data={data} slug={slug} />}
         sidebar={sidebar}
+        phoneSidebar={phoneSidebar}
       >
         {children}
         {workspaceName !== undefined && (
@@ -621,42 +635,109 @@ function RailShortcut({ isRail, onRail }: { readonly isRail: boolean; readonly o
   return null;
 }
 
-/** The settings sidebar (spec 0026): Settings with the way back, then Account, Workspace and Scheduling. */
+/**
+ * The settings sidebar (spec 0026): Settings with the way back, "Find a setting", then Account, Workspace, People,
+ * Scheduling and Data. Typing filters the entries (and their tabs, Teams under Members) into one list of matches,
+ * Enter opens the first, Escape clears (5 November 2026, as Vercel's and Linear's settings search).
+ */
 function SettingsNavigation({
+  data,
   slug,
   settings,
   permissions,
   isOperator,
   isGuest,
 }: {
+  readonly data: DataLayer;
   readonly slug: string;
   readonly settings: SettingsSidebar;
   readonly permissions: readonly Permission[] | undefined;
   readonly isOperator: boolean;
   readonly isGuest: boolean;
 }) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+  // A match opened (or any other page) empties the field, so the whole list is back on the new page.
+  const [queryFor, setQueryFor] = useState(settings.current);
+  if (queryFor !== settings.current) {
+    setQueryFor(settings.current);
+    setQuery('');
+  }
+  // Business (Places, Services, Staff, Shifts) only while Appointments or Table seating is installed.
+  const hasBusiness = useHasBusiness(data, slug, permissions);
+  const groups = visibleSettingsNav(settingsNav(slug, { hasBusiness }), permissions, isOperator, isGuest);
+  const hits = searchSettings(groups, query);
+  const isSearching = query.trim() !== '';
+  const find = (
+    <>
+      <Field
+        label={settingsStrings.findSetting}
+        isLabelHidden
+        variant="search"
+        placeholder={settingsStrings.findSetting}
+        value={query}
+        onChange={setQuery}
+        onSubmit={() => {
+          const [first] = hits;
+          if (first === undefined) return;
+          setQuery('');
+          void navigate({ href: first.href });
+        }}
+        onEscape={() => {
+          setQuery('');
+        }}
+      />
+      {/* How many match, said as it changes (WCAG 4.1.3); no match is the list's own EmptyState, a status too. */}
+      <VisuallyHidden>
+        <span role="status">{hits.length > 0 ? settingsStrings.settingsFound(hits.length) : ''}</span>
+      </VisuallyHidden>
+    </>
+  );
   return (
     <Sidebar
       heading={settingsStrings.settings}
       back={{ label: settingsStrings.leaveSettings, href: settings.backHref }}
       label={settingsStrings.settings}
       keyboard="arrows"
+      find={find}
     >
-      {visibleSettingsNav(settingsNav(slug), permissions, isOperator, isGuest).map((group) => (
-        <NavGroup key={group.id} label={group.label} isLabelShown>
-          {group.entries.map((entry) => (
+      {isSearching && hits.length === 0 ? (
+        <EmptyState layout="row" icon="search" title={settingsStrings.noSettingFound} />
+      ) : isSearching ? (
+        // The matches, in one unlabelled group (the field says what they are), best first; Enter opens the first.
+        <NavGroup label={settingsStrings.settings}>
+          {hits.map((hit) => (
             <NavItem
-              key={entry.id}
-              icon={entry.icon}
-              href={entry.href}
-              isCurrent={entry.id === settings.current}
-              {...(entry.meta === undefined ? {} : { meta: entry.meta })}
+              key={`${hit.id}:${hit.href}`}
+              icon={hit.icon}
+              href={hit.href}
+              meta={hit.where}
+              isCurrent={hit.id === settings.current}
             >
-              {entry.label}
+              {hit.label}
             </NavItem>
           ))}
         </NavGroup>
-      ))}
+      ) : (
+        groups.map((group) => (
+          <NavGroup key={group.id} label={group.label} isLabelShown>
+            {group.entries.map((entry) => (
+              <NavItem
+                key={entry.id}
+                icon={entry.icon}
+                href={entry.href}
+                // A tab's page marks the entry that holds it: Teams marks Members.
+                isCurrent={
+                  entry.id === settings.current || (entry.tabs?.some((tab) => tab.id === settings.current) ?? false)
+                }
+                {...(entry.meta === undefined ? {} : { meta: entry.meta })}
+              >
+                {entry.label}
+              </NavItem>
+            ))}
+          </NavGroup>
+        ))
+      )}
     </Sidebar>
   );
 }

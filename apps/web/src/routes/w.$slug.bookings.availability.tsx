@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
-import { memberZone } from '../features/booking/zone.ts';
+import { loadAvailability } from '../features/booking/availability-load.ts';
 import { availabilitySearch, rosterSearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
@@ -29,41 +29,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     });
   },
   loaderDeps: ({ search }) => ({ member: search.member }),
-  loader: async ({ context, params, deps }) => {
-    // Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
-    // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
-    const [access, members, people] = await Promise.all([
-      context.data.access.mine(params.slug),
-      context.data.scheduling.open().then((scheduling) => scheduling.visible(params.slug)),
-      context.data.members.list(params.slug),
-    ]);
-    const member =
-      deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
-        ? deps.member
-        : undefined;
-    await Promise.all([
-      context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready(),
-      // Time off (spec 0037, AC-1286), from the store `scheduling.open()` loaded above; a failure shows in its card.
-      context.data.scheduling
-        .loaded()
-        ?.timeOff.held(params.slug, member)
-        .ready()
-        .catch(() => undefined),
-      // Meeting limits (spec 0037, AC-1299), the same way.
-      context.data.scheduling
-        .loaded()
-        ?.limits.held(params.slug, member)
-        .ready()
-        .catch(() => undefined),
-    ]);
-    return {
-      member,
-      members,
-      me: access.memberId,
-      ownHours: access.permissions.includes('availability.own'),
-      people,
-    };
-  },
+  loader: ({ context, params, deps }) => loadAvailability(context.data, params.slug, deps.member),
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: AvailabilityRoutePending,
   errorComponent: AvailabilityError,

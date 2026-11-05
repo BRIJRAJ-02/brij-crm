@@ -56,7 +56,8 @@ test.describe('the wave 3 gaps', () => {
     await other.close();
   });
 
-  test('switching an automation off and deleting it read as sentences in History', async ({ page }) => {
+  // Parked with Settings › Automations (the owner, 4 November 2026).
+  test.skip('switching an automation off and deleting it read as sentences in History', async ({ page }) => {
     test.setTimeout(180_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `autohist-${tag}`;

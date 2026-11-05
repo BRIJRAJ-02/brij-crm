@@ -67,27 +67,28 @@ export function PhotoSwitch({ data, slug, hasPhoto }: PhotoSwitchProps) {
     });
   };
 
+  // No photo yet (critic B, 5 November 2026: the switch stood on with nothing to show): off and disabled, with the
+  // reason in the row; the choice they made is kept for when a photo comes.
+  const reason = !choice.canChange ? strings.readOnly : hasPhoto ? undefined : strings.noPhoto;
   return (
     <SettingsRow
       title={strings.title}
-      description={!choice.canChange ? strings.readOnly : hasPhoto ? strings.hint : strings.noPhoto}
+      {...(reason === undefined ? {} : { description: reason })}
       {...(isSlow ? { meta: <Spinner size="xs" label={strings.saving} /> } : {})}
     >
       <Switch
         label={strings.title}
         isLabelHidden
-        isSelected={!choice.isHidden}
+        isSelected={hasPhoto && !choice.isHidden}
         isReadOnly={!choice.canChange}
+        isDisabled={!hasPhoto}
         onChange={show}
       />
     </SettingsRow>
   );
 }
 
-/**
- * The row while the profile loads: its title and hint as they will stand (both fixed copy, so nothing moves when it
- * arrives), the switch to come at its end.
- */
+/** The row while the profile loads: its title as it will stand, the switch to come at its end. */
 export function PhotoSwitchPending() {
-  return <SettingsRow title={strings.title} description={strings.hint} />;
+  return <SettingsRow title={strings.title} />;
 }

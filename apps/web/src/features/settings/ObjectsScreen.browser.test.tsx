@@ -47,15 +47,29 @@ afterEach(() => {
 });
 
 /** The Objects page with these objects, as someone holding `permissions`. */
-async function renderObjects(objects: readonly ObjectSummary[], permissions: readonly string[]) {
+async function renderObjects(objects: readonly ObjectSummary[], permissions: readonly string[], usage: Usage = USAGE) {
   const data = { objects: { newId: () => '0199f0a0-0000-7000-8000-0000000000ff' } } as unknown as DataLayer;
-  shown = await renderInApp(() => <ObjectsScreen slug="acme" objects={objects} usage={USAGE} recordCounts={{}} />, {
+  shown = await renderInApp(() => <ObjectsScreen slug="acme" objects={objects} usage={usage} recordCounts={{}} />, {
     data,
     pattern: '/w/$slug/settings/objects',
     at: '/w/acme/settings/objects',
     permissions,
   });
 }
+
+// Critic A #19 (5 November 2026): the count of custom objects is noise until the plan's room runs short.
+describe('the custom object meter', () => {
+  it('stays out under 80% of the limit', async () => {
+    await renderObjects([PEOPLE], ['schema.manage'], { ...USAGE, customObjects: { used: 3, limit: 50 } });
+    await expect.element(page.getByRole('rowheader', { name: /People/ })).toBeVisible();
+    expect(page.getByRole('meter', { name: 'Custom objects' }).elements()).toEqual([]);
+  });
+
+  it('shows from 80% of the limit', async () => {
+    await renderObjects([PEOPLE], ['schema.manage'], { ...USAGE, customObjects: { used: 40, limit: 50 } });
+    await expect.element(page.getByRole('meter', { name: 'Custom objects' })).toBeVisible();
+  });
+});
 
 describe('the Archived disclosure (SW18)', () => {
   it('is left out while nothing is archived', async () => {

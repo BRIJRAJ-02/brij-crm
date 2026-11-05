@@ -12,6 +12,7 @@
     min-block-size: 0;
     background: var(--surface);
     color: var(--text);
+    container: app-shell / inline-size;
   }
 
   .skip {
@@ -91,6 +92,22 @@
     min-block-size: 0;
     overflow: auto;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* A phone (the shell under 480px, `bp-container-md`), when the screen asks (`phoneSidebar`): the page alone, its
+     TopBar's back the way up (`hidden`), or the sidebar alone as the whole screen's list (`full`). */
+  @container app-shell (width < 480px) {
+    .root[data-phone-sidebar='hidden'] > .sidebar {
+      display: none;
+    }
+
+    .root[data-phone-sidebar='full'] > .sidebar {
+      flex: 1;
+    }
+
+    .root[data-phone-sidebar='full'] > .main {
+      display: none;
+    }
   }
 
   @media (forced-colors: active) {

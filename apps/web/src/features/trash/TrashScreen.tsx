@@ -406,6 +406,31 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         undefined
       : strings.confirmPurgeText;
   const purgeWords = recordsWord(lastAsked.length, names);
+  // Nothing in the trash (or in this object's): one block EmptyState on the page, as every settings page's empty
+  // state reads, rather than an empty grid's header with a line in its first row (critic A, 5 November 2026).
+  const isEmpty = state.status === 'ready' && state.count.count === 0;
+  const empty =
+    filtered === undefined ? (
+      <EmptyState title={strings.emptyTitle} icon="trash">
+        {strings.emptyText}
+      </EmptyState>
+    ) : (
+      <EmptyState
+        title={strings.emptyObject(filtered.pluralName)}
+        icon={filtered.icon}
+        actions={
+          <Button
+            onPress={() => {
+              void navigate({ to: '/w/$slug/settings/trash', params: { slug }, search: {} });
+            }}
+          >
+            {strings.showAll}
+          </Button>
+        }
+      >
+        {strings.emptyObjectText(filtered.pluralName)}
+      </EmptyState>
+    );
   return (
     <SettingsPage
       title={strings.title}
@@ -445,75 +470,62 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
         )
       }
     >
-      <Toolbar label={strings.filterLabel}>
-        <Select
-          label={strings.objectFilter}
-          isLabelHidden
-          size="sm"
-          items={[
-            { id: ALL, label: strings.allObjects },
-            ...objects.map((object) => ({
-              id: object.id,
-              label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
-              icon: object.icon,
-              hue: object.hue,
-            })),
-          ]}
-          value={objectId ?? ALL}
-          onChange={(id) => {
-            void navigate({
-              to: '/w/$slug/settings/trash',
-              params: { slug },
-              search: id === null || id === ALL ? {} : { object: id },
-            });
+      {/* The filter only while there is something to narrow, or a narrowed list to widen again. */}
+      {(!isEmpty || filtered !== undefined) && (
+        <Toolbar label={strings.filterLabel}>
+          <Select
+            label={strings.objectFilter}
+            isLabelHidden
+            size="sm"
+            items={[
+              { id: ALL, label: strings.allObjects },
+              ...objects.map((object) => ({
+                id: object.id,
+                label: object.isArchived ? strings.archived(object.pluralName) : object.pluralName,
+                icon: object.icon,
+                hue: object.hue,
+              })),
+            ]}
+            value={objectId ?? ALL}
+            onChange={(id) => {
+              void navigate({
+                to: '/w/$slug/settings/trash',
+                params: { slug },
+                search: id === null || id === ALL ? {} : { object: id },
+              });
+            }}
+          />
+        </Toolbar>
+      )}
+      {isEmpty ? (
+        empty
+      ) : (
+        <DataGrid
+          label={strings.title}
+          columns={COLUMNS}
+          pinnedCount={1}
+          rows={state.source}
+          getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
+          getDisplay={(row, columnId) => {
+            if (columnId === TRASH_COLUMNS.name) return row.item.display;
+            if (columnId === TRASH_COLUMNS.deletedBy) {
+              const by = deleters(row);
+              return by === undefined ? undefined : [by];
+            }
+            return undefined;
           }}
+          rowHeader={TRASH_NAME_COLUMN}
+          hideColumnLocks
+          selection={selection}
+          onSelectionChange={select}
+          cellErrors={state.cellErrors}
+          status={state.status}
+          onRetry={view.retry}
+          {...(state.error === undefined ? {} : { errorText: state.error.message })}
+          {...(focusRow === undefined ? {} : { focusRow })}
+          {...(bar === undefined ? {} : { floatingBar: bar })}
         />
-      </Toolbar>
-      <DataGrid
-        label={strings.title}
-        columns={COLUMNS}
-        pinnedCount={1}
-        rows={state.source}
-        getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
-        getDisplay={(row, columnId) => {
-          if (columnId === TRASH_COLUMNS.name) return row.item.display;
-          if (columnId === TRASH_COLUMNS.deletedBy) {
-            const by = deleters(row);
-            return by === undefined ? undefined : [by];
-          }
-          return undefined;
-        }}
-        rowHeader={TRASH_NAME_COLUMN}
-        hideColumnLocks
-        selection={selection}
-        onSelectionChange={select}
-        cellErrors={state.cellErrors}
-        status={state.status}
-        onRetry={view.retry}
-        {...(state.error === undefined ? {} : { errorText: state.error.message })}
-        emptyState={
-          filtered === undefined ? (
-            <EmptyState title={strings.emptyTitle}>{strings.emptyText}</EmptyState>
-          ) : (
-            <EmptyState
-              title={strings.emptyObject(filtered.pluralName)}
-              actions={
-                <Button
-                  onPress={() => {
-                    void navigate({ to: '/w/$slug/settings/trash', params: { slug }, search: {} });
-                  }}
-                >
-                  {strings.showAll}
-                </Button>
-              }
-            >
-              {strings.emptyObjectText(filtered.pluralName)}
-            </EmptyState>
-          )
-        }
-        {...(focusRow === undefined ? {} : { focusRow })}
-        {...(bar === undefined ? {} : { floatingBar: bar })}
-      />
+      )}
       {/* Delete forever of up to 500 picked records asks first (AC-535). */}
       <Modal
         title={strings.confirmPurgeTitle(purgeWords)}

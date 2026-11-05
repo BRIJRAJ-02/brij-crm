@@ -17,7 +17,7 @@ import {
   TopBar,
   ViewOnlyTag,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
@@ -60,6 +60,12 @@ export interface AvailabilityScreenProps {
   readonly people: readonly StandinChoice[];
 }
 
+/** `href`'s search on the path `path`: a link made for Bookings' tab, kept on whichever address shows the screen. */
+const onPath = (path: string, href: string) => {
+  const query = href.indexOf('?');
+  return `${path}${query === -1 ? '' : href.slice(query)}`;
+};
+
 /** The tab: the open schedule's editor, its switcher, the admin's Viewing Select and New schedule. */
 export function AvailabilityScreen({
   data,
@@ -74,6 +80,9 @@ export function AvailabilityScreen({
 }: AvailabilityScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  // The page's own address: Bookings › Availability, or Settings › Scheduling › Availability (5 November 2026), so a
+  // switch keeps the reader where they are. Only the path is taken from the links; their search is kept.
+  const here = useLocation({ select: (location) => location.pathname });
   const view = data.schedules.view(slug, member, memberZone(data, slug));
   // An admin (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show, once there is a colleague.
   const hasColleagues = showsViewing(members, member);
@@ -105,15 +114,18 @@ export function AvailabilityScreen({
   const switcherRef = useRef<HTMLButtonElement>(null);
   const refocus = () => focusLater(() => switcherRef.current);
   const open = (id: string | null, replace = false) => {
-    void navigate({ href: scheduleHref(slug, id === null || id === fallback?.id ? 'default' : id, member), replace });
+    void navigate({
+      href: onPath(here, scheduleHref(slug, id === null || id === fallback?.id ? 'default' : id, member)),
+      replace,
+    });
     refocus();
   };
   // An address naming a schedule that isn't here (deleted, maybe in another tab) opens the default, at its own address.
   const isUnknown =
     state.status === 'ready' && scheduleId !== undefined && !schedules.some((each) => each.id === scheduleId);
   useEffect(() => {
-    if (isUnknown) void navigate({ href: scheduleHref(slug, 'default', member), replace: true });
-  }, [isUnknown, navigate, slug, member]);
+    if (isUnknown) void navigate({ href: onPath(here, scheduleHref(slug, 'default', member)), replace: true });
+  }, [isUnknown, navigate, slug, member, here]);
   const toast = (notice: {
     readonly tone: 'success' | 'danger';
     readonly message: string;
@@ -205,6 +217,8 @@ export function AvailabilityScreen({
   // The team's week is Bookings › Roster, a tab of its own (31 October 2026), so no Mine | Team switch stands here.
   const tools = (
     <SectionBar
+      // With no Bookings strip to sit on (Settings › Scheduling › Availability), its own bar under the TopBar.
+      variant={slot === null ? 'bar' : 'inline'}
       start={switcher}
       end={
         <>
@@ -213,7 +227,9 @@ export function AvailabilityScreen({
               members={members}
               me={me}
               value={member ?? me}
-              onChange={(id) => void navigate({ href: availabilityHref(slug, id === me ? undefined : id) })}
+              onChange={(id) =>
+                void navigate({ href: onPath(here, availabilityHref(slug, id === me ? undefined : id)) })
+              }
             />
           )}
           {actionSlot === null && newAction}
@@ -438,7 +454,13 @@ export function AvailabilityPending() {
   // New schedule waits in the TopBar, so it doesn't move when the editor arrives. The Viewing Select shows only
   // once colleagues are known, so it doesn't stand here.
   const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
-  const tools = <SectionBar start={<SwitcherPending />} end={<>{actionSlot === null && waiting}</>} />;
+  const tools = (
+    <SectionBar
+      variant={slot === null ? 'bar' : 'inline'}
+      start={<SwitcherPending />}
+      end={<>{actionSlot === null && waiting}</>}
+    />
+  );
   return (
     <WorkspacePage
       currentPage="bookings"

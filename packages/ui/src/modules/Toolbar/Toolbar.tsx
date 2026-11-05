@@ -4,7 +4,7 @@
 // view has unsaved changes.
 import { useRef, useState, type ReactNode, type Ref } from 'react';
 import { Toolbar as AriaToolbar } from 'react-aria-components';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -59,6 +59,11 @@ export interface TopBarProps {
    * screen readers and focus.
    */
   readonly isLoading?: boolean;
+  /**
+   * The way back up on a phone, where the sidebar is hidden (a settings page, 5 November 2026): a chevron before the
+   * title, named by `label` ("All settings"), shown only when the bar is under 480px wide.
+   */
+  readonly back?: { readonly label: string; readonly href: string };
 }
 
 /**
@@ -66,7 +71,7 @@ export interface TopBarProps {
  * the page's h1, and the page's actions. With `crumbs`, the trail shows the
  * title as its current place and the h1 stays for screen readers.
  */
-export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isLoading = false }: TopBarProps) {
+export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isLoading = false, back }: TopBarProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   const hasTrail = crumbs !== undefined && crumbs.length > 0;
   // Focused only by the app after a route change, so it never joins the tab order.
@@ -87,6 +92,11 @@ export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isL
   if (!isLoading) shownTitle = hasTrail ? <Breadcrumbs items={[...crumbs, { id: CURRENT, label: title }]} /> : heading;
   return (
     <header className={styles.top} aria-busy={isLoading || undefined}>
+      {back !== undefined && (
+        <span className={styles.back}>
+          <ButtonLink variant="ghost" icon="chevron-left" label={back.label} href={back.href} />
+        </span>
+      )}
       {isLoading ? skeleton : tile}
       {shownTitle}
       {isLoading || hasTrail ? <VisuallyHidden>{heading}</VisuallyHidden> : null}

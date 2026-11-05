@@ -52,8 +52,8 @@ export const availabilityHref = (slug: string, member?: string) =>
 // them are in the first load and that module is not: one import of it would put the whole tab strip's model
 // there, in a chunk of its own, for two strings (`build.test.ts` counts the files).
 
-/** Bookings › Calendars: a member's own calendar connections (specs 0024 and 0026). */
-export const calendarsHref = (slug: string) => `/w/${slug}/bookings/calendars`;
+/** Settings › Account › Calendars: where a member connects a calendar (specs 0024 and 0026; Bookings › Calendars shows the same screen). */
+export const calendarsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
 
 /** Bookings' own tab (its week or list, as the member left it). */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;

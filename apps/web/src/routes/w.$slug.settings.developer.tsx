@@ -1,53 +1,10 @@
-import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { DeveloperPending, DeveloperScreen } from '../features/settings/DeveloperScreen.tsx';
-import { strings } from '../features/settings/developer-nav-strings.ts';
-import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Settings › Workspace › Developer (parity #34): the workspace's API keys, for holders of `api_keys.manage` alone;
-// anyone else finds nothing here. The loader warms the held key list through the data layer; the screen holds it, so
-// every key write shows at once.
+// Settings › Developer, the API keys (parity #34) is parked (the owner, 4 November 2026: "if not built properly remove it
+// and add it to be built later"). Its screen and the server stay; the page is out of the navigation and ⌘K, and its
+// address opens where Settings opens, so a bookmark or an old link still lands somewhere real.
 export const Route = createFileRoute('/w/$slug/settings/developer')({
-  // One chunk for the page, its loading and its failure.
-  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
-  loader: async ({ context, params }) => {
-    try {
-      const access = await context.data.access.mine(params.slug);
-      if (!access.permissions.includes('api_keys.manage')) return { allowed: false };
-      await context.data.apiKeys.view(params.slug).ready();
-      return { allowed: true };
-    } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { allowed: false };
-      throw error;
-    }
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: '/w/$slug/settings/account/profile', params: { slug: params.slug }, replace: true });
   },
-  pendingComponent: () => (
-    <LoadingNow>
-      <DeveloperPending />
-    </LoadingNow>
-  ),
-  errorComponent: DeveloperError,
-  component: DeveloperRoute,
 });
-
-function DeveloperRoute() {
-  const { allowed } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  const { data, toasts } = Route.useRouteContext();
-  if (!allowed) return <SettingsMissing backTo="home" />;
-  return <DeveloperScreen data={data} toasts={toasts} slug={slug} />;
-}
-
-function DeveloperError({ error }: ErrorComponentProps) {
-  const router = useRouter();
-  return (
-    <SettingsFailed
-      title={strings.title}
-      heading={strings.failedTitle}
-      text={isDataError(error) ? error.message : strings.somethingWrong}
-      onRetry={() => void router.invalidate()}
-    />
-  );
-}

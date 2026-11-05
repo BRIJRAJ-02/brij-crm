@@ -40,8 +40,7 @@ export const strings = {
   bookings: 'Bookings',
   availability: 'Availability',
   bookingPages: 'Booking pages',
-  calendars: 'Calendars',
-  roundRobin: 'Round robin',
+  connectCalendar: 'Connect a calendar',
   forms: 'Forms',
   /** The charts page (the reports lane), which has no sidebar item: Home and this menu reach it. */
   reports: 'Reports',
@@ -64,11 +63,10 @@ export const strings = {
   trashTerms: ['deleted', 'bin', 'restore', 'go to trash'],
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
-  calendarsTerms: ['google', 'outlook', 'sync', 'connect'],
+  calendarsTerms: ['calendar', 'calendars', 'google', 'outlook', 'microsoft', 'sync', 'connect'],
   roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
-  jobsTerms: ['background', 'imports', 'exports', 'progress'],
-  /** Account › Sign in and devices answers to what people call it elsewhere (it was Security). */
+  /** Account › Sign in and security answers to what people call it elsewhere (it was Security). */
   signInTerms: ['security', 'password', 'two factor', 'sessions', 'devices', 'sign out'],
   /** Actions (AC-1086, AC-1087). */
   create: (singular: string) => `Create a ${singular.toLocaleLowerCase()}`,

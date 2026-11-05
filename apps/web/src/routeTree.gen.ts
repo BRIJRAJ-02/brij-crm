@@ -99,9 +99,12 @@ import { Route as WSlugSettingsListsIndexRouteImport } from './routes/w.$slug.se
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugSettingsRolesIndexRouteImport } from './routes/w.$slug.settings.roles.index.tsx'
 import { Route as WSlugSettingsRolesRoleIdRouteImport } from './routes/w.$slug.settings.roles.$roleId.tsx'
+import { Route as WSlugSettingsSchedulingAccessRouteImport } from './routes/w.$slug.settings.scheduling.access.tsx'
+import { Route as WSlugSettingsSchedulingAvailabilityRouteImport } from './routes/w.$slug.settings.scheduling.availability.tsx'
 import { Route as WSlugSettingsSchedulingCalendarsRouteImport } from './routes/w.$slug.settings.scheduling.calendars.tsx'
 import { Route as WSlugSettingsSchedulingRotationsRouteImport } from './routes/w.$slug.settings.scheduling.rotations.tsx'
 import { Route as WSlugSettingsSchedulingRoundRobinRouteImport } from './routes/w.$slug.settings.scheduling.round-robin.tsx'
+import { Route as WSlugSettingsSchedulingRoutingRouteImport } from './routes/w.$slug.settings.scheduling.routing.tsx'
 import { Route as WSlugSettingsStaffIndexRouteImport } from './routes/w.$slug.settings.staff.index.tsx'
 import { Route as WSlugSettingsStaffStaffIdRouteImport } from './routes/w.$slug.settings.staff.$staffId.tsx'
 import { Route as WSlugCapturesFormsFormIdPreviewRouteImport } from './routes/w.$slug.captures_.forms.$formId_.preview.tsx'
@@ -598,6 +601,18 @@ const WSlugSettingsRolesRoleIdRoute =
     path: '/roles/$roleId',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsSchedulingAccessRoute =
+  WSlugSettingsSchedulingAccessRouteImport.update({
+    id: '/scheduling/access',
+    path: '/scheduling/access',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
+const WSlugSettingsSchedulingAvailabilityRoute =
+  WSlugSettingsSchedulingAvailabilityRouteImport.update({
+    id: '/scheduling/availability',
+    path: '/scheduling/availability',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsSchedulingCalendarsRoute =
   WSlugSettingsSchedulingCalendarsRouteImport.update({
     id: '/scheduling/calendars',
@@ -614,6 +629,12 @@ const WSlugSettingsSchedulingRoundRobinRoute =
   WSlugSettingsSchedulingRoundRobinRouteImport.update({
     id: '/scheduling/round-robin',
     path: '/scheduling/round-robin',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
+const WSlugSettingsSchedulingRoutingRoute =
+  WSlugSettingsSchedulingRoutingRouteImport.update({
+    id: '/scheduling/routing',
+    path: '/scheduling/routing',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
 const WSlugSettingsStaffIndexRoute = WSlugSettingsStaffIndexRouteImport.update({
@@ -804,9 +825,12 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
   '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
+  '/w/$slug/settings/scheduling/access': typeof WSlugSettingsSchedulingAccessRoute
+  '/w/$slug/settings/scheduling/availability': typeof WSlugSettingsSchedulingAvailabilityRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
+  '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
@@ -913,9 +937,12 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
   '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
+  '/w/$slug/settings/scheduling/access': typeof WSlugSettingsSchedulingAccessRoute
+  '/w/$slug/settings/scheduling/availability': typeof WSlugSettingsSchedulingAvailabilityRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
+  '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
   '/w/$slug/captures/forms': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksIndexRoute
@@ -1027,9 +1054,12 @@ export interface FileRoutesById {
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
   '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
+  '/w/$slug/settings/scheduling/access': typeof WSlugSettingsSchedulingAccessRoute
+  '/w/$slug/settings/scheduling/availability': typeof WSlugSettingsSchedulingAvailabilityRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
+  '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
@@ -1142,9 +1172,12 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
     | '/w/$slug/settings/roles/$roleId'
+    | '/w/$slug/settings/scheduling/access'
+    | '/w/$slug/settings/scheduling/availability'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
+    | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
@@ -1251,9 +1284,12 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
     | '/w/$slug/settings/roles/$roleId'
+    | '/w/$slug/settings/scheduling/access'
+    | '/w/$slug/settings/scheduling/availability'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
+    | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
     | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
@@ -1364,9 +1400,12 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
     | '/w/$slug/settings/roles/$roleId'
+    | '/w/$slug/settings/scheduling/access'
+    | '/w/$slug/settings/scheduling/availability'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
+    | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
@@ -2044,6 +2083,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsRolesRoleIdRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/scheduling/access': {
+      id: '/w/$slug/settings/scheduling/access'
+      path: '/scheduling/access'
+      fullPath: '/w/$slug/settings/scheduling/access'
+      preLoaderRoute: typeof WSlugSettingsSchedulingAccessRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/scheduling/availability': {
+      id: '/w/$slug/settings/scheduling/availability'
+      path: '/scheduling/availability'
+      fullPath: '/w/$slug/settings/scheduling/availability'
+      preLoaderRoute: typeof WSlugSettingsSchedulingAvailabilityRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/scheduling/calendars': {
       id: '/w/$slug/settings/scheduling/calendars'
       path: '/scheduling/calendars'
@@ -2063,6 +2116,13 @@ declare module '@tanstack/react-router' {
       path: '/scheduling/round-robin'
       fullPath: '/w/$slug/settings/scheduling/round-robin'
       preLoaderRoute: typeof WSlugSettingsSchedulingRoundRobinRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/scheduling/routing': {
+      id: '/w/$slug/settings/scheduling/routing'
+      path: '/scheduling/routing'
+      fullPath: '/w/$slug/settings/scheduling/routing'
+      preLoaderRoute: typeof WSlugSettingsSchedulingRoutingRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/settings/staff/': {
@@ -2268,9 +2328,12 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsHistoryChangesRoute: typeof WSlugSettingsHistoryChangesRoute
   WSlugSettingsHistorySignInsRoute: typeof WSlugSettingsHistorySignInsRoute
   WSlugSettingsRolesRoleIdRoute: typeof WSlugSettingsRolesRoleIdRoute
+  WSlugSettingsSchedulingAccessRoute: typeof WSlugSettingsSchedulingAccessRoute
+  WSlugSettingsSchedulingAvailabilityRoute: typeof WSlugSettingsSchedulingAvailabilityRoute
   WSlugSettingsSchedulingCalendarsRoute: typeof WSlugSettingsSchedulingCalendarsRoute
   WSlugSettingsSchedulingRotationsRoute: typeof WSlugSettingsSchedulingRotationsRoute
   WSlugSettingsSchedulingRoundRobinRoute: typeof WSlugSettingsSchedulingRoundRobinRoute
+  WSlugSettingsSchedulingRoutingRoute: typeof WSlugSettingsSchedulingRoutingRoute
   WSlugSettingsStaffStaffIdRoute: typeof WSlugSettingsStaffStaffIdRoute
   WSlugSettingsAccountIndexRoute: typeof WSlugSettingsAccountIndexRoute
   WSlugSettingsAdminIndexRoute: typeof WSlugSettingsAdminIndexRoute
@@ -2324,10 +2387,14 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsHistoryChangesRoute: WSlugSettingsHistoryChangesRoute,
   WSlugSettingsHistorySignInsRoute: WSlugSettingsHistorySignInsRoute,
   WSlugSettingsRolesRoleIdRoute: WSlugSettingsRolesRoleIdRoute,
+  WSlugSettingsSchedulingAccessRoute: WSlugSettingsSchedulingAccessRoute,
+  WSlugSettingsSchedulingAvailabilityRoute:
+    WSlugSettingsSchedulingAvailabilityRoute,
   WSlugSettingsSchedulingCalendarsRoute: WSlugSettingsSchedulingCalendarsRoute,
   WSlugSettingsSchedulingRotationsRoute: WSlugSettingsSchedulingRotationsRoute,
   WSlugSettingsSchedulingRoundRobinRoute:
     WSlugSettingsSchedulingRoundRobinRoute,
+  WSlugSettingsSchedulingRoutingRoute: WSlugSettingsSchedulingRoutingRoute,
   WSlugSettingsStaffStaffIdRoute: WSlugSettingsStaffStaffIdRoute,
   WSlugSettingsAccountIndexRoute: WSlugSettingsAccountIndexRoute,
   WSlugSettingsAdminIndexRoute: WSlugSettingsAdminIndexRoute,

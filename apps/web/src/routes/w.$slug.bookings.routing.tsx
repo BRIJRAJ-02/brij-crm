@@ -1,52 +1,18 @@
-import { isDataError, type AttributeDefinition, type DataLayer, type MemberView } from '@crm/data';
+import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
+import { loadRouting, routingSearch } from '../features/routing/load.ts';
+import { RoutingPending, RoutingScreen } from '../features/routing/RoutingScreen.tsx';
 import { strings } from '../features/routing/tab-strings.ts';
 import { SettingsMissing } from '../features/settings/SettingsPage.tsx';
 
 // Bookings › Routing (spec 0037, AC-1383): what every routed form and team page shares, for holders of
 // routing.manage (owners and admins). Overview (`?view` absent) and Decisions (`?view=decisions`, with its filters
-// and the decision open in the address). Without routing.manage there is no such page (hidden means absent): the
-// access read comes first, from the data layer's cache, so nothing else is asked for then. The screen holds the
-// Overview and the Decisions log from the data layer, read again whenever the person comes back to the page.
+// and the decision open in the address). Without routing.manage there is no such page (hidden means absent). The
+// same screen is Settings › Scheduling › Routing (5 November 2026); both load through `features/routing/load.ts`.
 export const Route = createFileRoute('/w/$slug/bookings/routing')({
-  validateSearch: (raw: Record<string, unknown>): RoutingSearch => {
-    const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined);
-    const tag = text(raw.tag);
-    const period = text(raw.period);
-    const surface = text(raw.surface);
-    const rule = text(raw.rule);
-    const host = text(raw.host);
-    const decision = text(raw.decision);
-    return {
-      view: raw.view === 'decisions' || raw.view === 'skills' || raw.view === 'test' ? raw.view : 'overview',
-      ...(surface === undefined ? {} : { surface }),
-      ...(rule === undefined ? {} : { rule }),
-      ...(host === undefined ? {} : { host }),
-      ...(tag === 'yes' || tag === 'no' || tag === 'none' ? { tag } : {}),
-      ...(period === 'today' || period === '7' || period === '30' || period === '90' ? { period } : {}),
-      ...(decision === undefined ? {} : { decision }),
-    };
-  },
-  loader: async ({
-    context,
-    params,
-  }): Promise<{ readonly members?: readonly MemberView[]; readonly stage?: AttributeDefinition }> => {
-    try {
-      const access = await context.data.access.mine(params.slug);
-      if (!access.permissions.includes('routing.manage')) return {};
-      const [members, stage] = await Promise.all([
-        context.data.members.list(params.slug),
-        dealsStage(context.data, params.slug),
-      ]);
-      return { members, ...(stage === undefined ? {} : { stage }) };
-    } catch (error) {
-      // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return {};
-      throw error;
-    }
-  },
+  validateSearch: routingSearch,
+  loader: ({ context, params }) => loadRouting(context.data, params.slug),
   pendingComponent: () => (
     <LoadingNow>
       <RoutingPending />
@@ -55,15 +21,6 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
   errorComponent: RoutingError,
   component: RoutingRoute,
 });
-
-/** Deals' Stage field (api slug `stage`), for Won means (spec 0037, AC-1385); none when Deals or the field is hidden. */
-async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefinition | undefined> {
-  const objects = await data.objects.list(slug);
-  const deals = objects.find((each) => each.standardKey === 'deals');
-  if (deals === undefined) return undefined;
-  const attributes = await data.attributes.list(slug, deals.id);
-  return attributes.find((each) => each.apiSlug === 'stage' && !each.isArchived);
-}
 
 function RoutingRoute() {
   const { members, stage } = Route.useLoaderData();

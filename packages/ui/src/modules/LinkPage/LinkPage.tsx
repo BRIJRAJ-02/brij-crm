@@ -2044,6 +2044,12 @@ export interface LinkPageThumbnailProps {
   readonly size?: 'large';
   /** The owner's own page, drawn scaled down in place of the sample face, name and rows. Left out, the sample. */
   readonly profile?: LinkPageThumbnailProfile;
+  /**
+   * Draws a look that follows the visitor's light or dark (Classic, Split) in this one, whatever the app's theme
+   * (Settings › Brand's template picker, 5 November 2026: in the app's dark theme they looked like Night). Left out,
+   * the look's own mode.
+   */
+  readonly mode?: 'light' | 'dark';
 }
 
 /**
@@ -2054,12 +2060,13 @@ export interface LinkPageThumbnailProps {
  * the plain look. It fills its slot (TileGrid's choice thumbnail), never moves, takes no focus and is hidden from
  * screen readers: the tile's own name says which look it is.
  */
-export function LinkPageThumbnail({ theme, variables, detail, size, profile }: LinkPageThumbnailProps) {
+export function LinkPageThumbnail({ theme, variables, detail, size, profile, mode }: LinkPageThumbnailProps) {
   // Follow visitor: the page light and dark at once, one over the other, cut corner to corner.
   const held = {
     ...(variables === undefined ? {} : { variables }),
     ...(size === undefined ? {} : { size }),
     ...(profile === undefined ? {} : { profile }),
+    ...(mode === undefined ? {} : { mode }),
   };
   if (detail === 'mode' && theme.mode === 'system') {
     return (
@@ -2073,8 +2080,10 @@ export function LinkPageThumbnail({ theme, variables, detail, size, profile }: L
 }
 
 /** One look in miniature: the whole page, or only the detail its row is about. */
-function ThumbnailLook({ theme, variables, detail, size, profile }: LinkPageThumbnailProps) {
+function ThumbnailLook({ theme, variables, detail, size, profile, mode }: LinkPageThumbnailProps) {
   const look = drawnLook(theme);
+  // Only a look that follows the visitor takes `mode`: a template with its own (Studio light, Night dark) keeps it.
+  const shownMode = mode !== undefined && look.mode === 'system' ? { 'data-theme': mode, 'data-page-mode': mode } : {};
   const picture = safeImageSrc(profile?.picture);
   const logo = safeImageSrc(profile?.logo);
   const cover = safeImageSrc(profile?.cover);
@@ -2086,6 +2095,7 @@ function ThumbnailLook({ theme, variables, detail, size, profile }: LinkPageThum
       data-thumbnail
       data-size={size}
       {...lookAttributes(theme, photos)}
+      {...shownMode}
       ref={usePageVariables(variables)}
       aria-hidden="true"
       inert

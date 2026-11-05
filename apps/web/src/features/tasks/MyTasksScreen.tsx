@@ -4,7 +4,7 @@
 // Leaves out: search and saved filters (#33, #20), other people's lists except through "All tasks", a task's description.
 import type { MemberSummary, ObjectSummary, TaskList as TaskListSource, TaskMine } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
-import { Button, SegmentedControl, TabPanel, Tabs, TaskList, TopBar, useFormatSettings } from '@crm/ui';
+import { Button, EmptyState, SegmentedControl, TabPanel, Tabs, TaskList, TopBar, useFormatSettings } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useMemo, useRef } from 'react';
 import { recordLinks } from '../records/timeline.ts';
@@ -134,6 +134,8 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
               tabs={FILTERS.map((each) => ({ id: each.value, label: each.label }))}
               end={
                 <SegmentedControl
+                  // As tall as a button, so it sits on the tabs' line rather than floating above it (4 November 2026).
+                  size="compact"
                   label={strings.taskStatus}
                   segments={STATUSES}
                   value={status}
@@ -146,36 +148,29 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
             >
               {/* One panel, always the chosen tab's, so the list stays mounted while the next one loads. */}
               <TabPanel id={filter}>
-                <TaskList
-                  label={strings.listLabel(filterLabel, statusLabel)}
-                  tasks={entries}
-                  status={state.status === 'unavailable' ? 'no-access' : state.status}
-                  onRetry={list.retry}
-                  newIds={state.newIds}
-                  {...(sectionOf === undefined ? {} : { sectionOf })}
-                  emptyTitle={empty.title}
-                  {...(empty.body === undefined ? {} : { emptyBody: empty.body })}
-                  {...(status === 'open'
-                    ? {
-                        emptyActions: (
-                          <Button
-                            onPress={() => {
-                              openTask('new');
-                            }}
-                          >
-                            {strings.newTask}
-                          </Button>
-                        ),
-                      }
-                    : {})}
-                  recordHref={recordHref}
-                  onToggle={(entry, isDone) => {
-                    tickTask(toasts, (next) => data.tasks.setDone(slug, entry.id, next), isDone);
-                  }}
-                  onAction={(entry) => {
-                    openTask(entry.id);
-                  }}
-                />
+                {state.status === 'ready' && entries.count === 0 ? (
+                  // Nothing here: one centred state in the middle of the page (the owner, 4 November 2026: it sat
+                  // crammed under the tabs). No button in it: the bar's New task is the page's one way to start.
+                  <EmptyState layout="fill" icon={status === 'done' ? 'circle-check' : 'list-todo'} title={empty.title}>
+                    {empty.body}
+                  </EmptyState>
+                ) : (
+                  <TaskList
+                    label={strings.listLabel(filterLabel, statusLabel)}
+                    tasks={entries}
+                    status={state.status === 'unavailable' ? 'no-access' : state.status}
+                    onRetry={list.retry}
+                    newIds={state.newIds}
+                    {...(sectionOf === undefined ? {} : { sectionOf })}
+                    recordHref={recordHref}
+                    onToggle={(entry, isDone) => {
+                      tickTask(toasts, (next) => data.tasks.setDone(slug, entry.id, next), isDone);
+                    }}
+                    onAction={(entry) => {
+                      openTask(entry.id);
+                    }}
+                  />
+                )}
               </TabPanel>
             </Tabs>
             {task !== undefined && (

@@ -1,10 +1,10 @@
 // Brief
-// Purpose: Account › Sign in and devices › Recent activity (spec 0033, AC-898): what happened to this account lately.
-// Main task: scan the last 90 days of sign ins and sign in changes, newest first, and read further back on demand.
+// Purpose: Account › Sign in and security › Recent activity (spec 0033, AC-898): what happened to this account lately, the one place each member's sign ins show (History's copy went on 5 November 2026).
+// Main task: scan the latest sign ins and sign in changes, newest first, five at a time, and read further back on demand.
 // Leaves out: IP addresses (never shown), other people's activity, and anything older than 90 days.
 import { isDataError, type ActivityPage, type DataLayer, type SecurityActivity } from '@crm/data';
 import { Button, Card, EmptyState, RelativeTime, SettingsRow, SettingsSection, Skeleton } from '@crm/ui';
-import { Suspense, use, useDeferredValue, useState, type ReactNode } from 'react';
+import { Suspense, use, useDeferredValue, useState } from 'react';
 import { devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 
@@ -16,12 +16,13 @@ export function activityLine(event: SecurityActivity): string {
   return event.kind === 'sign_in' && event.method !== undefined ? `${what} ${copy.methods[event.method]}` : what;
 }
 
-/** The section's heading and the line under it, where another page shows the same list. */
+/** How many events show before "Show more" (critic A #12: a long list of one Mac's sign ins). */
+const SHOWN = 5;
+
+/** The section's heading. */
 export interface RecentActivityHeading {
-  /** The section's heading, where another page shows the same list (History's "Your sign ins"); "Recent activity". */
+  /** The section's heading; "Recent activity". No line under it: the empty state says how far back it reads. */
   readonly title?: string;
-  /** The line under the heading; the last 90 days' line when left out. */
-  readonly description?: ReactNode;
 }
 
 /** Props for Recent activity. */
@@ -49,9 +50,9 @@ function LoadingRows() {
  * loading rows it shows itself. For a route's pending screen (History's "Your sign ins"), so nothing moves or
  * renames when the list arrives.
  */
-export function RecentActivityPending({ title = copy.section, description = copy.description }: RecentActivityHeading) {
+export function RecentActivityPending({ title = copy.section }: RecentActivityHeading) {
   return (
-    <SettingsSection title={title} description={description}>
+    <SettingsSection title={title}>
       <LoadingRows />
     </SettingsSection>
   );
@@ -61,17 +62,11 @@ export function RecentActivityPending({ title = copy.section, description = copy
  * Recent activity: its own loading rows while the first page arrives, then the table. A new first page (a retry, or
  * a read after a change on the page) keeps what shows until it arrives, marked busy, so the rows never flash away.
  */
-export function RecentActivitySection({
-  data,
-  first,
-  onRetry,
-  title = copy.section,
-  description = copy.description,
-}: RecentActivitySectionProps) {
+export function RecentActivitySection({ data, first, onRetry, title = copy.section }: RecentActivitySectionProps) {
   // The page shown while a newer one is on its way: the first read has none, so it shows the loading rows.
   const shown = useDeferredValue(first);
   return (
-    <SettingsSection title={title} description={description}>
+    <SettingsSection title={title}>
       <Suspense fallback={<LoadingRows />}>
         <ActivityTable data={data} first={shown} onRetry={onRetry} isStale={shown !== first} />
       </Suspense>
@@ -117,9 +112,17 @@ function ActivityRows({
   });
   const [isLoading, setLoading] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // Five first; Show more shows the rest of what is read, then reads further back.
+  const [isOpen, setOpen] = useState(false);
   const items = [...page.items, ...more.items];
+  const shownItems = isOpen ? items : items.slice(0, SHOWN);
+  const hasMore = (!isOpen && items.length > SHOWN) || more.cursor !== undefined;
 
   const showMore = async () => {
+    if (!isOpen) {
+      setOpen(true);
+      return;
+    }
     if (more.cursor === undefined) return;
     setLoading(true);
     setFailure(undefined);
@@ -158,15 +161,15 @@ function ActivityRows({
     <>
       <Card isBusy={isStale}>
         {/* Nothing yet is one quiet line, not a block. */}
-        {items.length === 0 ? <EmptyState layout="row" title={copy.empty} /> : items.map(eventRow)}
+        {items.length === 0 ? <EmptyState layout="row" title={copy.empty} /> : shownItems.map(eventRow)}
       </Card>
       {failure !== undefined && (
-        <EmptyState layout="row" tone="error" title={copy.failedMore} onRetry={() => void showMore()}>
+        <EmptyState tone="error" title={copy.failedMore} onRetry={() => void showMore()}>
           {failure}
         </EmptyState>
       )}
-      {more.cursor !== undefined && failure === undefined && (
-        <Button isPending={isLoading} onPress={() => void showMore()}>
+      {hasMore && failure === undefined && (
+        <Button variant="ghost" isPending={isLoading} onPress={() => void showMore()}>
           {copy.showMore}
         </Button>
       )}

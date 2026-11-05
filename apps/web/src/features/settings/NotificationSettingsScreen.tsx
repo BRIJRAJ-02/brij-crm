@@ -2,7 +2,7 @@
 // Purpose: Settings › Account › Notifications (spec 0038): what reaches this person by email from this workspace.
 // Main task: turn each kind of email, and the daily digest, on or off; each switch saves at once, then says so in a
 // toast with Undo.
-// Leaves out: the in app inbox (always on, said under the Email heading), other workspaces' settings, push notifications.
+// Leaves out: the in app inbox (always on, as the heading "Also email me" says), other workspaces' settings, push notifications.
 import type { InboxSettings, NotificationSettings, NotificationSettingsChange } from '@crm/data';
 import { useNotificationSettings } from '@crm/data/react';
 import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, SettingsSection, Switch } from '@crm/ui';
@@ -34,7 +34,7 @@ export function stillShown(shown: NotificationSettings | undefined, change: Noti
 /** The page while the settings load: the Email card, busy. */
 export function NotificationSettingsLoading() {
   return (
-    <SettingsSection title={strings.email} description={strings.emailDescription}>
+    <SettingsSection title={strings.email}>
       <Card isBusy>
         <Skeleton width="long" />
         <Skeleton width="medium" />
@@ -102,7 +102,7 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
     email = (
       // A section like every other settings page's: the heading above the card, and the inbox's promise said
       // in a line rather than hidden in a tip.
-      <SettingsSection title={strings.email} description={strings.emailDescription}>
+      <SettingsSection title={strings.email}>
         <Card>
           {KINDS.map((kind) => (
             <SettingsRow key={kind.key} title={kind.title}>

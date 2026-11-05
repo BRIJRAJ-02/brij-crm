@@ -4,7 +4,6 @@ export const strings = {
   template: 'Template',
   /** A template picked and not published yet (spec 0068). */
   templateChange: (from: string, to: string) => `Template ${from} → ${to}`,
-  templateText: 'How every booking page, form and link page looks. People can pick another for their own link page.',
   templateClassic: 'Classic',
   templateStudio: 'Studio',
   templateNight: 'Night',
@@ -12,11 +11,9 @@ export const strings = {
   title: 'Brand',
   /** The settings navigation's entry. */
   navLabel: 'Brand',
-  kit: 'Brand kit',
   /** Said once to a member who may read the kit but not change it. */
   readOnly: 'Only owners and admins change the brand.',
   logo: 'Logo',
-  logoText: 'On booking pages, forms, the sidebar and the browser tab. A square mark reads best small.',
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',
@@ -29,7 +26,6 @@ export const strings = {
   logoRemoveText: 'Booking pages and forms show no logo, and the sidebar and tab go back to Timefix’s mark.',
   logoUnreadable: 'That picture couldn’t be read. Try a PNG, JPEG or WebP.',
   colour: 'Colour',
-  colourText: 'Buttons, the chosen day, links and focus rings.',
   /** The default the kit's colour falls back to: the product's own accent. */
   colourDefault: 'Timefix',
   colourMore: 'Dark colour',

@@ -18,20 +18,36 @@ import { breakpointToken } from '../../lib/token-values.ts';
 import styles from './AppShell.module.css';
 import { strings } from './strings.ts';
 
-/** What the shell tells the pieces inside it: whether the page is narrower than `bp-page-compact`. */
-export const AppShellContext = createContext({ isCompact: false });
+/**
+ * What the shell tells the pieces inside it: whether the page is narrower than `bp-page-compact`, whether it is a
+ * phone (under `bp-container-md`, 480px), and (for the sidebar alone) whether it is a phone's list
+ * (`phoneSidebar="full"`), the whole width there.
+ */
+export const AppShellContext = createContext({ isCompact: false, isFull: false, isPhone: false });
 
 const COMPACT_QUERY = `(width < ${String(breakpointToken('bp-page-compact'))}px)`;
+/** A phone: the width under which a container drops to one column (`bp-container-md`, 480px). */
+const PHONE_QUERY = `(width < ${String(breakpointToken('bp-container-md'))}px)`;
 
-// Whether the window is narrower than the compact breakpoint, kept current as it resizes.
-function subscribe(onChange: () => void) {
-  const query = window.matchMedia(COMPACT_QUERY);
+// Whether the window matches `media`, kept current as it resizes.
+const watch = (media: string) => (onChange: () => void) => {
+  const query = window.matchMedia(media);
   query.addEventListener('change', onChange);
   return () => {
     query.removeEventListener('change', onChange);
   };
-}
+};
+const subscribe = watch(COMPACT_QUERY);
+const subscribePhone = watch(PHONE_QUERY);
 const isCompactNow = () => window.matchMedia(COMPACT_QUERY).matches;
+const isPhoneNow = () => window.matchMedia(PHONE_QUERY).matches;
+
+/**
+ * What the sidebar is on a phone (under 480px): `rail` (the default) keeps the icon rail beside the page; `hidden`
+ * gives the page the whole width (a settings page, whose way back is its TopBar's `back`); `full` shows the sidebar
+ * alone, open and the whole width, as the list a phone's settings open on (iOS's and Linear's mobile settings).
+ */
+export type PhoneSidebar = 'rail' | 'hidden' | 'full';
 
 /** Props for AppShell. */
 export interface AppShellProps {
@@ -58,6 +74,8 @@ export interface AppShellProps {
    * arrives fresh rather than as the last page's box moved under new bars.
    */
   readonly viewKey?: string;
+  /** The sidebar on a phone (under 480px): the rail (default), hidden, or the whole screen as a list. */
+  readonly phoneSidebar?: PhoneSidebar;
 }
 
 /** Props for AppShellSlot. */
@@ -82,9 +100,22 @@ export function AppShellSlot({ ref }: AppShellSlotProps) {
  * A skip link, first in the tab order, jumps past the sidebar to the main
  * column. The view adapts to its width with container queries.
  */
-export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel, viewKey }: AppShellProps) {
+export function AppShell({
+  sidebar,
+  topBar,
+  viewBar,
+  toolbar,
+  banner,
+  children,
+  panel,
+  viewKey,
+  phoneSidebar = 'rail',
+}: AppShellProps) {
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
+  const isPhone = useSyncExternalStore(subscribePhone, isPhoneNow, () => false);
+  // A phone's settings list: the sidebar open (not the rail) and, by the shell's container query, the whole width.
+  const isFull = phoneSidebar === 'full';
   // The panels open that asked for room (Panel's `pushesPage`), widest first: the main column narrows by the widest.
   const [pushes, setPushes] = useState<readonly PanelWidth[]>([]);
   const push = useCallback((width: PanelWidth) => {
@@ -98,17 +129,26 @@ export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, 
   }, []);
   const pushed = isCompact || pushes.length === 0 ? undefined : pushes.includes('lg') ? 'lg' : 'md';
   // One object while the width class holds, so a panel opening (AppShell's state) doesn't re-render every reader.
-  const shell = useMemo(() => ({ isCompact }), [isCompact]);
+  const shell = useMemo(() => ({ isCompact, isFull: false, isPhone }), [isCompact, isPhone]);
+  const sidebarShell = useMemo(
+    () => ({ isCompact: isCompact && !(isFull && isPhone), isFull, isPhone }),
+    [isCompact, isFull, isPhone],
+  );
   return (
     <AppShellContext value={shell}>
       <PanelPushContext value={push}>
-        <div className={styles.root}>
-          <VisuallyHidden isFocusable>
-            <a className={styles.skip} href={`#${mainId}`}>
-              {strings.skipToContent}
-            </a>
-          </VisuallyHidden>
-          <div className={styles.sidebar}>{sidebar}</div>
+        <div className={styles.root} data-phone-sidebar={phoneSidebar === 'rail' ? undefined : phoneSidebar}>
+          {/* On a phone's settings list the page is hidden behind it, so there is no content to skip to. */}
+          {!(isFull && isPhone) && (
+            <VisuallyHidden isFocusable>
+              <a className={styles.skip} href={`#${mainId}`}>
+                {strings.skipToContent}
+              </a>
+            </VisuallyHidden>
+          )}
+          <div className={styles.sidebar}>
+            <AppShellContext value={sidebarShell}>{sidebar}</AppShellContext>
+          </div>
           <main id={mainId} className={styles.main} tabIndex={-1} data-pushed={pushed}>
             {topBar}
             {viewBar}

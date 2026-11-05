@@ -9,6 +9,7 @@ import {
   AccentPicker,
   BookingFrame,
   Button,
+  Callout,
   Card,
   Disclosure,
   EmptyState,
@@ -20,7 +21,7 @@ import {
   PreviewLayout,
   PublishBar,
   SegmentedControl,
-  SettingsRow,
+  SettingsSection,
   Skeleton,
   TileGrid,
   usePhotoCrop,
@@ -79,6 +80,12 @@ const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[]
   { id: 'night', name: strings.templateNight },
   { id: 'split', name: strings.templateSplit },
 ];
+
+/**
+ * A template's look as its own thumbnail wears it: a template that follows the visitor's light or dark (Classic,
+ * Split) is drawn light, as a first visitor most often meets it; Night stays dark and Studio light.
+ */
+const ownLook = (template: PageTemplate) => themeForTemplate(template, DEFAULT_PAGE_THEME);
 
 /** A template's name, as the picker says it. */
 const nameOf = (template: PageTemplate): string => TEMPLATES.find((one) => one.id === template)?.name ?? template;
@@ -215,20 +222,27 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
       <PreviewLayout
         bodyWidth="form"
         previewShare="wide"
-        {...(kit?.templateDraft !== undefined && canEdit
-          ? {
-              // A template waits for Publish (owner, 4 Nov 2026): every public page changes at once when it goes,
-              // so the bar heads the page, where the editors' bars sit.
+        // Every notice that holds, together (a refused colour never hides a template waiting for Publish): a refusal
+        // above the sections, where each can be seen from; then the Publish bar (owner, 4 Nov 2026: every public page
+        // changes at once when it goes, so it heads the page, where the editors' bars sit). A reader's View only tag
+        // is the page's own (`viewOnly`), never a note here.
+        {...(refusal === undefined && (kit?.templateDraft === undefined || !canEdit)
+          ? {}
+          : {
               notices: (
-                <PublishBar
-                  status="draft"
-                  changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
-                  onPublish={publishTemplate}
-                  onDiscard={discardTemplate}
-                />
+                <>
+                  {refusal !== undefined && <Callout tone="danger">{refusal}</Callout>}
+                  {canEdit && kit.templateDraft !== undefined && (
+                    <PublishBar
+                      status="draft"
+                      changes={[strings.templateChange(nameOf(kit.template), nameOf(kit.templateDraft))]}
+                      onPublish={publishTemplate}
+                      onDiscard={discardTemplate}
+                    />
+                  )}
+                </>
               ),
-            }
-          : {})}
+            })}
         preview={preview}
         previewControls={
           <SegmentedControl
@@ -247,127 +261,141 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
             <EmptyState tone="error" title={strings.failed} onRetry={() => brand.kit(slug).retry()} />
           </Card>
         ) : (
-          <Card
-            title={strings.kit}
-            isBusy={kit === undefined}
-            {...(refusal === undefined ? {} : { footerNote: refusal })}
-          >
-            {/* The template every public page wears (spec 0068, AC-6804): four finished looks, picked by sight. */}
-            <SettingsRow title={strings.template} description={strings.templateText} control="field">
-              {kit === undefined ? (
-                <Skeleton shape="field" />
-              ) : (
-                <TileGrid
-                  variant="choice"
-                  label={strings.template}
-                  showsDescription
-                  keepsPicture
-                  pictureSize="large"
-                  value={chosen ?? kit.template}
-                  tiles={TEMPLATES.map((template) => ({
-                    id: template.id,
-                    name: template.name,
-                    description: TEMPLATE_TEXT[template.id],
-                    isDisabled: !canEdit,
-                    // The template as a page in the kit's own colour and logo, the same large picture the link page's
-                    // picker draws (spec 0068, AC-6804).
-                    thumbnail: (
-                      <LinkPageThumbnail
-                        theme={themeForTemplate(template.id, DEFAULT_PAGE_THEME)}
-                        size="large"
-                        {...(colours === undefined ? {} : { variables: colours.variables })}
-                        profile={{
-                          name: strings.sampleHost,
-                          ...(logoSrc === undefined ? {} : { logo: logoSrc }),
-                          rows: [strings.sampleMeeting, strings.sampleHeadline],
-                        }}
+          <>
+            {/* Logo, Colour, then Template (critics A #11 and B #6, 5 November 2026): what the brand is first, then the
+                look every page wears, each its own section, as Linear's and Vercel's settings read. */}
+            <SettingsSection title={strings.logo}>
+              <Card isBusy={kit === undefined}>
+                {kit === undefined ? (
+                  <Skeleton shape="field" />
+                ) : canEdit ? (
+                  <>
+                    <FileDrop
+                      label={kit.logo === undefined ? strings.logoDrop : strings.logoReplace}
+                      acceptedTypes={BRAND_PHOTO_TYPES}
+                      typesText={strings.logoTypes}
+                      maxSize={BRAND_LOGO_PICK_MAX_BYTES}
+                      isDisabled={isSending}
+                      {...(logoSrc === undefined
+                        ? {}
+                        : {
+                            preview: { src: logoSrc, alt: strings.logoAlt },
+                            onAdjust: () => {
+                              sendLogo(logoSrc);
+                            },
+                          })}
+                      onFiles={(files) => {
+                        const [file] = files;
+                        if (file !== undefined) sendLogo(file);
+                      }}
+                    />
+                    {cropping.cropper}
+                    {kit.logo !== undefined && (
+                      <Button
+                        variant="ghost"
+                        icon="trash"
+                        label={strings.logoRemove}
+                        onPress={() => setRemoving(true)}
                       />
-                    ),
-                  }))}
-                  onChange={(picked) => {
-                    const found = TEMPLATES.find((template) => template.id === picked);
-                    if (found !== undefined && found.id !== chosen) chooseTemplate(found.id);
-                  }}
-                />
-              )}
-            </SettingsRow>
-
-            <SettingsRow title={strings.logo} description={strings.logoText} control="field">
-              {kit === undefined ? (
-                <Skeleton shape="field" />
-              ) : canEdit ? (
-                <>
+                    )}
+                  </>
+                ) : logoSrc === undefined ? (
+                  strings.noLogo
+                ) : (
                   <FileDrop
-                    label={kit.logo === undefined ? strings.logoDrop : strings.logoReplace}
-                    acceptedTypes={BRAND_PHOTO_TYPES}
-                    typesText={strings.logoTypes}
-                    maxSize={BRAND_LOGO_PICK_MAX_BYTES}
-                    isDisabled={isSending}
-                    {...(logoSrc === undefined
-                      ? {}
-                      : {
-                          preview: { src: logoSrc, alt: strings.logoAlt },
-                          onAdjust: () => {
-                            sendLogo(logoSrc);
-                          },
-                        })}
-                    onFiles={(files) => {
-                      const [file] = files;
-                      if (file !== undefined) sendLogo(file);
+                    label={strings.logo}
+                    isReadOnly
+                    preview={{ src: logoSrc, alt: strings.logoAlt }}
+                    onFiles={() => undefined}
+                  />
+                )}
+              </Card>
+            </SettingsSection>
+            <SettingsSection title={strings.colour}>
+              <Card isBusy={kit === undefined}>
+                {kit === undefined ? (
+                  <Skeleton shape="field" />
+                ) : (
+                  <AccentPicker
+                    label={strings.colour}
+                    isLabelHidden
+                    // The hex ends the swatches' row, so it reads as the colour's own value, not a stray field.
+                    hexPlacement="inline"
+                    defaultName={strings.colourDefault}
+                    {...(kit.accent === undefined ? {} : { value: kit.accent })}
+                    quickPicks={brand.quickPicks}
+                    isReadOnly={!canEdit}
+                    {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
+                    onPreview={setDragged}
+                    onChange={(next) => {
+                      save(next, next === undefined ? undefined : kit.accentDark);
+                    }}
+                  >
+                    {/* A separate colour for dark pages (AC-6), once there is a colour to set it beside. */}
+                    {kit.accent !== undefined && (
+                      <Disclosure title={strings.colourMore} variant="quiet">
+                        <AccentPicker
+                          label={strings.colourMore}
+                          hexPlacement="inline"
+                          defaultName={strings.colourDarkDefault}
+                          {...(kit.accentDark === undefined ? {} : { value: kit.accentDark })}
+                          quickPicks={brand.quickPicks}
+                          isReadOnly={!canEdit}
+                          onChange={(nextDark) => {
+                            save(kit.accent, nextDark);
+                          }}
+                        />
+                      </Disclosure>
+                    )}
+                  </AccentPicker>
+                )}
+              </Card>
+            </SettingsSection>
+            {/* The template every public page wears (spec 0068, AC-6804): four finished looks picked by sight, across
+                the section's whole width (four to a row where it holds them, two by two where it doesn't). */}
+            <SettingsSection title={strings.template}>
+              <Card isBusy={kit === undefined}>
+                {kit === undefined ? (
+                  <Skeleton shape="block" />
+                ) : (
+                  <TileGrid
+                    variant="choice"
+                    label={strings.template}
+                    showsDescription
+                    keepsPicture
+                    pictureSize="large"
+                    value={chosen ?? kit.template}
+                    tiles={TEMPLATES.map((template) => ({
+                      id: template.id,
+                      name: template.name,
+                      description: TEMPLATE_TEXT[template.id],
+                      isDisabled: !canEdit,
+                      // The template as a page in the kit's own colour and logo, in its own light or dark, never the
+                      // app's (critic A #11: in the app's dark theme three of the four looked like Night).
+                      thumbnail: (
+                        <LinkPageThumbnail
+                          theme={ownLook(template.id)}
+                          // Classic and Split follow the visitor: drawn light, as most visitors see them.
+                          mode="light"
+                          size="large"
+                          {...(colours === undefined ? {} : { variables: colours.variables })}
+                          profile={{
+                            name: strings.sampleHost,
+                            ...(logoSrc === undefined ? {} : { logo: logoSrc }),
+                            rows: [strings.sampleMeeting, strings.sampleHeadline],
+                          }}
+                        />
+                      ),
+                    }))}
+                    onChange={(picked) => {
+                      const found = TEMPLATES.find((template) => template.id === picked);
+                      if (found !== undefined && found.id !== chosen) chooseTemplate(found.id);
                     }}
                   />
-                  {cropping.cropper}
-                  {kit.logo !== undefined && (
-                    <Button variant="ghost" icon="trash" label={strings.logoRemove} onPress={() => setRemoving(true)} />
-                  )}
-                </>
-              ) : logoSrc === undefined ? (
-                strings.noLogo
-              ) : (
-                <FileDrop
-                  label={strings.logo}
-                  isReadOnly
-                  preview={{ src: logoSrc, alt: strings.logoAlt }}
-                  onFiles={() => undefined}
-                />
-              )}
-            </SettingsRow>
-            <SettingsRow title={strings.colour} description={strings.colourText} control="field">
-              {kit === undefined ? (
-                <Skeleton shape="field" />
-              ) : (
-                <AccentPicker
-                  label={strings.colour}
-                  isLabelHidden
-                  defaultName={strings.colourDefault}
-                  {...(kit.accent === undefined ? {} : { value: kit.accent })}
-                  quickPicks={brand.quickPicks}
-                  isReadOnly={!canEdit}
-                  {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
-                  onPreview={setDragged}
-                  onChange={(next) => {
-                    save(next, next === undefined ? undefined : kit.accentDark);
-                  }}
-                >
-                  {/* A separate colour for dark pages (AC-6), once there is a colour to set it beside. */}
-                  {kit.accent !== undefined && (
-                    <Disclosure title={strings.colourMore} variant="quiet">
-                      <AccentPicker
-                        label={strings.colourMore}
-                        defaultName={strings.colourDarkDefault}
-                        {...(kit.accentDark === undefined ? {} : { value: kit.accentDark })}
-                        quickPicks={brand.quickPicks}
-                        isReadOnly={!canEdit}
-                        onChange={(nextDark) => {
-                          save(kit.accent, nextDark);
-                        }}
-                      />
-                    </Disclosure>
-                  )}
-                </AccentPicker>
-              )}
-            </SettingsRow>
-          </Card>
+                )}
+              </Card>
+            </SettingsSection>
+          </>
         )}
       </PreviewLayout>
       <Modal
