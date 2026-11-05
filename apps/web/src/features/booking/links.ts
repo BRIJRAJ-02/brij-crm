@@ -16,8 +16,21 @@ export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}
 /** Captures › Links with the New dialog open on Managed page (New › Managed page). */
 export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
 
-/** The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. */
-export const PAGE_TABS = ['page', 'meeting', 'questions', 'hosts', 'hours', 'share', 'bookings', 'insights'] as const;
+/**
+ * The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only. Appearance (T21, 5
+ * November 2026) holds the page's look in a tab of its own, as a form's editor does.
+ */
+export const PAGE_TABS = [
+  'page',
+  'meeting',
+  'questions',
+  'hosts',
+  'hours',
+  'appearance',
+  'share',
+  'bookings',
+  'insights',
+] as const;
 /** One of the editor's tabs, as `?tab=` holds it. */
 export type PageTab = (typeof PAGE_TABS)[number];
 

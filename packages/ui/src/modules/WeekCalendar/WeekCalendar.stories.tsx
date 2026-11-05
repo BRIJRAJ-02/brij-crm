@@ -779,6 +779,43 @@ export const OpenHours: Story = {
   },
 };
 
+/**
+ * `fitsHours` (T13): only the working day, 9 to 5 with an hour either side, filling the page with no scroll; the now
+ * line shows since 3:30 PM is on the hours drawn.
+ */
+export const WorkingDay: Story = {
+  // Fill already has the page's shot; this one is checked by its play.
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <PageColumn align="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks().filter((block) => block.startMinute >= 9 * 60 && block.endMinute <= 17 * 60)}
+          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+          openHours={nineToFive}
+          isFill
+          fitsHours
+        />
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('section');
+    await expect(grid?.style.getPropertyValue('--from')).toBe('8');
+    await expect(grid?.style.getPropertyValue('--hours')).toBe('10');
+    // Ten hours drawn: they share the page's height out where it is taller than ten usual hours (64px each), so
+    // nothing scrolls then; on a shorter page only what ten usual hours need beyond it.
+    const scroller = grid?.querySelector('[class*="scroller"]');
+    const shown = scroller?.clientHeight ?? 0;
+    await waitFor(() =>
+      expect((scroller?.scrollHeight ?? 0) - shown).toBeLessThanOrEqual(Math.max(0, 10 * 64 - shown) + 1),
+    );
+    await expect(canvasElement.querySelector('[class*="now"]')).not.toBeNull();
+  },
+};
+
 /** A week with nothing on it: one quiet line in the middle of the grid. */
 export const EmptyWeek: Story = {
   render: (args) => (

@@ -114,6 +114,7 @@ function FormPending() {
   const published = tab === 'share' || tab === 'submissions' || tab === 'analytics';
   const label: Readonly<Record<FormTab, string>> = {
     form: strings.tabForm,
+    appearance: strings.tabAppearance,
     settings: strings.tabSettings,
     share: strings.tabShare,
     submissions: strings.tabSubmissions,
@@ -147,10 +148,12 @@ function FormPending() {
         cards={tab === 'form' ? [strings.name, strings.layoutTitle] : [strings.name]}
         tabs={{
           label: strings.tabs,
-          items: FORM_TABS.filter((id) => published || id === 'form' || id === 'settings').map((id) => ({
-            id,
-            label: label[id],
-          })),
+          items: FORM_TABS.filter((id) => published || id === 'form' || id === 'appearance' || id === 'settings').map(
+            (id) => ({
+              id,
+              label: label[id],
+            }),
+          ),
           shown: tab,
         }}
       />

@@ -1,13 +1,13 @@
-// The form's look and its branded preview in Chromium (spec 0063, AC-6327; forms fixes 3): Mode, Corners and Brand
-// upfront over the preview, the preview wearing the workspace's kit while it is Workspace brand, and the one line that
-// says where to put a kit the workspace hasn't saved yet.
+// The form's look and its branded preview in Chromium (spec 0063, AC-6327; T21): Mode, Corners and Brand on the
+// Appearance tab beside the preview, the preview wearing the workspace's kit while it is Workspace brand, the one line
+// that says where to put a kit the workspace hasn't saved yet, and Edit brand to Settings › Brand.
 import type { BrandKit, BrandStore, PublicForm } from '@crm/data';
 import { useState } from 'react';
 import { afterEach, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { Card, PreviewLayout } from '@crm/ui';
+import { PreviewLayout } from '@crm/ui';
 import { renderInApp } from '../../testing/renderInApp.tsx';
-import { BrandedFormPreview, LookControls, type FormLook } from './FormBrand.tsx';
+import { BrandedFormPreview, FormAppearance, type FormLook } from './FormBrand.tsx';
 // The app's own stylesheet, as `main.tsx` loads it: without it the shots below would be unstyled markup.
 import '@crm/ui/styles.css';
 
@@ -65,12 +65,19 @@ function storeOf(kit: BrandKit): BrandStore {
   } as unknown as BrandStore;
 }
 
-/** The look's controls on their own, the look kept as the editor's draft keeps it. */
+/** The Appearance tab's look on its own, the look kept as the editor's draft keeps it. */
 function Picker({ kit }: { readonly kit: BrandKit }) {
   const [look, setLook] = useState<FormLook>({ colour: 'light', corners: 'rounded', theme: 'brand' });
   return (
     <>
-      <LookControls brand={storeOf(kit)} slug="acme" look={look} isReadOnly={false} onChange={setLook} />
+      <FormAppearance
+        brand={storeOf(kit)}
+        slug="acme"
+        brandHref="/w/acme/settings/brand"
+        look={look}
+        isReadOnly={false}
+        onChange={setLook}
+      />
       <p>{`Look: ${look.colour} ${look.corners} ${look.theme ?? 'plain'}`}</p>
     </>
   );
@@ -82,18 +89,21 @@ async function pick(name: RegExp, option: string) {
   await userEvent.click(page.getByRole('option', { name: option }));
 }
 
-it('shows the look upfront, no click away: Mode, Corners, and Workspace brand or Plain (AC-6327)', async () => {
+it('shows the look on Appearance: Mode, Corners, and Workspace brand or Plain (AC-6327, T21)', async () => {
   app = await renderInApp(() => <Picker kit={KIT} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
-  await expect.element(page.getByRole('button', { name: /Brand/ })).toHaveTextContent('Workspace brand');
+  await expect.element(page.getByRole('button', { name: /Logo and colour/ })).toHaveTextContent('Workspace brand');
+  await expect
+    .element(page.getByRole('link', { name: 'Edit brand' }))
+    .toHaveAttribute('href', '/w/acme/settings/brand');
   await expect.element(page.getByRole('button', { name: /Mode/ })).toHaveTextContent('Light');
   await expect.element(page.getByRole('button', { name: /Corners/ })).toHaveTextContent('Rounded');
-  await pick(/Brand/, 'Plain');
+  await pick(/Logo and colour/, 'Plain');
   await pick(/Mode/, 'Dark');
   await pick(/Corners/, 'Square');
   await expect.element(page.getByText('Look: dark square plain')).toBeVisible();
 });
 
-it('says where to add a kit the workspace hasn’t saved yet, in view without a click (AC-6327)', async () => {
+it('says where to add a kit the workspace hasn’t saved yet, while Workspace brand is picked (AC-6327)', async () => {
   app = await renderInApp(() => <Picker kit={EMPTY} />, { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' });
   await expect.element(page.getByText('Add your logo and colour in Settings › Brand.')).toBeVisible();
 });
@@ -109,26 +119,20 @@ it('wears the workspace logo in the preview while the look is Brand (AC-6327)', 
 });
 
 /**
- * The Form tab as the editor draws it (spec 0058, AC-1): the preview column with the look's controls above it. One
- * shot per theme and width, so the controls and the branded preview are checked in both.
+ * The Appearance tab as the editor draws it (T21): the look's cards beside the branded preview. One shot per theme
+ * and width, so the cards and the branded preview are checked in both.
  */
 for (const [theme, width] of [
   ['light', 1280],
   ['dark', 1280],
 ] as const) {
-  it(`draws the look over the branded preview in ${theme} at ${String(width)} (AC-6327)`, async () => {
+  it(`draws the look beside the branded preview in ${theme} at ${String(width)} (AC-6327, T21)`, async () => {
     await page.viewport(width, 900);
     document.documentElement.dataset.theme = theme;
     app = await renderInApp(
       () => (
-        <PreviewLayout
-          bodyLayout="stack"
-          preview={<BrandedFormPreview brand={storeOf(KIT)} slug="acme" form={FORM} />}
-          previewControls={<Picker kit={KIT} />}
-        >
-          <Card title="Layout">
-            <p>The form’s questions sit here.</p>
-          </Card>
+        <PreviewLayout bodyLayout="stack" preview={<BrandedFormPreview brand={storeOf(KIT)} slug="acme" form={FORM} />}>
+          <Picker kit={KIT} />
         </PreviewLayout>
       ),
       { data: {}, pattern: '/w/$slug/forms', at: '/w/acme/forms' },

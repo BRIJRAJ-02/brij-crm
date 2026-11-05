@@ -30,6 +30,9 @@ import { deferred, openDialog, renderInApp, type InApp } from '../../testing/ren
 import type { HostBookingActions } from './BookingActions.tsx';
 import { BookingsCalendarScreen, BookingsListScreen } from './BookingsScreen.tsx';
 import { addDays, dayKeyOf, instantAt, weekOf } from './week.ts';
+// The app's own stylesheet, as `main.tsx` loads it: the week draws only the hours it fits to (T13) by clipping a
+// day tall grid to them, which needs the tokens; without them each day is no height and its blocks clipped away.
+import '@crm/ui/styles.css';
 
 // Next week, so every booking is still to come: its Wednesday, 10:00 to 11:00, in UTC (the member's zone here).
 const week = weekOf(addDays(dayKeyOf(new Date(), 'UTC'), 7));

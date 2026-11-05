@@ -1,14 +1,18 @@
 // Brief
-// Purpose: the form's look (spec 0063, AC-6327): Mode, Corners and Brand over the preview, in view without a click
-// (forms fixes 3, the owner: "this upfront as it was earlier was better"), and the preview wearing the workspace's kit,
-// from the same colours the hosted page's stylesheet holds.
+// Purpose: the form's look (spec 0063, AC-6327): Brand, Mode and Corners on the editor's Appearance tab (T21, 5 November
+// 2026: the look of a page in a tab of its own, as the booking page's editor has), beside the preview they change, and
+// the preview wearing the workspace's kit, from the same colours the hosted page's stylesheet holds.
 // Main task: change the look and see the form take it at once, before publishing.
-// Leaves out: editing the kit, which is Settings › Brand.
+// Leaves out: editing the kit (its logo and colour), which is Settings › Brand, one press away.
 import type { BrandKit, BrandStore, FormDocument, PublicForm } from '@crm/data';
 import { useBrand } from '@crm/data/react';
 import {
+  ButtonLink,
+  Card,
   HostedFormPreview,
   Select,
+  SettingsRow,
+  SettingsStack,
   type HostedFormPreviewProps,
   type PageBrand,
   type PreviewTextChange,
@@ -26,7 +30,7 @@ function useKit(brand: BrandStore, slug: string): BrandKit | undefined {
 export type FormLook = FormDocument['look'];
 
 /** Props for the look's controls. */
-export interface LookControlsProps {
+interface LookControlsProps {
   readonly look: FormLook;
   readonly isReadOnly: boolean;
   readonly onChange: (look: FormLook) => void;
@@ -35,93 +39,114 @@ export interface LookControlsProps {
   readonly slug: string;
 }
 
-/**
- * The look, over the preview it changes (forms fixes 3: builder2's Design popover hid it behind a click, and its Brand
- * row wrapped under its label): three compact Selects of one height, side by side in the preview's head, each named
- * for its axis: Mode (Light or Dark), Corners (Rounded or Square) and Brand (Workspace brand or Plain, AC-6327). Each
- * change shows on the preview at once and goes live with the next publish.
- */
-export function LookControls({ brand, slug, ...rest }: LookControlsProps) {
-  return brand === undefined ? <LookSelects {...rest} /> : <LookSelectsWithKit brand={brand} slug={slug} {...rest} />;
+/** Props for the Appearance tab's look. */
+export interface FormAppearanceProps extends LookControlsProps {
+  /** Settings › Brand, where the workspace's logo and colour are edited. */
+  readonly brandHref: string;
 }
 
-/** The three Selects, with where to add a kit under Workspace brand while the workspace has none. */
-function LookSelects({
-  look,
-  isReadOnly,
-  onChange,
-  hint,
-}: Pick<LookControlsProps, 'look' | 'isReadOnly' | 'onChange'> & { readonly hint?: string }) {
-  return (
-    <>
-      <Select
-        label={strings.colour}
-        isLabelHidden
-        size="sm"
-        isReadOnly={isReadOnly}
-        items={[
-          { id: 'light', label: strings.light, icon: 'sun' },
-          { id: 'dark', label: strings.dark, icon: 'moon' },
-        ]}
-        value={look.colour}
-        onChange={(colour) => {
-          if (colour === 'light' || colour === 'dark') onChange({ ...look, colour });
-        }}
-      />
-      <Select
-        label={strings.corners}
-        isLabelHidden
-        size="sm"
-        isReadOnly={isReadOnly}
-        items={[
-          { id: 'rounded', label: strings.rounded },
-          { id: 'square', label: strings.square },
-        ]}
-        value={look.corners}
-        onChange={(corners) => {
-          if (corners === 'rounded' || corners === 'square') onChange({ ...look, corners });
-        }}
-      />
-      <Select
-        label={strings.theme}
-        isLabelHidden
-        size="sm"
-        isReadOnly={isReadOnly}
-        // Where to add a kit, in view while Workspace brand is picked and there is none to wear.
-        {...(hint === undefined || look.theme !== 'brand' ? {} : { hint })}
-        items={[
-          {
-            id: 'brand',
-            label: strings.themeBrand,
-            icon: 'palette',
-            ...(hint === undefined ? {} : { description: hint }),
-          },
-          { id: 'plain', label: strings.themePlain },
-        ]}
-        value={look.theme ?? 'plain'}
-        onChange={(theme) => {
-          if (theme === 'brand' || theme === 'plain') onChange({ ...look, theme });
-        }}
-      />
-    </>
+/**
+ * The Appearance tab (T21): Look (Mode and Corners), then Brand (the workspace's logo and colour, or Plain), one
+ * labelled row each, the Selects one size. Brand's Edit brand takes you to Settings › Brand, where the kit itself is
+ * edited, as the booking page's Appearance does, so a form and a page wear the brand the same way.
+ */
+export function FormAppearance({ brand, slug, brandHref, ...rest }: FormAppearanceProps) {
+  return brand === undefined ? (
+    <AppearanceRows {...rest} brandHref={brandHref} />
+  ) : (
+    <AppearanceRowsWithKit brand={brand} slug={slug} brandHref={brandHref} {...rest} />
   );
 }
 
-/**
- * The Selects where the workspace's kit is known (the Form tab): Workspace brand says where to put a kit that is
- * empty. The kit is read through the store, so the Selects and the preview never show different states of it.
- */
-function LookSelectsWithKit({
+/** The kit read through the store, for the hint while the workspace has none saved. */
+function AppearanceRowsWithKit({
   brand,
   slug,
   ...rest
-}: Pick<LookControlsProps, 'look' | 'isReadOnly' | 'onChange'> & {
+}: Pick<FormAppearanceProps, 'look' | 'isReadOnly' | 'onChange' | 'brandHref'> & {
   readonly brand: BrandStore;
   readonly slug: string;
 }) {
   const kit = useKit(brand, slug);
   const isEmpty = kit !== undefined && kit.accent === undefined && kit.logo === undefined;
-  return <LookSelects {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
+  return <AppearanceRows {...rest} {...(isEmpty ? { hint: strings.themeBrandEmpty } : {})} />;
+}
+
+/** The three rows. */
+function AppearanceRows({
+  look,
+  isReadOnly,
+  onChange,
+  brandHref,
+  hint,
+}: Pick<FormAppearanceProps, 'look' | 'isReadOnly' | 'onChange' | 'brandHref'> & { readonly hint?: string }) {
+  return (
+    <SettingsStack>
+      <Card title={strings.appearanceTitle}>
+        <SettingsRow title={strings.colour} control="field">
+          <Select
+            label={strings.colour}
+            isLabelHidden
+            isReadOnly={isReadOnly}
+            items={[
+              { id: 'light', label: strings.light, icon: 'sun' },
+              { id: 'dark', label: strings.dark, icon: 'moon' },
+            ]}
+            value={look.colour}
+            onChange={(colour) => {
+              if (colour === 'light' || colour === 'dark') onChange({ ...look, colour });
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow title={strings.corners} control="field">
+          <Select
+            label={strings.corners}
+            isLabelHidden
+            isReadOnly={isReadOnly}
+            items={[
+              { id: 'rounded', label: strings.rounded },
+              { id: 'square', label: strings.square },
+            ]}
+            value={look.corners}
+            onChange={(corners) => {
+              if (corners === 'rounded' || corners === 'square') onChange({ ...look, corners });
+            }}
+          />
+        </SettingsRow>
+      </Card>
+      {/* The brand as the booking page's Appearance shows it: its own card, Edit brand at its head. */}
+      <Card
+        title={strings.theme}
+        description={strings.themeText}
+        actions={
+          <ButtonLink variant="ghost" icon="palette" href={brandHref}>
+            {strings.editBrand}
+          </ButtonLink>
+        }
+      >
+        <SettingsRow
+          title={strings.themeWear}
+          // Where to add a kit, in view while Workspace brand is picked and there is none to wear.
+          {...(hint === undefined || look.theme !== 'brand' ? {} : { description: hint })}
+          control="field"
+        >
+          <Select
+            label={strings.themeWear}
+            isLabelHidden
+            isReadOnly={isReadOnly}
+            items={[
+              { id: 'brand', label: strings.themeBrand, icon: 'palette' },
+              { id: 'plain', label: strings.themePlain },
+            ]}
+            value={look.theme ?? 'plain'}
+            onChange={(theme) => {
+              if (theme === 'brand' || theme === 'plain') onChange({ ...look, theme });
+            }}
+          />
+        </SettingsRow>
+      </Card>
+    </SettingsStack>
+  );
 }
 
 /** Props for the branded preview. */

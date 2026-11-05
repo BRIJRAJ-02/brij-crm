@@ -76,7 +76,8 @@ import {
   withQuestions,
   uploadsOffFor,
 } from './draft.ts';
-import { BrandedFormPreview, LookControls } from './FormBrand.tsx';
+import { BrandedFormPreview, FormAppearance } from './FormBrand.tsx';
+import { brandSettingsHref } from '../settings/nav.ts';
 import { LayoutCard } from './LayoutCard.tsx';
 import { AnalyticsTab } from './AnalyticsTab.tsx';
 import { ShareTab } from './ShareTab.tsx';
@@ -904,7 +905,7 @@ export function FormEditor(props: FormEditorProps) {
     ? tab === 'analytics'
       ? 'analytics'
       : 'submissions'
-    : isPublished || tab === 'settings'
+    : isPublished || tab === 'settings' || tab === 'appearance'
       ? tab
       : 'form';
   const notices = (
@@ -984,6 +985,20 @@ export function FormEditor(props: FormEditorProps) {
             onStatusChange={askStatus}
             onSettingsChange={applySettings}
             {...(props.keepMonths === undefined ? {} : { keepMonths: props.keepMonths })}
+          />
+        );
+      case 'appearance':
+        // The look in a tab of its own (T21), beside the preview it changes.
+        return (
+          <FormAppearance
+            look={draft.look}
+            isReadOnly={!canManage}
+            {...(props.brand === undefined ? {} : { brand: props.brand })}
+            slug={slug}
+            brandHref={brandSettingsHref(slug)}
+            onChange={(look) => {
+              setDraft((before) => ({ ...before, look }));
+            }}
           />
         );
       case 'share':
@@ -1244,9 +1259,10 @@ export function FormEditor(props: FormEditorProps) {
       // On a sunken canvas, the frame as tall as the form (forms fixes 3, the design critic: a white slab in dark).
       previewSurface="canvas"
       previewDevice={device}
-      // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
+      // Every tab reads top to bottom, full width; only Form and Appearance keep the preview (the owner, 22 October
+      // 2026; Appearance, T21).
       bodyLayout="stack"
-      {...(current === 'form'
+      {...(current === 'form' || current === 'appearance'
         ? {
             preview:
               draft.look.theme === 'brand' && props.brand !== undefined ? (
@@ -1266,7 +1282,7 @@ export function FormEditor(props: FormEditorProps) {
                   {...(previewEnding === undefined ? {} : { ending: previewEnding })}
                 />
               ),
-            // The look, upfront over the preview it changes (forms fixes 3): Mode, Corners and Brand, no click away.
+            // Desktop or Phone over the preview; the look itself is the Appearance tab's (T21).
             previewControls: (
               <>
                 {/* Desktop or Phone (forms fixes 3, the design critic): the form laid out at either, as Tally's and
@@ -1281,15 +1297,6 @@ export function FormEditor(props: FormEditorProps) {
                   value={device}
                   onChange={(value) => {
                     if (value === 'phone' || value === 'desktop') setDevice(value);
-                  }}
-                />
-                <LookControls
-                  look={draft.look}
-                  isReadOnly={!canManage}
-                  {...(props.brand === undefined ? {} : { brand: props.brand })}
-                  slug={slug}
-                  onChange={(look) => {
-                    setDraft((before) => ({ ...before, look }));
                   }}
                 />
               </>
@@ -1401,6 +1408,11 @@ export function FormEditor(props: FormEditorProps) {
                     ? []
                     : [
                         { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
+                        {
+                          id: 'appearance',
+                          label: strings.tabAppearance,
+                          href: formHref(slug, form.id, 'appearance'),
+                        },
                         { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
                       ]),
                   ...(isPublished && !viewOnly
@@ -1426,7 +1438,7 @@ export function FormEditor(props: FormEditorProps) {
                   ? (['submissions', 'analytics'] as const)
                   : isPublished
                     ? FORM_TABS
-                    : (['form', 'settings'] as const)
+                    : (['form', 'appearance', 'settings'] as const)
                 ).map((id) => (
                   <TabPanel key={id} id={id} variant="fill">
                     {id === current && layout}
