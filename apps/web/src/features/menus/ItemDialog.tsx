@@ -1,14 +1,28 @@
 // Brief
-// Purpose: one dish of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527) in a drawer, in checklabs' item sheet's
-// order: name, photo, price, calories, description, sizes, option groups, allergens, dietary marks, Popular.
-// Main task: get a dish right in one go and save it, the way guests will read it.
-// Leaves out: where the dish sits (the section's own Add dishes and Take out), and Sold out (a switch on its row).
+// Purpose: one item of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527) in a drawer, in checklabs' item sheet's
+// order: name, photo, price with Available beside it, calories, description, sizes, option groups (with New option
+// group, which opens its own drawer and comes back here), allergens, dietary marks, Popular.
+// Main task: get an item right in one go and save it, the way guests will read it.
+// Leaves out: where the item sits (the section's own Add item and Take out), and a serving size (the model has none).
 import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
-import { Button, Callout, ChoiceChips, Field, FileDrop, Form, Switch, usePhotoCrop, type Toasts } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  ChoiceChips,
+  Field,
+  FileDrop,
+  Form,
+  FormRow,
+  Switch,
+  usePhotoCrop,
+  type Toasts,
+} from '@crm/ui';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
+import { GroupDrawer } from './GroupDrawer.tsx';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
+import { flipSoldOut } from './StructureTab.tsx';
 import { strings } from './strings.ts';
 
 interface SizeRow {
@@ -54,7 +68,11 @@ export function ItemDialog({
   );
   const [kcal, setKcal] = useState(item?.kcal === undefined ? '' : String(item.kcal));
   const [featured, setFeatured] = useState(item?.featured ?? false);
+  // Available beside the price (checklabs' Active): Sold out, which goes live at once, sent as the item saves.
+  const [isAvailable, setAvailable] = useState(!(item?.soldOut ?? false));
   const [groupIds, setGroupIds] = useState<readonly string[]>(item?.groupIds ?? []);
+  // New option group opens its drawer over this one, then comes back here with the group picked.
+  const [isMakingGroup, setMakingGroup] = useState(false);
   const [sizes, setSizes] = useState<readonly SizeRow[]>(
     item?.sizes.map((size) => ({
       key: size.id,
@@ -85,6 +103,7 @@ export function ItemDialog({
   const isReadOnly = !draft.canEdit;
   const isDirty =
     pendingPhoto !== undefined ||
+    isAvailable === (item?.soldOut ?? false) ||
     name !== (item?.name ?? newName ?? '') ||
     price !== (item?.priceMinor === undefined ? '' : minorToDecimal(item.priceMinor, currency)) ||
     priceNote !== (item?.priceNote ?? '') ||
@@ -138,15 +157,27 @@ export function ItemDialog({
       })),
       groupIds: [...groupIds],
     };
+    // Busy until every part has gone (the item, its photo, Available), so a second Save sends nothing twice.
     setSaving(true);
     const refused = await store.saveItem(slug, id, fields, item === undefined ? sectionId : undefined);
-    setSaving(false);
     if (refused !== undefined) {
+      setSaving(false);
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
     if (pendingPhoto !== undefined) await upload(pendingPhoto);
+    // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists, said
+    // with Undo as the Items switch says it.
+    if (isAvailable === (item?.soldOut ?? false)) {
+      flipSoldOut(store, slug, { id, name: name.trim() }, !isAvailable, toasts, said);
+    }
+    setSaving(false);
     onClose();
+  };
+
+  /** A refusal said as a toast (the item's own Undo and Available speak through the same). */
+  const said = (refusedNow: { readonly message: string } | undefined) => {
+    if (refusedNow !== undefined) toasts.toast({ tone: 'danger', message: refusedNow.message });
   };
 
   /** Sends the cropped photo, already at both widths, for the dish `id`, which must exist by now. */
@@ -235,6 +266,7 @@ export function ItemDialog({
         <Field
           isReadOnly={isReadOnly}
           label={strings.dishName}
+          placeholder={strings.namePlaceholder}
           value={name}
           onChange={setName}
           isRequired
@@ -242,16 +274,28 @@ export function ItemDialog({
           error={problems.name}
         />
         {photoField}
-        <Field
-          isReadOnly={isReadOnly}
-          label={strings.price}
-          value={price}
-          onChange={setPrice}
-          hint={sizes.length > 0 ? strings.priceBySize : strings.priceHint(currency)}
-          error={problems.price}
-          isDisabled={sizes.length > 0}
-          inputMode="decimal"
-        />
+        <FormRow>
+          <Field
+            isReadOnly={isReadOnly}
+            label={strings.price}
+            value={price}
+            onChange={setPrice}
+            hint={sizes.length > 0 ? strings.priceBySize : strings.priceHint(currency)}
+            error={problems.price}
+            isDisabled={sizes.length > 0}
+            inputMode="decimal"
+          />
+          <Switch
+            label={strings.availableSwitch}
+            description={isReadOnly ? strings.availableNow : strings.availableHint}
+            isSelected={isAvailable}
+            onChange={(next) => {
+              setAvailable(next);
+              // Run service changes nothing else here, so Available goes live at once for them, with Undo.
+              if (isReadOnly && live !== undefined) flipSoldOut(store, slug, live, !next, toasts, said);
+            }}
+          />
+        </FormRow>
         {price.trim() === '' && sizes.length === 0 ? (
           <Field
             isReadOnly={isReadOnly}
@@ -326,18 +370,24 @@ export function ItemDialog({
             {strings.addSize}
           </Button>
         )}
-        {draft.groups.length === 0 ? (
-          isReadOnly ? null : (
-            // A button here would leave the drawer and what was typed in it: Options is where groups are made.
-            <Callout tone="info">{strings.groupsLater}</Callout>
-          )
-        ) : (
+        {isReadOnly && draft.groups.length === 0 ? null : (
+          // New option group opens its drawer over this one and comes back with the group picked, so nothing typed
+          // here is lost (checklabs' modifier groups, which it left unlinked).
           <ChoiceChips
             label={strings.groups}
             choices={draft.groups.map((group) => ({ id: group.id, label: group.name }))}
             selected={groupIds}
             isDisabled={isReadOnly}
             onChange={(next) => setGroupIds(next.slice(0, MENU_LIMITS.groupsPerItem))}
+            {...(isReadOnly
+              ? {}
+              : {
+                  end: (
+                    <Button variant="dashed" icon="plus" onPress={() => setMakingGroup(true)}>
+                      {strings.newOptionGroup}
+                    </Button>
+                  ),
+                })}
           />
         )}
         <ChoiceChips
@@ -376,6 +426,16 @@ export function ItemDialog({
         <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} isReadOnly={isReadOnly} />
       </Form>
       {cropping.cropper}
+      {isMakingGroup ? (
+        <GroupDrawer
+          store={store}
+          slug={slug}
+          draft={draft}
+          toasts={toasts}
+          onSaved={(groupId) => setGroupIds((was) => [...was, groupId].slice(0, MENU_LIMITS.groupsPerItem))}
+          onClose={() => setMakingGroup(false)}
+        />
+      ) : null}
     </DrawerForm>
   );
 }

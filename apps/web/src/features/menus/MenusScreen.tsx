@@ -1,7 +1,9 @@
 // Brief
 // Purpose: the Menu app's editor (spec 0065, H1, AC-6520 to AC-6527), laid out after checklabs' menu editor: a header
-// with the menu picked, its status, Settings and one Publish, then the menu's Structure (sections, sub sections and their
-// dishes in order), Dishes, Options and Settings, with the guest menu's phone beside it.
+// with the menu picked, its status, Settings, ⋯ (Discard changes, Delete menu) and one split Publish (Publish & go
+// live, then Publish · N drafts, else View, its chevron Open in new tab and Show QR code), then the menu's Structure
+// (sections, sub sections and their items in order), Items, Options and Settings, a search in the tab bar over
+// Structure and Items, with the guest menu's phone beside it.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
 // Leaves out: the guest look's presets (H5), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
 import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
@@ -11,6 +13,7 @@ import {
   Button,
   ButtonLink,
   EmptyState,
+  Field,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -21,13 +24,14 @@ import {
   SegmentedControl,
   Select,
   SetupChecklist,
+  SplitButton,
   TabPanel,
   Tabs,
   ToggleButton,
   TopBar,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { memo, useDeferredValue, useState } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { publicMenuUrl } from '../booking/links.ts';
 import { useIsNarrow } from './narrow.ts';
@@ -56,13 +60,14 @@ import { strings } from './strings.ts';
 
 export { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 
-/** What the screen opens over itself: a dish, a section or an option group in a drawer, or a confirm. */
+/** What the screen opens over itself: an item, a section or an option group in a drawer, a confirm, or the QR code. */
 export type Open =
   | { readonly kind: 'item'; readonly item?: Dish; readonly sectionId?: string; readonly newName?: string }
   | { readonly kind: 'section'; readonly menuId: string; readonly sectionId?: string; readonly parentId?: string }
   | { readonly kind: 'group'; readonly groupId?: string }
   | { readonly kind: 'discard' }
   | { readonly kind: 'publish' }
+  | { readonly kind: 'qr' }
   | { readonly kind: 'hide' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
   | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
@@ -73,8 +78,15 @@ export interface MenusScreenProps {
   readonly store: MenuStore;
   readonly slug: string;
   readonly toasts: Toasts;
-  /** The business's name and each place's hours, for the preview's header, the checklist and serving defaults. */
-  readonly business: { readonly name: string; readonly hours: Readonly<Record<string, PlaceHours>> };
+  /**
+   * The business's name, phone and each place's hours, for the preview's header, the checklist, serving defaults and
+   * Settings' read only phone.
+   */
+  readonly business: {
+    readonly name: string;
+    readonly phone?: string;
+    readonly hours: Readonly<Record<string, PlaceHours>>;
+  };
   readonly view: MenusView;
 }
 
@@ -83,7 +95,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const state = useHospitality(store.draft(slug));
   const [placeId, setPlaceId] = useState<string | undefined>();
   const [open, setOpen] = useState<Open>();
-  const [justPublished, setJustPublished] = useState(false);
+  const [isPublishing, setPublishing] = useState(false);
+  // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
+  const [query, setQuery] = useState('');
+  // The lists follow the search a beat behind the typing, so a long menu never holds a key back.
+  const searched = useDeferredValue(query);
   const isNarrow = useIsNarrow();
   // Put away from its own menu, the setup checklist stays away in this browser (UI state, never the server's).
   const setupKey = `crm.menus.setup-hidden.${slug}`;
@@ -111,13 +127,6 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       search: menusSearch({ ...view, ...next }),
       replace: true,
     });
-  // "Published" stands in the button for two seconds after a publish, then it reads Review and publish again.
-  useEffect(() => {
-    if (!justPublished) return undefined;
-    const timer = globalThis.setTimeout(() => setJustPublished(false), 2_000);
-    return () => globalThis.clearTimeout(timer);
-  }, [justPublished]);
-
   if (state.status === 'loading') {
     return (
       <WorkspacePage
@@ -148,6 +157,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const said = (refused: { readonly message: string } | undefined) => {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };
+  // A delete says it happened, as the Tables page's does, or why it didn't.
+  const deleted = (refused: { readonly message: string } | undefined, name: string) =>
+    toasts.toast(
+      refused === undefined
+        ? { tone: 'success', message: strings.deletedNamed(name) }
+        : { tone: 'danger', message: refused.message },
+    );
   const place = draft.places.find((each) => each.id === placeId) ?? draft.places[0];
   const placeHours = place === undefined ? undefined : business.hours[place.id];
   const menus = [...draft.menus].sort((a, b) => a.position - b.position);
@@ -161,13 +177,25 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   // The place's own page holds its week, so Set your hours opens there, not on the Business list (walk, 4 Nov).
   const hoursHref = place === undefined ? businessSettingsHref(slug) : placeTablesHref(slug, place.id);
 
-  const copyLink = async (link: string) => {
-    try {
-      await globalThis.navigator.clipboard.writeText(link);
-      toasts.toast({ tone: 'success', message: strings.linkCopied });
-    } catch {
-      toasts.toast({ tone: 'danger', message: link });
+  // The live guest menu, once there is one: View and Open in new tab open it (checklabs' split button).
+  const liveLink = isLive && place !== undefined ? publicMenuUrl(place.menuKey) : undefined;
+  const openGuest = () => {
+    if (liveLink !== undefined) globalThis.open(liveLink, '_blank', 'noopener');
+  };
+  // Publish · N drafts publishes at once, as checklabs' does; with something still in the way, the review says what.
+  const publishNow = async () => {
+    if (blocker !== undefined) {
+      setOpen({ kind: 'publish' });
+      return;
     }
+    setPublishing(true);
+    const refused = await store.publish(slug);
+    setPublishing(false);
+    if (refused !== undefined) {
+      said(refused);
+      return;
+    }
+    toasts.toast({ tone: 'success', message: strings.publishedToast });
   };
 
   // A first menu comes with a first section, so Add dishes is right there (foolproof from the first click).
@@ -263,9 +291,13 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       <>
         {picker}
         <MenuTrigger>
-          <Button variant="ghost" icon={draft.hidden ? 'eye-off' : 'eye'} iconRight="chevron-down">
-            {statusText}
-          </Button>
+          {/* At a phone's width the status is its eye alone, so the bar's actions keep their room. */}
+          <Button
+            variant="ghost"
+            icon={draft.hidden ? 'eye-off' : 'eye'}
+            iconRight="chevron-down"
+            {...(isNarrow ? { label: statusText } : { children: statusText })}
+          />
           <Menu
             label={strings.visibility}
             selectionMode="single"
@@ -292,72 +324,95 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       </>
     );
 
+  // The header's ⋯ (checklabs': Duplicate menu, Discard changes, Delete): only what can be done here. Duplicate menu
+  // has no write yet, so it isn't offered.
+  const moreItems = [
+    // At a phone's width Settings joins ⋯ rather than taking a button of its own in a full bar.
+    ...(isNarrow && current !== undefined ? (['settings'] as const) : []),
+    ...(draft.canEdit && isLive && draft.changes > 0 ? (['discard'] as const) : []),
+    ...(draft.canEdit && current !== undefined ? (['delete'] as const) : []),
+  ];
+  const hasDrafts = draft.canEdit && isLive && draft.changes > 0;
+  const publishButton = !isLive ? (
+    draft.canEdit ? (
+      <Button variant="primary" onPress={() => setOpen({ kind: 'publish' })}>
+        {isNarrow ? strings.publish : strings.publishGoLive}
+      </Button>
+    ) : null
+  ) : (
+    <SplitButton
+      variant={hasDrafts ? 'primary' : 'secondary'}
+      isPending={isPublishing}
+      onPress={() => {
+        if (hasDrafts) void publishNow();
+        else openGuest();
+      }}
+      menuLabel={strings.shareMenu}
+      menu={
+        <Menu
+          label={strings.shareMenu}
+          onAction={(key) => {
+            if (key === 'open') openGuest();
+            else if (key === 'qr') setOpen({ kind: 'qr' });
+          }}
+        >
+          <MenuItem id="open" icon="external-link">
+            {strings.openNewTab}
+          </MenuItem>
+          <MenuItem id="qr" icon="qr-code">
+            {strings.showQr}
+          </MenuItem>
+        </Menu>
+      }
+    >
+      {hasDrafts ? (isNarrow ? strings.publish : strings.publishDrafts(draft.changes)) : strings.view}
+    </SplitButton>
+  );
   const actions =
     draft.menus.length === 0 && !isLive ? undefined : (
       <>
         {/* Settings in the header, as checklabs' editor has it; its view keeps `?tab=settings`. */}
-        {current === undefined ? null : (
+        {current === undefined || isNarrow ? null : (
           <ToggleButton
             variant="ghost"
             icon="settings"
-            {...(isNarrow ? { label: strings.tabSettings } : { children: strings.tabSettings })}
             isSelected={tab === 'settings'}
             onChange={(isOn) => go({ tab: isOn ? 'settings' : 'structure' })}
-          />
+          >
+            {strings.tabSettings}
+          </ToggleButton>
         )}
-        <MenuTrigger>
-          <Button variant="ghost" icon="ellipsis" label={strings.more} />
-          <Menu
-            label={strings.more}
-            onAction={(key) => {
-              if (key === 'new') {
-                newMenu();
-                return;
-              }
-              if (place === undefined) return;
-              if (key === 'open') globalThis.open(publicMenuUrl(place.menuKey), '_blank', 'noopener');
-              else if (key === 'copy') void copyLink(publicMenuUrl(place.menuKey));
-              else if (key === 'qr') setOpen({ kind: 'publish' });
-              else if (key === 'discard') setOpen({ kind: 'discard' });
-            }}
-          >
-            {isLive && place !== undefined ? (
-              <>
-                <MenuItem id="open" icon="external-link">
-                  {strings.openGuest}
+        {moreItems.length === 0 ? null : (
+          <MenuTrigger>
+            <Button variant="ghost" icon="ellipsis" label={strings.more} />
+            <Menu
+              label={strings.more}
+              onAction={(key) => {
+                if (key === 'settings') go({ tab: tab === 'settings' ? 'structure' : 'settings' });
+                else if (key === 'discard') setOpen({ kind: 'discard' });
+                else if (key === 'delete' && current !== undefined)
+                  setOpen({ kind: 'deleteMenu', menuId: current.id, name: current.name });
+              }}
+            >
+              {moreItems.includes('settings') ? (
+                <MenuItem id="settings" icon="settings">
+                  {tab === 'settings' ? strings.backToMenu : strings.tabSettings}
                 </MenuItem>
-                <MenuItem id="copy" icon="copy">
-                  {strings.copyLink}
+              ) : null}
+              {moreItems.includes('discard') ? (
+                <MenuItem id="discard" icon="undo-2">
+                  {strings.discardChanges}
                 </MenuItem>
-                <MenuItem id="qr" icon="qr-code">
-                  {strings.showQr}
+              ) : null}
+              {moreItems.includes('delete') ? (
+                <MenuItem id="delete" icon="trash" isDanger>
+                  {strings.deleteMenu}
                 </MenuItem>
-              </>
-            ) : null}
-            {draft.canEdit && isLive && draft.changes > 0 ? (
-              <MenuItem id="discard" icon="undo-2">
-                {strings.discard}
-              </MenuItem>
-            ) : null}
-          </Menu>
-        </MenuTrigger>
-        {draft.canEdit ? (
-          <Button
-            variant="primary"
-            animateLabel
-            labelReserve={isNarrow ? strings.published : strings.reviewPublish}
-            isDisabled={draft.changes === 0 && isLive}
-            onPress={() => setOpen({ kind: 'publish' })}
-          >
-            {justPublished
-              ? strings.published
-              : isNarrow
-                ? strings.publish
-                : isLive && draft.changes > 0
-                  ? strings.publishCount(draft.changes)
-                  : strings.reviewPublish}
-          </Button>
-        ) : null}
+              ) : null}
+            </Menu>
+          </MenuTrigger>
+        )}
+        {publishButton}
       </>
     );
 
@@ -368,12 +423,12 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
       <>
         {/* The guests' own look (the Warm preset with the brand's accent), before any Publish. */}
         <link rel="stylesheet" href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}`} precedence="menu" />
-        <MenuList
-          menu={previewMenu(draft, place, {
-            businessName: business.name,
-            ...(placeHours === undefined ? {} : { hours: placeHours }),
-          })}
-          photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
+        <PreviewMenu
+          slug={slug}
+          draft={draft}
+          place={place}
+          businessName={business.name}
+          {...(placeHours === undefined ? {} : { hours: placeHours })}
           {...(at === undefined ? {} : { at: at.getTime() })}
         />
       </>
@@ -481,7 +536,9 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                     draft={draft}
                     menuId={current.id}
                     {...(placeHours === undefined ? {} : { placeHours })}
-                    onOpen={setOpen}
+                    {...(business.phone === undefined ? {} : { phone: business.phone })}
+                    {...(place === undefined ? {} : { timeZone: place.timeZone })}
+                    profileHref={businessSettingsHref(slug)}
                     said={said}
                   />
                 </>
@@ -496,7 +553,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                     },
                     {
                       id: 'dishes',
-                      // Every dish of the workspace, not this menu's (checklabs' Items).
+                      // Every item of the workspace, not only this menu's (checklabs' Items).
                       label: strings.tabAllDishes,
                       count: draft.items.length,
                       ...(unpriced.length === 0 ? {} : { alert: strings.needsPrice(unpriced.length) }),
@@ -507,6 +564,24 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   onSelectionChange={(id) =>
                     go({ tab: (MENU_TABS as readonly string[]).includes(id) ? (id as MenuTab) : 'structure' })
                   }
+                  // One search over Structure and Items, in the tab bar (checklabs'); a phone keeps the room.
+                  {...(isNarrow || tab === 'options'
+                    ? {}
+                    : {
+                        end: (
+                          <Field
+                            label={strings.search}
+                            isLabelHidden
+                            type="search"
+                            size="sm"
+                            icon="search"
+                            placeholder={strings.searchPlaceholder}
+                            value={query}
+                            onChange={setQuery}
+                            autoComplete="off"
+                          />
+                        ),
+                      })}
                 >
                   <TabPanel id="structure" variant="fields">
                     <StructureTab
@@ -515,13 +590,23 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                       slug={slug}
                       draft={draft}
                       menuId={current.id}
+                      query={isNarrow ? '' : searched}
                       onOpen={setOpen}
                       said={said}
                       toasts={toasts}
                     />
                   </TabPanel>
                   <TabPanel id="dishes">
-                    <DishesTab store={store} slug={slug} draft={draft} onOpen={setOpen} said={said} toasts={toasts} />
+                    <DishesTab
+                      store={store}
+                      slug={slug}
+                      draft={draft}
+                      menuId={current.id}
+                      query={isNarrow ? '' : searched}
+                      onOpen={setOpen}
+                      said={said}
+                      toasts={toasts}
+                    />
                   </TabPanel>
                   <TabPanel id="options">
                     <OptionsTab draft={draft} onOpen={setOpen} />
@@ -565,8 +650,9 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 onClose={() => setOpen(undefined)}
               />
             ) : null}
-            {open?.kind === 'publish' ? (
+            {open?.kind === 'publish' || open?.kind === 'qr' ? (
               <PublishDialog
+                startsOn={open.kind === 'qr' ? 'live' : 'review'}
                 store={store}
                 slug={slug}
                 draft={draft}
@@ -574,7 +660,6 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 {...(place === undefined ? {} : { place })}
                 blocker={blocker}
                 onClose={() => setOpen(undefined)}
-                onPublished={() => setJustPublished(true)}
                 onFix={(fix) => {
                   setOpen(undefined);
                   if (fix.kind === 'hours') router.history.push(hoursHref);
@@ -652,7 +737,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                     onPress={() => {
                       if (open?.kind === 'deleteMenu') {
                         go({ menu: undefined, tab: undefined });
-                        void store.deleteMenu(slug, open.menuId).then(said);
+                        const { name } = open;
+                        void store.deleteMenu(slug, open.menuId).then((refused) => deleted(refused, name));
                       }
                       setOpen(undefined);
                     }}
@@ -678,7 +764,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (open?.kind === 'deleteSection') void store.deleteSection(slug, open.sectionId).then(said);
+                      if (open?.kind === 'deleteSection') {
+                        const { name } = open;
+                        void store.deleteSection(slug, open.sectionId).then((refused) => deleted(refused, name));
+                      }
                       setOpen(undefined);
                     }}
                   >
@@ -703,7 +792,10 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                   <Button
                     variant="danger-solid"
                     onPress={() => {
-                      if (open?.kind === 'deleteItem') void store.deleteItem(slug, open.item.id).then(said);
+                      if (open?.kind === 'deleteItem') {
+                        const { name } = open.item;
+                        void store.deleteItem(slug, open.item.id).then((refused) => deleted(refused, name));
+                      }
                       setOpen(undefined);
                     }}
                   >
@@ -725,6 +817,34 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     />
   );
 }
+
+/**
+ * The phone preview: the real guest menu drawing the draft. Kept apart and memoised, so typing in the tab bar's
+ * search (or anything else that leaves the draft as it was) never draws the whole guest menu again.
+ */
+const PreviewMenu = memo(function PreviewMenu({
+  slug,
+  draft,
+  place,
+  businessName,
+  hours,
+  at,
+}: {
+  readonly slug: string;
+  readonly draft: MenuDraft;
+  readonly place: MenuDraft['places'][number];
+  readonly businessName: string;
+  readonly hours?: PlaceHours;
+  readonly at?: number;
+}) {
+  return (
+    <MenuList
+      menu={previewMenu(draft, place, { businessName, ...(hours === undefined ? {} : { hours }) })}
+      photoHref={(photoId, size, version) => draftPhotoHref(slug, photoId, size, version)}
+      {...(at === undefined ? {} : { at })}
+    />
+  );
+});
 
 /** Whether a refusal is the app gate's, for the route. */
 export const isNotInstalled = (error: unknown): boolean =>

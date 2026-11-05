@@ -4,12 +4,18 @@ import { FieldError } from '../../atoms/FieldError/FieldError.tsx';
 import { ToggleButton } from '../../atoms/Button/Button.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import type { Hue } from '../../hue.ts';
 import styles from './ChoiceChips.module.css';
 
 /** One choice. */
 export interface ChoiceChip {
   readonly id: string;
   readonly label: string;
+  /**
+   * A dot before the label in the hue's dot colour, mirroring Badge's `dot`: the colour the choice wears elsewhere on
+   * the page (a zone's colour, beside its tables). Decorative: the label still names the choice.
+   */
+  readonly dot?: Hue;
 }
 
 /** Props for ChoiceChips. */
@@ -104,7 +110,12 @@ export function ChoiceChips({
           }}
         >
           {choices.map((choice) => (
-            <ToggleButton key={choice.id} id={choice.id} isSelectionStrong={isSelectionStrong}>
+            <ToggleButton
+              key={choice.id}
+              id={choice.id}
+              isSelectionStrong={isSelectionStrong}
+              {...(choice.dot === undefined ? {} : { dot: choice.dot })}
+            >
               {choice.label}
             </ToggleButton>
           ))}

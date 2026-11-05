@@ -1,30 +1,33 @@
 // Brief
-// Purpose: Menu QR's print sheet (spec 0065, H2): every table of a place as an A4 tent card with the logo, the venue,
-// "Scan for the menu", the table's name and its code, printed from the browser with print CSS (no PDF service).
-// Main task: choose 2 or 4 cards a sheet, then Print.
-// Leaves out: stickers and other layouts (later), editing tables or codes (the QR codes page), and the app's frame:
-// it stands alone so only the sheets print.
+// Purpose: Menu QR's print sheet (spec 0065, H2, after checklabs' print sheet): the picked tables, else the zone shown,
+// else every table of a place, as A4 sheets of tiles (six a sheet, the default) or tent cards (two or four), each
+// with the table's label and code, printed from the browser with print CSS (no PDF service).
+// Main task: choose tiles or tents, then Print.
+// Leaves out: editing tables or codes (the Tables page), and the app's frame: it stands alone so only the sheets print.
 import type { HospitalityStore, PlaceQrCodes } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { tableDisplayName } from '@crm/contracts/menu';
-import { Button, ButtonLink, EmptyState, QrSheet, SegmentedControl, VisuallyHidden } from '@crm/ui';
+import { Button, ButtonLink, EmptyState, QrSheet, SegmentedControl, VisuallyHidden, type QrSheetLayout } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { placeTablesHref } from '../settings/nav.ts';
 import { tableMenuAddress } from './codes.ts';
-import { qrPageHref, type QrLook } from './look.ts';
+import { printedTables, qrPageHref, type QrLook } from './look.ts';
 import { MenuState } from './QrScreen.tsx';
 import { strings } from './strings.ts';
+import { zoneGroups } from './zones.ts';
 
-/** The sheet for one place: its codes as tent cards, the per sheet choice and Print above, never printed. */
+/** The sheet for one place: its codes as tiles or tents, the layout and Print above, never printed. */
 export function QrPrintScreen({
   slug,
   placeId,
+  tables,
   hospitality,
   venue,
   look,
 }: {
   readonly slug: string;
   readonly placeId: string;
+  /** The tables to print (the address's `tables`), or undefined for every one. */
+  readonly tables?: string;
   readonly hospitality: HospitalityStore;
   readonly venue: string;
   readonly look: QrLook;
@@ -32,6 +35,7 @@ export function QrPrintScreen({
   const held = hospitality.qrCodes(slug, placeId);
   const state = useHospitality(held);
   useEffect(() => held.retain(), [held]);
+  const [layout, setLayout] = useState<QrSheetLayout>('tiles');
   const [perPage, setPerPage] = useState<2 | 4>(2);
   const back = (
     <ButtonLink href={qrPageHref(slug)} variant="ghost" icon="arrow-left">
@@ -55,7 +59,16 @@ export function QrPrintScreen({
     );
   }
   const codes: PlaceQrCodes = state.value;
-  if (codes.tables.length === 0) {
+  const only = printedTables(tables);
+  // The tables asked for, in the Tables page's order (zone by zone, Unzoned last, each in reading order); a table
+  // deleted since is left out.
+  const printed = zoneGroups(
+    codes.tables.filter((table) => only === undefined || only.has(table.id)),
+    (table) => table.areaName,
+    (name) => name,
+    strings.unzoned,
+  ).flatMap((group) => group.tables);
+  if (printed.length === 0) {
     return (
       <main>
         <EmptyState
@@ -82,27 +95,41 @@ export function QrPrintScreen({
       </VisuallyHidden>
       <QrSheet
         venue={venue}
-        cards={codes.tables.map((table) => ({
+        cards={printed.map((table) => ({
           id: table.id,
-          name: tableDisplayName(table.label),
+          name: table.label,
+          code: table.code,
           value: tableMenuAddress(codes.menuKey, table.code),
         }))}
+        layout={layout}
         perPage={perPage}
         {...(look.colour === undefined ? {} : { colour: look.colour })}
         {...(look.logoSrc === undefined ? {} : { logoSrc: look.logoSrc })}
         notice={codes.menuState === 'live' ? undefined : <MenuState slug={slug} codes={codes} />}
         controls={back}
+        summary={strings.scanReady(printed.length)}
         actions={
           <>
             <SegmentedControl
-              label={strings.perPage}
+              label={strings.layout}
               segments={[
-                { value: '2', label: strings.two },
-                { value: '4', label: strings.four },
+                { value: 'tiles', label: strings.tiles },
+                { value: 'tents', label: strings.tents },
               ]}
-              value={String(perPage)}
-              onChange={(next) => setPerPage(next === '4' ? 4 : 2)}
+              value={layout}
+              onChange={(next) => setLayout(next === 'tents' ? 'tents' : 'tiles')}
             />
+            {layout === 'tents' ? (
+              <SegmentedControl
+                label={strings.perPage}
+                segments={[
+                  { value: '2', label: strings.two },
+                  { value: '4', label: strings.four },
+                ]}
+                value={String(perPage)}
+                onChange={(next) => setPerPage(next === '4' ? 4 : 2)}
+              />
+            ) : null}
             <Button variant="primary" icon="printer" onPress={() => globalThis.print()}>
               {strings.printNow}
             </Button>

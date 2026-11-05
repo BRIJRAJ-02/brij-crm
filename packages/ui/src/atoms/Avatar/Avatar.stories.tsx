@@ -83,6 +83,21 @@ export const Mark: Story = {
   },
 };
 
+/** An empty slot waiting for its picture (a menu item with no photo yet): a dashed edge, no fill, a quiet "+". */
+export const Empty: Story = {
+  render: () => (
+    <Stage>
+      <Avatar name="Oysters" mark={<Icon name="plus" size="xs" />} shape="square" size="sm" isEmpty />
+      <Avatar name="Oysters" mark={<Icon name="plus" size="sm" />} shape="square" size="md" isEmpty src={PICTURE} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // An empty slot shows no picture, even with one given.
+    const [, given] = canvas.getAllByRole('img', { name: 'Oysters' });
+    await expect(given?.querySelector('img')).toBeNull();
+  },
+};
+
 /** A picture from an outside origin is refused and the initials show (AC-14). */
 export const RefusedPicture: Story = {
   args: { src: 'https://images.example.com/ada.png' },

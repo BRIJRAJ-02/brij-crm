@@ -24,14 +24,43 @@ export async function qrLookOf(data: DataLayer, slug: string): Promise<QrLook> {
   }
 }
 
-/** The print sheet's address for a place. */
-export const qrPrintHref = (slug: string, placeId: string): string =>
-  `/w/${slug}/qr/print?${new URLSearchParams({ place: placeId }).toString()}`;
+/** At most this many tables a print address names (a place's own limit); past it the sheet prints them all. */
+const PRINT_TABLES_MAX = 300;
+
+const UUID = /^[0-9a-f-]{36}$/i;
+
+/**
+ * The print sheet's address for a place: every table, or only `tables` (the picked ones, else the zone shown), in
+ * the place's order (checklabs prints the selection, else the filter).
+ */
+export const qrPrintHref = (slug: string, placeId: string, tables?: readonly string[]): string =>
+  `/w/${slug}/qr/print?${new URLSearchParams({
+    place: placeId,
+    ...(tables === undefined || tables.length === 0 || tables.length > PRINT_TABLES_MAX
+      ? {}
+      : { tables: tables.join(',') }),
+  }).toString()}`;
 
 /** The QR codes page's address. */
 export const qrPageHref = (slug: string): string => `/w/${slug}/qr`;
 
-/** The print sheet's search as the route reads it (`?place=<id>`): anything else is dropped. */
-export function qrPrintSearch(search: Record<string, unknown>): { readonly place?: string } {
-  return typeof search.place === 'string' && /^[0-9a-f-]{36}$/i.test(search.place) ? { place: search.place } : {};
+/** The print sheet's search as the route reads it (`?place=<id>&tables=<id>,<id>`): anything else is dropped. */
+export function qrPrintSearch(search: Record<string, unknown>): {
+  readonly place?: string;
+  readonly tables?: string;
+} {
+  const tables =
+    typeof search.tables === 'string' &&
+    search.tables.split(',').length <= PRINT_TABLES_MAX &&
+    search.tables.split(',').every((id) => UUID.test(id))
+      ? search.tables
+      : undefined;
+  return {
+    ...(typeof search.place === 'string' && UUID.test(search.place) ? { place: search.place } : {}),
+    ...(tables === undefined ? {} : { tables }),
+  };
 }
+
+/** The table ids a print address names, or undefined for every table. */
+export const printedTables = (tables: string | undefined): ReadonlySet<string> | undefined =>
+  tables === undefined ? undefined : new Set(tables.toLowerCase().split(','));

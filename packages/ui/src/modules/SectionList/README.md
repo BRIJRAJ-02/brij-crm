@@ -53,3 +53,4 @@ Tab reaches each section's grip, then its menu, then what it holds (a LinkList t
 Not in the artifact yet.
 
 - `description` puts a line under a section's title, the Card's own (a menu section's "5 items", after checklabs' category card, 5 November 2026).
+- A section's `isExpanded` with `onExpandedChange` folds it: a ghost chevron at its header's end (after the grip and its actions; down while open, right while folded) is a disclosure button named "Show Mains", read as expanded or collapsed, that opens and closes what the section holds; a folded section draws its header alone. The caller keeps which are open (UI state). Why a variant: a menu's Structure folds its categories as checklabs' editor does (5 November 2026), and a Disclosure inside the Card would repeat its title; Card itself never folds.

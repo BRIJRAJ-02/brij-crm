@@ -18,6 +18,7 @@ New. Screens can't lay out a row of controls themselves (no styles in `apps/web`
 
 - `title` is an h2: the section's heading under the page's TopBar.
 - `description` is one quiet line after the heading, on its baseline, in `text-secondary`: Home's greeting and today's date (spec 0041). Why a prop: screens can't set text beside a heading themselves, and a Card would frame a single line.
+- `description` with no `title` stands alone as that quiet line, with no heading: a list's count before its actions (Menu QR's "12 of 20 tables" before Print QR sheet and Clear) or a page's one line of help under its TopBar, as checklabs' Tables page has them (5 November 2026). Why a variant: neither line names a section, so an h2 would put a false heading in the outline, and the screen can't set a line of text itself.
 - `after` holds controls right after the heading, before `end`: Bookings' week puts its calendar switch after the dates. Why a prop: the owner's bar (22 October 2026) reads Today ‹ › dates, then the calendars, then Filter at the end, and `end` is pushed to the far side.
 - `isTitleQuiet` sets the heading in `text-body-strong` rather than `text-title`, for a heading that is a place in time (the week's dates) beside the controls that lead. Why: the week's bar read heavy with the dates in title type (the owner, 22 October 2026).
 - `end` sits at the end and moves under the rest when the row wraps.

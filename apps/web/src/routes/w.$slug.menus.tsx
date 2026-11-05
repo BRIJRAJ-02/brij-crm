@@ -13,11 +13,16 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 interface MenusData {
   readonly isInstalled: boolean;
   readonly store?: MenuStore;
-  readonly business: { readonly name: string; readonly hours: Readonly<Record<string, PlaceHours>> };
+  readonly business: {
+    readonly name: string;
+    readonly phone?: string;
+    readonly hours: Readonly<Record<string, PlaceHours>>;
+  };
 }
 
 // Menus, the Menu app's editor (spec 0065, H1): shown only while Menu is installed, else not found. The loader reads
-// the draft (and, for those who set the apps up, the business: its name and each place's hours for the preview).
+// the draft (and, for those who set the apps up, the business: its name, its phone for Settings, and each place's
+// hours for the preview).
 export const Route = createFileRoute('/w/$slug/menus')({
   validateSearch: menusSearch,
   loader: async ({ context, params }): Promise<MenusData> => {
@@ -32,6 +37,7 @@ export const Route = createFileRoute('/w/$slug/menus')({
       store,
       business: {
         name: view?.profile?.name ?? '',
+        ...(view?.profile?.phone === undefined ? {} : { phone: view.profile.phone }),
         hours: Object.fromEntries((view?.places ?? []).map((place) => [place.id, place.hours])),
       },
     };

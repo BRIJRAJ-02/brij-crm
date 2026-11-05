@@ -138,3 +138,30 @@ export const WithEnds: Story = {
     await expect(canvas.getByRole('radiogroup').getBoundingClientRect().width).toBeGreaterThan(200);
   },
 };
+
+/**
+ * A dot per choice (Menu QR's zones, after checklabs' zone pills): each zone's colour before its name and count, one
+ * choice at a time, "All" first and "Unzoned" last with no dot.
+ */
+export const WithDots: Story = {
+  args: { label: 'Zones', isSingle: true, selected: ['patio'] },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips
+        {...args}
+        choices={[
+          { id: 'all', label: 'All (14)' },
+          { id: 'bar', label: 'Bar (4)', dot: 'orange' },
+          { id: 'patio', label: 'Patio (6)', dot: 'green' },
+          { id: 'window', label: 'Window (2)', dot: 'purple' },
+          { id: 'none', label: 'Unzoned (2)' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The dot is decorative: each chip is named by its label alone.
+    await expect(canvas.getByRole('radio', { name: 'Patio (6)' })).toHaveAttribute('aria-checked', 'true');
+    await expect(canvas.getByRole('radio', { name: 'Unzoned (2)' })).toBeInTheDocument();
+  },
+};

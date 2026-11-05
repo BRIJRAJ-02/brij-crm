@@ -10,6 +10,8 @@ import { strings } from '../features/menu-qr/strings.ts';
 interface PrintData {
   readonly store?: HospitalityStore;
   readonly placeId?: string;
+  /** The tables to print (`?tables=`), or undefined for every one. */
+  readonly tables?: string;
   readonly venue: string;
   readonly look: QrLook;
   /** Why there is no sheet: Menu QR isn't installed, or there is no place yet. */
@@ -17,10 +19,11 @@ interface PrintData {
 }
 
 // Menu QR's print sheet (spec 0065, H2): outside the app frame (as a form's preview is), so only the sheets print.
-// Shown only while Menu QR is installed; the place comes from `?place=`, else the first.
+// Shown only while Menu QR is installed; the place comes from `?place=`, else the first; `?tables=` names the tables
+// to print (the Tables page's picked rows, else its zone), else every one.
 export const Route = createFileRoute('/w/$slug/qr_/print')({
   validateSearch: qrPrintSearch,
-  loaderDeps: ({ search }) => ({ place: search.place }),
+  loaderDeps: ({ search }) => ({ place: search.place, tables: search.tables }),
   loader: async ({ context, params, deps }): Promise<PrintData> => {
     if (!(await isPageInstalled(context.data, params.slug, 'qr'))) return { venue: '', look: {}, missing: 'app' };
     const [look, store] = await Promise.all([qrLookOf(context.data, params.slug), context.data.hospitality.load()]);
@@ -28,14 +31,20 @@ export const Route = createFileRoute('/w/$slug/qr_/print')({
     const place = business.places.find((each) => each.id === deps.place) ?? business.places[0];
     if (place === undefined) return { venue: '', look, missing: 'place' };
     await store.readQrCodes(params.slug, place.id);
-    return { store, placeId: place.id, venue: business.profile?.name ?? place.name, look };
+    return {
+      store,
+      placeId: place.id,
+      ...(deps.tables === undefined ? {} : { tables: deps.tables }),
+      venue: business.profile?.name ?? place.name,
+      look,
+    };
   },
   errorComponent: PrintError,
   component: PrintRoute,
 });
 
 function PrintRoute() {
-  const { store, placeId, venue, look, missing } = Route.useLoaderData();
+  const { store, placeId, tables, venue, look, missing } = Route.useLoaderData();
   const { slug } = Route.useParams();
   if (store === undefined || placeId === undefined) {
     return (
@@ -54,7 +63,16 @@ function PrintRoute() {
       </main>
     );
   }
-  return <QrPrintScreen slug={slug} placeId={placeId} hospitality={store} venue={venue} look={look} />;
+  return (
+    <QrPrintScreen
+      slug={slug}
+      placeId={placeId}
+      {...(tables === undefined ? {} : { tables })}
+      hospitality={store}
+      venue={venue}
+      look={look}
+    />
+  );
 }
 
 function PrintError({ error }: ErrorComponentProps) {

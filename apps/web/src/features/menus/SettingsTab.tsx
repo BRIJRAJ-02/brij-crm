@@ -1,13 +1,14 @@
 // Brief
 // Purpose: one menu's settings (after checklabs' menu Settings: General, Availability, Tax and service): its name and
-// places, when it serves, the tax inside its prices and the service added, the note at its foot, and Delete.
+// places, when it serves, the tax inside its prices and the service added, the note at its foot, and the phone guests
+// call with the currency and time zone it reads in, from the business profile.
 // Main task: say when the menu serves and what its prices include.
-// Leaves out: the look (H5 presets), currency (the workspace's), and sections and dishes (Structure).
+// Leaves out: the look (H5 presets), the phone, currency and time zone themselves (the business profile's, linked),
+// Delete (the header's ⋯, as checklabs has it), and sections and items (Structure).
 import type { Menu as MenuShape, MenuDraft, MenuStore, PlaceHours } from '@crm/data';
 import { formatRate, parseRate, rateNote } from '@crm/data/menu';
-import { Button, Card, ChoiceChips, Field } from '@crm/ui';
+import { ButtonLink, Card, ChoiceChips, DescriptionList, Field } from '@crm/ui';
 import { useState } from 'react';
-import type { Open } from './MenusScreen.tsx';
 import { ServingEditor } from './serving.tsx';
 import { strings } from './strings.ts';
 
@@ -20,7 +21,9 @@ export function SettingsTab({
   draft,
   menuId,
   placeHours,
-  onOpen,
+  phone,
+  timeZone,
+  profileHref,
   said,
 }: {
   readonly store: MenuStore;
@@ -28,7 +31,12 @@ export function SettingsTab({
   readonly draft: MenuDraft;
   readonly menuId: string;
   readonly placeHours?: PlaceHours;
-  readonly onOpen: (open: Open) => void;
+  /** The business profile's phone, shown read only (guests tap it to call). */
+  readonly phone?: string;
+  /** The place's time zone, which serving times read in. */
+  readonly timeZone?: string;
+  /** Where the phone, currency and time zone are changed: Settings › Business. */
+  readonly profileHref: string;
   readonly said: Said;
 }) {
   const menu = draft.menus.find((each) => each.id === menuId);
@@ -77,23 +85,26 @@ export function SettingsTab({
       <Card title={strings.taxCard} description={strings.taxLine}>
         <Rates menu={menu} isReadOnly={isReadOnly} onSave={save} />
       </Card>
-      {draft.canEdit ? (
-        <Card
-          title={strings.dangerCard}
-          description={strings.dangerLine}
-          actions={
-            <Button
-              variant="danger"
-              icon="trash"
-              onPress={() => onOpen({ kind: 'deleteMenu', menuId: menu.id, name: menu.name })}
-            >
-              {strings.deleteMenu}
-            </Button>
-          }
-        >
-          {null}
-        </Card>
-      ) : null}
+      {/* The phone guests call, and the currency and time zone the menu reads in: the profile's, read only here. */}
+      <Card
+        title={strings.regionCard}
+        description={strings.regionLine}
+        actions={
+          <ButtonLink href={profileHref} variant="ghost" icon="pencil">
+            {strings.editProfile}
+          </ButtonLink>
+        }
+      >
+        <DescriptionList
+          items={[
+            phone === undefined || phone.trim() === ''
+              ? { term: strings.phone, description: strings.noPhone, isPlaceholder: true }
+              : { term: strings.phone, description: phone },
+            { term: strings.currency, description: draft.currency },
+            ...(timeZone === undefined ? [] : [{ term: strings.timeZone, description: timeZone }]),
+          ]}
+        />
+      </Card>
     </>
   );
 }

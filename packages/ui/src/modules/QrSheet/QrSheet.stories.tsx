@@ -10,6 +10,15 @@ const cards = (count: number): readonly QrSheetCard[] =>
     value: `https://timefix.com/m/AbCdEfGhIjKlMnOp?t=Q7n2Xc9LmB4vTz8RkP1wYd${String(index)}`.slice(0, 64),
   }));
 
+/** Cards with their tables' codes printed under the names (Menu QR's own labels, T1 to T8). */
+const coded = (count: number): readonly QrSheetCard[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `t${String(index + 1)}`,
+    name: `T${String(index + 1)}`,
+    code: `Q7n2Xc9LmB4vTz8RkP1wY${String(index)}`,
+    value: `https://timefix.com/m/AbCdEfGhIjKlMnOp?t=Q7n2Xc9LmB4vTz8RkP1wY${String(index)}`,
+  }));
+
 const meta = {
   title: 'Modules/QrSheet',
   component: QrSheet,
@@ -55,6 +64,27 @@ export const LongNames: Story = {
   args: {
     venue: 'The Somewhere Nowhere Kitchen and Wine Bar',
     cards: [{ id: 'a', name: 'Terrace 12', value: 'https://timefix.com/m/AbCdEfGhIjKlMnOp?t=Q7n2Xc9LmB4vTz8RkP1wYd' }],
+  },
+};
+
+/** Tiles (stickers), six an A4 sheet, each with the venue and the table's code under its name: eight on two sheets. */
+export const Tiles: Story = {
+  args: { cards: coded(8), layout: 'tiles', summary: '8 tables · scan-ready' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('region')).toHaveLength(2);
+    await expect(canvas.getAllByRole('article')).toHaveLength(8);
+    await expect(canvas.getByText('Somewhere · Q7n2Xc9LmB4vTz8RkP1wY0')).toBeInTheDocument();
+    await expect(canvas.getByText('8 tables · scan-ready')).toBeVisible();
+    // A tile is one face: one code a table, nothing upside down.
+    await expect(canvas.getAllByRole('img', { name: 'QR code for T1' })).toHaveLength(1);
+  },
+};
+
+/** Tents with each table's code printed under its name. */
+export const TentsWithCodes: Story = {
+  args: { cards: coded(2), perPage: 2 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('Q7n2Xc9LmB4vTz8RkP1wY0').length).toBeGreaterThan(0);
   },
 };
 

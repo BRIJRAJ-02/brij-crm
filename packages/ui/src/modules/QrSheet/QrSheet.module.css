@@ -35,6 +35,14 @@
     inline-size: min(100%, var(--size-dialog-wide));
   }
 
+  /* What prints, quiet beside the way back. */
+  .summary {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   /* The cards sit inside a margin most home printers can print to (about 8mm), the page itself having none. */
   .sheet {
     display: grid;
@@ -50,6 +58,27 @@
 
   .sheet[data-per-page='4'] {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Tiles (stickers): two across, three down, a cut gap between them. */
+  .sheet[data-layout='tiles'] {
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16);
+  }
+
+  /* One flat tile, its own dashed edge the cut line: the name, the venue and code, the code, the scan line. */
+  .tile {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    justify-items: center;
+    align-items: center;
+    gap: var(--space-4);
+    min-block-size: 0;
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) dashed var(--border-strong);
+    text-align: center;
   }
 
   .card {
@@ -133,6 +162,24 @@
     margin: 0;
     color: var(--text-secondary);
     font: var(--text-body-strong);
+  }
+
+  /* The table's code under its name (a tent), so staff can match a printed card to its table. */
+  .key {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+    overflow-wrap: anywhere;
+  }
+
+  /* A tile's venue and code, quiet under the name. */
+  .meta {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
   }
 
   /* A quarter card is narrow: the code above, the words under it, centred. */
