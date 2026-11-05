@@ -180,6 +180,11 @@ export interface LinkListProps {
    * section's Add item, which turns into its field in place).
    */
   readonly footer?: ReactNode;
+  /**
+   * With `density="media"`: the tiles keep the grip's column clear even with no grips (read only, or while a search
+   * has put them away), so they stay under a SectionList's `isTitleInset` titles.
+   */
+  readonly isTileInset?: boolean;
 }
 
 /** Props for LinkListToolbar. */
@@ -267,6 +272,7 @@ export function LinkList({
   rowOrder: RowOrder,
   leadingLoading,
   footer,
+  isTileInset = false,
 }: LinkListProps) {
   const hasLeading = leadingLoading !== undefined;
   const isCompact = density === 'compact';
@@ -296,6 +302,7 @@ export function LinkList({
     'data-reorderable': moves === undefined ? undefined : '',
     'data-leading': hasLeading ? '' : undefined,
     'data-settled': isMedia && isSettled ? '' : undefined,
+    'data-tile-inset': isMedia && isTileInset && moves === undefined ? '' : undefined,
   };
   const foot =
     isMedia && footer !== undefined && footer !== null ? <div className={styles.footer}>{footer}</div> : undefined;

@@ -507,6 +507,7 @@ function SectionBody({
       <LinkList
         label={strings.dishesIn(section.name)}
         density="media"
+        isTileInset
         rows={rows}
         onOpen={(id) => {
           const item = items.get(id);

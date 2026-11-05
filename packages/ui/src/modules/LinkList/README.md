@@ -160,9 +160,10 @@ Not in the artifact yet. `density` and `placement` are new (20 October 2026), `o
 
 A menu's items: rows told apart by a picture, inside a Card. Why a density rather than a new module: the rows, the grid's keys, the moves and the states are LinkList's own; only their look differs. `compact` rows are one line at 34px, too short for a photo you can recognise; `comfortable` is a box of its own, a card in the section's card.
 
-- The row: a `size-toolbar` square `leading` tile, the title, `chips` as one quiet line of words under it, then `quickAction`, `amount` (right aligned, tabular digits, the row's second voice; `quiet` for a note, `alert` for what must be fixed) and `actions`. No frame and no hairlines; the hover's ground reaches `space-8` past the Card's padding, so the tile stays on the Card's content edge.
+- The row: a `size-toolbar` square `leading` tile, the title, `chips` as one quiet line of words under it, then `amount` (right aligned, tabular digits, the row's second voice; `quiet` for a note, `alert` for what must be fixed), `quickAction` and `actions`, the last two close together on one edge down the list. No frame and no hairlines; the hover's ground reaches `space-8` past the Card's padding, so the tile stays on the Card's content edge.
 - The grip, `quickAction` and `actions` wait for the pointer or for focus on the row, holding their space so nothing shifts, and stay while a menu they opened is open or the row is lifted. Where there is no hover (`hover: none`) they just stand there. Reached by the arrows and left and right as any row's controls are.
 - `isOff` steps the tile back (`opacity-busy`) with the title and amount, easing as it flips. `titleBadgeTone="strong"` makes a state read at a glance (Sold out).
+- `isTileInset` keeps the grip's column clear with no grips (read only, or under a search), so the tiles stay under a SectionList's `isTitleInset` titles.
 - `footer` is the list's last line, lined up with the tiles, drawn with no rows too (with or without an `emptyState`). A menu's Add item, which turns into its field in place.
 - Rows that arrive after the first draw ease in (a fade with a `space-4` rise; a fade alone with reduced motion).
 - Under 480px of list: the words stack beside the tile, the name, then the amount on a clear line, then the facts, which may wrap. The name may wrap too.

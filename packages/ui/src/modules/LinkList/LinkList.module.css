@@ -370,6 +370,11 @@
     scroll-margin-block-end: calc(var(--size-control) + 2 * var(--space-16));
   }
 
+  /* No grips to hold the column (read only, or under a search): the tiles still start under an inset title. */
+  .frame[data-tile-inset] .row {
+    padding-inline-start: calc(var(--space-8) + var(--size-icon-sm) + 2 * var(--space-2) + var(--space-4));
+  }
+
   /* The grip's column stays on the same line as a section head's chevron, so the tiles start under its title. */
   .frame[data-density='media'] .grip {
     margin-inline-end: calc(var(--space-4) - var(--space-12));
