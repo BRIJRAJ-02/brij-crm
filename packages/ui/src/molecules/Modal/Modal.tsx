@@ -60,6 +60,12 @@ export interface ModalProps {
   /** The heading, which also names the dialog: a question or the task ("Delete 3 records?"). */
   readonly title: string;
   /**
+   * One quiet line under the title, opening the body in the secondary colour: what the dialog makes, where the title
+   * alone doesn't say it (New list: "A hand-picked set of people, with its own stages and columns."). It is the
+   * dialog's description for screen readers. Not for a `confirm`, whose body is already its one line.
+   */
+  readonly description?: ReactNode;
+  /**
    * The body. A `confirm` whose question says it all (Discard your unsaved changes?) leaves it out: no line is
    * drawn and no description is set, so the title and the two buttons are the whole dialog.
    */
@@ -182,6 +188,7 @@ function usePressOnKey(foot: HTMLDivElement | null) {
  */
 export function Modal({
   title,
+  description,
   children,
   actions,
   hint,
@@ -215,6 +222,9 @@ export function Modal({
   // A confirm asks in its body: no title bar, the question over its one line of consequence.
   const isConfirm = variant === 'confirm';
   const bodyId = useId();
+  const descriptionId = useId();
+  // The line under the title: any dialog but a confirm, whose body is its one line already.
+  const hasDescription = description !== undefined && description !== null && !isConfirm;
   // A confirm may be the question alone; any other dialog always has a body.
   const hasBody = children !== undefined && children !== null && children !== false;
   // The footer's submit shows ↵, or ⌘↵ while the dialog holds a long text or an editor, where Enter writes a line
@@ -249,7 +259,14 @@ export function Modal({
             </div>
           )
         ) : (
-          <PageEdge value={false}>{children}</PageEdge>
+          <>
+            {hasDescription && (
+              <p className={styles.description} id={descriptionId}>
+                {description}
+              </p>
+            )}
+            <PageEdge value={false}>{children}</PageEdge>
+          </>
         )}
       </div>
     </InPopover>
@@ -289,7 +306,11 @@ export function Modal({
         <Dialog
           className={styles.dialog}
           role={isAlert ? 'alertdialog' : 'dialog'}
-          {...(isAlert && hasBody ? { 'aria-describedby': bodyId } : {})}
+          {...(hasDescription
+            ? { 'aria-describedby': descriptionId }
+            : isAlert && hasBody
+              ? { 'aria-describedby': bodyId }
+              : {})}
         >
           {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
               contentinfo landmark beside the page's own. */}
