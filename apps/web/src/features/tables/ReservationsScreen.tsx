@@ -399,7 +399,8 @@ function PlaceDay({
     if (isPast) return null;
     const asked = pending.get(visit.id);
     const isConfirming = asked === 'confirmed';
-    const canConfirm = visit.status === 'booked' && (asked === undefined || isConfirming);
+    // Shown at once as confirmed, the row keeps its Confirm, pending, until the server answers.
+    const canConfirm = isConfirming || (visit.status === 'booked' && asked === undefined);
     const next = isToday ? (asked !== undefined && !isConfirming ? asked : LOOK[visit.status].next) : undefined;
     const canFree = asked === undefined && OPEN.has(visit.status);
     const words: Partial<Record<VisitStatus, string>> = {
