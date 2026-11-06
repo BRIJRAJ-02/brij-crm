@@ -42,3 +42,7 @@ Tab enters the group at the chosen choice; arrow keys move and choose; Tab leave
 
 - Choices are `Radio` children rather than an `options` array, so each can carry its own description and disabled state.
 - `orientation` replaces `inline`; React Aria's props replace the input attributes.
+
+## RadioMark
+
+`RadioMark` is the same circle and dot with no control, for a row that is the control and says its own state: an option in a `Select` with `showsMarks`. It says nothing to a screen reader. It stays inside the library, as `CheckboxMark` does.

@@ -293,3 +293,70 @@ export const AsRowRefused: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent('That picture couldn’t be read.');
   },
 };
+
+const PHOTO_SRC =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect width="400" height="300" fill="%23efe7dc"/%3E%3Ccircle cx="200" cy="150" r="110" fill="%23d9a26b"/%3E%3C/svg%3E';
+
+/** `variant="photo"` with nothing there: one box to press, drop on or paste into (a menu item's photo). */
+export const AsPhoto: Story = {
+  args: { label: 'Photo', variant: 'photo', acceptedTypes: ['image/png', 'image/jpeg'], onFiles: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole('button', { name: /Add photo/ })).toBeEnabled();
+    // A picture pasted anywhere around it lands here; text in the clipboard stays the field's.
+    const paste = (data: DataTransfer) =>
+      document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: data }));
+    const file = new DataTransfer();
+    file.items.add(new File(['x'], 'dish.png', { type: 'image/png' }));
+    paste(file);
+    await expect(args.onFiles).toHaveBeenCalledTimes(1);
+    const both = new DataTransfer();
+    both.items.add(new File(['x'], 'dish.png', { type: 'image/png' }));
+    both.setData('text/plain', 'Grilled salmon');
+    paste(both);
+    await expect(args.onFiles).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** `variant="photo"` with a picture: large enough to check it by, its buttons beside it. */
+export const AsPhotoWithPicture: Story = {
+  args: {
+    label: 'Photo',
+    variant: 'photo',
+    preview: { src: PHOTO_SRC, alt: 'A bowl of soup' },
+    onAdjust: fn(),
+    onRemove: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await expect(canvas.getByRole('img', { name: 'A bowl of soup' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Change photo' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Adjust crop' }));
+    await expect(args.onAdjust).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove photo' }));
+    await expect(args.onRemove).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** `variant="photo"` read only: the picture alone, nothing to press. */
+export const AsPhotoReadOnly: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Photo', variant: 'photo', isReadOnly: true, preview: { src: PHOTO_SRC, alt: 'A bowl of soup' } },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'A bowl of soup' })).toBeVisible();
+    await expect(canvas.queryByRole('button')).not.toBeInTheDocument();
+  },
+};

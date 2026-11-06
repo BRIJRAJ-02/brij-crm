@@ -197,6 +197,21 @@
     text-overflow: ellipsis;
   }
 
+  .plain[data-nothing] {
+    color: var(--text-tertiary);
+  }
+
+  /* showsMarks: the closed field grows to name every choice in full, so what is chosen is never cut off. */
+  .root[data-marks] .trigger {
+    block-size: auto;
+    min-block-size: var(--size-input);
+    padding-block: var(--space-4);
+  }
+
+  .root[data-marks] .value {
+    white-space: normal;
+  }
+
   .hint {
     color: var(--text-secondary);
     font: var(--text-label);
