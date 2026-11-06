@@ -3,7 +3,7 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { LinkPageLoader } from '../features/link-page/LinkPageLoader.tsx';
 import { LinkPagePending } from '../features/link-page/LinkPagePending.tsx';
-import { TeamPagesScreen } from '../features/link-page/TeamPagesScreen.tsx';
+import { MemberPageUnavailable, TeamPagesScreen } from '../features/link-page/TeamPagesScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { strings as linkPageStrings } from '../features/link-page/strings.ts';
 import { strings } from '../features/settings/workspace-strings.ts';
@@ -69,6 +69,8 @@ function LinkPageRoute() {
   const { edit, member } = Route.useSearch();
   const navigate = Route.useNavigate();
   if (team) return <TeamPagesScreen data={data} slug={slug} />;
+  // A member's page that can't be opened goes back to Team pages, never Home (spec 0070).
+  if (profile === undefined && member !== undefined) return <MemberPageUnavailable slug={slug} />;
   if (profile === undefined) return <SettingsMissing backTo="home" />;
   return (
     <LinkPageLoader

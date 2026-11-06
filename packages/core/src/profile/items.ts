@@ -51,12 +51,10 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   enterOwnForms,
   enterOwnPages,
-  isTeamPageEdit,
   ownUserId,
   type OwnedFormEntry,
   type OwnedPageEntry,
 } from '../access/door.ts';
-import { showLinkPage } from '../booking/handles.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { imageTypeOf } from '../booking/image-type.ts';
@@ -64,6 +62,7 @@ import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { mediaShareUrl, parseMediaLink } from './embeds.ts';
+import { touchLinkPage } from './page-touch.ts';
 import { isPlaceBlock, PLACE_BLOCK_TITLES, placeFactsOf, type PlaceFacts } from './place-blocks.ts';
 
 const { bookingPages, forms, places, workspaces } = schema;
@@ -427,7 +426,7 @@ export async function saveProfileTheme(scope: EngineScope, theme: PageTheme): Pr
       const answered = await tx.execute<{ theme: unknown }>(
         sql`select theme from crm_save_profile_theme(${owner}::uuid, ${scope.workspaceId}::uuid, ${JSON.stringify(parsed.data)}::jsonb) as theme`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'look');
       return answered.rows[0]?.theme;
     } catch (error) {
       const pg = postgresError(error);
@@ -450,6 +449,7 @@ export async function setProfileIndexable(scope: EngineScope, indexable: boolean
       const answered = await tx.execute<{ indexable: boolean }>(
         sql`select crm_save_profile_indexable(${owner}::uuid, ${scope.workspaceId}::uuid, ${indexable}) as indexable`,
       );
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'search');
       return answered.rows[0]?.indexable;
     } catch (error) {
       const pg = postgresError(error);
@@ -501,7 +501,7 @@ export async function saveProfileShareImage(
       // No row is no page: a person who has not picked a handle has nothing for a share image to belong to,
       // and is refused the same way choosing a look refuses them, rather than quietly saving nothing.
       if (row === undefined) throw refuse('NOT_FOUND', 'Pick a handle before you choose a share image.');
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, workspace);
+      await touchLinkPage(tx, scope, owner, workspace, 'blocks');
       return { handle: row.handle, version: row.version };
     } catch (error) {
       const pg = postgresError(error);
@@ -801,7 +801,7 @@ export async function saveProfileItem(
       const saved = await tx.execute<ItemRow>(
         sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'blocks');
       return saved.rows[0];
     } catch (error) {
       throw refusalOf(error);
@@ -867,7 +867,7 @@ export async function orderProfileItems(
       await tx.execute(
         sql`select crm_order_profile_items(${owner}::uuid, ${scope.workspaceId}::uuid, ${`{${ids.join(',')}}`}::uuid[])`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'blocks');
     } catch (error) {
       const pg = postgresError(error);
       if (pg?.code === '22023') {
@@ -910,7 +910,7 @@ export async function archiveProfileItem(
       );
       const found = answer.rows[0]?.found === true;
       // Only a change that happened publishes: a stale tab archiving a block already gone leaves the page as it was.
-      if (found && !isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      if (found) await touchLinkPage(tx, scope, owner, scope.workspaceId, 'blocks');
       return found;
     } catch (error) {
       throw refusalOf(error);
@@ -928,7 +928,7 @@ export async function deleteProfileItem(scope: EngineScope, id: string): Promise
       sql`select crm_delete_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${id}::uuid) as found`,
     );
     const found = answer.rows[0]?.found === true;
-    if (found && !isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+    if (found) await touchLinkPage(tx, scope, owner, scope.workspaceId, 'blocks');
     return found;
   });
   if (!found) throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
@@ -1249,6 +1249,7 @@ export async function saveQrStyle(scope: EngineScope, style: ProfileQrStyle | nu
       const answered = await tx.execute<{ style: unknown }>(
         sql`select crm_save_profile_qr_style(${owner}::uuid, ${scope.workspaceId}::uuid, ${empty ? null : JSON.stringify(kept)}::jsonb) as style`,
       );
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'qr');
       return answered.rows[0]?.style;
     } catch (error) {
       const pg = postgresError(error);
@@ -1313,7 +1314,7 @@ export async function importProfileLinks(
       const answered = await tx.execute<{ existed: boolean; made: number }>(
         sql`select existed, made from crm_import_profile_links(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${input.source}, ${JSON.stringify(blocks)}::jsonb, ${JSON.stringify(skipped)}::jsonb)`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'blocks');
       return answered.rows[0];
     } catch (error) {
       const pg = postgresError(error);

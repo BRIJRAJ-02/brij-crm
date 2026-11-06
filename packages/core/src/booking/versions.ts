@@ -42,7 +42,8 @@ export async function keepVersion(
     pageId,
     version,
     snapshot,
-    publishedByMemberId: publisherOf(scope),
+    // Whoever pressed Publish: a team page manager publishing someone's link page is named, not the page's member.
+    publishedByMemberId: scope.actor.type === 'member' && scope.actor.id !== null ? scope.actor.id : publisherOf(scope),
     publishedAt: now,
   });
   await tx

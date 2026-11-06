@@ -7,6 +7,7 @@ import { isDataError, type DataLayer, type TeamLinkPage } from '@crm/data';
 import {
   Badge,
   Button,
+  ButtonLink,
   EmptyState,
   Field,
   Menu,
@@ -106,7 +107,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   const copy = (handle: string) => {
     navigator.clipboard.writeText(publicProfileUrl(handle)).then(
       () => toasts.toast({ tone: 'success', message: strings.copied }),
-      () => undefined,
+      () => toasts.toast({ tone: 'danger', message: strings.copyFailed }),
     );
   };
 
@@ -119,7 +120,10 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           if (key === 'edit' || key === 'claim') openPage(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
-          if (key === 'png' || key === 'svg') setDrawing({ kind: 'one', handle: page.handle, format: key });
+          // One download at a time: a second press while one is drawn waits for it rather than being lost.
+          if ((key === 'png' || key === 'svg') && drawing === undefined) {
+            setDrawing({ kind: 'one', handle: page.handle, format: key });
+          }
         }}
       >
         {page.handle === undefined ? (
@@ -138,10 +142,10 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
               {strings.openPage}
             </MenuItem>
             <MenuSeparator />
-            <MenuItem id="png" icon="qr-code">
+            <MenuItem id="png" icon="qr-code" isDisabled={drawing !== undefined}>
               {strings.qrPng}
             </MenuItem>
-            <MenuItem id="svg" icon="qr-code">
+            <MenuItem id="svg" icon="qr-code" isDisabled={drawing !== undefined}>
               {strings.qrSvg}
             </MenuItem>
           </>
@@ -181,7 +185,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   const body = (() => {
     if (state.status === 'forbidden') {
       return (
-        <EmptyState icon="lock" title={strings.title} layout="block">
+        <EmptyState icon="lock" title={strings.forbiddenTitle} layout="block">
           {strings.forbidden}
         </EmptyState>
       );
@@ -240,12 +244,13 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
             crumbs={[{ id: 'link-page', label: strings.linkPage, href: `/w/${slug}/link-page` }]}
             back={{ label: strings.linkPage, href: `/w/${slug}/link-page` }}
           >
-            {state.status === 'ready' && (
+            {state.status !== 'forbidden' && (
+              // There from the first paint, off until the list is in, so the bar never shifts.
               <Button
                 icon="download"
                 isLabelCollapsible
                 label={strings.downloadAll}
-                isDisabled={handles.length === 0}
+                isDisabled={state.status !== 'ready' || handles.length === 0 || drawing?.kind === 'one'}
                 isPending={drawing?.kind === 'all'}
                 onPress={() => setDrawing({ kind: 'all', handles })}
               >
@@ -274,7 +279,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                       : was,
                   );
                   if (claimed.handle !== undefined) {
-                    toasts.toast({ tone: 'success', message: strings.claimed(claimed.handle) });
+                    toasts.toast({ tone: 'success', message: strings.claimed(claimed.handle, claimed.name) });
                   }
                 }}
               />
@@ -376,7 +381,8 @@ function ClaimForMember({
   readonly onClose: () => void;
   readonly onClaimed: (claimed: TeamLinkPage) => void;
 }) {
-  const [handle, setHandle] = useState('');
+  // A link made from their name to start from, as their own first claim suggests one: the server still says if it's taken.
+  const [handle, setHandle] = useState(() => addressAsTyped(page.name.trim().toLowerCase().replace(/\s+/g, '-')));
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [isClaiming, setIsClaiming] = useState(false);
   const claim = () => {
@@ -430,5 +436,43 @@ function ClaimForMember({
         {...(problem === undefined ? {} : { error: problem })}
       />
     </Modal>
+  );
+}
+
+/**
+ * A member's page that can't be opened from Team pages (spec 0070): they left, the address is stale, or it isn't the
+ * reader's to change (an owner's page, or no permission). One line and the way back to Team pages, never Home.
+ */
+export function MemberPageUnavailable({ slug }: { readonly slug: string }) {
+  const teamHref = `/w/${slug}/link-page?team=true`;
+  return (
+    <WorkspacePage
+      currentPage="linkPage"
+      page={{
+        topBar: (
+          <TopBar
+            title={strings.unavailable}
+            icon="id-card"
+            crumbs={[
+              { id: 'link-page', label: strings.linkPage, href: `/w/${slug}/link-page` },
+              { id: 'team', label: strings.title, href: teamHref },
+            ]}
+            back={{ label: strings.back, href: teamHref }}
+          />
+        ),
+        body: (
+          <PageColumn align="center">
+            <EmptyState
+              icon="lock"
+              title={strings.unavailable}
+              layout="block"
+              actions={<ButtonLink href={teamHref}>{strings.back}</ButtonLink>}
+            >
+              {strings.unavailableText}
+            </EmptyState>
+          </PageColumn>
+        ),
+      }}
+    />
   );
 }

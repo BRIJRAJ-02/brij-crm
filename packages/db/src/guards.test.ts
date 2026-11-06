@@ -288,6 +288,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0177).
       { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
+      // Each member's link page views in one workspace, for Team pages (spec 0070, migration 0193).
+      { name: 'crm_team_profile_views', owner: 'crm_handle' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -433,6 +435,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_table_place_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_take_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_team_profile_views', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -634,6 +637,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press',
         'crm_profile_counts',
         'crm_sweep_profile_counts',
+        // Each member's views for Team pages (spec 0070, migration 0193).
+        'crm_team_profile_views',
         // The look of the page (spec 0054, migration 0105), and whether search engines may show it
         // (spec 0055, migration 0108).
         'crm_save_profile_theme',
@@ -717,6 +722,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press(uuid, uuid, uuid, text)',
         'crm_profile_counts(uuid, uuid, date, date)',
         'crm_sweep_profile_counts(integer)',
+        'crm_team_profile_views(uuid[], uuid, date, date)',
         'crm_save_profile_theme(uuid, uuid, jsonb)',
         'crm_save_profile_indexable(uuid, uuid, boolean)',
         'crm_import_profile_links(uuid, uuid, uuid, text, jsonb, jsonb)',

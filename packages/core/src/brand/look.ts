@@ -11,9 +11,9 @@ import {
 } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
-import { isTeamPageEdit, ownUserId } from '../access/door.ts';
+import { ownUserId } from '../access/door.ts';
 import { inWorkspace } from '../access/run.ts';
-import { showLinkPage } from '../booking/handles.ts';
+import { touchLinkPage } from '../profile/page-touch.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 
@@ -96,7 +96,7 @@ export async function saveProfileAccent(
       const saved = await tx.execute<{ accent: string | null; accent_dark: string | null }>(
         sql`select accent, accent_dark from crm_save_profile_accent(${owner}::uuid, ${scope.workspaceId}::uuid, ${accent}, ${accentDark})`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'look');
       const row = saved.rows[0];
       return { accent: row?.accent ?? null, accentDark: row?.accent_dark ?? null };
     } catch (error) {
@@ -138,7 +138,7 @@ export async function saveProfileImage(
       const saved = await tx.execute<{ previous: string | null }>(
         sql`select crm_save_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${slot}, ${image?.path ?? null}, ${image?.type ?? null}, ${image?.version ?? null}) as previous`,
       );
-      if (!isTeamPageEdit(scope)) await showLinkPage(tx, owner, scope.workspaceId);
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'look');
       const replaced = saved.rows[0]?.previous ?? undefined;
       // A photo guests still see (spec 0068: the change waits for Publish) stays in the store until it is replaced
       // there too.

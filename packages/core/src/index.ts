@@ -186,7 +186,7 @@ export {
   type ResolvedMedia,
 } from './profile/items.ts';
 // Team link pages (spec 0070, slice 1): the list, a handle claimed for someone, History, and "Edited by".
-export { claimTeamHandle, listTeamLinkPages, noteTeamPageChange, readLinkPageEditedBy } from './profile/team-pages.ts';
+export { claimTeamHandle, listTeamLinkPages, readLinkPageEditedBy } from './profile/team-pages.ts';
 export {
   discardLinkDraft,
   listLinkPageVersions,

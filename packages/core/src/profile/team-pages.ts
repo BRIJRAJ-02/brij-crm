@@ -3,15 +3,9 @@
 // door's `enterTeamLinkPage` mints (the manager as actor, the member as principal), so they act on that member's page
 // and nothing else. Here: the list, a handle claimed for someone, the History row for every change to someone else's
 // page, and the one line a member reads about who last changed theirs.
-import {
-  PERMISSIONS,
-  type LinkPageEditedBy,
-  type LinkPageTeamChange,
-  type TeamLinkPage,
-  type TeamLinkPages,
-} from '@crm/contracts';
+import { type LinkPageEditedBy, type TeamLinkPage, type TeamLinkPages } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import { enterTeamLinkPage, isTeamPageEdit } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -30,6 +24,9 @@ const PAGE_ACTIONS = [
   'link_page.draft_discarded',
   'link_page.version_restored',
 ] as const;
+
+/** How long "Edited by" stays on the person's own page after someone else's last change. */
+const EDITED_BY_DAYS = 30;
 
 /** The most members one read lists: the workspace's seats are far fewer, and the definer refuses more. */
 const TEAM_MAX = 1000;
@@ -185,38 +182,11 @@ export async function claimTeamHandle(
 }
 
 /**
- * Writes the History row for one change a team page manager made to someone else's link page (AC-7004): the manager
- * as actor, the member whose page it is as target, and what changed. Only on a scope `enterTeamLinkPage` made for
- * someone else; anything else is `FORBIDDEN`. Publish, Discard and Restore write their own rows and don't call this.
- * Its own transaction, run once the change has committed (the link page services write in theirs).
- */
-export async function noteTeamPageChange(
-  scope: EngineScope,
-  change: LinkPageTeamChange,
-  source: AuditSource = {},
-): Promise<void> {
-  checkScope(scope);
-  const { principal } = scope.access;
-  if (!isTeamPageEdit(scope) || principal.kind !== 'member') {
-    throw refuse('FORBIDDEN', PERMISSIONS['link_pages.manage_team'].message);
-  }
-  await inWorkspace(scope, (tx) =>
-    writeAudit(
-      tx,
-      scope.workspaceId,
-      scope.actor,
-      { action: 'link_page.changed_for', targetType: 'member', targetId: principal.memberId, after: { change } },
-      source,
-    ),
-  );
-}
-
-/**
  * Who last changed the caller's own link page when it wasn't them (AC-7004): "Edited by Ana", on their own page. Any
  * member, about themself only (no input names whose); a guest, a key or the system has no page and gets nothing. One
  * statement on `audit_events_target`.
  */
-export async function readLinkPageEditedBy(scope: EngineScope): Promise<LinkPageEditedBy> {
+export async function readLinkPageEditedBy(scope: EngineScope, now: Date = new Date()): Promise<LinkPageEditedBy> {
   checkScope(scope);
   const { principal } = scope.access;
   if (principal.kind !== 'member' || principal.role === 'guest' || isTeamPageEdit(scope)) return {};
@@ -236,6 +206,8 @@ export async function readLinkPageEditedBy(scope: EngineScope): Promise<LinkPage
           eq(auditEvents.targetId, self),
           inArray(auditEvents.action, [...PAGE_ACTIONS]),
           ne(auditEvents.actorMemberId, self),
+          // A quiet line, not a record: an edit older than a month no longer needs saying.
+          gte(auditEvents.at, new Date(now.getTime() - EDITED_BY_DAYS * 86_400_000)),
         ),
       )
       .orderBy(desc(auditEvents.at))

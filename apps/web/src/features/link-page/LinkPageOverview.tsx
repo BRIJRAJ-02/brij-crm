@@ -39,6 +39,8 @@ export interface LinkPageOverviewProps {
   readonly items: readonly ProfileItem[];
   /** The person's own picture, when it shows on their pages: a choice for the code's middle. */
   readonly personImage?: string | undefined;
+  /** The page card's title: "Your page", or for someone else's page (spec 0070) what fits it. */
+  readonly title?: string;
   /** Who last changed this page when it wasn't its owner (spec 0070, AC-7004): a quiet line on Your page. */
   readonly editedBy?: { readonly name: string } | undefined;
 }
@@ -57,6 +59,7 @@ export function LinkPageOverview({
   items,
   personImage,
   editedBy,
+  title = strings.yourPage,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   // The code in the owner's saved style (AC-6124), here and in what Download saves.
@@ -83,7 +86,7 @@ export function LinkPageOverview({
   return (
     <>
       {isPublic ? (
-        <Card title={strings.yourPage} actions={edit} {...(edited === undefined ? {} : { description: edited })}>
+        <Card title={title} actions={edit} {...(edited === undefined ? {} : { description: edited })}>
           {/* The code to print or show across a table, and the one thing to do with it here: Share holds the rest. */}
           <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
             <ButtonGroup label={strings.shareInPerson} layout="row">
@@ -95,7 +98,7 @@ export function LinkPageOverview({
         </Card>
       ) : (
         <Card
-          title={strings.yourPage}
+          title={title}
           description={edited === undefined ? strings.privateShareLine : `${strings.privateShareLine} ${edited}.`}
           actions={edit}
         >

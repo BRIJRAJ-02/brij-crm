@@ -295,7 +295,6 @@ export function openBrand(given: {
             given.brand.save(
               {
                 workspace,
-                ...page,
                 accent: accent ?? null,
                 accentDark: accent === undefined ? null : (accentDark ?? null),
                 mutationId: given.mintId(),
@@ -406,6 +405,7 @@ export function openBrand(given: {
             given.profile.saveAccent(
               {
                 workspace,
+                ...page,
                 accent: accent ?? null,
                 accentDark: accent === undefined ? null : (accentDark ?? null),
                 mutationId: given.mintId(),

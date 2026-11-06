@@ -12,7 +12,6 @@ import {
   deleteProfileItem,
   enterTeamLinkPage,
   getMyProfile,
-  noteTeamPageChange,
   listProfileFormChoices,
   listPlaceChoices,
   saveProfileTheme,
@@ -33,7 +32,6 @@ import {
   updateMyMemberProfile,
   type ProfileExtras,
 } from '@crm/core';
-import type { LinkPageTeamChange } from '@crm/contracts';
 import { createMediaReader, readSitePicture, storeLinkPicture } from '../../link-page-pictures.ts';
 import type { EdgeCache } from '../../edge-cache.ts';
 import { apiError } from '../../errors.ts';
@@ -103,18 +101,6 @@ async function pageOf(context: { readonly scope: EngineScope }, member: string |
 export function pageOwnerId(scope: EngineScope): string | undefined {
   const { principal } = scope.access;
   return principal.kind === 'member' ? principal.userId : undefined;
-}
-
-/**
- * After a change to someone else's page has committed, its History row (AC-7004): the manager as actor, the member
- * as target. The caller's own page writes none (Publish, Discard and Restore write their own, whoever makes them).
- */
-async function noteFor(
-  context: Parameters<typeof sourceOf>[0] & { readonly scope: EngineScope },
-  page: EngineScope,
-  change: LinkPageTeamChange,
-): Promise<void> {
-  if (page !== context.scope) await noteTeamPageChange(page, change, sourceOf(context));
 }
 
 /** Outside reads for a link page's pictures and media, per person (spec 0061, AC-6128): 30 a minute. */
@@ -202,7 +188,6 @@ export const profileRouter = member.profile.router({
     // once the change has committed, so a page made Private stops being served at once and one made Live stops
     // answering its cached 404. Opening the page changes nothing a visitor was sent, so it purges nothing.
     if (input.live !== undefined) {
-      await noteFor(context, page, input.live ? 'live' : 'private');
       const { handle } = await getMyProfile(page);
       await context.edgeCache.forget(linkPageCacheTags(handle));
     }
@@ -273,7 +258,6 @@ export const profileRouter = member.profile.router({
   saveQrStyle: member.profile.saveQrStyle.handler(async ({ context, input }) => {
     const page = await pageOf(context, input.member);
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () => saveQrStyle(page, input.style));
-    await noteFor(context, page, 'qr');
     // A centre picture no longer named stops being served from the edge (AC-6129).
     await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return saved;
@@ -293,7 +277,6 @@ export const profileRouter = member.profile.router({
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileTheme(page, input.theme),
     );
-    await noteFor(context, page, 'look');
     return saved;
   }),
   // The page's own accent and photos (spec 0060, AC-14): read for the Design panel, the accent saved whole. The
@@ -304,7 +287,6 @@ export const profileRouter = member.profile.router({
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileAccent(page, { accent: input.accent, accentDark: input.accentDark }),
     );
-    await noteFor(context, page, 'look');
     // A personal booking page wears its owner's own accent, so its `brand.css` copies go too (AC-14, AC-21).
     await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
     return saved;
@@ -314,7 +296,6 @@ export const profileRouter = member.profile.router({
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       setProfileIndexable(page, input.indexable),
     );
-    await noteFor(context, page, 'search');
     return saved;
   }),
   /**
@@ -398,7 +379,6 @@ export const profileRouter = member.profile.router({
         { publicOrigins: context.publicOrigins, ...(readMedia === undefined ? {} : { readMedia }) },
       ),
     );
-    await noteFor(context, page, 'blocks');
     // An edit that may have let a picture go (a link's thumbnail, a picture, a gallery, a poster): the edge's copies
     // of the page's pictures go with it, so one no live block uses answers 404 at once (AC-6129).
     if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) {
@@ -411,7 +391,6 @@ export const profileRouter = member.profile.router({
     const items = await commitWrite(context, { mutationId: input.mutationId }, () =>
       orderProfileItems(page, input.ids, { publicOrigins: context.publicOrigins }),
     );
-    await noteFor(context, page, 'blocks');
     return items;
   }),
   archiveItem: member.profile.archiveItem.handler(async ({ context, input }) => {
@@ -419,14 +398,12 @@ export const profileRouter = member.profile.router({
     const items = await commitWrite(context, { mutationId: input.mutationId }, () =>
       archiveProfileItem(page, { id: input.id, archived: input.archived }, { publicOrigins: context.publicOrigins }),
     );
-    await noteFor(context, page, 'blocks');
     if (input.archived) await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return items;
   }),
   deleteItem: member.profile.deleteItem.handler(async ({ context, input }) => {
     const page = await pageOf(context, input.member);
     const gone = await commitWrite(context, { mutationId: input.mutationId }, () => deleteProfileItem(page, input.id));
-    await noteFor(context, page, 'blocks');
     await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return gone;
   }),

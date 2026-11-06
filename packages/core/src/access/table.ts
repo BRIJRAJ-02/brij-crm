@@ -257,11 +257,10 @@ export const ACCESS_TABLE = {
   listLinkPageVersions: { ownLinkPage: true },
   restoreLinkPageVersion: { ownLinkPage: true },
   // Team link pages (spec 0070, AC-7001 to AC-7004): someone else's page, the list and a claim are the permission's;
-  // History's row only on a scope the door made for someone else's page; "Edited by" is any member's own.
+  // "Edited by" is any member's own.
   enterTeamLinkPage: { permission: 'link_pages.manage_team' },
   listTeamLinkPages: { permission: 'link_pages.manage_team' },
   claimTeamHandle: { permission: 'link_pages.manage_team' },
-  noteTeamPageChange: { permission: 'link_pages.manage_team' },
   readLinkPageEditedBy: { anyMember: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },

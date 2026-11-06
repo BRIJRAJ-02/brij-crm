@@ -13,7 +13,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, showMyLinkPage, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { readProfileItems, saveProfileItem } from './items.ts';
-import { claimTeamHandle, listTeamLinkPages, monthOf, noteTeamPageChange, readLinkPageEditedBy } from './team-pages.ts';
+import { claimTeamHandle, listTeamLinkPages, monthOf, readLinkPageEditedBy } from './team-pages.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -95,6 +95,10 @@ describe('who may manage team pages (AC-7001)', () => {
     expect(listed.pages.find((page) => page.name === 'Ada')?.isSelf).toBe(true);
     expect((await listTeamLinkPages(bea.scope)).pages).toHaveLength(3);
 
+    // An admin manages everyone's page but an owner's (the owner rules): Ada's is hers and other owners'.
+    expect(await refusalOf(enterTeamLinkPage(bea.scope, ada.memberId))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(isTeamPageEdit(await enterTeamLinkPage(bea.scope, cy.memberId))).toBe(true);
+
     expect(await refusalOf(listTeamLinkPages(cy.scope))).toMatchObject({ code: 'FORBIDDEN' });
     expect(await refusalOf(enterTeamLinkPage(cy.scope, bea.memberId))).toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -119,7 +123,6 @@ describe("someone else's page (AC-7002, AC-7004)", () => {
     expect(isTeamPageEdit(ada.scope)).toBe(false);
     const id = newId();
     await saveProfileItem(page, { id, block: { kind: 'link', title: 'Site', url: 'https://cy.example' } });
-    await noteTeamPageChange(page, 'blocks');
 
     // The block is on Cy's own page, and not on Ada's.
     expect((await readProfileItems(cy.scope)).items.map((item) => item.id)).toEqual([id]);
@@ -148,8 +151,17 @@ describe("someone else's page (AC-7002, AC-7004)", () => {
     // A page scope holds no permission of its own: it can't reach the list, or another page.
     expect(await refusalOf(listTeamLinkPages(page))).toMatchObject({ code: 'FORBIDDEN' });
     expect(await refusalOf(enterTeamLinkPage(page, ada.memberId))).toMatchObject({ code: 'FORBIDDEN' });
-    // History's row is only ever for someone else's page.
-    expect(await refusalOf(noteTeamPageChange(ada.scope, 'blocks'))).toMatchObject({ code: 'FORBIDDEN' });
+    // Cy's own edits write no History row of this kind: the row is for someone else's change.
+    await saveProfileItem(cy.scope, {
+      id: newId(),
+      block: { kind: 'link', title: 'Blog', url: 'https://cy.example/b' },
+    });
+    const after = await testQuery(
+      ownerUrl,
+      `select 1 from audit_events where workspace_id = $1 and action = 'link_page.changed_for'`,
+      [ada.workspaceId],
+    );
+    expect(after).toHaveLength(1);
   });
 
   it('answers NOT_FOUND alike for another workspace’s member, a guest, a stranger and a removed member', async () => {

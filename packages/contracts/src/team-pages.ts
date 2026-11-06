@@ -51,7 +51,10 @@ export const TeamLinkPages = z.object({
 /** Every active member's link page. */
 export type TeamLinkPages = z.infer<typeof TeamLinkPages>;
 
-/** A handle claimed for a member who has none in this workspace (AC-7002); it lives at once, as their own claim does. */
+/**
+ * A handle claimed for a member who has none in this workspace (AC-7002). Unlike their own claim, the page starts
+ * Private: a page with their name on it goes public only when someone turns on Live.
+ */
 export const ClaimTeamHandleInput = WorkspaceScoped.extend({
   member: Uuid,
   handle: PublicHandle,

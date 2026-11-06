@@ -1188,6 +1188,7 @@ function Blocks({
           items={everyItem}
           personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
           editedBy={editedBy}
+          {...(isTeam ? { title: teamStrings.theirPage } : {})}
         />
       </PreviewLayout>
     );

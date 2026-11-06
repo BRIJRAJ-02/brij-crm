@@ -718,6 +718,9 @@ export async function previewScope(
   return { scope: rescope(scope, scope.actor, access), name: found.name };
 }
 
+/** The refusal for an owner's page, to someone who isn't an owner. */
+const OWNER_PAGE = 'Only an owner can change an owner’s link page.';
+
 /** The answer for a member a team page manager can't reach: the same whether they don't exist or aren't here. */
 const NO_SUCH_PAGE = 'That person isn’t in this workspace.';
 
@@ -743,6 +746,11 @@ export async function enterTeamLinkPage(scope: EngineScope, memberId: string): P
   });
   if (found === undefined || found.userId === null || !isRole(found.role) || found.role === 'guest') {
     throw refuse('NOT_FOUND', NO_SUCH_PAGE);
+  }
+  // An owner's page is changed by owners only, as the owner rules keep every other power over an owner (scheduling
+  // delegations, roles): an admin or a custom role holding the permission reaches everyone else's.
+  if (found.role === 'owner' && (principal.kind !== 'member' || principal.role !== 'owner')) {
+    throw refuse('FORBIDDEN', OWNER_PAGE);
   }
   return rescope(scope, scope.actor, linkPageAccess({ memberId: found.id, userId: found.userId, role: found.role }));
 }

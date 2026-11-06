@@ -117,13 +117,16 @@ describe('a handle claimed for someone (AC-7002)', () => {
     const { data, claim } = layerWith(ready);
     await renderTeam(data);
     await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Claim handle' }));
-    await expect.element(page.getByRole('dialog', { name: /Claim a handle for Dee/ })).toBeVisible();
-    // Nothing typed: refused before anything is sent.
+    await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
+    await expect.element(page.getByRole('dialog', { name: /Claim a link for Dee/ })).toBeVisible();
+    // A link made from their name to start from.
+    await expect.element(page.getByRole('textbox', { name: 'Link' })).toHaveValue('dee-marsh');
+    // Emptied: refused before anything is sent.
+    await userEvent.clear(page.getByRole('textbox', { name: 'Link' }));
     await userEvent.click(page.getByRole('button', { name: 'Claim', exact: true }));
-    await expect.element(page.getByText('Add a handle.')).toBeVisible();
+    await expect.element(page.getByText('Add a link.')).toBeVisible();
     expect(claim).not.toHaveBeenCalled();
-    await userEvent.fill(page.getByRole('textbox', { name: 'Handle' }), 'dee');
+    await userEvent.fill(page.getByRole('textbox', { name: 'Link' }), 'dee');
     await userEvent.click(page.getByRole('button', { name: 'Claim', exact: true }));
     await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
     expect(claim).toHaveBeenCalledWith('acme', PAGES[3]?.memberId, 'dee');
@@ -211,7 +214,7 @@ describe('screenshots', () => {
         await expect.element(page.getByRole('rowheader', { name: /Bea Rao/ })).toBeVisible();
         await page.screenshot({ path: `${SHOTS}/team-${String(width)}-${theme}.png` });
         await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
-        await userEvent.click(page.getByRole('menuitem', { name: 'Claim handle' }));
+        await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
         await expect.element(page.getByRole('dialog')).toBeVisible();
         await page.screenshot({ path: `${SHOTS}/claim-${String(width)}-${theme}.png` });
         await userEvent.keyboard('{Escape}');

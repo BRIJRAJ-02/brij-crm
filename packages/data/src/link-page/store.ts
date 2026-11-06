@@ -992,6 +992,12 @@ export function openLinkPage(given: {
   const { profile, call } = given;
   // Every call about the page names whose it is, when it isn't the caller's own (spec 0070).
   const page: { readonly member?: string } = given.member === undefined ? {} : { member: given.member };
+  // The share picture, the wallet pass and Bring a page across are the caller's own page's: a member's store refuses
+  // them rather than sending them without `member`, which would act on the caller's own page.
+  const ownPageOnly = (): Promise<void> =>
+    given.member === undefined
+      ? Promise.resolve()
+      : Promise.reject(toDataError({ code: 'FORBIDDEN', message: 'That stays with the page’s own person.' }));
   const deps: LinkPageDeps = {
     api: {
       items: (input) => call((options) => profile.items({ ...input, ...page }, options)),
@@ -1001,10 +1007,10 @@ export function openLinkPage(given: {
       placeChoices: (input) => call((options) => profile.placeChoices({ ...input, ...page }, options)),
       saveTheme: (input) => call((options) => profile.saveTheme({ ...input, ...page }, options)),
       setIndexable: (input) => call((options) => profile.setIndexable({ ...input, ...page }, options)),
-      setShareImage: (input) => call((options) => profile.setShareImage(input, options)),
-      walletLink: (input) => call((options) => profile.walletLink(input, options)),
+      setShareImage: (input) => ownPageOnly().then(() => call((options) => profile.setShareImage(input, options))),
+      walletLink: (input) => ownPageOnly().then(() => call((options) => profile.walletLink(input, options))),
       show: (input) => call((options) => profile.show({ ...input, ...page }, options)),
-      importLinks: (input) => call((options) => profile.importLinks(input, options)),
+      importLinks: (input) => ownPageOnly().then(() => call((options) => profile.importLinks(input, options))),
       saveItem: (input) => call((options) => profile.saveItem({ ...input, ...page }, options)),
       orderItems: (input) => call((options) => profile.orderItems({ ...input, ...page, ids: [...input.ids] }, options)),
       archiveItem: (input) => call((options) => profile.archiveItem({ ...input, ...page }, options)),
