@@ -56,6 +56,21 @@ alter table properties rename constraint business_profiles_links to properties_l
 --> statement-breakpoint
 alter table properties rename constraint business_profiles_look to properties_look;
 --> statement-breakpoint
+-- Postgres 18 names its not null constraints after the table too; 17 has none to rename.
+do $$
+declare
+  old text;
+begin
+  for old in
+    select conname from pg_constraint
+    where conrelid = 'public.properties'::regclass and conname like 'business\_profiles\_%\_not\_null'
+  loop
+    execute format('alter table public.properties rename constraint %I to %I',
+      old, replace(old, 'business_profiles_', 'properties_'));
+  end loop;
+end
+$$;
+--> statement-breakpoint
 alter table properties alter column name drop not null;
 --> statement-breakpoint
 alter table properties alter column kind drop not null;
