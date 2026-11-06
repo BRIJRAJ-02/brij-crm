@@ -50,6 +50,7 @@ import {
   formAccess,
   isRole,
   keyAccess,
+  linkPageAccess,
   NO_RULES,
   roleAccess,
   SYSTEM_ACCESS,
@@ -715,6 +716,51 @@ export async function previewScope(
   // Their data policy and none of their permissions: previewing an owner must never hand out an owner's powers.
   const access: Access = Object.freeze({ ...found.access, permissions: Object.freeze([]) });
   return { scope: rescope(scope, scope.actor, access), name: found.name };
+}
+
+/** The answer for a member a team page manager can't reach: the same whether they don't exist or aren't here. */
+const NO_SUCH_PAGE = 'That person isn’t in this workspace.';
+
+/**
+ * Someone else's link page, for a team page manager (spec 0070, AC-7001, AC-7002): `link_pages.manage_team` first
+ * (403 `FORBIDDEN`), then the active member `memberId` of this workspace, who must have their own identity and not be
+ * a guest (guests have no link page). The scope keeps the manager as its actor, so every audit row names them, and
+ * holds the member as its principal with no permission and no data (`linkPageAccess`), so it reaches only the link
+ * page services, which take the page's owner from the principal and never from an input. Naming yourself answers
+ * your own scope unchanged. Anyone else is `NOT_FOUND`, whatever the reason.
+ */
+export async function enterTeamLinkPage(scope: EngineScope, memberId: string): Promise<EngineScope> {
+  requirePermission(scope, 'link_pages.manage_team');
+  const { principal } = scope.access;
+  if (principal.kind === 'member' && principal.memberId === memberId) return scope;
+  if (!isUuid(memberId)) throw refuse('NOT_FOUND', NO_SUCH_PAGE);
+  const found = await inWorkspace(scope, async (tx) => {
+    const [row] = await tx
+      .select({ id: members.id, userId: members.userId, role: members.role })
+      .from(members)
+      .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
+    return row;
+  });
+  if (found === undefined || found.userId === null || !isRole(found.role) || found.role === 'guest') {
+    throw refuse('NOT_FOUND', NO_SUCH_PAGE);
+  }
+  return rescope(scope, scope.actor, linkPageAccess({ memberId: found.id, userId: found.userId, role: found.role }));
+}
+
+/**
+ * Whether `scope` is a team page manager acting on someone else's link page (`enterTeamLinkPage`): a member actor
+ * whose principal is another member, holding no permission. Such a change never puts the page live on its own (only
+ * the Live switch does), and is written to History as `link_page.changed_for`.
+ */
+export function isTeamPageEdit(scope: EngineScope): boolean {
+  checkScope(scope);
+  const { actor, access } = scope;
+  return (
+    actor.type === 'member' &&
+    access.principal.kind === 'member' &&
+    actor.id !== access.principal.memberId &&
+    access.permissions.length === 0
+  );
 }
 
 /**

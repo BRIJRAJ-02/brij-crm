@@ -54,6 +54,7 @@ import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
 import { profileContract } from './profile.ts';
+import { teamPagesContract } from './team-pages.ts';
 import { brandContract } from './workspace-brand.ts';
 import { hospitalityContract } from './hospitality.ts';
 import { menuContract } from './menu.ts';
@@ -134,6 +135,7 @@ export * from './values/index.ts';
 export * from './workspaces.ts';
 export * from './workspace-settings.ts';
 export * from './profile.ts';
+export * from './team-pages.ts';
 export * from './workspace-brand.ts';
 export * from './brand-colour.ts';
 export * from './hospitality.ts';
@@ -164,6 +166,8 @@ export const contract = {
   deletedWorkspace: deletedWorkspaceContract,
   // Settings › Account › Profile (spec 0031, slice 7).
   profile: profileContract,
+  // Team link pages (spec 0070, slice 1): everyone's link page, a handle claimed for someone, and who last changed yours.
+  teamPages: teamPagesContract,
   // A workspace's brand kit (spec 0060): any member reads it, owners and admins save it.
   brand: brandContract,
   // The Hospitality suite's setup (spec 0065, H0): apps, the business profile, places, areas and tables.

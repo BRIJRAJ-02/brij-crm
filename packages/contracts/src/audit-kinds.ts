@@ -116,6 +116,7 @@ export const AUDIT_KINDS = {
     'link_page.published',
     'link_page.draft_discarded',
     'link_page.version_restored',
+    'link_page.changed_for',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 

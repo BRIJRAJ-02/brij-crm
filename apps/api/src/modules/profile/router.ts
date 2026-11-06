@@ -10,7 +10,9 @@ import {
   isImportableHost,
   readImportedPage,
   deleteProfileItem,
+  enterTeamLinkPage,
   getMyProfile,
+  noteTeamPageChange,
   listProfileFormChoices,
   listPlaceChoices,
   saveProfileTheme,
@@ -31,6 +33,7 @@ import {
   updateMyMemberProfile,
   type ProfileExtras,
 } from '@crm/core';
+import type { LinkPageTeamChange } from '@crm/contracts';
 import { createMediaReader, readSitePicture, storeLinkPicture } from '../../link-page-pictures.ts';
 import type { EdgeCache } from '../../edge-cache.ts';
 import { apiError } from '../../errors.ts';
@@ -84,6 +87,36 @@ async function forgetPictures(context: {
   if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
 }
 
+/** A scope the door made. */
+type EngineScope = Parameters<typeof getMyProfile>[0];
+
+/**
+ * The link page a procedure acts on (spec 0070, AC-7002): the caller's own, or with `member` that member's, through
+ * the door's `enterTeamLinkPage` (`link_pages.manage_team`, an active member of this workspace, else NOT_FOUND). Its
+ * owner is always the scope's principal, never an input.
+ */
+async function pageOf(context: { readonly scope: EngineScope }, member: string | undefined): Promise<EngineScope> {
+  return member === undefined ? context.scope : enterTeamLinkPage(context.scope, member);
+}
+
+/** The identity whose page a scope acts on: its pictures are kept in that person's folder, whoever uploads them. */
+export function pageOwnerId(scope: EngineScope): string | undefined {
+  const { principal } = scope.access;
+  return principal.kind === 'member' ? principal.userId : undefined;
+}
+
+/**
+ * After a change to someone else's page has committed, its History row (AC-7004): the manager as actor, the member
+ * as target. The caller's own page writes none (Publish, Discard and Restore write their own, whoever makes them).
+ */
+async function noteFor(
+  context: Parameters<typeof sourceOf>[0] & { readonly scope: EngineScope },
+  page: EngineScope,
+  change: LinkPageTeamChange,
+): Promise<void> {
+  if (page !== context.scope) await noteTeamPageChange(page, change, sourceOf(context));
+}
+
 /** Outside reads for a link page's pictures and media, per person (spec 0061, AC-6128): 30 a minute. */
 const OUTSIDE_READS = { window: 60, max: 30 } as const;
 /** The same site read for anyone's thumbnail: 60 a minute, so a page of links can't point us at one site's door. */
@@ -103,7 +136,12 @@ async function afterPublication(
 }
 
 export const profileRouter = member.profile.router({
-  get: member.profile.get.handler(async ({ context }) => getMyProfile(context.scope, await extrasOf(context))),
+  // The caller's own profile, or (spec 0070) a member's whose page a team page manager opens: their name, handle and
+  // look as their page shows them. What only the session knows (the Google picture, Sync) is the caller's own alone.
+  get: member.profile.get.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
+    return page === context.scope ? getMyProfile(page, await extrasOf(context)) : getMyProfile(page);
+  }),
   update: member.profile.update.handler(async ({ context, input }) => {
     const extras = await extrasOf(context);
     const saved = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
@@ -132,9 +170,10 @@ export const profileRouter = member.profile.router({
     if (identityChanged && saved.handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(saved.handle));
     return saved;
   }),
-  // The link page (spec 0051): the caller's own blocks, in every workspace the same, never another person's.
-  items: member.profile.items.handler(({ context }) =>
-    readProfileItems(context.scope, { publicOrigins: context.publicOrigins }),
+  // The link page (spec 0051): the caller's own blocks, or with `member` (spec 0070) that member's, never another's
+  // without `link_pages.manage_team`.
+  items: member.profile.items.handler(async ({ context, input }) =>
+    readProfileItems(await pageOf(context, input.member), { publicOrigins: context.publicOrigins }),
   ),
   /**
    * A link to save the caller's own page to a wallet (26 October 2026). The pass holds only what their page already
@@ -152,54 +191,69 @@ export const profileRouter = member.profile.router({
       url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
     };
   }),
-  /** Opening the caller's own link page, or its Live or Private switch (spec 0058, AC-23). */
+  /**
+   * Opening a link page, or its Live or Private switch (spec 0058, AC-23). A team page manager opening someone's page
+   * changes nothing (spec 0070): only the switch does, and that is written to History.
+   */
   show: member.profile.show.handler(async ({ context, input }) => {
-    const shown = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      showMyLinkPage(context.scope, input.live),
-    );
+    const page = await pageOf(context, input.member);
+    const shown = await commitWrite(context, { mutationId: input.mutationId }, () => showMyLinkPage(page, input.live));
     // The switch, either way: the edge's copies of the page (its shell, card, picture and share image) are deleted
     // once the change has committed, so a page made Private stops being served at once and one made Live stops
     // answering its cached 404. Opening the page changes nothing a visitor was sent, so it purges nothing.
     if (input.live !== undefined) {
-      const { handle } = await getMyProfile(context.scope);
+      await noteFor(context, page, input.live ? 'live' : 'private');
+      const { handle } = await getMyProfile(page);
       await context.edgeCache.forget(linkPageCacheTags(handle));
     }
     return shown;
   }),
-  // Publish for the caller's own link page (spec 0068, AC-6810 to AC-6816). Each that changes what guests see purges
-  // the page's edge copies once committed; the photos it let go leave the store after that.
-  publication: member.profile.publication.handler(({ context }) => readLinkPagePublication(context.scope)),
+  // Publish for a link page (spec 0068, AC-6810 to AC-6816), the caller's own or a member's (spec 0070); each writes
+  // its own History row. Each that changes what guests see purges the page's edge copies once committed; the photos
+  // it let go leave the store after that.
+  publication: member.profile.publication.handler(async ({ context, input }) =>
+    readLinkPagePublication(await pageOf(context, input.member)),
+  ),
   publish: member.profile.publish.handler(async ({ context, input }) => {
-    const done = await commitWrite(context, { mutationId: input.mutationId }, () => publishLinkPage(context.scope));
-    await afterPublication(context, done.forget);
+    const page = await pageOf(context, input.member);
+    const done = await commitWrite(context, { mutationId: input.mutationId }, () => publishLinkPage(page));
+    await afterPublication({ scope: page, edgeCache: context.edgeCache, files: context.files }, done.forget);
     return done.publication;
   }),
   discard: member.profile.discard.handler(async ({ context, input }) => {
-    const done = await commitWrite(context, { mutationId: input.mutationId }, () => discardLinkDraft(context.scope));
-    await afterPublication(context, done.forget);
+    const page = await pageOf(context, input.member);
+    const done = await commitWrite(context, { mutationId: input.mutationId }, () => discardLinkDraft(page));
+    await afterPublication({ scope: page, edgeCache: context.edgeCache, files: context.files }, done.forget);
     return done.publication;
   }),
-  versions: member.profile.versions.handler(({ context }) => listLinkPageVersions(context.scope)),
+  versions: member.profile.versions.handler(async ({ context, input }) =>
+    listLinkPageVersions(await pageOf(context, input.member)),
+  ),
   restore: member.profile.restore.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
     const done = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      restoreLinkPageVersion(context.scope, input.version),
+      restoreLinkPageVersion(page, input.version),
     );
-    await afterPublication(context, done.forget);
+    await afterPublication({ scope: page, edgeCache: context.edgeCache, files: context.files }, done.forget);
     return done.publication;
   }),
   counts: member.profile.counts.handler(async ({ context, input }) => {
-    const counts = await readProfileCounts(context.scope, new Date(), input.days ?? 30);
+    const counts = await readProfileCounts(await pageOf(context, input.member), new Date(), input.days ?? 30);
     return { ...counts, presses: [...counts.presses] };
   }),
   /**
    * "Use the site's picture" (spec 0061, AC-6101): the link's own saved address, never one in the request, read for
    * its `og:image` through the pinned outside fetch (https only, every address checked before connecting and after
-   * each redirect, 3 seconds, 64 kB of page and 1 MB of picture), then kept as one of the owner's pictures. 30 reads
-   * a minute per person and 60 per site. The editor saves the link with the picture's id.
+   * each redirect, 3 seconds, 64 kB of page and 1 MB of picture), then kept as one of the page owner's pictures. 30
+   * reads a minute per person and 60 per site. The editor saves the link with the picture's id.
    */
   fetchThumbnail: member.profile.fetchThumbnail.handler(async ({ context, input }) => {
-    const address = await readOwnLinkAddress(context.scope, input.id);
-    if (address === undefined) throw apiError('NOT_FOUND', 'That link isn’t on your link page any more.');
+    const page = await pageOf(context, input.member);
+    const owner = pageOwnerId(page);
+    const address = await readOwnLinkAddress(page, input.id);
+    if (address === undefined || owner === undefined) {
+      throw apiError('NOT_FOUND', 'That link isn’t on this link page any more.');
+    }
     const mine = await context.limiter.consumeRateLimit(`link-page-read:${context.user.id}`, OUTSIDE_READS);
     const site = await context.limiter.consumeRateLimit(`link-page-site:${new URL(address).hostname}`, SITE_READS);
     if (!mine.allowed || !site.allowed) throw apiError('LIMIT_REACHED', 'Try the site’s picture again in a minute.');
@@ -209,58 +263,72 @@ export const profileRouter = member.profile.router({
         return picture.allowed;
       });
       if (bytes === undefined) return { none: true as const };
-      const stored = await storeLinkPicture(context.files, context.scope, context.user.id, bytes, 'thumb');
+      const stored = await storeLinkPicture(context.files, page, owner, bytes, 'thumb');
       return stored.ok ? { image: stored.image, width: stored.width, height: stored.height } : { none: true as const };
     });
   }),
-  qrStyle: member.profile.qrStyle.handler(({ context }) => readQrStyle(context.scope)),
+  qrStyle: member.profile.qrStyle.handler(async ({ context, input }) =>
+    readQrStyle(await pageOf(context, input.member)),
+  ),
   saveQrStyle: member.profile.saveQrStyle.handler(async ({ context, input }) => {
-    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveQrStyle(context.scope, input.style),
-    );
+    const page = await pageOf(context, input.member);
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () => saveQrStyle(page, input.style));
+    await noteFor(context, page, 'qr');
     // A centre picture no longer named stops being served from the edge (AC-6129).
-    await forgetPictures(context);
+    await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return saved;
   }),
-  pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
-    ...(await listProfilePageChoices(context.scope)),
+  pageChoices: member.profile.pageChoices.handler(async ({ context, input }) => [
+    ...(await listProfilePageChoices(await pageOf(context, input.member))),
   ]),
-  formChoices: member.profile.formChoices.handler(async ({ context }) => [
-    ...(await listProfileFormChoices(context.scope)),
+  formChoices: member.profile.formChoices.handler(async ({ context, input }) => [
+    ...(await listProfileFormChoices(await pageOf(context, input.member))),
   ]),
-  // The places a Menu or Reserve block can name (spec 0065, AC-6528): the caller's own workspace's, with facts.
-  placeChoices: member.profile.placeChoices.handler(async ({ context }) => [
-    ...(await listPlaceChoices(context.scope)),
+  // The places a Menu or Reserve block can name (spec 0065, AC-6528): the page's own workspace's, with facts.
+  placeChoices: member.profile.placeChoices.handler(async ({ context, input }) => [
+    ...(await listPlaceChoices(await pageOf(context, input.member))),
   ]),
-  saveTheme: member.profile.saveTheme.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveProfileTheme(context.scope, input.theme)),
-  ),
+  saveTheme: member.profile.saveTheme.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveProfileTheme(page, input.theme),
+    );
+    await noteFor(context, page, 'look');
+    return saved;
+  }),
   // The page's own accent and photos (spec 0060, AC-14): read for the Design panel, the accent saved whole. The
   // photos go up as bytes through `/api/me/link-page/{cover,ground}` (`link-page-images.ts`).
-  look: member.profile.look.handler(({ context }) => readProfileLook(context.scope)),
+  look: member.profile.look.handler(async ({ context, input }) => readProfileLook(await pageOf(context, input.member))),
   saveAccent: member.profile.saveAccent.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveProfileAccent(context.scope, { accent: input.accent, accentDark: input.accentDark }),
+      saveProfileAccent(page, { accent: input.accent, accentDark: input.accentDark }),
     );
+    await noteFor(context, page, 'look');
     // A personal booking page wears its owner's own accent, so its `brand.css` copies go too (AC-14, AC-21).
     await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
     return saved;
   }),
-  setIndexable: member.profile.setIndexable.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => setProfileIndexable(context.scope, input.indexable)),
-  ),
+  setIndexable: member.profile.setIndexable.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      setProfileIndexable(page, input.indexable),
+    );
+    await noteFor(context, page, 'search');
+    return saved;
+  }),
   /**
    * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). The contract bounds the
    * base64's length; the service decodes it, reads the bytes for what they actually are, and writes the one
-   * column through the one definer.
+   * column through the one definer. The caller's own page only.
    */
   setShareImage: member.profile.setShareImage.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => saveProfileShareImage(context.scope, input.image)),
   ),
   /**
-   * Bringing a link in bio page across (spec 0055, AC-5524 to AC-5528). Three steps, in this order and nowhere
-   * else: the address must be one of the services on the allow list, the page is read through the one bounded
-   * outside fetch, and what the parser makes of it is written as hidden blocks.
+   * Bringing a link in bio page across (spec 0055, AC-5524 to AC-5528), onto the caller's own page only. Three steps,
+   * in this order and nowhere else: the address must be one of the services on the allow list, the page is read
+   * through the one bounded outside fetch, and what the parser makes of it is written as hidden blocks.
    *
    * The hourly limit is kept twice on purpose. The definer counts the imports an account made, which bounds what
    * is written; this counts the asks, which bounds what we fetch, since a refused parse or a page that never
@@ -302,6 +370,8 @@ export const profileRouter = member.profile.router({
     );
   }),
   saveItem: member.profile.saveItem.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
+    const owner = pageOwnerId(page);
     // A media block's title and poster are read once, on save (spec 0061, AC-6105), within the person's budget of
     // outside reads; past it, the block saves with the provider's name and no poster.
     const reads =
@@ -309,17 +379,17 @@ export const profileRouter = member.profile.router({
         ? await context.limiter.consumeRateLimit(`link-page-read:${context.user.id}`, OUTSIDE_READS)
         : undefined;
     const readMedia =
-      reads?.allowed === true
+      reads?.allowed === true && owner !== undefined
         ? createMediaReader({
             fetch: context.linkPageFetch,
             files: context.files,
-            scope: context.scope,
-            userId: context.user.id,
+            scope: page,
+            userId: owner,
           })
         : undefined;
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileItem(
-        context.scope,
+        page,
         {
           id: input.id,
           block: input.block,
@@ -328,32 +398,36 @@ export const profileRouter = member.profile.router({
         { publicOrigins: context.publicOrigins, ...(readMedia === undefined ? {} : { readMedia }) },
       ),
     );
+    await noteFor(context, page, 'blocks');
     // An edit that may have let a picture go (a link's thumbnail, a picture, a gallery, a poster): the edge's copies
     // of the page's pictures go with it, so one no live block uses answers 404 at once (AC-6129).
-    if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) await forgetPictures(context);
+    if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) {
+      await forgetPictures({ scope: page, edgeCache: context.edgeCache });
+    }
     return saved;
   }),
-  orderItems: member.profile.orderItems.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),
-    ),
-  ),
-  archiveItem: member.profile.archiveItem.handler(async ({ context, input }) => {
+  orderItems: member.profile.orderItems.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
     const items = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      archiveProfileItem(
-        context.scope,
-        { id: input.id, archived: input.archived },
-        { publicOrigins: context.publicOrigins },
-      ),
+      orderProfileItems(page, input.ids, { publicOrigins: context.publicOrigins }),
     );
-    if (input.archived) await forgetPictures(context);
+    await noteFor(context, page, 'blocks');
+    return items;
+  }),
+  archiveItem: member.profile.archiveItem.handler(async ({ context, input }) => {
+    const page = await pageOf(context, input.member);
+    const items = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      archiveProfileItem(page, { id: input.id, archived: input.archived }, { publicOrigins: context.publicOrigins }),
+    );
+    await noteFor(context, page, 'blocks');
+    if (input.archived) await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return items;
   }),
   deleteItem: member.profile.deleteItem.handler(async ({ context, input }) => {
-    const gone = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      deleteProfileItem(context.scope, input.id),
-    );
-    await forgetPictures(context);
+    const page = await pageOf(context, input.member);
+    const gone = await commitWrite(context, { mutationId: input.mutationId }, () => deleteProfileItem(page, input.id));
+    await noteFor(context, page, 'blocks');
+    await forgetPictures({ scope: page, edgeCache: context.edgeCache });
     return gone;
   }),
 });

@@ -389,6 +389,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'link_page.published': [row('link_page.published', 'member', ada, { after: { version: 4 } })],
   'link_page.draft_discarded': [row('link_page.draft_discarded', 'member', ada, {})],
   'link_page.version_restored': [row('link_page.version_restored', 'member', ada, { after: { version: 1 } })],
+  'link_page.changed_for': [
+    row('link_page.changed_for', 'member', ada, { after: { change: 'blocks' } }),
+    row('link_page.changed_for', 'member', ada, { after: { change: 'handle', handle: 'ada' } }),
+  ],
   'managed_page.propagated': [
     row('managed_page.propagated', 'booking_page', newId(), {
       after: { templateId: newId(), name: 'Intro', locked: ['hours', 'limits'] },

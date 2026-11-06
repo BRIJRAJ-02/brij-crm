@@ -26,6 +26,15 @@ import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, SOCIAL_LINKS_MAX } from './val
 import { BrandHex, ImageVersion } from './workspace-brand.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
+/**
+ * The link page a procedure acts on (spec 0070, AC-7002): the caller's own, or, with `member`, that member's page in
+ * this workspace, for a holder of `link_pages.manage_team` (the door's `enterTeamLinkPage` decides). The page stays the
+ * member's: no input ever names a user id, and a member who can't be read here answers as absent.
+ */
+export const PageScoped = WorkspaceScoped.extend({ member: Uuid.optional() });
+/** The link page a procedure acts on. */
+export type PageScoped = z.infer<typeof PageScoped>;
+
 /** A member's name in a workspace: 1 to 80 characters, trimmed (AC-821). */
 export const MemberName = z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.');
 /** A member's name in a workspace. */
@@ -309,7 +318,7 @@ export type UpdateMyProfileInput = z.infer<typeof UpdateMyProfileInput>;
  * Adds or edits one block of the caller's link page (spec 0051, AC-5107): idempotent on the id the browser minted,
  * so a retry of the same add answers the block already made and adds nothing.
  */
-export const SaveProfileItemInput = WorkspaceScoped.extend({
+export const SaveProfileItemInput = PageScoped.extend({
   id: Uuid,
   block: ProfileBlock,
   /** An edit of a block the editor showed: refused as gone when another tab deleted it, never made again. */
@@ -320,7 +329,7 @@ export const SaveProfileItemInput = WorkspaceScoped.extend({
 export type SaveProfileItemInput = z.infer<typeof SaveProfileItemInput>;
 
 /** The caller's live blocks in their new order: exactly the live blocks, each once (AC-5116). */
-export const OrderProfileItemsInput = WorkspaceScoped.extend({
+export const OrderProfileItemsInput = PageScoped.extend({
   ids: z.array(Uuid).min(1).max(60),
   mutationId: Uuid,
 });
@@ -328,7 +337,7 @@ export const OrderProfileItemsInput = WorkspaceScoped.extend({
 export type OrderProfileItemsInput = z.infer<typeof OrderProfileItemsInput>;
 
 /** Archives one block of the caller's link page, or restores it to the end (AC-5106). */
-export const ArchiveProfileItemInput = WorkspaceScoped.extend({
+export const ArchiveProfileItemInput = PageScoped.extend({
   id: Uuid,
   archived: z.boolean(),
   mutationId: Uuid,
@@ -337,7 +346,7 @@ export const ArchiveProfileItemInput = WorkspaceScoped.extend({
 export type ArchiveProfileItemInput = z.infer<typeof ArchiveProfileItemInput>;
 
 /** Deletes one block of the caller's link page for good (AC-5106: the editor asks first). */
-export const DeleteProfileItemInput = WorkspaceScoped.extend({
+export const DeleteProfileItemInput = PageScoped.extend({
   id: Uuid,
   mutationId: Uuid,
 });
@@ -375,7 +384,7 @@ export type ProfileLook = z.infer<typeof ProfileLook>;
  * Sets or clears the caller's own link page accent pair (spec 0060, AC-14), whole: `null` clears one, and the page
  * then follows the workspace's brand. A dark accent needs a light one beside it.
  */
-export const SaveProfileAccentInput = WorkspaceScoped.extend({
+export const SaveProfileAccentInput = PageScoped.extend({
   accent: BrandHex.nullable(),
   accentDark: BrandHex.nullable(),
   mutationId: Uuid,
@@ -392,7 +401,7 @@ export const ProfileAccent = z.object({ accent: BrandHex.nullable(), accentDark:
 export type ProfileAccent = z.infer<typeof ProfileAccent>;
 
 /** Which period the link page's figures cover (spec 0061, AC-6118): 7, 30 or 90 days, 30 when absent. */
-export const ProfileCountsInput = WorkspaceScoped.extend({
+export const ProfileCountsInput = PageScoped.extend({
   days: z
     .union(
       PROFILE_INSIGHT_DAYS.map((days) => z.literal(days)),
@@ -408,7 +417,7 @@ export type ProfileCountsInput = z.infer<typeof ProfileCountsInput>;
  * owner presses "Use the site's picture". The link is named by id: the address read is the one saved, never an
  * input, so this is never a way to have our server read an address somebody chose for it.
  */
-export const FetchThumbnailInput = WorkspaceScoped.extend({ id: Uuid, mutationId: Uuid });
+export const FetchThumbnailInput = PageScoped.extend({ id: Uuid, mutationId: Uuid });
 /** Fetches a link's own site picture as its thumbnail. */
 export type FetchThumbnailInput = z.infer<typeof FetchThumbnailInput>;
 
@@ -421,7 +430,7 @@ export const FetchedThumbnail = z.union([
 export type FetchedThumbnail = z.infer<typeof FetchedThumbnail>;
 
 /** Saves the share QR's style (spec 0061, AC-6124), whole: `null` clears it back to the plain code. */
-export const SaveQrStyleInput = WorkspaceScoped.extend({ style: ProfileQrStyle.nullable(), mutationId: Uuid });
+export const SaveQrStyleInput = PageScoped.extend({ style: ProfileQrStyle.nullable(), mutationId: Uuid });
 /** Saves the share QR's style. */
 export type SaveQrStyleInput = z.infer<typeof SaveQrStyleInput>;
 
@@ -442,23 +451,23 @@ export type LinkPagePublication = z.infer<typeof LinkPagePublication>;
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
 export const profileContract = {
-  get: oc.input(WorkspaceScoped).output(MyProfile),
+  get: oc.input(PageScoped).output(MyProfile),
   update: oc.input(UpdateMyProfileInput).output(MyProfile),
-  items: oc.input(WorkspaceScoped).output(ProfileItems),
-  pageChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePageChoice)),
+  items: oc.input(PageScoped).output(ProfileItems),
+  pageChoices: oc.input(PageScoped).output(z.array(ProfilePageChoice)),
   /** The forms the caller may place on their link page (spec 0052, AC-5213), their own and not placed yet. */
-  formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
+  formChoices: oc.input(PageScoped).output(z.array(ProfileFormChoice)),
   /** The places the caller may put a Menu or Reserve block for (spec 0065, AC-6528), with each kind's facts. */
-  placeChoices: oc.input(WorkspaceScoped).output(z.array(ProfilePlaceChoice)),
+  placeChoices: oc.input(PageScoped).output(z.array(ProfilePlaceChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
-  saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  saveTheme: oc.input(PageScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
   /** The caller's own link page accent and photos (spec 0060), for the Design panel. */
-  look: oc.input(WorkspaceScoped).output(ProfileLook),
+  look: oc.input(PageScoped).output(ProfileLook),
   /** The caller's own link page accent pair (spec 0060, AC-14): their page and personal booking pages wear it. */
   saveAccent: oc.input(SaveProfileAccentInput).output(ProfileAccent),
   /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
   setIndexable: oc
-    .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
+    .input(PageScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))
     .output(z.object({ indexable: z.boolean() })),
   /**
    * The picture a pasted link shows instead of the drawn card (spec 0055, AC-5511). `image` absent clears it back
@@ -488,7 +497,7 @@ export const profileContract = {
   /** Fetches a link's own site picture as its thumbnail (spec 0061, AC-6101). */
   fetchThumbnail: oc.input(FetchThumbnailInput).output(FetchedThumbnail),
   /** The share QR's style (spec 0061, AC-6124), absent keys for the plain code. */
-  qrStyle: oc.input(WorkspaceScoped).output(ProfileQrStyle),
+  qrStyle: oc.input(PageScoped).output(ProfileQrStyle),
   /** Saves the share QR's style (spec 0061, AC-6124). Refused with a hint when the colour is too light to scan. */
   saveQrStyle: oc.input(SaveQrStyleInput).output(ProfileQrStyle),
   /**
@@ -498,7 +507,7 @@ export const profileContract = {
    * own choice from then on. Answers whether the page is public now.
    */
   show: oc
-    .input(WorkspaceScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
+    .input(PageScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
     .output(z.object({ isPublic: z.boolean() })),
   /**
    * Publish for the caller's own link page (spec 0068, AC-6810 to AC-6812): its edits are a draft until Publish.
@@ -506,11 +515,11 @@ export const profileContract = {
    * back to what guests see; `versions` lists the last 20; `restore` makes one the draft. Pausing, the handle, the
    * share picture and indexing stay instant (AC-6813).
    */
-  publication: oc.input(WorkspaceScoped).output(LinkPagePublication),
-  publish: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
-  discard: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
-  versions: oc.input(WorkspaceScoped).output(PageVersionList),
+  publication: oc.input(PageScoped).output(LinkPagePublication),
+  publish: oc.input(PageScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
+  discard: oc.input(PageScoped.extend({ mutationId: Uuid })).output(LinkPagePublication),
+  versions: oc.input(PageScoped).output(PageVersionList),
   restore: oc
-    .input(WorkspaceScoped.extend({ mutationId: Uuid, version: z.number().int().min(1) }))
+    .input(PageScoped.extend({ mutationId: Uuid, version: z.number().int().min(1) }))
     .output(LinkPagePublication),
 };

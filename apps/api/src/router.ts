@@ -29,6 +29,7 @@ import { membersRouter } from './modules/members/router.ts';
 import { navRouter } from './modules/nav/router.ts';
 import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
 import { profileRouter } from './modules/profile/router.ts';
+import { teamPagesRouter } from './modules/team-pages/router.ts';
 import { brandRouter } from './modules/brand/router.ts';
 import { hospitalityRouter } from './modules/hospitality/router.ts';
 import { menuRouter } from './modules/menu/router.ts';
@@ -90,6 +91,7 @@ export const router = base.router({
   workspace: workspaceRouter,
   deletedWorkspace: deletedWorkspaceRouter,
   profile: profileRouter,
+  teamPages: teamPagesRouter,
   brand: brandRouter,
   hospitality: hospitalityRouter,
   menu: menuRouter,

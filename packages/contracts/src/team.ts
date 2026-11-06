@@ -193,6 +193,10 @@ export const AUDIT_ACTIONS = [
   'link_page.published',
   'link_page.draft_discarded',
   'link_page.version_restored',
+  // Someone else's link page changed by a holder of `link_pages.manage_team` (spec 0070, AC-7004): the target is the
+  // member whose page it is; `after.change` says what (its blocks, its look, Live or Private, its QR code, search, or
+  // a handle claimed for them, with `after.handle`). Publish, Discard and Restore keep their own rows above.
+  'link_page.changed_for',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

@@ -679,6 +679,35 @@ export function emailLinkAccess(memberId: string): Access {
   });
 }
 
+/**
+ * Someone else's link page as a team page manager edits it (spec 0070, AC-7002): the page's member as the principal,
+ * so the link page services act on their page and nothing else, with no permission and no object at all, so every
+ * other member service refuses it. The actor stays the manager, so History names who changed it. Only the door's
+ * `enterTeamLinkPage` builds one.
+ */
+export function linkPageAccess(member: {
+  readonly memberId: string;
+  readonly userId: string;
+  readonly role: Role;
+}): Access {
+  return Object.freeze({
+    principal: Object.freeze({
+      kind: 'member',
+      memberId: member.memberId,
+      userId: member.userId,
+      role: member.role,
+      teamIds: Object.freeze([]),
+    }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord([]),
+      fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
 /** The system's access: every permission and the open policy. Only system work gets it. */
 export const SYSTEM_ACCESS: Access = Object.freeze({
   principal: Object.freeze({ kind: 'system' }),

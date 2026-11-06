@@ -560,6 +560,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deleted: os.deletedWorkspace.deleted.handler(notServed),
       restore: os.deletedWorkspace.restore.handler(notServed),
     },
+    teamPages: {
+      list: os.teamPages.list.handler(notServed),
+      claim: os.teamPages.claim.handler(notServed),
+      editedBy: os.teamPages.editedBy.handler(notServed),
+    },
     profile: {
       get: os.profile.get.handler(notServed),
       update: os.profile.update.handler(notServed),

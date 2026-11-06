@@ -19,6 +19,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
+import { isTeamPageEdit } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -381,11 +382,15 @@ export async function updateMyMemberProfile(
 export async function showMyLinkPage(scope: EngineScope, live?: boolean): Promise<{ readonly isPublic: boolean }> {
   const userId = selfUserId(scope);
   if (userId === undefined) return { isPublic: false };
+  // A team page manager opening someone's page (spec 0070) only reads where it stands: opening it is its member's act.
+  const opensOnly = live === undefined && isTeamPageEdit(scope);
   return {
-    isPublic: await inWorkspace(scope, (tx) =>
-      live === undefined
-        ? showLinkPage(tx, userId, scope.workspaceId)
-        : setLinkPageLive(tx, userId, scope.workspaceId, live),
+    isPublic: await inWorkspace(scope, async (tx) =>
+      opensOnly
+        ? (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId)?.isShown === true
+        : live === undefined
+          ? showLinkPage(tx, userId, scope.workspaceId)
+          : setLinkPageLive(tx, userId, scope.workspaceId, live),
     ),
   };
 }

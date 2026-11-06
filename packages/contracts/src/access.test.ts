@@ -52,6 +52,7 @@ describe('the permission catalog', () => {
       'hospitality.service',
       'services.manage',
       'services.calendar',
+      'link_pages.manage_team',
     ]);
   });
 
@@ -106,6 +107,7 @@ describe('the permission catalog', () => {
       'hospitality.service',
       'services.manage',
       'services.calendar',
+      'link_pages.manage_team',
     ]);
   });
 
@@ -164,6 +166,8 @@ describe('the role table', () => {
     // Spec 0066: the same for business booking.
     'services.manage': ['owner', 'admin'],
     'services.calendar': ['owner', 'admin'],
+    // Spec 0070, AC-7001: owners and admins, and anyone a custom role gives it to.
+    'link_pages.manage_team': ['owner', 'admin'],
   };
 
   it('holds exactly the table, row by row', () => {
@@ -220,7 +224,7 @@ describe('the key scope catalog', () => {
     expect(KEY_SCOPES).toContain('records.export');
     expect(KEY_SCOPES.slice(-2)).toEqual([...KEY_DATA_SCOPES]);
     // Spec 0065, AC-6511, and spec 0066: the four Business permissions stay with people too, for now.
-    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 18 + 2);
+    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 19 + 2);
   });
 });
 

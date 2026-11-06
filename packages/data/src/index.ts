@@ -149,7 +149,10 @@ import type {
   RecentItem,
   WorkspaceDomainsView,
   DeletedWorkspace,
+  LinkPageEditedBy,
   MyProfile,
+  TeamLinkPage,
+  TeamLinkPages,
   SocialLink,
   SubmissionsBeyond,
   WorkspaceSettings,
@@ -841,7 +844,10 @@ export type {
   WorkspaceDomainsView,
   WorkspaceSummary,
   DeletedWorkspace,
+  LinkPageEditedBy,
   MyProfile,
+  TeamLinkPage,
+  TeamLinkPages,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -1839,6 +1845,9 @@ export function createDataLayer({
     void brand?.then((made) => {
       made.clear();
     });
+    // Other members' pages (spec 0070) are the last person's to have opened: the next person opens them afresh.
+    memberLinkPages.clear();
+    memberBrands.clear();
     void hospitality?.then((made) => {
       made.clear();
     });
@@ -3067,6 +3076,9 @@ export function createDataLayer({
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
+  // Team link pages (spec 0070): a member's page as a team page manager edits it, one store per member.
+  const memberLinkPages = new Map<string, Promise<LinkPageStore>>();
+  const memberBrands = new Map<string, Promise<BrandStore>>();
   // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
   // photos, loaded with the first screen that asks, never in the first load.
   let brand: Promise<BrandStore> | undefined;
@@ -3083,11 +3095,14 @@ export function createDataLayer({
     path: string,
     workspace: string,
     body?: Blob,
+    member?: string,
   ): Promise<{ readonly version?: string; readonly removed?: boolean; readonly same?: boolean }> => {
     const response = await fetch(new URL(path, origin).href, {
       method: body === undefined ? 'DELETE' : 'POST',
       headers: {
         'x-crm-workspace': workspace,
+        // Whose link page a photo is for (spec 0070), when it isn't the caller's own.
+        ...(member === undefined ? {} : { 'x-crm-page-member': member }),
         ...(body === undefined ? {} : { 'content-type': body.type }),
       },
       ...(body === undefined ? {} : { body }),
@@ -3104,6 +3119,47 @@ export function createDataLayer({
       ...(fields.same === true ? { same: true } : {}),
     };
   };
+  /** A link page's store, the caller's own (`member` undefined) or a member's (spec 0070), in its own chunk. */
+  const openLinkPageFor = (member: string | undefined): Promise<LinkPageStore> =>
+    import('./link-page/store.ts').then(({ openLinkPage }) =>
+      openLinkPage({
+        profile: api.profile,
+        call,
+        mintId,
+        notify,
+        // A link page's picture (spec 0061, AC-6101, AC-6108): sent from the store's own chunk, to this origin.
+        origin,
+        summary: refusalSummary,
+        ...(member === undefined ? {} : { member }),
+        signup: {
+          /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
+          workspaces: () => readMe().then((who) => who?.workspaces ?? []),
+          // Loaded with the editor that uses it, so its three writes never ride in the first load.
+          make: async (workspace, input) =>
+            (await import('./link-page/signup-form.ts')).makeSignupForm(
+              { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
+              workspace,
+              input,
+            ),
+        },
+      }),
+    );
+  /** The brand store, for the caller's own link page (`member` undefined) or a member's (spec 0070). */
+  const openBrandFor = (member: string | undefined): Promise<BrandStore> =>
+    import('./brand/store.ts').then(({ openBrand }) =>
+      openBrand({
+        brand: api.brand,
+        profile: api.profile,
+        call,
+        mintId,
+        send: sendImage,
+        ...(member === undefined ? {} : { member }),
+        onLogo: (workspace, version) => {
+          logoStamp += 1;
+          setLogo(workspace, version ?? null);
+        },
+      }),
+    );
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
   const pictureChoice = createPictureChoiceStore({
     api: {
@@ -6285,49 +6341,48 @@ export function createDataLayer({
      * ones before it; refused, it is put back and a toast says why, with Try again.
      */
     linkPage: {
-      load: (): Promise<LinkPageStore> =>
-        (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
-          openLinkPage({
-            profile: api.profile,
-            call,
-            mintId,
-            notify,
-            // A link page's picture (spec 0061, AC-6101, AC-6108): sent from the store's own chunk, to this origin.
-            origin,
-            summary: refusalSummary,
-            signup: {
-              /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
-              workspaces: () => readMe().then((who) => who?.workspaces ?? []),
-              // Loaded with the editor that uses it, so its three writes never ride in the first load.
-              make: async (workspace, input) =>
-                (await import('./link-page/signup-form.ts')).makeSignupForm(
-                  { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
-                  workspace,
-                  input,
-                ),
-            },
-          }),
-        )),
+      load: (): Promise<LinkPageStore> => (linkPage ??= openLinkPageFor(undefined)),
+      /**
+       * A member's link page, for a team page manager (spec 0070, AC-7002): the same store as the person's own, one per
+       * member for the app load, every call naming `member` for the server's door to check.
+       */
+      loadFor: (member: string): Promise<LinkPageStore> => {
+        let found = memberLinkPages.get(member);
+        if (found === undefined) {
+          found = openLinkPageFor(member);
+          memberLinkPages.set(member, found);
+        }
+        return found;
+      },
+    },
+    /**
+     * Team link pages (spec 0070, AC-7001 to AC-7004): everyone's page in the workspace (`link_pages.manage_team`), read
+     * fresh on each visit (no change event carries it); a handle claimed for someone, which waits for the server, since
+     * whether a handle is free is the server's to say; and who last changed the caller's own page.
+     */
+    teamPages: {
+      list: (workspace: string): Promise<TeamLinkPages> =>
+        call((options) => api.teamPages.list({ workspace }, options)),
+      claim: (workspace: string, member: string, handle: string): Promise<TeamLinkPage> =>
+        call((options) => api.teamPages.claim({ workspace, member, handle, mutationId: mintId() }, options)),
+      editedBy: (workspace: string): Promise<LinkPageEditedBy> =>
+        call((options) => api.teamPages.editedBy({ workspace }, options)),
     },
     /**
      * The workspace's brand kit (Settings › Brand) and a link page's own colour and photos (its Design panel), spec
      * 0060: the store, loaded on first use with the colour guard it previews with.
      */
     brand: {
-      load: (): Promise<BrandStore> =>
-        (brand ??= import('./brand/store.ts').then(({ openBrand }) =>
-          openBrand({
-            brand: api.brand,
-            profile: api.profile,
-            call,
-            mintId,
-            send: sendImage,
-            onLogo: (workspace, version) => {
-              logoStamp += 1;
-              setLogo(workspace, version ?? null);
-            },
-          }),
-        )),
+      load: (): Promise<BrandStore> => (brand ??= openBrandFor(undefined)),
+      /** The Design panel of a member's link page (spec 0070): its look read and saved with `member`. */
+      loadFor: (member: string): Promise<BrandStore> => {
+        let found = memberBrands.get(member);
+        if (found === undefined) {
+          found = openBrandFor(member);
+          memberBrands.set(member, found);
+        }
+        return found;
+      },
     },
     /**
      * The Hospitality suite's setup (spec 0065, H0): the Apps page, the business with its places and hours, and each

@@ -10,6 +10,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Role } from './access.ts';
 import { AUDIT_KIND_NAMES, AUDIT_PAGE } from './audit-kinds.ts';
+import { LINK_PAGE_TEAM_CHANGES } from './team-pages.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -459,6 +460,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     z.strictObject({ version: z.number().int().min(1) }),
   ),
   entry(['link_page.draft_discarded'], member, NoParams),
+  /** Someone else's link page changed by a team page manager (spec 0070, AC-7004): what changed, and a claimed handle. */
+  entry(
+    ['link_page.changed_for'],
+    member,
+    z.strictObject({ change: z.enum(LINK_PAGE_TEAM_CHANGES), handle: z.string().optional() }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

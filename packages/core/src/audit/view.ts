@@ -6,6 +6,7 @@
 // from the reader), and a deleted account's profile changes keep their field
 // names and lose their values (AC-4610).
 import {
+  LINK_PAGE_TEAM_CHANGES,
   AUDIT_KINDS,
   type AuditChange,
   type AuditEntryView,
@@ -859,6 +860,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'link_page.draft_discarded':
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    // Someone else's link page changed by a team page manager (spec 0070, AC-7004): what, and a claimed handle.
+    case 'link_page.changed_for': {
+      const change = LINK_PAGE_TEAM_CHANGES.find((each) => each === after.change);
+      if (change === undefined) return undefined;
+      const handle = typeof after.handle === 'string' ? after.handle : undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { change, ...(handle === undefined ? {} : { handle }) },
+        changes: [],
+      };
+    }
     case 'managed_page.propagated':
       return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     // A one-time link made or revoked (spec 0062, AC-6204): the page only; the link's id and uses stay in the row.
