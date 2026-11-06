@@ -148,11 +148,6 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
 export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   records_deleted_by: 'history: who moved a record to the trash',
   api_keys_revoked_by: 'history: who revoked an API key',
-  partner_connections_approved_by:
-    'history: who connected an outside app (spec 0070); the connection stays until an owner disconnects it',
-  partner_connections_disconnected_by: 'history: who disconnected an outside app',
-  partner_codes_approved_by:
-    'a one time code lives 60 seconds, and its exchange refuses an approver who is no longer an active owner',
   booking_time_blocks_standin:
     'time off still names who was to cover; a stand in who left covers nothing (awayAt reads active members only)',
   values_set_by: 'history: who set a value',
