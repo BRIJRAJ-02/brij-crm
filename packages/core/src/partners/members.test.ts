@@ -185,6 +185,81 @@ describe('adding a managed member (AC-7020, AC-7021, AC-7023)', () => {
   });
 });
 
+describe('the edges', () => {
+  it('makes one person from two PUTs at once for a new external id', async () => {
+    const hub = await connected();
+    const both = await Promise.all(
+      [1, 2].map(() =>
+        putPartnerMember(hub.scope, { connectionId: hub.connectionId, externalId: 'race', person: grace }, users()),
+      ),
+    );
+    expect(both.map((each) => each.created).sort()).toEqual([false, true]);
+    expect(new Set(both.map((each) => each.member.memberId)).size).toBe(1);
+  });
+
+  it('keeps each partner to its own people, even with the same external id', async () => {
+    const hub = await connected();
+    await putPartnerMember(hub.scope, { connectionId: hub.connectionId, externalId: 'same', person: grace }, users());
+    const other = await connected();
+    expect((await listPartnerMembers(other.scope, { connectionId: other.connectionId })).members).toEqual([]);
+    expect(
+      await refusalOf(
+        removePartnerMember(other.scope, { connectionId: other.connectionId, externalId: 'same' }, users()),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    // Its own reaches only its own connection's id.
+    expect(
+      await refusalOf(
+        removePartnerMember(other.scope, { connectionId: hub.connectionId, externalId: 'same' }, users()),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('never takes an address someone was invited with, nor brings back someone the workspace removed', async () => {
+    const hub = await connected();
+    await testQuery(
+      ownerUrl,
+      `insert into invitations (workspace_id, email, role, token_hash, expires_at, created_by_type, updated_by_type)
+       values ($1, 'invited@example.com', 'member', $2, now() + interval '7 days', 'system', 'system')`,
+      [hub.workspaceId, randomBytes(32).toString('hex')],
+    );
+    expect(
+      await refusalOf(
+        putPartnerMember(
+          hub.scope,
+          { connectionId: hub.connectionId, externalId: 'inv', person: { ...grace, email: 'invited@example.com' } },
+          users(),
+        ),
+      ),
+    ).toMatchObject({ code: 'UNIQUE_CONFLICT' });
+
+    const added = await putPartnerMember(
+      hub.scope,
+      { connectionId: hub.connectionId, externalId: 'gone', person: grace },
+      users(),
+    );
+    await testQuery(ownerUrl, `update members set status = 'removed', left_at = now() where id = $1`, [
+      added.member.memberId,
+    ]);
+    expect(
+      await refusalOf(
+        putPartnerMember(hub.scope, { connectionId: hub.connectionId, externalId: 'gone', person: grace }, users()),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('ends only a managed identity’s sessions', async () => {
+    const someone = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
+    await testQuery(
+      ownerUrl,
+      `insert into auth.session (expires_at, token, user_id) values (now() + interval '1 hour', $1, $2)`,
+      [randomUUID(), someone],
+    );
+    expect(await identity.endManagedUserSessions(someone)).toBe(0);
+    expect(await testQuery(ownerUrl, 'select 1 from auth.session where user_id = $1', [someone])).toHaveLength(1);
+  });
+});
+
 describe('roles (AC-7024)', () => {
   it('maps admin and member, and never changes or removes an owner', async () => {
     const hub = await connected();
@@ -206,7 +281,7 @@ describe('roles (AC-7024)', () => {
       { connectionId: hub.connectionId, externalId: 'r-1', person: { ...grace, name: 'Grace B. Hopper' } },
       users(),
     );
-    expect(kept.member).toMatchObject({ role: 'owner', name: 'Grace B. Hopper' });
+    expect(kept.member).toMatchObject({ role: 'owner', name: 'Grace Hopper' });
     expect(
       await refusalOf(removePartnerMember(hub.scope, { connectionId: hub.connectionId, externalId: 'r-1' }, users())),
     ).toMatchObject({ code: 'FORBIDDEN' });

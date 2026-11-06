@@ -4,10 +4,13 @@
 // - A managed member is keyed by the partner and its own id for them (`managed_members`), never by email (AC-7021).
 //   Their identity is made by the identity store (`ensureManagedUser`): a made up `.invalid` address, no password and
 //   no linked account, so they can't sign in at the app and no Timefix account is ever merged with them (AC-7023).
-//   Their real address is only on their member row; one that an active member here already uses is refused.
+//   Their real address is only on their member row; one that an active member here already uses, or an open
+//   invitation names, is refused.
 // - Roles (AC-7024): `admin` is the built in Admin (which holds `link_pages.manage_team`), `member` is Member (a custom
-//   role the workspace gave them on top of Member stays). The partner never makes, changes or removes an owner: a
-//   person the workspace made an owner keeps that role, and removing them is refused.
+//   role the workspace gave them on top of Member stays). The partner never makes, changes or removes an owner: a PUT
+//   for a person the workspace made an owner changes nothing about them, and removing them is refused.
+// - Someone the workspace removed in Timefix is not brought back by a PUT (403); only the partner's own DELETE, then a
+//   PUT, adds them again.
 // - Every change writes its History row as the partner (the scope's actor) in the same transaction, and the `members`
 //   and `access` outbox rows a member change stores. A PUT that changes nothing writes nothing.
 // - A removal (AC-7022) is a member removal: their row is marked `removed` (so their handle stops working, AC-5603),
@@ -38,7 +41,7 @@ import { checkSeats } from '../members/invitations.ts';
 import { runRemovalEffects } from '../members/removal.ts';
 import { recordJoinReach } from '../scheduling/delegations.ts';
 
-const { managedMembers, members } = schema;
+const { invitations, managedMembers, members } = schema;
 
 /** What adding a managed member needs of the identity store. */
 export interface ManagedUserMaker {
@@ -56,6 +59,8 @@ const NO_MEMBER = 'This connection has no person with that external id.';
 const EMAIL_TAKEN =
   'Someone already in this workspace uses this email. A managed member needs an address nobody here uses.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only the workspace’s owners can remove them in Timefix.';
+const REMOVED_IN_TIMEFIX =
+  'This person was removed from the workspace in Timefix. Send DELETE for them first if they should come back.';
 
 /** The partner principal, for the connection its path names, or a refusal. */
 function partnerOf(scope: EngineScope, connectionId: string) {
@@ -111,7 +116,10 @@ async function lockManaged(tx: WorkspaceTx, workspaceId: string, partnerId: stri
   return { ...row, member };
 }
 
-/** Whether an active member here other than `except` already uses this address, in any case. */
+/**
+ * Whether an active member here other than `except` already uses this address, in any case, or an open email
+ * invitation names it: a partner never takes an address a real person was invited with, so it can't lock them out.
+ */
 async function emailTaken(tx: WorkspaceTx, workspaceId: string, email: string, except?: string): Promise<boolean> {
   const [row] = await tx
     .select({ id: members.id })
@@ -125,7 +133,27 @@ async function emailTaken(tx: WorkspaceTx, workspaceId: string, email: string, e
       ),
     )
     .limit(1);
-  return row !== undefined;
+  if (row !== undefined) return true;
+  const [invited] = await tx
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.workspaceId, workspaceId),
+        eq(invitations.status, 'open'),
+        eq(invitations.kind, 'email'),
+        sql`lower(${invitations.email}) = lower(${email})`,
+      ),
+    )
+    .limit(1);
+  return invited !== undefined;
+}
+
+/** Serialises writes for one partner's external id: two PUTs at once for a new person make one, never two. */
+async function lockExternalId(tx: WorkspaceTx, workspaceId: string, partnerId: string, externalId: string) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`managed-member:${workspaceId}:${partnerId}:${externalId}`}, 0))`,
+  );
 }
 
 /** A unique clash on the address (two writes at once) as the same refusal the read gives. */
@@ -193,7 +221,7 @@ async function addMemberRow(
 /**
  * Adds or updates a partner's managed member (AC-7020): the same external id is always the same person. A new one is
  * made silently (no invitation, no email) with a seat; one the partner removed comes back with the same identity, so
- * their handle and page return. An existing one gets the name, address and role given (an owner keeps their role).
+ * their handle and page return. An existing one gets the name, address and role given (an owner is left as is).
  * Answers the person and whether they were added now (`created`).
  */
 export async function putPartnerMember(
@@ -208,7 +236,8 @@ export async function putPartnerMember(
   const name = input.person.name.trim();
   const email = input.person.email.trim().toLowerCase();
   const role: Role = input.person.role === 'admin' ? 'admin' : 'member';
-  // Refused before an identity is made: an address an active member here already uses (AC-7021).
+  // Refused before an identity is made, so a refused PUT leaves nothing behind: an address someone here already uses
+  // or was invited with (AC-7021), a person the workspace removed, a full workspace.
   await inWorkspace(scope, async (tx) => {
     await lockConnection(tx, principal.connectionId);
     const [row] = await tx
@@ -220,8 +249,12 @@ export async function putPartnerMember(
       )
       .where(and(eq(managedMembers.partnerId, principal.partnerId), eq(managedMembers.externalId, externalId)))
       .limit(1);
-    const keeps = row !== undefined && row.removedAt === null && row.status === 'active' ? row.memberId : undefined;
+    if (row !== undefined && row.removedAt === null && row.status !== 'active') {
+      throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
+    }
+    const keeps = row !== undefined && row.removedAt === null ? row.memberId : undefined;
     if (await emailTaken(tx, scope.workspaceId, email, keeps)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
+    if (keeps === undefined) await checkSeats(tx, scope, 1);
   });
   const userId = await deps.users.ensureManagedUser({
     workspaceId: scope.workspaceId,
@@ -235,10 +268,15 @@ export async function putPartnerMember(
       async (context) => {
         const { tx } = context;
         await lockConnection(tx, principal.connectionId);
+        await lockExternalId(tx, scope.workspaceId, principal.partnerId, externalId);
         const found = await lockManaged(tx, scope.workspaceId, principal.partnerId, externalId);
         const active = found?.member?.status === 'active' ? found.member : undefined;
+        // Removed in Timefix (Members, or they left): a routine PUT never undoes the workspace's own removal.
+        if (found !== undefined && found.removedAt === null && active === undefined) {
+          throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
+        }
         if (found === undefined || active === undefined) {
-          // New, or back after a removal (theirs or the workspace's): a new member row on the same identity.
+          // New, or back after the partner's own removal: a new member row on the same identity.
           if (await emailTaken(tx, scope.workspaceId, email)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
           await checkSeats(tx, scope, 1);
           const added = await addMemberRow(context, { userId, name, email, role });
@@ -283,8 +321,12 @@ export async function putPartnerMember(
             created: true,
           };
         }
+        // An owner (the workspace made them one) is the workspace's: nothing about them changes (AC-7024).
+        if (active.role === 'owner') {
+          return { member: viewOf(externalId, active, found.createdAt, undefined), created: false };
+        }
         // An existing person: their name, address and role as given, each only when it changed.
-        const nextRole: Role = active.role === 'owner' ? 'owner' : role;
+        const nextRole: Role = role;
         // A custom role on top of Member counts as Member; anything else that differs moves.
         const roleChanges = active.role !== nextRole;
         const nameChanges = active.name !== name;
