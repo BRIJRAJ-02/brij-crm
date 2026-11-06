@@ -6567,6 +6567,12 @@ export function createDataLayer({
       },
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
       get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      /**
+       * A member's profile as their link page shows it, for a team page manager opening their page (spec 0070): read
+       * each time, never held, and refused (`FORBIDDEN`, `NOT_FOUND`) by the server's door as the page would be.
+       */
+      getFor: (workspace: string, member: string): Promise<MyProfile> =>
+        call((options) => api.profile.get({ workspace, member }, options)),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**

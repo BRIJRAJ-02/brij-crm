@@ -14,6 +14,7 @@ import { drawnQrStyle, useQrStyle } from './ShareTools.tsx';
 import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
 import { strings } from './strings.ts';
+import { teamStrings } from './team-strings.ts';
 
 /** Props for the overview. */
 export interface LinkPageOverviewProps {
@@ -38,6 +39,8 @@ export interface LinkPageOverviewProps {
   readonly items: readonly ProfileItem[];
   /** The person's own picture, when it shows on their pages: a choice for the code's middle. */
   readonly personImage?: string | undefined;
+  /** Who last changed this page when it wasn't its owner (spec 0070, AC-7004): a quiet line on Your page. */
+  readonly editedBy?: { readonly name: string } | undefined;
 }
 
 /** Your page (Edit page and the code), then, while the page holds nothing, its first empty moment, else Insights. */
@@ -53,6 +56,7 @@ export function LinkPageOverview({
   linkPage,
   items,
   personImage,
+  editedBy,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   // The code in the owner's saved style (AC-6124), here and in what Download saves.
@@ -74,10 +78,12 @@ export function LinkPageOverview({
       {strings.editPageAction}
     </Button>
   );
+  // "Edited by Ana": the page stays theirs, and they see who else changed it last (spec 0070, AC-7004).
+  const edited = editedBy === undefined ? undefined : teamStrings.editedBy(editedBy.name);
   return (
     <>
       {isPublic ? (
-        <Card title={strings.yourPage} actions={edit}>
+        <Card title={strings.yourPage} actions={edit} {...(edited === undefined ? {} : { description: edited })}>
           {/* The code to print or show across a table, and the one thing to do with it here: Share holds the rest. */}
           <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
             <ButtonGroup label={strings.shareInPerson} layout="row">
@@ -88,7 +94,11 @@ export function LinkPageOverview({
           </QrCode>
         </Card>
       ) : (
-        <Card title={strings.yourPage} description={strings.privateShareLine} actions={edit}>
+        <Card
+          title={strings.yourPage}
+          description={edited === undefined ? strings.privateShareLine : `${strings.privateShareLine} ${edited}.`}
+          actions={edit}
+        >
           <div>
             <Button icon="globe" onPress={onGoLive}>
               {strings.goLive}

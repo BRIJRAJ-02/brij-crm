@@ -665,6 +665,19 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'link_page.version_restored', target: member(bea), params: { version: 1 } },
     'Ada Lovelace restored version 1 of Bea Rao’s link page as its draft',
   ],
+  // Spec 0070, AC-7004: someone else's link page, changed by a team page manager.
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'blocks' } },
+    'Ada Lovelace edited Bea Rao’s link page',
+  ],
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'live' } },
+    'Ada Lovelace turned Bea Rao’s link page Live',
+  ],
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'handle', handle: 'bea' } },
+    'Ada Lovelace claimed /bea for Bea Rao',
+  ],
   [
     { ...base, action: 'managed_page.propagated', target: managedPage, params: {} },
     'Ada Lovelace updated Intro call from its managed page',

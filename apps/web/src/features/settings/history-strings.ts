@@ -369,6 +369,30 @@ const SENTENCES: SentenceTemplates = {
     actor(
       `restored version ${String(entry.params.version)} of ${w.persons(entry.target.person)} link page as its draft`,
     ),
+  // Someone else's link page, changed by a team page manager (spec 0070, AC-7004).
+  'link_page.changed_for': (entry, w) => {
+    const page = `${w.persons(entry.target.person)} link page`;
+    switch (entry.params.change) {
+      case 'blocks':
+        return actor(`edited ${page}`);
+      case 'look':
+        return actor(`changed the look of ${page}`);
+      case 'live':
+        return actor(`turned ${page} Live`);
+      case 'private':
+        return actor(`made ${page} Private`);
+      case 'qr':
+        return actor(`styled the QR code of ${page}`);
+      case 'search':
+        return actor(`changed whether search engines show ${page}`);
+      case 'handle':
+        return actor(
+          entry.params.handle === undefined
+            ? `claimed a handle for ${w.person(entry.target.person)}`
+            : `claimed /${entry.params.handle} for ${w.person(entry.target.person)}`,
+        );
+    }
+  },
   'managed_page.propagated': (entry, w) => actor(`updated ${w.thing(entry.target)} from its managed page`),
   'booking_page.link_created': (entry, w) => actor(`made a one-time link for ${w.thing(entry.target)}`),
   'booking_page.link_revoked': (entry, w) => actor(`revoked a one-time link for ${w.thing(entry.target)}`),

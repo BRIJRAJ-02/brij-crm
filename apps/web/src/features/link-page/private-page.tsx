@@ -2,7 +2,7 @@
 // so the switch, its words and the wallet read never drift apart: `useLinkPageLive`, `LiveSwitch`, `useWalletLink`.
 // Spec 0058, AC-23: a claimed handle is live at once; a page made for its owner is private until they open it once;
 // after that the one switch decides. Every call goes through the data layer's link page store.
-import type { DataLayer } from '@crm/data';
+import type { DataLayer, LinkPageStore } from '@crm/data';
 import { Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type RefObject } from 'react';
@@ -61,7 +61,11 @@ export function useLinkPageLive(
   data: DataLayer,
   slug: string,
   isPublic: boolean | undefined,
-  options: { readonly opens?: boolean } = {},
+  options: {
+    readonly opens?: boolean;
+    /** The store the switch saves through: a member's own (spec 0070), else the person's. */
+    readonly linkPage?: LinkPageStore;
+  } = {},
 ): LinkPageLive {
   const { toasts } = useRouteContext({ from: '__root__' });
   const [isLive, setIsLive] = useState(isPublic !== false);
@@ -69,7 +73,10 @@ export function useLinkPageLive(
   const latest = useRef(0);
   const opened = useRef(false);
   const switchRef = useRef<HTMLInputElement | null>(null);
-  const send = (live: boolean | undefined) => data.linkPage.load().then((store) => store.show(slug, live));
+  const send = (live: boolean | undefined) =>
+    (options.linkPage === undefined ? data.linkPage.load() : Promise.resolve(options.linkPage)).then((store) =>
+      store.show(slug, live),
+    );
   const setLive = (live: boolean) => {
     // The switch only ever flips, so what to put back is the other state: never a value an older render held
     // (the toast's Undo keeps the first render's copy of this function).
