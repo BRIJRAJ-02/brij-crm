@@ -1,9 +1,8 @@
 -- Team link pages (spec 0070, slice 1, AC-7001): each member's link page views in one workspace, read in one
 -- statement for the Team pages list, rather than one `crm_profile_counts` call per member.
 --
--- Numbered 0193, after main's 0190: the unlanded branches for apps-open and properties-1 already claim 0191 and 0192,
--- so this one takes the next free number with a `when` stamped after theirs. Whichever lands first, the journal is
--- renumbered to stay contiguous at landing (`check:journal`), and nothing here depends on 0191 or 0192.
+-- Numbered 0191, straight after main's 0190: this lands first. The unlanded branches for apps-open and properties-1,
+-- which had claimed 0191 and 0192, renumber after it. Nothing here depends on either.
 --
 -- `crm_team_profile_views(owners, workspace, from_day, to_day)` answers, for each of `owners` who is an active member
 -- of `workspace`, the views their page in `workspace` had between the two days (UTC, at most 400 days apart). It reads
@@ -59,7 +58,7 @@ begin
     or not has_function_privilege('crm_app', one, 'EXECUTE')
     or has_function_privilege('crm_identity', one, 'EXECUTE')
     or has_function_privilege('public', one, 'EXECUTE') then
-    raise exception '0193_team_link_pages: % is not crm_handle''s definer for crm_app alone', one;
+    raise exception '0191_team_link_pages: % is not crm_handle''s definer for crm_app alone', one;
   end if;
 end
 $$;

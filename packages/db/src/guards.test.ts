@@ -288,7 +288,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0177).
       { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
-      // Each member's link page views in one workspace, for Team pages (spec 0070, migration 0193).
+      // Each member's link page views in one workspace, for Team pages (spec 0070, migration 0191).
       { name: 'crm_team_profile_views', owner: 'crm_handle' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
@@ -637,7 +637,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press',
         'crm_profile_counts',
         'crm_sweep_profile_counts',
-        // Each member's views for Team pages (spec 0070, migration 0193).
+        // Each member's views for Team pages (spec 0070, migration 0191).
         'crm_team_profile_views',
         // The look of the page (spec 0054, migration 0105), and whether search engines may show it
         // (spec 0055, migration 0108).
