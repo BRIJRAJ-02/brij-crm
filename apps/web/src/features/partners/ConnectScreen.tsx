@@ -56,12 +56,17 @@ function powersOf(modules: readonly PartnerModule[]): string {
 export function ConnectScreen({ data, request, offer, user, leave }: ConnectScreenProps) {
   const formId = useId();
   const partner = offer.partner.name;
-  const [choice, setChoice] = useState<string>(offer.workspaces[0]?.slug ?? NEW);
+  // A workspace not connected yet comes first, so a quick Connect never replaces a live connection's access.
+  const [choice, setChoice] = useState<string>(
+    (offer.workspaces.find((each) => !each.connected) ?? offer.workspaces[0])?.slug ?? NEW,
+  );
   const [name, setName] = useState('');
   const [modules, setModules] = useState<readonly PartnerModule[]>(offer.modules);
   const [busy, setBusy] = useState<'approve' | 'deny' | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  // The modules' own line, under their group: kept out of the Form's refusals, so it shows once.
+  const [modulesError, setModulesError] = useState<string | undefined>(undefined);
   // A new workspace keeps its id across a retry, so a lost answer never makes two.
   const [workspaceId] = useState(() => data.workspaces.newId());
   const [madeSlug, setMadeSlug] = useState<string | undefined>(undefined);
@@ -79,11 +84,10 @@ export function ConnectScreen({ data, request, offer, user, leave }: ConnectScre
     if (choice === NEW && name.trim() === '') {
       problems.push({ code: 'INPUT_INVALID', message: strings.newWorkspaceMissing, attributeId: 'name' });
     }
-    if (modules.length === 0) {
-      problems.push({ code: 'INPUT_INVALID', message: strings.modulesMissing, attributeId: 'modules' });
-    }
+    const noModules = modules.length === 0;
+    setModulesError(noModules ? strings.modulesMissing : undefined);
     setRefusals(problems);
-    if (problems.length > 0) return;
+    if (problems.length > 0 || noModules) return;
     setBusy('approve');
     setFailure(undefined);
     try {
@@ -116,8 +120,6 @@ export function ConnectScreen({ data, request, offer, user, leave }: ConnectScre
     setFailure(undefined);
     data.partnerConnect.deny(request).then((answer) => leave(answer.redirectTo), failed);
   };
-
-  const modulesError = refusals.find((refusal) => refusal.attributeId === 'modules')?.message;
 
   return (
     <AuthLayout
@@ -189,9 +191,11 @@ export function ConnectScreen({ data, request, offer, user, leave }: ConnectScre
             <Checkbox
               key={module}
               label={MODULES[module].label}
-              description={MODULES[module].power}
               isSelected={modules.includes(module)}
-              onChange={(isOn) => toggle(module, isOn)}
+              onChange={(isOn) => {
+                setModulesError(undefined);
+                toggle(module, isOn);
+              }}
             />
           ))}
         </FieldGroup>

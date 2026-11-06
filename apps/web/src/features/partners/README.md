@@ -20,7 +20,7 @@ Settings › Workspace › Connected apps (AC-7013), owners only (`connected_app
 - **Main task:** see each app, what it may use, when it connected and its last call; change its modules; disconnect it.
 - **Leaves out:** connecting (it starts from the app's button), the people an app added, and its call log.
 
-A Table: the app (PersonLine with its logo and who approved it), its modules, Connected, Last call, then Change and Disconnect. Change opens a form Modal with a Checkbox per module (at least one). Disconnect asks first in a danger confirm Modal (an ending action), then the row goes at once and the toast says so.
+A Table: the app (its logo, square, and its name), its modules as Badges, Approved by, Connected, Last call, then Change and Disconnect; on a phone, two lines a row. Change opens a form Modal with a Checkbox per module (at least one). Disconnect asks first in a danger confirm Modal (an ending action); the row goes at once and the toast says so; a refusal puts the row back and stays in the dialog with its words.
 
 ## PartnersScreen
 
@@ -30,4 +30,4 @@ Settings › Super admin › Partners (AC-7010), super admins only.
 - **Main task:** register a partner, copy its client id and its secret (shown once), and later edit it or replace the secret.
 - **Leaves out:** the workspaces each partner connected, billing, and deleting a partner.
 
-A Table (name, client id, the secret's last four, registered, Edit and Replace secret). Register and Edit share a form Modal: name, logo (FileDrop row), redirect addresses and frame origins, one a line. The client id and secret show once in a Modal with Copy. Replace secret asks first in a danger confirm Modal: the old one stops at once.
+A Table (name, client id, the secret's last four, registered, Edit and Replace secret). Register and Edit share a form Modal: name, logo (FileDrop row), redirect addresses and frame origins, one a line. The client id and secret show once in a Modal with Copy that only Done closes (no Escape, no outside click). Replace secret asks first in a danger confirm Modal: the old one stops at once.

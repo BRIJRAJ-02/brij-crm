@@ -237,11 +237,20 @@ function PartnerForm({
   const pickLogo = (files: readonly File[]) => {
     const [file] = files;
     if (file === undefined) return;
-    void data.partners.logoFrom(file).then((read) => {
-      if (read === undefined) return;
+    const unreadable = () =>
+      setRefusals((now) => [
+        ...now.filter((refusal) => refusal.attributeId !== 'logo'),
+        { code: 'INPUT_INVALID', message: strings.form.logoUnreadable, attributeId: 'logo' },
+      ]);
+    data.partners.logoFrom(file).then((read) => {
+      if (read === undefined) {
+        unreadable();
+        return;
+      }
+      setRefusals((now) => now.filter((refusal) => refusal.attributeId !== 'logo'));
       setLogo(read);
       setLogoPreview(`data:${read.type};base64,${read.data}`);
-    });
+    }, unreadable);
   };
 
   const submit = () => {
@@ -274,12 +283,20 @@ function PartnerForm({
   const errorOf = (field: string) => refusals.find((refusal) => refusal.attributeId === field)?.message;
   const logoError = errorOf('logo');
   const title = partner === undefined ? strings.form.registerTitle : strings.form.editTitle(partner.name);
+  const isChanged =
+    name !== (partner?.name ?? '') ||
+    frames !== (partner?.frameOrigins.join('\n') ?? '') ||
+    redirects !== (partner?.redirectUris.join('\n') ?? '') ||
+    logo !== undefined;
 
   return (
     <Modal
       title={title}
       variant="form"
       isOpen
+      isBusy={isBusy}
+      // An outside click keeps what was typed: only a form still as it opened goes that way.
+      isDismissable={!isChanged}
       onOpenChange={(isOpen) => {
         if (!isOpen && !isBusy) onClose();
       }}
@@ -311,7 +328,6 @@ function PartnerForm({
       >
         <Field
           label={strings.form.name}
-          placeholder={strings.form.namePlaceholder}
           name="name"
           autoComplete="off"
           isRequired
@@ -444,11 +460,11 @@ function SecretDialog({
       title={showing.isNew ? strings.secret.madeTitle(partner.name) : strings.secret.replacedTitle(partner.name)}
       variant="form"
       isOpen={shown !== undefined}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
+      // Shown once: an Escape or a stray click must never lose it, so Done is the only way out.
+      isDismissable={false}
+      isClosable={false}
       actions={
-        <Button variant="primary" slot="close">
+        <Button variant="primary" onPress={onClose}>
           {strings.secret.done}
         </Button>
       }
@@ -483,7 +499,16 @@ function SecretDialog({
 export function PartnersPending({ title }: { readonly title: string }) {
   return (
     <SettingsPage title={title} isLoading>
-      <Table label={title} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
+      <Table
+        label={title}
+        columns={COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        isLoading
+        isScrollable
+        phoneLayout="rows"
+      />
     </SettingsPage>
   );
 }

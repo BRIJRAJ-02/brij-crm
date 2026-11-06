@@ -143,16 +143,11 @@ export function ConnectedAppsScreen({ data, toasts, slug, title }: ConnectedApps
         app={ending}
         onClose={() => setEnding(undefined)}
         onConfirm={(app) =>
-          data.connectedApps.disconnect(slug, app.id).then(
-            () => {
-              // The row and its button went away.
-              focusTitle();
-              toasts.toast({ tone: 'success', message: strings.disconnected(app.partner.name) });
-            },
-            (error: unknown) => {
-              toasts.toast({ tone: 'danger', message: messageOf(error) });
-            },
-          )
+          data.connectedApps.disconnect(slug, app.id).then(() => {
+            // The row and its button went away.
+            focusTitle();
+            toasts.toast({ tone: 'success', message: strings.disconnected(app.partner.name) });
+          })
         }
       />
     </SettingsPage>
@@ -174,11 +169,12 @@ function ModulesDialog({
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  const [modulesError, setModulesError] = useState<string | undefined>(undefined);
   if (app === undefined) return null;
   const save = () => {
     if (isBusy) return;
     if (modules.length === 0) {
-      setRefusals([{ code: 'INPUT_INVALID', message: strings.modulesMissing, attributeId: 'modules' }]);
+      setModulesError(strings.modulesMissing);
       return;
     }
     setBusy(true);
@@ -195,12 +191,13 @@ function ModulesDialog({
       },
     );
   };
-  const error = refusals[0]?.message;
+  const error = modulesError;
   return (
     <Modal
       title={strings.modulesTitle(app.partner.name)}
       variant="form"
       isOpen
+      isBusy={isBusy}
       onOpenChange={(open) => {
         if (!open && !isBusy) onClose();
       }}
@@ -235,7 +232,10 @@ function ModulesDialog({
               label={MODULES[module].label}
               description={MODULES[module].power}
               isSelected={modules.includes(module)}
-              onChange={(isOn) => setModules((now) => toggled(now, module, isOn))}
+              onChange={(isOn) => {
+                setModulesError(undefined);
+                setModules((now) => toggled(now, module, isOn));
+              }}
             />
           ))}
         </FieldGroup>
@@ -257,6 +257,7 @@ function DisconnectDialog({
   // The last app stays while the Modal plays its exit.
   const [last, setLast] = useState(app);
   const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
   if (app !== undefined && app !== last) setLast(app);
   const shown = app ?? last;
   if (shown === undefined) return null;
@@ -266,8 +267,12 @@ function DisconnectDialog({
       variant="confirm"
       tone="danger"
       isOpen={app !== undefined}
+      isBusy={isBusy}
       onOpenChange={(open) => {
-        if (!open && !isBusy) onClose();
+        if (!open && !isBusy) {
+          setFailure(undefined);
+          onClose();
+        }
       }}
       actions={
         <>
@@ -279,10 +284,17 @@ function DisconnectDialog({
             isPending={isBusy}
             onPress={() => {
               setBusy(true);
-              void onConfirm(shown).finally(() => {
-                setBusy(false);
-                onClose();
-              });
+              setFailure(undefined);
+              onConfirm(shown).then(
+                () => {
+                  setBusy(false);
+                  onClose();
+                },
+                (error: unknown) => {
+                  setBusy(false);
+                  setFailure(messageOf(error));
+                },
+              );
             }}
           >
             {isBusy ? strings.disconnecting : strings.confirm}
@@ -290,6 +302,11 @@ function DisconnectDialog({
         </>
       }
     >
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
       {strings.confirmText(shown.partner.name)}
     </Modal>
   );
@@ -299,7 +316,16 @@ function DisconnectDialog({
 export function ConnectedAppsPending({ title }: { readonly title: string }) {
   return (
     <SettingsPage title={title} isLoading>
-      <Table label={title} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
+      <Table
+        label={title}
+        columns={COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        isLoading
+        isScrollable
+        phoneLayout="rows"
+      />
     </SettingsPage>
   );
 }

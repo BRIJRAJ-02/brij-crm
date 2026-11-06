@@ -28,7 +28,7 @@ export const connectStrings = {
     count === 1
       ? 'You’re in 1 other workspace. Only its owners can connect it.'
       : `You’re in ${String(count)} other workspaces. Only their owners can connect them.`,
-  connectedAlready: 'Connected already: approving again replaces its access.',
+  connectedAlready: 'Already connected. Connecting again replaces its access.',
   newWorkspace: 'A new workspace',
   newWorkspaceName: 'Workspace name',
   newWorkspacePlaceholder: 'Acme',
@@ -96,10 +96,10 @@ export const partnersStrings = {
     registerTitle: 'Register a partner',
     editTitle: (name: string) => `Edit ${name}`,
     name: 'Name',
-    namePlaceholder: 'Marketing Hub',
     nameMissing: 'Give the partner a name.',
     logo: 'Logo',
     logoTypes: 'PNG, JPG or WebP',
+    logoUnreadable: 'Couldn’t read that image. Try a PNG, JPG or WebP.',
     frameOrigins: 'Sites allowed to embed Timefix',
     frameOriginsHint: 'One origin a line, like https://hub.example.com.',
     redirectUris: 'Addresses that receive a connection',
