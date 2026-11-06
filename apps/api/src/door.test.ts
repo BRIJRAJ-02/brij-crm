@@ -47,6 +47,10 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'deletedWorkspace.restore',
   'workspaces.create',
   'workspaces.slugAvailable',
+  // Spec 0070: the partner connect page, before a workspace is chosen; core enters each of the person's own
+  // workspaces through the door to find the ones they own.
+  'partnerConnect.offer',
+  'partnerConnect.deny',
   'realtime.connectionToken',
   // The signed in person's own sessions (spec 0033): global identity, by their user id, before any workspace.
   'account.sessions.list',
@@ -81,6 +85,8 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
   'me/router.ts',
   'invitations/public.ts',
   'join/router.ts',
+  // Spec 0070: the connect page's offer, which passes the door in packages/core for each of the person's workspaces.
+  'partners/connect.ts',
 ]);
 
 /**
@@ -96,6 +102,8 @@ const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set([
   'workspaces/router.ts',
   'invitations/public.ts',
   'account/router.ts',
+  // Spec 0070: the connect page's offer reads the person's own workspaces from the directory.
+  'partners/connect.ts',
 ]);
 
 /** Reaching the database around the door: the raw pool from the context, or a workspace transaction of its own. */

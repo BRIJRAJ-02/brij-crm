@@ -67,6 +67,10 @@ export const AUDIT_KINDS = {
     'api_key.created',
     'api_key.revoked',
     'api_key.restored',
+    // Outside products connected to the workspace (spec 0070).
+    'partner.connected',
+    'partner.modules_changed',
+    'partner.disconnected',
     // Numbers handed to someone outside (spec 0067): a share link made or revoked.
     'insights.share_created',
     'insights.share_revoked',

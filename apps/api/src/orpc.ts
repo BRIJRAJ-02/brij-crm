@@ -194,6 +194,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   googleLinked: (userId: string) => Promise<boolean>;
   /**
+   * The partner registry's two reads (spec 0070), by client id or partner id: the connect's check of what a partner
+   * sent, and Connected apps' names and logos. Kept for member handlers, unlike `identity`; each answer carries a
+   * secret's hash only for the connect's own check, which never answers it.
+   */
+  partners: Pick<IdentityStore, 'partnerByClientId' | 'partnerById'>;
+  /**
    * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials
    * for. The pass holds only what the caller's own page already shows; the handler reads that and hands it over.
    */
@@ -332,7 +338,9 @@ export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
 function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string; readonly q?: string } {
   if (typeof input !== 'object' || input === null) return {};
   const fields = input as Record<string, unknown>;
-  const target = [fields['userId'], fields['pageId'], fields['workspaceId']].find((value) => typeof value === 'string');
+  const target = [fields['userId'], fields['pageId'], fields['workspaceId'], fields['partnerId']].find(
+    (value) => typeof value === 'string',
+  );
   const period = fields['period'];
   const q = fields['q'];
   return {

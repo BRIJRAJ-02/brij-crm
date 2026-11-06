@@ -19,6 +19,7 @@ export const replacedStrings = {
   anAutomation: 'An automation',
   aForm: 'A form submission',
   aBookingPage: 'A booking page',
+  aConnectedApp: 'A connected app',
 } as const;
 
 /**
@@ -35,9 +36,11 @@ export function replacedToast(replaced: ReplacedValue): ToastContent {
           ? replacedStrings.aForm
           : replaced.by.kind === 'booking'
             ? replacedStrings.aBookingPage
-            : replaced.by.name === undefined || replaced.by.name === ''
-              ? replacedStrings.someone
-              : replaced.by.name;
+            : replaced.by.kind === 'partner'
+              ? replacedStrings.aConnectedApp
+              : replaced.by.name === undefined || replaced.by.name === ''
+                ? replacedStrings.someone
+                : replaced.by.name;
   return {
     tone: 'danger',
     message: replacedStrings.replaced(who, replaced.attributeTitle, replaced.others, replaced.recordName),

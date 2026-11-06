@@ -86,19 +86,19 @@ async function forgetPictures(context: {
 }
 
 /** A scope the door made. */
-type EngineScope = Parameters<typeof getMyProfile>[0];
+type MemberScope = Parameters<typeof getMyProfile>[0];
 
 /**
  * The link page a procedure acts on (spec 0070, AC-7002): the caller's own, or with `member` that member's, through
  * the door's `enterTeamLinkPage` (`link_pages.manage_team`, an active member of this workspace, else NOT_FOUND). Its
  * owner is always the scope's principal, never an input.
  */
-async function pageOf(context: { readonly scope: EngineScope }, member: string | undefined): Promise<EngineScope> {
+async function pageOf(context: { readonly scope: MemberScope }, member: string | undefined): Promise<MemberScope> {
   return member === undefined ? context.scope : enterTeamLinkPage(context.scope, member);
 }
 
 /** The identity whose page a scope acts on: its pictures are kept in that person's folder, whoever uploads them. */
-export function pageOwnerId(scope: EngineScope): string | undefined {
+export function pageOwnerId(scope: MemberScope): string | undefined {
   const { principal } = scope.access;
   return principal.kind === 'member' ? principal.userId : undefined;
 }

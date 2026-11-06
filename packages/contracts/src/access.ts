@@ -314,6 +314,15 @@ export const PERMISSIONS = {
     group: 'People',
     grant: 'any',
   },
+  // Partner connect (spec 0070, AC-7011, AC-7013): linking an outside product to the workspace, and changing or
+  // ending that link in Settings › Connected apps. Owners only: a partner adds and removes people.
+  'connected_apps.manage': {
+    message: 'Only workspace owners can connect apps.',
+    label: 'Connect apps',
+    description: 'Connect an outside product to the workspace, and change or end its connection.',
+    group: 'Owner only',
+    grant: 'owner',
+  },
 } as const satisfies Record<string, PermissionEntry>;
 
 /** Every permission's name, in catalog order. */
@@ -379,6 +388,8 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'services.calendar',
   // Spec 0070: a link page is a person's, so editing someone else's stays with people (a partner gets its own way in).
   'link_pages.manage_team',
+  // Spec 0070: connecting a partner, which adds and removes people, is an owner's own act.
+  'connected_apps.manage',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

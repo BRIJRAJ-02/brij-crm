@@ -12,6 +12,9 @@ export {
   enterWithKey,
   noteKeyUse,
   type KeyEntry,
+  enterAsPartner,
+  notePartnerCall,
+  type PartnerEntry,
   enterWorkspace,
   enterTeamLinkPage,
   mayPreviewDraft,
@@ -150,6 +153,40 @@ export {
 export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
 // A key's shape (pure): the api's tests make one to prove an unknown or misplaced key opens nothing.
 export { keyToken, parseKeyToken } from './developer/tokens.ts';
+// Partners (spec 0070, slice 2): the console's registry, the OAuth connect and its token exchange, Settings ›
+// Connected apps, and a partner's read of its own connection; the door's part is `enterAsPartner`.
+export {
+  listPartners,
+  registerPartner,
+  replacePartnerSecret,
+  toPartnerView,
+  updatePartner,
+  type PartnerRegistryDeps,
+} from './partners/registry.ts';
+export {
+  approvePartnerConnect,
+  checkConnectRequest,
+  denyPartnerConnect,
+  partnerConnectOffer,
+  type ConnectOfferDeps,
+  type ConnectPartners,
+} from './partners/connect.ts';
+export {
+  exchangePartnerCode,
+  type PartnerExchange,
+  type PartnerExchangeDeps,
+  type PartnerExchangeInput,
+} from './partners/exchange.ts';
+export {
+  disconnectApp,
+  listConnectedApps,
+  readPartnerConnection,
+  setConnectedAppModules,
+  type ConnectedAppsDeps,
+} from './partners/connections.ts';
+export { frameOriginProblem, partnerLogoPath, redirectUriProblem } from './partners/addresses.ts';
+// A partner's token shapes and PKCE (pure): the api's tests and the sample partner page make them.
+export { parsePartnerAccessToken, s256Challenge } from './partners/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {

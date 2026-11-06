@@ -92,6 +92,7 @@ import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realti
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
+import { mountPartnerApi, PARTNER_V1_PREFIX, partnerLogoResponse } from './partner/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 import type { WebhookUrlProblem } from '@crm/core';
@@ -469,6 +470,8 @@ export function createApp({
     // The public API (parity #34) reads no cookie, only a Bearer key, so a cross site write has nothing to ride on.
     // Never mount a route that reads the session under /api/v1/: this line would let its writes past.
     if (c.req.path.startsWith(V1_PREFIX)) return next();
+    // The partner API (spec 0070) likewise: a partner's client secret or access token, never a cookie.
+    if (c.req.path.startsWith(PARTNER_V1_PREFIX)) return next();
     // The marketing site's beacon checks its own origins, SITE_ORIGINS (spec 0047, AC-1627).
     if (c.req.path === SITE_HIT_PATH && c.req.method === 'POST') return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
@@ -565,6 +568,11 @@ export function createApp({
         },
         // Only whether a person has Google linked, by their own user id, for Profile's Sync Google photo.
         googleLinked: (userId) => identity.hasGoogleAccount(userId),
+        // The partner registry's two reads (spec 0070): the connect's check, and Connected apps' names and logos.
+        partners: {
+          partnerByClientId: (clientId) => identity.partnerByClientId(clientId),
+          partnerById: (id) => identity.partnerById(id),
+        },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
       },
@@ -583,6 +591,25 @@ export function createApp({
     analytics,
     keepAlive,
   });
+
+  // The partner API (spec 0070, slice 2): the token exchange, and a connection's read of itself, for a partner's
+  // server only (its secret or its access token, never a cookie), under `/api/partner/v1`.
+  mountPartnerApi(app, {
+    db,
+    partners: { partnerByClientId: (clientId) => identity.partnerByClientId(clientId) },
+    limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+    keepAlive,
+  });
+  // A partner's logo from our own origin (spec 0070, AC-7012): the connect page and Connected apps show it.
+  app.get('/public/partners/:clientId/logo', (c) =>
+    partnerLogoResponse(
+      {
+        partnerLogo: (clientId, version) => identity.partnerLogo(clientId, version),
+        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+      },
+      { clientId: c.req.param('clientId'), version: c.req.query('v'), address: c.get('clientIp') },
+    ),
+  );
 
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));

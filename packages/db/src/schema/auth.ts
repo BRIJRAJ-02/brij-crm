@@ -1002,3 +1002,52 @@ export const operatorEvent = auth.table(
     check('operator_event_q', sql`char_length(${t.q}) between 1 and 100`),
   ],
 );
+
+/**
+ * A partner (spec 0070, AC-7010): an outside product a super admin registered in the operator console, which may
+ * connect workspaces through OAuth and, later, embed Timefix. Global, so in `auth` on the identity login: a partner
+ * is nobody's workspace. Only the SHA-256 of its secret is kept, with the secret's last four characters; the whole
+ * secret is shown once, when it is made or replaced. Addresses are kept exactly as registered: a connect's redirect
+ * address must equal one of them character for character.
+ */
+export const partners = auth.table(
+  'partners',
+  {
+    id: authId(),
+    /** Public: `tfp_` and 22 base64url characters, what the partner sends as `client_id`. */
+    clientId: text('client_id').notNull(),
+    name: text('name').notNull(),
+    /** The partner's logo, a PNG, JPEG or WebP of at most 200 KB, served from our origin; none until one is added. */
+    logo: bytea('logo'),
+    logoType: text('logo_type'),
+    /** Moves with every new logo, so its address (`?v=`) changes and no cache keeps the old one. */
+    logoVersion: integer('logo_version').notNull().default(0),
+    /** The web origins allowed to embed Timefix in a frame (slice 4's `frame-ancestors`). */
+    frameOrigins: text('frame_origins').array().notNull(),
+    /** The addresses allowed to receive a connection: a connect's `redirect_uri` must equal one exactly. */
+    redirectUris: text('redirect_uris').array().notNull(),
+    /** SHA-256 of the secret. Never the secret. */
+    secretHash: bytea('secret_hash').notNull(),
+    secretHint: text('secret_hint').notNull(),
+    /** The super admin who registered it, by user id (no foreign key: the registry outlives the account). */
+    createdBy: uuid('created_by').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    /** When the secret was last replaced; the one before stopped working at that moment. */
+    secretReplacedAt: timestamptz('secret_replaced_at'),
+  },
+  (t) => [
+    uniqueIndex('partners_client_id').on(t.clientId),
+    index('partners_created').on(t.createdAt.desc()),
+    check('partners_client_id_shape', sql`${t.clientId} ~ '^tfp_[A-Za-z0-9_-]{22}$'`),
+    check('partners_name', sql`char_length(${t.name}) between 1 and 80`),
+    check(
+      'partners_logo',
+      sql`(${t.logo} is null and ${t.logoType} is null) or (octet_length(${t.logo}) between 1 and 204800 and ${t.logoType} in ('image/png', 'image/jpeg', 'image/webp'))`,
+    ),
+    check('partners_frame_origins', sql`cardinality(${t.frameOrigins}) <= 10`),
+    check('partners_redirect_uris', sql`cardinality(${t.redirectUris}) between 1 and 10`),
+    check('partners_secret_hash', sql`octet_length(${t.secretHash}) = 32`),
+    check('partners_secret_hint', sql`char_length(${t.secretHint}) = 4`),
+  ],
+);

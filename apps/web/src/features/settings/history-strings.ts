@@ -85,6 +85,11 @@ const WORKSPACE_FIELDS = {
 } as const;
 const LINK_FIELDS = { role: 'role', expires: 'expiry', uses: 'number of uses' } as const;
 
+/** A connected app's modules in words, after `lead` (" for Link pages"), or nothing with none. */
+const MODULE_WORDS: Readonly<Record<string, string>> = { link_pages: 'Link pages' };
+const moduleList = (modules: readonly string[], lead: string) =>
+  modules.length === 0 ? '' : `${lead}${modules.map((module) => MODULE_WORDS[module] ?? module).join(' and ')}`;
+
 const SENTENCES: SentenceTemplates = {
   'invitation.created': (entry, w) =>
     actor(
@@ -209,6 +214,11 @@ const SENTENCES: SentenceTemplates = {
   'api_key.created': (entry) => actor(`made the API key ${entry.params.name}`),
   'api_key.revoked': (entry) => actor(`revoked the API key ${entry.params.name}`),
   'api_key.restored': (entry) => actor(`brought back the API key ${entry.params.name}`),
+  // A connected app (spec 0070, AC-7013): its name then, and the modules it may use.
+  'partner.connected': (entry) => actor(`connected ${entry.params.name}${moduleList(entry.params.modules, ' for ')}`),
+  'partner.modules_changed': (entry) =>
+    actor(`changed what ${entry.params.name} can use${moduleList(entry.params.modules, ' to ')}`),
+  'partner.disconnected': (entry) => actor(`disconnected ${entry.params.name}`),
   'rotation.adjusted': (entry, w) =>
     actor(
       `adjusted ${w.persons(entry.params.person)} count in ${w.thing(entry.target)} by ${units(entry.params.units)}`,

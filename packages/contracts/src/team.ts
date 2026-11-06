@@ -197,6 +197,11 @@ export const AUDIT_ACTIONS = [
   // member whose page it is; `after.change` says what (its blocks, its look, Live or Private, its QR code, search, or
   // a handle claimed for them, with `after.handle`). Publish, Discard and Restore keep their own rows above.
   'link_page.changed_for',
+  // A partner connected to the workspace, its modules changed, or disconnected (spec 0070, AC-7011, AC-7013): the
+  // target is the workspace; `after.name` is the partner's name then and `after.modules` its modules. Never a token.
+  'partner.connected',
+  'partner.modules_changed',
+  'partner.disconnected',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

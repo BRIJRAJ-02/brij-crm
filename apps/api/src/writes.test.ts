@@ -124,6 +124,19 @@ const READS: ReadonlySet<string> = new Set([
   // The console's one write (spec 0065, AC-6502): a workspace's early access through crm_operator's definer; it
   // changes no record and stores no outbox row, and its before and after go to the console's own log.
   'operator.setEarlyAccess',
+  // Partners (spec 0070, slice 2): the registry lives in schema auth, kept in the console's log; the connect's code and
+  // Connected apps' changes are who may call the partner API, not CRM data, so they store no outbox row (each writes
+  // its History row, as API keys do).
+  'operator.partners',
+  'operator.registerPartner',
+  'operator.updatePartner',
+  'operator.replacePartnerSecret',
+  'partnerConnect.offer',
+  'partnerConnect.deny',
+  'partnerConnect.approve',
+  'connectedApps.list',
+  'connectedApps.setModules',
+  'connectedApps.disconnect',
   // The Hospitality setup's reads (spec 0065, H0).
   'hospitality.apps',
   'hospitality.business',

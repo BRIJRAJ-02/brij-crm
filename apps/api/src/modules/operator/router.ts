@@ -7,7 +7,11 @@ import {
   operatorSite,
   operatorUser,
   operatorUsers,
+  listPartners,
+  registerPartner,
+  replacePartnerSecret,
   setEarlyAccess,
+  updatePartner,
   type OperatorDeps,
 } from '@crm/core';
 import { forgetAfterCommit } from '../../edge-cache.ts';
@@ -19,6 +23,13 @@ import { operator, type RequestContext } from '../../orpc.ts';
 // factor, a recent sign in, and one log row per read). Its services read across workspaces only through
 // crm_operator's definers (counts and names) and the identity login's global rows.
 const deps = (context: RequestContext): OperatorDeps => ({ db: context.db, identity: context.identity });
+
+/** A partner change's row in the console's log (spec 0070, AC-7010), written in the change's own transaction. */
+const auditOf = (context: RequestContext & { readonly user: { readonly id: string } }, action: string) => ({
+  userId: context.user.id,
+  action,
+  requestId: context.requestId,
+});
 
 export const operatorRouter = operator.operator.router({
   overview: operator.operator.overview.handler(({ context, input }) => operatorOverview(deps(context), input.period)),
@@ -60,4 +71,15 @@ export const operatorRouter = operator.operator.router({
     }
     return change;
   }),
+  // Partners (spec 0070, AC-7010): the registry on the identity login. A secret is answered once and never logged.
+  partners: operator.operator.partners.handler(({ context }) => listPartners({ partners: context.identity })),
+  registerPartner: operator.operator.registerPartner.handler(({ context, input }) =>
+    registerPartner({ partners: context.identity }, input, auditOf(context, 'operator.partnerRegistered')),
+  ),
+  updatePartner: operator.operator.updatePartner.handler(({ context, input }) =>
+    updatePartner({ partners: context.identity }, input, auditOf(context, 'operator.partnerChanged')),
+  ),
+  replacePartnerSecret: operator.operator.replacePartnerSecret.handler(({ context, input }) =>
+    replacePartnerSecret({ partners: context.identity }, input, auditOf(context, 'operator.partnerSecretReplaced')),
+  ),
 });

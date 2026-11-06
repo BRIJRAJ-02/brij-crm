@@ -65,6 +65,8 @@ import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
 import { automationsRouter } from './modules/automations/router.ts';
 import { apiKeysRouter } from './modules/api-keys/router.ts';
+import { connectedAppsRouter } from './modules/partners/connected-apps.ts';
+import { partnerConnectRouter } from './modules/partners/connect.ts';
 import { base } from './orpc.ts';
 
 // One module per feature under ./modules, each implementing its contract namespace.
@@ -107,6 +109,9 @@ export const router = base.router({
   jobs: jobsRouter,
   automations: automationsRouter,
   apiKeys: apiKeysRouter,
+  // Partner connect (spec 0070, slice 2): the connect page (bootstrap) and the owner's approval; Connected apps.
+  partnerConnect: partnerConnectRouter,
+  connectedApps: connectedAppsRouter,
   usage: usageRouter,
   views: viewsRouter,
   reports: reportsRouter,

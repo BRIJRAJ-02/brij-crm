@@ -11,6 +11,7 @@ import * as z from 'zod';
 import { Role } from './access.ts';
 import { AUDIT_KIND_NAMES, AUDIT_PAGE } from './audit-kinds.ts';
 import { LINK_PAGE_TEAM_CHANGES } from './team-pages.ts';
+import { PartnerModule } from './partners.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -273,6 +274,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** An API key made, revoked or brought back (parity #34): its name then. */
   entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
+  /** A partner connected, its modules changed, or disconnected (spec 0070): its name then, and its modules. */
+  entry(
+    ['partner.connected', 'partner.modules_changed', 'partner.disconnected'],
+    workspace,
+    z.strictObject({ name: z.string(), modules: z.array(PartnerModule) }),
+  ),
   /**
    * An Insights share link made or revoked (spec 0067): its name, and on a revoke whether it went with its maker's
    * removal. Never its secret.

@@ -6,6 +6,14 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { EarlyAccessChange, EarlyAccessFlagName, SetEarlyAccessInput } from './hospitality.ts';
+import {
+  PartnerList,
+  PartnerRefInput,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+} from './partners.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -278,6 +286,16 @@ export const operatorContract = {
    * and after in the console's log. `NOT_FOUND` for a workspace that isn't there.
    */
   setEarlyAccess: oc.input(SetEarlyAccessInput).output(EarlyAccessChange),
+  /**
+   * Partners (spec 0070, AC-7010): every registered partner; register one (its secret answered once); change its
+   * name, logo or addresses; replace its secret (the old one stops at once, the new one is answered once). Each write
+   * is kept in the console's log. `NOT_FOUND` for a partner that isn't there; `INPUT_INVALID` for an address that
+   * isn't one.
+   */
+  partners: oc.output(PartnerList),
+  registerPartner: oc.input(RegisterPartnerInput).output(PartnerWithSecret),
+  updatePartner: oc.input(UpdatePartnerInput).output(PartnerView),
+  replacePartnerSecret: oc.input(PartnerRefInput).output(PartnerWithSecret),
 };
 
 /** What the marketing site's beacon sends (AC-1627): the path, the referring site's host, and `utm_source`. */

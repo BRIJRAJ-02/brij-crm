@@ -252,6 +252,19 @@ export {
 /** A booking a guest made, as Bookings' arrival toast hears it (B-12). */
 export type { BookingArrival } from './bookings/arrivals.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
+// Partners (spec 0070, slice 2): the console's registry, the connect page, and Settings › Connected apps.
+export type {
+  ConnectableWorkspace,
+  ConnectedApp,
+  PartnerConnectOffer,
+  PartnerConnectRequest,
+  PartnerLogoUpload,
+  PartnerModule,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+} from '@crm/contracts';
 /** The settings Settings changes live on a form (forms fixes 2). */
 export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
 // Insights (spec 0067).
@@ -526,6 +539,17 @@ import {
 import type { Report as ReportView, ReportConfig } from '@crm/contracts';
 import type { RecordFileView } from '@crm/contracts';
 import type { ApiKey, ApiKeyAccess } from '@crm/contracts';
+import type {
+  ConnectedApp,
+  PartnerConnectOffer,
+  PartnerConnectRequest,
+  PartnerLogoUpload,
+  PartnerModule,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+} from '@crm/contracts';
 import type { ReportPlan } from '@crm/contracts/reports';
 import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
@@ -1275,7 +1299,9 @@ export interface ReplacedValue {
     | { readonly kind: 'api_key' }
     | { readonly kind: 'automation' }
     | { readonly kind: 'form' }
-    | { readonly kind: 'booking' };
+    | { readonly kind: 'booking' }
+    /** A connected app (spec 0070), from slice 3 on. */
+    | { readonly kind: 'partner' };
   readonly useMine: () => void;
 }
 
@@ -3324,6 +3350,31 @@ export function createDataLayer({
   // change events of their own, so the list is read again when a screen holds it after a while.
   const apiKeyLists = createCaptureList<ApiKey>({
     read: (workspace) => call((options) => api.apiKeys.list({ workspace }, options)).then((answer) => answer.keys),
+  });
+  // Settings › Connected apps (spec 0070, AC-7013): one held list per workspace, patched by every change below. A
+  // connection has no change events of its own, so the list is read again when a screen holds it after a while.
+  /** A connection's new modules at once, and its old ones back on a refusal (while it still shows the new). */
+  const shownModules = (
+    items: readonly ConnectedApp[] | undefined,
+    connectionId: string,
+    modules: readonly PartnerModule[],
+  ) => {
+    const before = items?.find((item) => item.id === connectionId)?.modules;
+    const shown = [...modules];
+    return {
+      show: (now: readonly ConnectedApp[]) =>
+        now.map((item) => (item.id === connectionId ? { ...item, modules: shown } : item)),
+      undo: (now: readonly ConnectedApp[]) =>
+        now.map((item) =>
+          item.id === connectionId && before !== undefined && item.modules === shown
+            ? { ...item, modules: before }
+            : item,
+        ),
+    };
+  };
+  const connectedAppLists = createCaptureList<ConnectedApp>({
+    read: (workspace) =>
+      call((options) => api.connectedApps.list({ workspace }, options)).then((answer) => answer.apps),
   });
   /** A question's calculations as the records layer holds them: a report's figures ask through it. */
   const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
@@ -8055,6 +8106,76 @@ export function createDataLayer({
               b.createdAt.localeCompare(a.createdAt),
             ),
         }),
+    },
+    /**
+     * Settings › Connected apps (spec 0070, AC-7013), owners only: the outside apps connected to the workspace as a
+     * held list (`useCaptureList`), newest first. A change of modules shows at once and is put back on a refusal;
+     * Disconnect takes the row away at once and puts it back on a refusal.
+     */
+    connectedApps: {
+      view: (workspace: string): CaptureListView<ConnectedApp> => connectedAppLists.view(workspace),
+      setModules: (workspace: string, connectionId: string, modules: readonly PartnerModule[]): Promise<ConnectedApp> =>
+        connectedAppLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.connectedApps.setModules(
+                { workspace, connectionId, modules: [...modules], mutationId: mintId() },
+                options,
+              ),
+            ),
+          ...shownModules(connectedAppLists.items(workspace), connectionId, modules),
+          land: (items, changed) => items.map((item) => (item.id === changed.id ? changed : item)),
+        }),
+      disconnect: (workspace: string, connectionId: string): Promise<{ readonly id: string }> =>
+        connectedAppLists.write(workspace, {
+          send: () =>
+            call((options) => api.connectedApps.disconnect({ workspace, connectionId, mutationId: mintId() }, options)),
+          ...shownDrop(connectedAppLists.items(workspace), connectionId),
+        }),
+    },
+    /**
+     * The OAuth connect page (spec 0070, AC-7011, AC-7012): what the partner asks and the person's own workspaces,
+     * the owner's approval in one of them, and No thanks. Read fresh; each answers where the browser goes next, an
+     * address the server built from the partner's registered one.
+     */
+    partnerConnect: {
+      offer: (request: PartnerConnectRequest): Promise<PartnerConnectOffer> =>
+        call((options) => api.partnerConnect.offer(request, options)),
+      approve: (
+        workspace: string,
+        request: PartnerConnectRequest,
+        modules: readonly PartnerModule[],
+      ): Promise<{ readonly redirectTo: string }> =>
+        call((options) =>
+          api.partnerConnect.approve({ workspace, request, modules: [...modules], mutationId: mintId() }, options),
+        ),
+      deny: (request: PartnerConnectRequest): Promise<{ readonly redirectTo: string }> =>
+        call((options) => api.partnerConnect.deny(request, options)),
+    },
+    /**
+     * The operator console's partners (spec 0070, AC-7010), super admins only: read fresh, every write waits for the
+     * server. A register or a replace answers the whole secret, once.
+     */
+    partners: {
+      list: (): Promise<readonly PartnerView[]> =>
+        call((options) => api.operator.partners(undefined, options)).then((answer) => answer.partners),
+      register: (input: RegisterPartnerInput): Promise<PartnerWithSecret> =>
+        call((options) => api.operator.registerPartner(input, options)),
+      update: (input: UpdatePartnerInput): Promise<PartnerView> =>
+        call((options) => api.operator.updatePartner(input, options)),
+      replaceSecret: (partnerId: string): Promise<PartnerWithSecret> =>
+        call((options) => api.operator.replacePartnerSecret({ partnerId }, options)),
+      /** A picked logo file as the register and the change send it: its type and its bytes as base64. */
+      logoFrom: async (file: Blob): Promise<PartnerLogoUpload | undefined> => {
+        const type = file.type;
+        if (type !== 'image/png' && type !== 'image/jpeg' && type !== 'image/webp') return undefined;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = '';
+        for (let at = 0; at < bytes.length; at += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+        }
+        return { type, data: btoa(binary) };
+      },
     },
     reports: {
       /**

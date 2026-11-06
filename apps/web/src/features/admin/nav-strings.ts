@@ -8,6 +8,7 @@ export const navStrings = {
   users: 'Users',
   pages: 'Booking pages',
   website: 'Website',
+  partners: 'Partners',
   /** A page that failed to draw (its route's error screen). */
   failedTitle: 'Couldn’t load the numbers',
   failedText: 'Something went wrong drawing this page. Try again.',

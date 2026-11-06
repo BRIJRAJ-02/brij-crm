@@ -317,6 +317,24 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'api_key.restored', target: workspace, params: { name: 'Zapier' } },
     'Ada Lovelace brought back the API key Zapier',
   ],
+  // Spec 0070: a connected app.
+  [
+    { ...base, action: 'partner.connected', target: workspace, params: { name: 'Hub', modules: ['link_pages'] } },
+    'Ada Lovelace connected Hub for Link pages',
+  ],
+  [
+    {
+      ...base,
+      action: 'partner.modules_changed',
+      target: workspace,
+      params: { name: 'Hub', modules: ['link_pages'] },
+    },
+    'Ada Lovelace changed what Hub can use to Link pages',
+  ],
+  [
+    { ...base, action: 'partner.disconnected', target: workspace, params: { name: 'Hub', modules: ['link_pages'] } },
+    'Ada Lovelace disconnected Hub',
+  ],
   [
     { ...base, action: 'rotation.adjusted', target: rotation, params: { person: bea, units: 2 } },
     'Ada Lovelace adjusted Bea Rao’s count in Sales by +2',

@@ -37,6 +37,7 @@ import { publicSocialsOf } from '../booking/socials.ts';
 import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
+import { parsePartnerAccessToken } from '../partners/tokens.ts';
 import { requirePermission } from './check.ts';
 import { managesPageOf } from './scheduling.ts';
 import { workspaceRules } from './stored-rules.ts';
@@ -51,6 +52,7 @@ import {
   isRole,
   keyAccess,
   linkPageAccess,
+  partnerAccess,
   NO_RULES,
   roleAccess,
   SYSTEM_ACCESS,
@@ -570,6 +572,78 @@ export async function noteKeyUse(deps: { readonly db: Database }, entry: KeyEntr
         and(
           eq(schema.apiKeys.id, entry.keyId),
           sql`(${schema.apiKeys.lastUsedAt} is null or ${schema.apiKeys.lastUsedAt} < now() - interval '1 minute')`,
+        ),
+      ),
+  );
+}
+
+/** What the door answers for a partner it let in: the connection's scope, and its last call (for the touch). */
+export interface PartnerEntry {
+  readonly scope: EngineScope;
+  readonly connectionId: string;
+  readonly partnerId: string;
+  readonly lastCallAt: Date | undefined;
+}
+
+/**
+ * The scope for a partner's connection (spec 0070, slice 2): the access token as the partner sent it, or undefined
+ * for anything that isn't a live connection's token, the same for a malformed, unknown, disconnected or wrong one and
+ * a deleted workspace. The token's public half names the workspace and the connection, so the row is read under that
+ * workspace's row level security; its secret is compared with the stored SHA-256 in constant time. The access is
+ * `partnerAccess` (no permission, no object) and the actor the connection, so History names the partner.
+ */
+export async function enterAsPartner(
+  deps: { readonly db: Database },
+  token: string,
+): Promise<PartnerEntry | undefined> {
+  const parts = parsePartnerAccessToken(token);
+  if (parts === undefined) return undefined;
+  const { workspaceId, id: connectionId, secret } = parts;
+  const [row] = await deps.db.withWorkspace(workspaceId, (tx) =>
+    tx
+      .select({
+        partnerId: schema.partnerConnections.partnerId,
+        modules: schema.partnerConnections.modules,
+        tokenHash: schema.partnerConnections.tokenHash,
+        lastCallAt: schema.partnerConnections.lastCallAt,
+      })
+      .from(schema.partnerConnections)
+      .innerJoin(workspaces, eq(workspaces.id, schema.partnerConnections.workspaceId))
+      .where(
+        and(
+          eq(schema.partnerConnections.id, connectionId),
+          isNull(schema.partnerConnections.disconnectedAt),
+          isNull(workspaces.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  if (row === undefined || !keySecretMatches(secret, row.tokenHash)) return undefined;
+  const access = partnerAccess({ connectionId, partnerId: row.partnerId, modules: row.modules });
+  const scope = mintScope({ db: deps.db, workspaceId, actor: { type: 'partner', id: connectionId }, access });
+  return {
+    scope,
+    connectionId,
+    partnerId: row.partnerId,
+    lastCallAt: row.lastCallAt === null ? undefined : new Date(row.lastCallAt),
+  };
+}
+
+/**
+ * Notes a partner's call (spec 0070, AC-7013's "last call"): `last_call_at` moves to now when it is older than a
+ * minute, so a busy partner writes at most once a minute. Run after the answer; a failure is the caller's to log.
+ */
+export async function notePartnerCall(deps: { readonly db: Database }, entry: PartnerEntry): Promise<void> {
+  if (entry.lastCallAt !== undefined && Date.now() - entry.lastCallAt.getTime() < 60_000) return;
+  await deps.db.withWorkspace(entry.scope.workspaceId, (tx) =>
+    tx
+      .update(schema.partnerConnections)
+      .set({ lastCallAt: sql`now()` })
+      .where(
+        and(
+          eq(schema.partnerConnections.id, entry.connectionId),
+          isNull(schema.partnerConnections.disconnectedAt),
+          sql`(${schema.partnerConnections.lastCallAt} is null or ${schema.partnerConnections.lastCallAt} < now() - interval '1 minute')`,
         ),
       ),
   );

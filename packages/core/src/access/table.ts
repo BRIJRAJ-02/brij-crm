@@ -97,7 +97,12 @@ export type AccessEntry =
    * answers as absent (`NOT_FOUND`), so no refusal tells them a template exists; the list answers only the
    * templates they may change, so a member with none gets an empty list rather than a refusal.
    */
-  | { readonly managedPage: true };
+  | { readonly managedPage: true }
+  /**
+   * A partner's own connection (spec 0070, slice 2): only the scope `enterAsPartner` minted, and only the connection
+   * it names. Any other principal is 403 `FORBIDDEN`; another connection's id answers as absent (`NOT_FOUND`).
+   */
+  | { readonly ownConnectionAsPartner: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -627,6 +632,13 @@ export const ACCESS_TABLE = {
   createApiKey: { permission: 'api_keys.manage' },
   revokeApiKey: { permission: 'api_keys.manage' },
   restoreApiKey: { permission: 'api_keys.manage' },
+  // Partner connect (spec 0070, AC-7011, AC-7013): an owner's approval and Settings › Connected apps, owners only.
+  approvePartnerConnect: { permission: 'connected_apps.manage' },
+  listConnectedApps: { permission: 'connected_apps.manage' },
+  setConnectedAppModules: { permission: 'connected_apps.manage' },
+  disconnectApp: { permission: 'connected_apps.manage' },
+  // A partner's read of its own connection: the partner door's scope only.
+  readPartnerConnection: { ownConnectionAsPartner: true },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

@@ -736,6 +736,21 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       page: os.operator.page.handler(notServed),
       site: os.operator.site.handler(notServed),
       setEarlyAccess: os.operator.setEarlyAccess.handler(notServed),
+      partners: os.operator.partners.handler(notServed),
+      registerPartner: os.operator.registerPartner.handler(notServed),
+      updatePartner: os.operator.updatePartner.handler(notServed),
+      replacePartnerSecret: os.operator.replacePartnerSecret.handler(notServed),
+    },
+    // Partner connect (spec 0070) is read through to the api as is; its checks are core's and the api's tests.
+    partnerConnect: {
+      offer: os.partnerConnect.offer.handler(notServed),
+      approve: os.partnerConnect.approve.handler(notServed),
+      deny: os.partnerConnect.deny.handler(notServed),
+    },
+    connectedApps: {
+      list: os.connectedApps.list.handler(notServed),
+      setModules: os.connectedApps.setModules.handler(notServed),
+      disconnect: os.connectedApps.disconnect.handler(notServed),
     },
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
     services: {

@@ -505,7 +505,10 @@ export interface ReplacedNotice {
   readonly recordId: string;
   readonly recordName: string;
   readonly attributeIds: readonly string[];
-  readonly by: { readonly type: 'member' | 'api_key' | 'automation' | 'form' | 'booking'; readonly id: string | null };
+  readonly by: {
+    readonly type: 'member' | 'api_key' | 'automation' | 'form' | 'booking' | 'partner';
+    readonly id: string | null;
+  };
   readonly useMine: () => void;
 }
 

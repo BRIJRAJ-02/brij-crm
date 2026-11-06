@@ -20,6 +20,7 @@ import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
 import { Route as PublicInsightsRouteImport } from './routes/public.insights.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
+import { Route as OauthPartnerAuthorizeRouteImport } from './routes/oauth.partner.authorize.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
 import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx'
@@ -59,6 +60,7 @@ import { Route as WSlugSettingsAppsRouteImport } from './routes/w.$slug.settings
 import { Route as WSlugSettingsAutomationsRouteImport } from './routes/w.$slug.settings.automations.tsx'
 import { Route as WSlugSettingsBrandRouteImport } from './routes/w.$slug.settings.brand.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
+import { Route as WSlugSettingsConnectedAppsRouteImport } from './routes/w.$slug.settings.connected-apps.tsx'
 import { Route as WSlugSettingsDeveloperRouteImport } from './routes/w.$slug.settings.developer.tsx'
 import { Route as WSlugSettingsGeneralRouteImport } from './routes/w.$slug.settings.general.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
@@ -87,6 +89,7 @@ import { Route as WSlugSettingsAccountSchedulingRouteImport } from './routes/w.$
 import { Route as WSlugSettingsAccountSecurityRouteImport } from './routes/w.$slug.settings.account.security.tsx'
 import { Route as WSlugSettingsAccountSignInRouteImport } from './routes/w.$slug.settings.account.sign-in.tsx'
 import { Route as WSlugSettingsAdminIndexRouteImport } from './routes/w.$slug.settings.admin.index.tsx'
+import { Route as WSlugSettingsAdminPartnersRouteImport } from './routes/w.$slug.settings.admin.partners.tsx'
 import { Route as WSlugSettingsAdminWebsiteRouteImport } from './routes/w.$slug.settings.admin.website.tsx'
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
@@ -179,6 +182,11 @@ const PublicInsightsRoute = PublicInsightsRouteImport.update({
 const WSlugRoute = WSlugRouteImport.update({
   id: '/w/$slug',
   path: '/w/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthPartnerAuthorizeRoute = OauthPartnerAuthorizeRouteImport.update({
+  id: '/oauth/partner/authorize',
+  path: '/oauth/partner/authorize',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WSlugIndexRoute = WSlugIndexRouteImport.update({
@@ -378,6 +386,12 @@ const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
+const WSlugSettingsConnectedAppsRoute =
+  WSlugSettingsConnectedAppsRouteImport.update({
+    id: '/connected-apps',
+    path: '/connected-apps',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsDeveloperRoute = WSlugSettingsDeveloperRouteImport.update({
   id: '/developer',
   path: '/developer',
@@ -532,6 +546,12 @@ const WSlugSettingsAdminIndexRoute = WSlugSettingsAdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
+const WSlugSettingsAdminPartnersRoute =
+  WSlugSettingsAdminPartnersRouteImport.update({
+    id: '/admin/partners',
+    path: '/admin/partners',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsAdminWebsiteRoute =
   WSlugSettingsAdminWebsiteRouteImport.update({
     id: '/admin/website',
@@ -769,6 +789,7 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
@@ -805,6 +826,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/connected-apps': typeof WSlugSettingsConnectedAppsRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -832,6 +854,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
+  '/w/$slug/settings/admin/partners': typeof WSlugSettingsAdminPartnersRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
@@ -886,6 +909,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
+  '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/insights': typeof WSlugInsightsRoute
@@ -919,6 +943,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/connected-apps': typeof WSlugSettingsConnectedAppsRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -946,6 +971,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
+  '/w/$slug/settings/admin/partners': typeof WSlugSettingsAdminPartnersRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
@@ -1002,6 +1028,7 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
@@ -1038,6 +1065,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/connected-apps': typeof WSlugSettingsConnectedAppsRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -1065,6 +1093,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/scheduling': typeof WSlugSettingsAccountSchedulingRoute
   '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/account/sign-in': typeof WSlugSettingsAccountSignInRoute
+  '/w/$slug/settings/admin/partners': typeof WSlugSettingsAdminPartnersRoute
   '/w/$slug/settings/admin/website': typeof WSlugSettingsAdminWebsiteRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/business/page': typeof WSlugSettingsBusinessPageRoute
@@ -1122,6 +1151,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/public/insights'
     | '/w/$slug'
+    | '/oauth/partner/authorize'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/home'
@@ -1158,6 +1188,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/connected-apps'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -1185,6 +1216,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
+    | '/w/$slug/settings/admin/partners'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/business/page'
@@ -1239,6 +1271,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/invite/$token'
     | '/public/insights'
+    | '/oauth/partner/authorize'
     | '/w/$slug/home'
     | '/w/$slug/inbox'
     | '/w/$slug/insights'
@@ -1272,6 +1305,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/connected-apps'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -1299,6 +1333,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
+    | '/w/$slug/settings/admin/partners'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/business/page'
@@ -1354,6 +1389,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/public/insights'
     | '/w/$slug'
+    | '/oauth/partner/authorize'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/home'
@@ -1390,6 +1426,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/connected-apps'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -1417,6 +1454,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/scheduling'
     | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/account/sign-in'
+    | '/w/$slug/settings/admin/partners'
     | '/w/$slug/settings/admin/website'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/business/page'
@@ -1473,6 +1511,7 @@ export interface RootRouteChildren {
   InviteTokenRoute: typeof InviteTokenRoute
   PublicInsightsRoute: typeof PublicInsightsRoute
   WSlugRoute: typeof WSlugRouteWithChildren
+  OauthPartnerAuthorizeRoute: typeof OauthPartnerAuthorizeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1552,6 +1591,13 @@ declare module '@tanstack/react-router' {
       path: '/w/$slug'
       fullPath: '/w/$slug'
       preLoaderRoute: typeof WSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/partner/authorize': {
+      id: '/oauth/partner/authorize'
+      path: '/oauth/partner/authorize'
+      fullPath: '/oauth/partner/authorize'
+      preLoaderRoute: typeof OauthPartnerAuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/w/$slug/': {
@@ -1827,6 +1873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsCalendarRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/connected-apps': {
+      id: '/w/$slug/settings/connected-apps'
+      path: '/connected-apps'
+      fullPath: '/w/$slug/settings/connected-apps'
+      preLoaderRoute: typeof WSlugSettingsConnectedAppsRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/developer': {
       id: '/w/$slug/settings/developer'
       path: '/developer'
@@ -2021,6 +2074,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/w/$slug/settings/admin/'
       preLoaderRoute: typeof WSlugSettingsAdminIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/admin/partners': {
+      id: '/w/$slug/settings/admin/partners'
+      path: '/admin/partners'
+      fullPath: '/w/$slug/settings/admin/partners'
+      preLoaderRoute: typeof WSlugSettingsAdminPartnersRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/settings/admin/website': {
@@ -2343,6 +2403,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAutomationsRoute: typeof WSlugSettingsAutomationsRoute
   WSlugSettingsBrandRoute: typeof WSlugSettingsBrandRoute
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
+  WSlugSettingsConnectedAppsRoute: typeof WSlugSettingsConnectedAppsRoute
   WSlugSettingsDeveloperRoute: typeof WSlugSettingsDeveloperRoute
   WSlugSettingsGeneralRoute: typeof WSlugSettingsGeneralRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
@@ -2361,6 +2422,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountSchedulingRoute: typeof WSlugSettingsAccountSchedulingRoute
   WSlugSettingsAccountSecurityRoute: typeof WSlugSettingsAccountSecurityRoute
   WSlugSettingsAccountSignInRoute: typeof WSlugSettingsAccountSignInRoute
+  WSlugSettingsAdminPartnersRoute: typeof WSlugSettingsAdminPartnersRoute
   WSlugSettingsAdminWebsiteRoute: typeof WSlugSettingsAdminWebsiteRoute
   WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
   WSlugSettingsBusinessPageRoute: typeof WSlugSettingsBusinessPageRoute
@@ -2401,6 +2463,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAutomationsRoute: WSlugSettingsAutomationsRoute,
   WSlugSettingsBrandRoute: WSlugSettingsBrandRoute,
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
+  WSlugSettingsConnectedAppsRoute: WSlugSettingsConnectedAppsRoute,
   WSlugSettingsDeveloperRoute: WSlugSettingsDeveloperRoute,
   WSlugSettingsGeneralRoute: WSlugSettingsGeneralRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
@@ -2420,6 +2483,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAccountSchedulingRoute: WSlugSettingsAccountSchedulingRoute,
   WSlugSettingsAccountSecurityRoute: WSlugSettingsAccountSecurityRoute,
   WSlugSettingsAccountSignInRoute: WSlugSettingsAccountSignInRoute,
+  WSlugSettingsAdminPartnersRoute: WSlugSettingsAdminPartnersRoute,
   WSlugSettingsAdminWebsiteRoute: WSlugSettingsAdminWebsiteRoute,
   WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
   WSlugSettingsBusinessPageRoute: WSlugSettingsBusinessPageRoute,
@@ -2560,6 +2624,7 @@ const rootRouteChildren: RootRouteChildren = {
   InviteTokenRoute: InviteTokenRoute,
   PublicInsightsRoute: PublicInsightsRoute,
   WSlugRoute: WSlugRouteWithChildren,
+  OauthPartnerAuthorizeRoute: OauthPartnerAuthorizeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

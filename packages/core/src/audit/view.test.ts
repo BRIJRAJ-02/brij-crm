@@ -208,6 +208,18 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.restored': [row('api_key.restored', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'partner.connected': [
+    row('partner.connected', 'workspace', newId(), { after: { name: 'Hub', modules: ['link_pages'] } }),
+  ],
+  'partner.modules_changed': [
+    row('partner.modules_changed', 'workspace', newId(), {
+      before: { modules: ['link_pages'] },
+      after: { name: 'Hub', modules: ['link_pages'] },
+    }),
+  ],
+  'partner.disconnected': [
+    row('partner.disconnected', 'workspace', newId(), { after: { name: 'Hub', modules: ['link_pages'] } }),
+  ],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],

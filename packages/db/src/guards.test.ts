@@ -769,9 +769,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_text_ok(jsonb, integer, integer)',
         'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: the first 56 crm_app's to call and nobody else's, the last seven crm_handle's alone.
+      // One per signature: the first 57 crm_app's to call and nobody else's, the last seven crm_handle's alone.
       // Counted rather than written out, since a signature added without the count moved read as unreachable.
-      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
+      [...Array.from({ length: 57 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2620,6 +2620,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'known_device',
     'link_imports',
     'operator_event',
+    // The partner registry (spec 0070, migration 0192): global, nobody's workspace.
+    'partners',
     'passkey',
     'profile_booking_days',
     'profile_images',

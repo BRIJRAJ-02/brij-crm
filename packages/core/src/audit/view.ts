@@ -7,6 +7,7 @@
 // names and lose their values (AC-4610).
 import {
   LINK_PAGE_TEAM_CHANGES,
+  PARTNER_MODULES,
   AUDIT_KINDS,
   type AuditChange,
   type AuditEntryView,
@@ -512,6 +513,20 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'api_key.revoked':
     case 'api_key.restored':
       return { ...base, action, target: workspace, params: { name: text(after.name) ?? 'a key' }, changes: [] };
+    // An outside app connected, its modules changed, or disconnected (spec 0070): its name then, and its modules.
+    case 'partner.connected':
+    case 'partner.modules_changed':
+    case 'partner.disconnected': {
+      const listed: unknown[] = Array.isArray(after.modules) ? after.modules : [];
+      const modules = PARTNER_MODULES.filter((module) => listed.includes(module));
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: { name: text(after.name) ?? 'an app', modules },
+        changes: [],
+      };
+    }
     case 'workspace_security.changed': {
       const twoFactor = typeof after.requireTwoFactor === 'boolean' ? after.requireTwoFactor : undefined;
       const days = has(after, 'sessionLengthDays')
