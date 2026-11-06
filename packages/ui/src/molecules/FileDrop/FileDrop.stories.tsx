@@ -306,7 +306,7 @@ export const AsPhoto: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole('button', { name: /Add photo/ })).toBeEnabled();
+    await expect(canvas.getByRole('button', { name: /^Add photo/ })).toBeEnabled();
     // A picture pasted anywhere around it lands here; text in the clipboard stays the field's.
     const paste = (data: DataTransfer) =>
       document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: data }));
@@ -358,5 +358,47 @@ export const AsPhotoReadOnly: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('img', { name: 'A bowl of soup' })).toBeVisible();
     await expect(canvas.queryByRole('button')).not.toBeInTheDocument();
+  },
+};
+
+/** `variant="photo"` off: the box steps back. */
+export const AsPhotoDisabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Photo', variant: 'photo', isDisabled: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /^Add photo/ })).toBeDisabled();
+  },
+};
+
+/** `variant="photo"` while a picture goes up: the box says so and takes no second pick. */
+export const AsPhotoPending: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Photo', variant: 'photo', isPending: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /uploading/ })).toBeInTheDocument();
+  },
+};
+
+/** `variant="photo"` refused: the screen's own words in the refusal line. */
+export const AsPhotoRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Photo', variant: 'photo', error: 'That photo couldn’t be read.' },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('That photo couldn’t be read.');
   },
 };

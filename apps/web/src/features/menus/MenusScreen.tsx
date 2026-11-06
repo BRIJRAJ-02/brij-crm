@@ -97,6 +97,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
   const state = useHospitality(store.draft(slug));
   const [placeId, setPlaceId] = useState<string | undefined>();
   const [open, setOpen] = useState<Open>();
+  // Add another stays on from one opening of the item sheet to the next, as Create more does.
+  const [isAddingMore, setAddingMore] = useState(false);
   const [isPublishing, setPublishing] = useState(false);
   // The tab bar's search over Structure and Items (checklabs'): UI state, never the address's.
   const [query, setQuery] = useState('');
@@ -668,6 +670,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 {...(open.sectionId === undefined ? {} : { sectionId: open.sectionId })}
                 {...(open.newName === undefined ? {} : { newName: open.newName })}
                 toasts={toasts}
+                isAddingMore={isAddingMore}
+                onAddingMoreChange={setAddingMore}
                 onClose={() => setOpen(undefined)}
               />
             ) : null}

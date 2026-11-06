@@ -153,6 +153,9 @@ export function FileDrop({
       event.preventDefault();
       take(files);
     };
+    // React Aria's drop target keeps a hidden button of its own for the keyboard; here the box itself and the paste do
+    // that job, so Tab doesn't stop twice on one photo.
+    own.querySelector('button')?.setAttribute('tabindex', '-1');
     doc.addEventListener('paste', onPaste);
     return () => {
       doc.removeEventListener('paste', onPaste);
@@ -279,7 +282,13 @@ export function FileDrop({
                   <Text slot="label" className={styles.label}>
                     {strings.addNamed(label)}
                   </Text>
-                  <span className={styles.limits}>{strings.dropPasteOrPress}</span>
+                  {isPending ? (
+                    <span className={styles.limits}>{strings.sending}</span>
+                  ) : (
+                    <span className={`${styles.limits ?? ''} ${styles.photoHow ?? ''}`}>
+                      {strings.dropPasteOrPress}
+                    </span>
+                  )}
                 </span>
               </AriaButton>
             </FileTrigger>

@@ -24,12 +24,14 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { GroupDrawer } from './GroupDrawer.tsx';
 import {
-  dietClashes,
+  dietNotes,
+  findsAllergen,
   hasChanged,
   itemFields,
   itemForm,
   itemProblems,
   NO_SPICE,
+  placeChoices,
   PLAIN_DIET_MARKS,
   SPICE_MARKS,
   withContains,
@@ -40,6 +42,9 @@ import {
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
 import { flipSoldOut } from './StructureTab.tsx';
 import { strings } from './strings.ts';
+
+/** A new item left out of every section. */
+const NOWHERE = 'nowhere';
 
 const dietLabel = (mark: string): string => strings.diets[mark as keyof typeof strings.diets];
 const allergenLabel = (code: string): string => strings.allergens[code as keyof typeof strings.allergens];
@@ -53,6 +58,8 @@ export function ItemDialog({
   sectionId,
   newName,
   toasts,
+  isAddingMore,
+  onAddingMoreChange,
   onClose,
 }: {
   readonly store: MenuStore;
@@ -62,6 +69,9 @@ export function ItemDialog({
   readonly sectionId?: string;
   readonly newName?: string;
   readonly toasts: Toasts;
+  /** Add another: each save starts the next new item with the sheet still open (New record's Create more). */
+  readonly isAddingMore: boolean;
+  readonly onAddingMoreChange: (next: boolean) => void;
   readonly onClose: () => void;
 }) {
   const formId = useId();
@@ -71,8 +81,8 @@ export function ItemDialog({
   const [opened, setOpened] = useState<ItemForm>(() => itemForm(item, newName, currency));
   const [form, setForm] = useState<ItemForm>(opened);
   const change = (patch: Partial<ItemForm>) => setForm((was) => ({ ...was, ...patch }));
-  // Add another: each save starts the next new item with the sheet still open (New record's Create more).
-  const [isAddingMore, setAddingMore] = useState(false);
+  // A new item made outside any section (the Items tab) says where it goes; a run of them keeps the choice.
+  const [placedIn, setPlacedIn] = useState(NOWHERE);
   // Counts the items added, so the form starts afresh, its first field focused.
   const [round, setRound] = useState(0);
   // New add-on opens its drawer over this one, then comes back here with it picked.
@@ -107,7 +117,8 @@ export function ItemDialog({
   const hasPhotoChange = pendingPhoto !== undefined || isPhotoRemoved;
   const isDirty = hasPhotoChange || hasChanged(form, opened);
   const problems = hasTriedSaving ? itemProblems(form, currency) : {};
-  const clashes = dietClashes(form);
+  const notes = dietNotes(form);
+  const places = isNew && !isReadOnly && sectionId === undefined ? placeChoices(draft) : [];
 
   /** A refusal said as a toast (the item's own Undo and Available speak through the same). */
   const said = (refusedNow: { readonly message: string } | undefined) => {
@@ -124,14 +135,26 @@ export function ItemDialog({
     const fields = itemFields(form, currency);
     // Busy until every part has gone (the item, its photo, Available), so a second Save sends nothing twice.
     setSaving(true);
-    const refused = await store.saveItem(slug, id, fields, isNew ? sectionId : undefined);
+    // Placed once: a Save tried again after a refused photo finds the item made.
+    const place = sectionId ?? (placedIn === NOWHERE ? undefined : placedIn);
+    const refused = await store.saveItem(slug, id, fields, isNew && live === undefined ? place : undefined);
     if (refused !== undefined) {
       setSaving(false);
       toasts.toast({ tone: 'danger', message: refused.message });
       return;
     }
-    if (pendingPhoto !== undefined) said(await store.uploadPhoto(slug, id, pendingPhoto));
-    else if (isPhotoRemoved) said(await store.removePhoto(slug, id));
+    // The photo refused: the sheet stays, holding it, so Save can try it again.
+    const photoRefused =
+      pendingPhoto !== undefined
+        ? await store.uploadPhoto(slug, id, pendingPhoto)
+        : isPhotoRemoved
+          ? await store.removePhoto(slug, id)
+          : undefined;
+    if (photoRefused !== undefined) {
+      setSaving(false);
+      said(photoRefused);
+      return;
+    }
     // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists, said
     // with Undo as the Items switch says it.
     if (form.isAvailable !== opened.isAvailable) {
@@ -196,7 +219,7 @@ export function ItemDialog({
       isBusy={isSaving}
       onClose={onClose}
       {...(isNew && !isReadOnly
-        ? { footerStart: <Switch label={strings.addAnother} isSelected={isAddingMore} onChange={setAddingMore} /> }
+        ? { footerStart: <Switch label={strings.addAnother} isSelected={isAddingMore} onChange={onAddingMoreChange} /> }
         : {})}
       actions={
         isReadOnly ? (
@@ -205,8 +228,9 @@ export function ItemDialog({
           </Button>
         ) : (
           <>
+            {/* After a run of items, nothing is left to cancel: what was saved stays saved. */}
             <Button slot="close" isDisabled={isSaving}>
-              {strings.cancel}
+              {round > 0 && !isDirty ? strings.close : strings.cancel}
             </Button>
             <Button variant="primary" type="submit" form={formId} isPending={isSaving}>
               {strings.save}
@@ -219,6 +243,7 @@ export function ItemDialog({
         key={round}
         id={formId}
         focusesFirstField={isNew && !isReadOnly}
+        isBusy={isSaving}
         onSubmit={() => (isReadOnly ? undefined : void save())}
       >
         {isReadOnly ? <Callout tone="info">{strings.readOnlyDish}</Callout> : null}
@@ -292,7 +317,8 @@ export function ItemDialog({
             searchLabel={strings.findAllergen}
             placeholder={strings.none}
             isReadOnly={isReadOnly}
-            items={EU_ALLERGENS.map((code) => ({ id: code, label: allergenLabel(code) }))}
+            filter={findsAllergen}
+            items={EU_ALLERGENS.map((code) => ({ id: code, label: allergenLabel(code), group: strings.contains }))}
             values={form.contains}
             onValuesChange={(contains) => setForm((was) => withContains(was, contains))}
           />
@@ -305,9 +331,11 @@ export function ItemDialog({
             searchLabel={strings.findAllergen}
             placeholder={strings.none}
             isReadOnly={isReadOnly}
+            filter={findsAllergen}
             items={EU_ALLERGENS.map((code) => ({
               id: code,
               label: allergenLabel(code),
+              group: strings.mayContain,
               ...(form.contains.includes(code) ? { isDisabled: true, description: strings.inContains } : {}),
             }))}
             values={form.may}
@@ -324,13 +352,7 @@ export function ItemDialog({
             items={PLAIN_DIET_MARKS.map((mark) => ({ id: mark, label: dietLabel(mark) }))}
             values={form.diet}
             onValuesChange={(diet) => change({ diet })}
-            {...(clashes.length === 0
-              ? {}
-              : {
-                  hint: clashes
-                    .map((each) => strings.dietClash(dietLabel(each.mark), allergenLabel(each.allergen).toLowerCase()))
-                    .join(' '),
-                })}
+            {...(notes.length === 0 ? {} : { hint: notes.join(' ') })}
           />
           <Select
             label={strings.spice}
@@ -345,6 +367,17 @@ export function ItemDialog({
           />
         </FormRow>
         <Separator />
+        {places.length === 0 ? null : (
+          <Select
+            label={strings.placedIn}
+            showsMarks
+            isSearchable={places.length > 7}
+            searchLabel={strings.placedIn}
+            items={[{ id: NOWHERE, label: strings.notOnMenu, isNothing: true }, ...places]}
+            value={placedIn}
+            onChange={(next) => setPlacedIn(next ?? NOWHERE)}
+          />
+        )}
         <FormRow>
           {isReadOnly && draft.groups.length === 0 ? null : (
             // New add-on opens its drawer over this one and comes back with it picked, so nothing typed here is lost.
@@ -465,7 +498,7 @@ function PriceFields({
           after={kinds}
         />
       ) : form.priceKind === 'sizes' ? (
-        <Field key="sizes" label={strings.price} placeholder={strings.priceBySize} value="" isDisabled after={kinds} />
+        <Field key="sizes" label={strings.price} value={strings.priceBySize} isReadOnly after={kinds} />
       ) : (
         <Field
           key="price"
@@ -493,12 +526,13 @@ function PriceFields({
                 : {})}
               value={size.name}
               onChange={(name) => setSize(size.key, { name })}
-              error={problems[`size-${size.key}`]}
+              error={problems[`size-${size.key}-name`]}
               after={
                 <>
                   <Field
                     isReadOnly={isReadOnly}
-                    label={strings.sizePriceIn(currency)}
+                    label={strings.sizePriceOf(index + 1, currency)}
+                    error={problems[`size-${size.key}-price`]}
                     isLabelHidden
                     prefix={currency}
                     placeholder="0.00"
@@ -520,9 +554,7 @@ function PriceFields({
           ))}
           {isReadOnly || form.sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
             <Button
-              variant="ghost"
               icon="plus"
-              isFullWidth
               onPress={() => onChange({ ...form, sizes: [...form.sizes, { key: newKey(), name: '', price: '' }] })}
             >
               {strings.addSize}

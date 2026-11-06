@@ -206,9 +206,9 @@ test.describe('the Menu app from an empty workspace', () => {
       // Sizes: the first takes the price already typed.
       await drawer.getByLabel('Price', { exact: true }).fill('9.5');
       await drawer.getByText('Sizes', { exact: true }).click();
-      await drawer.getByLabel('Size 1').fill('Glass');
-      await drawer.getByLabel('Size 2').fill('Bottle');
-      await drawer.getByLabel('Price (GBP)').nth(1).fill('38');
+      await drawer.getByLabel('Size 1', { exact: true }).fill('Glass');
+      await drawer.getByLabel('Size 2', { exact: true }).fill('Bottle');
+      await drawer.getByLabel('Size 2 price (GBP)').fill('38');
       await shot(page, '12-sizes');
       await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();

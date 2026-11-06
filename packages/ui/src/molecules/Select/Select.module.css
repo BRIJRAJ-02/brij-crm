@@ -325,6 +325,11 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Why it can't be chosen stays readable; only the option itself fades. */
+  .option[data-disabled] > .description {
+    opacity: 1;
+  }
+
   .check {
     display: inline-flex;
     margin-inline-start: auto;

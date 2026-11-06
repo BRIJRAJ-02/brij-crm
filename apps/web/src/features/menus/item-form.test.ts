@@ -1,13 +1,15 @@
 // The item sheet's rules: one way of being priced, an allergen at one level, and nothing typed lost on the way.
-import type { MenuItem } from '@crm/data';
+import type { MenuDraft, MenuItem } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
-  dietClashes,
+  dietNotes,
+  findsAllergen,
   hasChanged,
   itemFields,
   itemForm,
   itemProblems,
   NO_SPICE,
+  placeChoices,
   withContains,
   withPriceKind,
 } from './item-form.ts';
@@ -66,7 +68,7 @@ describe('the item form', () => {
     expect(itemProblems(form, 'USD')).toEqual({});
     expect(itemFields(form, 'USD').sizes).toEqual([]);
     const half = { ...form, sizes: form.sizes.map((row, at) => (at === 0 ? { ...row, name: 'Bowl' } : row)) };
-    expect(Object.keys(itemProblems(half, 'USD'))).toEqual([`size-${half.sizes[0]?.key ?? ''}`]);
+    expect(Object.keys(itemProblems(half, 'USD'))).toEqual([`size-${half.sizes[0]?.key ?? ''}-price`]);
   });
 
   it('checks only what is saved: a price typed under another kind refuses nothing', () => {
@@ -115,16 +117,40 @@ describe('the item form', () => {
     expect(hasChanged({ ...was, description: '  ' }, was)).toBe(false);
   });
 
-  it('finds the marks a contained allergen rules out', () => {
+  it('warns of a mark the allergens contradict or leave unsaid', () => {
     const form = {
       ...itemForm(undefined, 'Soup', 'USD'),
       diet: ['vegan', 'gluten_free'],
-      contains: ['milk', 'gluten'],
+      contains: ['milk'],
+      may: ['gluten'],
     };
-    expect(dietClashes(form)).toEqual([
-      { mark: 'vegan', allergen: 'milk' },
-      { mark: 'gluten_free', allergen: 'gluten' },
+    expect(dietNotes(form)).toEqual([
+      'Marked Vegan, but contains milk.',
+      'Marked Gluten free, but may contain gluten.',
     ]);
-    expect(dietClashes({ ...form, contains: [], may: ['milk'] })).toEqual([]);
+    expect(dietNotes({ ...form, diet: ['contains_nuts'] })).toHaveLength(1);
+    expect(dietNotes({ ...form, diet: ['contains_nuts'], contains: ['nuts'] })).toEqual([]);
+  });
+
+  it('finds an allergen by an everyday word', () => {
+    expect(findsAllergen({ id: 'milk', label: 'Milk' }, 'dairy')).toBe(true);
+    expect(findsAllergen({ id: 'peanuts', label: 'Peanuts' }, 'NUT')).toBe(true);
+    expect(findsAllergen({ id: 'eggs', label: 'Eggs' }, 'dairy')).toBe(false);
+  });
+
+  it('lists where a new item can go, sub sections after their section', () => {
+    const section = (id: string, position: number, parentId?: string) =>
+      ({
+        id,
+        menuId: 'm1',
+        name: id,
+        layout: 'list',
+        position,
+        itemIds: [],
+        ...(parentId === undefined ? {} : { parentId }),
+      }) as MenuDraft['sections'][number];
+    const menus = [{ id: 'm1', name: 'Dinner', position: 0 }] as MenuDraft['menus'];
+    const sections = [section('Mains', 1), section('Grill', 0, 'Mains'), section('Starters', 0)];
+    expect(placeChoices({ menus, sections }).map((each) => each.label)).toEqual(['Starters', 'Mains', 'Mains · Grill']);
   });
 });

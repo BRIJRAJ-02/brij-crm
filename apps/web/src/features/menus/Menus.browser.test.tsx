@@ -161,8 +161,8 @@ function storeOf(draft: MenuDraft) {
     saveSection: done('saveSection'),
     placeItem: done('placeItem'),
     saveGroup: done('saveGroup'),
-    saveItem: (_workspace: string, _id: string, fields: ItemFields) => {
-      calls.push('saveItem');
+    saveItem: (_workspace: string, _id: string, fields: ItemFields, sectionId?: string) => {
+      calls.push(sectionId === undefined ? 'saveItem' : `saveItem in ${sectionId}`);
       saved.push(fields);
       return Promise.resolve(undefined);
     },
@@ -256,7 +256,7 @@ describe('the Menus editor', () => {
     // The first publish is checklabs' "Publish & go live", through the review.
     await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
-    await expect.element(review.getByText(/Give Oysters a price or a price note/)).toBeVisible();
+    await expect.element(review.getByText(/Give Oysters a price, then publish/)).toBeVisible();
     await expect.element(review.getByRole('button', { name: 'Publish & go live' })).toBeDisabled();
   });
 
@@ -426,6 +426,12 @@ describe('the Menus editor', () => {
     expect(focusedName()).toBe('Description');
     await userEvent.tab();
     expect(focusedName()).toBe('Price');
+    // On past how it is priced, one stop for the photo, and into the allergens.
+    await userEvent.tab();
+    await userEvent.tab();
+    expect(document.activeElement?.textContent).toContain('Add photo');
+    await userEvent.tab();
+    expect(document.activeElement?.textContent).toBe('None');
   });
 
   it('holds one way of pricing: only the kind chosen is saved', async () => {
@@ -435,9 +441,9 @@ describe('the Menus editor', () => {
     await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), '9.50');
     // The first size takes the price typed; sizes take over the box.
     await userEvent.click(sheet.getByText('Sizes', { exact: true }));
-    await expect.element(sheet.getByLabelText('Price (GBP)').first()).toHaveValue('9.50');
-    await userEvent.click(sheet.getByText('Text', { exact: true }));
-    await userEvent.fill(sheet.getByLabelText('Price text', { exact: true }), 'Market price');
+    await expect.element(sheet.getByLabelText('Size 1 price (GBP)')).toHaveValue('9.50');
+    await userEvent.click(sheet.getByText('Other', { exact: true }));
+    await userEvent.fill(sheet.getByLabelText('Instead of a price', { exact: true }), 'Market price');
     await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
     await expect.poll(() => saved.at(-1)).toMatchObject({ priceMinor: null, priceNote: 'Market price', sizes: [] });
   });
@@ -459,6 +465,25 @@ describe('the Menus editor', () => {
     await userEvent.click(page.getByRole('option', { name: 'Soya' }));
     await userEvent.keyboard('{Escape}');
     await expect.element(contains).toHaveTextContent('Milk, Soya');
+    // The list says which one it is, and one search takes the next and the next, by everyday words too.
+    await userEvent.click(contains);
+    await expect.element(page.getByRole('listbox').getByText('Contains allergens')).toBeVisible();
+    await userEvent.keyboard('egg');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('dairy');
+    await expect.element(page.getByRole('option', { name: 'Milk' })).toBeVisible();
+    expect(page.getByRole('option', { name: 'Soya' }).elements()).toHaveLength(0);
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(contains).toHaveTextContent('Eggs, Milk, Soya');
+    // A letter on the closed field changes nothing.
+    contains.element().focus();
+    await userEvent.keyboard('c');
+    await expect.element(contains).toHaveTextContent('Eggs, Milk, Soya');
+    await userEvent.click(contains);
+    await userEvent.click(page.getByRole('option', { name: 'Eggs' }));
+    await userEvent.keyboard('{Escape}');
     await expect.element(may).toHaveTextContent('None');
     // In the other list it says where it is, and can't be picked.
     await userEvent.click(may);
@@ -489,6 +514,7 @@ describe('the Menus editor', () => {
     const { sheet, saved } = await openNewItem();
     await userEvent.click(sheet.getByText('Add another'));
     await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Soup');
+    await expect.element(sheet.getByRole('button', { name: 'Cancel' })).toBeVisible();
     await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), '6');
     await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
     await expect.poll(() => saved.length).toBe(1);
@@ -496,9 +522,19 @@ describe('the Menus editor', () => {
     await expect.element(next.getByLabelText('Name', { exact: true })).toHaveValue('');
     await expect.element(next.getByLabelText('Price', { exact: true })).toHaveValue('');
     await expect.poll(() => labelOf(document.activeElement)).toBe('Name');
-    // Nothing typed yet, so it closes without asking.
-    await userEvent.click(next.getByRole('button', { name: 'Cancel' }));
+    // Nothing typed yet and nothing to cancel, so it closes without asking.
+    await userEvent.click(next.getByRole('button', { name: 'Close' }).last());
     await expect.element(next).not.toBeInTheDocument();
+  });
+
+  it('says where a new item goes when it was made outside a section', async () => {
+    await page.viewport(1280, 900);
+    const { sheet, calls } = await openNewItem();
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Soup');
+    await userEvent.click(sheet.getByRole('button', { name: /Section/ }));
+    await userEvent.click(page.getByRole('option', { name: 'Mains' }));
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect.poll(() => calls.at(-1)).toBe(`saveItem in ${MAINS}`);
   });
 
   it('goes to the first problem on Save, and a refused save keeps the form as typed', async () => {
@@ -509,7 +545,10 @@ describe('the Menus editor', () => {
       () => (
         <MenusScreen
           view={{ tab: 'dishes' }}
-          store={{ ...store, saveItem: () => Promise.resolve({ code: 'REFUSED', message: 'Refused.' } as DataError) }}
+          store={{
+            ...store,
+            saveItem: () => Promise.resolve({ code: 'REFUSED', message: 'Refused.' } as unknown as DataError),
+          }}
           slug="acme"
           toasts={toasts}
           business={BUSINESS}
@@ -545,7 +584,7 @@ describe('the Menus editor', () => {
         );
         await userEvent.click(page.getByText('Wood fired bream').first());
         const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
-        await expect.element(sheet.getByLabelText('Size 1')).toHaveValue('Half');
+        await expect.element(sheet.getByLabelText('Size 1', { exact: true })).toHaveValue('Half');
         await settled();
         expect(await axeViolations()).toEqual([]);
         await userEvent.click(sheet.getByRole('button', { name: /May contain allergens/ }));
@@ -569,7 +608,7 @@ describe('the Menus editor', () => {
     );
     await userEvent.click(page.getByText('Wood fired bream').first());
     const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
-    await expect.element(sheet.getByLabelText('Size 1')).toHaveValue('Half');
+    await expect.element(sheet.getByLabelText('Size 1', { exact: true })).toHaveValue('Half');
     await expect.element(sheet.getByRole('group', { name: 'Contains allergens' })).toHaveTextContent('Fish');
     expect(sheet.getByRole('radio').elements()).toHaveLength(0);
     expect(sheet.getByRole('button', { name: 'Save item' }).elements()).toHaveLength(0);

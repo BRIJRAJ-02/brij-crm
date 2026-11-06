@@ -183,6 +183,17 @@
     min-inline-size: 0;
   }
 
+  .photoAdd[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* Touch has nothing to drop or paste with: the box's own words are enough. */
+  @media (hover: none) {
+    .photoHow {
+      display: none;
+    }
+  }
+
   .photo[data-drop-target] .photoAdd,
   .photo[data-drop-target] .photoImage {
     border-color: var(--accent);

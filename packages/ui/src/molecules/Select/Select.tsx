@@ -582,6 +582,8 @@ export function SelectBase({
             return;
           }
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
+          // Marks: ready for the next one, so "mil", Enter, "egg" never searches "milegg".
+          if (showsMarks) setQuery('');
           return;
         }
         // The closed trigger's typeahead tests the key the open list last rested on without asking whether it is
@@ -670,7 +672,13 @@ export function SelectBase({
               >
                 <div className={styles.search}>
                   {/* A search over a list opens with its field focused (the scope's first stop), as React Aria expects. */}
-                  <Field label={searchLabel} isLabelHidden variant="search" size="sm" />
+                  <Field
+                    label={searchLabel}
+                    isLabelHidden
+                    variant="search"
+                    size="sm"
+                    {...(showsMarks ? { placeholder: searchLabel } : {})}
+                  />
                 </div>
                 {list}
               </Autocomplete>

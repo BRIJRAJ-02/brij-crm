@@ -1,7 +1,7 @@
 // The item sheet's form as plain data (ItemDialog draws it): what an item reads as in the form, what the form reads
 // as when saved, and the rules that keep it from contradicting itself. An item has one price, sizes or a price text;
 // an allergen is contained or may be, never both; one spice level at most.
-import type { ItemAllergen, ItemFields, MenuItem } from '@crm/data';
+import type { ItemAllergen, ItemFields, MenuDraft, MenuItem } from '@crm/data';
 import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
 import { strings } from './strings.ts';
 
@@ -137,7 +137,7 @@ const saved = (form: ItemForm) => ({
 export const hasChanged = (form: ItemForm, was: ItemForm): boolean =>
   JSON.stringify(saved(form)) !== JSON.stringify(saved(was));
 
-/** What the form says is wrong, by field: `name`, `price`, `kcal` and `size-<key>`. Empty when it can be saved. */
+/** What the form says is wrong, by field: `name`, `price`, `kcal`, `size-<key>-name` and `-price`. Empty when it can be saved. */
 export function itemProblems(form: ItemForm, currency: string): Readonly<Record<string, string>> {
   const kcal = Number(form.kcal.trim());
   return {
@@ -152,8 +152,12 @@ export function itemProblems(form: ItemForm, currency: string): Readonly<Record<
       ? Object.fromEntries(
           form.sizes
             .filter((size) => !isBlankRow(size))
-            .filter((size) => size.name.trim() === '' || parsePrice(size.price, currency) === undefined)
-            .map((size) => [`size-${size.key}`, strings.sizeInvalid]),
+            .flatMap((size): (readonly [string, string])[] => [
+              ...(size.name.trim() === '' ? ([[`size-${size.key}-name`, strings.sizeNameMissing]] as const) : []),
+              ...(parsePrice(size.price, currency) === undefined
+                ? ([[`size-${size.key}-price`, strings.priceInvalid]] as const)
+                : []),
+            ]),
         )
       : {}),
   };
@@ -195,10 +199,72 @@ const RULED_OUT: Readonly<Record<string, readonly string[]>> = {
   dairy_free: ['milk'],
 };
 
-/** The marks and contained allergens that can't both be true (Vegan with Milk), for a quiet warning. */
-export const dietClashes = (form: ItemForm): readonly { readonly mark: string; readonly allergen: string }[] =>
-  form.diet.flatMap((mark) =>
-    (RULED_OUT[mark] ?? [])
-      .filter((allergen) => form.contains.includes(allergen))
-      .map((allergen) => ({ mark, allergen })),
-  );
+const allergenWord = (code: string): string => strings.allergens[code as keyof typeof strings.allergens].toLowerCase();
+
+/**
+ * Quiet lines under Dietary, for a mark the allergens contradict (Vegan with Milk contained, Gluten free with Gluten
+ * possible) or leave unsaid: guests' allergens come from the allergen fields, so "Contains nuts" alone doesn't reach
+ * them. A warning, not a refusal: the person may know something this doesn't.
+ */
+export const dietNotes = (form: ItemForm): readonly string[] => [
+  ...form.diet.flatMap((mark) => {
+    const ruledOut = RULED_OUT[mark] ?? [];
+    const label = strings.diets[mark as keyof typeof strings.diets];
+    return [
+      ...ruledOut
+        .filter((code) => form.contains.includes(code))
+        .map((code) => strings.dietClash(label, allergenWord(code))),
+      ...ruledOut
+        .filter((code) => form.may.includes(code))
+        .map((code) => strings.dietMayClash(label, allergenWord(code))),
+    ];
+  }),
+  ...(form.diet.includes('contains_nuts') && !form.contains.some((code) => code === 'nuts' || code === 'peanuts')
+    ? [strings.nutsUnsaid]
+    : []),
+];
+
+/** The everyday words people search an allergen by, beyond its name. */
+const ALSO_KNOWN_AS: Readonly<Record<string, readonly string[]>> = {
+  celery: ['celeriac'],
+  gluten: ['wheat', 'barley', 'rye', 'oats', 'flour'],
+  crustaceans: ['shellfish', 'prawn', 'shrimp', 'crab', 'lobster'],
+  eggs: ['egg'],
+  milk: ['dairy', 'lactose', 'cream', 'butter', 'cheese'],
+  molluscs: ['shellfish', 'mussel', 'oyster', 'squid', 'clam'],
+  nuts: ['nut', 'almond', 'walnut', 'cashew', 'hazelnut', 'pistachio'],
+  peanuts: ['nut', 'groundnut'],
+  sesame: ['tahini'],
+  soya: ['soy', 'tofu'],
+  sulphites: ['sulfite', 'wine'],
+};
+
+/** Whether a search finds this allergen, by its name or an everyday word for it ("dairy" finds Milk). */
+export const findsAllergen = (item: { readonly id: string; readonly label: string }, query: string): boolean => {
+  const typed = query.trim().toLowerCase();
+  return [item.label.toLowerCase(), ...(ALSO_KNOWN_AS[item.id] ?? [])].some((word) => word.includes(typed));
+};
+
+/**
+ * Where a new item made outside any section can go: each section, its sub sections after it, under its menu's name
+ * when there are several menus.
+ */
+export const placeChoices = (
+  draft: Pick<MenuDraft, 'menus' | 'sections'>,
+): readonly { readonly id: string; readonly label: string; readonly group?: string }[] =>
+  [...draft.menus]
+    .sort((a, b) => a.position - b.position)
+    .flatMap((menu) => {
+      const own = draft.sections.filter((section) => section.menuId === menu.id);
+      const group = draft.menus.length > 1 ? { group: menu.name } : {};
+      return own
+        .filter((section) => section.parentId === undefined)
+        .sort((a, b) => a.position - b.position)
+        .flatMap((top) => [
+          { id: top.id, label: top.name, ...group },
+          ...own
+            .filter((section) => section.parentId === top.id)
+            .sort((a, b) => a.position - b.position)
+            .map((sub) => ({ id: sub.id, label: strings.sectionPath(top.name, sub.name), ...group })),
+        ]);
+    });

@@ -68,6 +68,8 @@ The house rule (the owner's ask, 21 October 2026): anything that ends something,
 
 - The scrim is a named size container, `modal-scrim` (the viewport's width less its padding). It is public: what sits in a dialog may query it, as the footer stacks under 480px and Button hides its keycaps there. Keep the name when changing the scrim.
 
+A `drawer`'s title stays on one line, cut with an ellipsis (6 November 2026): a title that follows what is typed (a menu item's name) moved the whole form down a line under the person's hands, and a form beside it holds the whole text.
+
 ## States
 
 Opening grows it from the centre over the scrim in `duration-modal`; closing fades it in `duration-exit`. Opened from the keyboard it appears at once. Under reduced motion it appears and leaves at once, scrim and all, with no fade (spec 0058, AC-2).
