@@ -242,7 +242,9 @@ export function ItemDialog({
       <Form
         key={round}
         id={formId}
-        focusesFirstField={isNew && !isReadOnly}
+        // Not when opened with a name: that was Enter in a section's Add item field, and the same key press landing in
+        // Name would send the form at once.
+        focusesFirstField={isNew && !isReadOnly && opened.name === ''}
         isBusy={isSaving}
         onSubmit={() => (isReadOnly ? undefined : void save())}
       >
