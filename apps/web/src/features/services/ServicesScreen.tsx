@@ -110,22 +110,6 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.servicesTitle} />;
     if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
-    // No business yet: every workspace has Appointments on, so this is someone's first sight of it.
-    if (view !== undefined && view.places.length === 0) {
-      return (
-        <SettingsPage title={strings.servicesTitle}>
-          <StartBusiness
-            slug={slug}
-            app="appointments"
-            icon="scissors"
-            title={strings.startServices}
-            text={strings.startServicesText}
-            onDone={() => store.catalogue(slug).retry()}
-          />
-        </SettingsPage>
-      );
-    }
-
     return (
       <SettingsPage title={strings.servicesTitle}>
         <EmptyState
@@ -159,6 +143,22 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
     ...(view?.categories ?? []).map((category) => ({ id: category.id, label: category.name })),
     { id: '', label: strings.noCategory, isApart: true },
   ];
+
+  // No business yet: every workspace has Appointments on, so this is someone's first sight of it.
+  if (view !== undefined && view.places.length === 0) {
+    return (
+      <SettingsPage title={strings.servicesTitle}>
+        <StartBusiness
+          slug={slug}
+          app="appointments"
+          icon="scissors"
+          title={strings.startServices}
+          text={strings.startServicesText}
+          onDone={() => store.catalogue(slug).retry()}
+        />
+      </SettingsPage>
+    );
+  }
 
   return (
     <SettingsPage

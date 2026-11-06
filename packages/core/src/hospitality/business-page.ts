@@ -31,7 +31,7 @@ import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { appointmentsReadiness } from '../visits/readiness.ts';
-import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp } from './gate.ts';
+import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp, requireBusiness } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
 
 const { businessPages, businessPhotos, businessProfiles, placePages, placeSlugs, places } = schema;
@@ -221,6 +221,7 @@ export async function claimBusinessHandle(
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    await requireBusiness(tx, scope.workspaceId);
     await ensurePageRow(tx, scope.workspaceId, by);
     try {
       await tx.transaction((savepoint) =>

@@ -52,7 +52,7 @@ export const strings = {
   noPlace: 'Add your place first',
   startTitle: 'A QR code for every table',
   startText:
-    'Tell us about your business, then add your tables and print a code for each. Guests scan it to see your menu.',
+    'Add your tables and print a code for each. Guests scan it to see your menu.',
   addPlace: 'Add your place',
   failed: 'Tables didn’t load',
   floorFailed: 'Seats and zones didn’t load, so tables can’t be added or changed right now.',

@@ -4,9 +4,10 @@
 // Main task: fill in the short business card, which makes the business and its first place, and carry on.
 // Leaves out: anything public. The card publishes nothing, and no guest page exists until someone publishes one.
 import type { BusinessKind, HospitalityApp, HospitalityStore, WorkspaceSettings } from '@crm/data';
-import { Button, EmptyState, type IconName } from '@crm/ui';
+import { Button, EmptyState, focusLater, type IconName } from '@crm/ui';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { pageHeading } from '../navigation/focus.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { BusinessCardDialog } from './BusinessCardDialog.tsx';
 import { strings } from './strings.ts';
@@ -14,7 +15,7 @@ import { strings } from './strings.ts';
 /** Props for the first screen. */
 export interface StartBusinessProps {
   readonly slug: string;
-  /** The app whose page this is; the card sets up what all the apps share. */
+  /** The app whose page this is, which is on: the card sets up what all the apps share and switches nothing. */
   readonly app: HospitalityApp;
   readonly icon: IconName;
   readonly title: string;
@@ -82,6 +83,8 @@ export function StartBusiness({ slug, app, icon, title, text, onDone }: StartBus
           toasts.toast({ tone: 'success', message: strings.setUpDone });
           onDone();
           void router.invalidate();
+          // The button that opened the card leaves with this screen, so focus goes on to the page's title.
+          focusLater(() => pageHeading(document));
         }}
       />
     </>

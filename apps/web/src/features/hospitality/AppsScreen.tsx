@@ -57,7 +57,13 @@ const appHref = (slug: string, app: HospitalityApp): string | undefined =>
 /** Settings › Apps: one card per app, with its switch and the way into it, or On its way. */
 export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
   const state = useHospitality(store.apps(slug));
+  // What is asked stays set through the Modal's exit, so its title never empties as it closes.
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
+  const [isAsking, setIsAsking] = useState(false);
+  const ask = (next: Asking) => {
+    setAsking(next);
+    setIsAsking(true);
+  };
   const [busy, setBusy] = useState<HospitalityApp | undefined>(undefined);
   const view = state.status === 'ready' ? state.value : undefined;
 
@@ -65,7 +71,7 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
   const install = (app: HospitalityApp, withNeeded = false) => {
     if (view === undefined) return;
     if (app === 'menu_qr' && !installed(view, 'menu') && !withNeeded) {
-      setAsking({ kind: 'needs-menu', app });
+      ask({ kind: 'needs-menu', app });
       return;
     }
     setBusy(app);
@@ -80,7 +86,7 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
   };
 
   const remove = (app: HospitalityApp, withDependents: boolean) => {
-    setAsking(undefined);
+    setIsAsking(false);
     setBusy(app);
     void store.remove(slug, app, withDependents).then((refused) => {
       setBusy(undefined);
@@ -95,9 +101,9 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
         action: {
           label: strings.undo,
           onAction: () => {
+            // Menu QR went with Menu: both come back in one write.
             void store
-              .install(slug, app)
-              .then(() => (withDependents ? store.install(slug, 'menu_qr') : undefined))
+              .install(slug, withDependents ? 'menu_qr' : app, { withNeeded: withDependents })
               .then((refused2) => {
                 if (refused2 !== undefined) toasts.toast({ tone: 'danger', message: refused2.message });
               });
@@ -129,13 +135,14 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
             if (!view.canManage) return <Badge text={isOn ? strings.appOn : strings.appOff} />;
             return (
               <Switch
-                label={strings.appSwitch(name)}
+                label={name}
                 isLabelHidden
                 isSelected={isOn}
-                isDisabled={busy === app}
+                // Read only, not disabled, while it saves: the switch keeps focus, also coming back from the Modal.
+                isReadOnly={busy === app}
                 onChange={(on) => {
                   if (on) install(app);
-                  else setAsking({ kind: 'remove', app, withDependents: app === 'menu' && installed(view, 'menu_qr') });
+                  else ask({ kind: 'remove', app, withDependents: app === 'menu' && installed(view, 'menu_qr') });
                 }}
               />
             );
@@ -169,7 +176,7 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
   return (
     <SettingsPage
       title={strings.appsTitle}
-      {...(view?.hasBusiness === true
+      {...(view?.hasBusiness === true && view.canManage
         ? {
             actions: (
               <ButtonLink href={businessSettingsHref(slug)} icon="store">
@@ -182,9 +189,9 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
       {view !== undefined && !view.canManage && <Callout tone="info">{strings.appsReadOnly}</Callout>}
       {body()}
       <Modal
-        isOpen={asking?.kind === 'needs-menu'}
+        isOpen={isAsking && asking?.kind === 'needs-menu'}
         onOpenChange={(open) => {
-          if (!open) setAsking(undefined);
+          if (!open) setIsAsking(false);
         }}
         title={strings.needsMenuTitle}
         variant="confirm"
@@ -195,7 +202,7 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
               variant="primary"
               onPress={() => {
                 const app = asking?.app ?? 'menu_qr';
-                setAsking(undefined);
+                setIsAsking(false);
                 install(app, true);
               }}
             >
@@ -207,9 +214,9 @@ export function AppsScreen({ store, slug, toasts }: AppsScreenProps) {
         {strings.needsMenuText}
       </Modal>
       <Modal
-        isOpen={asking?.kind === 'remove'}
+        isOpen={isAsking && asking?.kind === 'remove'}
         onOpenChange={(open) => {
-          if (!open) setAsking(undefined);
+          if (!open) setIsAsking(false);
         }}
         title={strings.removeTitle(asking === undefined ? '' : strings.appNames[asking.app])}
         variant="confirm"

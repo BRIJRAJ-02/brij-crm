@@ -5,6 +5,7 @@
 // "Floor staff" custom role (Run service only, read data access).
 import {
   APP_NEEDS,
+  APPS_ON_BY_DEFAULT,
   APPOINTMENT_HOURS,
   APPOINTMENT_KINDS,
   appsNeeding,
@@ -27,7 +28,7 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { syncBusinessListing } from './business-page.ts';
-import { hospitalityMember, installedHospitalityApps, isApp } from './gate.ts';
+import { auditSetup, hospitalityMember, installedHospitalityApps, isApp } from './gate.ts';
 import { insertPlace } from './places.ts';
 
 const { businessProfiles, members, workspaceApps, workspaceRoles, workspaces } = schema;
@@ -166,7 +167,8 @@ export async function installApp(
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   const by = hospitalityMember(scope);
-  if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
+  // An app still being built can't be turned on: it would only keep a page up with every real app off.
+  if (!isApp(input.app) || !APPS_ON_BY_DEFAULT.includes(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -177,7 +179,7 @@ export async function installApp(
       if (needed.length > 0 && input.withNeeded !== true) {
         throw refuse(
           'APP_NEEDED',
-          `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Install both?`,
+          `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Turn both on.`,
         );
       }
       const [profile] = await tx
@@ -195,7 +197,10 @@ export async function installApp(
         });
         // A salon or a clinic opens on a working week, a restaurant on lunch and dinner (Foolproof).
         const firstHours = APPOINTMENT_KINDS.includes(input.business.kind) ? APPOINTMENT_HOURS : RESTAURANT_HOURS;
-        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by, firstHours);
+        const placeId = newId();
+        await insertPlace(tx, scope, placeId, { name: input.business.name, ...input.business.place }, by, firstHours);
+        await auditSetup(tx, scope, 'business.saved');
+        await auditSetup(tx, scope, 'place.created', { placeId });
         // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
         const changed = await tx
           .update(workspaces)
@@ -247,7 +252,8 @@ export async function removeApp(
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   hospitalityMember(scope);
-  if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
+  // An app still being built can't be turned on: it would only keep a page up with every real app off.
+  if (!isApp(input.app) || !APPS_ON_BY_DEFAULT.includes(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -259,7 +265,7 @@ export async function removeApp(
       if (dependents.length > 0 && input.withDependents !== true) {
         throw refuse(
           'APP_NEEDED',
-          `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Remove both?`,
+          `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Turn both off.`,
         );
       }
       const removing = [input.app, ...dependents];

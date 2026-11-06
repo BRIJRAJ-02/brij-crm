@@ -130,7 +130,6 @@ export const OperatorUserWorkspace = z.object({
   recordsMade: z.number().int().nonnegative(),
   bookingsHosted: z.number().int().nonnegative(),
   pagesOwned: z.number().int().nonnegative(),
-  /** What Timefix opened early for the workspace (spec 0065, AC-6502): the Hospitality apps today. */
 });
 /** One workspace a person is in. */
 export type OperatorUserWorkspace = z.infer<typeof OperatorUserWorkspace>;

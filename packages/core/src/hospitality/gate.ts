@@ -50,6 +50,18 @@ export async function requireAnyApp(tx: WorkspaceTx, workspaceId: string): Promi
   }
 }
 
+/**
+ * Refuses `CONFLICT` until the business card has made the business: its profile, its first place and Floor
+ * staff come together, so nothing that hangs off a business gets ahead of it.
+ */
+export async function requireBusiness(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+  const [profile] = await tx
+    .select({ workspaceId: schema.businessProfiles.workspaceId })
+    .from(schema.businessProfiles)
+    .where(eq(schema.businessProfiles.workspaceId, workspaceId));
+  if (profile === undefined) throw refuse('CONFLICT', 'Set up your business first.');
+}
+
 /** The member a write is stamped with: only a signed in member installs, removes or sets up. */
 export function hospitalityMember(scope: EngineScope): string {
   const { principal } = scope.access;

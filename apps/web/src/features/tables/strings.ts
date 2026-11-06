@@ -7,7 +7,7 @@ export const strings = {
   place: 'Place',
   startTitle: 'Take reservations online',
   startText:
-    'Tell us about your business, then add tables and open your booking page when you’re ready. Guests see nothing until you do.',
+    'Add tables and open your booking page when you’re ready. Guests see nothing until you do.',
   copyLink: 'Copy link',
   openPage: 'Open page',
   unpublish: 'Stop taking reservations',

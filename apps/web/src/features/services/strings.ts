@@ -12,13 +12,13 @@ export const strings = {
   retry: 'Try again',
   notInstalled: 'Appointments is off',
   notInstalledText: 'Turn it on in Apps. Everything you made is kept.',
+  notInstalledAsk: 'An owner or admin can turn it on.',
   startServices: 'List what clients can book',
-  startServicesText:
-    'Tell us about your business, then add services with their length and price. Clients see nothing until you publish.',
+  startServicesText: 'Add services with their length and price. Clients see nothing until you publish.',
   startStaff: 'Add the people clients book',
-  startStaffText: 'Tell us about your business, then add your team. They don’t need to sign in.',
+  startStaffText: 'Add your team. They don’t need to sign in.',
   startShifts: 'Plan who works when',
-  startShiftsText: 'Tell us about your business, then add staff and set their shifts.',
+  startShiftsText: 'Add staff and set their shifts.',
   openApps: 'Open Apps',
   // Setup checklist
   setupTitle: 'Set up online booking',

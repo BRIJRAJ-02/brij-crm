@@ -94,11 +94,11 @@ test.describe('a salon set up from empty', () => {
       await page.goto(`/w/${slug}/settings/services`);
       await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
-      await expect(card.getByRole('button', { name: /Kind/ })).toContainText('Salon');
+      await expect(card.getByRole('button', { name: /Type/ })).toContainText('Salon');
       await card.getByLabel('Address', { exact: true }).fill('12 MG Road');
       await card.getByLabel('City', { exact: true }).fill('London');
       await shot(page, '01-business-card');
-      await card.getByRole('button', { name: 'Continue', exact: true }).click();
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 

@@ -79,7 +79,7 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Business name').fill('Somewhere');
     await shot(page, '02-business-card');
-    await dialog.getByRole('button', { name: 'Continue' }).click();
+    await dialog.getByRole('button', { name: 'Set up' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
     await shot(page, '03-installed');
   });

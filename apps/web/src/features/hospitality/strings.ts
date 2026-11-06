@@ -50,8 +50,6 @@ export const strings = {
   /** An app still being built, on its card in place of the switch. */
   appOnItsWay: 'On its way',
   hospitalityGroup: 'Hospitality',
-  /** The switch on an app's card, named so several read apart to a screen reader. */
-  appSwitch: (app: string) => `${app} on`,
   appOn: 'On',
   appOff: 'Off',
   openApp: (app: string) => `Open ${app}`,
@@ -63,7 +61,7 @@ export const strings = {
   setUpAsk: 'An owner or admin sets up the business first.',
   firstBusiness: {
     title: 'Set up your business',
-    text: 'Its name, kind and first place. Menus, tables and bookings all start here, and nothing goes public until you publish it.',
+    text: 'Its name, type and first place. Menus, tables and bookings all start here, and nothing goes public until you publish it.',
   },
   removeTitle: (app: string) => `Turn off ${app}?`,
   removeText: {
@@ -85,7 +83,7 @@ export const strings = {
   // The business card (AC-6506)
   cardTitle: 'Your business',
   businessName: 'Business name',
-  kind: 'Kind',
+  kind: 'Type',
   kinds: {
     restaurant: 'Restaurant',
     cafe: 'Café',
@@ -125,8 +123,8 @@ export const strings = {
   country: 'Country',
   timeZone: 'Time zone',
   currency: 'Currency',
-  continue: 'Continue',
-  continuing: 'Saving',
+  continue: 'Set up',
+  continuing: 'Setting up',
   nameMissing: 'Name the business.',
   countryMissing: 'Pick a country.',
   currencyMissing: 'Pick a currency.',

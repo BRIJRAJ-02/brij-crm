@@ -46,7 +46,7 @@ test.describe('the business page with Menu and Table seating', () => {
       await card.getByLabel('Address', { exact: true }).fill('1 Example Street');
       await card.getByLabel('City', { exact: true }).fill('London');
       await shot(page, '01-business-card');
-      await card.getByRole('button', { name: 'Continue', exact: true }).click();
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 

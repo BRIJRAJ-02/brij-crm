@@ -17,7 +17,8 @@ const SEARCHED = [
   'apps/web/src',
   'apps/web/e2e',
 ];
-const SELF = 'packages/core/src/hospitality/open-to-all.test.ts';
+// This file, and the flow that checks no screen says it.
+const ALLOWED = ['packages/core/src/hospitality/open-to-all.test.ts', 'apps/web/e2e/business-apps.flow.ts'];
 
 /** Every source file under `dir`. */
 function filesUnder(dir: string): readonly string[] {
@@ -44,8 +45,8 @@ describe('the business apps, open to every workspace', () => {
   it('names no early access in any code or copy outside the database package', () => {
     const named = SEARCHED.flatMap((dir) => filesUnder(join(ROOT, dir)))
       .map((path) => relative(ROOT, path))
-      .filter((path) => path !== SELF)
-      .filter((path) => /early.?access|business_apps/i.test(readFileSync(join(ROOT, path), 'utf8')));
+      .filter((path) => !ALLOWED.includes(path))
+      .filter((path) => /early[\s_/*-]*access|business_apps/i.test(readFileSync(join(ROOT, path), 'utf8')));
     expect(named).toEqual([]);
   });
 });

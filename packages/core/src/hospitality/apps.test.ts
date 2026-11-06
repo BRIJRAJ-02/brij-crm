@@ -190,10 +190,25 @@ describe('the switch (AC-6503 to AC-6506, AC-6511)', () => {
     expect((await getBusiness(w.owner)).places).toHaveLength(1);
   });
 
-  it('keeps Events off, whatever the others do', async () => {
+  it('keeps Events off: it can’t be turned on while it is being built', async () => {
     const w = await workspace();
-    await removeApp(w.owner, { app: 'events' });
+    expect(await refusalOf(installApp(w.owner, { app: 'events' }))).toBe('NOT_FOUND');
     expect((await listApps(w.owner)).apps.find((app) => app.app === 'events')?.installed).toBe(false);
+  });
+
+  it('audits the card, and refuses a profile, a place or a handle ahead of it', async () => {
+    const w = await workspace();
+    expect(await refusalOf(saveBusiness(w.owner, { name: 'Early', kind: 'bar' }))).toBe('CONFLICT');
+    expect(
+      await refusalOf(createPlace(w.owner, { id: newId(), place: { name: 'Early', country: 'GB', timeZone: 'UTC' } })),
+    ).toBe('CONFLICT');
+    await installApp(w.owner, { app: 'menu', business: CARD });
+    const audited = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ what: string }>(
+        sql`select after ->> 'hospitality' as what from audit_events where workspace_id = ${w.workspaceId} and after ? 'hospitality' order by at`,
+      ),
+    );
+    expect(audited.rows.map((row) => row.what)).toEqual(['business.saved', 'place.created']);
   });
 });
 

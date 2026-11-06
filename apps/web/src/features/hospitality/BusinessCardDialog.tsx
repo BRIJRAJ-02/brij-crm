@@ -50,7 +50,9 @@ export function BusinessCardDialog({
   return (
     <Modal
       title={strings.cardTitle}
-      variant="window"
+      variant="form"
+      isDismissable={false}
+      isBusy={isBusy}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && isBusy) return;

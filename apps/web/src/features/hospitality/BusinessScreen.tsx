@@ -58,6 +58,7 @@ export interface BusinessScreenProps {
 /** Settings › Business: the profile, then each place. */
 export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const state = useHospitality(store.business(slug));
+  const apps = useHospitality(store.apps(slug));
   const [isAdding, setAdding] = useState(false);
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
@@ -93,11 +94,15 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const view = state.status === 'ready' ? state.value : undefined;
   // No business yet: the card makes it and its first place, as on every business page.
   if (view !== undefined && view.profile === undefined && view.places.length === 0) {
+    const on = apps.status === 'ready' ? apps.value.apps.filter((each) => each.installed).map((each) => each.app) : [];
+    const onApp =
+      (['table_seating', 'menu', 'appointments'] as const).find((app) => on.includes(app)) ?? 'appointments';
     return (
       <SettingsPage title={strings.businessTitle}>
         <StartBusiness
           slug={slug}
-          app="table_seating"
+          // An app that is on, so the card turns nothing back on; a salon's card starts on Salon.
+          app={onApp}
           icon="store"
           title={strings.firstBusiness.title}
           text={strings.firstBusiness.text}

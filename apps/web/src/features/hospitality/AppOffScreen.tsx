@@ -17,6 +17,13 @@ const TITLES: Readonly<Record<HospitalityPage, string>> = {
   reservations: workspace.reservations,
 };
 
+/** The app each page belongs to, by the name its card in Apps has. */
+const APP_NAMES: Readonly<Record<HospitalityPage, string>> = {
+  menus: strings.appNames.menu,
+  qr: strings.appNames.menu_qr,
+  reservations: strings.appNames.table_seating,
+};
+
 const ICONS = { menus: 'utensils', qr: 'qr-code', reservations: 'calendar-check' } as const;
 
 /** Whether the reader's role reaches the business pages at all: Manage hospitality or Run service. */
@@ -40,7 +47,7 @@ export function AppOffScreen({ slug, page }: { readonly slug: string; readonly p
           <EmptyState
             layout="block"
             icon={ICONS[page]}
-            title={strings.appIsOff(TITLES[page])}
+            title={strings.appIsOff(APP_NAMES[page])}
             {...(canSwitch
               ? {
                   actions: (

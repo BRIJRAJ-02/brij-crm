@@ -240,7 +240,7 @@ describe('Settings › Apps', () => {
     const { store, calls } = storeOf();
     shown = await openApps(store);
     await expect.element(page.getByRole('heading', { name: 'Menu QR' })).toBeInTheDocument();
-    await pressSwitch('Menu QR on');
+    await pressSwitch('Menu QR');
     await expect.poll(() => calls).toEqual(['install:menu_qr:false']);
   });
 
@@ -249,8 +249,8 @@ describe('Settings › Apps', () => {
     const { store } = storeOf();
     shown = await openApps(store);
     await expect.element(page.getByRole('heading', { name: 'Events' })).toBeInTheDocument();
-    await expect.element(page.getByRole('switch', { name: 'Events on', exact: true })).not.toBeInTheDocument();
-    await expect.element(page.getByRole('switch', { name: 'Appointments on', exact: true })).toBeInTheDocument();
+    await expect.element(page.getByRole('switch', { name: 'Events', exact: true })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('switch', { name: 'Appointments', exact: true })).toBeInTheDocument();
     await expect.element(page.getByText('On its way').first()).toBeVisible();
     expect(document.body.textContent).not.toMatch(/install/i);
   });
@@ -260,7 +260,7 @@ describe('Settings › Apps', () => {
     const { store, calls } = storeOf();
     await store.remove('acme', 'menu');
     shown = await openApps(store);
-    await pressSwitch('Menu QR on');
+    await pressSwitch('Menu QR');
     await expect.element(page.getByRole('heading', { name: 'Menu QR needs Menu' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Turn both on' }));
     await expect.poll(() => calls).toEqual(['install:menu_qr:true']);
@@ -270,10 +270,10 @@ describe('Settings › Apps', () => {
     await page.viewport(1280, 900);
     const { store } = storeOf();
     shown = await openApps(store);
-    await pressSwitch('Menu on');
+    await pressSwitch('Menu');
     await expect.element(page.getByRole('heading', { name: 'Turn off Menu?' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Turn off', exact: true }));
-    await expect.element(page.getByRole('switch', { name: 'Menu on', exact: true })).not.toBeChecked();
+    await expect.element(page.getByRole('switch', { name: 'Menu', exact: true })).not.toBeChecked();
   });
 
   it('shows someone who can’t switch the apps a word for each, and no switch', async () => {
@@ -424,7 +424,7 @@ describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with so
           pattern: '/w/$slug/settings/x',
           at: '/w/acme/settings/x',
         });
-        await pressSwitch('Menu on');
+        await pressSwitch('Menu');
         await expect.element(page.getByRole('alertdialog').or(page.getByRole('dialog'))).toBeVisible();
         await new Promise((resolve) => setTimeout(resolve, 400));
         await shoot('remove-app', theme, width);

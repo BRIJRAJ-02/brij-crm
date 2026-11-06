@@ -112,8 +112,8 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(card).toBeVisible();
       await card.getByLabel('Business name').fill('Somewhere');
       await shot(page, '02-business-card');
-      // Country, time zone and currency start from the person's own, so Continue works at once.
-      await card.getByRole('button', { name: 'Continue', exact: true }).click();
+      // Country, time zone and currency start from the person's own, so Set up works at once.
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
       await shot(page, '03-set-up');
     });
@@ -441,7 +441,7 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
       await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
       await card.getByLabel('Business name').fill('Somewhere');
-      await card.getByRole('button', { name: 'Continue', exact: true }).click();
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 
