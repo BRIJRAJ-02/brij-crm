@@ -730,7 +730,6 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       pages: os.operator.pages.handler(notServed),
       page: os.operator.page.handler(notServed),
       site: os.operator.site.handler(notServed),
-      setEarlyAccess: os.operator.setEarlyAccess.handler(notServed),
     },
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
     services: {

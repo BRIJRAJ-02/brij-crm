@@ -10,7 +10,6 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { deleteWorkspace, restoreWorkspace } from '../workspace/settings.ts';
 import { testScope } from '../testing.ts';
 import { installApp, removeApp } from './apps.ts';
@@ -63,7 +62,6 @@ async function business(card: FirstBusiness = CARD) {
       sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${memberId}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
     ),
   );
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   const member = testScope({
     db,
@@ -313,6 +311,10 @@ describe('the page editor (B4 lite)', () => {
     expect(await bookingCompanyOf({ scope: w.owner })).toEqual({ name: 'Somewhere Nowhere', path: `/sn-${run}-off` });
     const listed = async () =>
       (await listSitemapBusinesses({ db }, { max: 50_000 })).some((row) => row.handle === `sn-${run}-off`);
+    expect(await listed()).toBe(true);
+    // Every app off, as one switch at a time: the page goes with the last.
+    await removeApp(w.owner, { app: 'menu', withDependents: true });
+    await removeApp(w.owner, { app: 'appointments' });
     expect(await listed()).toBe(true);
     await removeApp(w.owner, { app: 'table_seating' });
     expect(await listed()).toBe(false);

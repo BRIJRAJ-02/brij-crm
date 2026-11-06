@@ -40,7 +40,6 @@ function scan(key: string, code: string, init: { ip?: string; userAgent?: string
 /** "Somewhere" with Menu and Menu QR installed in one step and three tables, answering its codes. */
 async function somewhere() {
   const m = await memberWithWorkspace(app);
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'menu_qr',

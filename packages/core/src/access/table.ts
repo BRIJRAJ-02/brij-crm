@@ -262,8 +262,8 @@ export const ACCESS_TABLE = {
   countSubmissionsBeyond: { permission: 'workspace.manage' },
   // The brand kit (spec 0060, AC-1, AC-23): every member reads it; owners and admins change it and its logo.
   getWorkspaceBrand: { anyMember: true },
-  // The Hospitality suite (spec 0065, H0): any member reads the Apps page (empty without early access); owners and
-  // admins install and remove; the business, places and floors are `hospitality.manage`'s.
+  // The Hospitality suite (spec 0065, H0): any member reads the Apps page; owners and admins switch the apps on
+  // and off; the business, places and floors are `hospitality.manage`'s.
   listApps: { anyMember: true },
   installApp: { permission: 'workspace.manage' },
   removeApp: { permission: 'workspace.manage' },

@@ -119,7 +119,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'operatorPage',
   'operatorSite',
   // Its one write (spec 0065, AC-6502), behind the same gate, through crm_operator's one definer.
-  'setEarlyAccess',
   // The Hospitality gate (spec 0065, AC-6504): it takes the caller's transaction, inside a service the door let in.
   'appInstalled',
   'requireApp',

@@ -33,7 +33,7 @@ const ids = (groups: readonly SettingsNavGroup[]) => groups.map((group) => group
 
 describe('settingsNav', () => {
   it('lists Account, Workspace, People, Scheduling, Data and Super admin, in order, with their pages', () => {
-    const groups = settingsNav('acme', { hasApps: true });
+    const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual([
       'Account',
       'Workspace',
@@ -93,17 +93,15 @@ describe('settingsNav', () => {
     expect(new Set(icons).size).toBe(icons.length);
   });
 
-  it('offers Apps only where Timefix opened early access', () => {
-    const named = (hasApps: boolean) =>
-      settingsNav('acme', { hasApps })
-        .flatMap((group) => group.entries)
-        .map((entry) => entry.id);
-    expect(named(false)).not.toContain('apps');
-    expect(named(true)).toContain('apps');
+  it('offers Apps in every workspace, to owners and admins alone', () => {
+    const entry = settingsNav('acme')
+      .flatMap((group) => group.entries)
+      .find((each) => each.id === 'apps');
+    expect(entry?.requires).toBe('workspace.manage');
   });
 
   it('opens every entry inside Settings, Profile first', () => {
-    const entries = settingsNav('acme', { hasApps: true }).flatMap((group) => group.entries);
+    const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',

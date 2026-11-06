@@ -1,7 +1,7 @@
 // Brief
-// Purpose: what Services, Staff and Shifts show while Appointments isn't installed (spec 0066 B1).
-// Main task: open Settings › Apps to install it.
-// Leaves out: installing it here (Apps owns the business card the first install asks for).
+// Purpose: what Services, Staff and Shifts show while Appointments is off (spec 0066 B1).
+// Main task: open Settings › Apps to turn it on.
+// Leaves out: switching it here (Apps owns the switch).
 import { ButtonLink, EmptyState } from '@crm/ui';
 import { appsSettingsHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';

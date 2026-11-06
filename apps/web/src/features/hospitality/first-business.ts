@@ -1,4 +1,4 @@
-// The first install's guesses (spec 0068, foolproof from the first click; walk of 4 Nov 2026): a new workspace has no
+// The business card's guesses (spec 0068, foolproof from the first click; walk of 4 Nov 2026): a new workspace has no
 // country or currency yet and keeps its zone at UTC, so the business card starts from the browser instead: its
 // region, that region's currency, and its zone. Pure, so the guesses are tested; the person can change each one.
 

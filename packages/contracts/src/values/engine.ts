@@ -134,7 +134,6 @@ export const ENGINE_REFUSAL_CODES = [
   // installed without the one it needs, and a first install without its business card.
   'APP_NOT_INSTALLED',
   'APP_NEEDED',
-  'BUSINESS_NEEDED',
 ] as const;
 
 /** One of the engine's refusal codes. */

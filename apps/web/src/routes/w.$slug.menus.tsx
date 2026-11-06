@@ -1,7 +1,7 @@
 import { isDataError, type MenuStore, type PlaceHours } from '@crm/data';
 import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
+import { AppOffScreen } from '../features/hospitality/AppOffScreen.tsx';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
 import { MenusPending } from '../features/menus/MenusPending.tsx';
 import { MenusScreen } from '../features/menus/MenusScreen.tsx';
@@ -20,7 +20,7 @@ interface MenusData {
   };
 }
 
-// Menus, the Menu app's editor (spec 0065, H1): shown only while Menu is installed, else not found. The loader reads
+// Menus, the Menu app's editor (spec 0065, H1): shown only while Menu is on and the reader's role reaches it. The loader reads
 // the draft (and, for those who set the apps up, the business: its name, its phone for Settings, and each place's
 // hours for the preview).
 export const Route = createFileRoute('/w/$slug/menus')({
@@ -30,7 +30,13 @@ export const Route = createFileRoute('/w/$slug/menus')({
     const empty = { name: '', hours: {} };
     if (!isInstalled) return { isInstalled, business: empty };
     const [store, hospitality] = await Promise.all([context.data.menu.load(), context.data.hospitality.load()]);
-    await store.readDraft(params.slug);
+    try {
+      await store.readDraft(params.slug);
+    } catch (error) {
+      // Someone whose role doesn't reach the page meets it as one that isn't there, never a locked one.
+      if (isDataError(error) && error.code === 'FORBIDDEN') return { isInstalled: false, business: empty };
+      throw error;
+    }
     const view = await hospitality.readBusiness(params.slug).catch(() => undefined);
     return {
       isInstalled,
@@ -52,7 +58,7 @@ function PageRoute() {
   const { slug } = Route.useParams();
   const view = Route.useSearch();
   const { toasts } = Route.useRouteContext();
-  if (!isInstalled || store === undefined) return <ComingScreen slug={slug} page="menus" isInstalled={false} />;
+  if (!isInstalled || store === undefined) return <AppOffScreen slug={slug} page="menus" />;
   return <MenusScreen store={store} slug={slug} toasts={toasts} business={business} view={view} />;
 }
 

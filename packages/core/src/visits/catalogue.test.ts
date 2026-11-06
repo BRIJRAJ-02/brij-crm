@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import type { PlaceHours, ServiceFields } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { removeApp } from '../hospitality/apps.ts';
 import { mintScope, type EngineScope } from '../access/mint.ts';
 import { NO_RULES, roleAccess } from '../access/policy.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
@@ -524,8 +525,9 @@ describe('who may do what', () => {
     });
   });
 
-  it('refuses everything while Appointments isn’t installed', async () => {
+  it('refuses everything while Appointments is off', async () => {
     const w = await visitWorkspace(db, 'table_seating');
+    await removeApp(w.owner, { app: 'appointments' });
     expect(await refusal(getCatalogue(w.owner))).toMatchObject({ code: 'APP_NOT_INSTALLED' });
     expect(
       await refusal(

@@ -243,6 +243,9 @@ export const strings = {
   markAvailable: 'Mark available',
   searchDishes: 'Search items',
   newDish: 'New item',
+  startTitle: 'Put your menu online',
+  startText:
+    'Tell us about your business, then add dishes and publish when you’re ready. Guests see nothing until you do.',
   noDishes: 'No items yet',
   noDishesLine: 'Add items in Structure, or make one here.',
   noMatches: 'No items match',

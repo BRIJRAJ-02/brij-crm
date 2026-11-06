@@ -1,10 +1,10 @@
-// A salon set up from an empty workspace (spec 0066 B1): install Appointments with its business card (the kind starts
+// A salon set up from an empty workspace (spec 0066 B1): fill in the business card (the kind starts
 // on Salon, the place on a working week), add the starter Haircut with a price, add a stylist with a photo cropped
 // round, set her colour, change one date on the Shifts grid, copy that week to every week, and then prove through the
 // API that the engine plans a haircut with her (B2 books from exactly this). Each step is a screenshot when
 // FLOW_SCREENSHOTS names a folder; FLOW_COLOR_SCHEME=dark and FLOW_WIDTH=390 draw the same walk in dark and at a
-// phone's width. Business apps are behind Timefix's early access: the flow opens it with the owner connection
-// (`FLOW_OWNER_URL`, a local database), as the operator console would; without it the flow is skipped.
+// phone's width. The workspace is named through the owner connection (`FLOW_OWNER_URL`, a local
+// database); without it the flow is skipped.
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -73,7 +73,7 @@ test.describe('a salon set up from empty', () => {
   if (process.env.FLOW_WIDTH !== undefined) {
     test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
   }
-  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to name the new workspace.');
 
   test('install Appointments, add a service and a stylist, set shifts, and the engine plans a haircut', async ({
     page,
@@ -86,19 +86,19 @@ test.describe('a salon set up from empty', () => {
       execFileSync('psql', [
         OWNER_URL ?? '',
         '-c',
-        `update workspaces set early_access = '{business_apps}', name = 'Studio Asha' where slug = '${slug}'`,
+        `update workspaces set name = 'Studio Asha' where slug = '${slug}'`,
       ]);
     });
 
-    await test.step('install Appointments: the card starts on Salon', async () => {
-      await page.goto(`/w/${slug}/settings/apps`);
-      await page.getByRole('button', { name: 'Install Appointments', exact: true }).click();
+    await test.step('the first screen: the card starts on Salon', async () => {
+      await page.goto(`/w/${slug}/settings/services`);
+      await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
       await expect(card.getByRole('button', { name: /Kind/ })).toContainText('Salon');
       await card.getByLabel('Address', { exact: true }).fill('12 MG Road');
       await card.getByLabel('City', { exact: true }).fill('London');
       await shot(page, '01-business-card');
-      await card.getByRole('button', { name: 'Install', exact: true }).click();
+      await card.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 

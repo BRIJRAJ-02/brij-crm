@@ -121,9 +121,6 @@ const READS: ReadonlySet<string> = new Set([
   'operator.pages',
   'operator.page',
   'operator.site',
-  // The console's one write (spec 0065, AC-6502): a workspace's early access through crm_operator's definer; it
-  // changes no record and stores no outbox row, and its before and after go to the console's own log.
-  'operator.setEarlyAccess',
   // The Hospitality setup's reads (spec 0065, H0).
   'hospitality.apps',
   'hospitality.business',
@@ -3730,9 +3727,8 @@ Object.assign(WRITES, {
   },
 });
 
-/** Opens early access and installs Table seating with its business card (one write), answering the first place. */
+/** Installs Table seating with its business card (one write), answering the first place. */
 async function hospitalityOf(m: Member): Promise<{ readonly placeId: string }> {
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'table_seating',
@@ -3770,7 +3766,6 @@ async function tablesAt(m: Member, placeId: string): Promise<readonly [string, s
 // member (their sidebars follow); the setup writes change no record and store none. Each case installs first.
 Object.assign(WRITES, {
   'hospitality.install': async (m: Member, mutationId: string) => {
-    await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
     await m.client.hospitality.install({
       workspace: m.slug,
       app: 'menu',
@@ -3876,7 +3871,6 @@ Object.assign(WRITES, {
     return [{ kind: 'nav' }];
   },
   'hospitality.regenerateTableCode': async (m: Member, mutationId: string) => {
-    await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
     await m.client.hospitality.install({
       workspace: m.slug,
       app: 'menu_qr',
@@ -3897,9 +3891,8 @@ Object.assign(WRITES, {
   },
 });
 
-/** Opens early access and installs Menu with its business card (one write), answering the first place. */
+/** Installs Menu with its business card (one write), answering the first place. */
 async function menuOf(m: Member): Promise<{ readonly placeId: string }> {
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'menu',
@@ -4150,9 +4143,8 @@ Object.assign(WRITES, {
   },
 });
 
-/** Opens early access and installs Appointments for a salon (one write), answering the first place. */
+/** Installs Appointments for a salon (one write), answering the first place. */
 async function appointmentsOf(m: Member): Promise<{ readonly placeId: string }> {
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'appointments',

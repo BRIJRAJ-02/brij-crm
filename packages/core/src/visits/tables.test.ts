@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import { LOOKUP_PATTERN } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { removeApp } from '../hospitality/apps.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
@@ -172,7 +173,8 @@ describe('tables (no staff, a party fitted best fit)', () => {
     const { rescope } = await import('../testing.ts');
     const member = rescope(w.owner, { role: 'member' });
     expect(await refusal(bookVisit(member, deps, request(table, w)))).toMatchObject({ code: 'FORBIDDEN' });
-    await w.sql(sql`update workspace_apps set removed_at = now()`);
+    await removeApp(w.owner, { app: 'table_seating' });
+    await removeApp(w.owner, { app: 'appointments' });
     expect(await refusal(bookVisit(w.owner, deps, request(table, w)))).toMatchObject({ code: 'APP_NOT_INSTALLED' });
   });
 });

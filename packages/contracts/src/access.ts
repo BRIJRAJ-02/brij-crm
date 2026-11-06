@@ -274,7 +274,7 @@ export const PERMISSIONS = {
     grant: 'admin',
   },
   // The Hospitality suite (spec 0065, AC-6511): setting the apps up, and running the floor. Members hold neither
-  // until given a role that has them; the first install seeds a "Floor staff" custom role with Run service.
+  // until given a role that has them; setting the business up seeds a "Floor staff" custom role with Run service.
   'hospitality.manage': {
     message: 'Your role can’t set up the Hospitality apps.',
     label: 'Manage hospitality',

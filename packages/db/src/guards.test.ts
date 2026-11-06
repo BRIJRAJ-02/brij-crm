@@ -13,6 +13,12 @@ import * as tenantSchema from './schema/index.ts';
 
 const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 
+/** Whether a door's body still asks the old per workspace flag (spec 0065, migration 0191: it never may again). */
+async function doorMentions(door: string): Promise<boolean> {
+  const { rows } = await owner.query<{ body: string }>(`select pg_get_functiondef($1::regprocedure) as body`, [door]);
+  return /early_access|business_apps/.test(rows[0]?.body ?? '');
+}
+
 /** Tables that are not tenant data: drizzle's own bookkeeping lives in its own schema. */
 const NOT_TENANT = new Set<string>();
 
@@ -1542,10 +1548,9 @@ describe('isolation', () => {
       db.withWorkspace(randomUUID(), (tx) =>
         tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from crm_menu_by_key(${key})`),
       );
-    // No early access yet: the key names nothing.
-    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
-    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    // On for every workspace, whatever the old early access column says (migration 0191).
     expect((await lookup(keys[0] ?? '')).rows).toEqual([{ workspace_id: a.workspaceId }]);
+    expect(await doorMentions('crm_menu_by_key(text)')).toBe(false);
     // Removing Menu hides its guest page at once (AC-6504).
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(sql`update workspace_apps set removed_at = now() where app = 'menu'`),
@@ -1577,17 +1582,14 @@ describe('isolation', () => {
           sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${each})`,
         ),
       );
-    // No early access yet: the key names nothing.
-    expect((await lookup(key)).rows).toEqual([]);
-    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
-    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: false }]);
+    // On for every workspace with no row at all, whatever the old early access column says (migration 0191).
+    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: true }]);
+    expect(await doorMentions('crm_table_place_by_key(text)')).toBe(false);
+    // Switching the app off keeps the place found (a guest's manage link), but not installed.
     await db.withWorkspace(a.workspaceId, (tx) =>
-      tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${a.workspaceId}, 'table_seating')`),
-    );
-    expect((await lookup(key)).rows[0]?.installed).toBe(true);
-    // Removing the app keeps the place found (a guest's manage link), but not installed.
-    await db.withWorkspace(a.workspaceId, (tx) =>
-      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'table_seating'`),
+      tx.execute(
+        sql`insert into workspace_apps (workspace_id, app, removed_at) values (${a.workspaceId}, 'table_seating', now())`,
+      ),
     );
     expect((await lookup(key)).rows[0]?.installed).toBe(false);
     await owner.query(`update workspaces set deleted_at = now() where id = $1`, [a.workspaceId]);

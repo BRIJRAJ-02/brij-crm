@@ -423,7 +423,6 @@ export type {
   BusinessProfileFields,
   BusinessView,
   Resource,
-  EarlyAccessFlag,
   FirstBusiness,
   HospitalityApp,
   HoursException,
@@ -1698,7 +1697,6 @@ export function createDataLayer({
     page: (workspaceId, pageId, period) =>
       call((options) => api.operator.page({ workspaceId, pageId, period }, options)),
     site: (period) => call((options) => api.operator.site({ period }, options)),
-    setEarlyAccess: (input) => call((options) => api.operator.setEarlyAccess(input, options)),
   });
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>

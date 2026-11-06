@@ -52,7 +52,6 @@ const madeUpKey = () =>
 /** A workspace with Menu installed and one dish published; its place's key. */
 async function publishedMenuKey(): Promise<string> {
   const m = await memberWithWorkspace(app);
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'menu',

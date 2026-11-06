@@ -1933,7 +1933,7 @@ export interface TableEntry {
 
 /**
  * The reservation page's entry: a malformed key never reaches the database, and an unknown key, a deleted workspace,
- * one without business apps, or one without both standard objects is NOT_FOUND, all one answer.
+ * or one without both standard objects is NOT_FOUND, all one answer.
  */
 export async function enterTablePage(deps: { readonly db: Database }, key: string): Promise<TableEntry> {
   const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');

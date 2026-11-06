@@ -58,7 +58,7 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 /** Settings › Workspace › Brand (spec 0060, AC-1): the logo, colour and template its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
 
-/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace installs (the Hospitality suite today). */
+/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace has on (the business apps today). */
 export const appsSettingsHref = (slug: string) => `/w/${slug}/settings/apps`;
 
 /** Settings › Business › Places (spec 0065, AC-6507): the business profile and its places. */
@@ -294,12 +294,10 @@ export function settingsNav(
   slug: string,
   options: {
     /**
-     * Whether Appointments or Table seating is installed (spec 0065, 0066): only then does the Business group show
+     * Whether Appointments or Table seating is on (spec 0065, 0066): only then does the Business group show
      * (Places, Services, Staff and Shifts). Absent, the group is left out.
      */
     readonly hasBusiness?: boolean;
-    /** Whether Timefix opened early access for the workspace (spec 0065, AC-6501): only then does Apps show. */
-    readonly hasApps?: boolean;
   } = {},
 ): readonly SettingsNavGroup[] {
   return [
@@ -376,20 +374,15 @@ export function settingsNav(
           requires: 'audit.read',
           keywords: ['audit', 'log', 'changes', 'activity'],
         },
-        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all, and
-        // nobody does before Timefix opens early access.
-        ...(options.hasApps === true
-          ? [
-              {
-                id: 'apps' as const,
-                label: hospitality.appsTitle,
-                href: appsSettingsHref(slug),
-                icon: 'blocks' as const,
-                requires: 'workspace.manage' as const,
-                keywords: ['hospitality', 'menu', 'qr', 'table seating', 'appointments', 'install'],
-              },
-            ]
-          : []),
+        // Apps (spec 0065, AC-6501): owners and admins switch them, so nobody else sees the entry at all.
+        {
+          id: 'apps',
+          label: hospitality.appsTitle,
+          href: appsSettingsHref(slug),
+          icon: 'blocks',
+          requires: 'workspace.manage',
+          keywords: ['business', 'hospitality', 'menu', 'qr', 'table seating', 'appointments', 'turn on', 'turn off'],
+        },
       ],
     },
     {

@@ -4,7 +4,6 @@
 // workspace; people and website numbers from the identity login's global rows.
 // Who may call these is the api's operator gate, never this module.
 import {
-  EARLY_ACCESS_FLAGS,
   OPERATOR_USERS_PAGE,
   PERIOD_DAYS,
   type OperatorFigure,
@@ -108,7 +107,6 @@ interface WorkspaceRow extends Record<string, unknown> {
   deleted_at: string | null;
   members: number;
   records: number;
-  early_access: string[] | null;
 }
 
 interface MemberRow extends Record<string, unknown> {
@@ -143,7 +141,7 @@ const workspacesOf = (db: Database, ids: readonly string[]) =>
   chunked(ids, (chunk) =>
     definer<WorkspaceRow>(
       db,
-      sql`select workspace_id, name, slug, deleted_at::text, members, records, early_access from crm_operator_workspaces(${uuids(chunk)})`,
+      sql`select workspace_id, name, slug, deleted_at::text, members, records from crm_operator_workspaces(${uuids(chunk)})`,
     ),
   );
 
@@ -331,7 +329,6 @@ export async function operatorUser(
         recordsMade: member.records_made,
         bookingsHosted: member.bookings_hosted,
         pagesOwned: member.pages_owned,
-        earlyAccess: EARLY_ACCESS_FLAGS.filter((flag) => workspace.early_access?.includes(flag) === true),
       },
     ];
   });

@@ -65,7 +65,6 @@ function guest(path: string, init: { method?: string; body?: unknown; ip?: strin
 /** An empty workspace "Somewhere", set up the way a newcomer would: install, hours, a table, Publish. */
 async function somewhere() {
   const m = await memberWithWorkspace(app);
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'table_seating',

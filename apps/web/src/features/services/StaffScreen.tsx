@@ -29,6 +29,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useId, useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { staffProfileHref } from '../settings/nav.ts';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
 import { SetupSteps, useSetupShown } from './SetupSteps.tsx';
 import { strings } from './strings.ts';
@@ -109,6 +110,22 @@ export function StaffScreen({ store, slug, toasts }: StaffScreenProps) {
   const ticked = live.filter((each) => selected.has(each.id));
   const photoOf = (person: StaffView) =>
     person.photo === undefined ? undefined : store.staffPhotoSrc(slug, person.id, person.photo);
+
+  // No business yet: every workspace has Appointments on, so this is someone's first sight of it.
+  if (team !== undefined && team.places.length === 0) {
+    return (
+      <SettingsPage title={strings.staffTitle}>
+        <StartBusiness
+          slug={slug}
+          app="appointments"
+          icon="id-card"
+          title={strings.startStaff}
+          text={strings.startStaffText}
+          onDone={() => store.team(slug).retry()}
+        />
+      </SettingsPage>
+    );
+  }
 
   return (
     <SettingsPage

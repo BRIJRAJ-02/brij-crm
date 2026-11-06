@@ -1,20 +1,16 @@
-// Table seating end to end (spec 0066 B7 lite), as a newcomer walks it in an empty workspace "Somewhere": install
-// Table seating (the place opens for lunch and dinner, Tuesday to Sunday), add tables, check the rules and publish; a
+// Table seating end to end (spec 0066 B7 lite), as a newcomer walks it in an empty workspace "Somewhere": the
+// business card (the place opens for lunch and dinner, Tuesday to Sunday), add tables, check the rules and publish; a
 // guest reserves at phone width, finds and changes the reservation, then cancels another; the guest's closed page,
 // a time taken meanwhile and a bad manage link each leave a way on; staff seat and finish on the Reservations list (a
 // double tap on Seat never finishes the table), open a table from the floor, and seat a walk in at a free table, and
 // a second browser's floor follows. FLOW_SCREENSHOTS=<dir> keeps a picture of each screen, light and dark, at 390
 // and 1280.
 //
-// Business apps are behind Timefix's early access: the flow opens it for the new workspace with the local cluster's
-// owner (FLOW_OWNER_DB, the database name; `docker exec` into the compose Postgres), as the operator console would.
-import { execFileSync } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 import { firstRun } from './people.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
-const DB = process.env.FLOW_OWNER_DB ?? 'crm';
 
 /** A screenshot of the page as it is, in both themes, at its current width. */
 async function shot(page: Page, name: string): Promise<void> {
@@ -36,17 +32,6 @@ async function shots(page: Page, name: string): Promise<void> {
     await shot(page, name);
   }
   await page.setViewportSize(before);
-}
-
-/** Opens early access for the workspace, as the operator console's switch does. */
-function openEarlyAccess(slug: string): void {
-  execFileSync('docker', [
-    'exec',
-    'crm-postgres-1',
-    'sh',
-    '-c',
-    `psql -U "$POSTGRES_USER" -d ${DB} -c "update workspaces set early_access = '{business_apps}' where slug = '${slug}'"`,
-  ]);
 }
 
 /** The next open day, the nth time on it, and on to the details (the Book bar: "Continue · Fri 6 Nov, 19:30"). */
@@ -85,17 +70,16 @@ test('a newcomer sets up Table seating, a guest reserves, the host runs service'
     await page.getByLabel('Code').fill(await codeFor(page.request, email));
     await firstRun(page, slug, 'Sam Host');
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: 30_000 });
-    openEarlyAccess(slug);
   });
 
-  await test.step('install Table seating from Settings, Apps', async () => {
-    await page.goto(`/w/${slug}/settings/apps`);
-    await shot(page, '01-apps');
-    await page.getByRole('button', { name: 'Install Table seating' }).click();
+  await test.step('the first screen of Reservations: the business card', async () => {
+    await page.goto(`/w/${slug}/reservations`);
+    await shot(page, '01-first-screen');
+    await page.getByRole('button', { name: 'Set up your business' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Business name').fill('Somewhere');
     await shot(page, '02-business-card');
-    await dialog.getByRole('button', { name: 'Install' }).click();
+    await dialog.getByRole('button', { name: 'Continue' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
     await shot(page, '03-installed');
   });

@@ -1,5 +1,5 @@
 // Fixtures for the visit engine's suites (spec 0066, B0), against the real Postgres as the app role: a workspace with
-// early access and an engine app installed, its first place with hours, and services, staff and resources written
+// an engine app on, its first place with hours, and services, staff and resources written
 // straight into the tables (B1's screens make them later). Tests only: it lives outside src, beside the other kits.
 import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
@@ -10,7 +10,6 @@ import { NO_RULES, roleAccess } from '../src/access/policy.ts';
 import { newId } from '../src/engine/ids.ts';
 import { createWorkspace } from '../src/engine/workspaces.ts';
 import { installApp } from '../src/hospitality/apps.ts';
-import { setEarlyAccess } from '../src/operator/early-access.ts';
 import { testScope } from '../src/testing.ts';
 
 let made = 0;
@@ -32,7 +31,6 @@ export async function visitWorkspace(db: Database, app: 'table_seating' | 'appoi
     slug: `visits-${String(made)}-${String(Date.now())}-${randomBytes(3).toString('hex')}`,
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   await installApp(owner, {
     app,

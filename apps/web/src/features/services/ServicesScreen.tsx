@@ -31,6 +31,7 @@ import {
 import { useId, useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { servicePrice, serviceLength } from './format.ts';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
 import { ServiceDrawer, type ServiceStart } from './ServiceDrawer.tsx';
 import { SetupSteps, useSetupShown } from './SetupSteps.tsx';
@@ -109,6 +110,22 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
   if (state.status === 'error') {
     if (state.error.code === 'APP_NOT_INSTALLED') return <NotInstalled slug={slug} title={strings.servicesTitle} />;
     if (state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
+    // No business yet: every workspace has Appointments on, so this is someone's first sight of it.
+    if (view !== undefined && view.places.length === 0) {
+      return (
+        <SettingsPage title={strings.servicesTitle}>
+          <StartBusiness
+            slug={slug}
+            app="appointments"
+            icon="scissors"
+            title={strings.startServices}
+            text={strings.startServicesText}
+            onDone={() => store.catalogue(slug).retry()}
+          />
+        </SettingsPage>
+      );
+    }
+
     return (
       <SettingsPage title={strings.servicesTitle}>
         <EmptyState

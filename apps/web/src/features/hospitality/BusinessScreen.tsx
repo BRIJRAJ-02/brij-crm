@@ -33,6 +33,7 @@ import { appsSettingsHref, businessPageHref, placeTablesHref } from '../settings
 import { pageStrings } from './business-page-strings.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
+import { StartBusiness } from './StartBusiness.tsx';
 import { strings } from './strings.ts';
 
 /** The places' columns, the count named for what this kind of business books. */
@@ -90,6 +91,21 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
     );
   }
   const view = state.status === 'ready' ? state.value : undefined;
+  // No business yet: the card makes it and its first place, as on every business page.
+  if (view !== undefined && view.profile === undefined && view.places.length === 0) {
+    return (
+      <SettingsPage title={strings.businessTitle}>
+        <StartBusiness
+          slug={slug}
+          app="table_seating"
+          icon="store"
+          title={strings.firstBusiness.title}
+          text={strings.firstBusiness.text}
+          onDone={() => store.business(slug).retry()}
+        />
+      </SettingsPage>
+    );
+  }
   return (
     <SettingsPage
       title={strings.businessTitle}
