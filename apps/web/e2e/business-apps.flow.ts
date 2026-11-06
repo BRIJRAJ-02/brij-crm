@@ -131,11 +131,40 @@ test.describe('the business apps', () => {
       // Before a first Publish there is no guest menu, and no table taking reservations.
       const guest = await browser.newContext();
       const reader = await guest.newPage();
-      const menuAnswer = await reader.request.get(`/api/public/menus/${keys.menu}`);
+      const menuAnswer = await reader.request.get(`/api/public/menu/${keys.menu}`);
       expect(menuAnswer.ok()).toBe(false);
       await reader.goto(`/r/${keys.table}`);
       await expect(reader.getByRole('button', { name: /Reserve|Book/ })).toHaveCount(0);
       await shot(reader, 'guest-reserve-before-publish');
+      await guest.close();
+    });
+
+    await test.step('make a menu, publish it, and a guest opens the link', async () => {
+      await page.goto(`/w/${slug}/menus`);
+      await page.getByRole('button', { name: 'New menu' }).first().click();
+      await expect(page.getByRole('button', { name: 'Starters', exact: true })).toBeVisible();
+      const addButton = page.getByRole('button', { name: 'Add item', exact: true }).first();
+      if (await addButton.isVisible()) await addButton.click();
+      const add = page.getByLabel('Add items').first();
+      await add.fill('Edamame');
+      await expect(page.getByRole('option', { name: /Create “Edamame”/ })).toBeVisible();
+      await add.press('Enter');
+      const drawer = page.getByRole('dialog', { name: 'Edamame' });
+      await drawer.getByLabel('Price', { exact: true }).fill('5.5');
+      await drawer.getByRole('button', { name: 'Save item' }).click();
+      await expect(drawer).toBeHidden();
+      await page.getByRole('button', { name: /^Publish( & go live)?$/ }).click();
+      const review = page.getByRole('dialog', { name: 'Review and publish' });
+      await review.getByRole('button', { name: 'Publish & go live', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Your menu is live' })).toBeVisible();
+      await shot(page, 'menu-live');
+      await page.getByRole('button', { name: 'Done' }).click();
+      const guest = await browser.newContext();
+      const reader = await guest.newPage();
+      await reader.goto(`/m/${keys.menu}`);
+      await expect(reader.getByRole('heading', { level: 1, name: 'Dinner' })).toBeVisible();
+      await expect(reader.getByText('Edamame').first()).toBeVisible();
+      await shot(reader, 'guest-menu');
       await guest.close();
     });
 
