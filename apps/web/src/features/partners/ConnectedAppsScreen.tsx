@@ -6,12 +6,15 @@
 import { isDataError, type ConnectedApp, type DataLayer, type PartnerModule } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  Avatar,
+  Badge,
   Button,
+  Callout,
   Checkbox,
   EmptyState,
+  FieldGroup,
   Form,
   Modal,
-  PersonLine,
   RelativeTime,
   Table,
   type FormRefusal,
@@ -34,18 +37,17 @@ export interface ConnectedAppsScreenProps {
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'app', label: strings.columns.app, isRowHeader: true, size: 'fill' },
-  { id: 'modules', label: strings.columns.modules, size: 'fit' },
+  { id: 'app', label: strings.columns.app, isRowHeader: true, isInline: true, phone: 'title' },
+  { id: 'modules', label: strings.columns.modules, size: 'fit', isInline: true },
+  { id: 'approvedBy', label: strings.columns.approvedBy, size: 'fit', phone: 'hidden' },
   { id: 'connected', label: strings.columns.connected, size: 'fit' },
-  { id: 'lastCall', label: strings.columns.lastCall, size: 'fit' },
+  { id: 'lastCall', label: strings.columns.lastCall, size: 'fit', phone: 'hidden' },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
 ];
 
 const ALL_MODULES = Object.keys(MODULES) as PartnerModule[];
 
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : strings.failedTitle);
-
-const moduleNames = (modules: readonly PartnerModule[]) => modules.map((module) => MODULES[module].label).join(', ');
 
 /** Connected apps: a Table of the apps, Change and Disconnect on each row, and their dialogs. */
 export function ConnectedAppsScreen({ data, toasts, slug, title }: ConnectedAppsScreenProps) {
@@ -57,16 +59,22 @@ export function ConnectedAppsScreen({ data, toasts, slug, title }: ConnectedApps
     switch (column) {
       case 'app':
         return (
-          <PersonLine
-            id={app.id}
-            name={app.partner.name}
-            meta={app.approvedBy === undefined ? [] : [strings.by(app.approvedBy)]}
-            size="md"
-            {...(app.partner.logoUrl === undefined ? {} : { src: app.partner.logoUrl })}
-          />
+          <>
+            <Avatar
+              name={app.partner.name}
+              size="sm"
+              shape="square"
+              fit="contain"
+              isDecorative
+              {...(app.partner.logoUrl === undefined ? {} : { src: app.partner.logoUrl })}
+            />
+            {app.partner.name}
+          </>
         );
       case 'modules':
-        return moduleNames(app.modules);
+        return app.modules.map((module) => <Badge key={module} text={MODULES[module].label} />);
+      case 'approvedBy':
+        return app.approvedBy ?? strings.formerMember;
       case 'connected':
         return <RelativeTime value={app.connectedAt} />;
       case 'lastCall':
@@ -118,6 +126,7 @@ export function ConnectedAppsScreen({ data, toasts, slug, title }: ConnectedApps
           renderCell={cell}
           isLoading={list.status === 'loading'}
           isScrollable
+          phoneLayout="rows"
         />
       )}
       <ModulesDialog
@@ -164,6 +173,7 @@ function ModulesDialog({
   const [modules, setModules] = useState<readonly PartnerModule[]>(app?.modules ?? []);
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
   if (app === undefined) return null;
   const save = () => {
     if (isBusy) return;
@@ -173,6 +183,7 @@ function ModulesDialog({
     }
     setBusy(true);
     setRefusals([]);
+    setFailure(undefined);
     onSave(app, modules).then(
       () => {
         setBusy(false);
@@ -180,7 +191,7 @@ function ModulesDialog({
       },
       (error: unknown) => {
         setBusy(false);
-        setRefusals([{ code: 'INPUT_INVALID', message: messageOf(error), attributeId: 'modules' }]);
+        setFailure(messageOf(error));
       },
     );
   };
@@ -212,17 +223,22 @@ function ModulesDialog({
         fieldFor={(refusal) => refusal.attributeId}
         onSubmit={save}
       >
-        {strings.modulesText}
-        {ALL_MODULES.map((module) => (
-          <Checkbox
-            key={module}
-            label={MODULES[module].label}
-            description={MODULES[module].power}
-            isSelected={modules.includes(module)}
-            onChange={(isOn) => setModules((now) => toggled(now, module, isOn))}
-            {...(error === undefined ? {} : { error })}
-          />
-        ))}
+        {failure !== undefined && (
+          <Callout tone="danger" isAnnounced>
+            {failure}
+          </Callout>
+        )}
+        <FieldGroup label={strings.modulesLabel} hint={strings.modulesText} {...(error === undefined ? {} : { error })}>
+          {ALL_MODULES.map((module) => (
+            <Checkbox
+              key={module}
+              label={MODULES[module].label}
+              description={MODULES[module].power}
+              isSelected={modules.includes(module)}
+              onChange={(isOn) => setModules((now) => toggled(now, module, isOn))}
+            />
+          ))}
+        </FieldGroup>
       </Form>
     </Modal>
   );

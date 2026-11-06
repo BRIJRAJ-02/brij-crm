@@ -12,6 +12,7 @@ import {
   type PartnerWithSecret,
 } from '@crm/data';
 import {
+  Avatar,
   Button,
   Callout,
   Code,
@@ -42,10 +43,10 @@ export interface PartnersScreenProps {
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.columns.name, isRowHeader: true, size: 'fill' },
+  { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true, phone: 'title' },
   { id: 'clientId', label: strings.columns.clientId, size: 'fit' },
-  { id: 'secret', label: strings.columns.secret, size: 'fit' },
-  { id: 'created', label: strings.columns.created, size: 'fit' },
+  { id: 'secret', label: strings.columns.secret, size: 'fit', phone: 'hidden' },
+  { id: 'created', label: strings.columns.created, size: 'fit', phone: 'hidden' },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit', isInline: true },
 ];
 
@@ -117,7 +118,19 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
   const cell = (partner: PartnerView, column: string) => {
     switch (column) {
       case 'name':
-        return partner.name;
+        return (
+          <>
+            <Avatar
+              name={partner.name}
+              size="sm"
+              shape="square"
+              fit="contain"
+              isDecorative
+              {...(partner.logoUrl === undefined ? {} : { src: partner.logoUrl })}
+            />
+            {partner.name}
+          </>
+        );
       case 'clientId':
         return <Code>{partner.clientId}</Code>;
       case 'secret':
@@ -149,7 +162,7 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
       }
     >
       {loaded.status === 'ready' && loaded.partners.length === 0 ? (
-        <EmptyState icon="plug" title={strings.emptyTitle}>
+        <EmptyState icon="handshake" title={strings.emptyTitle}>
           {strings.emptyText}
         </EmptyState>
       ) : (
@@ -161,6 +174,7 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
           renderCell={cell}
           isLoading={loaded.status === 'loading'}
           isScrollable
+          phoneLayout="rows"
         />
       )}
       {editing !== undefined && (
@@ -313,20 +327,13 @@ function PartnerForm({
           maxSize={LOGO_MAX_BYTES}
           onFiles={pickLogo}
           {...(logoPreview === undefined ? {} : { preview: { src: logoPreview, alt: strings.form.logo } })}
+          {...(logoError === undefined ? {} : { error: logoError })}
+          // Taken away from the form only: Save makes it so, and Cancel keeps the logo (Save is the confirm).
+          onRemove={() => {
+            setLogo(null);
+            setLogoPreview(undefined);
+          }}
         />
-        {logoError !== undefined && <Callout tone="danger">{logoError}</Callout>}
-        {logoPreview !== undefined && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onPress={() => {
-              setLogo(null);
-              setLogoPreview(undefined);
-            }}
-          >
-            {strings.form.removeLogo}
-          </Button>
-        )}
         <Field
           label={strings.form.redirectUris}
           hint={strings.form.redirectUrisHint}
@@ -409,7 +416,12 @@ function ReplaceDialog({
         </>
       }
     >
-      {failure ?? strings.replaceConfirm.text}
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
+      {strings.replaceConfirm.text}
     </Modal>
   );
 }
@@ -441,6 +453,7 @@ function SecretDialog({
         </Button>
       }
     >
+      <Callout tone="warning">{strings.secret.text}</Callout>
       <DescriptionList
         layout="stacked"
         items={[
@@ -462,7 +475,15 @@ function SecretDialog({
           },
         ]}
       />
-      {strings.secret.text}
     </Modal>
+  );
+}
+
+/** The Partners page while its route loads: the head's place and rows where the list will be. */
+export function PartnersPending({ title }: { readonly title: string }) {
+  return (
+    <SettingsPage title={title} isLoading>
+      <Table label={title} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
+    </SettingsPage>
   );
 }

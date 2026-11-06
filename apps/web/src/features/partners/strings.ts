@@ -39,7 +39,6 @@ export const connectStrings = {
   approving: 'Connecting…',
   deny: 'Cancel',
   leaving: 'Going back…',
-  logoAlt: (partner: string) => `${partner} logo`,
 } as const;
 
 export const connectedStrings = {
@@ -51,10 +50,12 @@ export const connectedStrings = {
     modules: 'Modules',
     connected: 'Connected',
     lastCall: 'Last call',
+    approvedBy: 'Approved by',
     actions: 'Actions',
   },
   never: 'Not yet',
-  by: (name: string) => `by ${name}`,
+  formerMember: 'A former member',
+  modulesLabel: 'Modules',
   change: (app: string) => `Change what ${app} can use`,
   changeShort: 'Change',
   disconnect: (app: string) => `Disconnect ${app}`,
@@ -82,7 +83,6 @@ export const partnersStrings = {
   columns: {
     name: 'Partner',
     clientId: 'Client id',
-    redirects: 'Redirect addresses',
     secret: 'Secret',
     created: 'Registered',
     actions: 'Actions',
@@ -100,7 +100,6 @@ export const partnersStrings = {
     nameMissing: 'Give the partner a name.',
     logo: 'Logo',
     logoTypes: 'PNG, JPG or WebP',
-    removeLogo: 'Remove logo',
     frameOrigins: 'Sites allowed to embed Timefix',
     frameOriginsHint: 'One origin a line, like https://hub.example.com.',
     redirectUris: 'Addresses that receive a connection',

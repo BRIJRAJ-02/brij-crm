@@ -17,6 +17,7 @@ import {
   Callout,
   Checkbox,
   Field,
+  FieldGroup,
   Form,
   Radio,
   RadioGroup,
@@ -183,16 +184,17 @@ export function ConnectScreen({ data, request, offer, user, leave }: ConnectScre
           />
         )}
         {offer.otherWorkspaces > 0 && <Callout tone="info">{strings.others(offer.otherWorkspaces)}</Callout>}
-        {offer.modules.map((module) => (
-          <Checkbox
-            key={module}
-            label={MODULES[module].label}
-            description={MODULES[module].power}
-            isSelected={modules.includes(module)}
-            onChange={(isOn) => toggle(module, isOn)}
-            {...(modulesError === undefined ? {} : { error: modulesError })}
-          />
-        ))}
+        <FieldGroup label={strings.modules} {...(modulesError === undefined ? {} : { error: modulesError })}>
+          {offer.modules.map((module) => (
+            <Checkbox
+              key={module}
+              label={MODULES[module].label}
+              description={MODULES[module].power}
+              isSelected={modules.includes(module)}
+              onChange={(isOn) => toggle(module, isOn)}
+            />
+          ))}
+        </FieldGroup>
         <Button
           variant="primary"
           size="lg"
