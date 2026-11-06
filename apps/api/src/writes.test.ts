@@ -799,7 +799,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     expect(claimed).toMatchObject({ memberId: mate.memberId, isLive: false, views: 0, isSelf: false });
-    return [];
+    // The one row is the teammate joining; the claim adds none.
+    return [{ kind: 'members' }];
   },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);

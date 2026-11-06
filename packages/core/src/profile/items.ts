@@ -48,13 +48,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import {
-  enterOwnForms,
-  enterOwnPages,
-  ownUserId,
-  type OwnedFormEntry,
-  type OwnedPageEntry,
-} from '../access/door.ts';
+import { enterOwnForms, enterOwnPages, ownUserId, type OwnedFormEntry, type OwnedPageEntry } from '../access/door.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { imageTypeOf } from '../booking/image-type.ts';
