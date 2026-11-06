@@ -184,6 +184,14 @@ export {
   setConnectedAppModules,
   type ConnectedAppsDeps,
 } from './partners/connections.ts';
+// A partner's managed members (spec 0070, slice 3): its own connection's people, added, changed, listed and removed.
+export {
+  listPartnerMembers,
+  putPartnerMember,
+  removePartnerMember,
+  type ManagedUserEnder,
+  type ManagedUserMaker,
+} from './partners/members.ts';
 export { frameOriginProblem, partnerLogoPath, redirectUriProblem } from './partners/addresses.ts';
 // A partner's token shapes and PKCE (pure): the api's tests and the sample partner page make them.
 export { parsePartnerAccessToken, s256Challenge } from './partners/tokens.ts';

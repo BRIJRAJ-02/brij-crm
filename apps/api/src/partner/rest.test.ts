@@ -187,6 +187,69 @@ describe('/api/partner/v1', () => {
     ).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
   });
 
+  it('adds, lists, changes and removes a managed member (slice 3), each answer `{ code, message }` on refusal', async () => {
+    const made = await partner();
+    const owner = await memberWithWorkspace(app);
+    const { request: asked, verifier } = request(made.partner.clientId);
+    const approved = await owner.client.partnerConnect.approve({
+      workspace: owner.slug,
+      request: asked,
+      modules: ['link_pages'],
+      mutationId: newId(),
+    });
+    const swapped = (await (
+      await token(
+        {
+          grant_type: 'authorization_code',
+          code: new URL(approved.redirectTo).searchParams.get('code') ?? '',
+          redirect_uri: REDIRECT,
+          code_verifier: verifier,
+        },
+        { id: made.partner.clientId, secret: made.secret },
+      )
+    ).json()) as { access_token: string; connection_id: string };
+    const base = `/api/partner/v1/connections/${swapped.connection_id}/members`;
+    const auth = { authorization: `Bearer ${swapped.access_token}` };
+    const put = (externalId: string, body: unknown) =>
+      app.request(`${base}/${externalId}`, {
+        method: 'PUT',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const person = { email: 'lin@example.com', name: 'Lin', role: 'admin' };
+
+    const added = await put('hub-42', person);
+    expect(added.status).toBe(201);
+    const member = (await added.json()) as { memberId: string; role: string; externalId: string };
+    expect(member).toMatchObject({ externalId: 'hub-42', role: 'admin' });
+    expect((await put('hub-42', { ...person, role: 'member' })).status).toBe(200);
+    const listed = await app.request(base, { headers: auth });
+    expect(await listed.json()).toMatchObject({ members: [{ externalId: 'hub-42', role: 'member' }] });
+    // The workspace sees them as a member.
+    const people = await owner.client.members.list({ workspace: owner.slug });
+    expect(people.members.map((each) => each.id)).toContain(member.memberId);
+
+    const badId = await put('not ok!', person);
+    expect(badId.status).toBe(400);
+    expect(((await badId.json()) as { code: string }).code).toBe('INPUT_INVALID');
+    const owner_ = await put('hub-43', { ...person, role: 'owner' });
+    expect(owner_.status).toBe(400);
+    expect(((await owner_.json()) as { code: string }).code).toBe('INPUT_INVALID');
+    expect((await app.request(`${base}/hub-42`, { method: 'PUT', body: 'x' })).status).toBe(401);
+
+    const removed = await app.request(`${base}/hub-42`, { method: 'DELETE', headers: auth });
+    expect(removed.status).toBe(204);
+    expect((await app.request(`${base}/hub-42`, { method: 'DELETE', headers: auth })).status).toBe(204);
+    const gone = await app.request(`${base}/nobody`, { method: 'DELETE', headers: auth });
+    expect(gone.status).toBe(404);
+    expect(await gone.json()).toEqual({
+      code: 'NOT_FOUND',
+      message: 'This connection has no person with that external id.',
+    });
+    const after = await owner.client.members.list({ workspace: owner.slug });
+    expect(after.members.map((each) => each.id)).not.toContain(member.memberId);
+  });
+
   it('answers a logo at its current version only, as an image that is never sniffed', async () => {
     const made = await partner();
     const logo = await app.request(made.partner.logoUrl ?? '');

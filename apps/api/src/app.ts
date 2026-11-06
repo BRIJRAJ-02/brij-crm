@@ -598,6 +598,14 @@ export function createApp({
     db,
     partners: { partnerByClientId: (clientId) => identity.partnerByClientId(clientId) },
     limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+    // Managed members' identities (slice 3): made by the identity login, never the app's.
+    users: {
+      ensureManagedUser: (person) => identity.ensureManagedUser(person),
+      endManagedUserSessions: (userId) => identity.endManagedUserSessions(userId),
+      dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+    },
+    wakeRelay,
+    analytics,
     keepAlive,
   });
   // A partner's logo from our own origin (spec 0070, AC-7012): the connect page and Connected apps show it.

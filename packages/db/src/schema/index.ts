@@ -117,7 +117,7 @@ export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { memberSkills, routingDecisions, routingSettings, routingSkills } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
 export { apiKeys } from './developer.ts';
-export { partnerCodes, partnerConnections } from './partners.ts';
+export { managedMembers, partnerCodes, partnerConnections } from './partners.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
 export { webhookDeliveries, webhookEndpoints } from './webhooks.ts';
 export { insightShares, pageVisitDays, pageVisits, pageVisitStaleDays } from './insights.ts';

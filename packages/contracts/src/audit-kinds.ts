@@ -38,6 +38,8 @@ export const AUDIT_KINDS = {
     'invitation.accepted',
     'invitation.link_set',
     'invitation.link_revoked',
+    // A connected app added someone (spec 0070, AC-7020).
+    'member.added',
     'workspace.domains_set',
     'join_request.created',
     'join_request.approved',

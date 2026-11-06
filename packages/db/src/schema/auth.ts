@@ -1051,3 +1051,26 @@ export const partners = auth.table(
     check('partners_secret_hint', sql`char_length(${t.secretHint}) = 4`),
   ],
 );
+
+/**
+ * An identity a partner made for a managed member (spec 0070, AC-7020 to AC-7023), by the workspace, the partner and
+ * the partner's own id for them, so the same id is always the same identity. Its `user.email` is a made up address
+ * under `.invalid`, it has no password and no linked account, so nothing signs in as it and no Timefix account is
+ * ever merged with it. Goes with its user.
+ */
+export const managedUsers = auth.table(
+  'managed_users',
+  {
+    userId: uuid('user_id').notNull().primaryKey(),
+    /** The workspace it was made for (no foreign key across schemas). */
+    workspaceId: uuid('workspace_id').notNull(),
+    partnerId: uuid('partner_id').notNull(),
+    externalId: text('external_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'managed_users_user', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    uniqueIndex('managed_users_external').on(t.workspaceId, t.partnerId, t.externalId),
+    check('managed_users_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
+  ],
+);

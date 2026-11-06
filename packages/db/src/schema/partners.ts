@@ -139,3 +139,53 @@ export const partnerCodes = pgTable(
     index('partner_codes_connection_ix').on(t.workspaceId, t.connectionId),
   ],
 );
+
+/**
+ * A person a partner added to this workspace (spec 0070, AC-7020 to AC-7022): keyed by the partner and its own id for
+ * them, never by email (AC-7021), with the member row and the identity (`auth.managed_users`) it made. The connection
+ * that last wrote it is kept, so a partner that connects again finds the same people. `removed_at` is the partner's
+ * DELETE; the same id again brings the same identity back as a new member row (their handle returns, AC-5603).
+ */
+export const managedMembers = pgTable(
+  'managed_members',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    /** `auth.partners.id` (no foreign key across schemas). */
+    partnerId: uuid('partner_id').notNull(),
+    /** The partner's own id for the person: 1 to 128 URL safe characters. */
+    externalId: text('external_id').notNull(),
+    /** The connection that last added or changed them. */
+    connectionId: uuid('connection_id').notNull(),
+    /** Their member row now (a new one each time they come back). */
+    memberId: uuid('member_id').notNull(),
+    /** Their managed identity, `auth.user.id`. */
+    userId: uuid('user_id').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+    /** When the partner removed them; none while they are in. */
+    removedAt: timestamptz('removed_at'),
+  },
+  (t) => [
+    primaryKey({ name: 'managed_members_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'managed_members_workspace',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'managed_members_connection',
+      columns: [t.workspaceId, t.connectionId],
+      foreignColumns: [partnerConnections.workspaceId, partnerConnections.id],
+    }),
+    foreignKey({
+      name: 'managed_members_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('managed_members_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
+    uniqueIndex('managed_members_external').on(t.workspaceId, t.partnerId, t.externalId),
+    uniqueIndex('managed_members_member_ix').on(t.workspaceId, t.memberId),
+    index('managed_members_connection_ix').on(t.workspaceId, t.connectionId),
+  ],
+);

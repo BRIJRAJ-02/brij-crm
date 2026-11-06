@@ -784,7 +784,13 @@ export function createAuth({
         create: {
           // Every new session (an email code, Google): what it is on, roughly where, and that it just proved who it
           // is (spec 0033). The headers are the ones `handle` rebuilt, so the geo pair is the edge guard's or none.
-          before: (session, context) => {
+          before: async (session, context) => {
+            // A partner's managed member never signs in here (spec 0070, AC-7023): their identity has no address,
+            // password or Google of its own, and this refuses a session for it should any way in ever find it.
+            if (typeof session.userId === 'string' && (await identity.isManagedUser(session.userId))) {
+              log.warn('Session refused for a managed member', { userId: session.userId });
+              return false;
+            }
             // Turning two factor on or off makes a new session in place of this one (the plugin's way to renew its
             // cookie): it keeps what the old one knew, and its sign in time stays its own.
             if (session.verifiedAt instanceof Date) return Promise.resolve({ data: session });

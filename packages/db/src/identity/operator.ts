@@ -14,6 +14,10 @@ const iso = (column: SQL) => sql<string>`to_char(${column} at time zone 'UTC', '
 
 /** The UTC midnight a day starts at. */
 const startOf = (day: string) => sql`(${day}::date)::timestamp at time zone 'UTC'`;
+/** `u` signed up themselves: not an identity a partner made for a managed member (spec 0070), counted apart. */
+const signedUp = sql`not exists (select 1 from auth.managed_users mu where mu.user_id = u.id)`;
+/** Whether `u` is a partner's managed member's identity (spec 0070). */
+const isManaged = sql<boolean>`exists (select 1 from auth.managed_users mu where mu.user_id = u.id)`;
 
 /** The days a read covers: `from` inclusive, `to` exclusive, UTC; `before` starts the same length earlier. */
 export interface DayRange {
@@ -49,7 +53,10 @@ export interface OperatorEventInput {
 
 /** The people side of Overview. */
 export interface OperatorPeopleFacts {
+  /** People who signed up themselves; a partner's managed members (spec 0070) are counted apart, in `managed`. */
   readonly total: number;
+  /** Identities partners made for managed members (spec 0070): no sign up, no sign in. */
+  readonly managed: number;
   readonly made: number;
   readonly madeBefore: number;
   readonly activeToday: number;
@@ -70,6 +77,8 @@ export interface OperatorPerson {
   readonly emailVerified: boolean;
   readonly createdAt: string;
   readonly twoFactor: boolean;
+  /** A partner's managed member (spec 0070): made by the partner, never signed up, can't sign in. */
+  readonly managed: boolean;
   readonly lastActiveAt?: string;
   readonly activeDays: number;
   readonly workspaces: number;
@@ -225,6 +234,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
       if (!checkRange(range) || !DAY.test(today)) throw new TypeError('A range is UTC days, YYYY-MM-DD.');
       const totals = await db.execute<{
         total: number;
+        managed: number;
         made: number;
         made_before: number;
         today: number;
@@ -234,11 +244,13 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         active_before: number;
       }>(sql`
         select
-          (select count(*)::int from auth.user) as total,
+          (select count(*)::int from auth.user u where ${signedUp}) as total,
+          (select count(*)::int from auth.managed_users) as managed,
           (select count(*)::int from auth.user u
-            where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)}) as made,
+            where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)} and ${signedUp}) as made,
           (select count(*)::int from auth.user u
-            where u.created_at >= ${startOf(range.before)} and u.created_at < ${startOf(range.from)}) as made_before,
+            where u.created_at >= ${startOf(range.before)} and u.created_at < ${startOf(range.from)}
+              and ${signedUp}) as made_before,
           (select count(*)::int from auth.activity_day a where a.day = ${today}::date) as today,
           (select count(distinct a.user_id)::int from auth.activity_day a
             where a.day > ${today}::date - 7 and a.day <= ${today}::date) as week,
@@ -258,7 +270,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         ) d
         left join (
           select (u.created_at at time zone 'UTC')::date as day, count(*) as n from auth.user u
-          where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)}
+          where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)} and ${signedUp}
           group by 1
         ) s on s.day = d.day
         left join (
@@ -271,6 +283,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
       const row = totals.rows[0];
       return {
         total: row?.total ?? 0,
+        managed: row?.managed ?? 0,
         made: row?.made ?? 0,
         madeBefore: row?.made_before ?? 0,
         activeToday: row?.today ?? 0,
@@ -299,6 +312,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         email_verified: boolean;
         created_at: string;
         two_factor: boolean;
+        managed: boolean;
         last_active_at: string | null;
         active_days: number;
         workspaces: number;
@@ -306,7 +320,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
       }>(sql`
         select u.id, u.name, u.email, u.email_verified, ${iso(sql`u.created_at`)} as created_at,
           (extract(epoch from u.created_at) * 1000000)::bigint::text as created_us,
-          u.two_factor_enabled as two_factor,
+          u.two_factor_enabled as two_factor, ${isManaged} as managed,
           ${iso(sql`(select max(a.last_at) from auth.activity_day a where a.user_id = u.id)`)} as last_active_at,
           (select count(*)::int from auth.activity_day a
             where a.user_id = u.id and a.day >= ${range.from}::date and a.day < ${range.to}::date) as active_days,
@@ -334,6 +348,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
           emailVerified: row.email_verified,
           createdAt: row.created_at,
           twoFactor: row.two_factor,
+          managed: row.managed,
           ...(row.last_active_at === null ? {} : { lastActiveAt: row.last_active_at }),
           activeDays: row.active_days,
           workspaces: row.workspaces,
@@ -352,12 +367,13 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         email_verified: boolean;
         created_at: string;
         two_factor: boolean;
+        managed: boolean;
         last_active_at: string | null;
         google: boolean;
         sessions: number;
       }>(sql`
         select u.id, u.name, u.email, u.email_verified, ${iso(sql`u.created_at`)} as created_at,
-          u.two_factor_enabled as two_factor,
+          u.two_factor_enabled as two_factor, ${isManaged} as managed,
           ${iso(sql`(select max(a.last_at) from auth.activity_day a where a.user_id = u.id)`)} as last_active_at,
           exists (select 1 from auth.account c where c.user_id = u.id and c.provider_id = 'google') as google,
           (select count(*)::int from auth.session s where s.user_id = u.id and s.expires_at > now()) as sessions
@@ -381,6 +397,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
         emailVerified: row.email_verified,
         createdAt: row.created_at,
         twoFactor: row.two_factor,
+        managed: row.managed,
         ...(row.last_active_at === null ? {} : { lastActiveAt: row.last_active_at }),
         activeDays: days.rows.length,
         workspaces: memberships.rows.length,

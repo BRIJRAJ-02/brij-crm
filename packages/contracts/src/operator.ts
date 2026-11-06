@@ -65,7 +65,13 @@ export type OperatorOverviewDay = z.infer<typeof OperatorOverviewDay>;
 
 /** Overview (AC-1629): the app's dashboard analytics for a period. */
 export const OperatorOverview = OperatorRange.extend({
-  people: z.object({ total: z.number().int().nonnegative(), new: OperatorFigure }),
+  people: z.object({
+    /** People who signed up themselves. */
+    total: z.number().int().nonnegative(),
+    new: OperatorFigure,
+    /** A partner's managed members (spec 0070), counted apart: no sign up, no sign in. */
+    managed: z.number().int().nonnegative().optional(),
+  }),
   active: z.object({
     /** Users active on any day of the period, against the period before. */
     period: OperatorFigure,
@@ -100,6 +106,8 @@ export const OperatorUserRow = z.object({
   bookingsHosted: z.number().int().nonnegative(),
   pages: z.number().int().nonnegative(),
   twoFactor: z.boolean(),
+  /** Present for a partner's managed member (spec 0070): made by the partner, never signed up, can't sign in. */
+  managed: z.literal(true).optional(),
 });
 /** One person in the users list. */
 export type OperatorUserRow = z.infer<typeof OperatorUserRow>;

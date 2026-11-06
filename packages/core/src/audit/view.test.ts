@@ -220,6 +220,8 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'partner.disconnected': [
     row('partner.disconnected', 'workspace', newId(), { after: { name: 'Hub', modules: ['link_pages'] } }),
   ],
+  // Someone a connected app added (spec 0070, AC-7020): written as the partner, with the role they joined with.
+  'member.added': [{ ...row('member.added', 'member', bea, { after: { role: 'admin' } }), actorType: 'partner' }],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],
@@ -486,6 +488,14 @@ describe('toEntryView, per action', () => {
     expect(only('join_request.created').actor).toEqual({ kind: 'asker', name: 'Cy Young' });
     const unknown = toEntryView({ ...row('member.removed', 'member', newId()), actorMemberId: newId() }, names);
     expect(unknown).toMatchObject({ actor: { kind: 'unknown' }, target: { person: { kind: 'unknown' } } });
+  });
+
+  it('names a connected app as the partner, and the role someone it added joined with (spec 0070)', () => {
+    expect(only('member.added')).toMatchObject({
+      actor: { kind: 'partner' },
+      target: { type: 'member' },
+      params: { role: 'admin' },
+    });
   });
 
   it('names targets as they are now, and a deleted or purged one as gone', () => {

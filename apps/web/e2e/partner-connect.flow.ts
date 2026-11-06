@@ -64,10 +64,29 @@ test.describe('partner connect', () => {
     await expect(page.getByRole('heading', { name: 'This link can’t connect an app' })).toBeVisible();
     await expect(page).toHaveURL(/\/oauth\/partner\/authorize/);
 
-    // Settings › Connected apps: the app, its module, when it connected and its last call; Disconnect asks first.
+    // Slice 3: the hub adds a teammate silently, then removes them; Members in Timefix shows them in between.
     await page.goto('/');
     await expect(page).toHaveURL(/\/w\/[^/]+\/home$/);
     const slug = new URL(page.url()).pathname.split('/')[2] ?? '';
+    const teammate = `Lin ${tag}`;
+    await page.goto(SAMPLE);
+    await page.getByLabel('External id').fill(`hub-user-${tag}`);
+    await page.getByLabel('Email').fill(`lin-${tag}@example.com`);
+    await page.getByLabel('Name').fill(teammate);
+    await page.getByLabel('Role').selectOption('admin');
+    await page.getByRole('button', { name: 'Add teammate' }).click();
+    await expect(page.locator('#status')).toHaveText('Teammate added.');
+    await expect(page.locator('#team')).toContainText(`${teammate} · lin-${tag}@example.com · admin`);
+    await page.goto(`/w/${slug}/settings/members`);
+    await expect(page.getByRole('row').filter({ hasText: teammate })).toBeVisible();
+    await page.goto(SAMPLE);
+    await page.getByRole('button', { name: `Remove ${teammate}` }).click();
+    await expect(page.locator('#status')).toHaveText('Teammate removed.');
+    await expect(page.locator('#team')).not.toContainText(teammate);
+    await page.goto(`/w/${slug}/settings/members`);
+    await expect(page.getByRole('row').filter({ hasText: teammate })).toHaveCount(0);
+
+    // Settings › Connected apps: the app, its module, when it connected and its last call; Disconnect asks first.
     await page.goto(`/w/${slug}/settings/connected-apps`);
     const row = page.getByRole('row').filter({ hasText: 'Sample Hub' });
     await expect(row).toContainText('Link pages');

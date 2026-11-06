@@ -6,6 +6,10 @@
 // GET  /callback  checks the state, swaps the code for a connection with the client secret and the verifier, then
 //                 reads the connection back with its access token
 // POST /check     reads the held connection again (after a Disconnect in Timefix, it is refused)
+// POST /members   adds or updates a teammate in Timefix (slice 3): `PUT …/members/{externalId}` with their email,
+//                 name and role, no invitation sent
+// POST /remove    removes a teammate: `DELETE …/members/{externalId}`
+// The page lists the hub's teammates as Timefix has them (`GET …/members`).
 //
 // Settings come from the environment: TIMEFIX_URL (the app, http://localhost:5290), PARTNER_CLIENT_ID,
 // PARTNER_CLIENT_SECRET, and PORT (5390). The redirect address it sends is http://localhost:<PORT>/callback, which
@@ -55,8 +59,36 @@ function settingsOf(env: NodeJS.ProcessEnv): Settings {
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (character) => `&#${String(character.charCodeAt(0))};`);
 
+/** A teammate as the hub lists them, from Timefix's answer. */
+interface Teammate {
+  readonly externalId: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: string;
+}
+
+/** The hub's team: the list, and the forms that add and remove someone. */
+function team(teammates: readonly Teammate[]): string {
+  const rows = teammates
+    .map(
+      (each) => `<li data-external-id="${escape(each.externalId)}">${escape(each.name)} · ${escape(each.email)} ·
+        ${escape(each.role)}
+        <form method="post" action="/remove"><input type="hidden" name="externalId" value="${escape(each.externalId)}">
+        <button type="submit">Remove ${escape(each.name)}</button></form></li>`,
+    )
+    .join('');
+  return `<h2>Team</h2><ul id="team">${rows}</ul>
+    <form method="post" action="/members">
+      <label>External id <input name="externalId" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Name <input name="name" required></label>
+      <label>Role <select name="role"><option value="member">Member</option><option value="admin">Admin</option></select></label>
+      <button type="submit">Add teammate</button>
+    </form>`;
+}
+
 /** The hub's one page, plain HTML: what it holds, a status line, and its buttons. */
-function page(held: Held | undefined, status: string): string {
+function page(held: Held | undefined, status: string, teammates: readonly Teammate[] = []): string {
   const body =
     held === undefined
       ? `<p id="state">Not connected</p>
@@ -65,7 +97,8 @@ function page(held: Held | undefined, status: string): string {
          <p id="modules">Modules: ${escape(held.modules.join(', '))}</p>
          <p id="connection">Connection: ${escape(held.connectionId)}</p>
          <form method="post" action="/check"><button type="submit">Check connection</button></form>
-         <form method="post" action="/connect"><button type="submit">Integrate Timefix</button></form>`;
+         <form method="post" action="/connect"><button type="submit">Integrate Timefix</button></form>
+         ${team(teammates)}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sample hub</title></head>
     <body><main><h1>Sample hub · Timefix</h1>${body}<p id="status" role="status">${escape(status)}</p></main></body></html>`;
 }
@@ -78,6 +111,16 @@ function send(response: ServerResponse, status: number, html: string): void {
 function goTo(response: ServerResponse, location: string): void {
   response.writeHead(303, { location, 'cache-control': 'no-store' });
   response.end();
+}
+
+/** A posted form's fields (at most 16 KB). */
+async function formOf(request: IncomingMessage): Promise<URLSearchParams> {
+  let text = '';
+  for await (const chunk of request) {
+    text += String(chunk);
+    if (text.length > 16_384) break;
+  }
+  return new URLSearchParams(text);
 }
 
 async function call(url: string, init: RequestInit): Promise<Answer> {
@@ -96,10 +139,62 @@ export function startSample(settings: Settings): ReturnType<typeof createServer>
   let held: Held | undefined;
   let status = '';
 
+  /** The held connection's members address, with its token. */
+  const members = (connection: Held, externalId?: string) => ({
+    url: `${settings.timefix}/api/partner/v1/connections/${connection.connectionId}/members${
+      externalId === undefined ? '' : `/${encodeURIComponent(externalId)}`
+    }`,
+    headers: { authorization: `Bearer ${connection.token}` },
+  });
+
+  /** The team as Timefix has it now; none when not connected or refused. */
+  const teammates = async (): Promise<readonly Teammate[]> => {
+    if (held === undefined) return [];
+    const target = members(held);
+    const listed = await call(target.url, { headers: target.headers });
+    const list = listed.body['members'];
+    if (listed.status !== 200 || !Array.isArray(list)) return [];
+    return list.map((each: Record<string, unknown>) => ({
+      externalId: String(each['externalId']),
+      name: String(each['name']),
+      email: String(each['email']),
+      role: String(each['role']),
+    }));
+  };
+
   const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? '/', redirectUri);
     if (request.method === 'GET' && url.pathname === '/') {
-      send(response, 200, page(held, status));
+      send(response, 200, page(held, status, await teammates()));
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/members') {
+      const form = await formOf(request);
+      if (held !== undefined) {
+        const target = members(held, form.get('externalId') ?? '');
+        const put = await call(target.url, {
+          method: 'PUT',
+          headers: { ...target.headers, 'content-type': 'application/json' },
+          body: JSON.stringify({ email: form.get('email'), name: form.get('name'), role: form.get('role') }),
+        });
+        status =
+          put.status === 201
+            ? 'Teammate added.'
+            : put.status === 200
+              ? 'Teammate updated.'
+              : `Teammate refused: ${String(put.body['code'])} ${String(put.body['message'])}`;
+      }
+      goTo(response, '/');
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/remove') {
+      const form = await formOf(request);
+      if (held !== undefined) {
+        const target = members(held, form.get('externalId') ?? '');
+        const removed = await fetch(target.url, { method: 'DELETE', headers: target.headers });
+        status = removed.status === 204 ? 'Teammate removed.' : `Remove refused: ${String(removed.status)}`;
+      }
+      goTo(response, '/');
       return;
     }
     if (request.method === 'POST' && url.pathname === '/connect') {

@@ -48,6 +48,8 @@ export function whoOf(person: AuditPerson): Who {
       return { name: people.system };
     case 'api_key':
       return { name: people.apiKey };
+    case 'partner':
+      return { name: people.partner };
     default:
       // An unknown row, or a kind of actor this page doesn't know yet.
       return { name: people.unknown };

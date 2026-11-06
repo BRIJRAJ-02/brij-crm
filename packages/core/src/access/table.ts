@@ -639,6 +639,10 @@ export const ACCESS_TABLE = {
   disconnectApp: { permission: 'connected_apps.manage' },
   // A partner's read of its own connection: the partner door's scope only.
   readPartnerConnection: { ownConnectionAsPartner: true },
+  // A partner's managed members (spec 0070, AC-7020 to AC-7025): its own connection's people only.
+  putPartnerMember: { ownConnectionAsPartner: true },
+  removePartnerMember: { ownConnectionAsPartner: true },
+  listPartnerMembers: { ownConnectionAsPartner: true },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

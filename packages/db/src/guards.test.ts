@@ -2619,6 +2619,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'guest_connect_handoffs',
     'known_device',
     'link_imports',
+    // The identities partners made for managed members (spec 0070, migration 0193).
+    'managed_users',
     'operator_event',
     // The partner registry (spec 0070, migration 0192): global, nobody's workspace.
     'partners',
@@ -2665,6 +2667,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
       // A business listed for search engines names its workspace (spec 0066, migration 0179).
       'business_listings',
+      // A managed member's identity names the workspace it was made for (spec 0070, migration 0193): never access.
+      'managed_users',
       // A link page's bookings, pictures and views by fact (spec 0061, migration 0147).
       'profile_booking_days',
       'profile_images',

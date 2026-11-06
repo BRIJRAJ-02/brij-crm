@@ -73,6 +73,7 @@ export type {
   SiteVisitInput,
 } from './identity/operator.ts';
 export type {
+  ManagedPerson,
   NewPartner,
   PartnerAudit,
   PartnerChange,

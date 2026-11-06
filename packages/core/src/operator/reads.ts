@@ -211,7 +211,11 @@ export async function operatorOverview(deps: OperatorDeps, period: OperatorPerio
   const both = (key: 'records_made' | 'bookings_made' | 'submissions') => figure(sum(key, true), sum(key, false));
   return {
     ...rangeOf(days),
-    people: { total: people.total, new: figure(people.made, people.madeBefore) },
+    people: {
+      total: people.total,
+      new: figure(people.made, people.madeBefore),
+      ...(people.managed > 0 ? { managed: people.managed } : {}),
+    },
     active: {
       period: figure(people.activePeriod, people.activeBefore),
       today: people.activeToday,
@@ -282,6 +286,7 @@ export async function operatorUsers(
       bookingsHosted: used?.bookings ?? 0,
       pages: used?.pages ?? 0,
       twoFactor: person.twoFactor,
+      ...(person.managed ? { managed: true as const } : {}),
     };
   });
   const last = people.at(-1);
@@ -350,7 +355,9 @@ export async function operatorUser(
       bookingsHosted: usage?.bookings ?? 0,
       pages: usage?.pages ?? 0,
       twoFactor: person.twoFactor,
-      methods: person.google ? ['email', 'google'] : ['email'],
+      ...(person.managed ? { managed: true as const } : {}),
+      // A managed member has no way in of their own (spec 0070, AC-7023).
+      methods: person.managed ? [] : person.google ? ['email', 'google'] : ['email'],
       sessions: person.sessions,
     },
     days: everyDay(days).map((day) => ({ day, active: active.has(day) })),

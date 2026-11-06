@@ -160,6 +160,13 @@ const SENTENCES: SentenceTemplates = {
     );
   },
   'member.removed': (entry, w) => actor(`removed ${w.person(entry.target.person)} from the workspace`),
+  // Someone a connected app added (spec 0070, AC-7020).
+  'member.added': (entry, w) =>
+    actor(
+      entry.params.role === undefined
+        ? `added ${w.person(entry.target.person)} to the workspace`
+        : `added ${w.person(entry.target.person)} to the workspace as ${w.role(entry.params.role)}`,
+    ),
   'member.left': () => actor('left the workspace'),
   'workspace.ownership_transferred': (entry, w) =>
     actor(`made ${w.person(entry.target.person)} an owner, and became an admin`),
@@ -453,6 +460,8 @@ export const strings = {
     deleted: 'Deleted user',
     system: 'System',
     apiKey: 'API key',
+    /** A connected app, through the partner API (spec 0070). */
+    partner: 'Connected app',
     /** An actor whose member row can't be read. */
     unknown: 'Unknown person',
     asker: 'Asked to join',

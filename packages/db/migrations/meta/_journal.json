@@ -1352,6 +1352,13 @@
       "when": 1795700013000,
       "tag": "0192_partner_connect",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1795700014000,
+      "tag": "0193_managed_members",
+      "breakpoints": true
     }
   ]
 }

@@ -193,6 +193,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         return person(row.actorMemberId);
       case 'api_key':
         return { kind: 'api_key' };
+      // A connected app, through the partner API (spec 0070, AC-7025).
+      case 'partner':
+        return { kind: 'partner' };
       default:
         // The system, and the system's own kinds of actor (an automation, a form, a booking page).
         return { kind: 'system' };
@@ -408,6 +411,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'member.left':
     case 'account.deleted':
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    // Someone a connected app added (spec 0070, AC-7020), with the role they joined with.
+    case 'member.added': {
+      const joined = roleOf(after.role);
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: joined === undefined ? {} : { role: joined },
+        changes: [],
+      };
+    }
     case 'member.profile_updated': {
       const target = memberTarget();
       const known = (

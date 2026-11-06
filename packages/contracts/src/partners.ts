@@ -247,6 +247,66 @@ export const PartnerTokenAnswer = z.object({
 export type PartnerTokenAnswer = z.infer<typeof PartnerTokenAnswer>;
 
 /**
+ * A partner's own id for a person (spec 0070, AC-7020): 1 to 128 URL safe characters, as it sits in the address
+ * `/connections/{id}/members/{externalId}`. The same id is always the same person.
+ */
+export const PARTNER_EXTERNAL_ID = /^[A-Za-z0-9._~:@+=|-]{1,128}$/;
+/** A partner's own id for a person. */
+export const PartnerExternalId = z
+  .string()
+  .regex(PARTNER_EXTERNAL_ID, 'Use 1 to 128 letters, digits or . _ ~ : @ + = | - for the external id.');
+/** A partner's own id for a person. */
+export type PartnerExternalId = z.infer<typeof PartnerExternalId>;
+
+/** The roles a partner may give (AC-7024): never owner. */
+export const PARTNER_MEMBER_ROLES = ['admin', 'member'] as const;
+/** A role a partner may give. */
+export const PartnerMemberRole = z.enum(PARTNER_MEMBER_ROLES, { error: 'Use admin or member for the role.' });
+/** A role a partner may give. */
+export type PartnerMemberRole = z.infer<typeof PartnerMemberRole>;
+
+/** `PUT /connections/{id}/members/{externalId}`'s body (AC-7020): who the person is and their role. */
+export const PartnerMemberInput = z.strictObject({
+  email: z.email('Enter a valid email address.').max(254),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Add a name.')
+    .max(80, 'Use at most 80 characters for the name.')
+    // One line, no control characters (it is the link page's name and History's).
+    // eslint-disable-next-line no-control-regex
+    .regex(/^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]+$/, 'Use a name on one line.'),
+  role: PartnerMemberRole,
+});
+/** `PUT /connections/{id}/members/{externalId}`'s body. */
+export type PartnerMemberInput = z.infer<typeof PartnerMemberInput>;
+
+/**
+ * A managed member as the partner reads them (AC-7020): the partner's id for them, their member id, name, email and
+ * role in Timefix (`owner` when the workspace's owner made them one, which the partner can't change, AC-7024), and
+ * their link page's handle while they have one.
+ */
+export const PartnerMemberView = z.object({
+  externalId: PartnerExternalId,
+  memberId: Uuid,
+  name: z.string(),
+  email: z.string(),
+  role: z.enum(['owner', 'admin', 'member', 'guest']),
+  handle: z.string().optional(),
+  addedAt: Timestamp,
+});
+/** A managed member as the partner reads them. */
+export type PartnerMemberView = z.infer<typeof PartnerMemberView>;
+
+/** `GET /connections/{id}/members`: the partner's people still in the workspace, oldest first (at most 1,000). */
+export const PartnerMemberList = z.object({ members: z.array(PartnerMemberView) });
+/** The partner's people still in the workspace. */
+export type PartnerMemberList = z.infer<typeof PartnerMemberList>;
+
+/** The most people one partner's list answers. */
+export const PARTNER_MEMBERS_LIST_MAX = 1000;
+
+/**
  * The connect, before any workspace (`offer`, `deny`) and inside the one chosen (`approve`, its owner only). A request
  * naming an unknown partner or an address it didn't register is `INPUT_INVALID` and never sends the browser anywhere.
  */

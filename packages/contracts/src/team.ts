@@ -202,6 +202,9 @@ export const AUDIT_ACTIONS = [
   'partner.connected',
   'partner.modules_changed',
   'partner.disconnected',
+  // A connected app added someone to the workspace (spec 0070, AC-7020), or brought back someone it removed: the
+  // target is the member; `after.role` is the role they joined with. The actor is the partner. Never an email.
+  'member.added',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

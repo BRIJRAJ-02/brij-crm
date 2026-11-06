@@ -66,6 +66,8 @@ export const AuditPerson = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('asker'), name: z.string() }),
   z.strictObject({ kind: z.literal('system') }),
   z.strictObject({ kind: z.literal('api_key') }),
+  /** A connected app, acting through the partner API (spec 0070, AC-7025). */
+  z.strictObject({ kind: z.literal('partner') }),
   z.strictObject({ kind: z.literal('unknown') }),
 ]);
 /** A person as the log names them now. */
@@ -243,6 +245,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     }),
   ),
   entry(['member.removed', 'member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
+  /** Someone a connected app added (spec 0070, AC-7020), with the role they joined with. */
+  entry(['member.added'], member, z.strictObject({ role: Role.optional() })),
   /** `fields` holds only known fields; empty, the sentence says the profile changed. */
   entry(
     ['member.profile_updated'],

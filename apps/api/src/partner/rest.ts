@@ -4,7 +4,9 @@
 //   the body; the body is form encoded or JSON with OAuth's field names. It answers the connection and its access
 //   token, once, with `cache-control: no-store`.
 // - `GET /api/partner/v1/connections/{id}`: a connection's read of itself, with `Authorization: Bearer <token>`.
-//   Slice 3 adds `PUT` and `DELETE /connections/{id}/members/{externalId}`, slice 4 `POST /connections/{id}/launch`.
+// - `PUT`, `DELETE /connections/{id}/members/{externalId}` and `GET /connections/{id}/members` (slice 3): the
+//   connection's managed members, added or updated (201 when added, 200 when it already was), removed (204, again
+//   safe) and listed. Slice 4 adds `POST /connections/{id}/launch`.
 //
 // No route here reads a cookie, so the Origin check on writes (CSRF's defence for a cookie) doesn't apply, and
 // `app.ts` lets `/api/partner/v1/` past it. Errors are the app's `{ code, message }` (AC-7025): a wrong client id or
@@ -19,26 +21,36 @@ import {
   PARTNER_CLIENT_ID,
   PARTNER_REQUESTS_A_MINUTE,
   PARTNER_TOKEN_REQUESTS_A_MINUTE,
+  PartnerExternalId,
+  PartnerMemberInput,
   PartnerTokenRequest,
   type PartnerTokenAnswer,
 } from '@crm/contracts';
 import {
   enterAsPartner,
   exchangePartnerCode,
+  listPartnerMembers,
   notePartnerCall,
   parsePartnerAccessToken,
+  putPartnerMember,
   readPartnerConnection,
+  removePartnerMember,
+  type ManagedUserEnder,
+  type ManagedUserMaker,
   type PartnerEntry,
 } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { ORPCError } from '@orpc/server';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type * as z from 'zod';
 import { inputProblems, toApiError } from '../errors.ts';
+import { commitCounted } from '../hooks.ts';
 import { errorFields, log } from '../log.ts';
+import type { Analytics } from '../monitoring/posthog.ts';
 import { captureFault } from '../monitoring/sentry.ts';
+import type { WakeRelay } from '../realtime/wake.ts';
 import { bearerOf } from '../v1/rest.ts';
 
 /** Where the partner API lives, under the app's `/api`. */
@@ -58,6 +70,10 @@ export interface PartnerApiDeps {
   readonly partners: Pick<IdentityStore, 'partnerByClientId'>;
   /** The central limiter's one call. */
   readonly limiter: Pick<IdentityStore, 'consumeRateLimit'>;
+  /** Managed members' identities (slice 3): made, and their sessions ended and directory rows dropped on removal. */
+  readonly users: ManagedUserMaker & ManagedUserEnder;
+  readonly wakeRelay: WakeRelay;
+  readonly analytics: Analytics;
   readonly keepAlive: (work: Promise<unknown>) => void;
 }
 
@@ -273,8 +289,10 @@ export function mountPartnerApi(
       connectionId: entry.connectionId,
       workspaceId: entry.scope.workspaceId,
       method: c.req.method,
-      // The route, ids left out.
-      path: c.req.path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id'),
+      // The route, ids left out (an external id may be an address, so it never reaches a log).
+      path: c.req.path
+        .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id')
+        .replace(/\/members\/[^/]+/, '/members/:externalId'),
       status: c.res.status,
       ms: Date.now() - started,
     });
@@ -288,6 +306,81 @@ export function mountPartnerApi(
       return answerError(c, error);
     }
   });
+
+  // Managed members (slice 3, AC-7020 to AC-7025). Each change writes its History row as the partner, and stores the
+  // members' outbox rows through `commitCounted`, so every open tab of the workspace reads its people again.
+  const writer = { wakeRelay: deps.wakeRelay, analytics: deps.analytics };
+  const sourceOf = (c: Context<{ Variables: Variables }>) => ({
+    requestId: c.get('requestId'),
+    ...(c.get('clientIp') === undefined ? {} : { ip: c.get('clientIp') }),
+  });
+  /** The external id from the address, or a 400 naming it. */
+  const externalIdOf = (c: Context<{ Variables: Variables }>) => {
+    const parsed = PartnerExternalId.safeParse(c.req.param('externalId'));
+    return parsed.success
+      ? { ok: true as const, id: parsed.data }
+      : { ok: false as const, answer: badInput(parsed.error.issues) };
+  };
+
+  api.get('/partner/v1/connections/:id/members', async (c) => {
+    try {
+      const list = await listPartnerMembers(c.get('partner').scope, { connectionId: c.req.param('id') });
+      return c.json(list, 200, { 'cache-control': 'no-store' });
+    } catch (error) {
+      return answerError(c, error);
+    }
+  });
+
+  api.put('/partner/v1/connections/:id/members/:externalId', async (c) => {
+    const externalId = externalIdOf(c);
+    if (!externalId.ok) return externalId.answer;
+    const body = PartnerMemberInput.safeParse(await jsonOf(c));
+    if (!body.success) return badInput(body.error.issues);
+    try {
+      const { result } = await commitCounted(writer, { mutationId: randomUUID() }, (hooks) =>
+        putPartnerMember(
+          c.get('partner').scope,
+          { connectionId: c.req.param('id'), externalId: externalId.id, person: body.data },
+          { users: deps.users },
+          hooks,
+          sourceOf(c),
+        ),
+      );
+      return c.json(result.member, result.created ? 201 : 200, { 'cache-control': 'no-store' });
+    } catch (error) {
+      return answerError(c, error);
+    }
+  });
+
+  api.delete('/partner/v1/connections/:id/members/:externalId', async (c) => {
+    const externalId = externalIdOf(c);
+    if (!externalId.ok) return externalId.answer;
+    try {
+      await commitCounted(writer, { mutationId: randomUUID() }, (hooks) =>
+        removePartnerMember(
+          c.get('partner').scope,
+          { connectionId: c.req.param('id'), externalId: externalId.id },
+          { users: deps.users },
+          hooks,
+          sourceOf(c),
+        ),
+      );
+      // Removed now or before: either way they are out (a DELETE is safe to send again).
+      return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+    } catch (error) {
+      return answerError(c, error);
+    }
+  });
+}
+
+/** A JSON body, or undefined for anything that isn't JSON. */
+async function jsonOf(c: Context): Promise<unknown> {
+  if (!(c.req.header('content-type')?.toLowerCase() ?? '').startsWith('application/json')) return undefined;
+  try {
+    return (await c.req.json()) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
