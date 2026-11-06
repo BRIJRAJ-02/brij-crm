@@ -2,7 +2,7 @@
 // entry point calls (`appInstalled`, `requireApp`), and installing and removing. An app shows only where Timefix
 // opened early access (`workspaces.early_access`, the operator console's switch), and a workspace admin
 // (`workspace.manage`) installs or removes it. Removing keeps every row: it sets `removed_at`, and installing again
-// clears it. The first install of any Hospitality app takes the business card (profile and first place) in the same
+// clears it. The first install of any Hospitality app takes the business card (the property's name and first place) in the same
 // transaction, and seeds the "Floor staff" custom role (Run service only, read data access).
 import {
   APP_NEEDS,
@@ -30,8 +30,9 @@ import { writeAudit } from '../members/audit.ts';
 import { syncBusinessListing } from './business-page.ts';
 import { hasEarlyAccess, hospitalityMember, installedRows, isApp } from './gate.ts';
 import { insertPlace } from './places.ts';
+import { currentProperty, currentPropertyRef } from './property.ts';
 
-const { businessProfiles, members, workspaceApps, workspaceRoles, workspaces } = schema;
+const { members, properties, workspaceApps, workspaceRoles, workspaces } = schema;
 
 /**
  * Tells every active member's sidebar that the Hospitality section changed (AC-6510): one `nav` change event naming
@@ -65,14 +66,11 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope): Promise<AppsView> {
     .select({ app: workspaceApps.app, installedAt: workspaceApps.installedAt, removedAt: workspaceApps.removedAt })
     .from(workspaceApps)
     .where(eq(workspaceApps.workspaceId, scope.workspaceId));
-  const [profile] = await tx
-    .select({ name: businessProfiles.name })
-    .from(businessProfiles)
-    .where(eq(businessProfiles.workspaceId, scope.workspaceId));
+  const property = await currentProperty(tx, scope.workspaceId);
   return {
     available: true,
     canManage,
-    hasBusiness: profile !== undefined,
+    hasBusiness: property.name !== null,
     apps: HOSPITALITY_APPS.map((app) => {
       const row = rows.find((each) => each.app === app && each.removedAt === null);
       return row === undefined
@@ -188,21 +186,29 @@ export async function installApp(
           `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Install both?`,
         );
       }
-      const [profile] = await tx
-        .select({ name: businessProfiles.name })
-        .from(businessProfiles)
-        .where(eq(businessProfiles.workspaceId, scope.workspaceId));
-      if (profile === undefined) {
+      const property = await currentProperty(tx, scope.workspaceId);
+      if (property.name === null) {
         if (input.business === undefined) {
           throw refuse('BUSINESS_NEEDED', 'Tell us about the business first: its name, kind and first place.');
         }
-        await tx.insert(businessProfiles).values({
-          workspaceId: scope.workspaceId,
-          name: input.business.name,
-          kind: input.business.kind,
-          createdByMemberId: by,
-          updatedByMemberId: by,
-        });
+        // The property's currency and country are the workspace's when it has them, else the card's.
+        await tx
+          .update(properties)
+          .set({
+            name: input.business.name,
+            kind: input.business.kind,
+            currency: sql`coalesce(${properties.currency}, ${input.business.currency})`,
+            country: sql`coalesce(${properties.country}, ${input.business.place.country})`,
+            createdByMemberId: by,
+            updatedByMemberId: by,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(properties.workspaceId, scope.workspaceId),
+              eq(properties.id, currentPropertyRef(scope.workspaceId)),
+            ),
+          );
         // A salon or a clinic opens on a working week, a restaurant on lunch and dinner (Foolproof).
         const firstHours = APPOINTMENT_KINDS.includes(input.business.kind) ? APPOINTMENT_HOURS : RESTAURANT_HOURS;
         await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by, firstHours);

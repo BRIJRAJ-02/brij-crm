@@ -1,5 +1,5 @@
 // The business apps' shared base (spec 0065, H0, migration 0181_hospitality_apps), Hospitality first: which apps a workspace installed,
-// its business profile, its places with opening hours, and each place's areas and tables. Tenant tables under forced
+// its properties (migration 0192; spec 0065 H7), its places with opening hours, and each place's areas and tables. Tenant tables under forced
 // row level security with the plain workspace policy; every index leads with workspace_id, but the places' two public
 // keys, which a guest page finds before the workspace is known (H1, H3), so they are unique everywhere.
 import { sql } from 'drizzle-orm';
@@ -52,13 +52,18 @@ export const workspaceApps = pgTable(
   ],
 );
 
-/** The business profile (AC-6507): one per workspace, made by the first install's card. */
-export const businessProfiles = pgTable(
-  'business_profiles',
+/**
+ * A property (AC-6512, AC-6513): one brand of the workspace, with its own places, menus, services, look and currency.
+ * Every workspace has one at position 0, from a trigger on `workspaces`. Its `name` and `kind` stay null until someone
+ * sets it up, which is what "no business yet" reads as. No logo of its own falls back to the workspace's brand kit.
+ */
+export const properties = pgTable(
+  'properties',
   {
     workspaceId: workspaceId(),
-    name: text('name').notNull(),
-    kind: text('kind').notNull(),
+    id: id(),
+    name: text('name'),
+    kind: text('kind'),
     description: text('description'),
     phone: text('phone'),
     email: text('email'),
@@ -69,41 +74,64 @@ export const businessProfiles = pgTable(
       .default(sql`'[]'::jsonb`),
     /** The guest look (AC-6570 as amended): one checked `MenuLook` document; null is the default, Warm. */
     look: jsonb('look'),
+    /** What every price of this property is in (ISO 4217); none reads as US dollars. */
+    currency: text('currency'),
+    country: text('country'),
+    logoPath: text('logo_path'),
+    logoType: text('logo_type'),
+    logoVersion: text('logo_version'),
+    position: smallint('position').notNull().default(0),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     createdByMemberId: uuid('created_by_member_id'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     updatedByMemberId: uuid('updated_by_member_id'),
   },
   (t) => [
-    primaryKey({ name: 'business_profiles_pkey', columns: [t.workspaceId] }),
+    primaryKey({ name: 'properties_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('properties_first')
+      .on(t.workspaceId)
+      .where(sql`${t.position} = 0`),
+    index('properties_order').on(t.workspaceId, t.position),
+    check('properties_set_up', sql`(${t.name} is null) = (${t.kind} is null)`),
+    check('properties_position', sql`${t.position} between 0 and 19`),
+    check('properties_currency', sql`${t.currency} is null or ${t.currency} ~ '^[A-Z]{3}$'`),
+    check('properties_country', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
     check(
-      'business_profiles_look',
+      'properties_logo',
+      sql`(${t.logoPath} is null and ${t.logoType} is null and ${t.logoVersion} is null)
+        or (${t.logoPath} ~ ('^logos/' || ${t.workspaceId}::text || '/[0-9a-f-]{36}[.](png|jpg|webp)$')
+          and ${t.logoType} in ('image/png', 'image/jpeg', 'image/webp')
+          and ${t.logoVersion} ~ '^[0-9a-f]{12}$')`,
+    ),
+    check(
+      'properties_look',
       sql`${t.look} is null or (jsonb_typeof(${t.look}) = 'object' and octet_length(${t.look}::text) <= 2000)`,
     ),
     foreignKey({
-      name: 'business_profiles_workspace',
+      name: 'properties_workspace',
       columns: [t.workspaceId],
       foreignColumns: [workspaces.id],
     }).onDelete('cascade'),
-    check('business_profiles_name', sql`char_length(${t.name}) between 1 and 80`),
+    check('properties_name', sql`char_length(${t.name}) between 1 and 80`),
     check(
-      'business_profiles_kind',
+      'properties_kind',
       sql`${t.kind} in ('restaurant', 'cafe', 'bar', 'bakery', 'salon', 'spa', 'barber', 'clinic', 'fitness', 'other')`,
     ),
-    check('business_profiles_description', sql`char_length(${t.description}) <= 160`),
-    check('business_profiles_phone', sql`char_length(${t.phone}) <= 40`),
-    check('business_profiles_email', sql`char_length(${t.email}) <= 254`),
-    check('business_profiles_website', sql`char_length(${t.website}) <= 2048`),
-    check('business_profiles_links', sql`jsonb_typeof(${t.links}) = 'array' and jsonb_array_length(${t.links}) <= 10`),
+    check('properties_description', sql`char_length(${t.description}) <= 160`),
+    check('properties_phone', sql`char_length(${t.phone}) <= 40`),
+    check('properties_email', sql`char_length(${t.email}) <= 254`),
+    check('properties_website', sql`char_length(${t.website}) <= 2048`),
+    check('properties_links', sql`jsonb_typeof(${t.links}) = 'array' and jsonb_array_length(${t.links}) <= 10`),
   ],
 );
 
-/** A place (location) of the business (AC-6508), with its opening hours as one checked `PlaceHours` document. */
+/** A place (location) of a property (AC-6508, AC-6514), with its opening hours as one checked `PlaceHours` document. */
 export const places = pgTable(
   'places',
   {
     workspaceId: workspaceId(),
     id: id(),
+    propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     addressLine: text('address_line'),
     city: text('city'),
@@ -129,6 +157,13 @@ export const places = pgTable(
     foreignKey({ name: 'places_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
+    foreignKey({
+      name: 'places_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    uniqueIndex('places_in_property').on(t.workspaceId, t.id, t.propertyId),
+    index('places_property').on(t.workspaceId, t.propertyId, t.position),
     uniqueIndex('places_public_key').on(t.publicKey),
     uniqueIndex('places_menu_key').on(t.menuKey),
     index('places_order').on(t.workspaceId, t.position),

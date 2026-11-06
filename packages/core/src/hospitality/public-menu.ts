@@ -24,14 +24,14 @@ import {
   type PublicMenu,
 } from '@crm/contracts';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { readMenuBrandIn, type PageBrand } from '../brand/public.ts';
 import { businessCacheId } from './cache-tags.ts';
 import { appInstalled } from './gate.ts';
 import { soldOutIds } from './menu-rows.ts';
 import { reservePathOf } from './public-page.ts';
 
-const { businessProfiles, menuDrafts, menuPhotos, menuVersions, places } = schema;
+const { menuDrafts, menuPhotos, menuVersions, places, properties } = schema;
 
 /** Whether the workspace's menu is hidden from guests for now (Live or Hidden). */
 async function isHidden(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
@@ -117,6 +117,7 @@ export async function readPublicMenu(
     if (!parsed.success) return undefined;
     const [place] = await tx
       .select({
+        propertyId: places.propertyId,
         name: places.name,
         addressLine: places.addressLine,
         city: places.city,
@@ -129,14 +130,17 @@ export async function readPublicMenu(
       .from(places)
       .where(and(eq(places.workspaceId, entry.workspaceId), eq(places.id, entry.placeId)));
     if (place === undefined) return undefined;
+    // The property the place belongs to (AC-6514). It has a name once anyone has set it up.
     const [business] = await tx
-      .select({
-        name: businessProfiles.name,
-        description: businessProfiles.description,
-        website: businessProfiles.website,
-      })
-      .from(businessProfiles)
-      .where(eq(businessProfiles.workspaceId, entry.workspaceId));
+      .select({ name: properties.name, description: properties.description, website: properties.website })
+      .from(properties)
+      .where(
+        and(
+          eq(properties.workspaceId, entry.workspaceId),
+          eq(properties.id, place.propertyId),
+          isNotNull(properties.name),
+        ),
+      );
     const hidden = await isHidden(tx, entry.workspaceId);
     // Hidden, the page still offers Reserve a table while the place takes reservations online (spec 0065).
     const reservePath =

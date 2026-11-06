@@ -15,7 +15,7 @@ import {
   type SectionLayout,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
@@ -36,6 +36,7 @@ import {
   snapshotFor,
   soldOutIds,
 } from './menu-rows.ts';
+import { currentProperty, currentPropertyRef } from './property.ts';
 
 const {
   menus,
@@ -51,8 +52,7 @@ const {
   menuVersions,
   menuDrafts,
   places,
-  workspaces,
-  businessProfiles,
+  properties,
 } = schema;
 
 const MENU_NOT_FOUND = 'That menu doesn’t exist.';
@@ -64,13 +64,9 @@ const L = MENU_LIMITS;
 /** How many published versions a place keeps. */
 const VERSIONS_KEPT = 10;
 
-/** The workspace's currency, or US dollars until one is set (the first install's card sets it). */
+/** The property's currency, or US dollars until one is set (the first install's card sets it). */
 async function currencyOf(tx: WorkspaceTx, workspaceId: string): Promise<string> {
-  const [row] = await tx
-    .select({ currency: workspaces.currency })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId));
-  return row?.currency ?? 'USD';
+  return (await currentProperty(tx, workspaceId)).currency ?? 'USD';
 }
 
 /** The places as the Menus screen names them, in order. */
@@ -226,6 +222,7 @@ export async function saveMenu(
       await tx.insert(menus).values({
         workspaceId: ws,
         id,
+        propertyId: currentPropertyRef(ws),
         ...fields,
         position,
         createdByMemberId: by,
@@ -234,7 +231,11 @@ export async function saveMenu(
     }
     await tx.delete(menuPlaces).where(and(eq(menuPlaces.workspaceId, ws), eq(menuPlaces.menuId, id)));
     if (placeIds.length > 0) {
-      await tx.insert(menuPlaces).values(placeIds.map((placeId) => ({ workspaceId: ws, menuId: id, placeId })));
+      await tx
+        .insert(menuPlaces)
+        .values(
+          placeIds.map((placeId) => ({ workspaceId: ws, menuId: id, placeId, propertyId: currentPropertyRef(ws) })),
+        );
     }
   });
 }
@@ -783,10 +784,10 @@ export async function saveMenuLook(
     }
     const wasCover = await savedCoverId(tx, ws);
     const changed = await tx
-      .update(businessProfiles)
+      .update(properties)
       .set({ look, updatedAt: sql`now()`, updatedByMemberId: by })
-      .where(eq(businessProfiles.workspaceId, ws))
-      .returning({ workspaceId: businessProfiles.workspaceId });
+      .where(and(eq(properties.workspaceId, ws), eq(properties.id, currentPropertyRef(ws)), isNotNull(properties.name)))
+      .returning({ workspaceId: properties.workspaceId });
     if (changed.length === 0) throw refuse('CONFLICT', 'Add your business first, then you can design its menu.');
     // A cover has a photo row of its own and is live with no Publish, so one replaced or taken off goes as this saves:
     // a look can change many times between Publishes, and each row counts towards the workspace's photos.
@@ -820,9 +821,9 @@ export async function saveMenuLook(
  */
 async function savedCoverId(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
   const [row] = await tx
-    .select({ id: sql<string | null>`${businessProfiles.look} -> 'cover' ->> 'id'` })
-    .from(businessProfiles)
-    .where(eq(businessProfiles.workspaceId, workspaceId));
+    .select({ id: sql<string | null>`${properties.look} -> 'cover' ->> 'id'` })
+    .from(properties)
+    .where(and(eq(properties.workspaceId, workspaceId), eq(properties.id, currentPropertyRef(workspaceId))));
   const id = row?.id ?? undefined;
   return id !== undefined && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     ? id

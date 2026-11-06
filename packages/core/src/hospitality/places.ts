@@ -1,4 +1,4 @@
-// Settings › Business (spec 0065, AC-6507, AC-6508): the business profile and its places, each with an address, a
+// Settings › Business (spec 0065, AC-6507, AC-6508): the property and its places, each with an address, a
 // time zone, a locale prices format with, a phone and opening hours. `hospitality.manage` only, checked before any
 // input is read, and only while some Hospitality app is installed (`requireAnyApp`). Hours are checked by the one
 // rule the editor runs too (`hoursProblem`), and stored whole as one document.
@@ -7,13 +7,13 @@ import {
   RESTAURANT_HOURS,
   HOSPITALITY_LIMITS,
   hoursProblem,
-  type BusinessProfile,
-  type BusinessProfileFields,
   type BusinessView,
   type Place,
   type PlaceFields,
   type PlaceHours,
   type PlaceHoursShape,
+  type Property,
+  type PropertyFields,
   type SocialLinks,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -25,8 +25,9 @@ import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
+import { currentProperty, currentPropertyRef } from './property.ts';
 
-const { businessProfiles, places, resources, workspaces } = schema;
+const { places, properties, resources } = schema;
 
 /** The refusal for a place that isn't there, or is another workspace's. */
 export const PLACE_NOT_FOUND = 'That place doesn’t exist.';
@@ -98,6 +99,7 @@ export async function insertPlace(
   await tx.insert(places).values({
     workspaceId: scope.workspaceId,
     id,
+    propertyId: currentPropertyRef(scope.workspaceId),
     ...placeColumns(fields),
     hours,
     publicKey: newKey(),
@@ -183,26 +185,13 @@ async function readPlace(tx: WorkspaceTx, workspaceId: string, placeId: string):
   return found;
 }
 
-/** The profile as the screens show it, with the workspace's currency. */
-async function readProfile(tx: WorkspaceTx, workspaceId: string): Promise<BusinessProfile | undefined> {
-  const [row] = await tx
-    .select({
-      name: businessProfiles.name,
-      kind: businessProfiles.kind,
-      description: businessProfiles.description,
-      phone: businessProfiles.phone,
-      email: businessProfiles.email,
-      website: businessProfiles.website,
-      links: businessProfiles.links,
-      currency: workspaces.currency,
-    })
-    .from(businessProfiles)
-    .innerJoin(workspaces, eq(workspaces.id, businessProfiles.workspaceId))
-    .where(eq(businessProfiles.workspaceId, workspaceId));
-  if (row === undefined) return undefined;
+/** The property as the screens show it, with its currency; undefined until someone has set it up. */
+async function readProperty(tx: WorkspaceTx, workspaceId: string): Promise<Property | undefined> {
+  const row = await currentProperty(tx, workspaceId);
+  if (row.name === null || row.kind === null) return undefined;
   return {
     name: row.name,
-    kind: row.kind as BusinessProfile['kind'],
+    kind: row.kind as Property['kind'],
     ...(row.description === null ? {} : { description: row.description }),
     ...(row.phone === null ? {} : { phone: row.phone }),
     ...(row.email === null ? {} : { email: row.email }),
@@ -212,12 +201,12 @@ async function readProfile(tx: WorkspaceTx, workspaceId: string): Promise<Busine
   };
 }
 
-/** Settings › Business (AC-6507, AC-6508): the profile and the places, for `hospitality.manage`. */
+/** Settings › Business (AC-6507, AC-6508): the property and the places, for `hospitality.manage`. */
 export async function getBusiness(scope: EngineScope): Promise<BusinessView> {
   requirePermission(scope, 'hospitality.manage');
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const profile = await readProfile(tx, scope.workspaceId);
+    const profile = await readProperty(tx, scope.workspaceId);
     return {
       ...(profile === undefined ? {} : { profile }),
       places: await readPlaces(tx, scope.workspaceId),
@@ -226,8 +215,8 @@ export async function getBusiness(scope: EngineScope): Promise<BusinessView> {
   });
 }
 
-/** Saves the business profile, whole (AC-6507): empty text clears a field. Answers it as saved. */
-export async function saveBusiness(scope: EngineScope, fields: BusinessProfileFields): Promise<BusinessProfile> {
+/** Saves the property, whole (AC-6507): empty text clears a field. Answers it as saved. */
+export async function saveBusiness(scope: EngineScope, fields: PropertyFields): Promise<Property> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
@@ -243,12 +232,18 @@ export async function saveBusiness(scope: EngineScope, fields: BusinessProfileFi
       updatedByMemberId: by,
     };
     await tx
-      .insert(businessProfiles)
-      .values({ workspaceId: scope.workspaceId, ...values, createdByMemberId: by })
-      .onConflictDoUpdate({ target: businessProfiles.workspaceId, set: { ...values, updatedAt: sql`now()` } });
+      .update(properties)
+      .set({
+        ...values,
+        createdByMemberId: sql`coalesce(${properties.createdByMemberId}, ${by}::uuid)`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(eq(properties.workspaceId, scope.workspaceId), eq(properties.id, currentPropertyRef(scope.workspaceId))),
+      );
     await auditSetup(tx, scope, 'business.saved');
-    const saved = await readProfile(tx, scope.workspaceId);
-    if (saved === undefined) throw new Error('The business profile was not stored.');
+    const saved = await readProperty(tx, scope.workspaceId);
+    if (saved === undefined) throw new Error('The property was not stored.');
     return saved;
   });
 }

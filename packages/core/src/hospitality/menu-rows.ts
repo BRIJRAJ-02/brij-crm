@@ -24,6 +24,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, asc, eq } from 'drizzle-orm';
+import { currentPropertyRef } from './property.ts';
 
 const {
   menus,
@@ -518,6 +519,7 @@ export async function restoreMenuRows(
       rows.menus.map((row) => ({
         ...ws,
         id: row.id,
+        propertyId: currentPropertyRef(workspaceId),
         name: row.name,
         note: row.note,
         serving: row.serving,
@@ -529,9 +531,14 @@ export async function restoreMenuRows(
   }
   const menuPlaceRows = rows.menuPlaces.filter((row) => live.placeIds.has(row.placeId));
   if (menuPlaceRows.length > 0) {
-    await tx
-      .insert(menuPlaces)
-      .values(menuPlaceRows.map((row) => ({ ...ws, menuId: row.menuId, placeId: row.placeId })));
+    await tx.insert(menuPlaces).values(
+      menuPlaceRows.map((row) => ({
+        ...ws,
+        menuId: row.menuId,
+        placeId: row.placeId,
+        propertyId: currentPropertyRef(workspaceId),
+      })),
+    );
   }
   const sectionValues = (list: readonly SectionRow[]) =>
     list.map((row) => ({

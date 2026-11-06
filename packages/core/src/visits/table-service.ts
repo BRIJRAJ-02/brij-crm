@@ -35,6 +35,7 @@ import { requireVisitApp, type SlotCache } from './book.ts';
 import { loadVisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { partyGroups, type PlannerResource } from './planner.ts';
+import { currentPropertyRef } from '../hospitality/property.ts';
 
 /** The Table service's defaults (0065 AC-6550): what a first try books with. */
 export const TABLE_DEFAULTS = {
@@ -379,8 +380,9 @@ export async function saveTableSetup(
     if (row === undefined) {
       const serviceId = newId();
       await tx.execute(sql`
-        insert into services (workspace_id, id, name, slug, capacity_mode, staff_rule, position, created_by_member_id)
-        values (${scope.workspaceId}::uuid, ${serviceId}::uuid, 'Table', ${`table-${serviceId.slice(-8)}`}, 'party', 'none',
+        insert into services (workspace_id, id, property_id, name, slug, capacity_mode, staff_rule, position,
+          created_by_member_id)
+        values (${scope.workspaceId}::uuid, ${serviceId}::uuid, ${currentPropertyRef(scope.workspaceId)}, 'Table', ${`table-${serviceId.slice(-8)}`}, 'party', 'none',
           0, ${by}::uuid)
       `);
       await tx.execute(sql`update services set ${columns} where id = ${serviceId}::uuid`);
@@ -389,7 +391,8 @@ export async function saveTableSetup(
         values (${scope.workspaceId}::uuid, ${serviceId}::uuid, 'Table', ${rules.minutes}, 'free', 0)
       `);
       await tx.execute(sql`
-        insert into service_places (workspace_id, service_id, place_id) values (${scope.workspaceId}::uuid, ${serviceId}::uuid, ${placeId}::uuid)
+        insert into service_places (workspace_id, service_id, place_id, property_id)
+        values (${scope.workspaceId}::uuid, ${serviceId}::uuid, ${placeId}::uuid, ${currentPropertyRef(scope.workspaceId)})
       `);
       await tx.execute(sql`
         insert into service_resources (workspace_id, service_id, kind, count) values (${scope.workspaceId}::uuid, ${serviceId}::uuid, 'table', 1)

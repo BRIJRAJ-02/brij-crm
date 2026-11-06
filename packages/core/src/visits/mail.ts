@@ -159,7 +159,7 @@ export async function prepareVisitMail(
       tx.execute<MailRow>(sql`
         select a.id::text, a.status, a.starts_at, a.ends_at, a.updated_at, a.party_size, a.client_name, a.client_email,
           a.lookup_code, p.name as place_name, p.address_line, p.city, p.postcode, p.phone, p.time_zone, p.public_key,
-          (select b.name from business_profiles b where b.workspace_id = a.workspace_id) as business,
+          (select b.name from properties b where b.workspace_id = p.workspace_id and b.id = p.property_id) as business,
           a.source, a.place_id::text, a.note as party_note, a.occasion, a.client_phone, w.slug
         from appointments a join places p on p.workspace_id = a.workspace_id and p.id = a.place_id
           join workspaces w on w.id = a.workspace_id

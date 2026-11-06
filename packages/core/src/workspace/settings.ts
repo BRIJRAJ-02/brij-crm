@@ -37,6 +37,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import { syncBusinessListing } from '../hospitality/business-page.ts';
 import { installedRows } from '../hospitality/gate.ts';
+import { followWorkspaceCurrency } from '../hospitality/property.ts';
 
 const { members, workspaces } = schema;
 
@@ -228,6 +229,9 @@ export async function updateWorkspace(
           throw addressRefusal(error);
         });
       if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      if (after.currency !== undefined && input.currency !== undefined) {
+        await followWorkspaceCurrency(tx, scope.workspaceId, input.currency);
+      }
       await writeAudit(
         tx,
         scope.workspaceId,

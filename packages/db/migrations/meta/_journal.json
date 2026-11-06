@@ -1338,6 +1338,13 @@
       "when": 1795700011000,
       "tag": "0190_business_look",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1795700020000,
+      "tag": "0192_properties",
+      "breakpoints": true
     }
   ]
 }

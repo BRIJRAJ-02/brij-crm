@@ -21,11 +21,12 @@ import { inWorkspace } from '../access/run.ts';
 import { isUuid } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { businessCacheTags } from './cache-tags.ts';
-import { pagePlaces } from './business-page.ts';
+import { pagePlaces, thePage } from './business-page.ts';
 import { installedHospitalityApps } from './gate.ts';
+import { currentProperty } from './property.ts';
 import { readTableService } from '../visits/table-service.ts';
 
-const { businessPages, businessPhotos, businessProfiles, places, placeSlugs, workspaces } = schema;
+const { businessPages, businessPhotos, places, placeSlugs, workspaces } = schema;
 
 /** The id `withWorkspace` takes for a read that belongs to no workspace: the definer reads past it. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
@@ -106,16 +107,20 @@ export async function enterBusinessPage(
         handle: businessPages.handle,
         published: businessPages.published,
         publishedAt: businessPages.publishedAt,
-        name: businessProfiles.name,
-        kind: businessProfiles.kind,
-        description: businessProfiles.description,
-        phone: businessProfiles.phone,
-        website: businessProfiles.website,
       })
       .from(businessPages)
-      .innerJoin(businessProfiles, eq(businessProfiles.workspaceId, businessPages.workspaceId))
-      .where(eq(businessPages.workspaceId, workspaceId));
-    if (row === undefined || row.handle === null || row.published === null || row.publishedAt === null) throw noPage();
+      .where(thePage(workspaceId));
+    const property = await currentProperty(tx, workspaceId);
+    if (
+      row === undefined ||
+      row.handle === null ||
+      row.published === null ||
+      row.publishedAt === null ||
+      property.name === null ||
+      property.kind === null
+    ) {
+      throw noPage();
+    }
     const content = businessContentOf(row.published);
     // Only places Publish saw (its snapshot names them): a place added or given an address since waits for Publish.
     const publishedPlaces = publishedPlaceIds(row.published);
@@ -138,7 +143,7 @@ export async function enterBusinessPage(
         await tx
           .select({ id: businessPhotos.id })
           .from(businessPhotos)
-          .where(eq(businessPhotos.workspaceId, workspaceId))
+          .where(and(eq(businessPhotos.workspaceId, workspaceId), eq(businessPhotos.propertyId, property.id)))
       ).map((photo) => photo.id),
     );
     const current = row.handle;
@@ -149,12 +154,12 @@ export async function enterBusinessPage(
     const brand = await businessBrandOf(tx, workspaceId);
     const page: PublicBusinessPage = {
       handle: current,
-      name: row.name,
-      kind: row.kind as BusinessKind,
-      ...(row.description === null ? {} : { description: row.description }),
+      name: property.name,
+      kind: property.kind as BusinessKind,
+      ...(property.description === null ? {} : { description: property.description }),
       ...(content.about === undefined ? {} : { about: content.about }),
-      ...(row.phone === null ? {} : { phone: row.phone }),
-      ...(row.website === null ? {} : { website: row.website }),
+      ...(property.phone === null ? {} : { phone: property.phone }),
+      ...(property.website === null ? {} : { website: property.website }),
       gallery: content.gallery
         .filter((photo) => kept.has(photo.id))
         .map((photo) => ({ ...photo, src: businessPhotoSrc(current, photo.id) })),
@@ -225,7 +230,7 @@ export async function publicBusinessPhoto(
     const [row] = await tx
       .select({ published: businessPages.published })
       .from(businessPages)
-      .where(eq(businessPages.workspaceId, workspaceId));
+      .where(thePage(workspaceId));
     if (row === undefined || row.published === null) return undefined;
     if (!businessContentOf(row.published).gallery.some((photo) => photo.id === photoId)) return undefined;
     const [photo] = await tx
@@ -247,7 +252,7 @@ export async function publicBusinessBrand(
     const [row] = await tx
       .select({ published: businessPages.publishedAt })
       .from(businessPages)
-      .where(eq(businessPages.workspaceId, workspaceId));
+      .where(thePage(workspaceId));
     if (row === undefined || row.published === null || !(await isLive(tx, workspaceId))) return undefined;
     return { brand: await businessBrandOf(tx, workspaceId), workspaceId };
   });
@@ -279,7 +284,7 @@ export async function publishedBusinessHandle(tx: WorkspaceTx, workspaceId: stri
   const [row] = await tx
     .select({ handle: businessPages.handle })
     .from(businessPages)
-    .where(and(eq(businessPages.workspaceId, workspaceId), sql`${businessPages.publishedAt} is not null`));
+    .where(and(thePage(workspaceId), sql`${businessPages.publishedAt} is not null`));
   if (row?.handle === null || row?.handle === undefined) return undefined;
   return (await isLive(tx, workspaceId)) ? row.handle : undefined;
 }
@@ -295,11 +300,8 @@ export async function bookingCompanyOf(entry: {
   return inWorkspace(entry.scope, async (tx) => {
     const handle = await publishedBusinessHandle(tx, entry.scope.workspaceId);
     if (handle === undefined || !HANDLE_PATTERN.test(handle)) return undefined;
-    const [profile] = await tx
-      .select({ name: businessProfiles.name })
-      .from(businessProfiles)
-      .where(eq(businessProfiles.workspaceId, entry.scope.workspaceId));
-    return profile === undefined ? undefined : { name: profile.name, path: `/${handle}` };
+    const { name } = await currentProperty(tx, entry.scope.workspaceId);
+    return name === null ? undefined : { name, path: `/${handle}` };
   });
 }
 

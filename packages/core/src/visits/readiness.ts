@@ -70,7 +70,7 @@ export async function appointmentsSetup(
   const ready = await appointmentsReadiness(tx);
   const [facts] = (
     await tx.execute<{ profile: boolean; published: boolean }>(sql`
-      select exists (select 1 from business_profiles) as profile,
+      select exists (select 1 from properties where name is not null) as profile,
         exists (select 1 from business_pages where published_at is not null) as published
     `)
   ).rows;

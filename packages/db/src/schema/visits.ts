@@ -21,7 +21,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { id, timestamptz, workspaceId } from './common.ts';
-import { places, resources } from './hospitality.ts';
+import { places, properties, resources } from './hospitality.ts';
 import { members, workspaces } from './workspaces.ts';
 import { records } from './records.ts';
 
@@ -34,6 +34,7 @@ export const serviceCategories = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     position: integer('position').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
@@ -48,6 +49,13 @@ export const serviceCategories = pgTable(
       columns: [t.workspaceId],
       foreignColumns: [workspaces.id],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'service_categories_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    uniqueIndex('service_categories_in_property').on(t.workspaceId, t.id, t.propertyId),
+    index('service_categories_property').on(t.workspaceId, t.propertyId, t.position),
     index('service_categories_order').on(t.workspaceId, t.position),
     check('service_categories_name', sql`char_length(${t.name}) between 1 and 60`),
   ],
@@ -63,6 +71,7 @@ export const services = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    propertyId: uuid('property_id').notNull(),
     categoryId: uuid('category_id'),
     name: text('name').notNull(),
     description: text('description'),
@@ -103,9 +112,16 @@ export const services = pgTable(
     ),
     foreignKey({
       name: 'services_category',
-      columns: [t.workspaceId, t.categoryId],
-      foreignColumns: [serviceCategories.workspaceId, serviceCategories.id],
+      columns: [t.workspaceId, t.categoryId, t.propertyId],
+      foreignColumns: [serviceCategories.workspaceId, serviceCategories.id, serviceCategories.propertyId],
     }).onDelete('set null'),
+    foreignKey({
+      name: 'services_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    uniqueIndex('services_in_property').on(t.workspaceId, t.id, t.propertyId),
+    index('services_property').on(t.workspaceId, t.propertyId, t.position),
     index('services_category').on(t.workspaceId, t.categoryId, t.position),
     uniqueIndex('services_slug')
       .on(t.workspaceId, t.slug)
@@ -339,20 +355,23 @@ export const servicePlaces = pgTable(
     workspaceId: workspaceId(),
     serviceId: uuid('service_id').notNull(),
     placeId: uuid('place_id').notNull(),
+    /** One value both keys carry, so a service can only be offered at its own property's places (AC-6514). */
+    propertyId: uuid('property_id').notNull(),
   },
   (t) => [
     primaryKey({ name: 'service_places_pkey', columns: [t.workspaceId, t.serviceId, t.placeId] }),
     foreignKey({
       name: 'service_places_service',
-      columns: [t.workspaceId, t.serviceId],
-      foreignColumns: [services.workspaceId, services.id],
+      columns: [t.workspaceId, t.serviceId, t.propertyId],
+      foreignColumns: [services.workspaceId, services.id, services.propertyId],
     }).onDelete('cascade'),
     foreignKey({
       name: 'service_places_place',
-      columns: [t.workspaceId, t.placeId],
-      foreignColumns: [places.workspaceId, places.id],
+      columns: [t.workspaceId, t.placeId, t.propertyId],
+      foreignColumns: [places.workspaceId, places.id, places.propertyId],
     }).onDelete('cascade'),
     index('service_places_place').on(t.workspaceId, t.placeId),
+    index('service_places_property').on(t.workspaceId, t.propertyId),
   ],
 );
 

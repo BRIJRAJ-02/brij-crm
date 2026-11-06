@@ -14,10 +14,11 @@ import {
   primaryKey,
   smallint,
   text,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { id, timestamptz, workspaceId } from './common.ts';
-import { places } from './hospitality.ts';
+import { places, properties } from './hospitality.ts';
 import { workspaces } from './workspaces.ts';
 
 /** A menu (AC-6520): Dinner, Drinks, Brunch. Up to 30 a workspace. */
@@ -26,6 +27,7 @@ export const menus = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
+    propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     note: text('note'),
     /** `{ weekly }` per day windows, checked by `MenuServing` in contracts; null serves whenever the place shows it. */
@@ -44,6 +46,13 @@ export const menus = pgTable(
     foreignKey({ name: 'menus_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
+    foreignKey({
+      name: 'menus_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    uniqueIndex('menus_in_property').on(t.workspaceId, t.id, t.propertyId),
+    index('menus_property').on(t.workspaceId, t.propertyId, t.position),
     index('menus_order').on(t.workspaceId, t.position),
     check('menus_name', sql`char_length(${t.name}) between 1 and 60`),
     check('menus_note', sql`char_length(${t.note}) <= 300`),
@@ -53,27 +62,29 @@ export const menus = pgTable(
   ],
 );
 
-/** Which places a menu shows at. */
+/** Which places a menu shows at: only its own property's (AC-6514), held by the one `property_id` both keys carry. */
 export const menuPlaces = pgTable(
   'menu_places',
   {
     workspaceId: workspaceId(),
     menuId: uuid('menu_id').notNull(),
     placeId: uuid('place_id').notNull(),
+    propertyId: uuid('property_id').notNull(),
   },
   (t) => [
     primaryKey({ name: 'menu_places_pkey', columns: [t.workspaceId, t.menuId, t.placeId] }),
     foreignKey({
       name: 'menu_places_menu',
-      columns: [t.workspaceId, t.menuId],
-      foreignColumns: [menus.workspaceId, menus.id],
+      columns: [t.workspaceId, t.menuId, t.propertyId],
+      foreignColumns: [menus.workspaceId, menus.id, menus.propertyId],
     }).onDelete('cascade'),
     foreignKey({
       name: 'menu_places_place',
-      columns: [t.workspaceId, t.placeId],
-      foreignColumns: [places.workspaceId, places.id],
+      columns: [t.workspaceId, t.placeId, t.propertyId],
+      foreignColumns: [places.workspaceId, places.id, places.propertyId],
     }).onDelete('cascade'),
     index('menu_places_place').on(t.workspaceId, t.placeId),
+    index('menu_places_property').on(t.workspaceId, t.propertyId),
   ],
 );
 
@@ -147,7 +158,7 @@ export const menuItems = pgTable(
     id: id(),
     name: text('name').notNull(),
     description: text('description'),
-    /** Minor units of the workspace currency; null with sizes, or with a price note ("Market price"). */
+    /** Minor units of the property's currency; null with sizes, or with a price note ("Market price"). */
     priceMinor: integer('price_minor'),
     priceNote: text('price_note'),
     photoId: uuid('photo_id'),

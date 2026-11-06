@@ -246,7 +246,7 @@ describe('the guest look (AC-6570 as amended)', () => {
     // A row someone wrote by hand wears the default rather than reaching CSS.
     const evil = { ...NOIR, palette: { brand: '#000;}body{display:none}' } };
     await db.withWorkspace(w.workspaceId, (tx) =>
-      tx.execute(sql`update business_profiles set look = ${JSON.stringify(evil)}::jsonb`),
+      tx.execute(sql`update properties set look = ${JSON.stringify(evil)}::jsonb`),
     );
     const { look } = await readMenuDraft(w.owner);
     expect(look).toEqual(DEFAULT_MENU_LOOK);
@@ -314,7 +314,7 @@ describe('the guest look (AC-6570 as amended)', () => {
     const cover = await addMenuCover(w.owner, { photo });
     const unknown = { ...NOIR, preset: 'retired-preset', cover };
     await db.withWorkspace(w.workspaceId, (tx) =>
-      tx.execute(sql`update business_profiles set look = ${JSON.stringify(unknown)}::jsonb`),
+      tx.execute(sql`update properties set look = ${JSON.stringify(unknown)}::jsonb`),
     );
     expect((await publishMenus(w.owner)).removedPaths).not.toContain('l');
   });

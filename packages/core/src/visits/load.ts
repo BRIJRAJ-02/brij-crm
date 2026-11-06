@@ -105,8 +105,8 @@ export async function loadVisitInputs(
   const busyTo = new Date(input.to.getTime() + DAY);
   const [place] = (
     await tx.execute<{ id: string; time_zone: string; hours: PlaceHoursShape; currency: string | null }>(sql`
-      select p.id::text as id, p.time_zone, p.hours, w.currency
-      from places p join workspaces w on w.id = p.workspace_id
+      select p.id::text as id, p.time_zone, p.hours, pr.currency
+      from places p join properties pr on pr.workspace_id = p.workspace_id and pr.id = p.property_id
       where p.workspace_id = ${workspaceId}::uuid and p.id = ${placeId}::uuid
     `)
   ).rows;

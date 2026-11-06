@@ -26,6 +26,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { SlotCache } from './book.ts';
 import { appointmentsSetup } from './readiness.ts';
+import { currentPropertyRef } from '../hospitality/property.ts';
 
 /** The refusal for a service that isn't there (or is Table seating's). */
 export const SERVICE_MISSING = 'That service doesn’t exist.';
@@ -119,8 +120,7 @@ export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
   ).rows;
   const [facts] = (
     await tx.execute<{ currency: string | null; kind: string | null }>(sql`
-      select (select currency from workspaces where id = nullif(current_setting('app.workspace_id', true), '')::uuid)
-        as currency, (select kind from business_profiles limit 1) as kind
+      select currency, kind from properties order by position, id limit 1
     `)
   ).rows;
   const group = <Row extends { service_id: string }>(rows: readonly Row[]) => {
@@ -253,8 +253,9 @@ export async function saveServiceCategory(
         throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.categories)} categories.`);
       }
       await tx.execute(sql`
-        insert into service_categories (workspace_id, id, name, position, created_by_member_id, updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${name}, ${counted?.next ?? 0}, ${by}::uuid, ${by}::uuid)
+        insert into service_categories (workspace_id, id, property_id, name, position, created_by_member_id,
+          updated_by_member_id)
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${currentPropertyRef(scope.workspaceId)}, ${name}, ${counted?.next ?? 0}, ${by}::uuid, ${by}::uuid)
       `);
     }
     return { places: await allPlaceIds(tx), ids: { categoryId: id } };
@@ -432,9 +433,9 @@ export async function saveService(
         throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.services)} services.`);
       }
       await tx.execute(sql`
-        insert into services (workspace_id, id, category_id, name, description, slug, buffer_after_min, online,
+        insert into services (workspace_id, id, property_id, category_id, name, description, slug, buffer_after_min, online,
           capacity_mode, staff_rule, cancel_note, position, created_by_member_id, updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${categoryId}::uuid, ${fields.name.trim()}, ${description},
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${currentPropertyRef(scope.workspaceId)}, ${categoryId}::uuid, ${fields.name.trim()}, ${description},
           ${await freeSlug(tx, fields.name, id)}, ${fields.bufferAfterMin}, ${fields.online}, 'one', ${fields.staffRule},
           ${cancelNote}, ${end?.next ?? 0}, ${by}::uuid, ${by}::uuid)
       `);
@@ -488,8 +489,8 @@ export async function saveService(
     await tx.execute(sql`delete from service_places where service_id = ${id}::uuid`);
     for (const placeId of placeIds) {
       await tx.execute(sql`
-        insert into service_places (workspace_id, service_id, place_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${placeId}::uuid)
+        insert into service_places (workspace_id, service_id, place_id, property_id)
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${placeId}::uuid, ${currentPropertyRef(scope.workspaceId)})
       `);
     }
     await tx.execute(sql`delete from service_staff where service_id = ${id}::uuid`);

@@ -31,8 +31,13 @@ import { inputInvalid, postgresError, refuse, refuseOn } from '../engine/refusal
 import { appointmentsReadiness } from '../visits/readiness.ts';
 import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
+import { currentProperty, currentPropertyRef } from './property.ts';
 
-const { businessPages, businessPhotos, businessProfiles, placePages, placeSlugs, places } = schema;
+const { businessPages, businessPhotos, placePages, placeSlugs, places } = schema;
+
+/** A condition naming this workspace's business page row. */
+export const thePage = (workspaceId: string) =>
+  and(eq(businessPages.workspaceId, workspaceId), eq(businessPages.propertyId, currentPropertyRef(workspaceId)));
 
 /** The folder a business's pictures are kept under in the private store. */
 export function businessPhotoFolder(workspaceId: string): string {
@@ -48,6 +53,7 @@ export function businessPhotoPath(workspaceId: string, photoId: string, type: st
 /** One place as the editor and the public read take it, with its current slug when it has one. */
 export interface PagePlaceRow {
   readonly id: string;
+  readonly propertyId: string;
   readonly name: string;
   readonly addressLine: string | null;
   readonly city: string | null;
@@ -64,6 +70,7 @@ export async function pagePlaces(tx: WorkspaceTx, workspaceId: string): Promise<
   return tx
     .select({
       id: places.id,
+      propertyId: places.propertyId,
       name: places.name,
       addressLine: places.addressLine,
       city: places.city,
@@ -99,7 +106,7 @@ async function pageRowOf(tx: WorkspaceTx, workspaceId: string): Promise<PageRow 
       version: businessPages.version,
     })
     .from(businessPages)
-    .where(eq(businessPages.workspaceId, workspaceId));
+    .where(thePage(workspaceId));
   return row;
 }
 
@@ -107,8 +114,8 @@ async function pageRowOf(tx: WorkspaceTx, workspaceId: string): Promise<PageRow 
 async function ensurePageRow(tx: WorkspaceTx, workspaceId: string, by: string): Promise<void> {
   await tx
     .insert(businessPages)
-    .values({ workspaceId, updatedByMemberId: by })
-    .onConflictDoNothing({ target: businessPages.workspaceId });
+    .values({ workspaceId, propertyId: currentPropertyRef(workspaceId), updatedByMemberId: by })
+    .onConflictDoNothing({ target: [businessPages.workspaceId, businessPages.propertyId] });
 }
 
 /** Whether two contents are the same page (key order aside). */
@@ -119,10 +126,7 @@ const sameContent = (a: BusinessPageContentShape, b: BusinessPageContentShape) =
 async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPageView> {
   const row = await pageRowOf(tx, workspaceId);
   const placeRows = await pagePlaces(tx, workspaceId);
-  const [profile] = await tx
-    .select({ name: businessProfiles.name })
-    .from(businessProfiles)
-    .where(eq(businessProfiles.workspaceId, workspaceId));
+  const { name: propertyName } = await currentProperty(tx, workspaceId);
   const apps = await installedHospitalityApps(tx, workspaceId);
   const draft = businessContentOf(row?.draft);
   const published =
@@ -137,7 +141,7 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
   ];
   const problem = businessPublishProblem({
     ...(row?.handle === null || row?.handle === undefined ? {} : { handle: row.handle }),
-    ...(profile === undefined ? {} : { name: profile.name }),
+    ...(propertyName === null ? {} : { name: propertyName }),
     places: placeRows.map((place) => ({
       id: place.id,
       name: place.name,
@@ -149,7 +153,7 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
     ...(apps.has('appointments') ? { appointments: await appointmentsReadiness(tx) } : {}),
   });
   const hasHandle = row?.handle !== null && row?.handle !== undefined;
-  const suggested = hasHandle || profile === undefined ? undefined : await freeHandleFor(tx, profile.name);
+  const suggested = hasHandle || propertyName === null ? undefined : await freeHandleFor(tx, propertyName);
   return {
     ...(row?.handle === null || row?.handle === undefined ? {} : { handle: row.handle }),
     ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
@@ -234,7 +238,7 @@ export async function claimBusinessHandle(
     await tx
       .update(businessPages)
       .set({ handle: input.handle, updatedAt: sql`now()`, updatedByMemberId: by })
-      .where(eq(businessPages.workspaceId, scope.workspaceId));
+      .where(thePage(scope.workspaceId));
     // A first address gives each place its first slug, so the page has every address it needs from the start.
     await ensurePlaceSlugs(tx, scope.workspaceId);
     if (before?.publishedAt !== null && before?.publishedAt !== undefined) await listBusiness(tx, scope.workspaceId);
@@ -262,7 +266,7 @@ async function ensurePlaceSlugs(tx: WorkspaceTx, workspaceId: string): Promise<v
     }
     held.add(slug);
     await tx.insert(placeSlugs).values({ workspaceId, slug, placeId: place.id });
-    await tx.insert(placePages).values({ workspaceId, placeId: place.id, slug });
+    await tx.insert(placePages).values({ workspaceId, placeId: place.id, propertyId: place.propertyId, slug });
   }
 }
 
@@ -281,7 +285,7 @@ export async function setPlaceSlug(
     await requireAnyApp(tx, scope.workspaceId);
     await lockKey(tx, `place-slugs:${scope.workspaceId}`);
     const [place] = await tx
-      .select({ id: places.id })
+      .select({ id: places.id, propertyId: places.propertyId })
       .from(places)
       .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, placeId)));
     if (place === undefined) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
@@ -297,7 +301,7 @@ export async function setPlaceSlug(
     }
     await tx
       .insert(placePages)
-      .values({ workspaceId: scope.workspaceId, placeId, slug: input.slug })
+      .values({ workspaceId: scope.workspaceId, placeId, propertyId: place.propertyId, slug: input.slug })
       .onConflictDoUpdate({
         target: [placePages.workspaceId, placePages.placeId],
         set: { slug: input.slug, updatedAt: sql`now()` },
@@ -330,6 +334,7 @@ export async function saveBusinessPage(
         .where(
           and(
             eq(businessPhotos.workspaceId, scope.workspaceId),
+            eq(businessPhotos.propertyId, currentPropertyRef(scope.workspaceId)),
             sql`${businessPhotos.id} = any(${`{${photoIds.join(',')}}`}::uuid[])`,
           ),
         );
@@ -348,7 +353,7 @@ export async function saveBusinessPage(
         updatedAt: sql`now()`,
         updatedByMemberId: by,
       })
-      .where(eq(businessPages.workspaceId, scope.workspaceId));
+      .where(thePage(scope.workspaceId));
     await auditSetup(tx, scope, 'business_page.draft_saved');
     return viewOf(tx, scope.workspaceId);
   });
@@ -411,14 +416,14 @@ export async function publishBusinessPage(scope: EngineScope): Promise<BusinessP
       .update(businessPages)
       .set({
         // The snapshot names the places it was published with, so a place added later waits for the next Publish.
-        published: sql`${businessPages.draft} || jsonb_build_object('placeIds', (select coalesce(jsonb_agg(pp.place_id), '[]'::jsonb) from place_pages pp where pp.workspace_id = ${scope.workspaceId}::uuid))`,
+        published: sql`${businessPages.draft} || jsonb_build_object('placeIds', (select coalesce(jsonb_agg(pp.place_id), '[]'::jsonb) from place_pages pp where pp.workspace_id = ${scope.workspaceId}::uuid and pp.property_id = ${businessPages.propertyId}))`,
         publishedAt: sql`now()`,
         publishedByMemberId: by,
         version: sql`${businessPages.version} + 1`,
         updatedAt: sql`now()`,
         updatedByMemberId: by,
       })
-      .where(eq(businessPages.workspaceId, scope.workspaceId));
+      .where(thePage(scope.workspaceId));
     await listBusiness(tx, scope.workspaceId);
     const used = new Set(before.draft.gallery.map((photo) => photo.id));
     const unused = await tx
@@ -426,6 +431,7 @@ export async function publishBusinessPage(scope: EngineScope): Promise<BusinessP
       .where(
         and(
           eq(businessPhotos.workspaceId, scope.workspaceId),
+          eq(businessPhotos.propertyId, currentPropertyRef(scope.workspaceId)),
           // A picture uploaded in the last ten minutes may not be in the draft yet: it stays until a later Publish.
           sql`${businessPhotos.createdAt} < now() - interval '10 minutes'`,
           ...(used.size === 0 ? [] : [sql`not (${businessPhotos.id} = any(${`{${[...used].join(',')}}`}::uuid[]))`]),
@@ -451,7 +457,7 @@ export async function discardBusinessPage(scope: EngineScope): Promise<BusinessP
         updatedAt: sql`now()`,
         updatedByMemberId: by,
       })
-      .where(eq(businessPages.workspaceId, scope.workspaceId));
+      .where(thePage(scope.workspaceId));
     await auditSetup(tx, scope, 'business_page.discarded');
     return viewOf(tx, scope.workspaceId);
   });
@@ -488,6 +494,7 @@ export async function addBusinessPhoto(
     await tx.insert(businessPhotos).values({
       workspaceId: scope.workspaceId,
       id,
+      propertyId: currentPropertyRef(scope.workspaceId),
       path,
       type: input.type,
       bytes: input.bytes,

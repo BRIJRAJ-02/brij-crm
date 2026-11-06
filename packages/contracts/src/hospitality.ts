@@ -130,8 +130,8 @@ const Phone = Optional(40).regex(/^[0-9+()\-. ]*$/, 'Use digits, spaces and + ( 
 const Country = z.string().refine((code) => COUNTRIES.has(code), { error: 'Pick a country.' });
 const Currency = z.string().refine((code) => CURRENCIES.has(code), { error: 'Pick a currency, such as GBP.' });
 
-/** The business profile (AC-6507), as Settings › Business shows it. Optional fields are absent when empty. */
-export const BusinessProfile = z.object({
+/** A property (AC-6507, AC-6513), as Settings › Business shows it. Optional fields are absent when empty. */
+export const Property = z.object({
   name: z.string(),
   kind: BusinessKindName,
   description: z.string().optional(),
@@ -139,14 +139,14 @@ export const BusinessProfile = z.object({
   email: z.string().optional(),
   website: z.string().optional(),
   links: SocialLinks,
-  /** The workspace's currency (one per workspace). */
+  /** What the property's prices are in. */
   currency: z.string().optional(),
 });
-/** The business profile. */
-export type BusinessProfile = z.infer<typeof BusinessProfile>;
+/** A property. */
+export type Property = z.infer<typeof Property>;
 
-/** A business profile as saved: empty text clears a field. */
-export const BusinessProfileFields = z.object({
+/** A property as saved: empty text clears a field. */
+export const PropertyFields = z.object({
   name: z.string().trim().min(1, 'Name the business.').max(L.businessNameMax),
   kind: BusinessKindName,
   description: Optional(L.descriptionMax).optional(),
@@ -160,8 +160,8 @@ export const BusinessProfileFields = z.object({
     .optional(),
   links: SocialLinks.optional(),
 });
-/** A business profile as saved. */
-export type BusinessProfileFields = z.infer<typeof BusinessProfileFields>;
+/** A property as saved. */
+export type PropertyFields = z.infer<typeof PropertyFields>;
 
 /** A place's address and contact, as saved (AC-6508). */
 export const PlaceFields = z.object({
@@ -255,7 +255,7 @@ export type AppsView = z.infer<typeof AppsView>;
 
 /** Settings › Business: the profile (absent before the first install) and its places, in order. */
 export const BusinessView = z.object({
-  profile: BusinessProfile.optional(),
+  profile: Property.optional(),
   places: z.array(Place),
   canEdit: z.boolean(),
 });
@@ -264,7 +264,7 @@ export type BusinessView = z.infer<typeof BusinessView>;
 
 /** The first install's business card (AC-6506): the business, its first place, and the workspace's currency. */
 export const FirstBusiness = z.object({
-  name: BusinessProfileFields.shape.name,
+  name: PropertyFields.shape.name,
   kind: BusinessKindName,
   place: PlaceFields.pick({ addressLine: true, city: true, postcode: true, country: true, timeZone: true }),
   currency: Currency,
@@ -295,7 +295,7 @@ export const RemoveAppInput = WorkspaceScoped.extend({
 export type RemoveAppInput = z.infer<typeof RemoveAppInput>;
 
 /** Saving the business profile, whole. */
-export const SaveBusinessInput = WorkspaceScoped.extend({ profile: BusinessProfileFields, mutationId: Uuid });
+export const SaveBusinessInput = WorkspaceScoped.extend({ profile: PropertyFields, mutationId: Uuid });
 /** Saving the business profile. */
 export type SaveBusinessInput = z.infer<typeof SaveBusinessInput>;
 
@@ -445,7 +445,7 @@ export const hospitalityContract = {
   install: oc.input(InstallAppInput).output(AppsView),
   remove: oc.input(RemoveAppInput).output(AppsView),
   business: oc.input(WorkspaceScoped).output(BusinessView),
-  saveBusiness: oc.input(SaveBusinessInput).output(BusinessProfile),
+  saveBusiness: oc.input(SaveBusinessInput).output(Property),
   createPlace: oc.input(CreatePlaceInput).output(Place),
   updatePlace: oc.input(UpdatePlaceInput).output(Place),
   resources: oc.input(PlaceInput).output(PlaceFloor),

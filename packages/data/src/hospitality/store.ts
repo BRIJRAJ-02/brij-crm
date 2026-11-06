@@ -8,8 +8,6 @@
 // next time it holds the copy. Installing or removing an app tells the sidebar, whose Hospitality section follows.
 import type {
   AppsView,
-  BusinessProfile,
-  BusinessProfileFields,
   BusinessView,
   Resource,
   FirstBusiness,
@@ -19,6 +17,8 @@ import type {
   PlaceFloor,
   PlaceHours,
   PlaceQrCodes,
+  Property,
+  PropertyFields,
   ResourceKind,
 } from '@crm/contracts';
 import { dataError, toDataError, type DataError } from '../errors.ts';
@@ -60,9 +60,9 @@ export interface HospitalityProcedures {
   ) => Promise<AppsView>;
   readonly business: (input: Scoped, options: Options) => Promise<BusinessView>;
   readonly saveBusiness: (
-    input: Scoped & { profile: BusinessProfileFields; mutationId: string },
+    input: Scoped & { profile: PropertyFields; mutationId: string },
     options: Options,
-  ) => Promise<BusinessProfile>;
+  ) => Promise<Property>;
   readonly createPlace: (
     input: Scoped & { id: string; place: PlaceFields; mutationId: string },
     options: Options,
@@ -413,7 +413,7 @@ export function openHospitality(given: {
     /** Reads Business now (the route's loader); rejects with the refusal. */
     readBusiness: (workspace: string): Promise<BusinessView> => businessOf(workspace).read(),
     /** Saves the profile, whole; shown at once (the currency stays the workspace's). */
-    saveBusiness: (workspace: string, profile: BusinessProfileFields): Promise<DataError | undefined> =>
+    saveBusiness: (workspace: string, profile: PropertyFields): Promise<DataError | undefined> =>
       businessOf(workspace).change(
         (view) => ({
           ...view,

@@ -63,7 +63,7 @@ async function placeOf(entry: TableEntry) {
     const [place] = (
       await tx.execute<PlaceRow>(sql`
         select p.name, p.address_line, p.city, p.postcode, p.phone, p.time_zone, p.hours,
-          (select b.name from business_profiles b where b.workspace_id = p.workspace_id) as business
+          (select b.name from properties b where b.workspace_id = p.workspace_id and b.id = p.property_id) as business
         from places p where p.id = ${entry.placeId}::uuid
       `)
     ).rows;

@@ -1,4 +1,4 @@
-// The business page (spec 0066 B4 lite, migration 0186_business_pages): the workspace's public page at
+// The business page (spec 0066 B4 lite, migration 0186_business_pages, per property since 0192): a property's public page at
 // `/<company-handle>`, its gallery's pictures, and each place's slug with its history. Tenant tables under forced row
 // level security with the plain workspace policy; every index leads with workspace_id. The handle itself is held in
 // `auth.public_handles` (owner kind `business`) through crm_handle's definers; `handle` here mirrors the current one.
@@ -16,11 +16,11 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { timestamptz, workspaceId } from './common.ts';
-import { places } from './hospitality.ts';
+import { places, properties } from './hospitality.ts';
 import { members, workspaces } from './workspaces.ts';
 
 /**
- * One per workspace: the current business handle, the editor's draft and the published snapshot (spec 0068's
+ * One per property: the current business handle, the editor's draft and the published snapshot (spec 0068's
  * draft and publish pattern, kept here until the shared `page_versions` lands). Guests see only `published`; a page
  * never published is not live.
  */
@@ -28,6 +28,7 @@ export const businessPages = pgTable(
   'business_pages',
   {
     workspaceId: workspaceId(),
+    propertyId: uuid('property_id').notNull(),
     handle: text('handle'),
     draft: jsonb('draft')
       .notNull()
@@ -42,7 +43,12 @@ export const businessPages = pgTable(
     updatedByMemberId: uuid('updated_by_member_id'),
   },
   (t) => [
-    primaryKey({ name: 'business_pages_pkey', columns: [t.workspaceId] }),
+    primaryKey({ name: 'business_pages_pkey', columns: [t.workspaceId, t.propertyId] }),
+    foreignKey({
+      name: 'business_pages_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
     foreignKey({
       name: 'business_pages_workspace',
       columns: [t.workspaceId],
@@ -74,6 +80,7 @@ export const businessPhotos = pgTable(
   {
     workspaceId: workspaceId(),
     id: uuid('id').notNull(),
+    propertyId: uuid('property_id').notNull(),
     path: text('path').notNull(),
     type: text('type').notNull(),
     bytes: integer('bytes').notNull(),
@@ -84,6 +91,12 @@ export const businessPhotos = pgTable(
   },
   (t) => [
     primaryKey({ name: 'business_photos_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'business_photos_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    index('business_photos_property').on(t.workspaceId, t.propertyId, t.createdAt),
     foreignKey({
       name: 'business_photos_workspace',
       columns: [t.workspaceId],
@@ -140,6 +153,7 @@ export const placePages = pgTable(
   {
     workspaceId: workspaceId(),
     placeId: uuid('place_id').notNull(),
+    propertyId: uuid('property_id').notNull(),
     slug: text('slug').notNull(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
@@ -147,8 +161,8 @@ export const placePages = pgTable(
     primaryKey({ name: 'place_pages_pkey', columns: [t.workspaceId, t.placeId] }),
     foreignKey({
       name: 'place_pages_place',
-      columns: [t.workspaceId, t.placeId],
-      foreignColumns: [places.workspaceId, places.id],
+      columns: [t.workspaceId, t.placeId, t.propertyId],
+      foreignColumns: [places.workspaceId, places.id, places.propertyId],
     }).onDelete('cascade'),
     foreignKey({
       name: 'place_pages_slug',
@@ -156,5 +170,6 @@ export const placePages = pgTable(
       foreignColumns: [placeSlugs.workspaceId, placeSlugs.slug, placeSlugs.placeId],
     }),
     uniqueIndex('place_pages_slug_once').on(t.workspaceId, t.slug),
+    index('place_pages_property').on(t.workspaceId, t.propertyId),
   ],
 );

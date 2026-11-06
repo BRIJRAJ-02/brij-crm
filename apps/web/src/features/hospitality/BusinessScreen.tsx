@@ -2,7 +2,7 @@
 // Purpose: Settings › Business (spec 0065, AC-6507, AC-6508): the business the Hospitality apps share, and its places.
 // Main task: keep the profile right, see each place at a glance, and open one for its hours and tables.
 // Leaves out: menus, codes and reservation rules (each app's page), the logo (Settings › Brand), the cover photo.
-import type { BusinessKind, BusinessProfile, HospitalityStore, Place, PlaceFields, ResourceKind } from '@crm/data';
+import type { BusinessKind, Property, HospitalityStore, Place, PlaceFields, ResourceKind } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { BUSINESS_KINDS, DEFAULT_RESOURCE_KIND } from '@crm/data/hospitality';
 import {
@@ -200,7 +200,7 @@ function ProfileCard({
   profile,
   onSave,
 }: {
-  readonly profile: BusinessProfile | undefined;
+  readonly profile: Property | undefined;
   readonly onSave: (fields: {
     readonly name: string;
     readonly kind: BusinessKind;
@@ -208,7 +208,7 @@ function ProfileCard({
     readonly phone: string;
     readonly email: string;
     readonly website: string;
-    readonly links: BusinessProfile['links'];
+    readonly links: Property['links'];
   }) => Promise<void>;
 }) {
   const formId = useId();

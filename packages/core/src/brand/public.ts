@@ -26,8 +26,9 @@ import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { brandRowOf, templateOf, type BrandRow } from './brand.ts';
 import { lookRowOf, type LookRow } from './look.ts';
+import { currentProperty } from '../hospitality/property.ts';
 
-const { bookingPages, businessProfiles } = schema;
+const { bookingPages } = schema;
 
 /** The accent pair a page wears, both checked, or none for the product's own. */
 interface Accents {
@@ -126,12 +127,9 @@ export async function readFormBrand(entry: { readonly scope: EngineScope }): Pro
  */
 export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
   const brand = await brandRowOf(tx, workspaceId);
-  const [profile] = await tx
-    .select({ look: businessProfiles.look })
-    .from(businessProfiles)
-    .where(eq(businessProfiles.workspaceId, workspaceId));
+  const property = await currentProperty(tx, workspaceId);
   // Checked again on the way out, as every value here is: a row that somehow held anything else wears the default.
-  const look = MenuLook.safeParse(profile?.look);
+  const look = MenuLook.safeParse(property.look);
   return { ...pageBrandOf(accentsOf(undefined, brand), brand), ...(look.success ? { menuLook: look.data } : {}) };
 }
 
