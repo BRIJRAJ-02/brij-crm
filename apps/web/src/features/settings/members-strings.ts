@@ -67,7 +67,9 @@ export const strings = {
   searchPlaceholder: 'Name or email',
   /** A guest searches by name alone (spec 0031, AC-829). */
   searchNamePlaceholder: 'Name',
-  noMatches: 'No members match',
+  /** Requests and invitations are searched too, so not "No members". */
+  noMatches: 'Nobody matches',
+  clearSearch: 'Clear search',
   showMore: 'Show more members',
   /** The table's foot while more members wait: how many of them show. */
   shownOf: (shown: number, total: number) => `${String(shown)} of ${String(total)} members`,
@@ -180,6 +182,7 @@ export const strings = {
   linkCap: (cap: number) => `${String(cap)} people`,
   linkSpent: 'This link has expired or reached its limit, so change it or reset it.',
   linkReset: 'Reset link',
+  linkResetShort: 'Reset',
   linkResetTitle: 'Reset the invite link?',
   linkResetText: 'The old link stops working.',
   linkResetAction: 'Reset link',

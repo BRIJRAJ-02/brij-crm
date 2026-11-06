@@ -232,6 +232,8 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
           onPress={() => {
             stepUp.reset();
             setOpen(true);
+            // The dialog's one task is the code: focus starts in the boxes, so it can be typed or pasted at once.
+            stepUp.focus();
           }}
         >
           {strings.signInAction}
@@ -259,7 +261,7 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
             <Button
               variant="primary"
               isPending={isChecking}
-              // The boxes send themselves once full, so this waits for what they can't: a backup code, or a retry.
+              // The boxes send themselves once full, so this waits for what they can't: a backup code.
               isDisabled={!stepUp.isReady}
               onPress={() => commit.current()}
             >

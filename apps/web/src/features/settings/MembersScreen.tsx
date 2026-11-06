@@ -594,8 +594,9 @@ export function MembersScreen({
   /** A member's row menu: What can Priya do, Ask to reconnect, Transfer ownership, Remove from workspace. */
   const memberMenu = (member: MemberView, inDetails = false) => {
     const { mayTransfer, mayRemove, calendar, mayAsk, mayExplain } = powersOver(member);
-    // No menu at all for a row the reader can't act on, rather than a locked one.
-    if (!mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
+    // No menu at all for a row the reader can't act on, rather than a locked one; in the details, none when the foot
+    // already holds all of it.
+    if (inDetails ? !mayTransfer && !mayAsk : !mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
     const first = member.name.trim().split(/\s+/)[0] ?? member.name;
     return (
       <MenuTrigger>
@@ -616,21 +617,22 @@ export function MembersScreen({
               {strings.details.menu}
             </MenuItem>
           )}
-          {mayExplain && (
+          {/* The details' foot holds these two already, in full words. */}
+          {mayExplain && !inDetails && (
             <MenuItem id="explain" icon="id-card">
               {strings.capabilities.menu(first)}
             </MenuItem>
           )}
-          {mayExplain && (mayAsk || mayTransfer || mayRemove) && <MenuSeparator />}
+          {mayExplain && !inDetails && (mayAsk || mayTransfer || mayRemove) && <MenuSeparator />}
           {askReconnectItem(calendar)}
-          {mayAsk && (mayTransfer || mayRemove) && <MenuSeparator />}
+          {mayAsk && (mayTransfer || (mayRemove && !inDetails)) && <MenuSeparator />}
           {mayTransfer && (
             <MenuItem id="transfer" icon="crown">
               {strings.transfer}
             </MenuItem>
           )}
-          {mayTransfer && mayRemove && <MenuSeparator />}
-          {mayRemove && (
+          {mayTransfer && mayRemove && !inDetails && <MenuSeparator />}
+          {mayRemove && !inDetails && (
             <MenuItem id="remove" icon="user-x" isDanger>
               {strings.remove}
             </MenuItem>
@@ -682,7 +684,6 @@ export function MembersScreen({
   const requestButtons = (request: JoinRequestView) => (
     <ButtonGroup label={strings.requestActions(request.name)} layout="line">
       <Button
-        size="sm"
         label={strings.approveFor(request.name)}
         isPending={approving === request.id}
         isDisabled={approving !== undefined && approving !== request.id}
@@ -691,7 +692,6 @@ export function MembersScreen({
         {strings.approve}
       </Button>
       <Button
-        size="sm"
         variant="ghost"
         label={strings.declineFor(request.name)}
         isDisabled={approving === request.id}
@@ -901,7 +901,7 @@ export function MembersScreen({
       {...(!canInvite && !isGuest ? { viewOnly: sharedStrings.ownersAndAdminsOnly } : {})}
       tabBody="table"
       // The entry's tab strip (Members · Teams): Members' own tab carries the count, the search at the strip's end.
-      tabBar={{ count: page.total, end: searchField }}
+      tabBar={{ count: page.total, countMax: Number.MAX_SAFE_INTEGER, end: searchField }}
       // The page's one primary action, in the bar (the owner, 21 October 2026: no title block). Role help lives in the
       // role picker and on Roles and access, never a second button here (owner ask T12).
       actions={
@@ -967,7 +967,14 @@ export function MembersScreen({
             look="person"
             // On a phone each row reads as two lines: the person with their menu, then their role and date under the name.
             phoneLayout="rows"
-            emptyState={<EmptyState icon="search" title={strings.noMatches} />}
+            emptyState={
+              <EmptyState
+                layout="block"
+                icon="search"
+                title={strings.noMatches}
+                actions={<Button onPress={() => setTyped('')}>{strings.clearSearch}</Button>}
+              />
+            }
             // How many show of how many, and the next page, while more wait.
             {...(held.cursor === undefined
               ? {}
@@ -981,8 +988,9 @@ export function MembersScreen({
                     </>
                   ),
                 })}
-            // Checkboxes only once a bulk change could mean anything: two people or more this reader can change.
-            {...(canManage && members.filter(mayRechange).length > 1
+            // Checkboxes only once a bulk change could mean anything: two people or more this reader can change. A search
+            // narrowing the list, or someone ticked, keeps them, so the column never leaves mid typing.
+            {...(canManage && (search !== '' || ticked.size > 0 || members.filter(mayRechange).length > 1)
               ? {
                   selected: ticked,
                   isSelectionQuiet: true,

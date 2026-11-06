@@ -199,6 +199,13 @@
     border-block-end: none;
   }
 
+  /* A checkbox's column is as narrow as what it holds, not a share of the spare width (a px width is only a hint to an
+     auto table). */
+  .column[data-card][data-select],
+  .cell[data-card][data-select] {
+    inline-size: 1%;
+  }
+
   /* With rows above it the foot keeps the Card's surface and gutter, the last row's hairline over it. */
   .withFoot[data-edge='card'] .foot {
     padding-inline: var(--space-16);
@@ -286,11 +293,14 @@
   /* A quiet selection: the checkboxes wait for the pointer on the table, or focus in it; their column keeps its place. */
   .selection {
     display: inline-flex;
+    justify-content: center;
+    inline-size: var(--size-column-check);
     transition: opacity var(--duration-hover) var(--ease-hover);
   }
 
+  /* The keyboard's focus, not a press: a click in the table leaves no column of boxes behind once the pointer goes. */
   @media (hover: hover) and (pointer: fine) {
-    .root[data-selection='quiet']:not(:hover, :focus-within) .selection {
+    .root[data-selection='quiet']:not(:hover, :has(:focus-visible)) .selection {
       opacity: 0;
     }
   }
@@ -561,23 +571,28 @@
     /* A person's row on a phone: the picture, name and email with the row's end cell beside them on the first line;
        the rest on the second line, starting under the name. */
     .root[data-phone='rows'] .row[data-look='person'] {
-      display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
-      gap: var(--space-4) var(--space-8);
+      flex-wrap: wrap;
+      gap: var(--space-2) var(--space-8);
       align-items: center;
     }
 
+    /* The line break: the title and the end cell before it, however wide the rest's words are. */
+    .root[data-phone='rows'] .row[data-look='person']::after {
+      flex-basis: 100%;
+      order: 1;
+      content: '';
+    }
+
     .root[data-phone='rows'] .cell[data-look='person'][data-phone='title'] {
-      grid-column: 1 / 4;
+      flex: 1 1 0;
     }
 
     .root[data-phone='rows'] .cell[data-look='person'][data-phone='end'] {
-      grid-column: 4;
-      grid-row: 1;
+      flex: none;
     }
 
     .root[data-phone='rows'] .cell[data-look='person'][data-phone='meta'] {
-      grid-row: 2;
+      order: 2;
     }
 
     /* A row's checkbox stands level with the picture, not across both lines. */
@@ -606,7 +621,8 @@
 
     .root[data-phone='rows'] .cell[data-card][data-handle],
     .root[data-phone='rows'] .column[data-card][data-select] {
-      padding-inline: var(--space-8) 0;
+      inline-size: auto;
+      padding-inline: 0;
     }
 
     /* After the gutters above, and under the name: the first thing on the second line. */
@@ -614,8 +630,9 @@
       padding-inline-start: calc(var(--avatar-lg) + var(--space-12));
     }
 
-    /* A lone select all on its own line says nothing until something is ticked. */
-    .root[data-phone='rows'] .header[data-quiet] {
+    /* A lone select all on its own line says little, and appearing with the first tick it would move the rows under the
+       thumb: out of the flow in a person's list, in reach of the keyboard, where it shows while it holds focus. */
+    .root[data-phone='rows'] .header[data-quiet]:not(:focus-within) {
       position: absolute;
       inline-size: var(--border-width-hairline);
       block-size: var(--border-width-hairline);

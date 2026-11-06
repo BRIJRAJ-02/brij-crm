@@ -297,11 +297,6 @@ export const InputRows: Story = {
 };
 
 /**
- * `rows="inline"`: an editor's ~550px column beside its preview (the booking page editor). Every row keeps its label
- * on the left and its control on the right, the label giving way first, so a Field, a SegmentedControl and a Switch
- * line up at one edge rather than the wider ones dropping under their labels.
- */
-/**
  * `aside`: a list holding the width and its settings at the page's end (Members' list and Other ways to join), going
  * under the list when both can't keep their widths. `variant="card"` is the stack inside the side Card.
  */
@@ -328,6 +323,11 @@ export const WithAside: Story = {
   ),
 };
 
+/**
+ * `rows="inline"`: an editor's ~550px column beside its preview (the booking page editor). Every row keeps its label
+ * on the left and its control on the right, the label giving way first, so a Field, a SegmentedControl and a Switch
+ * line up at one edge rather than the wider ones dropping under their labels.
+ */
 export const InlineRows: Story = {
   render: () => (
     <Stage width="dialog">

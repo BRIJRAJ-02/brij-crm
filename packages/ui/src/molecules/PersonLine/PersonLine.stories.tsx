@@ -104,7 +104,6 @@ export const MemberRow: Story = {
   },
 };
 
-/** A staff member's own colour on the tile (spec 0066 B1): no photo yet, so the hue they chose. */
 /** `lg`: a list of people to read through (Settings › Members), the picture 32px beside the two lines. */
 export const Large: Story = {
   render: () => (
@@ -114,6 +113,7 @@ export const Large: Story = {
   ),
 };
 
+/** A staff member's own colour on the tile (spec 0066 B1): no photo yet, so the hue they chose. */
 export const StaffColour: Story = {
   args: { id: 'asha', name: 'Asha Rao', meta: ['Senior stylist', 'Indiranagar'], size: 'md', hue: 'purple' },
 };

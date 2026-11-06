@@ -94,7 +94,7 @@ test.describe('teams and access', () => {
     await again.getByRole('button', { name: 'Cancel' }).click();
 
     // Rename it from its name.
-    await grid.getByRole('button', { name: 'Sales' }).click();
+    await grid.getByRole('rowheader', { name: 'Sales' }).click();
     const edit = page.getByRole('dialog', { name: 'Edit Sales' });
     await edit.getByLabel('Name', { exact: true }).fill('Revenue');
     await edit.getByRole('button', { name: 'Save' }).click();
@@ -168,7 +168,7 @@ test.describe('teams and access', () => {
 
     // The owner puts them in Sales; after a reload they have Deals.
     await page.goto(`/w/${slug}/settings/teams`);
-    await page.getByRole('grid', { name: 'Teams' }).getByRole('button', { name: 'Sales' }).click();
+    await page.getByRole('grid', { name: 'Teams' }).getByRole('rowheader', { name: 'Sales' }).click();
     const fill = page.getByRole('dialog', { name: 'Edit Sales' });
     await fill.getByRole('button', { name: 'People' }).click();
     await page.getByRole('option', { name: /grace/i }).click();

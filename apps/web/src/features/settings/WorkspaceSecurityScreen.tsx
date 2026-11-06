@@ -171,6 +171,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
     setConfirm(next);
     stepUp.reset();
     setIsOpen(true);
+    stepUp.focus();
   };
 
   const mayRequire = rules.requireTwoFactor || rules.youHaveTwoFactor;

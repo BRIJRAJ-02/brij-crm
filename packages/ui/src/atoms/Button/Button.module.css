@@ -380,6 +380,10 @@
       background: var(--accent-hover);
     }
 
+    .root[data-variant='value']:not([data-selected], [data-expanded])[data-hovered] {
+      background: transparent;
+    }
+
     .root[data-variant='danger-solid'][data-hovered] {
       background: var(--danger-fill-hover);
     }
@@ -409,6 +413,14 @@
   .root[data-focus-visible] {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
+  }
+
+  /* As Select's inline: an outline clear of its text, since it has no box to light up. */
+  .root[data-variant='value'][data-focus-visible] {
+    border-color: transparent;
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+    box-shadow: none;
   }
 
   .root[data-variant='danger'][data-focus-visible] {
@@ -519,7 +531,7 @@
 
   /* A quiet link leading the line stands its word on the edge of what's above it. */
   .group[data-layout='line'] > .root[data-variant='link']:first-child {
-    margin-inline-start: calc(-1 * var(--space-4));
+    margin-inline-start: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
   }
 
   .group > .root[data-focus-visible] {

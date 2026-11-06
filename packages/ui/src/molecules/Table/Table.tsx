@@ -275,7 +275,9 @@ export function Table<T>({
         className={styles.header}
         columns={shown}
         data-hidden={isHeaderHidden || undefined}
-        data-quiet={(isSelectable && isSelectionQuiet && selected.size === 0) || undefined}
+        data-quiet={(isSelectable && isSelectionQuiet) || undefined}
+        // Its cells say where they stand, and React Aria keeps a column's render while the column object is the same.
+        dependencies={[isSelectable, isSelectionQuiet, isCardEdge]}
       >
         {(column) => (
           <Column

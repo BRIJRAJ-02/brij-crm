@@ -8,8 +8,6 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 
 ## Use
 
-`isFlush` takes the body's padding away, for what runs to the Card's edges itself: a Table with `edge="card"` (Settings › Members, 6 November 2026), whose rows' hairlines and hover reach the frame.
-
 ```tsx
 <Card
   title="API keys"
@@ -30,6 +28,8 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 - An inline card's title is an `h3`, under a page's `h2`. Inside a `SettingsLayout` whose title is the page's `h1` (`titleLevel={1}`, spec 0026) it is an `h2`, set by the layout through `CardTitleLevel`, so headings never skip a level. A screen whose cards sit straight under its TopBar's `h1` wraps them in `<CardTitleLevel value={2}>` itself (exported since 5 November 2026: Tables' area cards). Inside a `SettingsSection` it is one level under the section's heading (an `h3` under an `h2` section, an `h4` under an `h3` one). Why: the settings pages lost the TopBar's h1 when the settings sidebar arrived, and their Cards would otherwise jump from h1 to h3.
 - Use it to group, not to decorate: a single list or form on a page needs no card, except with `placement="page"`, where the card is the page.
 - What the card holds stacks 16px apart. A Select or a Table can come first with no wrapper: the hidden template and markers React Aria puts before them don't count as the first child. So the first child must be a library component or carry a class: an empty element with no class there (an `hr`, an `img`) would be taken for one of those markers.
+
+- `isFlush` takes the body's padding away, for what runs to the Card's edges itself: a Table with `edge="card"` (Settings › Members, 6 November 2026), whose rows' hairlines and hover reach the frame. Why a prop: a Card's padding put a second gutter inside the frame. Story: Table's `PersonList`.
 
 ## States
 

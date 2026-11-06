@@ -412,6 +412,12 @@ export const PersonList: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
+    // The checkbox's column is its own width, however much spare room the table has.
+    const box = canvas
+      .getByRole('checkbox', { name: /^Select Linus Torvalds/ })
+      .closest('td')
+      ?.getBoundingClientRect();
+    await expect(Math.round(box?.width ?? 0)).toBe(36);
     const name = canvas.getByRole('columnheader', { name: 'Name' }).getBoundingClientRect();
     const table = canvas.getByRole('grid').getBoundingClientRect();
     await expect(Math.abs(name.width / table.width - 0.4)).toBeLessThan(0.06);
@@ -420,7 +426,39 @@ export const PersonList: Story = {
   },
 };
 
-/** The same list with something ticked: the checkboxes stay and the select all shows, here and on a phone. */
+/** The person list at a phone's width: the person with their menu, then the rest under the name. */
+export const PersonListPhone: Story = {
+  render: () => (
+    <Stage width="phone-fill">
+      <PeopleCard count={3} />
+    </Stage>
+  ),
+};
+
+/** The person list while it loads: a picture and two lines, a row's height, in the flush Card. */
+export const PersonListLoading: Story = {
+  render: () => (
+    <Stage width="fill">
+      <Card isFlush>
+        <Table
+          label="Members"
+          columns={[
+            { id: 'name', label: 'Name', isRowHeader: true, size: 'lead', phone: 'title' },
+            { id: 'role', label: 'Role', size: 'fact' },
+          ]}
+          rows={[]}
+          getRowId={() => ''}
+          renderCell={() => null}
+          edge="card"
+          look="person"
+          isLoading
+        />
+      </Card>
+    </Stage>
+  ),
+};
+
+/** The same list with something ticked: the checkboxes stay and the select all shows. */
 export const PersonListTicked: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (

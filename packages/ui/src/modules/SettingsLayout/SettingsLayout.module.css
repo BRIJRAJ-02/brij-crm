@@ -300,7 +300,7 @@
   /* Stays in view while a long list scrolls, a breath under the entry's tab strip, which stays too. */
   .splitAside {
     position: sticky;
-    inset-block-start: calc(var(--size-bar) + var(--border-width-hairline) + var(--space-16));
+    inset-block-start: calc(var(--size-bar) + var(--space-16));
     flex: 1 1 calc(var(--size-column-wide) + var(--space-32));
   }
 

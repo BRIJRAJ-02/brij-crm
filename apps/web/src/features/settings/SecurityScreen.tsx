@@ -142,6 +142,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     setConfirm(next);
     stepUp.reset();
     setIsOpen(true);
+    stepUp.focus();
   };
 
   /** The confirm's trigger may have gone with the change: the page's title takes focus rather than the document. */

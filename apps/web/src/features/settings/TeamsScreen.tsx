@@ -200,18 +200,7 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
   const cell = (team: TeamView, column: string) => {
     switch (column) {
       case 'team':
-        return canManage ? (
-          <Button
-            variant="value"
-            onPress={() => {
-              openOn(team);
-            }}
-          >
-            {team.name}
-          </Button>
-        ) : (
-          team.name
-        );
+        return team.name;
       case 'people': {
         const people = peopleOf(team);
         if (people.length === 0) return strings.noOne;
@@ -279,6 +268,14 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
             edge="card"
             look="person"
             isScrollable
+            // The row opens the team, as a member's does next door.
+            {...(canManage
+              ? {
+                  onRowAction: (id: string) => {
+                    openOn(teams.find((team) => team.id === id));
+                  },
+                }
+              : {})}
           />
         </Card>
       )}
@@ -320,7 +317,6 @@ export function TeamsPending() {
           getRowId={() => ''}
           renderCell={() => null}
           edge="card"
-          look="person"
           isLoading
         />
       </Card>

@@ -125,7 +125,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   if (isNeeded && twoFactorOn) {
     fields = (
       <>
-        {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
+        {/* A block of its own: a dialog's own sentence comes straight before this one. */}
+        <div>{kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}</div>
         {kind === 'totp' ? (
           <CodeInput
             ref={field}
@@ -195,7 +196,7 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
             </ButtonGroup>
           </>
         ) : (
-          strings.stepUp.withEmail
+          <div>{strings.stepUp.withEmail}</div>
         )}
         {sendError !== undefined && <Callout tone="danger">{sendError}</Callout>}
       </>

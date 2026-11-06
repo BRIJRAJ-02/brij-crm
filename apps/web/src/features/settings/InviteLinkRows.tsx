@@ -238,6 +238,8 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
                 <Button
                   icon="refresh-cw"
                   label={strings.linkReset}
+                  // Its row's title says what is reset: the word, as the neighbouring settings' buttons have.
+
                   isDisabled={busy !== undefined}
                   onPress={() => {
                     ask({
@@ -251,7 +253,9 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
                       done: strings.linkWasReset,
                     });
                   }}
-                />
+                >
+                  {strings.linkResetShort}
+                </Button>
               </SettingsRow>
             </SettingsStack>
           </Disclosure>
