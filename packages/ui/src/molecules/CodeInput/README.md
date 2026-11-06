@@ -6,6 +6,8 @@ A one time code as separate boxes.
 
 New. Two factor setup and sign in (#25) ask for a 6 digit code. It is one real field underneath, with `autocomplete="one-time-code"` and a numeric keyboard, so pasting or the phone's code suggestion fills every box at once, and screen readers hear one field.
 
+It is never a login, so its input carries the password managers' opt outs (`data-1p-ignore`, `data-lpignore`, `data-bwignore`, `data-form-type="other"`, as Field's `autoComplete="off"` does), and for a manager that ignores them (the owner saw NordPass's badge over the fourth box, 6 November 2026) the input runs past the last box, clipped, since a manager draws its badge inside the input's end. `isLabelHidden` with `size="lg"` is the shape wherever a sentence above says what the code is: the sign in page's second step, and every step up (Settings' `useStepUp`).
+
 ## Use
 
 ```tsx

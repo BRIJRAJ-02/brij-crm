@@ -10,6 +10,8 @@ export const strings = {
   newTeam: 'New team',
   columns: { team: 'Team', people: 'People', actions: 'Actions' },
   emptyTitle: 'No teams yet',
+  /** Under it, for those who may make one: what a team is for, in one line. */
+  emptyText: 'Group people so access rules can name them.',
   noOne: 'No one yet',
   removeTeam: (name: string) => `Delete ${name}`,
   peopleIn: (team: string, count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'} in ${team}`,

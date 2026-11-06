@@ -1,9 +1,10 @@
 // Brief
 // Purpose: Settings › People › Members (spec 0031, AC-803, AC-810, AC-811; owner ask T12, "looks confusing"): who is
 // in the workspace and who is on their way in, in one table.
-// Main task: find someone by name or email; read each person's role and status at a glance; owners and admins
-// change roles, answer requests to join, resend or revoke invitations, remove people (each ending asks first), and
-// open a row for the rest (two factor, calendar, scheduling access); invite from the bar's one button.
+// Main task: find someone by name or email; read each person's role and when they joined (or that they're on their
+// way in) at a glance; owners and admins change roles, answer requests to join, resend or revoke invitations, remove
+// people (each ending asks first), and open a row for the rest (two factor, calendar, scheduling access); invite from
+// the bar's one button.
 // Leaves out: leaving (the workspace menu's), teams and roles (their own tabs and pages), and a role for the invite
 // link.
 import {
@@ -30,6 +31,7 @@ import {
   Button,
   ButtonGroup,
   Card,
+  CardTitleLevel,
   DescriptionList,
   EmptyState,
   Field,
@@ -43,7 +45,6 @@ import {
   RelativeTime,
   Select,
   SettingsRow,
-  SettingsSection,
   SettingsStack,
   sharedStrings,
   Skeleton,
@@ -113,28 +114,22 @@ export interface MembersScreenProps {
  * One row of the table (owner ask T12: one list, not a hidden tab): someone asking to join, someone invited, or a
  * member. Requests and invitations carry a prefix in their id, so no row can share a member's id.
  */
+type RequestRow = { readonly kind: 'request'; readonly id: string; readonly request: JoinRequestView };
+type InvitationRow = { readonly kind: 'invitation'; readonly id: string; readonly invitation: InvitationView };
 type PersonRow =
-  | { readonly kind: 'request'; readonly id: string; readonly request: JoinRequestView }
-  | { readonly kind: 'invitation'; readonly id: string; readonly invitation: InvitationView }
-  | { readonly kind: 'member'; readonly id: string; readonly member: MemberView };
+  RequestRow | InvitationRow | { readonly kind: 'member'; readonly id: string; readonly member: MemberView };
 
 /**
- * The table's columns: the person (picture, name, and their email under it), their role, their status (for those who
- * may invite, the only readers who see anyone but members), then the row's actions. Two factor, calendar and
- * scheduling access live in the row's details.
+ * The table's columns: the person (picture, name, and their email under it), their role, when they joined (or, for
+ * anyone on their way in, where that stands), then the row's actions. "Active" for everyone said nothing, so only the
+ * exceptions carry a status. Two factor, calendar and scheduling access live in the row's details.
  */
-const NAME_COLUMN: TableColumn = { id: 'name', label: strings.columns.name, isRowHeader: true, phone: 'title' };
-const ROLE_COLUMN: TableColumn = { id: 'role', label: strings.columns.role };
-const STATUS_COLUMN: TableColumn = { id: 'status', label: strings.columns.status };
-const ACTIONS_COLUMN: TableColumn = {
-  id: 'actions',
-  label: strings.columns.actions,
-  isLabelHidden: true,
-  align: 'end',
-  size: 'fit',
-};
-const COLUMNS: readonly TableColumn[] = [NAME_COLUMN, ROLE_COLUMN, ACTIONS_COLUMN];
-const COLUMNS_WITH_STATUS: readonly TableColumn[] = [NAME_COLUMN, ROLE_COLUMN, STATUS_COLUMN, ACTIONS_COLUMN];
+const COLUMNS: readonly TableColumn[] = [
+  { id: 'name', label: strings.columns.name, isRowHeader: true, size: 'lead', phone: 'title' },
+  { id: 'role', label: strings.columns.role, size: 'fact' },
+  { id: 'joined', label: strings.columns.joined, size: 'fact' },
+  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit', phone: 'end' },
+];
 
 /** How long the search waits after the last key before it asks again. */
 const SEARCH_WAIT_MS = 250;
@@ -685,7 +680,7 @@ export function MembersScreen({
 
   /** A request's answer: Approve, and Decline (asked first). */
   const requestButtons = (request: JoinRequestView) => (
-    <ButtonGroup label={strings.requestActions(request.name)} layout="row">
+    <ButtonGroup label={strings.requestActions(request.name)} layout="line">
       <Button
         size="sm"
         label={strings.approveFor(request.name)}
@@ -707,9 +702,8 @@ export function MembersScreen({
     </ButtonGroup>
   );
 
-  /** A row's status: Active as plain words, so the exceptions stand out, a blue dot Invited, orange when it waits on someone here. */
-  const statusOf = (row: PersonRow) => {
-    if (row.kind === 'member') return strings.status.active;
+  /** Where someone on their way in stands: a blue dot Invited, orange when it waits on someone here. */
+  const statusOf = (row: RequestRow | InvitationRow) => {
     if (row.kind === 'request') return <Badge text={strings.status.asking} dot="orange" isWhole />;
     return row.invitation.isExpired ? (
       <Badge text={strings.status.expired} dot="orange" isWhole />
@@ -727,6 +721,7 @@ export function MembersScreen({
             <PersonLine
               id={member.id}
               name={member.name}
+              size="lg"
               // Their email under the name; a guest is told nobody's address (spec 0031, AC-829). The reader's own row
               // says "You" first, beside the name rather than across a wide column at the line's end.
               meta={[
@@ -738,13 +733,14 @@ export function MembersScreen({
           );
         }
         if (row.kind === 'request') {
-          return <PersonLine id={row.request.id} name={row.request.name} meta={[row.request.email]} />;
+          return <PersonLine id={row.request.id} name={row.request.name} meta={[row.request.email]} size="lg" />;
         }
         return (
           <PersonLine
             id={row.invitation.id}
             name={row.invitation.email}
             meta={[strings.invitedByLine(row.invitation.invitedBy)]}
+            size="lg"
           />
         );
       case 'role':
@@ -752,8 +748,8 @@ export function MembersScreen({
         if (row.kind === 'invitation') return row.invitation.roleLabel ?? labelOf(row.invitation.role);
         // Someone asking joins with the role new people get (spec 0037, AC-1237), as the server's approval gives it.
         return labelOf(roles.defaultRole);
-      case 'status':
-        return statusOf(row);
+      case 'joined':
+        return row.kind === 'member' ? <RelativeTime value={row.member.joinedAt} /> : statusOf(row);
       default:
         if (row.kind === 'member') return memberMenu(row.member);
         if (row.kind === 'invitation') return invitationMenu(row.invitation);
@@ -778,7 +774,6 @@ export function MembersScreen({
               },
             ]),
         { term: strings.details.role, description: roleOf(member, strings.details.role) },
-        { term: strings.details.status, description: statusOf(row) },
         { term: strings.details.joined, description: <RelativeTime value={member.joinedAt} /> },
         // What only owners and admins are told, or may change (spec 0033, AC-895; spec 0037, AC-1267, AC-1308).
         ...(canManage
@@ -806,6 +801,7 @@ export function MembersScreen({
           <Avatar
             name={member.name}
             id={member.id}
+            size="md"
             {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
             isDecorative
           />
@@ -830,7 +826,7 @@ export function MembersScreen({
       const manages = managesInvitation(invitation);
       return {
         title: invitation.email,
-        leading: <Avatar name={invitation.email} id={invitation.id} isDecorative />,
+        leading: <Avatar name={invitation.email} id={invitation.id} size="md" isDecorative />,
         items: [
           { term: strings.details.role, description: invitation.roleLabel ?? labelOf(invitation.role) },
           { term: strings.details.status, description: statusOf(row) },
@@ -855,7 +851,7 @@ export function MembersScreen({
     const { request } = row;
     return {
       title: request.name,
-      leading: <Avatar name={request.name} id={request.id} isDecorative />,
+      leading: <Avatar name={request.name} id={request.id} size="md" isDecorative />,
       items: [
         {
           term: strings.details.email,
@@ -918,89 +914,95 @@ export function MembersScreen({
         </>
       }
     >
-      <Table
-        label={canInvite ? strings.peopleTable : strings.membersTab}
-        // Status only where the table can hold anyone but members: the readers who may invite.
-        columns={canInvite ? COLUMNS_WITH_STATUS : COLUMNS}
-        rows={people}
-        getRowId={(row) => row.id}
-        renderCell={cell}
-        onRowAction={setOpenId}
-        // On a phone each row reads as two lines: the person, then their role and status, nothing scrolling sideways.
-        phoneLayout="rows"
-        emptyState={<EmptyState icon="search" title={strings.noMatches} />}
-        // How many show of how many, and the next page, while more wait.
-        {...(held.cursor === undefined
-          ? {}
-          : {
-              footer: (
-                <>
-                  {strings.shownOf(members.length, page.total)}
-                  <Button variant="ghost" size="sm" onPress={showMore} isPending={isLoadingMore}>
-                    {strings.showMore}
-                  </Button>
-                </>
-              ),
-            })}
-        // Checkboxes only while someone here can take a new role, so Select all never ticks nothing.
-        {...(canManage && members.some(mayRechange)
-          ? {
-              selected: ticked,
-              // Only the people the reader may give a role to tick (never themself, an owner only for an owner, nobody
-              // on their way in), so the bar's count is the change's.
-              isRowSelectable: (row: PersonRow) => row.kind === 'member' && mayRechange(row.member),
-              onSelectedChange: (ids: ReadonlySet<string>) => {
-                setSelected(new Set(members.filter((member) => ids.has(member.id)).map((member) => member.id)));
-              },
-              getSelectLabel: (row: PersonRow) =>
-                row.kind === 'member'
-                  ? row.member.name
-                  : row.kind === 'request'
-                    ? row.request.name
-                    : row.invitation.email,
-            }
-          : {})}
-      />
-      {/* Set once, so after the list (and never among a search's matches): the invite link, then the company email, a
-          Card each, so each way reads apart; a breath under the table's last row. */}
-      {canInvite && search === '' && (link !== undefined || domains !== undefined) && (
-        <SettingsStack>
-          <SettingsSection title={strings.otherWaysSection}>
-            {link !== undefined && (
-              <Card>
-                <InviteLinkRows
-                  data={data}
-                  slug={slug}
-                  link={link}
-                  ask={setQuestion}
-                  onChanged={reload}
-                  toasts={toasts}
-                  onFailed={(message) => {
-                    toasts.toast({ tone: 'danger', message });
-                  }}
-                />
+      <SettingsStack
+        // Set once, so beside the list, in view however long it is: the invite link and the company email, one Card.
+        aside={
+          canInvite && (link !== undefined || domains !== undefined) ? (
+            <CardTitleLevel value={2}>
+              <Card title={strings.otherWaysSection}>
+                <SettingsStack variant="card" rows="inline">
+                  {link !== undefined && (
+                    <InviteLinkRows
+                      data={data}
+                      slug={slug}
+                      link={link}
+                      ask={setQuestion}
+                      onChanged={reload}
+                      toasts={toasts}
+                      onFailed={(message) => {
+                        toasts.toast({ tone: 'danger', message });
+                      }}
+                    />
+                  )}
+                  {domains !== undefined && (
+                    <EmailDomainRow
+                      data={data}
+                      slug={slug}
+                      domains={domains}
+                      ask={setQuestion}
+                      onChanged={reload}
+                      onTurnedOn={(message) => {
+                        toasts.toast({ tone: 'success', message });
+                      }}
+                      onFailed={(message) => {
+                        toasts.toast({ tone: 'danger', message });
+                      }}
+                    />
+                  )}
+                </SettingsStack>
               </Card>
-            )}
-            {domains !== undefined && (
-              <Card>
-                <EmailDomainRow
-                  data={data}
-                  slug={slug}
-                  domains={domains}
-                  ask={setQuestion}
-                  onChanged={reload}
-                  onTurnedOn={(message) => {
-                    toasts.toast({ tone: 'success', message });
-                  }}
-                  onFailed={(message) => {
-                    toasts.toast({ tone: 'danger', message });
-                  }}
-                />
-              </Card>
-            )}
-          </SettingsSection>
-        </SettingsStack>
-      )}
+            </CardTitleLevel>
+          ) : undefined
+        }
+      >
+        <Card isFlush>
+          <Table
+            label={canInvite ? strings.peopleTable : strings.membersTab}
+            columns={COLUMNS}
+            rows={people}
+            getRowId={(row) => row.id}
+            renderCell={cell}
+            onRowAction={setOpenId}
+            edge="card"
+            look="person"
+            // On a phone each row reads as two lines: the person with their menu, then their role and date under the name.
+            phoneLayout="rows"
+            emptyState={<EmptyState icon="search" title={strings.noMatches} />}
+            // How many show of how many, and the next page, while more wait.
+            {...(held.cursor === undefined
+              ? {}
+              : {
+                  footer: (
+                    <>
+                      {strings.shownOf(members.length, page.total)}
+                      <Button variant="ghost" size="sm" onPress={showMore} isPending={isLoadingMore}>
+                        {strings.showMore}
+                      </Button>
+                    </>
+                  ),
+                })}
+            // Checkboxes only once a bulk change could mean anything: two people or more this reader can change.
+            {...(canManage && members.filter(mayRechange).length > 1
+              ? {
+                  selected: ticked,
+                  isSelectionQuiet: true,
+                  // Only the people the reader may give a role to tick (never themself, an owner only for an owner, nobody
+                  // on their way in), so the bar's count is the change's.
+                  isRowSelectable: (row: PersonRow) => row.kind === 'member' && mayRechange(row.member),
+                  onSelectedChange: (ids: ReadonlySet<string>) => {
+                    setSelected(new Set(members.filter((member) => ids.has(member.id)).map((member) => member.id)));
+                  },
+                  getSelectLabel: (row: PersonRow) =>
+                    row.kind === 'member'
+                      ? row.member.name
+                      : row.kind === 'request'
+                        ? row.request.name
+                        : row.invitation.email,
+                }
+              : {})}
+          />
+        </Card>
+      </SettingsStack>
       {/* Change role for those ticked, at the view's foot however long the list, as Trash's and a form's Submissions'. */}
       {canManage && isBarShown && (
         <PreviewFooter>
@@ -1134,7 +1136,7 @@ export function MembersScreen({
  * Settings › Members while it loads: the bar, the tab strip with the search, and the table's skeleton rows under its
  * columns, so nothing moves when the page arrives.
  */
-export function MembersPending({ isSearching = false }: { readonly isSearching?: boolean }) {
+export function MembersPending() {
   const canInvite = useCan('members.invite');
   const canManageWorkspace = useCan('workspace.manage');
   return (
@@ -1165,34 +1167,41 @@ export function MembersPending({ isSearching = false }: { readonly isSearching?:
         </>
       }
     >
-      <Table
-        label={strings.membersTab}
-        columns={canInvite ? COLUMNS_WITH_STATUS : COLUMNS}
-        rows={[]}
-        getRowId={() => ''}
-        renderCell={() => null}
-        phoneLayout="rows"
-        isLoading
-      />
-      {/* Other ways to join, as the page will draw them under its list (and, as it does, not among a search's matches). */}
-      {canInvite && !isSearching && (
-        <SettingsStack>
-          <SettingsSection title={strings.otherWaysSection}>
-            <Card isBusy>
-              <SettingsRow title={strings.linkTitle} description={<Skeleton width="long" />}>
-                <Switch label={strings.linkTitle} isLabelHidden isDisabled />
-              </SettingsRow>
-            </Card>
-            {canManageWorkspace && (
-              <Card isBusy>
-                <SettingsRow title={strings.domainTitle} description={<Skeleton width="long" />}>
-                  <Switch label={strings.domainTitle} isLabelHidden isDisabled />
-                </SettingsRow>
+      <SettingsStack
+        // Other ways to join, as the page will draw it beside its list.
+        aside={
+          canInvite ? (
+            <CardTitleLevel value={2}>
+              <Card title={strings.otherWaysSection} isBusy>
+                <SettingsStack variant="card" rows="inline">
+                  <SettingsRow title={strings.linkTitle} description={<Skeleton width="long" />}>
+                    <Switch label={strings.linkTitle} isLabelHidden isDisabled />
+                  </SettingsRow>
+                  {canManageWorkspace && (
+                    <SettingsRow title={strings.domainTitle}>
+                      <Switch label={strings.domainTitle} isLabelHidden isDisabled />
+                    </SettingsRow>
+                  )}
+                </SettingsStack>
               </Card>
-            )}
-          </SettingsSection>
-        </SettingsStack>
-      )}
+            </CardTitleLevel>
+          ) : undefined
+        }
+      >
+        <Card isFlush>
+          <Table
+            label={strings.membersTab}
+            columns={COLUMNS}
+            rows={[]}
+            getRowId={() => ''}
+            renderCell={() => null}
+            edge="card"
+            look="person"
+            phoneLayout="rows"
+            isLoading
+          />
+        </Card>
+      </SettingsStack>
     </SettingsPage>
   );
 }

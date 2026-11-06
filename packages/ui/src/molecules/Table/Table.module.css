@@ -177,6 +177,35 @@
     padding-inline-end: var(--space-16);
   }
 
+  /* Filling a flush Card (edge="card"): the first and last columns keep the Card's gutter, what follows a checkbox's
+     column starts straight after it (that column is the gutter), the rows' hairlines run to the Card's edges, and the
+     last row gives its hairline up to the Card's own. The cells say which they are: nothing here reads their order. */
+  .column[data-card-edge='start'],
+  .cell[data-card-edge='start'] {
+    padding-inline-start: var(--space-16);
+  }
+
+  .column[data-card-edge='end'],
+  .cell[data-card-edge='end'] {
+    padding-inline-end: var(--space-16);
+  }
+
+  .column[data-card-edge='after-select'],
+  .cell[data-card-edge='after-select'] {
+    padding-inline-start: 0;
+  }
+
+  .cell[data-last-row] {
+    border-block-end: none;
+  }
+
+  /* With rows above it the foot keeps the Card's surface and gutter, the last row's hairline over it. */
+  .withFoot[data-edge='card'] .foot {
+    padding-inline: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: transparent;
+  }
+
   /* There, a row's handle sits in its first cell's gutter, before the content edge, not in a column of its own,
      so a table that reorders keeps its text where one that doesn't has it. */
   .cell[data-gutter-handle] {
@@ -229,6 +258,43 @@
     max-inline-size: 0;
   }
 
+  /* The column a row is read from: a set share of the table, its text cut rather than widening it; what's left goes
+     to the columns after it, so a few short facts spread evenly over a wide screen. */
+  .column[data-size='lead'],
+  .cell[data-size='lead'] {
+    inline-size: 40%;
+    max-inline-size: 0;
+  }
+
+  /* A short fact after it (a role, a date): an even share of what's left, and room for its longest usual value. */
+  .column[data-size='fact'],
+  .cell[data-size='fact'] {
+    inline-size: var(--size-column-narrow);
+  }
+
+  /* A list read by the person each row leads with (look="person"): the rows' room comes from the cells' padding, so
+     a row with a taller control in it (a request's Approve) still lines up with the rest. */
+  .cell[data-look='person'] {
+    padding-block: var(--space-8);
+  }
+
+  /* A Badge beside plain text stands on the row's middle, not on the text's baseline. */
+  .cell[data-look='person'] > * {
+    vertical-align: middle;
+  }
+
+  /* A quiet selection: the checkboxes wait for the pointer on the table, or focus in it; their column keeps its place. */
+  .selection {
+    display: inline-flex;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-selection='quiet']:not(:hover, :focus-within) .selection {
+      opacity: 0;
+    }
+  }
+
   .reveal {
     display: inline-flex;
     align-items: center;
@@ -255,6 +321,34 @@
     flex-direction: column;
     gap: var(--space-16);
     padding: var(--space-12) var(--space-8);
+  }
+
+  /* A person's rows while they load: the loaded row's height and shape, hairlines between them. */
+  .loading[data-look='person'] {
+    gap: 0;
+    padding: 0;
+  }
+
+  .loadingPerson {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+    box-sizing: border-box;
+    block-size: calc(var(--space-32) + var(--space-20) + var(--border-width-hairline));
+    padding-inline: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .loadingPerson:last-child {
+    border-block-end: none;
+  }
+
+  .loadingLines {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    inline-size: var(--size-column);
+    max-inline-size: 100%;
   }
 
   /* Directly in a settings page's body, the skeleton rows start on the content edge too. */
@@ -462,6 +556,71 @@
     .root[data-phone='rows'] .cell[data-size] {
       inline-size: auto;
       max-inline-size: none;
+    }
+
+    /* A person's row on a phone: the picture, name and email with the row's end cell beside them on the first line;
+       the rest on the second line, starting under the name. */
+    .root[data-phone='rows'] .row[data-look='person'] {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      gap: var(--space-4) var(--space-8);
+      align-items: center;
+    }
+
+    .root[data-phone='rows'] .cell[data-look='person'][data-phone='title'] {
+      grid-column: 1 / 4;
+    }
+
+    .root[data-phone='rows'] .cell[data-look='person'][data-phone='end'] {
+      grid-column: 4;
+      grid-row: 1;
+    }
+
+    .root[data-phone='rows'] .cell[data-look='person'][data-phone='meta'] {
+      grid-row: 2;
+    }
+
+    /* A row's checkbox stands level with the picture, not across both lines. */
+    .root[data-phone='rows'] .cell[data-look='person'][data-handle] {
+      inset-block: var(--space-8) auto;
+      block-size: var(--avatar-lg);
+    }
+
+    /* In a flush Card the row keeps the Card's gutter, its checkbox in that gutter, and the last gives up its hairline;
+       its cells' own gutters are the table's, not a line's. */
+    .root[data-phone='rows'] .row[data-card] {
+      padding-inline: var(--space-16);
+    }
+
+    .root[data-phone='rows'] .row[data-card]:has(.cell[data-handle]) {
+      padding-inline-start: calc(var(--space-8) + var(--size-control));
+    }
+
+    .root[data-phone='rows'] .row[data-last-row] {
+      border-block-end: none;
+    }
+
+    .root[data-phone='rows'] .cell[data-card-edge] {
+      padding-inline: 0;
+    }
+
+    .root[data-phone='rows'] .cell[data-card][data-handle],
+    .root[data-phone='rows'] .column[data-card][data-select] {
+      padding-inline: var(--space-8) 0;
+    }
+
+    /* After the gutters above, and under the name: the first thing on the second line. */
+    .root[data-phone='rows'] .cell[data-phone-first] {
+      padding-inline-start: calc(var(--avatar-lg) + var(--space-12));
+    }
+
+    /* A lone select all on its own line says nothing until something is ticked. */
+    .root[data-phone='rows'] .header[data-quiet] {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: var(--border-width-hairline);
+      overflow: hidden;
+      clip-path: inset(50%);
     }
 
     /* The select all checkbox sits over the rows' own. */

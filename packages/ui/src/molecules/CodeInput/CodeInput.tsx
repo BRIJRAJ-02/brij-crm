@@ -103,6 +103,11 @@ export function CodeInput({
         <Input
           ref={ref}
           className={styles.input}
+          // A code is never a login: no password manager fills it or draws its icon here.
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
+          data-form-type="other"
           // A paste is a whole code, so it replaces what the boxes hold rather than joining it; a sentence with the
           // code in it gives the code alone. Anything else pastes as usual and sends nothing.
           onPaste={(event) => {

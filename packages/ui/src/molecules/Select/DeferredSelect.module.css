@@ -19,6 +19,7 @@
     max-inline-size: 100%;
     padding: 0;
     border: var(--border-width-hairline) solid transparent;
+    border-inline-start-width: 0;
     border-radius: var(--radius-md);
     background: transparent;
     color: inherit;

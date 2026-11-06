@@ -8,6 +8,8 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 
 ## Use
 
+`isFlush` takes the body's padding away, for what runs to the Card's edges itself: a Table with `edge="card"` (Settings › Members, 6 November 2026), whose rows' hairlines and hover reach the frame.
+
 ```tsx
 <Card
   title="API keys"

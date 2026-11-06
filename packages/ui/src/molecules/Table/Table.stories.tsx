@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, screen, waitFor } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
@@ -8,8 +8,10 @@ import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Card } from '../Card/Card.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
+import { PersonLine } from '../PersonLine/PersonLine.tsx';
 import { Table, type TableColumn } from './Table.tsx';
 
 interface Member {
@@ -352,6 +354,84 @@ export const PageEdgeWithCount: Story = {
     const row = canvas.getAllByRole('row')[1]?.getBoundingClientRect();
     const box = canvas.getByRole('checkbox', { name: 'Select Ada Lovelace' }).closest('label')?.getBoundingClientRect();
     await expect(Math.round((box?.left ?? 0) - (row?.left ?? 0))).toBeGreaterThanOrEqual(16);
+  },
+};
+
+/** What a list of people holds in its cells: the shape Settings › Members draws. */
+function PeopleCard({ count }: { readonly count: number }) {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const people = [
+    { id: 'p1', name: 'Ada Lovelace', email: 'ada@example.com', role: 'Owner', joined: 'Oct 8, 2026' },
+    { id: 'p2', name: 'Linus Torvalds', email: 'linus@example.com', role: 'Member', joined: '6 days ago' },
+    { id: 'p3', name: 'Mary Shelley', email: 'mary@example.com', role: 'Member', joined: 'Sep 2, 2026' },
+  ].slice(0, count);
+  return (
+    <Card isFlush>
+      <Table
+        label="Members"
+        columns={[
+          { id: 'name', label: 'Name', isRowHeader: true, size: 'lead', phone: 'title' },
+          { id: 'role', label: 'Role', size: 'fact' },
+          { id: 'joined', label: 'Joined', size: 'fact' },
+          { id: 'actions', label: 'Actions', isLabelHidden: true, align: 'end', size: 'fit', phone: 'end' },
+        ]}
+        rows={people}
+        getRowId={(person) => person.id}
+        renderCell={(person, column) =>
+          column === 'name' ? (
+            <PersonLine id={person.id} name={person.name} meta={[person.email]} size="lg" />
+          ) : column === 'role' ? (
+            person.role
+          ) : column === 'joined' ? (
+            person.joined
+          ) : (
+            <Button variant="ghost" icon="ellipsis" label={`Actions for ${person.name}`} />
+          )
+        }
+        edge="card"
+        look="person"
+        phoneLayout="rows"
+        selected={selected}
+        onSelectedChange={setSelected}
+        isSelectionQuiet
+        getSelectLabel={(person) => person.name}
+        isRowSelectable={(person) => person.role !== 'Owner'}
+      />
+    </Card>
+  );
+}
+
+/**
+ * `look="person"`, `edge="card"` in a flush Card, the `lead` and `fact` columns and `isSelectionQuiet`: a list read by
+ * the person each row leads with, its checkboxes waiting for the pointer in a column that keeps its place.
+ */
+export const PersonList: Story = {
+  render: () => (
+    <Stage width="fill">
+      <PeopleCard count={3} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const name = canvas.getByRole('columnheader', { name: 'Name' }).getBoundingClientRect();
+    const table = canvas.getByRole('grid').getBoundingClientRect();
+    await expect(Math.abs(name.width / table.width - 0.4)).toBeLessThan(0.06);
+    await expect(canvas.getByRole('checkbox', { name: /^Select Linus Torvalds/ })).toBeInTheDocument();
+    await expect(canvas.queryByRole('checkbox', { name: /^Select Ada Lovelace/ })).toBeNull();
+  },
+};
+
+/** The same list with something ticked: the checkboxes stay and the select all shows, here and on a phone. */
+export const PersonListTicked: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <PeopleCard count={3} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('checkbox', { name: /^Select Linus Torvalds/ }));
+    await expect(canvas.getByRole('checkbox', { name: /^Select Linus Torvalds/ })).toBeChecked();
+    await expect(canvas.getByRole('grid').getAttribute('data-selection')).toBe('ticked');
   },
 };
 

@@ -92,7 +92,10 @@
     max-inline-size: 100%;
   }
 
+  /* No border at its start, so the value's first letter stands where plain text in the same column does ("Owner" over
+     "Member"). */
   .root[data-variant='inline'] .trigger {
+    border-inline-start-width: 0;
     inline-size: auto;
     max-inline-size: 100%;
     block-size: auto;

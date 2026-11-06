@@ -18,7 +18,7 @@ test.describe('the schema’s edges', () => {
     const slug = `joinask-${tag}`;
     await newWorkspace(page, `owner-${tag}@${domain}`, slug);
     await page.goto(`/w/${slug}/settings/members`);
-    // Company email sits under the list, in Other ways to join (owner ask T12: no tab of its own).
+    // Company email sits beside the list, in Other ways to join (owner ask T12: no tab of its own).
     // The label a person presses: the input is hidden inside it, so a click on the input itself never lands.
     await page
       .getByRole('switch', { name: `Let @${domain} ask to join` })

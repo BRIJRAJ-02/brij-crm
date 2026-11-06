@@ -40,6 +40,14 @@ const ADA: MemberView = {
   role: 'owner',
   joinedAt: '2026-10-01T09:00:00.000Z',
 };
+/** A second person the reader may change, which is when a bulk change means anything. */
+const BARBARA: MemberView = {
+  id: '0199a6f2-0000-7000-8000-000000000003',
+  name: 'Barbara Liskov',
+  email: 'barbara@example.com',
+  role: 'member',
+  joinedAt: '2026-10-03T09:00:00.000Z',
+};
 const LINUS: MemberView = {
   id: '0199a6f2-0000-7000-8000-000000000002',
   name: 'Linus Torvalds',
@@ -516,16 +524,17 @@ describe('removing a member asks first', () => {
 });
 
 describe('a row’s details (owner ask T12: the secondary columns left the table)', () => {
-  it('keeps the table to the person, their role and status, and the row’s actions', async () => {
+  it('keeps the table to the person, their role, when they joined and the row’s actions', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
-    // After the selection column (Change role for several, spec 0037): the person, role, status and actions alone.
+    // With one person to change, Change role for several means nothing, so there is no selection column.
     expect(
       page
         .getByRole('columnheader')
         .elements()
         .map((header) => header.textContent),
-    ).toEqual(['Select all rows', 'Name', 'Role', 'Status', 'Actions']);
+    ).toEqual(['Name', 'Role', 'Joined', 'Actions']);
+    expect(page.getByRole('checkbox').elements()).toHaveLength(0);
     // The person's email sits under their name, in the one cell.
     await expect.element(page.getByRole('rowheader', { name: /Linus Torvalds.*linus@example\.com/ })).toBeVisible();
   });
@@ -536,9 +545,11 @@ describe('a row’s details (owner ask T12: the secondary columns left the table
     await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
     const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
     await expect.element(details).toBeVisible();
-    for (const term of ['Email', 'Role', 'Status', 'Joined', 'Two factor', 'Calendar', 'Scheduling access']) {
+    for (const term of ['Email', 'Role', 'Joined', 'Two factor', 'Calendar', 'Scheduling access']) {
       await expect.element(details.getByText(term, { exact: true })).toBeVisible();
     }
+    // Every member is active: only someone on their way in has a status to read.
+    expect(details.getByText('Status', { exact: true }).elements()).toHaveLength(0);
     await expect.element(details.getByText('Reconnect needed')).toBeVisible();
     // Removing still asks first, in its own dialog.
     await details.getByRole('button', { name: 'Remove from workspace' }).click();
@@ -702,7 +713,7 @@ describe('transferring ownership asks first (AC-813)', () => {
 });
 
 describe('everyone on their way in, in the one table (owner ask T12)', () => {
-  it('lists the requests, then the invitations, then the members, each with its status; Other ways to join follows', async () => {
+  it('lists the requests, then the invitations, then the members, with a status only for those on their way in; Other ways to join follows', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, { requests: [REQUEST], link: LINK, domains: DOMAINS });
     // No tab of their own: the entry's strip is Members and Teams.
@@ -726,11 +737,11 @@ describe('everyone on their way in, in the one table (owner ask T12)', () => {
     ]);
     await expect.element(page.getByRole('row', { name: /Mary Shelley/ }).getByText('Asks to join')).toBeVisible();
     await expect.element(page.getByRole('row', { name: /grace@example\.com/ }).getByText('Invited')).toBeVisible();
-    await expect.element(page.getByRole('row', { name: /Linus Torvalds/ }).getByText('Active')).toBeVisible();
+    expect(page.getByText('Active', { exact: true }).elements()).toHaveLength(0);
     // No "Just you so far" while anyone is on their way in, and one Invite button, in the bar (here, none: the harness
     // mounts no bar).
     expect(page.getByText('Just you so far').elements()).toHaveLength(0);
-    // Other ways to join follows the table, set once, so last.
+    // Other ways to join follows the table for a screen reader and the keyboard, set once, so last.
     const table = page.getByRole('grid', { name: 'Members and invitations' }).element();
     const otherWays = page.getByRole('heading', { name: 'Other ways to join' }).element();
     expect(table.compareDocumentPosition(otherWays) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -742,17 +753,17 @@ describe('everyone on their way in, in the one table (owner ask T12)', () => {
 
   it('gives only members a checkbox for Change role: never the reader, nor anyone on their way in', async () => {
     const counted = layerWith(() => Promise.resolve());
-    await renderMembers(counted.layer, { requests: [REQUEST] });
+    await renderMembers(counted.layer, { requests: [REQUEST], members: [ADA, LINUS, BARBARA] });
     // Each checkbox is named by its row's person (their email too, from the row's header).
     await expect.element(page.getByRole('checkbox', { name: /^Select Linus Torvalds/ })).toBeInTheDocument();
     for (const name of [/^Select Ada Lovelace/, /^Select Mary Shelley/, /^Select grace@example\.com/]) {
       expect(page.getByRole('checkbox', { name }).elements()).toHaveLength(0);
     }
-    // Select all picks the one person who may take a new role. A click on the box's own input, which the header's text
+    // Select all picks the two people who may take a new role. A click on the box's own input, which the header's text
     // covers in this unstyled page.
     (page.getByRole('checkbox', { name: /Select all/i }).element() as HTMLElement).click();
     await expect.element(page.getByRole('toolbar', { name: /selected/i })).toBeVisible();
-    await expect.element(page.getByText('1 selected')).toBeVisible();
+    await expect.element(page.getByText('2 selected')).toBeVisible();
   });
 
   it('keeps each role’s help in the role picker, one line under its name', async () => {
@@ -765,7 +776,7 @@ describe('everyone on their way in, in the one table (owner ask T12)', () => {
 
   it('asks before Change role for several, even one that only gives more', async () => {
     const counted = layerWith(() => Promise.resolve());
-    await renderMembers(counted.layer);
+    await renderMembers(counted.layer, { members: [ADA, LINUS, BARBARA] });
     (page.getByRole('checkbox', { name: /^Select Linus Torvalds/ }).element() as HTMLElement).click();
     await page.getByRole('button', { name: /Change role for 1 person/ }).click();
     await page.getByRole('option', { name: /^Admin/ }).click();
@@ -879,14 +890,14 @@ describe('a member who can’t invite', () => {
     // this harness doesn't mount.
     await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
     expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
-    // Members and Teams, and no Status column: they see members alone, all of them active.
+    // Members and Teams, and no status for anyone: they see members alone, all of them active.
     expect(
       page
         .getByRole('tab')
         .elements()
         .map((tab) => tab.textContent.replaceAll(/\d/g, '')),
     ).toEqual(['Members', 'Teams']);
-    expect(page.getByRole('columnheader', { name: 'Status' }).elements()).toHaveLength(0);
+    expect(page.getByText('Active', { exact: true }).elements()).toHaveLength(0);
     expect(page.getByRole('heading', { name: 'Other ways to join' }).elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
     // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.

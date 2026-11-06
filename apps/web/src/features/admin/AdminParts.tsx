@@ -196,12 +196,13 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
   const commit = useRef<() => void>(() => undefined);
   const stepUp = useStepUp(data, security, { secondFactor: true, onComplete: () => commit.current() });
   const live = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set again on mounting: React's development double mount runs the cleanup once, which left Confirm spinning.
+    live.current = true;
+    return () => {
       live.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const isMounted = () => live.current;
   const confirm = async () => {
     setChecking(true);
@@ -255,13 +256,18 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
             <Button slot="close" isDisabled={isChecking}>
               {strings.cancel}
             </Button>
-            <Button variant="primary" isPending={isChecking} onPress={() => commit.current()}>
+            <Button
+              variant="primary"
+              isPending={isChecking}
+              // The boxes send themselves once full, so this waits for what they can't: a backup code, or a retry.
+              isDisabled={!stepUp.isReady}
+              onPress={() => commit.current()}
+            >
               {strings.confirm}
             </Button>
           </>
         }
       >
-        {strings.confirmText}
         {stepUp.fields}
       </Modal>
     </EmptyState>

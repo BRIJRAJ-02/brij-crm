@@ -1,6 +1,8 @@
 // The Members page with the library's styles, in Chromium (owner ask T12, 5 November 2026): no axe violations in either
 // theme with someone asking to join, someone invited and a row's details open, and the Role picker's chevron beside
-// its word, in the table and in the details, however wide the slot.
+// its word, in the table and in the details, however wide the slot. The shape the owner asked for on 6 November 2026
+// too: a request's Approve and Decline on one line, Owner and Member on one edge, a switch near its label, the list
+// not leaving a role far from its name, and the phone's two lines.
 import '@crm/ui/styles.css';
 import type {
   DataLayer,
@@ -90,7 +92,7 @@ afterEach(() => {
   resetTheme();
 });
 
-async function render() {
+async function render(members: readonly MemberView[] = [ADA, LINUS]) {
   const toasts = createToasts();
   const data = {
     scheduling: { loaded: () => ({ delegations: () => delegations, health }) },
@@ -103,7 +105,7 @@ async function render() {
         toasts={toasts}
         slug="acme"
         workspaceName="Acme"
-        page={{ members: [ADA, LINUS], total: 2 }}
+        page={{ members: [...members], total: members.length }}
         search=""
         onSearch={() => undefined}
         invitations={[GRACE]}
@@ -123,6 +125,80 @@ function hugs(trigger: Element) {
   if (slot === null) throw new Error('expected the picker in a cell or a description');
   return trigger.getBoundingClientRect().width < slot.getBoundingClientRect().width / 2;
 }
+
+const BARBARA: MemberView = {
+  id: '0199a6f2-0000-7000-8000-000000000003',
+  name: 'Barbara Liskov',
+  email: 'barbara@example.com',
+  role: 'member',
+  joinedAt: '2026-10-03T09:00:00.000Z',
+};
+
+describe('Members, the owner’s shape (6 November 2026)', () => {
+  it('keeps a request’s Approve and Decline on one line', async () => {
+    await render();
+    const approve = page.getByRole('button', { name: 'Approve Mary Shelley' }).element().getBoundingClientRect();
+    const decline = page.getByRole('button', { name: 'Decline Mary Shelley' }).element().getBoundingClientRect();
+    expect(Math.round(approve.top)).toBe(Math.round(decline.top));
+    expect(decline.left).toBeGreaterThan(approve.right);
+  });
+
+  it('stands a role’s text and a role’s picker on one edge', async () => {
+    await render();
+    const row = (name: RegExp) => page.getByRole('row', { name }).element();
+    const adaRole = [...row(/Ada Lovelace.*You/).querySelectorAll('td')].find((each) => each.textContent === 'Owner');
+    if (adaRole === undefined) throw new Error('expected Ada’s role');
+    const text = document.createRange();
+    text.selectNodeContents(adaRole);
+    const word = page
+      .getByRole('button', { name: /Role for Linus Torvalds/ })
+      .element()
+      .querySelector('span');
+    if (word === null) throw new Error('expected the picker’s word');
+    expect(Math.abs(text.getBoundingClientRect().left - word.getBoundingClientRect().left)).toBeLessThan(1);
+  });
+
+  it('shows no checkboxes for one person to change, and waits for the pointer with two', async () => {
+    await render();
+    expect(page.getByRole('checkbox').elements()).toHaveLength(0);
+    shown?.unmount();
+    await render([ADA, LINUS, BARBARA]);
+    const box = page.getByRole('checkbox', { name: /^Select Linus Torvalds/ }).element();
+    const label = box.closest('label');
+    if (label === null) throw new Error('expected the checkbox’s label');
+    // The rows are as wide with them as without: the column keeps its place.
+    expect(getComputedStyle(label).display).not.toBe('none');
+  });
+
+  it('keeps the Role column near the name on a wide screen', async () => {
+    await page.viewport(1920, 1080);
+    await render();
+    const name = page.getByRole('columnheader', { name: 'Name' }).element().getBoundingClientRect();
+    const role = page.getByRole('columnheader', { name: 'Role' }).element().getBoundingClientRect();
+    // Before, the browser gave the person 60% of the table, 900px of nothing at this width: now 40% (and a little).
+    const table = page.getByRole('grid').element().getBoundingClientRect();
+    expect((role.left - name.left) / table.width).toBeLessThan(0.45);
+    await page.viewport(1280, 800);
+  });
+
+  it.each(THEMES)('has no axe violations in %s on a phone, on its two lines', async (theme) => {
+    await page.viewport(390, 844);
+    await render();
+    const row = page
+      .getByRole('row', { name: /Linus Torvalds/ })
+      .element()
+      .getBoundingClientRect();
+    const menu = page.getByRole('button', { name: 'Actions for Linus Torvalds' }).element().getBoundingClientRect();
+    const name = page.getByText('Linus Torvalds', { exact: true }).element().getBoundingClientRect();
+    // The menu has the first line's end, beside the name, never under it.
+    expect(menu.top).toBeLessThan(name.bottom);
+    expect(menu.right).toBeLessThanOrEqual(row.right);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+    applyTheme(theme);
+    expect(await axeViolations()).toEqual([]);
+    await page.viewport(1280, 800);
+  });
+});
 
 describe('Members, styled', () => {
   it.each(THEMES)('has no axe violations in %s, with the table and a row’s details', async (theme) => {

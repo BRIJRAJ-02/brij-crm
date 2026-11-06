@@ -721,6 +721,31 @@ export const GroupRow: Story = {
 };
 
 /** A disclosure: open, it reads as expanded and draws held down; a danger one keeps its red. */
+/** `layout="line"`: never wraps, in a Table's fitted cell as narrow as its content, or a link at a field's start. */
+export const GroupLine: Story = {
+  render: () => (
+    <Stage>
+      <ButtonGroup label="Answer the request" layout="line">
+        <Button size="sm">Approve</Button>
+        <Button size="sm" variant="ghost">
+          Decline
+        </Button>
+      </ButtonGroup>
+    </Stage>
+  ),
+};
+
+/** `value`: a value that opens something, in a list of values, as Select's inline variant draws one. */
+export const Value: Story = {
+  render: () => (
+    <Stage>
+      <Button variant="value" iconRight="chevron-down">
+        Only their own
+      </Button>
+    </Stage>
+  ),
+};
+
 export const Disclosure: Story = {
   render: () => (
     <Stage>

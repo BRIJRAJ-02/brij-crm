@@ -257,6 +257,20 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* A value that opens something, in a list of values (a member's Scheduling access in their details): it reads as its
+     text with a chevron, in line with the plain values above and below, as Select's inline variant does. */
+  .root[data-variant='value'] {
+    block-size: auto;
+    padding: 0;
+    border-color: transparent;
+    border-inline-start-width: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
   .root[data-variant='ghost'],
   .root[data-variant='ghost-danger'] {
     border-color: transparent;
@@ -494,6 +508,18 @@
     flex-wrap: wrap;
     gap: var(--space-8);
     box-shadow: none;
+  }
+
+  /* A row that never wraps: in a table's fitted cell a wrapping row stacks its buttons. */
+  .group[data-layout='line'] {
+    display: inline-flex;
+    gap: var(--space-8);
+    box-shadow: none;
+  }
+
+  /* A quiet link leading the line stands its word on the edge of what's above it. */
+  .group[data-layout='line'] > .root[data-variant='link']:first-child {
+    margin-inline-start: calc(-1 * var(--space-4));
   }
 
   .group > .root[data-focus-visible] {

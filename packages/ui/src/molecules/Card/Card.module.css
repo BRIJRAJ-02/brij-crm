@@ -159,6 +159,11 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* What runs to the Card's edges itself (a Table with edge="card"). */
+  .body[data-flush] {
+    padding: 0;
+  }
+
   /* What a card holds stacks with a form's rhythm: a field, its hint, then air before the next. */
   .body > :not(:first-child) {
     margin-block-start: var(--space-16);

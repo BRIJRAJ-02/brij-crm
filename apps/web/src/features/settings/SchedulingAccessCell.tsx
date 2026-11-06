@@ -188,7 +188,7 @@ function Reach({
     <>
       <Button
         ref={triggerRef}
-        variant="ghost"
+        variant="value"
         iconRight="chevron-down"
         label={`${strings.cellFor(member.name)}: ${words}`}
         onPress={() => setOpen(true)}

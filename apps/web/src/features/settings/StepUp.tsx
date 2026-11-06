@@ -3,7 +3,7 @@
 // Main task: enter the authenticator app's code (or a backup code) when two factor is on, else a code emailed now.
 // Leaves out: its own dialog (each change's dialog holds these fields).
 import type { AccountSecurityState, DataLayer } from '@crm/data';
-import { Button, Callout, CodeInput, Field } from '@crm/ui';
+import { Button, ButtonGroup, Callout, CodeInput, Field } from '@crm/ui';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { strings } from './security-strings.ts';
 
@@ -19,6 +19,8 @@ export interface StepUp {
   readonly isNeeded: boolean;
   /** The next commit sends an email code rather than checking one: its button should say so. */
   readonly willSend: boolean;
+  /** A commit could go somewhere now: no step up, a code to send, or a whole code typed. Stays false while the boxes are empty. */
+  readonly isReady: boolean;
   /** The sentence saying why, then the code's field and the way to switch: siblings in the dialog's body. */
   readonly fields: ReactNode;
   /** Checks the typed code when a step up is needed; true when the change may go on. */
@@ -123,13 +125,14 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   if (isNeeded && twoFactorOn) {
     fields = (
       <>
-        <Callout tone="info" title={strings.stepUp.title}>
-          {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
-        </Callout>
+        {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
         {kind === 'totp' ? (
           <CodeInput
             ref={field}
             label={strings.stepUp.appLabel}
+            // The line above says what it is; the boxes fill the dialog's width, as they do on the sign in page.
+            isLabelHidden
+            size="lg"
             value={code}
             onChange={setCode}
             {...complete}
@@ -139,6 +142,7 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
           <Field
             ref={field}
             label={strings.stepUp.backupLabel}
+            isLabelHidden
             value={code}
             onChange={setCode}
             autoComplete="off"
@@ -148,49 +152,63 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
             {...errorProps}
           />
         )}
-        <Button
-          variant="ghost"
-          onPress={() => {
-            setKind(kind === 'totp' ? 'backup' : 'totp');
-            setCode('');
-            setError(undefined);
-            refocus();
-          }}
-        >
-          {kind === 'totp' ? strings.stepUp.useBackup : strings.stepUp.useApp}
-        </Button>
+        {/* A line, so the quiet way round stands at the boxes' start rather than stretching across them. */}
+        <ButtonGroup label={strings.stepUp.otherWay} layout="line">
+          <Button
+            variant="link"
+            onPress={() => {
+              setKind(kind === 'totp' ? 'backup' : 'totp');
+              setCode('');
+              setError(undefined);
+              refocus();
+            }}
+          >
+            {kind === 'totp' ? strings.stepUp.useBackup : strings.stepUp.useApp}
+          </Button>
+        </ButtonGroup>
       </>
     );
   } else if (isNeeded && need.secondFactor === true) {
-    fields = (
-      <Callout tone="info" title={strings.stepUp.title}>
-        {strings.stepUp.secondFactorOnly}
-      </Callout>
-    );
+    fields = <Callout tone="info">{strings.stepUp.secondFactorOnly}</Callout>;
   } else if (isNeeded) {
     fields = (
       <>
-        <Callout tone="info" title={strings.stepUp.title} isAnnounced>
-          {sent ? strings.stepUp.sent : strings.stepUp.withEmail}
-        </Callout>
         {sent ? (
           <>
+            <Callout tone="info" isAnnounced>
+              {strings.stepUp.sent}
+            </Callout>
             <CodeInput
               ref={field}
               label={strings.stepUp.emailLabel}
+              isLabelHidden
+              size="lg"
               value={code}
               onChange={setCode}
               {...complete}
               {...errorProps}
             />
-            <Button variant="ghost" isPending={isSending} onPress={() => void send()}>
-              {strings.stepUp.sendAgain}
-            </Button>
+            <ButtonGroup label={strings.stepUp.otherWay} layout="line">
+              <Button variant="link" isPending={isSending} onPress={() => void send()}>
+                {strings.stepUp.sendAgain}
+              </Button>
+            </ButtonGroup>
           </>
-        ) : null}
+        ) : (
+          strings.stepUp.withEmail
+        )}
         {sendError !== undefined && <Callout tone="danger">{sendError}</Callout>}
       </>
     );
   }
-  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset, focus: refocus };
+  const willSend = isNeeded && !twoFactorOn && !sent;
+  return {
+    isNeeded,
+    willSend,
+    isReady: !isNeeded || willSend || code.trim().length >= 6,
+    fields,
+    prove,
+    reset,
+    focus: refocus,
+  };
 }

@@ -301,6 +301,33 @@ export const InputRows: Story = {
  * on the left and its control on the right, the label giving way first, so a Field, a SegmentedControl and a Switch
  * line up at one edge rather than the wider ones dropping under their labels.
  */
+/**
+ * `aside`: a list holding the width and its settings at the page's end (Members' list and Other ways to join), going
+ * under the list when both can't keep their widths. `variant="card"` is the stack inside the side Card.
+ */
+export const WithAside: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SettingsStack
+        aside={
+          <Card title="Other ways to join">
+            <SettingsStack variant="card" rows="inline">
+              <SettingsRow title="Invite link" description="Anyone with the link can join as a member.">
+                <Switch label="Invite link" isLabelHidden />
+              </SettingsRow>
+              <SettingsRow title="Let @acme.com ask to join">
+                <Switch label="Let @acme.com ask to join" isLabelHidden />
+              </SettingsRow>
+            </SettingsStack>
+          </Card>
+        }
+      >
+        <Card title="Members">Ada Lovelace</Card>
+      </SettingsStack>
+    </Stage>
+  ),
+};
+
 export const InlineRows: Story = {
   render: () => (
     <Stage width="dialog">

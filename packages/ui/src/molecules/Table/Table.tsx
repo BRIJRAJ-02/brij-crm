@@ -30,9 +30,13 @@ export interface TableColumn {
   /**
    * `fit` shrinks the column to its widest content (its label, a checkbox), so columns of controls keep one width
    * from table to table; `fill` takes the room the rest leave and lets its text truncate (TruncatedText) rather
-   * than widen the table. Left out, the browser shares the width as usual.
+   * than widen the table. `lead` is the column a row is read from (a person): a set share of the table, its text
+   * truncating, the rest of the width left to the columns after it, so a wide screen spreads a few short facts
+   * evenly instead of leaving them far from the name. `fact` is one of those columns: never narrower than
+   * `size-column-narrow` however short its content, sharing what's left evenly with the other facts. Left out, the
+   * browser shares the width as usual.
    */
-  readonly size?: 'fit' | 'fill';
+  readonly size?: 'fit' | 'fill' | 'lead' | 'fact';
   /**
    * The cell's content shows only while its row is hovered or holds focus (or its menu is open), so a list of
    * calendars isn't a column of identical buttons; always shown on touch, where nothing hovers.
@@ -53,9 +57,10 @@ export interface TableColumn {
   /**
    * Where the cell goes in a `phoneLayout="rows"` table on a phone: `title` on the row's first line, `meta` on its
    * second line after the others, `hidden` left out there (it still shows on a wider screen and is in the row's
-   * accessible content everywhere else). Left out, a cell is `meta`.
+   * accessible content everywhere else), `end` beside the title at the first line's end (a row's menu, with
+   * `look="person"`). Left out, a cell is `meta`.
    */
-  readonly phone?: 'title' | 'meta' | 'hidden';
+  readonly phone?: 'title' | 'meta' | 'hidden' | 'end';
 }
 
 /** How a Table shares its width. */
@@ -140,9 +145,22 @@ interface TableBase<T> {
   /**
    * `page` runs the rows out through a page's `space-16` gutter to its edges, the first and last columns' text on
    * the content edges, as a settings page's body does by itself (PageEdge): for a table directly in another page's
-   * body, such as a form editor's Submissions tab, whose text then lines up with the tabs above it.
+   * body, such as a form editor's Submissions tab, whose text then lines up with the tabs above it. `card` is a table
+   * filling a flush Card: its first and last columns keep the Card's `space-16` gutter and the last row gives its
+   * hairline up to the Card's edge.
    */
-  readonly edge?: 'page';
+  readonly edge?: 'page' | 'card';
+  /**
+   * `person` is a list read by the person each row leads with (PersonLine at `size="lg"`, Settings › Members): rows
+   * tall enough for a picture and two lines with room to breathe, and on a phone a row's second line under the name.
+   */
+  readonly look?: 'default' | 'person';
+  /**
+   * With `selected`: the checkboxes wait until the pointer is on the table, focus is in it or something is ticked, so
+   * a list read far more than it is bulk changed stays calm; the column keeps its place, so nothing moves. Always
+   * shown where nothing hovers.
+   */
+  readonly isSelectionQuiet?: boolean;
   /** A quiet band under the rows, as the records grid's footer: how many there are ("12 submissions"). */
   readonly footer?: ReactNode;
 }
@@ -182,6 +200,8 @@ export function Table<T>({
   getRowTone,
   phoneLayout = 'table',
   edge,
+  look = 'default',
+  isSelectionQuiet = false,
   footer,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
@@ -198,6 +218,7 @@ export function Table<T>({
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
   // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
   const atPageEdge = useContext(PageEdge) || edge === 'page';
+  const frameEdge = atPageEdge ? 'page' : edge === 'card' ? 'card' : undefined;
   // A table that also selects keeps the handle column: its checkboxes take the first cell's place.
   const handleInGutter = atPageEdge && onReorder !== undefined && !isSelectable;
   const firstColumnId = columns[0]?.id;
@@ -206,6 +227,23 @@ export function Table<T>({
     ...(isSelectable ? [{ id: SELECT, label: strings.selection, isLabelHidden: true }] : []),
   ];
   const shown: readonly TableColumn[] = [...lead, ...columns];
+  const isPerson = look === 'person';
+  const isCardEdge = frameEdge === 'card';
+  /** Where a column stands in a flush Card: at its gutters, or straight after a checkbox's column, which is a gutter. */
+  const cardEdgeOf = (id: string): 'start' | 'end' | 'after-select' | undefined => {
+    if (!isCardEdge) return undefined;
+    const index = shown.findIndex((each) => each.id === id);
+    if (index === shown.length - 1) return 'end';
+    if (index === 0 && id !== SELECT) return 'start';
+    return shown[index - 1]?.id === SELECT ? 'after-select' : undefined;
+  };
+  // A phone's second line starts under the name: the first cell that goes on it.
+  const firstMeta = shown.find(
+    (each) => each.id !== SELECT && each.id !== HANDLE && (each.phone ?? 'meta') === 'meta',
+  )?.id;
+  const lastRowId = ids.at(-1);
+  // A quiet selection's checkboxes, in the span that fades them.
+  const quietly = (box: ReactNode) => (isSelectionQuiet ? <span className={styles.selection}>{box}</span> : box);
   // The frame scrolls a table wider than its slot sideways on its own (a phone), never the page around it.
   // A sticky header sticks to the page's scroll, so its frame lets the table run on instead.
   const table = (
@@ -214,7 +252,9 @@ export function Table<T>({
       aria-label={label}
       data-layout={layout === 'even' ? 'even' : undefined}
       data-phone={phoneLayout === 'rows' ? 'rows' : undefined}
-      data-edge={atPageEdge ? 'page' : undefined}
+      data-edge={frameEdge}
+      data-look={look === 'default' ? undefined : look}
+      data-selection={isSelectable && isSelectionQuiet ? (selected.size > 0 ? 'ticked' : 'quiet') : undefined}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
       {...(isSelectable
         ? {
@@ -231,7 +271,12 @@ export function Table<T>({
           }
         : {})}
     >
-      <TableHeader className={styles.header} columns={shown} data-hidden={isHeaderHidden || undefined}>
+      <TableHeader
+        className={styles.header}
+        columns={shown}
+        data-hidden={isHeaderHidden || undefined}
+        data-quiet={(isSelectable && isSelectionQuiet && selected.size === 0) || undefined}
+      >
         {(column) => (
           <Column
             id={column.id}
@@ -248,9 +293,11 @@ export function Table<T>({
             data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
             data-current={column.isCurrent === true || undefined}
             data-tone={column.tone}
+            data-card={isCardEdge || undefined}
+            data-card-edge={cardEdgeOf(column.id)}
           >
             {column.id === SELECT ? (
-              <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
+              quietly(<Checkbox slot="selection" label={strings.selectAll} isLabelHidden />)
             ) : column.isLabelHidden === true ? (
               <VisuallyHidden>{column.label}</VisuallyHidden>
             ) : column.heading !== undefined ? (
@@ -271,11 +318,22 @@ export function Table<T>({
         items={showSkeleton ? [] : rows.map((row) => ({ id: getRowId(row), row }))}
         renderEmptyState={() =>
           showSkeleton ? (
-            <span className={styles.loading}>
+            <span className={styles.loading} data-look={look === 'default' ? undefined : look}>
               <VisuallyHidden>{strings.loading}</VisuallyHidden>
-              {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-                <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
-              ))}
+              {Array.from({ length: SKELETON_ROWS }, (_, index) =>
+                look === 'person' ? (
+                  // A person's own row: their picture beside two lines, a row's height.
+                  <span key={index} className={styles.loadingPerson}>
+                    <Skeleton shape="circle" size="lg" />
+                    <span className={styles.loadingLines}>
+                      <Skeleton width="long" />
+                      <Skeleton width="medium" />
+                    </span>
+                  </span>
+                ) : (
+                  <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
+                ),
+              )}
             </span>
           ) : (
             emptyState
@@ -289,6 +347,9 @@ export function Table<T>({
             className={styles.row}
             data-pressable={onRowAction === undefined ? undefined : ''}
             data-tone={getRowTone?.(item.row)}
+            data-look={isPerson ? look : undefined}
+            data-card={isCardEdge || undefined}
+            data-last-row={(isCardEdge && item.id === lastRowId) || undefined}
           >
             {(column) =>
               column.id === HANDLE ? (
@@ -296,14 +357,22 @@ export function Table<T>({
                   <SortableRowGrip id={item.id} label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
                 </Cell>
               ) : column.id === SELECT ? (
-                <Cell className={styles.cell} data-handle data-select>
-                  {!unselectable.has(item.id) && (
-                    <Checkbox
-                      slot="selection"
-                      label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
-                      isLabelHidden
-                    />
-                  )}
+                <Cell
+                  className={styles.cell}
+                  data-handle
+                  data-select
+                  data-look={isPerson ? look : undefined}
+                  data-card={isCardEdge || undefined}
+                  data-last-row={(isCardEdge && item.id === lastRowId) || undefined}
+                >
+                  {!unselectable.has(item.id) &&
+                    quietly(
+                      <Checkbox
+                        slot="selection"
+                        label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
+                        isLabelHidden
+                      />,
+                    )}
                 </Cell>
               ) : (
                 <Cell
@@ -315,6 +384,10 @@ export function Table<T>({
                   data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
                   data-phone={phoneLayout === 'rows' ? (column.phone ?? 'meta') : undefined}
+                  data-look={isPerson ? look : undefined}
+                  data-card-edge={cardEdgeOf(column.id)}
+                  data-last-row={(isCardEdge && item.id === lastRowId) || undefined}
+                  data-phone-first={(isPerson && phoneLayout === 'rows' && column.id === firstMeta) || undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (
                     <span className={styles.gutter}>
@@ -343,7 +416,7 @@ export function Table<T>({
       data-sticky={isHeaderSticky || undefined}
       data-scrollable={scrolls || undefined}
       data-fade={fade}
-      data-edge={atPageEdge ? 'page' : undefined}
+      data-edge={frameEdge}
       data-layout={layout === 'even' ? 'even' : undefined}
       data-phone={phoneLayout === 'rows' ? 'rows' : undefined}
       // How many columns share the width evenly, so an even table's least width holds each at size-column-min.
@@ -369,7 +442,7 @@ export function Table<T>({
   );
   if (footer === undefined) return framed;
   return (
-    <div className={styles.withFoot} data-edge={atPageEdge ? 'page' : undefined}>
+    <div className={styles.withFoot} data-edge={frameEdge}>
       {framed}
       <div className={styles.foot}>{footer}</div>
     </div>

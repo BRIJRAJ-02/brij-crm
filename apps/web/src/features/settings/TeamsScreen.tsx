@@ -5,7 +5,7 @@
 // reads who is in which team.
 // Leaves out: what a team may see (an object's Access tab), team pages and team calendars, and guests.
 import { isDataError, type DataLayer, type MemberView, type TeamView } from '@crm/data';
-import { AvatarStack, Button, EmptyState, sharedStrings, Table, type TableColumn, type Toasts } from '@crm/ui';
+import { AvatarStack, Button, Card, EmptyState, sharedStrings, Table, type TableColumn, type Toasts } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -34,13 +34,13 @@ export interface TeamsScreenProps {
 }
 
 const READ_COLUMNS: readonly TableColumn[] = [
-  { id: 'team', label: strings.columns.team, isRowHeader: true },
+  { id: 'team', label: strings.columns.team, isRowHeader: true, size: 'lead' },
   { id: 'people', label: strings.columns.people, isInline: true },
 ];
 
 const MANAGE_COLUMNS: readonly TableColumn[] = [
   ...READ_COLUMNS,
-  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
+  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end', size: 'fit' },
 ];
 
 /** The message a refusal shows, in the server's words when it gave any. */
@@ -202,7 +202,7 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
       case 'team':
         return canManage ? (
           <Button
-            variant="link"
+            variant="value"
             onPress={() => {
               openOn(team);
             }}
@@ -264,21 +264,23 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
       {...(canManage ? { actions: newTeam } : { viewOnly: sharedStrings.ownersAndAdminsOnly })}
     >
       {teams.length === 0 ? (
-        <EmptyState title={strings.emptyTitle}>
+        <EmptyState layout="block" icon="users" title={strings.emptyTitle}>
           {/* New team sits in the page head; a reader hears who makes them. */}
-          {canManage ? undefined : strings.readerEmptyText}
+          {canManage ? strings.emptyText : strings.readerEmptyText}
         </EmptyState>
       ) : (
-        <>
+        <Card isFlush>
           <Table
             label={strings.title}
             columns={canManage ? MANAGE_COLUMNS : READ_COLUMNS}
             rows={teams}
             getRowId={(team) => team.id}
             renderCell={cell}
+            edge="card"
+            look="person"
             isScrollable
           />
-        </>
+        </Card>
       )}
       {canManage && (
         <TeamDialog
@@ -310,14 +312,18 @@ export function TeamsPending() {
   const canManage = useCan('teams.manage');
   return (
     <SettingsPage title={strings.loading} isLoading>
-      <Table
-        label={strings.loading}
-        columns={canManage ? MANAGE_COLUMNS : READ_COLUMNS}
-        rows={[]}
-        getRowId={() => ''}
-        renderCell={() => null}
-        isLoading
-      />
+      <Card isFlush>
+        <Table
+          label={strings.loading}
+          columns={canManage ? MANAGE_COLUMNS : READ_COLUMNS}
+          rows={[]}
+          getRowId={() => ''}
+          renderCell={() => null}
+          edge="card"
+          look="person"
+          isLoading
+        />
+      </Card>
     </SettingsPage>
   );
 }

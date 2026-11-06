@@ -2,7 +2,7 @@
 // Purpose: invite people to the workspace by email, each with a role (spec 0031, AC-803).
 // Main task: type an address per row (+ Add another, or Enter, makes the next; a pasted list splits into rows), pick
 // each row's role where it differs, then Invite; a clean send closes the dialog with a toast, a partial one says who.
-// Leaves out: the invite link's settings (Members' Other ways to join, under its list; the foot only copies it, turning it on
+// Leaves out: the invite link's settings (Members' Other ways to join, beside its list; the foot only copies it, turning it on
 // as a Member link when off, with Undo), email domains, and a seat line (until #38 sets limits).
 import { isDataError, type DataLayer, type InviteLinkView, type RoleOption } from '@crm/data';
 import { Button, Callout, Disclosure, InviteRows, Modal, sharedStrings, Skeleton, useDelayedLoading } from '@crm/ui';

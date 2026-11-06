@@ -303,7 +303,11 @@ export interface SettingsStackProps {
    * `flush` is `plain` with no breath above it, so its first control starts on the same line as what sits beside it
    * in a two column grid: a form's embed choices beside EmbedPreview's made up site (the owner, 5 November 2026).
    */
-  readonly variant?: 'default' | 'plain' | 'nested' | 'flush';
+  /**
+   * `card` is the page's stack with no breath above it and a hairline between its parts, for what goes inside a Card,
+   * whose own padding is that breath: Members' Other ways to join, whose invite link is several rows and a field.
+   */
+  readonly variant?: 'default' | 'plain' | 'nested' | 'flush' | 'card';
   /**
    * `readable` holds the stack to `size-dialog-wide`, so a row's control stays near its label on a wide screen: a
    * tab of plain rows with no Card around them (a form's Settings, forms fixes 2), where the full width put a label
@@ -318,6 +322,12 @@ export interface SettingsStackProps {
    * Field keeps `size-column-wide` (the forms Settings tab's field width) down to `size-column`.
    */
   readonly rows?: 'wrap' | 'inline';
+  /**
+   * A side column beside the stack: its settings at the page's end, the list holding the width (Members' list and
+   * its Other ways to join), so a page with a few rows still uses both edges. It stays in view while a long list
+   * scrolls, and goes under the list when both can't keep their widths (a phone, a details panel open).
+   */
+  readonly aside?: ReactNode;
   readonly children: ReactNode;
 }
 
@@ -325,7 +335,13 @@ export interface SettingsStackProps {
  * The page body's rhythm inside a tab's panel: sections (Cards, Tables, a
  * Callout) stacked `space-16` apart, as they are directly in the body.
  */
-export function SettingsStack({ variant = 'default', width = 'full', rows = 'wrap', children }: SettingsStackProps) {
+export function SettingsStack({
+  variant = 'default',
+  width = 'full',
+  rows = 'wrap',
+  aside,
+  children,
+}: SettingsStackProps) {
   return (
     <div
       className={styles.stack}
@@ -333,7 +349,14 @@ export function SettingsStack({ variant = 'default', width = 'full', rows = 'wra
       data-width={width === 'full' ? undefined : width}
       data-rows={rows === 'wrap' ? undefined : rows}
     >
-      {children}
+      {aside === undefined || aside === null || aside === false ? (
+        children
+      ) : (
+        <div className={styles.split}>
+          <div className={styles.splitMain}>{children}</div>
+          <div className={styles.splitAside}>{aside}</div>
+        </div>
+      )}
     </div>
   );
 }

@@ -170,7 +170,6 @@ export const strings = {
   signInText: 'These pages ask for an app code every 12 hours.',
   signInAction: 'Confirm it’s you',
   confirmTitle: 'Confirm it’s you',
-  confirmText: 'Enter your authenticator app code.',
   confirm: 'Confirm',
   cancel: 'Cancel',
   stillHeld: 'That code didn’t work. Try a new one.',

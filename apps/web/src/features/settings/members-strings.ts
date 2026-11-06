@@ -30,11 +30,10 @@ export const strings = {
     expires: 'Expires',
   },
   /**
-   * Each row's status (owner ask T12): a member is Active; someone on their way in is Invited (Invite expired once
-   * their link ran out, sent again with Resend) or Asks to join (answered with Approve or Decline).
+   * Where someone on their way in stands (owner ask T12): Invited (Invite expired once their link ran out, sent again
+   * with Resend) or Asks to join (answered with Approve or Decline). A member needs no word for it.
    */
   status: {
-    active: 'Active',
     invited: 'Invited',
     expired: 'Invitation expired',
     asking: 'Asks to join',
