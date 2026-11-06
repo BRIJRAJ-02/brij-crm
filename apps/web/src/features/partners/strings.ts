@@ -42,6 +42,7 @@ export const connectStrings = {
 } as const;
 
 export const connectedStrings = {
+  test: 'Test',
   emptyTitle: 'No apps connected',
   emptyText: 'An app you connect from its own Integrate Timefix button shows here.',
   failedTitle: 'Couldn’t load connected apps',
@@ -105,6 +106,8 @@ export const partnersStrings = {
     redirectUris: 'Addresses that receive a connection',
     redirectUrisHint: 'One full address a line. A connect must name one of these exactly.',
     redirectMissing: 'Add the address that receives a connection.',
+    isTest: 'Sandbox partner',
+    isTestHint: 'For trying the API before going live. Its connections are marked as tests and never billed.',
     cancel: 'Cancel',
     register: 'Register',
     registering: 'Registering…',
@@ -129,4 +132,21 @@ export const partnersStrings = {
     cancel: 'Cancel',
   },
   saved: (name: string) => `${name} saved`,
+  // The sandbox (spec 0070, AC-7035).
+  test: 'Test',
+  wipe: (name: string) => `Wipe the test connections of ${name}`,
+  wipeShort: 'Wipe tests',
+  wipeConfirm: {
+    title: (name: string) => `Wipe the test connections of ${name}?`,
+    text: 'Every workspace it is connected to as a test is disconnected, and its open screens close. People it added stay in their workspaces.',
+    confirm: 'Wipe tests',
+    wiping: 'Wiping…',
+    cancel: 'Cancel',
+  },
+  wiped: (count: number) =>
+    count === 0
+      ? 'No test connections to wipe'
+      : count === 1
+        ? 'Wiped 1 test connection'
+        : `Wiped ${count} test connections`,
 } as const;

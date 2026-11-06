@@ -8,6 +8,7 @@
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
 import { Field, Link, Switch } from '@crm/ui';
 import { profileHref } from '../settings/nav.ts';
+import { useLinkPagePlace } from './place.tsx';
 import { useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -48,6 +49,7 @@ type Part = keyof PageIdentity;
  * stays on its own field (or, for the switch, in the card's foot, as Sharing does) until the next try, and the field keeps what was typed so it can be put right.
  */
 export function IdentityFields({ data, slug, jobTitle, identity, onSaved, onSwitchRefused }: IdentityFieldsProps) {
+  const { isEmbedded } = useLinkPagePlace(slug);
   const [site, setSite] = useState(identity.site);
   const [footLine, setFootLine] = useState(identity.footLine);
   // The switch shows its new place the moment it is pressed, and goes back if the save is refused.
@@ -86,8 +88,9 @@ export function IdentityFields({ data, slug, jobTitle, identity, onSaved, onSwit
           isSelected={switched ?? identity.showJobTitle}
           onChange={(next) => save('showJobTitle', next)}
         />
-      ) : (
-        // No title to show: the way to add one, rather than a switch that can't move.
+      ) : isEmbedded ? undefined : (
+        // No title to show: the way to add one, rather than a switch that can't move. Settings is no part of a
+        // partner's frame (spec 0070, AC-7033), so there it is left out.
         <Link href={profileHref(slug)}>{strings.addJobTitle}</Link>
       )}
       <Field

@@ -9,7 +9,13 @@
 // POST /members   adds or updates a teammate in Timefix (slice 3): `PUT …/members/{externalId}` with their email,
 //                 name and role, no invitation sent
 // POST /remove    removes a teammate: `DELETE …/members/{externalId}`
-// The page lists the hub's teammates as Timefix has them (`GET …/members`).
+// GET  /embed     the hub's Timefix tab for one teammate (slice 4): a launch (`POST …/launch`) for their screen, and
+//                 Timefix in an iframe sized by the frame's own height messages; a relaunch asked by the frame
+//                 (`POST /launch`, its session ended, or the browser refused its cookie) opens a fresh address in the
+//                 frame or in a new tab
+// POST /launch    a fresh launch for the frame's page, as JSON `{ url }`
+// The page lists the hub's teammates as Timefix has them (`GET …/members`). Open it on 127.0.0.1 rather than
+// localhost and the frame is on another site, as a real hub's is (`setup.ts` registers both as frame origins).
 //
 // Settings come from the environment: TIMEFIX_URL (the app, http://localhost:5290), PARTNER_CLIENT_ID,
 // PARTNER_CLIENT_SECRET, and PORT (5390). The redirect address it sends is http://localhost:<PORT>/callback, which
@@ -59,6 +65,49 @@ function settingsOf(env: NodeJS.ProcessEnv): Settings {
 
 const escape = (text: string) => text.replace(/[&<>"']/g, (character) => `&#${String(character.charCodeAt(0))};`);
 
+/** The screens a launch opens, as the hub offers them. */
+const SCREENS = ['link_pages.mine', 'link_pages.team'] as const;
+
+/**
+ * The hub's Timefix tab around the frame: the frame starts at the launch's address, takes the height Timefix sends
+ * (only from Timefix's own origin), and asks the hub's server for a fresh launch when Timefix asks for one.
+ */
+function embedPage(launch: {
+  readonly url: string;
+  readonly externalId: string;
+  readonly screen: string;
+  readonly theme: string;
+}): string {
+  const timefix = new URL(launch.url).origin;
+  const again = JSON.stringify({ externalId: launch.externalId, screen: launch.screen, theme: launch.theme });
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sample hub · Timefix</title>
+    <style>body{margin:0;font:14px system-ui,sans-serif;background:#f4f4f5}header{padding:12px 16px;background:#111827;color:#fff}
+    header a{color:#c7d2fe;margin-right:12px}main{padding:16px}iframe{display:block;width:100%;height:720px;border:0;border-radius:8px;background:#fff}</style>
+    </head><body><header><strong>Sample hub</strong> · <a href="/">Back to the hub</a></header>
+    <main><iframe id="timefix" title="Timefix" src="${escape(launch.url)}"></iframe></main>
+    <script>
+      const frame = document.getElementById('timefix');
+      const TIMEFIX = ${JSON.stringify(timefix)};
+      const AGAIN = ${again};
+      window.addEventListener('message', async (event) => {
+        if (event.origin !== TIMEFIX || event.source !== frame.contentWindow) return;
+        const message = event.data;
+        if (message && message.type === 'timefix:height' && Number.isFinite(message.height)) {
+          // The frame's own height, kept inside the window so its dialogs stay in view.
+          frame.style.height = Math.max(320, Math.min(message.height, window.innerHeight - 80)) + 'px';
+        }
+        if (message && message.type === 'timefix:relaunch') {
+          const answer = await fetch('/launch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(AGAIN) });
+          const { url } = await answer.json();
+          if (typeof url !== 'string') return;
+          if (message.target === 'tab') window.open(url, '_blank', 'noopener');
+          else frame.src = url;
+        }
+      });
+    </script></body></html>`;
+}
+
 /** A teammate as the hub lists them, from Timefix's answer. */
 interface Teammate {
   readonly externalId: string;
@@ -73,6 +122,8 @@ function team(teammates: readonly Teammate[]): string {
     .map(
       (each) => `<li data-external-id="${escape(each.externalId)}">${escape(each.name)} · ${escape(each.email)} ·
         ${escape(each.role)}
+        <a href="/embed?externalId=${encodeURIComponent(each.externalId)}&amp;screen=link_pages.mine">Open ${escape(each.name)}’s link page</a>
+        ${each.role === 'member' ? '' : `<a href="/embed?externalId=${encodeURIComponent(each.externalId)}&amp;screen=link_pages.team">Team pages as ${escape(each.name)}</a>`}
         <form method="post" action="/remove"><input type="hidden" name="externalId" value="${escape(each.externalId)}">
         <button type="submit">Remove ${escape(each.name)}</button></form></li>`,
     )
@@ -147,6 +198,26 @@ export function startSample(settings: Settings): ReturnType<typeof createServer>
     headers: { authorization: `Bearer ${connection.token}` },
   });
 
+  /** A launch (slice 4): a one time address for one teammate's screen, or why it was refused. */
+  const launch = async (
+    connection: Held,
+    asked: { readonly externalId: string; readonly screen: string; readonly theme: string },
+  ): Promise<{ readonly url: string } | { readonly refused: string }> => {
+    const launched = await call(`${settings.timefix}/api/partner/v1/connections/${connection.connectionId}/launch`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        externalId: asked.externalId,
+        screen: asked.screen,
+        ...(asked.theme === 'light' || asked.theme === 'dark' ? { theme: asked.theme } : {}),
+      }),
+    });
+    const url = launched.body['url'];
+    return launched.status === 200 && typeof url === 'string'
+      ? { url }
+      : { refused: `${String(launched.body['code'])} ${String(launched.body['message'])}` };
+  };
+
   /** The team as Timefix has it now; none when not connected or refused. */
   const teammates = async (): Promise<readonly Teammate[]> => {
     if (held === undefined) return [];
@@ -166,6 +237,49 @@ export function startSample(settings: Settings): ReturnType<typeof createServer>
     const url = new URL(request.url ?? '/', redirectUri);
     if (request.method === 'GET' && url.pathname === '/') {
       send(response, 200, page(held, status, await teammates()));
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/embed') {
+      const asked = {
+        externalId: url.searchParams.get('externalId') ?? '',
+        screen: SCREENS.find((each) => each === url.searchParams.get('screen')) ?? 'link_pages.mine',
+        theme: url.searchParams.get('theme') ?? '',
+      };
+      if (held === undefined) {
+        send(response, 409, page(held, 'Connect first.'));
+        return;
+      }
+      const launched = await launch(held, asked);
+      if ('refused' in launched) {
+        status = `Launch refused: ${launched.refused}`;
+        goTo(response, '/');
+        return;
+      }
+      send(response, 200, embedPage({ ...asked, url: launched.url }));
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/launch') {
+      let text = '';
+      for await (const chunk of request) text += String(chunk);
+      const parsed: unknown = JSON.parse(text || '{}');
+      const body = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+      const field = (name: string, fallback: string) => {
+        const value = body[name];
+        return typeof value === 'string' ? value : fallback;
+      };
+      const launched =
+        held === undefined
+          ? { refused: 'not connected' }
+          : await launch(held, {
+              externalId: field('externalId', ''),
+              screen: field('screen', 'link_pages.mine'),
+              theme: field('theme', ''),
+            });
+      response.writeHead('refused' in launched ? 409 : 200, {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      });
+      response.end(JSON.stringify(launched));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/members') {
@@ -279,7 +393,9 @@ export function startSample(settings: Settings): ReturnType<typeof createServer>
       send(response, 500, page(held, `Failed: ${String(error)}`));
     });
   });
-  server.listen(settings.port, 'localhost');
+  // Every local address, so the hub answers on localhost (the connect's registered callback) and on 127.0.0.1 (another
+  // site from the app's localhost, for the frame).
+  server.listen(settings.port);
   return server;
 }
 

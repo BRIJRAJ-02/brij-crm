@@ -61,7 +61,8 @@ import { BlockEditorFrame } from './editors.tsx';
 import { IdentityFields, identityOf, type PageIdentity } from './IdentityFields.tsx';
 import { SharingFields } from './SharingFields.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useLinkPagePlace } from './place.tsx';
 import {
   ADDABLE,
   blockKindOf,
@@ -238,8 +239,10 @@ export function LinkPageScreen({
   // else opening it (spec 0070) never does: only the switch.
   const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined && !isTeam, linkPage });
   // Team pages (spec 0070, AC-7001): one way there, on the person's own overview, for those who may manage them.
-  const canManageTeam = useCan('link_pages.manage_team');
-  const teamHref = `/w/${slug}/link-page?team=true`;
+  // Its addresses are the place's: the app's, or the partner's frame's (AC-7032).
+  const place = useLinkPagePlace(slug);
+  const canManageTeam = place.canManageTeam;
+  const teamHref = place.href({ team: true });
   return (
     // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
     // in the sidebar, its own bar, and no trail of configuration above it (the owner).
@@ -253,7 +256,7 @@ export function LinkPageScreen({
             {...(isTeam
               ? {
                   crumbs: [
-                    { id: 'link-page', label: teamStrings.linkPage, href: `/w/${slug}/link-page` },
+                    { id: 'link-page', label: teamStrings.linkPage, href: place.href() },
                     { id: 'team', label: teamStrings.title, href: teamHref },
                   ],
                   back: { label: teamStrings.back, href: teamHref },
@@ -444,6 +447,12 @@ export function HeaderActions({
   );
 }
 
+/**
+ * The kinds that belong to modules other than Link pages (booking pages, forms, places): an embedded frame, which
+ * shares Link pages alone (spec 0070, AC-7033), never offers them.
+ */
+const OTHER_MODULES: ReadonlySet<AddableKind> = new Set(['page', 'times', 'form', 'signup', 'menu', 'reserve']);
+
 /** The blocks, their editors and the phone, once the person has a handle. */
 function Blocks({
   data,
@@ -475,6 +484,9 @@ function Blocks({
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  // Embedded in a partner's frame (spec 0070, AC-7033): only Link pages is shared, so no block of another module
+  // (booking pages, forms, places) is offered, and none opens that module's editor.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const held = linkPage.view(slug);
   const state = useLinkPage(held);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
@@ -878,7 +890,7 @@ function Blocks({
               </MenuItem>
             )}
             <MenuSeparator />
-            {item.kind === 'page' && item.page !== undefined && (
+            {item.kind === 'page' && item.page !== undefined && !isEmbedded && (
               <MenuItem id="page" icon="calendar-clock" href={pageEditorHref(item.page.workspaceSlug, item.pageId)}>
                 {strings.editPage}
               </MenuItem>
@@ -943,7 +955,7 @@ function Blocks({
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),
       ...(isPending ? { isPending: true } : { actions: rowMenu(item, index) }),
-      ...(item.kind === 'page' && item.page !== undefined
+      ...(item.kind === 'page' && item.page !== undefined && !isEmbedded
         ? { href: pageEditorHref(item.page.workspaceSlug, item.pageId) }
         : {}),
     };
@@ -959,6 +971,8 @@ function Blocks({
   // installed in this workspace, read once as the screen opens. Elsewhere the Add modal never mentions them.
   const [placeKinds, setPlaceKinds] = useState<ReadonlySet<AddableKind>>(() => new Set());
   useEffect(() => {
+    // Embedded, no place's block is offered, so there is nothing to ask.
+    if (isEmbedded) return undefined;
     let isCurrent = true;
     linkPage.placeChoices(slug).then(
       (found) => {
@@ -975,10 +989,13 @@ function Blocks({
     return () => {
       isCurrent = false;
     };
-  }, [linkPage, slug]);
+  }, [linkPage, slug, isEmbedded]);
   // Email signup makes a form in the name of whoever adds it, so it is the page owner's own to add (spec 0070).
   const addable = ADDABLE.filter(
-    (kind) => ((kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind)) && !(isTeam && kind === 'signup'),
+    (kind) =>
+      ((kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind)) &&
+      !(isTeam && kind === 'signup') &&
+      !(isEmbedded && OTHER_MODULES.has(kind)),
   );
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
@@ -1153,7 +1170,7 @@ function Blocks({
           // A booking page block opens the booking page's own editor, in its workspace; its menu's Edit holds the
           // block's own size and window.
           if (item.kind === 'page' && item.page !== undefined) {
-            void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
+            if (!isEmbedded) void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
           } else if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
         }}
         onMove={move}

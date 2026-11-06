@@ -91,6 +91,7 @@ export async function registerPartner(
       secretHash: partnerSecretHash(secret),
       secretHint: partnerSecretHint(secret),
       createdBy: audit.userId,
+      ...(input.isTest === true ? { isTest: true } : {}),
     },
     audit,
   );

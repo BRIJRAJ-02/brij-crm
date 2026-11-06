@@ -20,6 +20,8 @@ import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
 import { Route as PublicInsightsRouteImport } from './routes/public.insights.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
+import { Route as EmbedClientIdLinkPageRouteImport } from './routes/embed.$clientId.link-page.tsx'
+import { Route as EmbedClientIdStartRouteImport } from './routes/embed.$clientId.start.tsx'
 import { Route as OauthPartnerAuthorizeRouteImport } from './routes/oauth.partner.authorize.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
@@ -182,6 +184,16 @@ const PublicInsightsRoute = PublicInsightsRouteImport.update({
 const WSlugRoute = WSlugRouteImport.update({
   id: '/w/$slug',
   path: '/w/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedClientIdLinkPageRoute = EmbedClientIdLinkPageRouteImport.update({
+  id: '/embed/$clientId/link-page',
+  path: '/embed/$clientId/link-page',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedClientIdStartRoute = EmbedClientIdStartRouteImport.update({
+  id: '/embed/$clientId/start',
+  path: '/embed/$clientId/start',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthPartnerAuthorizeRoute = OauthPartnerAuthorizeRouteImport.update({
@@ -789,6 +801,8 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/embed/$clientId/link-page': typeof EmbedClientIdLinkPageRoute
+  '/embed/$clientId/start': typeof EmbedClientIdStartRoute
   '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
@@ -909,6 +923,8 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
+  '/embed/$clientId/link-page': typeof EmbedClientIdLinkPageRoute
+  '/embed/$clientId/start': typeof EmbedClientIdStartRoute
   '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
@@ -1028,6 +1044,8 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/public/insights': typeof PublicInsightsRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/embed/$clientId/link-page': typeof EmbedClientIdLinkPageRoute
+  '/embed/$clientId/start': typeof EmbedClientIdStartRoute
   '/oauth/partner/authorize': typeof OauthPartnerAuthorizeRoute
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
@@ -1151,6 +1169,8 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/public/insights'
     | '/w/$slug'
+    | '/embed/$clientId/link-page'
+    | '/embed/$clientId/start'
     | '/oauth/partner/authorize'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
@@ -1271,6 +1291,8 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/invite/$token'
     | '/public/insights'
+    | '/embed/$clientId/link-page'
+    | '/embed/$clientId/start'
     | '/oauth/partner/authorize'
     | '/w/$slug/home'
     | '/w/$slug/inbox'
@@ -1389,6 +1411,8 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/public/insights'
     | '/w/$slug'
+    | '/embed/$clientId/link-page'
+    | '/embed/$clientId/start'
     | '/oauth/partner/authorize'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
@@ -1511,6 +1535,8 @@ export interface RootRouteChildren {
   InviteTokenRoute: typeof InviteTokenRoute
   PublicInsightsRoute: typeof PublicInsightsRoute
   WSlugRoute: typeof WSlugRouteWithChildren
+  EmbedClientIdLinkPageRoute: typeof EmbedClientIdLinkPageRoute
+  EmbedClientIdStartRoute: typeof EmbedClientIdStartRoute
   OauthPartnerAuthorizeRoute: typeof OauthPartnerAuthorizeRoute
 }
 
@@ -1591,6 +1617,20 @@ declare module '@tanstack/react-router' {
       path: '/w/$slug'
       fullPath: '/w/$slug'
       preLoaderRoute: typeof WSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/$clientId/link-page': {
+      id: '/embed/$clientId/link-page'
+      path: '/embed/$clientId/link-page'
+      fullPath: '/embed/$clientId/link-page'
+      preLoaderRoute: typeof EmbedClientIdLinkPageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/$clientId/start': {
+      id: '/embed/$clientId/start'
+      path: '/embed/$clientId/start'
+      fullPath: '/embed/$clientId/start'
+      preLoaderRoute: typeof EmbedClientIdStartRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth/partner/authorize': {
@@ -2624,6 +2664,8 @@ const rootRouteChildren: RootRouteChildren = {
   InviteTokenRoute: InviteTokenRoute,
   PublicInsightsRoute: PublicInsightsRoute,
   WSlugRoute: WSlugRouteWithChildren,
+  EmbedClientIdLinkPageRoute: EmbedClientIdLinkPageRoute,
+  EmbedClientIdStartRoute: EmbedClientIdStartRoute,
   OauthPartnerAuthorizeRoute: OauthPartnerAuthorizeRoute,
 }
 export const routeTree = rootRouteImport

@@ -48,6 +48,8 @@ export interface NewPartner {
   readonly secretHash: Buffer;
   readonly secretHint: string;
   readonly createdBy: string;
+  /** A sandbox partner (spec 0070, AC-7035). */
+  readonly isTest?: boolean;
 }
 
 /** A change to a partner: only the fields given; `logo: null` takes the logo away. */
@@ -215,11 +217,12 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
             secretHash: partner.secretHash,
             secretHint: partner.secretHint,
             createdBy: partner.createdBy,
+            isTest: partner.isTest === true,
           })
           .returning(ROW);
         if (row === undefined) throw new Error('A partner just made could not be read back.');
         const made = toRow(row);
-        await logChange(tx, audit, made, { clientId: made.clientId });
+        await logChange(tx, audit, made, { clientId: made.clientId, isTest: made.isTest });
         return made;
       });
     },

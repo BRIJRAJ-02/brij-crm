@@ -740,6 +740,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       registerPartner: os.operator.registerPartner.handler(notServed),
       updatePartner: os.operator.updatePartner.handler(notServed),
       replacePartnerSecret: os.operator.replacePartnerSecret.handler(notServed),
+      wipeTestConnections: os.operator.wipeTestConnections.handler(notServed),
     },
     // Partner connect (spec 0070) is read through to the api as is; its checks are core's and the api's tests.
     partnerConnect: {
@@ -751,6 +752,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.connectedApps.list.handler(notServed),
       setModules: os.connectedApps.setModules.handler(notServed),
       disconnect: os.connectedApps.disconnect.handler(notServed),
+    },
+    // The embedded frame's calls (spec 0070, slice 4): the api's tests drive them.
+    embed: {
+      start: os.embed.start.handler(notServed),
+      session: os.embed.session.handler(notServed),
     },
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
     services: {

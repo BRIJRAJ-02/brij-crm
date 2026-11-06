@@ -256,6 +256,7 @@ export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contra
 export type {
   ConnectableWorkspace,
   ConnectedApp,
+  EmbedSessionView,
   PartnerConnectOffer,
   PartnerConnectRequest,
   PartnerLogoUpload,
@@ -541,6 +542,7 @@ import type { RecordFileView } from '@crm/contracts';
 import type { ApiKey, ApiKeyAccess } from '@crm/contracts';
 import type {
   ConnectedApp,
+  EmbedSessionView,
   PartnerConnectOffer,
   PartnerConnectRequest,
   PartnerLogoUpload,
@@ -1531,6 +1533,11 @@ export interface DataLayerOptions {
   /** The network. The browser's `fetch` by default; tests pass a fake API. */
   readonly fetch?: FetchLike;
   /**
+   * Headers every API call carries: an embedded frame's (spec 0070, AC-7031), so the API reads the frame's own
+   * session cookie and holds it to the shared modules. None in the app.
+   */
+  readonly callHeaders?: Readonly<Record<string, string>>;
+  /**
    * Centrifugo's WebSocket address (`VITE_REALTIME_URL`). Unset (previews),
    * live updates are off and `live.status()` says so.
    */
@@ -1621,6 +1628,7 @@ export function createDataLayer({
   onSessionChange = () => undefined,
   onSessionKnown = () => undefined,
   fetch = (input, init) => globalThis.fetch(input, init),
+  callHeaders,
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   onReplaced = () => undefined,
@@ -1633,6 +1641,7 @@ export function createDataLayer({
   const api: ApiClient = createORPCClient(
     new RPCLink<CallContext>({
       url: new URL('/api/rpc', origin).href,
+      ...(callHeaders === undefined ? {} : { headers: { ...callHeaders } }),
       fetch: async (request, init, { context }, path) => {
         const response = await fetch(request, init);
         const requestId = response.headers.get('x-request-id') ?? undefined;
@@ -8134,6 +8143,39 @@ export function createDataLayer({
         }),
     },
     /**
+     * An embedded frame's own calls (spec 0070, AC-7031): `start` redeems a launch's one time code and the server sets
+     * the frame's session cookie; `session` reads what that session opens. Neither ends a session on a 401 (the frame
+     * says so itself); once a session answers, a later 401 on any screen ends it as anywhere. `frameOrigins` reads the
+     * partner's registered origins, the only ones the frame tells its height or asks for a fresh launch; none on a
+     * failure, so nothing is ever sent to an origin nobody registered.
+     */
+    embed: {
+      start: (code: string): Promise<EmbedSessionView> =>
+        attempt((options) => api.embed.start({ code }, options)).then((view) => {
+          ended = false;
+          seenPerson = true;
+          return view;
+        }),
+      session: (): Promise<EmbedSessionView> =>
+        attempt((options) => api.embed.session(undefined, options)).then((view) => {
+          ended = false;
+          seenPerson = true;
+          return view;
+        }),
+      frameOrigins: async (clientId: string): Promise<readonly string[]> => {
+        if (!/^tfp_[A-Za-z0-9_-]{22}$/.test(clientId)) return [];
+        try {
+          const response = await fetch(new URL(`/api/public/partners/${clientId}/frame`, origin).href);
+          const answer: unknown = response.ok ? await response.json() : undefined;
+          const listed =
+            typeof answer === 'object' && answer !== null && 'frameOrigins' in answer ? answer.frameOrigins : [];
+          return Array.isArray(listed) ? listed.filter((each): each is string => typeof each === 'string') : [];
+        } catch {
+          return [];
+        }
+      },
+    },
+    /**
      * The OAuth connect page (spec 0070, AC-7011, AC-7012): what the partner asks and the person's own workspaces,
      * the owner's approval in one of them, and No thanks. Read fresh; each answers where the browser goes next, an
      * address the server built from the partner's registered one.
@@ -8165,6 +8207,9 @@ export function createDataLayer({
         call((options) => api.operator.updatePartner(input, options)),
       replaceSecret: (partnerId: string): Promise<PartnerWithSecret> =>
         call((options) => api.operator.replacePartnerSecret({ partnerId }, options)),
+      /** A sandbox partner's test connections ended in one go (AC-7035): how many. */
+      wipeTests: (partnerId: string): Promise<number> =>
+        call((options) => api.operator.wipeTestConnections({ partnerId }, options)).then((answer) => answer.wiped),
       /** A picked logo file as the register and the change send it: its type and its bytes as base64. */
       logoFrom: async (file: Blob): Promise<PartnerLogoUpload | undefined> => {
         const type = file.type;

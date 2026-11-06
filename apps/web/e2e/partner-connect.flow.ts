@@ -106,4 +106,72 @@ test.describe('partner connect', () => {
     await expect(page.getByRole('rowheader', { name: /connected Sample Hub for Link pages$/ })).toBeVisible();
     await expect(page.getByRole('rowheader', { name: /disconnected Sample Hub$/ })).toBeVisible();
   });
+
+  // Slice 4 (AC-7030 to AC-7033): the hub launches a teammate's screen and shows it in its own frame, on another site
+  // (the hub on 127.0.0.1, the app on localhost): the frame signs in by its own cookie, draws the link page without
+  // the sidebar, tells the hub its height, and keeps every link inside; Team pages opens for an admin.
+  test('a hub opens a teammate’s link page and Team pages in its frame, on another site', async ({ page }) => {
+    test.skip(!(await sampleRunning()), `The sample partner hub isn't running at ${SAMPLE}.`);
+    test.setTimeout(180_000);
+    const tag = randomUUID().slice(0, 8);
+    const email = `hub-${tag}@example.com`;
+    const workspace = `Hub frame ${tag}`;
+    const lead = `Lead ${tag}`;
+    const crew = `Crew ${tag}`;
+    // The hub on another site from the app's: the frame's cookie is a third party's, partitioned under the hub.
+    const otherSite = SAMPLE.replace('//localhost', '//127.0.0.1');
+
+    await page.goto(SAMPLE);
+    await page.getByRole('button', { name: 'Integrate Timefix' }).click();
+    await page.getByLabel('Email').fill(email);
+    await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
+    await page.getByLabel('Code').fill(await codeFor(page.request, email));
+    await page.getByLabel('Workspace name').fill(workspace);
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(page.locator('#state')).toHaveText(`Connected to ${workspace}`);
+    for (const [externalId, name, role] of [
+      [`lead-${tag}`, lead, 'admin'],
+      [`crew-${tag}`, crew, 'member'],
+    ] as const) {
+      await page.getByLabel('External id').fill(externalId);
+      await page.getByLabel('Email').fill(`${externalId}@example.com`);
+      await page.getByLabel('Name').fill(name);
+      await page.getByLabel('Role').selectOption(role);
+      await page.getByRole('button', { name: 'Add teammate' }).click();
+      await expect(page.locator('#status')).toHaveText('Teammate added.');
+    }
+
+    // The lead's own link page, in the hub's frame: our screen, no sidebar, its address kept inside the frame.
+    await page.goto(`${otherSite}/embed?externalId=lead-${tag}&screen=link_pages.mine&theme=dark`);
+    const frame = page.frameLocator('#timefix');
+    await expect(frame.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible({ timeout: 20_000 });
+    // Their page was made with them (slice 3): it opens on its overview, ready to edit.
+    await expect(frame.getByRole('button', { name: 'Edit page' })).toBeVisible();
+    await expect(frame.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(0);
+    await expect(frame.locator('html')).toHaveAttribute('data-theme', 'dark');
+    // The frame told the hub its height, and the hub sized it.
+    await expect(page.locator('#timefix')).toHaveAttribute('style', /height: \d+px/);
+    // Team pages, from the lead's own page, stays inside the frame and lists the team.
+    await frame.getByRole('link', { name: 'Team pages' }).click();
+    await expect(frame.getByRole('heading', { level: 1, name: 'Team pages' })).toBeVisible();
+    await expect(frame.getByRole('row').filter({ hasText: crew })).toBeVisible();
+    expect(page.frames().some((each) => /\/embed\/tfp_[^/]+\/link-page\?team=true/.test(each.url()))).toBe(true);
+
+    // Team pages launched straight away for the lead; refused for the crew member, who manages no one's page.
+    await page.goto(`${otherSite}/embed?externalId=lead-${tag}&screen=link_pages.team`);
+    await expect(frame.getByRole('heading', { level: 1, name: 'Team pages' })).toBeVisible({ timeout: 20_000 });
+    await page.goto(`${otherSite}/embed?externalId=crew-${tag}&screen=link_pages.team`);
+    await expect(page.locator('#status')).toContainText('Launch refused: FORBIDDEN');
+
+    // A launch's address works once: opened again, the frame says so and offers a fresh launch.
+    await page.goto(`${otherSite}/embed?externalId=crew-${tag}&screen=link_pages.mine`);
+    await expect(frame.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible({ timeout: 20_000 });
+    const used = await page.locator('#timefix').getAttribute('src');
+    await page.locator('#timefix').evaluate((element, src) => {
+      (element as HTMLIFrameElement).src = `${src ?? ''}`;
+    }, used);
+    await expect(frame.getByRole('heading', { level: 1, name: 'Open this again' })).toBeVisible({ timeout: 20_000 });
+    await frame.getByRole('button', { name: 'Open again' }).click();
+    await expect(frame.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible({ timeout: 20_000 });
+  });
 });

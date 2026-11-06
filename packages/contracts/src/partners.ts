@@ -100,6 +100,8 @@ export const RegisterPartnerInput = z.object({
   logo: PartnerLogoUpload.optional(),
   frameOrigins: FrameOrigins,
   redirectUris: RedirectUris,
+  /** A sandbox partner (AC-7035): its connections are made as test ones. */
+  isTest: z.boolean().optional(),
 });
 /** Registers a partner. */
 export type RegisterPartnerInput = z.infer<typeof RegisterPartnerInput>;

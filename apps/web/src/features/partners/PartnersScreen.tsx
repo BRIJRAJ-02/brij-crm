@@ -3,6 +3,7 @@
 // workspaces to Timefix.
 // Main task: a super admin registers a partner (name, logo, the sites that may embed Timefix, the addresses that
 // receive a connection), copies its client id and its secret, shown once, and later edits it or replaces the secret.
+// A sandbox partner (spec 0070, AC-7035) is marked Test, and its test connections can be wiped in one go.
 // Leaves out: the workspaces each partner connected (slice 3's console), billing, and deleting a partner.
 import {
   isDataError,
@@ -13,6 +14,7 @@ import {
 } from '@crm/data';
 import {
   Avatar,
+  Badge,
   Button,
   Callout,
   Code,
@@ -23,6 +25,7 @@ import {
   Form,
   Modal,
   RelativeTime,
+  Switch,
   Table,
   type FormRefusal,
   type TableColumn,
@@ -93,6 +96,7 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
   const [opening, setOpening] = useState(0);
   const [secret, setSecret] = useState<{ readonly made: PartnerWithSecret; readonly isNew: boolean } | undefined>();
   const [replacing, setReplacing] = useState<PartnerView | undefined>(undefined);
+  const [wiping, setWiping] = useState<PartnerView | undefined>(undefined);
 
   const landed = (partner: PartnerView) =>
     setLoaded((now) =>
@@ -129,6 +133,7 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
               {...(partner.logoUrl === undefined ? {} : { src: partner.logoUrl })}
             />
             {partner.name}
+            {partner.isTest && <Badge text={strings.test} tone="accent" />}
           </>
         );
       case 'clientId':
@@ -146,6 +151,11 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
             <Button size="sm" label={strings.replace(partner.name)} onPress={() => setReplacing(partner)}>
               {strings.replaceShort}
             </Button>
+            {partner.isTest && (
+              <Button size="sm" label={strings.wipe(partner.name)} onPress={() => setWiping(partner)}>
+                {strings.wipeShort}
+              </Button>
+            )}
           </>
         );
     }
@@ -206,6 +216,15 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
         }}
       />
       <SecretDialog shown={secret} onClose={() => setSecret(undefined)} />
+      <WipeDialog
+        data={data}
+        partner={wiping}
+        onClose={() => setWiping(undefined)}
+        onWiped={(count) => {
+          setWiping(undefined);
+          toasts.toast({ tone: 'success', message: strings.wiped(count) });
+        }}
+      />
     </SettingsPage>
   );
 }
@@ -231,6 +250,7 @@ function PartnerForm({
   // undefined: unchanged; null: taken away; a logo: the new one.
   const [logo, setLogo] = useState<PartnerLogoUpload | null | undefined>(undefined);
   const [logoPreview, setLogoPreview] = useState<string | undefined>(partner?.logoUrl);
+  const [isTest, setTest] = useState(partner?.isTest ?? false);
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
 
@@ -264,7 +284,7 @@ function PartnerForm({
     setRefusals(problems);
     if (problems.length > 0) return;
     setBusy(true);
-    const fields = { name: name.trim(), frameOrigins: linesOf(frames), redirectUris: linesOf(redirects) };
+    const fields = { name: name.trim(), frameOrigins: linesOf(frames), redirectUris: linesOf(redirects), isTest };
     const failed = (error: unknown) => {
       setBusy(false);
       setRefusals(formRefusals(error, ['name', 'logo', 'frameOrigins', 'redirectUris']));
@@ -287,6 +307,7 @@ function PartnerForm({
     name !== (partner?.name ?? '') ||
     frames !== (partner?.frameOrigins.join('\n') ?? '') ||
     redirects !== (partner?.redirectUris.join('\n') ?? '') ||
+    isTest !== (partner?.isTest ?? false) ||
     logo !== undefined;
 
   return (
@@ -369,6 +390,12 @@ function PartnerForm({
           value={frames}
           onChange={setFrames}
         />
+        <Switch
+          label={strings.form.isTest}
+          description={strings.form.isTestHint}
+          isSelected={isTest}
+          onChange={setTest}
+        />
       </Form>
     </Modal>
   );
@@ -438,6 +465,74 @@ function ReplaceDialog({
         </Callout>
       )}
       {strings.replaceConfirm.text}
+    </Modal>
+  );
+}
+
+/** Wipe tests, asked first (spec 0070, AC-7035): the sandbox partner's test connections end in one go. */
+function WipeDialog({
+  data,
+  partner,
+  onClose,
+  onWiped,
+}: {
+  readonly data: DataLayer;
+  readonly partner: PartnerView | undefined;
+  readonly onClose: () => void;
+  readonly onWiped: (count: number) => void;
+}) {
+  const [last, setLast] = useState(partner);
+  const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  if (partner !== undefined && partner !== last) setLast(partner);
+  const shown = partner ?? last;
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={strings.wipeConfirm.title(shown.name)}
+      variant="confirm"
+      tone="danger"
+      isOpen={partner !== undefined}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isBusy) {
+          setFailure(undefined);
+          onClose();
+        }
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.wipeConfirm.cancel}
+          </Button>
+          <Button
+            variant="danger-solid"
+            isPending={isBusy}
+            onPress={() => {
+              setBusy(true);
+              setFailure(undefined);
+              data.partners.wipeTests(shown.id).then(
+                (count) => {
+                  setBusy(false);
+                  onWiped(count);
+                },
+                (error: unknown) => {
+                  setBusy(false);
+                  setFailure(isDataError(error) ? error.message : strings.failedTitle);
+                },
+              );
+            }}
+          >
+            {isBusy ? strings.wipeConfirm.wiping : strings.wipeConfirm.confirm}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
+      {strings.wipeConfirm.text}
     </Modal>
   );
 }

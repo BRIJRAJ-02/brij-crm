@@ -39,7 +39,8 @@ if (values.drop) {
       { partners: identity },
       {
         name: 'Sample Hub',
-        frameOrigins: [`http://localhost:${values.port}`],
+        // 127.0.0.1 too: a hub page there is another site from the app's localhost, as a real hub's is.
+        frameOrigins: [`http://localhost:${values.port}`, `http://127.0.0.1:${values.port}`],
         redirectUris: [`http://localhost:${values.port}/callback`],
       },
       { userId: '00000000-0000-0000-0000-000000000000', action: 'operator.partnerSample', requestId: 'partner-sample' },

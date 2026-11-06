@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { localStore, writeSessionHint, type SessionHint } from './features/auth/hint.ts';
 import { hintPage, writeParentSessionHint } from './features/auth/parent-hint.ts';
 import { signInHref } from './features/auth/redirect.ts';
+import { EMBED_HEADER, embedClientIdOf, embedEndedHref } from './features/embed/paths.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
 import { followPageTitle } from './features/navigation/title.ts';
@@ -92,8 +93,14 @@ const reloadPages = () => {
 // Centrifugo's address, baked in at build time; unset (previews), live updates are off.
 const realtimeUrl = import.meta.env.VITE_REALTIME_URL;
 
+// One of our screens inside a partner's frame (spec 0070, AC-7032): its calls carry the frame's header, so the API
+// reads the frame's own session; it opens no live socket, writes no session hint and keeps no theme choice of the
+// person's; and a session that ends sends it to the frame's own page, never to sign in.
+const embedClientId = embedClientIdOf(window.location.pathname);
+
 const data = createDataLayer({
   origin: window.location.origin,
+  ...(embedClientId === undefined ? {} : { callHeaders: { [EMBED_HEADER]: '1' } }),
   notify: (notice) => {
     toasts.toast(notice);
   },
@@ -107,6 +114,10 @@ const data = createDataLayer({
   onSignedOut: (redirectTo, { unsaved }) => {
     // Nothing of the workspace stays behind sign in: a toast naming a record (Ada Lovelace created) goes too.
     toasts.queue.clear();
+    if (embedClientId !== undefined) {
+      goTo(embedEndedHref(embedClientId));
+      return;
+    }
     goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));
   },
   onSessionChange: forgetPages,
@@ -116,6 +127,7 @@ const data = createDataLayer({
   // person to the app instead of the marketing site. Presence and an expiry, on the parent domain only, and
   // never proof of anything either: `me.get` still decides.
   onSessionKnown: (isSignedIn) => {
+    if (embedClientId !== undefined) return;
     const hint = isSignedIn ? 'in' : 'out';
     if (hint === lastSessionHint) return;
     lastSessionHint = hint;
@@ -123,7 +135,7 @@ const data = createDataLayer({
     writeParentSessionHint(hintPage(window), import.meta.env.VITE_BOOKING_PUBLIC_ORIGIN, isSignedIn);
   },
   currentPath: () => `${window.location.pathname}${window.location.search}`,
-  ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),
+  ...(realtimeUrl === undefined || realtimeUrl === '' || embedClientId !== undefined ? {} : { realtimeUrl }),
   onDefinitionsChange: reloadPages,
   // Someone else's later save replaced a value this tab saved (spec 0006): say so, with Use mine.
   onReplaced: (replaced) => {
@@ -207,7 +219,8 @@ const data = createDataLayer({
 // theme-boot.js already applied a saved choice before first paint; this keeps
 // it in step with changes here and in other tabs.
 const theme = createThemeController({
-  storage: safeLocalStorage(window),
+  // In a partner's frame the partner's look applies for this page only, never as the person's own choice.
+  storage: embedClientId === undefined ? safeLocalStorage(window) : undefined,
   root: document.documentElement,
   barMetas: [...document.querySelectorAll('meta[name="theme-color"]')],
   onStorage: (handler) => {

@@ -29,7 +29,8 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { addressAsTyped } from '../address/address.ts';
 import { publicBookingHost, publicProfileUrl } from '../booking/links.ts';
-import { useWorkspaceName, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useLinkPagePlace } from './place.tsx';
 import { saveFile } from './qr-png.ts';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
 import { teamStrings as strings } from './team-strings.ts';
@@ -64,7 +65,9 @@ const COLUMNS: readonly TableColumn[] = [
 export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const workspaceName = useWorkspaceName() ?? '';
+  // The app's addresses, or the partner's frame's (spec 0070, AC-7032).
+  const place = useLinkPagePlace(slug);
+  const workspaceName = place.workspaceName ?? '';
   const [state, setState] = useState<TeamState>({ status: 'loading' });
   const [claiming, setClaiming] = useState<TeamLinkPage | undefined>(undefined);
   const [drawing, setDrawing] = useState<Drawing | undefined>(undefined);
@@ -94,14 +97,14 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   /** A member's own page in the editor; your own row opens your own page, never the team one. */
   const openPage = (page: TeamLinkPage) => {
     if (page.isSelf) {
-      void navigate({ to: '/w/$slug/link-page', params: { slug } });
+      void navigate({ href: place.href() });
       return;
     }
     if (page.handle === undefined) {
       setClaiming(page);
       return;
     }
-    void navigate({ to: '/w/$slug/link-page', params: { slug }, search: { member: page.memberId } });
+    void navigate({ href: place.href({ member: page.memberId }) });
   };
 
   const copy = (handle: string) => {
@@ -241,8 +244,8 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           <TopBar
             title={strings.title}
             icon="users"
-            crumbs={[{ id: 'link-page', label: strings.linkPage, href: `/w/${slug}/link-page` }]}
-            back={{ label: strings.linkPage, href: `/w/${slug}/link-page` }}
+            crumbs={[{ id: 'link-page', label: strings.linkPage, href: place.href() }]}
+            back={{ label: strings.linkPage, href: place.href() }}
           >
             {state.status !== 'forbidden' && (
               // There from the first paint, off until the list is in, so the bar never shifts.
@@ -444,7 +447,8 @@ function ClaimForMember({
  * reader's to change (an owner's page, or no permission). One line and the way back to Team pages, never Home.
  */
 export function MemberPageUnavailable({ slug }: { readonly slug: string }) {
-  const teamHref = `/w/${slug}/link-page?team=true`;
+  const place = useLinkPagePlace(slug);
+  const teamHref = place.href({ team: true });
   return (
     <WorkspacePage
       currentPage="linkPage"
@@ -454,7 +458,7 @@ export function MemberPageUnavailable({ slug }: { readonly slug: string }) {
             title={strings.unavailable}
             icon="id-card"
             crumbs={[
-              { id: 'link-page', label: strings.linkPage, href: `/w/${slug}/link-page` },
+              { id: 'link-page', label: strings.linkPage, href: place.href() },
               { id: 'team', label: strings.title, href: teamHref },
             ]}
             back={{ label: strings.back, href: teamHref }}
