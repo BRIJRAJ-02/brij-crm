@@ -83,6 +83,8 @@ export const PartnerView = z.object({
   secretHint: z.string(),
   createdAt: Timestamp,
   secretReplacedAt: Timestamp.optional(),
+  /** A sandbox partner (AC-7035): its connections are test ones, never billed, and can be wiped in one go. */
+  isTest: z.boolean(),
 });
 /** One partner as the console shows it. */
 export type PartnerView = z.infer<typeof PartnerView>;
@@ -114,6 +116,8 @@ export const UpdatePartnerInput = z.object({
   logo: PartnerLogoUpload.nullable().optional(),
   frameOrigins: FrameOrigins.optional(),
   redirectUris: RedirectUris.optional(),
+  /** Marks it a sandbox partner, or a live one (AC-7035): only connections made from now on take the mark. */
+  isTest: z.boolean().optional(),
 });
 /** Changes a partner. */
 export type UpdatePartnerInput = z.infer<typeof UpdatePartnerInput>;
@@ -183,6 +187,8 @@ export const ConnectedApp = z.object({
   /** Who approved it, by name; absent once they left the workspace. */
   approvedBy: z.string().optional(),
   lastCallAt: Timestamp.optional(),
+  /** Made by a sandbox partner (AC-7035): marked as a test, never billed. */
+  isTest: z.boolean(),
 });
 /** One connection as Connected apps lists it. */
 export type ConnectedApp = z.infer<typeof ConnectedApp>;
@@ -232,6 +238,8 @@ export const PartnerConnectionView = z.object({
   workspace: z.object({ id: Uuid, name: z.string() }),
   modules: z.array(PartnerModule),
   connectedAt: Timestamp,
+  /** Made by a sandbox partner (AC-7035). */
+  isTest: z.boolean(),
 });
 /** A connection as the partner reads it. */
 export type PartnerConnectionView = z.infer<typeof PartnerConnectionView>;
@@ -322,3 +330,83 @@ export const connectedAppsContract = {
   setModules: oc.input(SetConnectedAppModulesInput).output(ConnectedApp),
   disconnect: oc.input(DisconnectAppInput).output(z.object({ id: Uuid })),
 };
+
+// Slice 4: embedded screens (AC-7030 to AC-7033).
+
+/** The screens a launch may open (AC-7030), each in one module. */
+export const PARTNER_SCREENS = ['link_pages.mine', 'link_pages.team'] as const;
+/** A screen a launch may open. */
+export const PartnerScreen = z.enum(PARTNER_SCREENS, {
+  error: 'Use link_pages.mine or link_pages.team for the screen.',
+});
+/** A screen a launch may open. */
+export type PartnerScreen = z.infer<typeof PartnerScreen>;
+
+/** The module each screen belongs to: a connection without it can't open the screen. */
+export const PARTNER_SCREEN_MODULE: Readonly<Record<PartnerScreen, PartnerModule>> = {
+  'link_pages.mine': 'link_pages',
+  'link_pages.team': 'link_pages',
+};
+
+/** How long a launch's one time address works (AC-7030). */
+export const PARTNER_LAUNCH_SECONDS = 60;
+/** How long an embedded session lasts (AC-7031): it is never extended. */
+export const EMBED_SESSION_HOURS = 12;
+/** The light or dark look a partner may ask for; absent, the person's system decides. */
+export const EmbedTheme = z.enum(['light', 'dark'], { error: 'Use light or dark for the theme.' });
+/** The light or dark look a partner may ask for. */
+export type EmbedTheme = z.infer<typeof EmbedTheme>;
+
+/** `POST /connections/{id}/launch`'s body (AC-7030): whom to open it for, which screen, and in which look. */
+export const PartnerLaunchInput = z.strictObject({
+  externalId: PartnerExternalId,
+  screen: PartnerScreen,
+  theme: EmbedTheme.optional(),
+});
+/** `POST /connections/{id}/launch`'s body. */
+export type PartnerLaunchInput = z.infer<typeof PartnerLaunchInput>;
+
+/** The launch's answer: the one time address to put in the frame's `src`, and when it stops working. */
+export const PartnerLaunchAnswer = z.object({ url: z.string(), expiresAt: Timestamp });
+/** The launch's answer. */
+export type PartnerLaunchAnswer = z.infer<typeof PartnerLaunchAnswer>;
+
+/** A launch's one time code as the frame hands it over: its shape is checked by the server. */
+export const EmbedStartInput = z.object({ code: z.string().min(1).max(300) });
+/** A launch's one time code. */
+export type EmbedStartInput = z.infer<typeof EmbedStartInput>;
+
+/**
+ * What an embedded session opens (AC-7031, AC-7032): the workspace (its address names it to every procedure), the
+ * partner (whose frame origins alone hear the frame's height), the screen it was launched for and its look, and who
+ * the person is. `canManageTeam` says whether Team pages may be drawn.
+ */
+export const EmbedSessionView = z.object({
+  workspace: z.string(),
+  workspaceName: z.string(),
+  partner: z.object({ clientId: z.string(), name: z.string() }),
+  frameOrigins: z.array(z.string()),
+  /** The screen the launch asked for: only `start` answers it; the frame's own address keeps it after that. */
+  screen: PartnerScreen.optional(),
+  theme: EmbedTheme.optional(),
+  person: z.object({ name: z.string() }),
+  canManageTeam: z.boolean(),
+  expiresAt: Timestamp,
+});
+/** What an embedded session opens. */
+export type EmbedSessionView = z.infer<typeof EmbedSessionView>;
+
+/**
+ * The embedded frame's own calls (AC-7031): `start` redeems a launch's one time code (once, within 60 seconds) and
+ * sets the embedded session's cookie; `session` reads what that session opens. Both take no workspace: the session
+ * names it.
+ */
+export const embedContract = {
+  start: oc.input(EmbedStartInput).output(EmbedSessionView),
+  session: oc.output(EmbedSessionView),
+};
+
+/** The console's wipe of a sandbox partner's test connections (AC-7035): how many it ended. */
+export const WipedTestConnections = z.object({ wiped: z.number().int().min(0) });
+/** How many test connections a wipe ended. */
+export type WipedTestConnections = z.infer<typeof WipedTestConnections>;

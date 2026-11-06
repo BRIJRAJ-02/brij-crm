@@ -80,6 +80,7 @@ export async function checkConnectRequest(deps: ConnectPartners, request: Partne
     ...(partner.logoVersion === undefined ? {} : { logoVersion: partner.logoVersion }),
     frameOrigins: partner.frameOrigins,
     redirectUris: partner.redirectUris,
+    isTest: partner.isTest,
     secretHint: partner.secretHint,
     createdAt: partner.createdAt,
     updatedAt: partner.updatedAt,

@@ -191,12 +191,27 @@ export function rpcPost(app: App, cookie: string, procedure: string, jsonText: s
 }
 
 /** A typed client for the app's contract, sending `cookie` like a signed in browser. */
-export function rpcClient(app: App, cookie?: string): RouterClient<typeof router> {
+export function rpcClient(
+  app: App,
+  cookie?: string,
+  /** More headers, read at each call (the embedded frame's header and the cookie its first call set, spec 0070). */
+  more?: () => Record<string, string>,
+  options: { readonly onResponse?: (response: Response) => void } = {},
+): RouterClient<typeof router> {
   return createORPCClient(
     new RPCLink({
       url: `${APP_URL}/api/rpc`,
-      headers: { origin: APP_URL, ...THROUGH_THE_EDGE, ...(cookie === undefined ? {} : { cookie }) },
-      fetch: async (request) => app.fetch(request),
+      headers: () => ({
+        origin: APP_URL,
+        ...THROUGH_THE_EDGE,
+        ...(cookie === undefined ? {} : { cookie }),
+        ...(more === undefined ? {} : more()),
+      }),
+      fetch: async (request) => {
+        const response = await app.fetch(request);
+        options.onResponse?.(response);
+        return response;
+      },
     }),
   );
 }

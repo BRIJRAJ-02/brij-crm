@@ -55,7 +55,7 @@ import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
 import { profileContract } from './profile.ts';
 import { teamPagesContract } from './team-pages.ts';
-import { connectedAppsContract, partnerConnectContract } from './partners.ts';
+import { connectedAppsContract, embedContract, partnerConnectContract } from './partners.ts';
 import { brandContract } from './workspace-brand.ts';
 import { hospitalityContract } from './hospitality.ts';
 import { menuContract } from './menu.ts';
@@ -174,6 +174,8 @@ export const contract = {
   // the owner's approval (the member door); Settings › Connected apps, owners only.
   partnerConnect: partnerConnectContract,
   connectedApps: connectedAppsContract,
+  // Embedded screens (spec 0070, slice 4): a launch's code redeemed for the frame's session, and what it opens.
+  embed: embedContract,
   // A workspace's brand kit (spec 0060): any member reads it, owners and admins save it.
   brand: brandContract,
   // The Hospitality suite's setup (spec 0065, H0): apps, the business profile, places, areas and tables.

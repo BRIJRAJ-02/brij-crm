@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { newId, registerPartner, s256Challenge } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { signInApp, testConnections } from '../../test/sign-in.ts';
+import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 
 let db: Database;
@@ -248,6 +248,124 @@ describe('/api/partner/v1', () => {
     });
     const after = await owner.client.members.list({ workspace: owner.slug });
     expect(after.members.map((each) => each.id)).not.toContain(member.memberId);
+  });
+
+  it('launches a screen once, opens an embedded session that reaches only the shared module, and ends it on Disconnect (slice 4)', async () => {
+    const made = await partner();
+    const owner = await memberWithWorkspace(app);
+    const { request: asked, verifier } = request(made.partner.clientId);
+    const approved = await owner.client.partnerConnect.approve({
+      workspace: owner.slug,
+      request: asked,
+      modules: ['link_pages'],
+      mutationId: newId(),
+    });
+    const swapped = (await (
+      await token(
+        {
+          grant_type: 'authorization_code',
+          code: new URL(approved.redirectTo).searchParams.get('code') ?? '',
+          redirect_uri: REDIRECT,
+          code_verifier: verifier,
+        },
+        { id: made.partner.clientId, secret: made.secret },
+      )
+    ).json()) as { access_token: string; connection_id: string };
+    const bearer = { authorization: `Bearer ${swapped.access_token}`, 'content-type': 'application/json' };
+    const base = `/api/partner/v1/connections/${swapped.connection_id}`;
+    for (const [externalId, role] of [
+      ['hub-admin', 'admin'],
+      ['hub-member', 'member'],
+    ] as const) {
+      const put = await app.request(`${base}/members/${externalId}`, {
+        method: 'PUT',
+        headers: bearer,
+        body: JSON.stringify({ email: `${externalId}-${newId().slice(0, 8)}@example.com`, name: externalId, role }),
+      });
+      expect(put.status).toBe(201);
+    }
+    const launch = (body: unknown) =>
+      app.request(`${base}/launch`, { method: 'POST', headers: bearer, body: JSON.stringify(body) });
+
+    // Refusals, each `{ code, message }`: Team pages for a plain member, someone never added, a screen not offered.
+    const notTeam = await launch({ externalId: 'hub-member', screen: 'link_pages.team' });
+    expect(notTeam.status).toBe(403);
+    expect(((await notTeam.json()) as { code: string }).code).toBe('FORBIDDEN');
+    const nobody = await launch({ externalId: 'nobody', screen: 'link_pages.mine' });
+    expect(nobody.status).toBe(404);
+    const badScreen = await launch({ externalId: 'hub-admin', screen: 'people' });
+    expect(badScreen.status).toBe(400);
+    expect((await app.request(`${base}/launch`, { method: 'POST' })).status).toBe(401);
+
+    const launched = await launch({ externalId: 'hub-admin', screen: 'link_pages.team', theme: 'dark' });
+    expect(launched.status).toBe(200);
+    expect(launched.headers.get('cache-control')).toBe('no-store');
+    const { url } = (await launched.json()) as { url: string; expiresAt: string };
+    const address = new URL(url);
+    expect(address.pathname).toBe(`/embed/${made.partner.clientId}/start`);
+    const code = new URLSearchParams(address.hash.slice(1)).get('code') ?? '';
+    expect(code).toMatch(/^tfl_/);
+
+    // The frame's own calls: its header, and its own cookie once `start` set it.
+    let cookie = '';
+    const frame = rpcClient(app, undefined, () => ({ 'x-crm-embed': '1', ...(cookie === '' ? {} : { cookie }) }), {
+      onResponse: (response) => {
+        const set = response.headers.getSetCookie().find((line) => line.startsWith('tf_embed='));
+        if (set !== undefined) {
+          expect(set).toMatch(/; HttpOnly; Secure; SameSite=None; Partitioned$/);
+          expect(set).toMatch(/; Path=\/; Max-Age=4(3200|3199);/);
+          cookie = set.split(';')[0] ?? '';
+        }
+      },
+    });
+    const started = await frame.embed.start({ code });
+    expect(started).toMatchObject({
+      workspace: owner.slug,
+      partner: { clientId: made.partner.clientId, name: 'Hub' },
+      frameOrigins: ['https://hub.example.com'],
+      screen: 'link_pages.team',
+      theme: 'dark',
+      person: { name: 'hub-admin' },
+      canManageTeam: true,
+    });
+    expect(cookie).not.toBe('');
+    // Once only.
+    await expect(rpcClient(app).embed.start({ code })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(await frame.embed.session()).toMatchObject({ workspace: owner.slug, canManageTeam: true });
+    await expect(frame.profile.get({ workspace: owner.slug })).resolves.toBeDefined();
+    await expect(frame.teamPages.list({ workspace: owner.slug })).resolves.toBeDefined();
+    // Nothing outside the shared module, whatever the person's role would allow in the app.
+    await expect(frame.me.get()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(frame.members.list({ workspace: owner.slug })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(frame.objects.list({ workspace: owner.slug })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(frame.profile.pageChoices({ workspace: owner.slug })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // The embedded cookie is no app session, and the app's door reads no embedded one: without the header, nobody.
+    await expect(rpcClient(app, cookie).me.get()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    // The embedded token under the app's own cookie name opens nothing either.
+    const asApp = cookie.replace(/^tf_embed=/, 'better-auth.session_token=');
+    await expect(rpcClient(app, asApp).me.get()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    // And the owner's app session sent as the frame's opens nothing in the frame.
+    await expect(rpcClient(app, owner.cookie, () => ({ 'x-crm-embed': '1' })).embed.session()).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+
+    // Disconnect in Connected apps ends the embedded session at once.
+    await owner.client.connectedApps.disconnect({
+      workspace: owner.slug,
+      connectionId: swapped.connection_id,
+      mutationId: newId(),
+    });
+    await expect(frame.embed.session()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+
+  it('answers a partner’s frame origins for the edge, and none for an unknown client id', async () => {
+    const made = await partner();
+    const known = await app.request(`/api/public/partners/${made.partner.clientId}/frame`);
+    expect(known.status).toBe(200);
+    expect(await known.json()).toEqual({ frameOrigins: ['https://hub.example.com'] });
+    const unknown = await app.request('/api/public/partners/tfp_AAAAAAAAAAAAAAAAAAAAAA/frame');
+    expect(await unknown.json()).toEqual({ frameOrigins: [] });
   });
 
   it('answers a logo at its current version only, as an image that is never sniffed', async () => {

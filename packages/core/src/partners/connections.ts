@@ -66,6 +66,7 @@ async function liveRows(tx: WorkspaceTx, connectionId?: string) {
       modules: partnerConnections.modules,
       createdAt: partnerConnections.createdAt,
       lastCallAt: partnerConnections.lastCallAt,
+      isTest: partnerConnections.isTest,
       approvedBy: members.name,
       approvedByStatus: members.status,
     })
@@ -97,6 +98,7 @@ function toConnectedApp(row: LiveRow, faces: Awaited<ReturnType<typeof partnerFa
     connectedAt: new Date(row.createdAt).toISOString(),
     ...(row.approvedBy !== null && row.approvedByStatus === 'active' ? { approvedBy: row.approvedBy } : {}),
     ...(row.lastCallAt === null ? {} : { lastCallAt: new Date(row.lastCallAt).toISOString() }),
+    isTest: row.isTest,
   };
 }
 
@@ -218,6 +220,7 @@ export async function readPartnerConnection(
       .select({
         modules: partnerConnections.modules,
         createdAt: partnerConnections.createdAt,
+        isTest: partnerConnections.isTest,
         workspaceName: workspaces.name,
       })
       .from(partnerConnections)
@@ -231,5 +234,6 @@ export async function readPartnerConnection(
     workspace: { id: scope.workspaceId, name: row.workspaceName },
     modules: modulesOf(row.modules),
     connectedAt: new Date(row.createdAt).toISOString(),
+    isTest: row.isTest,
   };
 }

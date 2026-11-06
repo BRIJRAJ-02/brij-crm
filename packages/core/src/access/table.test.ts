@@ -139,6 +139,14 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'partnerLogoPath',
   'parsePartnerAccessToken',
   's256Challenge',
+  // Embedded screens (spec 0070, slice 4): a launch's code read (pure) and redeemed (its own code is the key), an
+  // embedded session's reads (the session's own scope; `describeEmbedSession` passes the member door itself), and
+  // the console's sandbox wipe (the operator gate is the api's).
+  'parsePartnerLaunchCode',
+  'redeemPartnerLaunch',
+  'embedConnectionModules',
+  'describeEmbedSession',
+  'wipeTestConnections',
   // The Hospitality gate (spec 0065, AC-6504): it takes the caller's transaction, inside a service the door let in.
   'appInstalled',
   'requireApp',

@@ -51,6 +51,10 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   // workspaces through the door to find the ones they own.
   'partnerConnect.offer',
   'partnerConnect.deny',
+  // Spec 0070, slice 4: the embedded frame's own calls, before it knows a workspace; core redeems the launch by its
+  // code and enters the session's workspace through the member door itself.
+  'embed.start',
+  'embed.session',
   'realtime.connectionToken',
   // The signed in person's own sessions (spec 0033): global identity, by their user id, before any workspace.
   'account.sessions.list',
@@ -87,6 +91,8 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
   'join/router.ts',
   // Spec 0070: the connect page's offer, which passes the door in packages/core for each of the person's workspaces.
   'partners/connect.ts',
+  // Spec 0070, slice 4: a launch redeemed by its code, then the member door in packages/core.
+  'embed/router.ts',
 ]);
 
 /**

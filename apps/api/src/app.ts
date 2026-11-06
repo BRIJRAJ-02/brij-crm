@@ -7,6 +7,7 @@ import {
   createCalendarEvents,
   createBusyCache,
   createHomeMetricsCache,
+  embedConnectionModules,
   enterWorkspace,
   mayPreviewDraft,
   jobKinds,
@@ -18,6 +19,7 @@ import {
   type RuleSource,
 } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
+import { apiError } from './errors.ts';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -92,7 +94,7 @@ import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realti
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
-import { mountPartnerApi, PARTNER_V1_PREFIX, partnerLogoResponse } from './partner/rest.ts';
+import { mountPartnerApi, PARTNER_V1_PREFIX, partnerFrameResponse, partnerLogoResponse } from './partner/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 import type { WebhookUrlProblem } from '@crm/core';
@@ -573,6 +575,8 @@ export function createApp({
           partnerByClientId: (clientId) => identity.partnerByClientId(clientId),
           partnerById: (id) => identity.partnerById(id),
         },
+        // Only ending a connection's embedded sessions, by connection id (spec 0070, slice 4): Disconnect's last step.
+        embedSessions: { end: (connectionIds) => identity.endEmbedSessions(connectionIds) },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
       },
@@ -596,7 +600,11 @@ export function createApp({
   // server only (its secret or its access token, never a cookie), under `/api/partner/v1`.
   mountPartnerApi(app, {
     db,
-    partners: { partnerByClientId: (clientId) => identity.partnerByClientId(clientId) },
+    partners: {
+      partnerByClientId: (clientId) => identity.partnerByClientId(clientId),
+      partnerById: (id) => identity.partnerById(id),
+    },
+    appUrl: env.APP_URL,
     limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
     // Managed members' identities (slice 3): made by the identity login, never the app's.
     users: {
@@ -616,6 +624,17 @@ export function createApp({
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
       },
       { clientId: c.req.param('clientId'), version: c.req.query('v'), address: c.get('clientIp') },
+    ),
+  );
+  // The origins a partner may frame its embedded screens in (spec 0070, AC-7032): the edge asks it for each
+  // `/embed/<clientId>/…` page, to send that page's `frame-ancestors`.
+  app.get('/public/partners/:clientId/frame', (c) =>
+    partnerFrameResponse(
+      {
+        partners: { partnerByClientId: (clientId) => identity.partnerByClientId(clientId) },
+        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+      },
+      { clientId: c.req.param('clientId'), address: c.get('clientIp') },
     ),
   );
 
@@ -854,8 +873,22 @@ export function createApp({
   // the same member door the RPC opens (spec 0060, AC-2, AC-13, AC-23).
   const imageRoutes = {
     auth,
-    enter: (session: AuthSession, slug: string) =>
-      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    enter: async (session: AuthSession, slug: string) => {
+      const scope = await enterWorkspace(
+        { db, identity, log, rules },
+        { userId: session.user.id, slug, session: doorSession(session) },
+      );
+      // An embedded frame's session (spec 0070, AC-7033), which only a link page's routes take: its own workspace,
+      // while its connection is live with Link pages; anything else is absent to it.
+      if (session.embed !== undefined) {
+        const modules =
+          scope.workspaceId === session.embed.workspaceId
+            ? await embedConnectionModules({ db }, session.embed)
+            : undefined;
+        if (modules?.includes('link_pages') !== true) throw apiError('NOT_FOUND', 'There is nothing at this address.');
+      }
+      return scope;
+    },
     files: pictureFiles,
     limiter: createMemoryLimiter(),
     errorResponse,

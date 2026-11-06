@@ -72,7 +72,8 @@ export async function pageScopeOf(
   | { readonly scope: MemberScope; readonly session: Parameters<ImageRouteDeps['enter']>[0]; readonly owner: string }
   | Response
 > {
-  const entered = await memberScopeOf(c, deps, slug);
+  // A link page's own routes: an embedded frame's session may reach them (spec 0070, AC-7033).
+  const entered = await memberScopeOf(c, deps, slug, { embed: true });
   if (entered instanceof Response) return entered;
   try {
     const scope =

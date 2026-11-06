@@ -222,6 +222,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_members', owner: 'crm_operator' },
       { name: 'crm_operator_page_days', owner: 'crm_operator' },
       { name: 'crm_operator_pages', owner: 'crm_operator' },
+      // A sandbox partner's live test connections, ids only, for the console's wipe (spec 0070, AC-7035, migration 0194).
+      { name: 'crm_operator_partner_connections', owner: 'crm_operator' },
       { name: 'crm_operator_totals', owner: 'crm_operator' },
       { name: 'crm_operator_workspaces', owner: 'crm_operator' },
       { name: 'crm_order_profile_items', owner: 'crm_handle' },
@@ -366,6 +368,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_page_days', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_partner_connections', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_totals', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises PROFILE_ORDER_STALE for an order that isn't exactly the live blocks.
@@ -598,6 +601,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_pages',
         'crm_operator_page_days',
         'crm_set_early_access',
+        'crm_operator_partner_connections',
       ],
       [
         'crm_operator_workspaces(uuid[])',
@@ -607,8 +611,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_pages(date, date, uuid, uuid)',
         'crm_operator_page_days(date, date, uuid, uuid)',
         'crm_set_early_access(uuid, text, boolean)',
+        'crm_operator_partner_connections(uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_handle',
@@ -885,6 +890,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       form_submissions: ['form_id', 'received_at', 'workspace_id'],
       forms: ['id', 'workspace_id'],
       members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
+      // A sandbox partner's live test connections (spec 0070, AC-7035): ids and the two marks, never a token's hash.
+      partner_connections: ['disconnected_at', 'id', 'is_test', 'partner_id', 'workspace_id'],
       records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
       workspaces: ['created_at', 'deleted_at', 'early_access', 'id', 'name', 'slug'],
     };

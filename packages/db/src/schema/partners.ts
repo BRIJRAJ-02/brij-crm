@@ -6,6 +6,7 @@
 // `partner_launches` and the embedded session's scope.
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   customType,
   foreignKey,
@@ -50,6 +51,8 @@ export const partnerConnections = pgTable(
     disconnectedAt: timestamptz('disconnected_at'),
     /** Who disconnected it; none when it was ended for the partner (a code used twice, AC-7011). */
     disconnectedByMemberId: uuid('disconnected_by_member_id'),
+    /** Made by a sandbox partner (AC-7035): marked as test, never billed, wiped with the partner's other tests. */
+    isTest: boolean('is_test').notNull().default(false),
   },
   (t) => [
     primaryKey({ name: 'partner_connections_pkey', columns: [t.workspaceId, t.id] }),
@@ -187,5 +190,61 @@ export const managedMembers = pgTable(
     uniqueIndex('managed_members_external').on(t.workspaceId, t.partnerId, t.externalId),
     uniqueIndex('managed_members_member_ix').on(t.workspaceId, t.memberId),
     index('managed_members_connection_ix').on(t.workspaceId, t.connectionId),
+  ],
+);
+
+/** The screens a launch may open (`PARTNER_SCREENS` in `@crm/contracts`). */
+const SCREENS = sql`array['link_pages.mine', 'link_pages.team']::text[]`;
+
+/**
+ * One launch (spec 0070, AC-7030): the partner's server asked to open a screen for one of its people and got a one
+ * time address. Only the SHA-256 of the code's secret half is kept. Good once within 60 seconds: redeeming it sets
+ * `used_at` and makes the embedded session. Rows older than a day are deleted by the next launch in the workspace.
+ */
+export const partnerLaunches = pgTable(
+  'partner_launches',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    connectionId: uuid('connection_id').notNull(),
+    /** The managed member's row when it was launched; redeeming checks it is still active. */
+    memberId: uuid('member_id').notNull(),
+    /** Their managed identity, `auth.user.id`: whom the embedded session is for. */
+    userId: uuid('user_id').notNull(),
+    screen: text('screen').notNull(),
+    /** `light` or `dark` as the partner asked; none follows the person's system. */
+    theme: text('theme'),
+    /** SHA-256 of the code's secret half. */
+    codeHash: bytea('code_hash').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    usedAt: timestamptz('used_at'),
+  },
+  (t) => [
+    primaryKey({ name: 'partner_launches_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'partner_launches_workspace',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'partner_launches_connection',
+      columns: [t.workspaceId, t.connectionId],
+      foreignColumns: [partnerConnections.workspaceId, partnerConnections.id],
+    }),
+    foreignKey({
+      name: 'partner_launches_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('partner_launches_screen', sql`${t.screen} = any(${SCREENS})`),
+    check('partner_launches_theme', sql`${t.theme} is null or ${t.theme} in ('light', 'dark')`),
+    check('partner_launches_code_hash', sql`octet_length(${t.codeHash}) = 32`),
+    check('partner_launches_expiry', sql`${t.expiresAt} > ${t.createdAt}`),
+    // The next launch's sweep of old rows.
+    index('partner_launches_expires').on(t.workspaceId, t.expiresAt),
+    // Every foreign key into a connection or a member is indexed (the guard test).
+    index('partner_launches_connection_ix').on(t.workspaceId, t.connectionId),
+    index('partner_launches_member_ix').on(t.workspaceId, t.memberId),
   ],
 );

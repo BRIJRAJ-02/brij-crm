@@ -2,7 +2,7 @@
 // operator console registers and changes partners, the connect page reads one's name and logo, and the token exchange
 // reads its secret's hash. Only `secretHash` ever leaves here as a hash; the secret itself never reaches this file.
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { managedUsers, operatorEvent, partners, session, user } from '../schema/auth.ts';
 
@@ -22,6 +22,8 @@ export interface PartnerRow {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly secretReplacedAt?: Date;
+  /** A sandbox partner (spec 0070, AC-7035). */
+  readonly isTest: boolean;
 }
 
 /** A partner with its secret's hash, for the token exchange's check only. */
@@ -54,6 +56,7 @@ export interface PartnerChange {
   readonly logo?: { readonly bytes: Buffer; readonly type: string } | null;
   readonly frameOrigins?: readonly string[];
   readonly redirectUris?: readonly string[];
+  readonly isTest?: boolean;
 }
 
 /**
@@ -96,6 +99,11 @@ export interface PartnerIdentity {
   endManagedUserSessions(userId: string): Promise<number>;
   /** Whether this identity is a partner's managed member's (AC-7023): such an identity never starts a session itself. */
   isManagedUser(userId: string): Promise<boolean>;
+  /**
+   * Ends every embedded session of these connections at once (spec 0070, AC-7013, AC-7035): a disconnect, or the
+   * console's wipe of a sandbox partner. Sessions without an embed scope are never touched. Answers how many.
+   */
+  endEmbedSessions(connectionIds: readonly string[]): Promise<number>;
 }
 
 /** Who a managed identity is made for, and the name it shows on their link page. */
@@ -123,6 +131,7 @@ const ROW = {
   createdAt: partners.createdAt,
   updatedAt: partners.updatedAt,
   secretReplacedAt: partners.secretReplacedAt,
+  isTest: partners.isTest,
 };
 
 type Selected = {
@@ -137,6 +146,7 @@ type Selected = {
   createdAt: Date | string;
   updatedAt: Date | string;
   secretReplacedAt: Date | string | null;
+  isTest: boolean;
 };
 
 const toRow = (row: Selected): PartnerRow => ({
@@ -150,6 +160,7 @@ const toRow = (row: Selected): PartnerRow => ({
   createdAt: new Date(row.createdAt),
   updatedAt: new Date(row.updatedAt),
   ...(row.secretReplacedAt === null ? {} : { secretReplacedAt: new Date(row.secretReplacedAt) }),
+  isTest: row.isTest,
 });
 
 type Tx = Parameters<Parameters<NodePgDatabase<Record<string, unknown>>['transaction']>[0]>[0];
@@ -223,6 +234,7 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
             ...(change.name === undefined ? {} : { name: change.name }),
             ...(change.frameOrigins === undefined ? {} : { frameOrigins: [...change.frameOrigins] }),
             ...(change.redirectUris === undefined ? {} : { redirectUris: [...change.redirectUris] }),
+            ...(change.isTest === undefined ? {} : { isTest: change.isTest }),
             ...(change.logo === undefined
               ? {}
               : change.logo === null
@@ -237,7 +249,10 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
           .returning(ROW);
         if (row === undefined) return undefined;
         const changed = toRow(row);
-        await logChange(tx, audit, changed, { logoChanged: change.logo !== undefined });
+        await logChange(tx, audit, changed, {
+          logoChanged: change.logo !== undefined,
+          ...(change.isTest === undefined ? {} : { isTest: change.isTest }),
+        });
         return changed;
       });
     },
@@ -333,6 +348,16 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         .where(eq(managedUsers.userId, userId))
         .limit(1);
       return row !== undefined;
+    },
+
+    async endEmbedSessions(connectionIds) {
+      const ids = connectionIds.filter((id) => UUID.test(id));
+      if (ids.length === 0) return 0;
+      const ended = await db
+        .delete(session)
+        .where(inArray(session.embedConnectionId, ids))
+        .returning({ id: session.id });
+      return ended.length;
     },
   };
 }

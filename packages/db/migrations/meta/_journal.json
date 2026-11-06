@@ -1359,6 +1359,13 @@
       "when": 1795700014000,
       "tag": "0193_managed_members",
       "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1795700015000,
+      "tag": "0194_partner_embed",
+      "breakpoints": true
     }
   ]
 }

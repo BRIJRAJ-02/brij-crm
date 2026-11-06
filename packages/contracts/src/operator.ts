@@ -13,6 +13,7 @@ import {
   PartnerWithSecret,
   RegisterPartnerInput,
   UpdatePartnerInput,
+  WipedTestConnections,
 } from './partners.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
@@ -304,6 +305,11 @@ export const operatorContract = {
   registerPartner: oc.input(RegisterPartnerInput).output(PartnerWithSecret),
   updatePartner: oc.input(UpdatePartnerInput).output(PartnerView),
   replacePartnerSecret: oc.input(PartnerRefInput).output(PartnerWithSecret),
+  /**
+   * A sandbox partner's test connections ended in one go (spec 0070, AC-7035): each is disconnected in its workspace
+   * (History says so) and its embedded sessions end. `CONFIG_INVALID` for a partner that isn't a sandbox one.
+   */
+  wipeTestConnections: oc.input(PartnerRefInput).output(WipedTestConnections),
 };
 
 /** What the marketing site's beacon sends (AC-1627): the path, the referring site's host, and `utm_source`. */

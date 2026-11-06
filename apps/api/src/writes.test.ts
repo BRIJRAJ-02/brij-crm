@@ -137,6 +137,12 @@ const READS: ReadonlySet<string> = new Set([
   'connectedApps.list',
   'connectedApps.setModules',
   'connectedApps.disconnect',
+  // Embedded screens (spec 0070, slice 4): a launch's one time code used up and a session made in schema auth, and
+  // the session's own read; no CRM data changes, so no outbox row. The sandbox wipe is the console's, as the registry
+  // is: each connection it ends writes its History row.
+  'embed.start',
+  'embed.session',
+  'operator.wipeTestConnections',
   // The Hospitality setup's reads (spec 0065, H0).
   'hospitality.apps',
   'hospitality.business',

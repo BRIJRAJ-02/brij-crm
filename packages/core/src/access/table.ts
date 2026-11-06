@@ -643,6 +643,8 @@ export const ACCESS_TABLE = {
   putPartnerMember: { ownConnectionAsPartner: true },
   removePartnerMember: { ownConnectionAsPartner: true },
   listPartnerMembers: { ownConnectionAsPartner: true },
+  // A launch of an embedded screen for one of its people (spec 0070, AC-7030): its own connection only.
+  launchPartnerScreen: { ownConnectionAsPartner: true },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

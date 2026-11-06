@@ -111,14 +111,17 @@ export function imageBodyLimit(errorResponse: ImageRouteDeps['errorResponse']) {
 
 /**
  * The scope of the signed in member of the workspace the request names, or the answer to send: no session is 401,
- * a workspace they aren't in is the door's own refusal. Refreshed session cookies are set on `c`.
+ * a workspace they aren't in is the door's own refusal. Refreshed session cookies are set on `c`. With `embed`, an
+ * embedded frame's session may answer too (spec 0070, AC-7031): a link page's own routes only, and `enter` holds it
+ * to its workspace and its connection's Link pages module.
  */
 export async function memberScopeOf(
   c: Context<{ Variables: ImageVariables }>,
   deps: Pick<ImageRouteDeps, 'auth' | 'enter' | 'errorResponse'>,
   slug: string | undefined,
+  options: { readonly embed?: boolean } = {},
 ): Promise<{ readonly scope: MemberScope; readonly session: AuthSession } | Response> {
-  const session = await deps.auth.session(c.req.raw.headers, c.get('clientIp'));
+  const session = await deps.auth.session(c.req.raw.headers, c.get('clientIp'), { embed: options.embed === true });
   if (session === undefined) return deps.errorResponse('UNAUTHENTICATED', 'Sign in to continue.');
   for (const cookie of session.setCookies) c.header('set-cookie', cookie, { append: true });
   if (slug === undefined || slug === '' || slug.length > 64) {
@@ -166,7 +169,8 @@ export function mountBrandLogo(app: Hono<{ Variables: ImageVariables }>, deps: I
   const { files, limiter, errorResponse } = deps;
 
   app.get('/brand/logo', async (c) => {
-    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    // A read, which a link page's look draws: an embedded frame may see it (spec 0070), never change it.
+    const entered = await memberScopeOf(c, deps, c.req.query('workspace'), { embed: true });
     if (entered instanceof Response) return entered;
     const decision = limiter(`brand-logo:${entered.session.user.id}`, READ_LIMIT);
     if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');

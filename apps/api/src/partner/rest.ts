@@ -6,7 +6,10 @@
 // - `GET /api/partner/v1/connections/{id}`: a connection's read of itself, with `Authorization: Bearer <token>`.
 // - `PUT`, `DELETE /connections/{id}/members/{externalId}` and `GET /connections/{id}/members` (slice 3): the
 //   connection's managed members, added or updated (201 when added, 200 when it already was), removed (204, again
-//   safe) and listed. Slice 4 adds `POST /connections/{id}/launch`.
+//   safe) and listed.
+// - `POST /connections/{id}/launch` (slice 4, AC-7030): a one time address that opens one screen for one of the
+//   partner's people in its frame, once, within 60 seconds. The code rides in the address's fragment, so no server log
+//   or Referer ever holds it.
 //
 // No route here reads a cookie, so the Origin check on writes (CSRF's defence for a cookie) doesn't apply, and
 // `app.ts` lets `/api/partner/v1/` past it. Errors are the app's `{ code, message }` (AC-7025): a wrong client id or
@@ -22,13 +25,16 @@ import {
   PARTNER_REQUESTS_A_MINUTE,
   PARTNER_TOKEN_REQUESTS_A_MINUTE,
   PartnerExternalId,
+  PartnerLaunchInput,
   PartnerMemberInput,
   PartnerTokenRequest,
+  type PartnerLaunchAnswer,
   type PartnerTokenAnswer,
 } from '@crm/contracts';
 import {
   enterAsPartner,
   exchangePartnerCode,
+  launchPartnerScreen,
   listPartnerMembers,
   notePartnerCall,
   parsePartnerAccessToken,
@@ -66,8 +72,10 @@ const REFUSED_RULE = { window: 600, max: 30 } as const;
 /** What the partner API needs from the app. */
 export interface PartnerApiDeps {
   readonly db: Database;
-  /** The registry's one read: a partner and its secret's hash, by client id. */
-  readonly partners: Pick<IdentityStore, 'partnerByClientId'>;
+  /** The registry's reads: a partner and its secret's hash by client id, and a partner by id (a launch's address). */
+  readonly partners: Pick<IdentityStore, 'partnerByClientId' | 'partnerById'>;
+  /** The app's own address (`APP_URL`): a launch's address opens there. */
+  readonly appUrl: string;
   /** The central limiter's one call. */
   readonly limiter: Pick<IdentityStore, 'consumeRateLimit'>;
   /** Managed members' identities (slice 3): made, and their sessions ended and directory rows dropped on removal. */
@@ -352,6 +360,26 @@ export function mountPartnerApi(
     }
   });
 
+  // Embedded screens (slice 4, AC-7030): a one time address for one person and one screen. Nothing changes but the
+  // launch's own row, so no outbox row and no History row.
+  api.post('/partner/v1/connections/:id/launch', async (c) => {
+    const body = PartnerLaunchInput.safeParse(await jsonOf(c));
+    if (!body.success) return badInput(body.error.issues);
+    try {
+      const entry = c.get('partner');
+      const partner = await deps.partners.partnerById(entry.partnerId);
+      if (partner === undefined) return failure('NOT_FOUND', 'There is no such connection.');
+      const launch = await launchPartnerScreen(entry.scope, { connectionId: c.req.param('id'), launch: body.data });
+      const answer: PartnerLaunchAnswer = {
+        url: launchAddress(deps.appUrl, partner.clientId, launch.code),
+        expiresAt: launch.expiresAt.toISOString(),
+      };
+      return c.json(answer, 200, { 'cache-control': 'no-store', pragma: 'no-cache' });
+    } catch (error) {
+      return answerError(c, error);
+    }
+  });
+
   api.delete('/partner/v1/connections/:id/members/:externalId', async (c) => {
     const externalId = externalIdOf(c);
     if (!externalId.ok) return externalId.answer;
@@ -371,6 +399,16 @@ export function mountPartnerApi(
       return answerError(c, error);
     }
   });
+}
+
+/**
+ * A launch's address (AC-7030): the frame's start page under the partner's client id, the one time code in the
+ * fragment (never sent to a server, so no log or Referer keeps it).
+ */
+export function launchAddress(appUrl: string, clientId: string, code: string): string {
+  const url = new URL(`/embed/${encodeURIComponent(clientId)}/start`, appUrl);
+  url.hash = `code=${encodeURIComponent(code)}`;
+  return url.href;
 }
 
 /** A JSON body, or undefined for anything that isn't JSON. */
@@ -417,4 +455,34 @@ export async function partnerLogoResponse(
       'cross-origin-resource-policy': 'same-origin',
     },
   });
+}
+
+/**
+ * The origins a partner's frame may load our embedded screens in (AC-7032), for the edge's
+ * `Content-Security-Policy: frame-ancestors` on `/embed/<clientId>/…`: public (the partner registered them to be
+ * framed from), and the same for an unknown partner as for one with none, an empty list, so the edge sends
+ * `frame-ancestors 'none'`. Cached a minute, so a change in the console reaches the edge within one.
+ */
+export async function partnerFrameResponse(
+  deps: {
+    readonly partners: Pick<IdentityStore, 'partnerByClientId'>;
+    readonly limiter: Pick<IdentityStore, 'consumeRateLimit'>;
+  },
+  request: { readonly clientId: string; readonly address: string | undefined },
+): Promise<Response> {
+  const answer = (frameOrigins: readonly string[]) =>
+    Response.json(
+      { frameOrigins },
+      { headers: { 'cache-control': 'public, max-age=60, s-maxage=60', 'x-content-type-options': 'nosniff' } },
+    );
+  if (!PARTNER_CLIENT_ID.test(request.clientId)) return answer([]);
+  const counted = await deps.limiter.consumeRateLimit(`partner:frame:${request.address ?? 'unknown'}`, {
+    window: 60,
+    max: 600,
+  });
+  if (!counted.allowed) {
+    return new Response(null, { status: 429, headers: { 'retry-after': String(counted.retryAfterSeconds ?? 60) } });
+  }
+  const partner = await deps.partners.partnerByClientId(request.clientId);
+  return answer(partner?.frameOrigins ?? []);
 }

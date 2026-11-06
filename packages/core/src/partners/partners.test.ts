@@ -385,6 +385,7 @@ describe('the token exchange (AC-7011)', () => {
         modules: ['link_pages'],
         connectedAt: expect.any(String) as string,
         approvedBy: 'Ada',
+        isTest: false,
       },
     ]);
     expect(

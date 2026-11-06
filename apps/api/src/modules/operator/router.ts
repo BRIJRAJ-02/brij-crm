@@ -12,8 +12,10 @@ import {
   replacePartnerSecret,
   setEarlyAccess,
   updatePartner,
+  wipeTestConnections,
   type OperatorDeps,
 } from '@crm/core';
+import { apiError } from '../../errors.ts';
 import { forgetAfterCommit } from '../../edge-cache.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
@@ -82,4 +84,21 @@ export const operatorRouter = operator.operator.router({
   replacePartnerSecret: operator.operator.replacePartnerSecret.handler(({ context, input }) =>
     replacePartnerSecret({ partners: context.identity }, input, auditOf(context, 'operator.partnerSecretReplaced')),
   ),
+  // The sandbox (spec 0070, AC-7035): a test partner's live test connections ended in one go, each in its own
+  // workspace with its History row, then their embedded sessions. The gate's row names the partner (`partnerId`).
+  wipeTestConnections: operator.operator.wipeTestConnections.handler(async ({ context, input }) => {
+    const partner = await context.identity.partnerById(input.partnerId);
+    if (partner === undefined) throw apiError('NOT_FOUND', 'There is no partner with that id.');
+    if (!partner.isTest) {
+      throw apiError('CONFIG_INVALID', 'Only a sandbox partner’s connections can be wiped. Mark it as a test first.');
+    }
+    const ended = await wipeTestConnections({ db: context.db }, { id: partner.id, name: partner.name });
+    await context.identity.endEmbedSessions(ended);
+    log.info('operator.partnerTestsWiped', {
+      requestId: context.requestId,
+      partnerId: partner.id,
+      wiped: ended.length,
+    });
+    return { wiped: ended.length };
+  }),
 });

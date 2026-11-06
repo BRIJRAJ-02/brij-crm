@@ -213,6 +213,39 @@ export interface AuthSession {
   readonly verifiedWith?: 'email' | 'second_factor';
   /** Whether the person has the authenticator app on, their one second factor. */
   readonly twoFactorEnabled: boolean;
+  /**
+   * An embedded session's scope (spec 0070, AC-7031): the partner connection its launch belonged to, and that
+   * connection's workspace. Present only on a session read from the embedded frame's own cookie; such a session
+   * opens only the shared modules' procedures there (`orpc.ts`).
+   */
+  readonly embed?: EmbedScope;
+}
+
+/** An embedded session's scope: the connection and its workspace. */
+export interface EmbedScope {
+  readonly connectionId: string;
+  readonly workspaceId: string;
+}
+
+/** The request header the embedded frame's data layer sends: such a request is read by the embedded cookie alone. */
+export const EMBED_HEADER = 'x-crm-embed';
+
+/** The embedded session's cookie (AC-7031): host only, and `__Host-` wherever cookies are Secure. */
+export function embedCookieName(local: boolean): string {
+  return local ? 'tf_embed' : '__Host-tf_embed';
+}
+
+/** What a signed session cookie's value may hold: Better Auth's token and signature, percent encoded. */
+const EMBED_COOKIE_VALUE = /^[A-Za-z0-9%._~+/=-]{20,200}$/;
+
+/** The value of the cookie `name` in a Cookie header, or undefined. */
+function cookieOf(header: string | null, name: string): string | undefined {
+  if (header === null) return undefined;
+  for (const pair of header.split(';')) {
+    const at = pair.indexOf('=');
+    if (at > 0 && pair.slice(0, at).trim() === name) return pair.slice(at + 1).trim();
+  }
+  return undefined;
 }
 
 /** Sign in, as the rest of the API sees it. */
@@ -238,8 +271,28 @@ export interface Auth {
   session(
     headers: Headers,
     clientIp: string | undefined,
-    options?: { readonly renew?: boolean },
+    options?: {
+      readonly renew?: boolean;
+      /**
+       * Whether an embedded session may answer (spec 0070, AC-7031): only the RPC and a link page's own picture and
+       * upload routes ask, and each holds the session to its scope. Without it, a request from the embedded frame (its
+       * header) answers no session at all. With it, the frame's header reads the embedded cookie alone; a request
+       * without it (a picture the frame draws) reads the app's cookie first, then the embedded one.
+       */
+      readonly embed?: boolean;
+    },
   ): Promise<AuthSession | undefined>;
+  /**
+   * Makes an embedded session (spec 0070, AC-7031) for a launch the core just redeemed: a session row with the embed
+   * scope, ending at `expiresAt` and never extended, and the Set-Cookie line that carries it (`Secure`,
+   * `SameSite=None`, `HttpOnly`, `Partitioned`). The only way a managed member's identity gets a session.
+   */
+  startEmbedSession(launch: {
+    readonly userId: string;
+    readonly connectionId: string;
+    readonly workspaceId: string;
+    readonly expiresAt: Date;
+  }): Promise<{ readonly sessionId: string; readonly setCookie: string }>;
   /**
    * Checks an app code, or uses up a backup code, for a step up (spec 0033,
    * AC-896). False for a wrong code or no two factor; never throws for one.
@@ -516,6 +569,10 @@ export function createAuth({
 
   // The sessions each request made (spec 0033, AC-897): checked for a new device after it answers, never in its way.
   const signedInThisRequest = new AsyncLocalStorage<{ userId: string; sessionId: string }[]>();
+  // The launch an embedded session is being made for (spec 0070, AC-7031), set only by `startEmbedSession`: the
+  // session create hook lets a managed identity's session through for it alone, and only with the same scope.
+  const embedLaunching = new AsyncLocalStorage<{ readonly userId: string; readonly connectionId: string }>();
+  const embedCookie = embedCookieName(local);
   const alertDeps = {
     identity,
     send: async (to: string, alert: { when: Date; device: string; place?: string }, sessionId: string) => {
@@ -743,6 +800,9 @@ export function createAuth({
         deviceLabel: { type: 'string', required: false, input: false },
         verifiedAt: { type: 'date', required: false, input: false },
         verifiedWith: { type: 'string', required: false, input: false },
+        // An embedded session's scope (spec 0070, AC-7031): set only by `startEmbedSession`, never by a caller.
+        embedConnectionId: { type: 'string', required: false, input: false },
+        embedWorkspaceId: { type: 'string', required: false, input: false },
       },
     },
     account: {
@@ -785,6 +845,23 @@ export function createAuth({
           // Every new session (an email code, Google): what it is on, roughly where, and that it just proved who it
           // is (spec 0033). The headers are the ones `handle` rebuilt, so the geo pair is the edge guard's or none.
           before: async (session, context) => {
+            // An embedded session (spec 0070, AC-7031) is made only by `startEmbedSession`, for the launch it is
+            // running, with exactly that launch's person and connection: a scope set any other way is refused, and so
+            // is a launch's session that lost its scope. It passes the managed member's refusal below on purpose.
+            const launching = embedLaunching.getStore();
+            const embedScope: unknown = session.embedConnectionId;
+            if (launching !== undefined || (embedScope !== undefined && embedScope !== null)) {
+              if (
+                launching === undefined ||
+                embedScope !== launching.connectionId ||
+                session.userId !== launching.userId ||
+                typeof session.embedWorkspaceId !== 'string'
+              ) {
+                log.warn('Embedded session refused: its scope is not the launch being redeemed');
+                return false;
+              }
+              return { data: session };
+            }
             // A partner's managed member never signs in here (spec 0070, AC-7023): their identity has no address,
             // password or Google of its own, and this refuses a session for it should any way in ever find it.
             if (typeof session.userId === 'string' && (await identity.isManagedUser(session.userId))) {
@@ -814,6 +891,8 @@ export function createAuth({
           },
           // Kept in the account's security history (AC-898): how, on what, and roughly where. Never fails a sign in.
           after: async (session, context) => {
+            // An embedded session is no sign in: the partner's launch is its record (spec 0070).
+            if (typeof session.embedConnectionId === 'string') return;
             // A session renewed in place by a two factor change is no new sign in.
             if (context?.context.session !== null && context?.context.session !== undefined) return;
             // Checked for a new device once the request has answered (AC-897), when a held back one is gone.
@@ -1190,6 +1269,48 @@ export function createAuth({
     ],
   });
 
+  /** One read of a session: by the app's cookie, or with `embedded` by the embedded frame's (spec 0070, AC-7031). */
+  async function readSession(
+    headers: Headers,
+    clientIp: string | undefined,
+    embedded: boolean,
+    renew: boolean | undefined,
+  ): Promise<AuthSession | undefined> {
+    let asked = headers;
+    if (embedded) {
+      const value = cookieOf(headers.get('cookie'), embedCookie);
+      if (value === undefined || !EMBED_COOKIE_VALUE.test(value)) return undefined;
+      const context = await auth.$context;
+      asked = new Headers(headers);
+      asked.set('cookie', `${context.authCookies.sessionToken.name}=${value}`);
+    }
+    const { headers: answered, response } = await auth.api.getSession({
+      headers: forwardedHeaders(asked, clientIp),
+      returnHeaders: true,
+      // An embedded session is never extended: it ends 12 hours after its launch.
+      ...(renew === false || embedded ? { query: { disableRefresh: true } } : {}),
+    });
+    if (response === null) return undefined;
+    const connectionId: unknown = response.session.embedConnectionId;
+    const workspaceId: unknown = response.session.embedWorkspaceId;
+    const embed =
+      typeof connectionId === 'string' && typeof workspaceId === 'string' ? { connectionId, workspaceId } : undefined;
+    // An embedded session's token sent as the app's cookie opens nothing, and the app's sent as the frame's neither.
+    if (embedded !== (embed !== undefined)) return undefined;
+    const { id, name, email, emailVerified, image } = response.user;
+    const verified: unknown = response.session.verifiedAt;
+    return {
+      sessionId: response.session.id,
+      user: { id, name, email, emailVerified, ...(typeof image === 'string' ? { image } : {}) },
+      // An embedded session's cookie is set once, by its launch; nothing renews or rewrites it.
+      setCookies: embedded ? [] : answered.getSetCookie(),
+      verifiedAt: verifiedAtOf(verified, response.session.createdAt),
+      verifiedWith: verifiedWithOf(response.session),
+      twoFactorEnabled: isTwoFactorUser(response.user),
+      ...(embed === undefined ? {} : { embed }),
+    };
+  }
+
   return {
     providers: { google: google !== undefined },
 
@@ -1208,21 +1329,45 @@ export function createAuth({
     },
 
     async session(headers, clientIp, options) {
-      const { headers: answered, response } = await auth.api.getSession({
-        headers: forwardedHeaders(headers, clientIp),
-        returnHeaders: true,
-        ...(options?.renew === false ? { query: { disableRefresh: true } } : {}),
-      });
-      if (response === null) return undefined;
-      const { id, name, email, emailVerified, image } = response.user;
-      const verified: unknown = response.session.verifiedAt;
+      // The embedded frame's requests (spec 0070, AC-7031) are read by its own cookie alone, never the app's, and the
+      // app's by the app's alone: a person signed in to Timefix in the same browser keeps the two apart. Only a caller
+      // that holds an embedded session to its scope asks for one (`embed`); any other answers the frame no session.
+      if (headers.has(EMBED_HEADER)) {
+        return options?.embed === true ? readSession(headers, clientIp, true, options.renew) : undefined;
+      }
+      const app = await readSession(headers, clientIp, false, options?.renew);
+      if (app !== undefined || options?.embed !== true) return app;
+      // A picture the frame draws carries no header: its cookie is the only way to know it.
+      return readSession(headers, clientIp, true, options.renew);
+    },
+
+    async startEmbedSession(launch) {
+      const context = await auth.$context;
+      const made = await embedLaunching.run({ userId: launch.userId, connectionId: launch.connectionId }, () =>
+        context.internalAdapter.createSession(
+          launch.userId,
+          false,
+          {
+            embedConnectionId: launch.connectionId,
+            embedWorkspaceId: launch.workspaceId,
+            expiresAt: launch.expiresAt,
+            verifiedAt: new Date(),
+            verifiedWith: 'email',
+          },
+          true,
+        ),
+      );
+      // The create hook refusing it answers null, whatever the adapter's type says.
+      if ((made as typeof made | null) === null) throw new Error('An embedded session could not be made.');
+      // Signed as Better Auth signs its own session cookie, so its session read verifies it unchanged.
+      const signature = createHmac('sha256', env.BETTER_AUTH_SECRET).update(made.token).digest('base64');
+      const value = encodeURIComponent(`${made.token}.${signature}`);
+      const seconds = Math.max(0, Math.floor((launch.expiresAt.getTime() - Date.now()) / 1000));
       return {
-        sessionId: response.session.id,
-        user: { id, name, email, emailVerified, ...(typeof image === 'string' ? { image } : {}) },
-        setCookies: answered.getSetCookie(),
-        verifiedAt: verifiedAtOf(verified, response.session.createdAt),
-        verifiedWith: verifiedWithOf(response.session),
-        twoFactorEnabled: isTwoFactorUser(response.user),
+        sessionId: made.id,
+        // Secure and SameSite=None so the partner's frame sends it; Partitioned (CHIPS) so it lives only under the
+        // partner's site; HttpOnly so no script reads it; host only and the whole path, as `__Host-` asks.
+        setCookie: `${embedCookie}=${value}; Path=/; Max-Age=${String(seconds)}; HttpOnly; Secure; SameSite=None; Partitioned`,
       };
     },
 

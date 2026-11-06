@@ -95,11 +95,23 @@ export const session = auth.table(
      * Turning two factor off takes a second factor (AC-885).
      */
     verifiedWith: text('verified_with', { enum: ['email', 'second_factor'] }),
+    /**
+     * An embedded session's scope (spec 0070, AC-7031): the partner connection whose launch made it, and that
+     * connection's workspace. Set only when a launch is redeemed, never by a sign in; a session with them set opens
+     * only the shared modules' procedures in that workspace, and one without them never opens an embedded screen.
+     */
+    embedConnectionId: uuid('embed_connection_id'),
+    embedWorkspaceId: uuid('embed_workspace_id'),
   },
   (t) => [
     uniqueIndex('session_token').on(t.token),
     check('session_verified_with', sql`${t.verifiedWith} in ('email', 'second_factor')`),
+    check('session_embed', sql`(${t.embedConnectionId} is null) = (${t.embedWorkspaceId} is null)`),
     index('session_user').on(t.userId),
+    // A disconnect or a sandbox wipe ends a connection's embedded sessions at once.
+    index('session_embed_connection')
+      .on(t.embedConnectionId)
+      .where(sql`${t.embedConnectionId} is not null`),
     foreignKey({ name: 'session_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
   ],
 );
@@ -1035,6 +1047,11 @@ export const partners = auth.table(
     updatedAt: updatedAt(),
     /** When the secret was last replaced; the one before stopped working at that moment. */
     secretReplacedAt: timestamptz('secret_replaced_at'),
+    /**
+     * A sandbox partner (spec 0070, AC-7035): its developers' test product. Its connections are made as test ones,
+     * never counted for billing, and the console can wipe them in one go.
+     */
+    isTest: boolean('is_test').notNull().default(false),
   },
   (t) => [
     uniqueIndex('partners_client_id').on(t.clientId),

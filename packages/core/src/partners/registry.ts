@@ -36,6 +36,7 @@ export function toPartnerView(row: PartnerRow): PartnerView {
     secretHint: row.secretHint,
     createdAt: row.createdAt.toISOString(),
     ...(row.secretReplacedAt === undefined ? {} : { secretReplacedAt: row.secretReplacedAt.toISOString() }),
+    isTest: row.isTest,
   };
 }
 
@@ -111,6 +112,7 @@ export async function updatePartner(
       ? {}
       : { redirectUris: checkedAddresses(input.redirectUris, redirectUriProblem, 'redirectUris') }),
     ...(input.logo === undefined ? {} : { logo: input.logo === null ? null : checkedLogo(input.logo) }),
+    ...(input.isTest === undefined ? {} : { isTest: input.isTest }),
   };
   if (change.redirectUris?.length === 0) {
     throw refuseOn('CONFIG_INVALID', 'Keep at least one address that receives a connection.', 'redirectUris');

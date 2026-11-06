@@ -193,6 +193,19 @@ export {
   type ManagedUserMaker,
 } from './partners/members.ts';
 export { frameOriginProblem, partnerLogoPath, redirectUriProblem } from './partners/addresses.ts';
+// Embedded screens and the sandbox (spec 0070, slice 4): a launch and its redemption, an embedded session's reads,
+// and the console's wipe of a sandbox partner's test connections.
+export {
+  describeEmbedSession,
+  embedConnectionModules,
+  launchPartnerScreen,
+  parsePartnerLaunchCode,
+  redeemPartnerLaunch,
+  wipeTestConnections,
+  type EmbedSessionFacts,
+  type PartnerLaunch,
+  type RedeemedLaunch,
+} from './partners/launch.ts';
 // A partner's token shapes and PKCE (pure): the api's tests and the sample partner page make them.
 export { parsePartnerAccessToken, s256Challenge } from './partners/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
