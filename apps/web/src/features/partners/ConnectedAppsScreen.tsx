@@ -70,7 +70,7 @@ export function ConnectedAppsScreen({ data, toasts, slug, title }: ConnectedApps
             />
             {app.partner.name}
             {/* A sandbox partner's (spec 0070, AC-7035): never billed, and wiped by Timefix when its tests end. */}
-            {app.isTest && <Badge text={strings.test} tone="accent" />}
+            {app.isTest && <Badge text={strings.test} />}
           </>
         );
       case 'modules':

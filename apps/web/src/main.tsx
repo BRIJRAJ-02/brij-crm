@@ -13,7 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { localStore, writeSessionHint, type SessionHint } from './features/auth/hint.ts';
 import { hintPage, writeParentSessionHint } from './features/auth/parent-hint.ts';
 import { signInHref } from './features/auth/redirect.ts';
-import { EMBED_HEADER, embedClientIdOf, embedEndedHref } from './features/embed/paths.ts';
+import { EMBED_HEADER, embedClientIdOf, embedEndedHref, embedThemeOf } from './features/embed/paths.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
 import { followPageTitle } from './features/navigation/title.ts';
@@ -115,7 +115,7 @@ const data = createDataLayer({
     // Nothing of the workspace stays behind sign in: a toast naming a record (Ada Lovelace created) goes too.
     toasts.queue.clear();
     if (embedClientId !== undefined) {
-      goTo(embedEndedHref(embedClientId));
+      goTo(embedEndedHref(embedClientId, embedThemeOf(window.location.search)));
       return;
     }
     goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));

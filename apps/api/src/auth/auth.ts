@@ -962,6 +962,15 @@ export function createAuth({
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // An embedded session (spec 0070, AC-7031) is the partner's frame's alone: its token sent as the app's cookie
+        // to any sign in route (renaming the identity, linking Google, listing sessions) opens nothing. Its row's
+        // expiry never grows either way (migration 0194's trigger).
+        // Our own session reads (`readSession`) carry no request: they hold the scope themselves.
+        const asked = ctx.request === undefined ? null : await getSessionFromCtx(ctx);
+        const embedScope: unknown = asked?.session.embedConnectionId;
+        if (typeof embedScope === 'string') {
+          throw new APIError('UNAUTHORIZED', { code: 'UNAUTHENTICATED', message: 'Sign in to continue.' });
+        }
         // Google signs in only through its own page (the code flow, with state and PKCE). Better Auth would also
         // take a Google id token posted here; the app never sends one, so nothing reaches that path.
         if (ctx.path === SOCIAL_SIGN_IN_PATH && hasIdToken(ctx.body)) {

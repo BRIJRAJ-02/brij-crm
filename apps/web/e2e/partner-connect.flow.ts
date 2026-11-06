@@ -165,13 +165,13 @@ test.describe('partner connect', () => {
 
     // A launch's address works once: opened again, the frame says so and offers a fresh launch.
     await page.goto(`${otherSite}/embed?externalId=crew-${tag}&screen=link_pages.mine`);
-    await expect(frame.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible({ timeout: 20_000 });
+    await expect(frame.getByRole('button', { name: 'Edit page' })).toBeVisible({ timeout: 20_000 });
     const used = await page.locator('#timefix').getAttribute('src');
     await page.locator('#timefix').evaluate((element, src) => {
-      (element as HTMLIFrameElement).src = `${src ?? ''}`;
+      (element as HTMLIFrameElement).src = src ?? '';
     }, used);
-    await expect(frame.getByRole('heading', { level: 1, name: 'Open this again' })).toBeVisible({ timeout: 20_000 });
+    await expect(frame.getByText('This timed out')).toBeVisible({ timeout: 20_000 });
     await frame.getByRole('button', { name: 'Open again' }).click();
-    await expect(frame.getByRole('heading', { level: 1, name: 'Link page' })).toBeVisible({ timeout: 20_000 });
+    await expect(frame.getByRole('button', { name: 'Edit page' })).toBeVisible({ timeout: 20_000 });
   });
 });

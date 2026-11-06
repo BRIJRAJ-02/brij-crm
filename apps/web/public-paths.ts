@@ -40,8 +40,11 @@ export const EMBED_PAGE_SOURCE = '/embed/(tfp_[A-Za-z0-9_-]{22})/(.*)';
 /** vercel.json's header source for the embed script (`/embed/v1.js`, spec 0023): every `/embed/` path but a screen's. */
 export const EMBED_SCRIPT_SOURCE = '/embed/((?!tfp_).*)';
 
-/** An embedded screen's page, as the middleware matches it: the partner's client id is its first segment. */
-export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/[a-z-]+\/?$/;
+/**
+ * An embedded screen's page, as the middleware matches it: the partner's client id is its first segment, and every
+ * path vercel.json sends to the app under it (`EMBED_PAGE_SOURCE`), so none is served without the partner's policy.
+ */
+export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/.*$/;
 
 /**
  * The share card's own path, `/api/public/handles/<handle>/card.png` (spec 0055, AC-5510). It sits under the public

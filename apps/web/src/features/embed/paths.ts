@@ -12,7 +12,13 @@ export function embedClientIdOf(pathname: string): string | undefined {
   return EMBED_PATH.exec(pathname)?.[1];
 }
 
-/** The frame's own page for a session that ended: it asks the partner for a fresh launch. */
-export function embedEndedHref(clientId: string): string {
-  return `/embed/${clientId}/start?ended=true`;
+/** The partner's look, as the frame's address keeps it (`?theme=`), or undefined. */
+export function embedThemeOf(search: string): 'light' | 'dark' | undefined {
+  const theme = new URLSearchParams(search).get('theme');
+  return theme === 'light' || theme === 'dark' ? theme : undefined;
+}
+
+/** The frame's own page for a session that ended, in the partner's look: it asks the partner for a fresh launch. */
+export function embedEndedHref(clientId: string, theme?: 'light' | 'dark'): string {
+  return `/embed/${clientId}/start?ended=true${theme === undefined ? '' : `&theme=${theme}`}`;
 }

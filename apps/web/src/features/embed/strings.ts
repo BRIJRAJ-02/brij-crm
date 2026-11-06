@@ -1,18 +1,17 @@
 /** The embedded frame's own words (spec 0070, AC-7031, AC-7032): short, plain, and never naming the partner's app. */
 export const embedStrings = {
+  /** The bar's title on the frame's own pages: the module it opens, whatever happened. */
+  title: 'Link page',
   opening: 'Opening',
-  openingText: 'One moment.',
-  expiredTitle: 'Open this again',
-  expiredText: 'This screen has timed out. Open it again to carry on.',
-  endedTitle: 'Your session ended',
-  endedText: 'Open this screen again to carry on where you left off.',
+  expiredTitle: 'This timed out',
+  endedTitle: 'Session ended',
   openAgain: 'Open again',
-  /** In a tab of its own there is no app around it to ask: the person goes back to it. */
-  goBackText: 'Go back to the app you came from and open it from there.',
-  blockedTitle: 'Open in a new tab',
-  blockedText: 'Your browser keeps Timefix from signing you in inside this page. It works in a tab of its own.',
+  blockedTitle: 'Your browser blocked sign in here',
   openInNewTab: 'Open in a new tab',
+  /** Outside a frame there is no app around it to ask: the person goes back to it. */
+  goBackText: 'Open it again from the app you came from.',
+  /** A press that the app around the frame didn't answer within a few seconds. */
+  noAnswerText: 'If nothing opens, open it again from the app you came from.',
   failedTitle: 'This didn’t open',
-  failedText: 'Something went wrong on our side. Try again in a moment.',
-  tryAgain: 'Try again',
+  failedText: 'Something went wrong on our side.',
 } as const;

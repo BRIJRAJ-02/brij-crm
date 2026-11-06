@@ -15,6 +15,7 @@ import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
 import { strings } from './strings.ts';
 import { teamStrings } from './team-strings.ts';
+import { useLinkPagePlace } from './place.tsx';
 
 /** Props for the overview. */
 export interface LinkPageOverviewProps {
@@ -62,6 +63,7 @@ export function LinkPageOverview({
   title = strings.yourPage,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
+  const { isEmbedded } = useLinkPagePlace(slug);
   // The code in the owner's saved style (AC-6124), here and in what Download saves.
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   const codeRef = useRef<SVGSVGElement>(null);
@@ -121,7 +123,7 @@ export function LinkPageOverview({
               </Button>
             }
           >
-            {strings.startText}
+            {isEmbedded ? strings.startTextEmbedded : strings.startText}
           </EmptyState>
         </Card>
       )}

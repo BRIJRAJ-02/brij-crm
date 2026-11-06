@@ -15,8 +15,10 @@ AC-7030 to AC-7033). The partner's guide is `docs/partners/guide.md`.
 3. `/embed/$clientId/link-page` draws the app's own screens (the person's page, Team pages, a member's page) in
    `EmbeddedLayout`: the same shell without the sidebar or the workspace menu.
 
-Every request from the frame carries `x-crm-embed` (`paths.ts`, set in `main.tsx`), so the API reads the frame's
-cookie and holds the session to the link page procedures in its own workspace.
+Every API call from the frame carries `x-crm-embed` (`EMBED_HEADER` in `paths.ts`, given to the data layer as
+`callHeaders` in `main.tsx`), so the API reads the frame's cookie and holds the session to the link page procedures in
+its own workspace. A picture the frame draws carries no header; the link page's picture routes fall back to the
+frame's cookie when no app session is there.
 
 ## Screens
 
@@ -40,7 +42,11 @@ cookie and holds the session to the link page procedures in its own workspace.
 
 - `{ type: 'timefix:height', height }` each time the page's height changes (`EmbedFrame`; the page is as tall as its
   content in a frame, the base layer's `[data-embedded]` rule).
-- `{ type: 'timefix:relaunch', target: 'frame' | 'tab', reason }` from Open again or Open in a new tab.
+- `{ type: 'timefix:relaunch', target: 'frame' | 'tab', reason }` from Open again or Open in a new tab. The button is
+  busy for a few seconds; if the page is still here, one line says to open it again from the partner's app. A partner
+  opening a tab must open it before any await (Safari forgets the press), as the guide and the sample hub do.
+- A fresh launch put in the same frame differs from the start page only by its fragment: the start page reads the new
+  code on `hashchange`.
 
 ## The look
 

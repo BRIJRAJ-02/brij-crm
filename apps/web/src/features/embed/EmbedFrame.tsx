@@ -23,11 +23,18 @@ export function EmbedFrame({ origins, theme, children }: EmbedFrameProps) {
   useLayoutEffect(() => {
     if (theme !== undefined) controller.set(theme);
   }, [controller, theme]);
+  // As tall as what it shows (the base layer's rule), so its height is the content's: before paint, and undone
+  // should the page ever leave the frame's screens.
+  useLayoutEffect(() => {
+    const root = document.querySelector<HTMLElement>('[data-app-root]');
+    root?.setAttribute('data-embedded', '');
+    return () => {
+      root?.removeAttribute('data-embedded');
+    };
+  }, []);
   useEffect(() => {
     const root = document.querySelector<HTMLElement>('[data-app-root]');
     if (root === null) return undefined;
-    // As tall as what it shows (the base layer's rule), so its height is the content's.
-    root.setAttribute('data-embedded', '');
     let last = 0;
     const send = () => {
       const height = Math.ceil(root.getBoundingClientRect().height);

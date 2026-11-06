@@ -94,7 +94,13 @@ import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realti
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
-import { mountPartnerApi, PARTNER_V1_PREFIX, partnerFrameResponse, partnerLogoResponse } from './partner/rest.ts';
+import {
+  createFrameOrigins,
+  mountPartnerApi,
+  PARTNER_V1_PREFIX,
+  partnerFrameResponse,
+  partnerLogoResponse,
+} from './partner/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 import type { WebhookUrlProblem } from '@crm/core';
@@ -628,15 +634,8 @@ export function createApp({
   );
   // The origins a partner may frame its embedded screens in (spec 0070, AC-7032): the edge asks it for each
   // `/embed/<clientId>/…` page, to send that page's `frame-ancestors`.
-  app.get('/public/partners/:clientId/frame', (c) =>
-    partnerFrameResponse(
-      {
-        partners: { partnerByClientId: (clientId) => identity.partnerByClientId(clientId) },
-        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
-      },
-      { clientId: c.req.param('clientId'), address: c.get('clientIp') },
-    ),
-  );
+  const frameOrigins = createFrameOrigins({ partnerByClientId: (clientId) => identity.partnerByClientId(clientId) });
+  app.get('/public/partners/:clientId/frame', (c) => partnerFrameResponse(frameOrigins, c.req.param('clientId')));
 
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));

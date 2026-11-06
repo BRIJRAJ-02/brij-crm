@@ -210,6 +210,8 @@ export async function redeemPartnerLaunch(
           eq(managedMembers.workspaceId, partnerConnections.workspaceId),
           eq(managedMembers.partnerId, partnerConnections.partnerId),
           eq(managedMembers.memberId, launch.memberId),
+          // The identity the launch named, still the person's: never someone the external id was moved to since.
+          eq(managedMembers.userId, launch.userId),
           isNull(managedMembers.removedAt),
         ),
       )

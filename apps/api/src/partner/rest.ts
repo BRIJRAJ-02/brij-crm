@@ -457,32 +457,50 @@ export async function partnerLogoResponse(
   });
 }
 
+/** How long a partner's frame origins are kept in this process, and how many partners' at most. */
+const FRAME_ORIGINS_SECONDS = 60;
+const FRAME_ORIGINS_KEPT = 1000;
+
+/**
+ * A partner's frame origins by client id, each kept a minute in this process (a change in the console reaches the
+ * edge within one). No limiter: the edge asks for every embedded page from its own address, so a limit per address
+ * would let anyone turn every partner's frames off; a kept answer (an unknown client id's too, as none) bounds the
+ * reads instead.
+ */
+export function createFrameOrigins(
+  partners: Pick<IdentityStore, 'partnerByClientId'>,
+  now: () => number = Date.now,
+): (clientId: string) => Promise<readonly string[]> {
+  const kept = new Map<string, { readonly at: number; readonly origins: Promise<readonly string[]> }>();
+  return (clientId) => {
+    if (!PARTNER_CLIENT_ID.test(clientId)) return Promise.resolve([]);
+    const hit = kept.get(clientId);
+    if (hit !== undefined && now() - hit.at < FRAME_ORIGINS_SECONDS * 1000) return hit.origins;
+    if (kept.size >= FRAME_ORIGINS_KEPT) kept.clear();
+    const origins = partners.partnerByClientId(clientId).then(
+      (partner) => partner?.frameOrigins ?? [],
+      (error: unknown) => {
+        kept.delete(clientId);
+        throw error;
+      },
+    );
+    kept.set(clientId, { at: now(), origins });
+    return origins;
+  };
+}
+
 /**
  * The origins a partner's frame may load our embedded screens in (AC-7032), for the edge's
  * `Content-Security-Policy: frame-ancestors` on `/embed/<clientId>/…`: public (the partner registered them to be
  * framed from), and the same for an unknown partner as for one with none, an empty list, so the edge sends
- * `frame-ancestors 'none'`. Cached a minute, so a change in the console reaches the edge within one.
+ * `frame-ancestors 'none'`.
  */
 export async function partnerFrameResponse(
-  deps: {
-    readonly partners: Pick<IdentityStore, 'partnerByClientId'>;
-    readonly limiter: Pick<IdentityStore, 'consumeRateLimit'>;
-  },
-  request: { readonly clientId: string; readonly address: string | undefined },
+  frameOrigins: (clientId: string) => Promise<readonly string[]>,
+  clientId: string,
 ): Promise<Response> {
-  const answer = (frameOrigins: readonly string[]) =>
-    Response.json(
-      { frameOrigins },
-      { headers: { 'cache-control': 'public, max-age=60, s-maxage=60', 'x-content-type-options': 'nosniff' } },
-    );
-  if (!PARTNER_CLIENT_ID.test(request.clientId)) return answer([]);
-  const counted = await deps.limiter.consumeRateLimit(`partner:frame:${request.address ?? 'unknown'}`, {
-    window: 60,
-    max: 600,
-  });
-  if (!counted.allowed) {
-    return new Response(null, { status: 429, headers: { 'retry-after': String(counted.retryAfterSeconds ?? 60) } });
-  }
-  const partner = await deps.partners.partnerByClientId(request.clientId);
-  return answer(partner?.frameOrigins ?? []);
+  return Response.json(
+    { frameOrigins: await frameOrigins(clientId) },
+    { headers: { 'cache-control': 'public, max-age=60, s-maxage=60', 'x-content-type-options': 'nosniff' } },
+  );
 }

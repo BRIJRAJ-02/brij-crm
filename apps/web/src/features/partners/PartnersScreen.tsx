@@ -133,7 +133,7 @@ export function PartnersScreen({ data, toasts, title }: PartnersScreenProps) {
               {...(partner.logoUrl === undefined ? {} : { src: partner.logoUrl })}
             />
             {partner.name}
-            {partner.isTest && <Badge text={strings.test} tone="accent" />}
+            {partner.isTest && <Badge text={strings.test} />}
           </>
         );
       case 'clientId':
@@ -517,7 +517,7 @@ function WipeDialog({
                 },
                 (error: unknown) => {
                   setBusy(false);
-                  setFailure(isDataError(error) ? error.message : strings.failedTitle);
+                  setFailure(isDataError(error) ? error.message : strings.wipeConfirm.failed);
                 },
               );
             }}

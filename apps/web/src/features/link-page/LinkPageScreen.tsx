@@ -1092,7 +1092,7 @@ function Blocks({
       {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
         <EmptyState layout="block" title={strings.empty} icon="link">
-          {strings.emptyText}
+          {isEmbedded ? strings.emptyTextEmbedded : strings.emptyText}
         </EmptyState>
       }
     />
@@ -1152,7 +1152,7 @@ function Blocks({
           </>
         }
       >
-        {hasArchived ? strings.emptyArchived : strings.emptyText}
+        {hasArchived ? strings.emptyArchived : isEmbedded ? strings.emptyTextEmbedded : strings.emptyText}
       </EmptyState>
     );
   } else {
@@ -1169,8 +1169,8 @@ function Blocks({
           if (item === undefined) return;
           // A booking page block opens the booking page's own editor, in its workspace; its menu's Edit holds the
           // block's own size and window.
-          if (item.kind === 'page' && item.page !== undefined) {
-            if (!isEmbedded) void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
+          if (item.kind === 'page' && item.page !== undefined && !isEmbedded) {
+            void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
           } else if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
         }}
         onMove={move}

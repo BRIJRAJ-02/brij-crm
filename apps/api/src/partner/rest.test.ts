@@ -6,10 +6,14 @@
 import { randomBytes } from 'node:crypto';
 import { newId, registerPartner, s256Challenge } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { testQuery } from '@crm/db/testing';
 import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
+import { EDGE_HEADER } from '../edge.ts';
+import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 
+const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -345,6 +349,24 @@ describe('/api/partner/v1', () => {
     // The embedded token under the app's own cookie name opens nothing either.
     const asApp = cookie.replace(/^tf_embed=/, 'better-auth.session_token=');
     await expect(rpcClient(app, asApp).me.get()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    // Nor at any sign in route (renaming the identity here), and no read of it ever extends the embedded session.
+    const expiry = () =>
+      testQuery<{ expires_at: string }>(
+        ownerUrl,
+        'select expires_at::text from auth.session where embed_connection_id = $1',
+        [swapped.connection_id],
+      );
+    const [before] = await expiry();
+    const read = await app.request('/api/auth/get-session', {
+      headers: { cookie: asApp, origin: APP_URL, [EDGE_HEADER]: TEST_EDGE_SECRET },
+    });
+    expect(read.status).toBe(401);
+    await testQuery(
+      ownerUrl,
+      "update auth.session set expires_at = now() + interval '30 days' where embed_connection_id = $1",
+      [swapped.connection_id],
+    );
+    expect(await expiry()).toEqual([before]);
     // And the owner's app session sent as the frame's opens nothing in the frame.
     await expect(rpcClient(app, owner.cookie, () => ({ 'x-crm-embed': '1' })).embed.session()).rejects.toMatchObject({
       code: 'UNAUTHENTICATED',

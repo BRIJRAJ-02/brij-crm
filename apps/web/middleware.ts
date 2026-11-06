@@ -45,7 +45,7 @@ export const PUBLIC_HOST_PATH = new RegExp(
 );
 
 /** public-paths.ts's EMBED_PAGE_PATH: an embedded screen's page, `/embed/<clientId>/…` (spec 0070, AC-7032). */
-export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/[a-z-]+\/?$/;
+export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/.*$/;
 
 /**
  * The app's own policy (vercel.json's first header rule) with its `frame-ancestors` left for an embedded screen to

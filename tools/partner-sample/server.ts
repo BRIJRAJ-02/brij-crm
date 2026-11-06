@@ -98,10 +98,17 @@ function embedPage(launch: {
           frame.style.height = Math.max(320, Math.min(message.height, window.innerHeight - 80)) + 'px';
         }
         if (message && message.type === 'timefix:relaunch') {
+          // A new tab opens now, while the press still counts (Safari forgets it across an await), then gets its
+          // address once the launch answers.
+          const tab = message.target === 'tab' ? window.open('', '_blank') : null;
+          if (tab) tab.opener = null;
           const answer = await fetch('/launch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(AGAIN) });
           const { url } = await answer.json();
-          if (typeof url !== 'string') return;
-          if (message.target === 'tab') window.open(url, '_blank', 'noopener');
+          if (typeof url !== 'string') {
+            if (tab) tab.close();
+            return;
+          }
+          if (tab) tab.location.href = url;
           else frame.src = url;
         }
       });

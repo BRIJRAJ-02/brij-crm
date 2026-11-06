@@ -78,13 +78,14 @@ function EmbedLinkPageRoute() {
   const { data } = Route.useRouteContext();
   const { edit, member, team, theme } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const router = useRouter();
   const slug = session.workspace;
   const isTeam = team === true && session.canManageTeam;
   // Their own page couldn't be read: the frame's own page, with its own frame.
   if (!isTeam && profile === undefined && member === undefined) {
     return (
       <EmbedFrame origins={session.frameOrigins} theme={theme}>
-        <EmbedStatus state="failed" origins={session.frameOrigins} />
+        <EmbedStatus state="failed" origins={session.frameOrigins} onRetry={() => void router.invalidate()} />
       </EmbedFrame>
     );
   }

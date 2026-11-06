@@ -52,6 +52,25 @@ ALTER TABLE "auth"."session" ADD COLUMN "embed_connection_id" uuid;--> statement
 ALTER TABLE "auth"."session" ADD COLUMN "embed_workspace_id" uuid;--> statement-breakpoint
 ALTER TABLE "auth"."session" ADD CONSTRAINT "session_embed" CHECK (("auth"."session"."embed_connection_id" is null) = ("auth"."session"."embed_workspace_id" is null));--> statement-breakpoint
 CREATE INDEX "session_embed_connection" ON "auth"."session" USING btree ("embed_connection_id") WHERE "auth"."session"."embed_connection_id" is not null;--> statement-breakpoint
+-- An embedded session ends 12 hours after its launch whatever reads it: a session read that would extend it (Better
+-- Auth renews a session past its update age) keeps its expiry, and its scope never changes or goes.
+create function "auth"."crm_keep_embed_session"() returns trigger
+  language plpgsql
+  set search_path = pg_catalog, pg_temp
+as $$
+begin
+  if old.embed_connection_id is not null then
+    new.expires_at := least(new.expires_at, old.expires_at);
+    new.embed_connection_id := old.embed_connection_id;
+    new.embed_workspace_id := old.embed_workspace_id;
+  end if;
+  return new;
+end
+$$;
+--> statement-breakpoint
+create trigger "session_keep_embed" before update on "auth"."session"
+  for each row execute function "auth"."crm_keep_embed_session"();
+--> statement-breakpoint
 ALTER TABLE "auth"."partners" ADD COLUMN "is_test" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "partner_connections" ADD COLUMN "is_test" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 grant select (workspace_id, id, partner_id, is_test, disconnected_at) on partner_connections to crm_operator;

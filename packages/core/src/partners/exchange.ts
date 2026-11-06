@@ -168,18 +168,21 @@ export async function exchangePartnerCode(
               tokenHash,
               isTest: partner.isTest,
             })
-            .returning({ id: partnerConnections.id, createdAt: partnerConnections.createdAt })
+            .returning({
+              id: partnerConnections.id,
+              createdAt: partnerConnections.createdAt,
+              isTest: partnerConnections.isTest,
+            })
         : await tx
             .update(partnerConnections)
-            .set({
-              modules,
-              approvedByMemberId: code.approvedByMemberId,
-              tokenHash,
-              isTest: partner.isTest,
-              updatedAt: sql`now()`,
-            })
+            // A connection stays what it was made as (live or test), whatever the partner is marked now.
+            .set({ modules, approvedByMemberId: code.approvedByMemberId, tokenHash, updatedAt: sql`now()` })
             .where(eq(partnerConnections.id, live.id))
-            .returning({ id: partnerConnections.id, createdAt: partnerConnections.createdAt });
+            .returning({
+              id: partnerConnections.id,
+              createdAt: partnerConnections.createdAt,
+              isTest: partnerConnections.isTest,
+            });
     if (connection === undefined) throw new Error('A partner connection just written could not be read back.');
     await tx
       .update(partnerCodes)
@@ -204,7 +207,7 @@ export async function exchangePartnerCode(
         workspace: { id: parts.workspaceId, name: approver.name },
         modules,
         connectedAt: new Date(connection.createdAt).toISOString(),
-        isTest: partner.isTest,
+        isTest: connection.isTest,
       },
     };
   });

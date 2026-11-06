@@ -141,6 +141,7 @@ export const partnersStrings = {
     text: 'Every workspace it is connected to as a test is disconnected, and its open screens close. People it added stay in their workspaces.',
     confirm: 'Wipe tests',
     wiping: 'Wiping…',
+    failed: 'Couldn’t wipe the test connections. Try again.',
     cancel: 'Cancel',
   },
   wiped: (count: number) =>

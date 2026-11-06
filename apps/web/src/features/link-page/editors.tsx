@@ -33,6 +33,7 @@ import { DraftPage } from './draft-look.tsx';
 import { reachStrings } from './reach-strings.ts';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
+import { useLinkPagePlace } from './place.tsx';
 
 /**
  * The one Add modal's own places, while an editor is drawn inside it. Adding used to mount a Modal per kind, so
@@ -1383,6 +1384,8 @@ function PlacedPageEditor({ item, items, linkPage, onSubmit, onClose }: BlockEdi
 
 /** Add a booking page: the person's Public pages not on the page yet. */
 function PageChoice({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  // A partner's frame shares Link pages alone (spec 0070, AC-7033): no way out to another module's screens.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const focusFirst = useFocusesFirstField();
   const formId = useId();
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
@@ -1445,7 +1448,7 @@ function PageChoice({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockE
       <EmptyState
         layout="row"
         title={items.some((item) => item.kind === 'page') ? strings.noPages : strings.noPagesYet}
-        actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
+        {...(isEmbedded ? {} : { actions: <ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink> })}
       />
     );
   } else {
@@ -1498,6 +1501,8 @@ type FormChoices =
  * which the owner may replace; the name itself never leaves the editor, so a visitor reads only what was typed.
  */
 export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  // A partner's frame shares Link pages alone (spec 0070, AC-7033): no way out to another module's screens.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'form' ? item : undefined;
@@ -1581,7 +1586,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
       <EmptyState
         layout="row"
         title={items.some((each) => each.kind === 'form') ? strings.noForms : strings.noFormsYet}
-        actions={<ButtonLink href={formsHref(slug)}>{strings.noFormsAction}</ButtonLink>}
+        {...(isEmbedded ? {} : { actions: <ButtonLink href={formsHref(slug)}>{strings.noFormsAction}</ButtonLink> })}
       />
     );
   } else {
