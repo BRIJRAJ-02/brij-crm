@@ -32,6 +32,7 @@ import { inWorkspace } from '../access/run.ts';
 import { pairToken, parsePairToken } from '../developer/tokens.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
+import { operatorTestConnections } from '../operator/reads.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { writeAudit } from '../members/audit.ts';
 import { newPartnerTokenSecret, partnerTokenHash, partnerTokenMatches, type PartnerTokenParts } from './tokens.ts';
@@ -346,12 +347,9 @@ export async function wipeTestConnections(
   partner: { readonly id: string; readonly name: string },
 ): Promise<readonly string[]> {
   if (!isUuid(partner.id)) return [];
-  const found = await deps.db.withWorkspace('00000000-0000-0000-0000-000000000000', (tx) =>
-    tx.execute(sql`select workspace_id, connection_id from crm_operator_partner_connections(${partner.id}::uuid)`),
-  );
-  const rows = (found.rows as { workspace_id: string; connection_id: string }[]).filter(
-    (row) => isUuid(row.workspace_id) && isUuid(row.connection_id),
-  );
+  const rows = (await operatorTestConnections(deps, partner.id))
+    .map((row) => ({ workspace_id: row.workspaceId, connection_id: row.connectionId }))
+    .filter((row) => isUuid(row.workspace_id) && isUuid(row.connection_id));
   const ended: string[] = [];
   for (const row of rows) {
     const done = await deps.db.withWorkspace(row.workspace_id, async (tx) => {

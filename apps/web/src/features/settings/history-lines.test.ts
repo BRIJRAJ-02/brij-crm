@@ -186,6 +186,12 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'member.removed', target: member(gone), params: {} },
     'Ada Lovelace removed a deleted user from the workspace',
   ],
+  // Spec 0070, AC-7020: someone a connected app added.
+  [
+    { ...base, action: 'member.added', target: member(bea), params: { role: 'admin' } },
+    'Ada Lovelace added Bea Rao to the workspace as Admin',
+  ],
+  [{ ...base, action: 'member.added', target: member(bea), params: {} }, 'Ada Lovelace added Bea Rao to the workspace'],
   [{ ...base, actor: bea, action: 'member.left', target: member(bea), params: {} }, 'Bea Rao left the workspace'],
   [
     { ...base, action: 'workspace.ownership_transferred', target: member(bea), params: {} },

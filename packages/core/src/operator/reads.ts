@@ -450,3 +450,18 @@ export async function operatorSite(deps: OperatorDeps, period: OperatorPeriod): 
     devices: [...facts.devices],
   };
 }
+
+/**
+ * A sandbox partner's live test connections, every workspace's (spec 0070, AC-7035): ids only, through
+ * `crm_operator_partner_connections`, which reads connections marked as test alone. The wipe's one cross workspace read.
+ */
+export async function operatorTestConnections(
+  deps: { readonly db: Database },
+  partnerId: string,
+): Promise<readonly { readonly workspaceId: string; readonly connectionId: string }[]> {
+  const rows = await definer<{ workspace_id: string; connection_id: string }>(
+    deps.db,
+    sql`select workspace_id, connection_id from crm_operator_partner_connections(${partnerId}::uuid)`,
+  );
+  return rows.map((row) => ({ workspaceId: row.workspace_id, connectionId: row.connection_id }));
+}
