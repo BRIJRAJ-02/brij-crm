@@ -3,11 +3,11 @@
 // `crm` database. Test tooling only, never shipped.
 //
 //   node tools/partner-sample/setup.ts [--port=5390] [--out=<file>]   prepare, register, write the settings as JSON
-//   node tools/partner-sample/setup.ts --drop                         drop the database again
+//   node tools/partner-sample/setup.ts --drop --out=<file>            drop the database that JSON names
 //
 // The JSON holds the database's logins (test only, as every test database's) and the partner's client id and
 // secret, for the api's environment and the sample's.
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { registerPartner } from '@crm/core';
 import { createIdentityStore } from '@crm/db';
@@ -24,10 +24,13 @@ const { values } = parseArgs({
 });
 
 if (values.drop) {
-  // The checkout's own copy: prepareTestDatabase named it, so it is found the same way.
-  const prepared = await prepareTestDatabase(DATABASE);
-  await dropTestDatabase(prepared);
-  process.stdout.write(`Dropped ${prepared.name}\n`);
+  // The database the settings name; dropTestDatabase drops only a crm_test_ one.
+  if (values.out === undefined) throw new Error('Name the settings file with --out.');
+  const settings: unknown = JSON.parse(await readFile(values.out, 'utf8'));
+  const name =
+    typeof settings === 'object' && settings !== null && 'database' in settings ? String(settings.database) : '';
+  await dropTestDatabase({ name });
+  process.stdout.write(`Dropped ${name}\n`);
 } else {
   const database = await prepareTestDatabase(DATABASE);
   const identity = createIdentityStore({ url: database.identityUrl, applicationName: 'crm-partner-sample' });
