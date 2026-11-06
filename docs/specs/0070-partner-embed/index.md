@@ -55,7 +55,17 @@ It is built to work for any outside product, not only this hub. Charging partner
 - **AC-7031**: That address opens an embedded session. It is limited to that person, that workspace and the connection's modules, and lasts 12 hours. The session's cookie is `Secure`, `SameSite=None`, `HttpOnly` and `Partitioned`, so it works inside the partner's frame and nowhere else. Where the browser still refuses it, the screen offers "Open in a new tab", which uses a fresh launch.
 - **AC-7032**: Embedded screens live under `app.timefix.com/embed/…`. They draw without our sidebar or top bar, in light or dark as the partner asks, and send their height to the parent page. They are allowed to load only inside the partner's registered web addresses (`frame-ancestors`), and refuse anything else.
 - **AC-7033**: Inside the frame, a person can reach only the shared modules. A link to anything else (People, Settings, another workspace) isn't drawn, and the server refuses it for an embedded session.
-- **AC-7034**: A short partner guide (one page, with copyable requests and a sample frame) explains connect, members and launch, for the hub's developers.
+- **AC-7034**: A partner guide is the hub developers' only source (owner, 6 Nov 2026: the client's developers build their side from it, without access to us). It covers:
+  - the Integrate Timefix button and the connect flow;
+  - storing the connection;
+  - adding and removing members;
+  - opening a screen with a launch and the frame;
+  - every error code and what to do;
+  - rate limits;
+  - replacing the secret.
+
+  Every step has a copyable request and a short Node example, and one complete sample hub page that works end to end.
+- **AC-7035**: A test partner sandbox lets a partner's developers try every call before going live. Their test connections are marked as test, can be wiped in one go, and never count toward billing.
 
 **Public pages**: link pages stay at `timefix.com/<handle>`, with "Powered by Timefix" in its usual place (AC-5601 to AC-5608 and 0051 unchanged).
 
@@ -85,7 +95,7 @@ Tracer Bullet, each slice landing on its own:
 1. **Slice 1**, team link pages and QR (AC-7001 to AC-7004): helps every Timefix workspace now.
 2. **Slice 2**, partners and connect (AC-7010 to AC-7013): test with a small sample partner page in the repo's test tools, never shipped.
 3. **Slice 3**, managed members (AC-7020 to AC-7025).
-4. **Slice 4**, embedded screens and the guide (AC-7030 to AC-7034): checked in Chrome, Safari and Firefox inside a real frame on another origin.
+4. **Slice 4**, embedded screens, the guide and the sandbox (AC-7030 to AC-7035): checked in Chrome, Safari and Firefox inside a real frame on another origin.
 
 Slices 2 to 4 each get a `security-access-reviewer` pass before landing.
 
