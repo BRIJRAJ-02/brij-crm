@@ -257,4 +257,42 @@ describe('businesses (spec 0065 H7)', () => {
     const choice = store.choice('acme').getSnapshot();
     expect(choice.status === 'ready' && choice.value).toBeUndefined();
   });
+
+  it('asks nothing more once signed out, while the switcher still shows on the way to sign in', async () => {
+    let reads = 0;
+    const late = deferred<ReturnType<typeof listed>>();
+    const api = new Proxy({} as HospitalityProcedures, {
+      get: (_target, name: string) =>
+        name === 'properties'
+          ? () => {
+              reads += 1;
+              return reads === 1 ? Promise.resolve(listed(2)) : late.promise;
+            }
+          : () => Promise.reject(new Error('Not used here.')),
+    });
+    const store = openHospitality({ api, call: (run) => run({}), mintId: () => 'id' });
+    const shown = store.properties('acme');
+    shown.retain();
+    store.choice('acme').retain();
+    await store.readProperties('acme');
+    // A read still out when the session ends (a `nav` event's) never lands in the copy after it.
+    store.propertiesChanged('acme');
+    expect(reads).toBe(2);
+    const heard = vi.fn();
+    shown.subscribe(heard);
+    store.clear();
+    expect(heard).toHaveBeenCalled();
+    expect(shown.getSnapshot().status).toBe('loading');
+    // The sidebar renders again as sign out navigates: the same copy, so nothing is held anew and nothing asked.
+    expect(store.properties('acme')).toBe(shown);
+    store.choice('acme').getSnapshot();
+    late.resolve(listed(2));
+    await late.promise;
+    await Promise.resolve();
+    expect(shown.getSnapshot().status).toBe('loading');
+    expect(reads).toBe(2);
+    // The next sign in's screens hold it anew, and it reads.
+    shown.retain();
+    expect(reads).toBe(3);
+  });
 });

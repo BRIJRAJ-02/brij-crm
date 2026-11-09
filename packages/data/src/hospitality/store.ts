@@ -168,6 +168,8 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
   let readAt: number | undefined;
   // A write landed while a read was out: that read may have started before it, so another follows it.
   let readAgain = false;
+  // Bumped when the session ends (`forget`): a read or change sent before it never lands in the copy after it.
+  let generation = 0;
   const listeners = new Set<() => void>();
   const set = (next: HospitalityHeldState<Value>) => {
     state = next;
@@ -179,8 +181,10 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
     void read().catch(() => undefined);
   };
   const read = (): Promise<Value> => {
+    const sentIn = generation;
     reading ??= load().then(
       (value) => {
+        if (sentIn !== generation) return value;
         reading = undefined;
         readAt = now();
         set({ status: 'ready', value, isSaving: false });
@@ -188,8 +192,9 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
         return value;
       },
       (error: unknown) => {
-        reading = undefined;
         const refused = toDataError(error);
+        if (sentIn !== generation) throw refused;
+        reading = undefined;
         if (state.status !== 'ready') set({ status: 'error', error: refused });
         followUp();
         throw refused;
@@ -224,6 +229,7 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
     if (state.status !== 'ready') return dataError('NOT_READY', 'Still loading, try again.');
     made += 1;
     const mine = made;
+    const sentIn = generation;
     const was = state.value;
     set({ status: 'ready', value: next(was), isSaving: true });
     pending += 1;
@@ -231,7 +237,7 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
     queue = sent.catch(() => undefined);
     try {
       const landed = await sent;
-      if (mine === made) {
+      if (mine === made && sentIn === generation) {
         const after = valueOf(held.getSnapshot(), was);
         set({
           status: 'ready',
@@ -241,6 +247,7 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
       }
       return undefined;
     } catch (error) {
+      if (sentIn !== generation) return toDataError(error);
       if (mine === made) set({ status: 'ready', value: was, isSaving: false });
       else stale = true;
       return toDataError(error);
@@ -267,7 +274,20 @@ export function holder<Value>(load: () => Promise<Value>, now: () => number) {
       void read().catch(() => undefined);
     },
   };
-  return { held, read, reread, change, patch };
+  /**
+   * The session ended: the copy goes back to loading and reads nothing until a screen holds it again. The held copy
+   * stays the same object, so a screen still showing it (the sidebar's switcher while sign out navigates) never
+   * holds a new one, which would read after the session ended and answer 401.
+   */
+  const forget = () => {
+    generation += 1;
+    reading = undefined;
+    readAt = undefined;
+    readAgain = false;
+    stale = false;
+    set({ status: 'loading' });
+  };
+  return { held, read, reread, change, patch, forget };
 }
 
 /** `tables` with the live ones in `order` (by id), positions renumbered, archived ones after. */
@@ -883,15 +903,18 @@ export function openHospitality(given: {
         (mutationId, options) => api.deleteResource({ workspace, placeId, resourceId, mutationId }, options),
       ),
 
-    /** Signed out: forgets every copy. */
+    /**
+     * Signed out: forgets every copy. Each held copy goes back to loading rather than away, so a screen still mounted
+     * as sign out navigates (the sidebar's switcher, ⌘K) keeps the copy it holds and asks nothing more: a new copy
+     * would be held again at once and read with the session gone (a 401). The next sign in's screens hold them anew.
+     */
     clear: (): void => {
-      appsHeld.clear();
-      businessHeld.clear();
-      propertiesHeld.clear();
+      for (const each of [appsHeld, businessHeld, propertiesHeld, floors, qrHeld]) {
+        for (const found of each.values()) found.forget();
+      }
       chosen.clear();
       guards.clear();
       choiceSnapshots.clear();
-      floors.clear();
     },
   };
 }
