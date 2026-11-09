@@ -13,6 +13,8 @@ import type {
   InvitationView,
   InviteLinkView,
   JoinRequestView,
+  MemberReach,
+  MemberReachView,
   MemberView,
   MyAccess,
   RolesList,
@@ -904,5 +906,77 @@ describe('a member who can’t invite', () => {
     expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);
     expect(page.getByRole('button', { name: 'Actions for Linus Torvalds' }).elements()).toHaveLength(1);
     expect(page.getByRole('button', { name: 'Invite people' }).elements()).toHaveLength(0);
+  });
+});
+
+describe('where a member works in the business apps (spec 0065 H7, AC-6594)', () => {
+  const BAR = '0190a000-0000-7000-8000-00000000000b';
+  const QUAY = '0190a000-0000-7000-8000-0000000000b1';
+  /** A workspace with two businesses, the second with two places; Linus works everywhere until changed. */
+  function withBusinesses(answer: (reach: MemberReach) => MemberReachView | Error) {
+    const counted = layerWith(() => Promise.resolve());
+    const sent: MemberReach[] = [];
+    const view = (reach: MemberReach): MemberReachView => ({
+      memberId: LINUS.id,
+      reach,
+      fixed: false,
+      businesses: [
+        {
+          id: '0190a000-0000-7000-8000-00000000000a',
+          name: 'Somewhere',
+          places: [{ id: '0190a000-0000-7000-8000-0000000000a1', name: 'Soho' }],
+        },
+        {
+          id: BAR,
+          name: 'Bar',
+          places: [
+            { id: QUAY, name: 'Quay' },
+            { id: '0190a000-0000-7000-8000-0000000000b2', name: 'Pier' },
+          ],
+        },
+      ],
+    });
+    const store = {
+      memberReach: () => Promise.resolve(view({ all: true, properties: [], places: [] })),
+      setMemberReach: (_slug: string, _memberId: string, reach: MemberReach) => {
+        sent.push(reach);
+        const answered = answer(reach);
+        return Promise.resolve(answered instanceof Error ? answered : view(answered.reach));
+      },
+    };
+    const layer = { ...counted.layer, hospitality: { load: () => Promise.resolve(store) } } as unknown as DataLayer;
+    return { layer, sent, view };
+  }
+  const ADMIN = { ...ACCESS, permissions: [...ACCESS.permissions, 'workspace.manage'] };
+
+  it('reads Every business, and a place picked saves at once as that place alone', async () => {
+    const world = withBusinesses((reach) => world.view(reach));
+    await renderMembers(world.layer, { access: ADMIN });
+    await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
+    const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
+    await expect.element(details.getByText('Works in', { exact: true })).toBeVisible();
+    await details.getByRole('button', { name: /Where Linus Torvalds works/ }).click();
+    await page.getByRole('option', { name: 'Quay' }).click();
+    await expect.poll(() => world.sent).toEqual([{ all: false, properties: [], places: [QUAY] }]);
+  });
+
+  it('puts the choice back and says why when the server refuses it', async () => {
+    const world = withBusinesses(() => refusal('FORBIDDEN', 'Not yours.'));
+    await renderMembers(world.layer, { access: ADMIN });
+    await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
+    const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
+    await details.getByRole('button', { name: /Where Linus Torvalds works/ }).click();
+    await page.getByRole('option', { name: 'Quay' }).click();
+    await expect.element(page.getByText('Not yours.')).toBeVisible();
+    expect(world.sent).toHaveLength(1);
+  });
+
+  it('shows nothing to a reader who can’t change it', async () => {
+    const world = withBusinesses((reach) => world.view(reach));
+    await renderMembers(world.layer);
+    await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
+    const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
+    await expect.element(details.getByText('Joined', { exact: true })).toBeVisible();
+    expect(details.getByText('Works in', { exact: true }).elements()).toHaveLength(0);
   });
 });

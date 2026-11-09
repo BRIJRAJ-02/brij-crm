@@ -57,6 +57,18 @@ export const strings = {
     /** The first item of a row's menu: what a click on the row opens. */
     menu: 'Details',
   },
+  /**
+   * Where a member may work in the business apps (spec 0065 H7, AC-6594): the panel's Works in row, shown once there
+   * is a choice (two businesses, or a business with two places). Under each business's heading, its whole first.
+   */
+  worksIn: {
+    term: 'Works in',
+    every: 'Every business',
+    allOf: 'All places',
+    /** An owner or admin: always every business, said as text. */
+    everyByRole: 'Every business',
+    label: (name: string) => `Where ${name} works`,
+  },
   /** A row's details on a phone, where they fill the screen: their way back to the list. */
   backToMembers: 'Members',
   /** The Two factor column (spec 0033, AC-895): an authenticator app. */

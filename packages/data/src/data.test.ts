@@ -810,6 +810,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       properties: os.hospitality.properties.handler(notServed),
       createProperty: os.hospitality.createProperty.handler(notServed),
       removeProperty: os.hospitality.removeProperty.handler(notServed),
+      memberReach: os.hospitality.memberReach.handler(notServed),
+      setMemberReach: os.hospitality.setMemberReach.handler(notServed),
       saveBusiness: os.hospitality.saveBusiness.handler(notServed),
       createPlace: os.hospitality.createPlace.handler(notServed),
       updatePlace: os.hospitality.updatePlace.handler(notServed),

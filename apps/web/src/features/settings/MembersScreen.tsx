@@ -65,6 +65,7 @@ import { InviteLinkRows } from './InviteLinkRows.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { SchedulingAccessCell } from './SchedulingAccessCell.tsx';
+import { useWorksIn, WorksIn } from './WorksIn.tsx';
 import {
   askReconnect,
   askReconnectItem,
@@ -274,6 +275,13 @@ export function MembersScreen({
   // A row that went (a removal, a search that hides it) is forgotten, so its details never reopen by themselves.
   if (openId !== undefined && opened === undefined) setOpenId(undefined);
   const shown = opened ?? lastOpened;
+  // Where the open member works in the business apps (spec 0065 H7, AC-6594): an owner's or admin's to change.
+  const [worksIn, setWorksIn] = useWorksIn(
+    data,
+    slug,
+    shown?.kind === 'member' ? shown.member : undefined,
+    access.permissions.includes('workspace.manage'),
+  );
   const isSelecting = ticked.size > 0;
   // The bar stays mounted while it sinks out, until its onLeft.
   const [isBarShown, setBarShown] = useState(isSelecting);
@@ -796,6 +804,23 @@ export function MembersScreen({
                       description: <CalendarHealthChip state={health.get(member.id)} name={member.name} />,
                     },
                     { term: strings.details.scheduling, description: schedulingOf(member) },
+                  ]),
+              ...(worksIn === undefined || worksIn.memberId !== member.id
+                ? []
+                : [
+                    {
+                      term: strings.worksIn.term,
+                      description: (
+                        <WorksIn
+                          data={data}
+                          slug={slug}
+                          toasts={toasts}
+                          member={member}
+                          view={worksIn}
+                          onChange={setWorksIn}
+                        />
+                      ),
+                    },
                   ]),
             ]
           : []),

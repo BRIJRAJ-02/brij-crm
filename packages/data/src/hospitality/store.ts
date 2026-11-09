@@ -17,6 +17,8 @@ import type {
   PlaceFloor,
   PlaceHours,
   PlaceQrCodes,
+  MemberReach,
+  MemberReachView,
   PropertiesView,
   Property,
   PropertyFields,
@@ -71,6 +73,11 @@ export interface HospitalityProcedures {
     input: Scoped & { property: string; mutationId: string },
     options: Options,
   ) => Promise<PropertiesView>;
+  readonly memberReach: (input: Scoped & { memberId: string }, options: Options) => Promise<MemberReachView>;
+  readonly setMemberReach: (
+    input: Scoped & { memberId: string; reach: MemberReach; mutationId: string },
+    options: Options,
+  ) => Promise<MemberReachView>;
   readonly saveBusiness: (
     input: Scoped & InProperty & { profile: PropertyFields; mutationId: string },
     options: Options,
@@ -582,6 +589,29 @@ export function openHospitality(given: {
         (mutationId, options) => api.removeProperty({ workspace, property, mutationId }, options),
       ),
 
+    /**
+     * Where one member may work (spec 0065 H7, AC-6594), for their panel in Settings › Members: read when the panel
+     * opens, never held (an admin changes it rarely, and the panel reads it again each time). Rejects with the refusal.
+     */
+    memberReach: (workspace: string, memberId: string): Promise<MemberReachView> =>
+      call((options) => api.memberReach({ workspace, memberId }, options)),
+    /**
+     * Sets where one member may work (AC-6594, AC-6597): the panel shows the choice at once and puts it back on a
+     * refusal, which comes back here; the server's answer otherwise.
+     */
+    setMemberReach: async (
+      workspace: string,
+      memberId: string,
+      reach: MemberReach,
+    ): Promise<MemberReachView | DataError> => {
+      try {
+        return await call((options) =>
+          api.setMemberReach({ workspace, memberId, reach, mutationId: mintId() }, options),
+        );
+      } catch (error) {
+        return toDataError(error);
+      }
+    },
     /** Settings › Business (AC-6507, AC-6508): the chosen business's profile and places, read when first held. */
     business: (workspace: string): HospitalityHeld<BusinessView> => businessOf(workspace).held,
     /** Reads Business now (the route's loader); rejects with the refusal. */
