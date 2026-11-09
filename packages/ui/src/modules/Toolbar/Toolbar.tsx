@@ -109,7 +109,11 @@ export function TopBar({
   let shownTitle: ReactNode = null;
   if (!isLoading) shownTitle = hasTrail ? <Breadcrumbs items={[...crumbs, { id: CURRENT, label: title }]} /> : heading;
   return (
-    <header className={styles.top} aria-busy={isLoading || undefined}>
+    <header
+      className={styles.top}
+      aria-busy={isLoading || undefined}
+      data-has-tabs={tabs === undefined ? undefined : true}
+    >
       {back !== undefined && (
         <span className={styles.back}>
           <ButtonLink variant="ghost" icon="chevron-left" label={back.label} href={back.href} />
