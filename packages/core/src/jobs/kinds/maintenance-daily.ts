@@ -98,6 +98,7 @@ const PHASES = [
   'task_due',
   'views',
   'partials',
+  'consent_requests',
   'form_visits',
   'submissions',
   'page_visits',
@@ -156,6 +157,8 @@ const Totals = z.object({
   views: Count.default(0),
   // Added by spec 0063 (AC-6319): part filled forms past their 30 days, which nobody came back to.
   partials: Count.default(0),
+  // Added 9 Nov 2026 (migration 0202): news and offers requests that ran out unconfirmed.
+  consentRequests: Count.default(0),
   // Added by spec 0063 (AC-6320): form visit rows past their thirteen months.
   formVisits: Count.default(0),
   // Added by spec 0023 (AC-1054): submissions past the workspace's retention, and spam past 30 days.
@@ -201,6 +204,7 @@ const NO_TOTALS: Totals = {
   tasksDue: 0,
   views: 0,
   partials: 0,
+  consentRequests: 0,
   formVisits: 0,
   submissions: 0,
   pageVisits: 0,
@@ -272,6 +276,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   tasksDue: totals.tasksDue + (more.tasksDue ?? 0),
   views: totals.views + (more.views ?? 0),
   partials: totals.partials + (more.partials ?? 0),
+  consentRequests: totals.consentRequests + (more.consentRequests ?? 0),
   formVisits: totals.formVisits + (more.formVisits ?? 0),
   submissions: totals.submissions + (more.submissions ?? 0),
   pageVisits: totals.pageVisits + (more.pageVisits ?? 0),
@@ -447,6 +452,24 @@ async function expiredPartials(context: WriteContext, at: Checkpoint, limit: num
   `);
   const count = removed.rowCount ?? 0;
   const totals = plus(at.totals, { partials: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1g2 (9 Nov 2026, migration 0202): news and offers requests a guest never confirmed, once their link ran out,
+ * `limit` a batch, soonest expiry first. A request was never a consent, so only the row goes. The confirm checks the
+ * expiry itself, so a row this phase hasn't reached yet already confirms nothing.
+ */
+async function expiredConsentRequests(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from consent_requests where (workspace_id, id) in (
+      select workspace_id, id from consent_requests
+      where workspace_id = ${context.scope.workspaceId} and confirmed_at is null and expires_at <= now()
+      order by expires_at limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { consentRequests: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
@@ -1032,6 +1055,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldPageViews(context, at, limit);
         case 'partials':
           return expiredPartials(context, at, limit);
+        case 'consent_requests':
+          return expiredConsentRequests(context, at, limit);
         case 'form_visits':
           return oldFormVisits(context, at, limit);
         case 'submissions':

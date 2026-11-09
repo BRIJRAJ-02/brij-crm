@@ -475,6 +475,35 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { partials: 2 } });
   });
 
+  it('removes news requests that ran out unconfirmed, and keeps confirmed and open ones (migration 0202)', async () => {
+    const t = await team([]);
+    const guest = await person(t.owner, 'Guest');
+    for (const [hours, confirmed, mark] of [
+      [-2, false, 'ran out'],
+      [-2, true, 'confirmed'],
+      [24, false, 'open'],
+    ] as const) {
+      await testQuery(
+        ownerUrl,
+        `insert into consent_requests
+           (workspace_id, record_id, purpose, wording, source_type, source_id, requested_at, expires_at, confirmed_at)
+         values ($1, $2, 'marketing_email', $3, 'appointment', $4, now() - interval '8 days',
+           now() + make_interval(hours => $5::integer), case when $6::boolean then now() - interval '3 days' end)`,
+        [t.workspaceId, guest, mark, randomUUID(), hours, confirmed],
+      );
+    }
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ wording: string }>(
+      ownerUrl,
+      'select wording from consent_requests where workspace_id = $1 order by 1',
+      [t.workspaceId],
+    );
+    expect(left.map((row) => row.wording)).toEqual(['confirmed', 'open']);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { consentRequests: 1 } });
+  });
+
   it('removes form visit rows older than thirteen months, and keeps the rest (spec 0063, AC-6320)', async () => {
     const t = await team([]);
     const { formId, versionId } = await formFor(t.workspaceId);

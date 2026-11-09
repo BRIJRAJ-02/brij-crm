@@ -73,7 +73,7 @@ interface EmailRow extends Record<string, unknown> {
 }
 
 /** The kinds that go to someone outside the workspace about it: sent as the workspace, not the product. */
-const GUEST_KINDS: ReadonlySet<QueuedEmailKind> = new Set(['form_confirmation', 'form_resume']);
+const GUEST_KINDS: ReadonlySet<QueuedEmailKind> = new Set(['form_confirmation', 'form_resume', 'reservation_news']);
 
 /**
  * The only kinds a partner's managed member gets (spec 0070, AC-7023): what their page's visitors trigger. Everything

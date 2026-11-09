@@ -847,6 +847,11 @@ export function createApp({
     linkKey,
     wakeRelay,
     limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    // Held across instances (9 Nov 2026): a reservation's and a news confirm's windows, behind the memory gate.
+    durable: {
+      consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost),
+      peekRateLimit: (key, rule) => identity.peekRateLimit(key, rule),
+    },
     ics: {
       uidDomain: new URL(env.APP_URL).hostname,
       publicOrigin: bookingOrigin,

@@ -112,5 +112,18 @@ export const strings = {
   finding: 'Finding',
   addToCalendarFailed: 'The calendar file didn’t download. Try again.',
   withRestaurant: (business: string) => `at ${business}`,
+  // News and offers, confirmed from the email (double opt-in).
+  newsAsk: (business: string) => `Get news from ${business}?`,
+  newsAskBody: (business: string) => `Say yes and ${business} can email you news and offers.`,
+  newsYes: 'Yes, send me news',
+  newsSaving: 'Saving',
+  newsDone: 'You’re signed up',
+  newsAlready: 'You’re already signed up',
+  newsDoneBody: (business: string) => `${business} can email you news and offers.`,
+  newsGone: 'This link no longer works',
+  newsGoneBody: 'It may have expired. Tick news and offers next time you reserve.',
+  newsTabTitle: (business: string) => `News from ${business}`,
+  /** On the receipt just after reserving with the box ticked: the tick counts once they confirm. */
+  newsCheckEmail: 'To get news and offers, confirm from the email we sent you.',
   poweredBy: 'Powered by Timefix',
 } as const;

@@ -36,6 +36,8 @@ import { strings } from './strings.ts';
 export interface Reserved {
   readonly token: string | undefined;
   readonly lookupCode: string;
+  /** The news box was ticked: the guest is told to confirm it from the email (double opt-in). */
+  readonly isNewsAsked: boolean;
 }
 
 /** The place's facts in the rail: where it is and its phone. */
@@ -234,7 +236,11 @@ export function ReservePage({
       return {
         kind: 'done',
         next: () => {
-          onReserved({ token: made.manageToken, lookupCode: made.visit.lookupCode });
+          onReserved({
+            token: made.manageToken,
+            lookupCode: made.visit.lookupCode,
+            isNewsAsked: values.answers.marketing === true,
+          });
         },
       };
     } catch (error) {

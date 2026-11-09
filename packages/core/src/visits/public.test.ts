@@ -1,7 +1,8 @@
 // The guest's side of Table seating (spec 0066 B7 lite) against the real Postgres as the app role: the door finds
 // a place by its public key only while Table seating takes reservations; a guest reserves, finds the reservation by
 // token or by code with email (never by code alone), changes and cancels within the cutoffs; three upcoming per
-// email; a ticked marketing box is a consent; and nothing of another guest reaches an answer.
+// email; a ticked marketing box is a request confirmed by email (double opt-in); and nothing of another guest
+// reaches an answer.
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { PublicReserveInput } from '@crm/contracts';
@@ -12,7 +13,8 @@ import { enterTablePage } from '../access/table-door.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
-import { addResource, visitWorkspace } from '../../test/visits-kit.ts';
+import { addResource, visitWorkspace, type VisitWorkspace } from '../../test/visits-kit.ts';
+import { confirmNews } from './news.ts';
 import { guestCancel, guestChange, guestIcs, guestReserve, guestTimes, guestVisit, readTablePage } from './public.ts';
 import { getTableSetup, saveTableSetup } from './table-service.ts';
 import { prepareVisitMail, visitManageToken } from './mail.ts';
@@ -37,6 +39,28 @@ const DAY = week.monday;
 const at = (time: string) => `${DAY}T${time}:00.000Z`;
 const NOW = new Date(`${week.sunday}T09:00:00Z`);
 const deps = { busy: NO_CALENDAR.busy, now: () => NOW };
+/** With the link key, so a ticked news box's email is queued with its signed link. */
+const newsDeps = { ...deps, linkKey: new Uint8Array(32).fill(7) };
+/** A confirm on the real clock: a link is signed when its request is made, and the fixture clock is a year out. */
+const confirmDeps = { linkKey: newsDeps.linkKey };
+
+/** The news emails queued in a workspace, oldest first. */
+async function newsMails(w: { readonly sql: VisitWorkspace['sql'] }) {
+  return (
+    await w.sql<{
+      key: string;
+      to_address: string;
+      status: string;
+      params: { readonly business?: string; readonly confirmPath?: string };
+    }>(
+      sql`select key, to_address, status::text, params from emails where kind = 'reservation_news' order by created_at, id`,
+    )
+  ).rows;
+}
+
+/** The token a confirm path carries in its fragment. */
+const tokenOf = (path: string | undefined): string =>
+  new URLSearchParams((path ?? '').split('#')[1] ?? '').get('news') ?? '';
 
 async function code(promise: Promise<unknown>): Promise<string | undefined> {
   try {
@@ -143,48 +167,133 @@ describe('the reservation page (AC-6550, AC-6551)', () => {
     expect(await code(book(at('21:00')))).toBe('CONFLICT');
   });
 
-  it('keeps a ticked marketing box as a consent on the guest’s Person, and nothing when unticked', async () => {
+  it('keeps a ticked marketing box as a request and emails its link; nothing counts until it is confirmed', async () => {
     const { w, key } = await restaurant();
     const entry = await enterTablePage({ db }, key);
-    const ticked = await guestReserve(entry, deps, { ...reserve(at('18:00')), marketing: true });
-    await guestReserve(entry, deps, reserve(at('21:00')));
-    const rows = (
-      await w.sql<{ purpose: string; source_id: string; wording: string }>(
-        sql`select purpose, source_id::text, wording from consent_records where source_type = 'appointment'`,
+    const email = `news-${randomUUID().slice(0, 8)}@example.com`;
+    const input = { ...reserve(at('18:00'), email), marketing: true };
+    const ticked = await guestReserve(entry, newsDeps, input);
+    expect(ticked.news).toBe('emailed');
+    const unticked = await guestReserve(entry, newsDeps, reserve(at('21:00')));
+    expect(unticked.news).toBeUndefined();
+    // No consent anywhere a consent is read: only the request.
+    expect((await w.sql(sql`select 1 from consent_records`)).rows).toEqual([]);
+    const requests = (
+      await w.sql<{ purpose: string; source_id: string; wording: string; confirmed: boolean }>(
+        sql`select purpose, source_id::text, wording, confirmed_at is not null as confirmed from consent_requests`,
       )
     ).rows;
-    expect(rows).toEqual([
+    expect(requests).toEqual([
       {
         purpose: 'marketing_email',
         source_id: ticked.booked.appointmentId,
         wording: 'Send me news and offers from Somewhere Nowhere.',
+        confirmed: false,
       },
     ]);
+    // One email to the address typed, carrying the confirm link and nothing of the reservation.
+    const mails = await newsMails(w);
+    expect(mails).toHaveLength(1);
+    expect(mails[0]?.to_address).toBe(email);
+    expect(mails[0]?.params.business).toBe('Somewhere Nowhere');
+    expect(mails[0]?.params.confirmPath).toMatch(new RegExp(`^/r/${key}/manage#news=`));
+    expect(JSON.stringify(mails[0]?.params)).not.toContain('Grace');
+    // A retry of the same reservation asks nothing more.
+    const replayed = await guestReserve(entry, newsDeps, input);
+    expect(replayed.booked.replayed).toBe(true);
+    expect(replayed.news).toBe('asked_before');
+    expect(await newsMails(w)).toHaveLength(1);
   });
 
-  it('never lets a ticked box override a withdrawal the Person already has', async () => {
+  it('confirms once from the link, grants then, and refuses a forged, foreign or expired link', async () => {
+    const { w, key } = await restaurant();
+    const entry = await enterTablePage({ db }, key);
+    const made = await guestReserve(entry, newsDeps, { ...reserve(at('18:00')), marketing: true });
+    const token = tokenOf((await newsMails(w))[0]?.params.confirmPath);
+    expect(await code(confirmNews(entry, confirmDeps, `${token}x`))).toBe('NOT_FOUND');
+    expect(await code(confirmNews(entry, { linkKey: new Uint8Array(32).fill(9) }, token))).toBe('NOT_FOUND');
+    // Another restaurant's page never opens this workspace's request.
+    const other = await restaurant();
+    expect(await code(confirmNews(await enterTablePage({ db }, other.key), confirmDeps, token))).toBe('NOT_FOUND');
+    expect(await confirmNews(entry, confirmDeps, token)).toBe('confirmed');
+    expect(await confirmNews(entry, confirmDeps, token)).toBe('already');
+    const rows = (
+      await w.sql<{ granted: boolean; source_type: string; source_id: string; record_id: string }>(
+        sql`select granted, source_type, source_id::text, record_id::text from consent_records`,
+      )
+    ).rows;
+    expect(rows).toEqual([
+      {
+        granted: true,
+        source_type: 'appointment',
+        source_id: made.booked.appointmentId,
+        record_id: made.booked.personRecordId,
+      },
+    ]);
+    // A request that ran out confirms nothing, whatever its token says.
+    const late = await guestReserve(entry, newsDeps, { ...reserve(at('21:00')), marketing: true });
+    const lateToken = tokenOf((await newsMails(w))[1]?.params.confirmPath);
+    await testQuery(
+      ownerUrl,
+      `update consent_requests set requested_at = now() - interval '8 days', expires_at = now() - interval '1 day'
+       where source_id = $1`,
+      [late.booked.appointmentId],
+    );
+    expect(await code(confirmNews(entry, confirmDeps, lateToken))).toBe('NOT_FOUND');
+    expect((await w.sql(sql`select 1 from consent_records`)).rows).toHaveLength(1);
+  });
+
+  it('lets a confirm from the inbox opt back in over a withdrawal, and asks nothing while the Person already said yes', async () => {
     const { w, key } = await restaurant();
     const entry = await enterTablePage({ db }, key);
     const email = `opted-${randomUUID().slice(0, 8)}@example.com`;
-    const first = await guestReserve(entry, deps, { ...reserve(at('18:00'), email), marketing: true });
+    const first = await guestReserve(entry, newsDeps, { ...reserve(at('18:00'), email), marketing: true });
     const person = first.booked.personRecordId ?? '';
-    // They withdrew afterwards (a preference link, the CRM): the latest row for the purpose says no.
+    expect(await confirmNews(entry, confirmDeps, tokenOf((await newsMails(w))[0]?.params.confirmPath))).toBe(
+      'confirmed',
+    );
+    // Already yes: a second tick asks nothing.
+    const again = await guestReserve(entry, newsDeps, { ...reserve(at('19:30'), email), marketing: true });
+    expect(again.news).toBe('already_given');
+    // They withdrew afterwards (the CRM): a tick asks again, and only their confirm grants.
     await w.sql(sql`
       insert into consent_records (workspace_id, record_id, purpose, granted, wording, wording_version, source_type)
       values (${w.workspaceId}::uuid, ${person}::uuid, 'marketing_email', false, 'Withdrawn.', 1, 'member')
     `);
-    // Someone types their email on the page and ticks the box: no grant is stored over the withdrawal.
-    const again = await guestReserve(entry, deps, { ...reserve(at('21:00'), email), marketing: true });
-    expect(again.booked.personRecordId).toBe(person);
-    const rows = (
-      await w.sql<{ granted: boolean; source_type: string }>(
-        sql`select granted, source_type from consent_records where record_id = ${person}::uuid order by at, id`,
-      )
-    ).rows;
-    expect(rows).toEqual([
-      { granted: true, source_type: 'appointment' },
-      { granted: false, source_type: 'member' },
+    const third = await guestReserve(entry, newsDeps, { ...reserve(at('21:00'), email), marketing: true });
+    expect(third.news).toBe('emailed');
+    const latest = async () =>
+      (
+        await w.sql<{ granted: boolean }>(
+          sql`select granted from consent_records where record_id = ${person}::uuid order by at desc, id desc limit 1`,
+        )
+      ).rows[0]?.granted;
+    expect(await latest()).toBe(false);
+    const mails = await newsMails(w);
+    expect(mails).toHaveLength(2);
+    expect(await confirmNews(entry, confirmDeps, tokenOf(mails[1]?.params.confirmPath))).toBe('confirmed');
+    expect(await latest()).toBe(true);
+    // Withdrawn again: the old link never reads as a yes, and writes nothing.
+    await w.sql(sql`
+      insert into consent_records (workspace_id, record_id, purpose, granted, wording, wording_version, source_type)
+      values (${w.workspaceId}::uuid, ${person}::uuid, 'marketing_email', false, 'Withdrawn.', 1, 'member')
+    `);
+    expect(await code(confirmNews(entry, confirmDeps, tokenOf(mails[1]?.params.confirmPath)))).toBe('NOT_FOUND');
+    expect(await latest()).toBe(false);
+  });
+
+  it('confirms only at the place that asked, and never onto a deleted Person', async () => {
+    const { w, key } = await restaurant();
+    const entry = await enterTablePage({ db }, key);
+    const made = await guestReserve(entry, newsDeps, { ...reserve(at('18:00')), marketing: true });
+    const token = tokenOf((await newsMails(w))[0]?.params.confirmPath);
+    // The same workspace through another place's door: refused.
+    expect(await code(confirmNews({ ...entry, placeId: randomUUID() }, confirmDeps, token))).toBe('NOT_FOUND');
+    await testQuery(ownerUrl, `update records set deleted_at = now(), deleted_by_type = 'system' where id = $1`, [
+      made.booked.personRecordId,
     ]);
+    expect(await code(confirmNews(entry, confirmDeps, token))).toBe('NOT_FOUND');
+    expect((await w.sql(sql`select 1 from consent_records`)).rows).toEqual([]);
   });
 });
 

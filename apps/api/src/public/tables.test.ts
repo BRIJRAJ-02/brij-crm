@@ -422,3 +422,92 @@ describe('walk ins and new reservation emails on the staff side (spec 0066 B7 li
     expect((await m.client.tables.setup({ workspace: m.slug, placeId })).notifyMe).toBe(false);
   });
 });
+
+describe('news and offers by double opt-in, and the durable limits (9 November 2026)', () => {
+  /** A place taking reservations. */
+  async function taking() {
+    const made = await somewhere();
+    await made.m.client.tables.saveSetup({
+      workspace: made.m.slug,
+      placeId: made.placeId,
+      rules: { ...made.rules, online: true },
+      mutationId: newId(),
+    });
+    return made;
+  }
+
+  it('emails a ticked box’s link, counts nothing until Yes, and confirms once', async () => {
+    const { m, key } = await taking();
+    const email = `news-${newId().slice(-8)}@example.com`;
+    const made = await guest(`${key}/reserve`, { method: 'POST', body: reservation({ email, marketing: true }) });
+    expect(made.status).toBe(200);
+    // The answer never says what the tick came to: whether an email already said yes is nobody else's business.
+    expect(await made.json()).not.toHaveProperty('news');
+    expect(
+      await testQuery(ownerUrl, `select 1 from consent_records where workspace_id = $1`, [m.workspace.id]),
+    ).toEqual([]);
+    const [mail] = await testQuery<{ to_address: string; path: string }>(
+      ownerUrl,
+      `select to_address, params->>'confirmPath' as path from emails
+       where workspace_id = $1 and kind = 'reservation_news'`,
+      [m.workspace.id],
+    );
+    expect(mail?.to_address).toBe(email);
+    const token = new URLSearchParams((mail?.path ?? '').split('#')[1] ?? '').get('news') ?? '';
+    expect(token).not.toBe('');
+
+    // Same origin only, as every write here.
+    expect(
+      (await guest(`${key}/news`, { method: 'POST', body: { token }, origin: 'https://evil.example' })).status,
+    ).toBe(403);
+    expect((await guest(`${key}/news`, { method: 'POST', body: { token: `${token}x` } })).status).toBe(404);
+    expect((await guest(`${key}/news`, { method: 'POST', body: {} })).status).toBe(400);
+    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toEqual({
+      status: 'confirmed',
+    });
+    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toEqual({
+      status: 'already',
+    });
+    const consents = await testQuery<{ granted: boolean; source_type: string }>(
+      ownerUrl,
+      `select granted, source_type from consent_records where workspace_id = $1`,
+      [m.workspace.id],
+    );
+    expect(consents).toEqual([{ granted: true, source_type: 'appointment' }]);
+  });
+
+  it('holds a reservation’s per address window across instances, where each one’s memory starts empty', async () => {
+    const { key } = await taking();
+    const ip = newIp();
+    // Five unreadable reservations spend the address's window on one instance…
+    for (let index = 0; index < 5; index += 1) {
+      expect((await guest(`${key}/reserve`, { method: 'POST', ip, body: { party: 'x' } })).status).toBe(400);
+    }
+    // …and a second instance, its memory fresh, still refuses the sixth.
+    const env = testEnv();
+    const second = createApp({
+      services: { ...testServices(env, { db, identity }), bookingLimiter: createMemoryLimiter(), now: () => NOW },
+      env,
+    });
+    const sixth = await second.request(`/api/public/tables/${key}/reserve`, {
+      method: 'POST',
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': ip,
+        'content-type': 'application/json',
+        [ORIGIN_HEADER]: APP_URL,
+        origin: APP_URL,
+      },
+      body: JSON.stringify(withTableTicket(`${key}/reserve`, reservation())),
+    });
+    expect(sixth.status).toBe(429);
+    expect(sixth.headers.get('retry-after')).not.toBeNull();
+    // No address in the clear in the shared table.
+    const keys = await testQuery<{ key: string }>(
+      ownerUrl,
+      `select key from auth.rate_limit where key like 'public-tables:%' and key like $1`,
+      [`%${ip}%`],
+    );
+    expect(keys).toEqual([]);
+  });
+});

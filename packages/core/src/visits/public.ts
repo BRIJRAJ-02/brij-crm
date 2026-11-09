@@ -26,6 +26,7 @@ import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { placeDateOf } from '../hospitality/hours.ts';
 import { offerVisitTimes, placeVisit, type BookedVisit, type VisitDeps } from './book.ts';
+import { askForNews, type NewsAsked } from './news.ts';
 import { cancelVisit, moveVisit } from './move.ts';
 import { guestPartyRange, placeTables, readTableService } from './table-service.ts';
 
@@ -287,12 +288,15 @@ export interface GuestReserved {
   readonly visit: PublicTableVisit;
   readonly manageToken?: string;
   readonly booked: BookedVisit;
+  /** What a ticked news box came to; absent when it was unticked, no Person was matched, or asking failed. */
+  readonly news?: NewsAsked;
 }
 
 /**
  * Reserves a table (AC-6551, AC-6553): Table seating installed and published, at most 3 upcoming reservations per
  * email at the place, then the engine's booking (idempotency, place lock, recheck, SLOT_TAKEN with the next times).
- * A ticked marketing box is kept as a consent on the guest's Person (spec 0023 records, source `appointment`).
+ * A ticked marketing box is a request the guest confirms by email (`askForNews`, migration 0202): it becomes a consent
+ * on their Person (spec 0023 records, source `appointment`) only once they do.
  */
 export async function guestReserve(
   entry: TableEntry,
@@ -332,20 +336,47 @@ export async function guestReserve(
         ...(input.occasion === undefined ? {} : { occasion: input.occasion }),
         ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
       },
-      ...(input.marketing
-        ? { consent: { purpose: 'marketing_email' satisfies ConsentPurpose, wording: MARKETING_WORDING(business) } }
-        : {}),
+      // No `consent` here: a ticked box is a request the guest confirms by email (`askForNews`), never a consent.
       perEmail: { max: UPCOMING_PER_EMAIL, message: refusal },
       source: 'online',
       idempotencyKey: input.idempotencyKey,
     },
     hooks,
   );
+  const personRecordId = booked.personRecordId;
+  let news: NewsAsked | undefined;
+  if (input.marketing && personRecordId !== undefined) {
+    // After the visit committed, in its own transaction: asking can fail without losing the reservation. A retry
+    // (a replay) asks again, and the request's one row per visit makes that a no-op once one exists.
+    try {
+      news = await inWorkspace(entry.scope, (tx) =>
+        askForNews(tx, {
+          workspaceId: entry.scope.workspaceId,
+          placeId: entry.placeId,
+          recordId: personRecordId,
+          appointmentId: booked.appointmentId,
+          purpose: 'marketing_email' satisfies ConsentPurpose,
+          wording: MARKETING_WORDING(business),
+          business,
+          email: input.email,
+          placeKey: entry.key,
+          timeZone: place.time_zone,
+          linkKey: deps.linkKey,
+        }),
+      );
+    } catch (error) {
+      deps.log?.warn('tables.news_request_failed', {
+        appointmentId: booked.appointmentId,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+    }
+  }
   const row = await findVisitById(entry, booked.appointmentId);
   return {
     visit: viewOf(row, service.rules, now),
     ...(booked.manageToken === undefined ? {} : { manageToken: booked.manageToken }),
     booked,
+    ...(news === undefined ? {} : { news }),
   };
 }
 

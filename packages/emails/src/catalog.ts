@@ -13,6 +13,7 @@ import {
 } from './templates/account.ts';
 import { formConfirmation, formResume, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
+import { reservationNews } from './templates/reservations.ts';
 import {
   editorAdded,
   importFinished,
@@ -84,6 +85,16 @@ export const CATALOG: Catalog = {
     sample: {
       formName: 'Lead qualification',
       resumePath: '/f/contact-us?resume=Zm9ybS1yZXN1bWUtdG9rZW4tc2FtcGxlLTMyLWJ5dGVz',
+      expiresAt: AT,
+      timeZone: 'Europe/London',
+    },
+  },
+  reservation_news: {
+    template: reservationNews,
+    medium: 'email_booking',
+    sample: {
+      business: 'The Larder',
+      confirmPath: '/r/Zm9yLXJlc2VydmUx/manage#news=cnYxLnNhbXBsZS5zaWduYXR1cmU',
       expiresAt: AT,
       timeZone: 'Europe/London',
     },

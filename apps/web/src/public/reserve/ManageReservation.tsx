@@ -43,12 +43,15 @@ export function ManageReservation({
   locale,
   token,
   isWelcome,
+  isNewsAsked = false,
 }: {
   readonly client: TableClient;
   readonly page: PublicTablePage;
   readonly locale: string;
   readonly token: string | undefined;
   readonly isWelcome: boolean;
+  /** Just reserved with news and offers ticked: say the email asks them to confirm it (double opt-in). */
+  readonly isNewsAsked?: boolean;
 }) {
   const [guest, setGuest] = useState<GuestKey | undefined>(token === undefined ? undefined : { token });
   const [read, setRead] = useState<{ readonly key: string; readonly loaded: Loaded } | undefined>();
@@ -190,9 +193,11 @@ export function ManageReservation({
             ),
           }
         : notice === undefined
-          ? isOpen && visit.cancelUntil === undefined && state === 'confirmed'
-            ? { notice: <Callout tone="info">{strings.tooLate(page.place.phone)}</Callout> }
-            : {}
+          ? isWelcome && isNewsAsked && state === 'confirmed'
+            ? { notice: <Callout tone="info">{strings.newsCheckEmail}</Callout> }
+            : isOpen && visit.cancelUntil === undefined && state === 'confirmed'
+              ? { notice: <Callout tone="info">{strings.tooLate(page.place.phone)}</Callout> }
+              : {}
           : {
               notice: (
                 <Callout tone="success" isAnnounced>

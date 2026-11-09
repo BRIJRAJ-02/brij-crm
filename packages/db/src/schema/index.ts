@@ -86,6 +86,7 @@ export {
 } from './calendar.ts';
 export {
   consentRecords,
+  consentRequests,
   formPartials,
   formPublicKeys,
   formSubmissionRecords,

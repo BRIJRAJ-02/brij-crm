@@ -141,7 +141,10 @@ export const PublicReserveInput = z.object({
   phone: GuestPhone,
   note: GuestNote.optional(),
   occasion: TableOccasion.optional(),
-  /** News and offers from the business: unticked by default, separate from the reservation, stored as a consent. */
+  /**
+   * News and offers from the business: unticked by default, separate from the reservation. A tick is a request the
+   * guest confirms from an email (double opt-in, migration 0202); it is a consent only once they do.
+   */
   marketing: z.boolean().default(false),
   timeZone: z.string().max(64).optional(),
   company_url: z.string().max(200).optional(),
@@ -206,6 +209,16 @@ export const PublicTableCancelInput = z.object({
 });
 /** A guest's cancel. */
 export type PublicTableCancelInput = z.infer<typeof PublicTableCancelInput>;
+
+/** A news and offers confirm (migration 0202): the signed token from the email's link, sent in the body. */
+export const PublicNewsConfirmInput = z.object({ token: z.string().min(1).max(1024) });
+/** A news and offers confirm. */
+export type PublicNewsConfirmInput = z.infer<typeof PublicNewsConfirmInput>;
+
+/** What a news confirm came to: saved now, or saved before (the link pressed again). */
+export const PublicNewsConfirmed = z.object({ status: z.enum(['confirmed', 'already']) });
+/** What a news confirm came to. */
+export type PublicNewsConfirmed = z.infer<typeof PublicNewsConfirmed>;
 
 // ---- The staff's side (RPC) ----
 
