@@ -246,7 +246,10 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
           {strings.stillHeld}
         </Callout>
       )}
+      {/* A confirm's shape (the owner, 6 November 2026, "this also should be better"): no title bar, the question,
+          its one line, the boxes and the way round, then Cancel and Continue; the boxes send themselves once full. */}
       <Modal
+        variant="confirm"
         title={strings.confirmTitle}
         isOpen={isOpen}
         isBusy={isChecking}
