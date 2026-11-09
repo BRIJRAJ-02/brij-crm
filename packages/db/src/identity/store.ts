@@ -351,6 +351,12 @@ export interface IdentityStore extends OperatorIdentity, PartnerIdentity {
    */
   consumeRateLimit(key: string, rule: RateLimitRule, cost?: number): Promise<RateLimitDecision>;
   /**
+   * Whether one more use of `key` would pass `rule`, counting nothing: for a budget spent only by what succeeded (a
+   * public reservation's emails to one address), read first and spent with `consumeRateLimit` once the work is done,
+   * so a refused attempt never spends a real person's.
+   */
+  peekRateLimit(key: string, rule: RateLimitRule): Promise<RateLimitDecision>;
+  /**
    * Refuses (throws) unless this store is connected as an identity login: a
    * member of `crm_identity`, outside `crm_app`, unable to bypass row level
    * security, own the database, create roles or databases, and in no role
@@ -899,6 +905,20 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       if (row === undefined) throw new Error('The rate limit row was not written.');
       if (row.count <= rule.max) return { allowed: true, retryAfterSeconds: undefined };
       return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((Number(row.window_end) - now) / 1000)) };
+    },
+
+    async peekRateLimit(key, rule) {
+      const now = Date.now();
+      const [row] = await db
+        .select({ count: rateLimit.count, windowEnd: rateLimit.lastRequest })
+        .from(rateLimit)
+        .where(eq(rateLimit.key, key))
+        .limit(1);
+      // No row, or its window closed: the next use opens a new one.
+      if (row === undefined || row.windowEnd <= now || row.count < rule.max) {
+        return { allowed: true, retryAfterSeconds: undefined };
+      }
+      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((row.windowEnd - now) / 1000)) };
     },
 
     async assertIdentityRole() {

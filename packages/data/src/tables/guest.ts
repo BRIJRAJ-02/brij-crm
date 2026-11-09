@@ -5,6 +5,7 @@
 // issues), and being offline `API_UNAVAILABLE`. The guest's key (token, or code and email) is always sent in a body,
 // the calendar file's too.
 import type {
+  PublicNewsConfirmed,
   PublicReserveInput,
   PublicReserved,
   PublicTablePage,
@@ -14,7 +15,14 @@ import type {
 import { dataError, isFetchFailure, parseRetryAfter, toDataError, type DataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
 
-export type { PublicReserveInput, PublicReserved, PublicTablePage, PublicTableTimes, PublicTableVisit };
+export type {
+  PublicNewsConfirmed,
+  PublicReserveInput,
+  PublicReserved,
+  PublicTablePage,
+  PublicTableTimes,
+  PublicTableVisit,
+};
 export { isDataError, type DataError } from '../errors.ts';
 
 /** Who the guest is on the manage page: the link's token, or the code with the email. */
@@ -46,6 +54,11 @@ export interface TableClient {
    * sits in an address; the page saves the answer as a file.
    */
   ics(key: string, guest: GuestKey): Promise<Blob>;
+  /**
+   * Says yes to news and offers from the email's link (double opt-in): the signed token goes in the body, never an
+   * address. A second press answers `already`; a link that ran out is NOT_FOUND.
+   */
+  confirmNews(key: string, token: string): Promise<PublicNewsConfirmed>;
 }
 
 /** The client, on `origin` (the page's own), with `fetch` and the clock passed in for tests. */
@@ -126,5 +139,6 @@ export function createTableClient(options: {
         { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guest }) },
         'blob',
       ),
+    confirmNews: (key, token) => post<PublicNewsConfirmed>(`${at(key)}/news`, { token }),
   };
 }

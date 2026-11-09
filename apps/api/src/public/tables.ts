@@ -12,14 +12,21 @@
 //   POST /api/public/tables/:key/change                { guest, start, party? }: a new time or party size
 //   POST /api/public/tables/:key/cancel                { guest, reason? }
 //   POST /api/public/tables/:key/ics                   { guest }: the reservation as a calendar file (Add to calendar)
+//   POST /api/public/tables/:key/news                  { token }: yes to news and offers, from the email's link
 //
 // The guest's key (token, or code and email) always travels in a POST body, never a URL, so no log or history keeps
 // it. A lookup by code is limited tighter than a read, per address and per place, so codes can't be swept; a change
 // or cancel by code spends its own bucket, so looking a reservation up never uses up the guest's change.
-import { createHash } from 'node:crypto';
+//
+// A reservation and a news confirm also pass durable limits (9 November 2026): the same windows held in the identity
+// store's `rate_limit` rows (`consumeRateLimit`), so they hold across every serverless instance, where this process's
+// memory resets with each one and a flood spread over instances got through. The memory limiter stays in front as the
+// cheap first gate. Durable keys are HMACs under the link key, never an address or an email, nor a plain hash of one.
+import { createHash, createHmac } from 'node:crypto';
 import {
   errorStatus,
   GuestKey,
+  PublicNewsConfirmInput,
   PublicReserveInput,
   PublicTableCancelInput,
   PublicTableChangeInput,
@@ -28,6 +35,7 @@ import {
 } from '@crm/contracts';
 import { outboxHook, type BusyReader, type ManageLinkKey, type SlotCache } from '@crm/core';
 import {
+  confirmNews,
   enterTablePage,
   guestCancel,
   guestChange,
@@ -41,7 +49,7 @@ import {
   TABLE_KEY_PATTERN,
   type GuestKey as CoreGuestKey,
 } from '@crm/core/public';
-import type { Database } from '@crm/db';
+import type { Database, IdentityStore } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
@@ -69,7 +77,24 @@ export const TABLE_LIMITS = {
   /** A change or cancel by code and email: its own bucket, as tight, apart from the lookups. */
   codeWritesPerAddress: { max: 10, windowMs: 60_000 },
   codeWritesPerPlace: { max: 60, windowMs: 60_000 },
+  /** A press of the news email's Yes (double opt-in): a person pressing, never a sweep; the manage page's number. */
+  newsPerAddress: BOOKING_LIMITS.managePerAddress,
 } as const satisfies Record<string, LimitRule>;
+
+/**
+ * The durable limits (9 November 2026), held across instances: a reservation 5 a minute per address and 50 a minute
+ * per place, as the memory gate's; and one place's mail to one guest email 5 an hour, read before and spent once a
+ * reservation is made. The instance ceiling stays in memory only: it bounds one instance by definition.
+ */
+export const TABLE_DURABLE_LIMITS = {
+  reservesPerAddress: TABLE_LIMITS.reservesPerAddress,
+  reservesPerPlace: TABLE_LIMITS.reservesPerPlace,
+  reservesPerEmail: TABLE_LIMITS.reservesPerEmail,
+  newsPerAddress: TABLE_LIMITS.newsPerAddress,
+} as const satisfies Record<string, LimitRule>;
+
+/** The limiter whose windows live in the database: the identity store's two calls, and nothing else of it. */
+export type DurableLimiter = Pick<IdentityStore, 'consumeRateLimit' | 'peekRateLimit'>;
 
 const BODY_LIMIT_BYTES = 16 * 1024;
 const BOT_REFUSED = 'We couldn’t take that reservation. Check your details and try again.';
@@ -82,6 +107,8 @@ export interface PublicTableServices {
   /** The key manage tokens derive from (the booking pages' and the worker's), so emails write the same link. */
   readonly linkKey: ManageLinkKey;
   readonly limiter: PublicLimiter;
+  /** The durable limiter (the identity store's `rate_limit` rows): a reservation's and a news confirm's windows. */
+  readonly durable: DurableLimiter;
   /** Fill tickets (spec 0023, B-04): the server's clock for the minimum fill time. */
   readonly tickets?: TicketBook;
   readonly now?: () => Date;
@@ -133,6 +160,18 @@ function addressKey(clientIp: string | undefined): string {
     .slice(0, 22);
 }
 
+/** A durable rule from a memory one: the identity store counts its windows in whole seconds. */
+const durableRule = (rule: LimitRule) => ({ window: Math.max(1, Math.ceil(rule.windowMs / 1000)), max: rule.max });
+
+/** The one refusal for a spent window, with its wait. */
+const tooMany = (retryAfterSeconds: number | undefined) =>
+  answer(
+    'RATE_LIMITED',
+    'Too many requests. Wait a moment and try again.',
+    {},
+    { 'retry-after': String(retryAfterSeconds ?? 60) },
+  );
+
 /** A short hash for a limiter key, so no email or token sits in the limiter's memory. */
 const hashed = (text: string): string => createHash('sha256').update(text).digest('base64url').slice(0, 22);
 
@@ -145,7 +184,21 @@ const missing = () => answer('NOT_FOUND', 'This page is no longer available.');
 
 /** Mounts the table routes on the app (its base path is `/api`). */
 export function mountPublicTables(app: Hono<{ Variables: Variables }>, services: PublicTableServices): void {
-  const { db, limiter } = services;
+  const { db, limiter, durable } = services;
+  /**
+   * A durable key's part: an HMAC under a key derived from the link key for this one use, so a row in the shared table names no address or email, and a
+   * copy of the table alone can't be walked back to one (a plain hash of an IPv4 address could be).
+   */
+  const limitKey = createHmac('sha256', services.linkKey).update('crm:tables-limit').digest();
+  const sealed = (text: string): string => createHmac('sha256', limitKey).update(text).digest('base64url').slice(0, 22);
+  /** Spends each durable window in order, stopping at the first spent one: its 429, or nothing. */
+  const lasting = async (checks: readonly (readonly [string, LimitRule])[]): Promise<Response | undefined> => {
+    for (const [key, rule] of checks) {
+      const decision = await durable.consumeRateLimit(`public-tables:${key}`, durableRule(rule));
+      if (!decision.allowed) return tooMany(decision.retryAfterSeconds);
+    }
+    return undefined;
+  };
   const deps = {
     busy: services.busy,
     slotCache: services.slotCache,
@@ -292,6 +345,11 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
       ['tables:reserve-instance', TABLE_LIMITS.reservesPerInstance],
     ]);
     if (refused !== undefined) return refused;
+    // The address's own window first, whatever it sent: junk spends only the sender's budget.
+    const held = await lasting([
+      [`reserve:${sealed(limitAddress(c.get('clientIp')) ?? 'unknown')}`, TABLE_DURABLE_LIMITS.reservesPerAddress],
+    ]);
+    if (held !== undefined) return held;
     const read = await jsonOf(c);
     if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
     const input = PublicReserveInput.safeParse(read.body);
@@ -308,18 +366,29 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
       log.warn('tables.bot_refused', { requestId: c.get('requestId'), reason: bot, ticket: ticket?.kind ?? 'none' });
       return answer('INPUT_INVALID', BOT_REFUSED);
     }
+    // The place's shared window only for what reads as a person's reservation, so a few addresses sending junk or
+    // bot filled bodies can never spend every real guest's budget for the place.
+    const placeHeld = await lasting([[`reserve-place:${key}`, TABLE_DURABLE_LIMITS.reservesPerPlace]]);
+    if (placeHeld !== undefined) return placeHeld;
     // One place's mail to one email: read here, counted once it is made, so a refusal never spends a real guest's.
+    // Read then spent, not spent at once, so reservations arriving together on several instances can each pass the
+    // read; the upcoming limit (3 per email per place, counted again under the place lock) bounds what that lets in.
     const emailRule = [
       `tables:reserve-email:${key}:${hashed(limitEmail(input.data.email))}`,
       TABLE_LIMITS.reservesPerEmail,
     ] as const;
     const spent = limited([emailRule], { count: false });
     if (spent !== undefined) return spent;
+    const emailKey = `public-tables:reserve-email:${key}:${sealed(limitEmail(input.data.email))}`;
+    const emailWindow = durableRule(TABLE_DURABLE_LIMITS.reservesPerEmail);
+    const mailed = await durable.peekRateLimit(emailKey, emailWindow);
+    if (!mailed.allowed) return tooMany(mailed.retryAfterSeconds);
     try {
       const entry = await enterTablePage({ db }, key);
       const made = await guestReserve(entry, deps, input.data, [outboxHook()]);
       if (!made.booked.replayed) {
         limiter(...emailRule);
+        await durable.consumeRateLimit(emailKey, emailWindow);
         services.wakeRelay();
       }
       return ok({ visit: made.visit, ...(made.manageToken === undefined ? {} : { manageToken: made.manageToken }) });
@@ -378,6 +447,34 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
       const done = await guestCancel(entry, deps, input.data, [outboxHook()]);
       if (done.cancelled) services.wakeRelay();
       return ok({ visit: done.visit });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // Yes to news and offers (double opt-in, migration 0203): the token from the email's link, in the body. The page
+  // that link opens asks first and posts only on a press, since link scanners open links too. Limited per address in
+  // memory and durably; a token that opens nothing is the one NOT_FOUND, whatever the reason.
+  app.post('/public/tables/:key/news', async (c) => {
+    const key = c.req.param('key');
+    if (!TABLE_KEY_PATTERN.test(key)) return missing();
+    const address = limitAddress(c.get('clientIp')) ?? 'unknown';
+    const refused =
+      limited([[`tables:news:${addressKey(c.get('clientIp'))}`, TABLE_LIMITS.newsPerAddress]]) ??
+      (await lasting([[`news:${sealed(address)}`, TABLE_DURABLE_LIMITS.newsPerAddress]]));
+    if (refused !== undefined) return refused;
+    const read = await jsonOf(c);
+    const input = PublicNewsConfirmInput.safeParse(read?.body);
+    if (!input.success) return answer('INPUT_INVALID', 'This link isn’t complete. Open it from the email again.');
+    try {
+      const entry = await enterTablePage({ db }, key);
+      const status = await confirmNews(
+        entry,
+        { linkKey: services.linkKey, ...(services.now === undefined ? {} : { now: services.now }) },
+        input.data.token,
+      );
+      log.info('tables.news_confirmed', { requestId: c.get('requestId'), status });
+      return ok({ status });
     } catch (error) {
       return refusalAnswer(error);
     }

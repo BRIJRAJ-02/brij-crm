@@ -399,6 +399,48 @@ export const consentRecords = pgTable(
 );
 
 /**
+ * A consent asked for and not yet given (9 November 2026, migration 0203): a guest ticked news and offers on a
+ * reservation page, and is emailed a signed link. Only confirming it through that link writes the consent into
+ * `consent_records`, so a request never counts anywhere a consent is read. Confirmed once (`confirmed_at`), never
+ * after `expires_at`; the purge deletes a person's requests with them and a merge moves them.
+ */
+export const consentRequests = pgTable(
+  'consent_requests',
+  {
+    workspaceId: workspaceId(),
+    id: uuid('id')
+      .notNull()
+      .default(sql`uuidv7()`),
+    recordId: uuid('record_id').notNull(),
+    purpose: text('purpose').notNull(),
+    wording: text('wording').notNull(),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    requestedAt: timestamptz('requested_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    confirmedAt: timestamptz('confirmed_at'),
+  },
+  (t) => [
+    primaryKey({ name: 'consent_requests_pkey', columns: [t.workspaceId, t.id] }),
+    // No `on delete` action: the purge deletes these rows first, with the record's other links.
+    foreignKey({
+      name: 'consent_requests_record',
+      columns: [t.workspaceId, t.recordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    uniqueIndex('consent_requests_by_source').on(t.workspaceId, t.sourceId, t.purpose),
+    index('consent_requests_by_record').on(t.workspaceId, t.recordId),
+    index('consent_requests_open_expiry')
+      .on(t.workspaceId, t.expiresAt)
+      .where(sql`${t.confirmedAt} is null`),
+    check('consent_requests_purpose', sql`${t.purpose} ~ '^[a-z][a-z0-9_]{0,39}$'`),
+    check('consent_requests_wording', sql`char_length(${t.wording}) between 1 and 2000`),
+    check('consent_requests_source', sql`${t.sourceType} in ('appointment')`),
+    check('consent_requests_expiry', sql`${t.expiresAt} > ${t.requestedAt}`),
+  ],
+);
+
+/**
  * A file a visitor uploaded to a public form (#32): kept in the blob store under `pathname`, bound here to its
  * workspace and form, and to its submission once one takes it (`submission_id`). Unguessable ids, never listed.
  * `submission_id` and `form_id` carry no foreign key on purpose: a deleted submission or form must leave the row

@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { wearGuestScheme, wearStylesheet } from '../stylesheet.ts';
 import { ManageReservation } from './ManageReservation.tsx';
+import { NewsConfirm } from './NewsConfirm.tsx';
 import { lookHref, ReservePage } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
@@ -50,6 +51,16 @@ const tokenOf = (hash: string): string | undefined => {
   return /^[A-Za-z0-9_-]{32}$/.test(token) ? token : undefined;
 };
 
+/**
+ * The news and offers link's token (`#news=`, double opt-in), from the fragment like the manage token: present (a
+ * string, maybe one that opens nothing) only on that link, so the manage page never reads it as a reservation's.
+ */
+const newsOf = (hash: string): string | undefined => {
+  if (!hash.startsWith('#news=')) return undefined;
+  const token = new URLSearchParams(hash.slice(1)).get('news') ?? '';
+  return /^[A-Za-z0-9_.-]{1,1024}$/.test(token) ? token : '';
+};
+
 type Read =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly page: PublicTablePage }
@@ -58,9 +69,10 @@ type Read =
 function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isManage: boolean }) {
   const [read, setRead] = useState<Read>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
-  const [manage, setManage] = useState<{ readonly token: string | undefined; readonly isWelcome: boolean } | undefined>(
-    isManage ? { token: tokenOf(globalThis.location.hash), isWelcome: false } : undefined,
-  );
+  const [news] = useState(() => (isManage ? newsOf(globalThis.location.hash) : undefined));
+  const [manage, setManage] = useState<
+    { readonly token: string | undefined; readonly isWelcome: boolean; readonly isNewsAsked?: boolean } | undefined
+  >(isManage ? { token: tokenOf(globalThis.location.hash), isWelcome: false } : undefined);
   useEffect(() => {
     let current = true;
     client.page(placeKey).then(
@@ -99,6 +111,9 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
       </BookingMessage>
     );
   }
+  if (isManage && news !== undefined) {
+    return <NewsConfirm client={client} page={read.page} token={news === '' ? undefined : news} />;
+  }
   if (manage !== undefined) {
     return (
       <ManageReservation
@@ -107,6 +122,7 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
         locale={locale}
         token={manage.token}
         isWelcome={manage.isWelcome}
+        isNewsAsked={manage.isNewsAsked === true}
       />
     );
   }
@@ -121,7 +137,7 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
         if (reserved.token !== undefined) {
           globalThis.history.replaceState(null, '', `/r/${encodeURIComponent(placeKey)}/manage#${reserved.token}`);
         }
-        setManage({ token: reserved.token, isWelcome: true });
+        setManage({ token: reserved.token, isWelcome: true, isNewsAsked: reserved.isNewsAsked });
       }}
     />
   );

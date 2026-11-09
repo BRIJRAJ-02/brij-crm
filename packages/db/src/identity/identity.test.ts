@@ -326,6 +326,22 @@ describe('limits the auth library cannot key', () => {
     expect(refused.retryAfterSeconds).toBeGreaterThan(24 * 60 * 60 - 1300);
   });
 
+  it('peeks at a window without counting, and refuses once it is spent', async () => {
+    const key = `tables:reserve-email:${unique()}`;
+    const rule = { window: 3600, max: 2 };
+    expect(await identity.peekRateLimit(key, rule)).toEqual({ allowed: true, retryAfterSeconds: undefined });
+    expect(await identity.peekRateLimit(key, rule)).toEqual({ allowed: true, retryAfterSeconds: undefined });
+    await identity.consumeRateLimit(key, rule);
+    expect((await identity.peekRateLimit(key, rule)).allowed).toBe(true);
+    await identity.consumeRateLimit(key, rule);
+    const spent = await identity.peekRateLimit(key, rule);
+    expect(spent.allowed).toBe(false);
+    expect(spent.retryAfterSeconds).toBeGreaterThan(3590);
+    // The window passes.
+    await identitySql.query('update auth.rate_limit set last_request = last_request - 3600001 where key = $1', [key]);
+    expect((await identity.peekRateLimit(key, rule)).allowed).toBe(true);
+  });
+
   it('holds the limit when uses arrive at once', async () => {
     const key = `email:${unique()}@example.com|send-code`;
     const decisions = await Promise.all(

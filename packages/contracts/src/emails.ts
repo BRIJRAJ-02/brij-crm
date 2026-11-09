@@ -152,6 +152,27 @@ export const FormResumeEmail = z.strictObject({
 export type FormResumeEmail = z.infer<typeof FormResumeEmail>;
 
 /**
+ * The double opt-in for news and offers (9 November 2026): a guest ticked the
+ * box on a reservation page, and the tick counts only once they confirm from
+ * this email. It carries the business's name, one link and when it stops
+ * working: no reservation, no name, so a forwarded email gives nothing away.
+ */
+export const ReservationNewsEmail = z.strictObject({
+  /** The business the guest reserved with, as the page named it. */
+  business: Line,
+  /**
+   * The reservation page's confirm address with the signed token in its
+   * fragment (`/r/<key>/manage#news=<token>`), so no request log holds it.
+   */
+  confirmPath: AppPath,
+  /** When the link stops working, so the email can say so. */
+  expiresAt: Instant,
+  timeZone: EmailTimeZone.optional(),
+});
+/** The double opt-in for news and offers. */
+export type ReservationNewsEmail = z.infer<typeof ReservationNewsEmail>;
+
+/**
  * A member's calendar stopped syncing (spec 0024, AC-619 and AC-620):
  * `expired` when the provider withdrew access, `failed` when syncing kept
  * failing for 6 hours. Sent to the member who connected it.
@@ -479,6 +500,7 @@ export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
   form_confirmation: FormConfirmationEmail,
   form_resume: FormResumeEmail,
+  reservation_news: ReservationNewsEmail,
   calendar_disconnected: CalendarDisconnectedEmail,
   calendar_reconnect_asked: CalendarReconnectAskedEmail,
   booking_calendar_removed: BookingCalendarRemovedEmail,
@@ -515,6 +537,7 @@ export const QUEUED_EMAIL_KINDS = [
   'form_submission',
   'form_confirmation',
   'form_resume',
+  'reservation_news',
   'calendar_disconnected',
   'calendar_reconnect_asked',
   'booking_calendar_removed',
