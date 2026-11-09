@@ -3,7 +3,7 @@
 // categories, each with its length, price, who does it and whether it books online.
 // Main task: add a service, then order the list the way clients should read it (drag, or Move up and down).
 // Leaves out: the booking flow (B2), per staff prices (later), and the staff themselves (Settings › Staff).
-import type { CatalogueCategory, CatalogueService, CatalogueView, ServicesStore } from '@crm/data';
+import type { CatalogueCategory, CatalogueService, CatalogueView, HospitalityStore, ServicesStore } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { CATALOGUE_LIMITS, starterService } from '@crm/data/services';
 import {
@@ -30,6 +30,7 @@ import {
 } from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
+import { ShownBusinessLink } from '../hospitality/ShownBusinessLink.tsx';
 import { servicePrice, serviceLength } from './format.ts';
 import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
@@ -40,6 +41,8 @@ import { strings } from './strings.ts';
 /** Props for Settings › Services. */
 export interface ServicesScreenProps {
   readonly store: ServicesStore;
+  /** From two businesses, the title says whose catalogue this is (spec 0065 H7); left out, it says nothing. */
+  readonly hospitality?: HospitalityStore;
   readonly slug: string;
   readonly toasts: Toasts;
 }
@@ -60,7 +63,7 @@ type Open =
   | { readonly kind: 'delete-category'; readonly category: CatalogueCategory };
 
 /** The catalogue. */
-export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
+export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScreenProps) {
   const { locale } = useFormatSettings();
   const newId = store.newId;
   const state = useHospitality(store.catalogue(slug));
@@ -163,6 +166,7 @@ export function ServicesScreen({ store, slug, toasts }: ServicesScreenProps) {
   return (
     <SettingsPage
       title={strings.servicesTitle}
+      {...(hospitality === undefined ? {} : { meta: <ShownBusinessLink hospitality={hospitality} slug={slug} /> })}
       isLoading={view === undefined}
       actions={
         <>

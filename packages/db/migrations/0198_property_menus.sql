@@ -6,8 +6,10 @@
 --   (2,000 dishes, 1,000 photos, AC-6518) count one business's rows, and a currency change (AC-6519) asks only whether
 --   that business has a price. A dish belongs to the business whose menu places it (the first such menu by position),
 --   else the first business; an option group to the business of the first dish offering it, else the first; a photo to
---   the business of the first dish showing it, or whose look names it as a cover, else the first. Today every
---   workspace in production has one business, so each of these is that one.
+--   the business whose look names it as a cover, else the business of the first dish showing it, else the first. Today
+--   every workspace in production has one business, so each of these is that one.
+-- * Where a workspace already has two businesses (a preview or a dev database since 0197), what its draft last
+--   published was the whole workspace's, so Discard has nothing of one business's own to go back to: it is cleared.
 -- * A dish's photo is its own business's: `menu_items_photo` becomes a composite key to `menu_photos`, setting only
 --   `photo_id` null when the photo goes.
 -- * `menu_drafts` (the count of changes, what was last published, Live or Hidden) is keyed per business:
@@ -61,6 +63,11 @@ update menu_option_groups t set property_id = p.id
   from properties p
   where p.workspace_id = t.workspace_id and p.position = 0 and t.property_id is null;
 --> statement-breakpoint
+-- A cover first: its look is live with no Publish, so its business must never lose it to another's Publish.
+update menu_photos ph set property_id = p.id
+  from properties p
+  where p.workspace_id = ph.workspace_id and p.look -> 'cover' ->> 'id' = ph.id::text;
+--> statement-breakpoint
 update menu_photos ph set property_id = owner.property_id
   from (
     select distinct on (i.workspace_id, i.photo_id) i.workspace_id, i.photo_id, i.property_id
@@ -68,12 +75,7 @@ update menu_photos ph set property_id = owner.property_id
     where i.photo_id is not null
     order by i.workspace_id, i.photo_id, i.id
   ) owner
-  where owner.workspace_id = ph.workspace_id and owner.photo_id = ph.id;
---> statement-breakpoint
-update menu_photos ph set property_id = p.id
-  from properties p
-  where p.workspace_id = ph.workspace_id and ph.property_id is null
-    and p.look ->> 'cover' is not null and p.look -> 'cover' ->> 'id' = ph.id::text;
+  where owner.workspace_id = ph.workspace_id and owner.photo_id = ph.id and ph.property_id is null;
 --> statement-breakpoint
 update menu_photos t set property_id = p.id
   from properties p
@@ -88,6 +90,9 @@ update menu_items i set photo_id = null
 update menu_drafts t set property_id = p.id
   from properties p
   where p.workspace_id = t.workspace_id and p.position = 0;
+--> statement-breakpoint
+update menu_drafts d set published = null
+  where (select count(*) from properties p where p.workspace_id = d.workspace_id) > 1;
 --> statement-breakpoint
 update menus m set position = r.n - 1
   from (
@@ -151,6 +156,12 @@ begin
   if exists (
     select 1 from menu_items i
     where not exists (select 1 from properties p where p.workspace_id = i.workspace_id and p.id = i.property_id)
+  ) or exists (
+    select 1 from menu_photos x
+    where not exists (select 1 from properties p where p.workspace_id = x.workspace_id and p.id = x.property_id)
+  ) or exists (
+    select 1 from menu_option_groups g
+    where not exists (select 1 from properties p where p.workspace_id = g.workspace_id and p.id = g.property_id)
   ) or exists (
     select 1 from menu_drafts d
     where not exists (select 1 from properties p where p.workspace_id = d.workspace_id and p.id = d.property_id)

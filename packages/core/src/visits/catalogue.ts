@@ -393,16 +393,19 @@ async function requireRows(
   ids: readonly string[],
   field: string,
   message: string,
-  /** Places only: the business they must belong to (spec 0065 H7). */
+  /** Places, and the rooms and chairs at them: the business they must belong to (spec 0065 H7). */
   propertyId?: string,
 ): Promise<void> {
   if (ids.length === 0) return;
-  const live =
-    table === 'places'
-      ? propertyId === undefined
-        ? sql`true`
-        : sql`property_id = ${propertyId}::uuid`
-      : sql`archived_at is null`;
+  const own =
+    propertyId === undefined
+      ? sql`true`
+      : table === 'places'
+        ? sql`property_id = ${propertyId}::uuid`
+        : table === 'resources'
+          ? sql`place_id in (select p.id from places p where p.property_id = ${propertyId}::uuid)`
+          : sql`true`;
+  const live = table === 'places' ? own : sql`archived_at is null and ${own}`;
   const [row] = (
     await tx.execute<{ n: number }>(sql`
       select count(*)::int as n from ${sql.identifier(table)}
@@ -470,7 +473,7 @@ export async function saveService(
     const named = fields.needs.flatMap((need) =>
       'resourceId' in need ? [checkId(need.resourceId, 'That room or chair doesn’t exist.')] : [],
     );
-    await requireRows(tx, 'resources', named, 'needs', 'One of those rooms or chairs doesn’t exist.');
+    await requireRows(tx, 'resources', named, 'needs', 'One of those rooms or chairs doesn’t exist.', propertyId);
     const before = found === undefined ? [] : await placesOfServices(tx, [id]);
     const moved = found === undefined || found.category_id !== categoryId;
     const [end] = moved

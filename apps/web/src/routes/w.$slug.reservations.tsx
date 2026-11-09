@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
+import { useShownBusiness } from '../features/hospitality/shown-business.ts';
 import { pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 import { AppOffScreen, useReachesBusinessPages } from '../features/hospitality/AppOffScreen.tsx';
@@ -16,14 +17,21 @@ export const Route = createFileRoute('/w/$slug/reservations')({
     // The businesses come first, so the places listed are the chosen one's (spec 0065 H7); a switch reads this again.
     const hospitality = await context.data.hospitality.load();
     await hospitality.readProperties(params.slug).catch(() => undefined);
-    return { isInstalled, tables: await context.data.tables.load(), property: hospitality.current(params.slug) };
+    return {
+      isInstalled,
+      tables: await context.data.tables.load(),
+      hospitality,
+      property: hospitality.current(params.slug),
+    };
   },
   pendingComponent: () => <WorkspacePage currentPage="reservations" page={pendingPage()} />,
   component: PageRoute,
 });
 
 function PageRoute() {
-  const { isInstalled, tables, property } = Route.useLoaderData();
+  const { isInstalled, tables, hospitality, property: fromLoader } = Route.useLoaderData();
+  // A switch remounts the page at once on the chosen business's places (spec 0065 H7).
+  const property = useShownBusiness(hospitality, Route.useParams().slug, fromLoader);
   const { slug } = Route.useParams();
   const search = Route.useSearch();
   const { toasts } = Route.useRouteContext();
@@ -40,6 +48,7 @@ function PageRoute() {
       search={search}
       // A day picked replaces the address rather than adding to history: Back leaves the page, not the days.
       onSearch={(next) => void navigate({ search: next, replace: true })}
+      onOtherBusiness={(other) => void hospitality.requestChoice(slug, other)}
     />
   );
 }

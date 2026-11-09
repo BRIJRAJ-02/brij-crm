@@ -167,6 +167,9 @@ function storeOf(canManage = true, businesses: 1 | 2 = 1) {
     guardChoice: (_slug: string, next: (() => Promise<boolean>) | undefined) => {
       guard = next;
     },
+    dropGuard: (_slug: string, mine: () => Promise<boolean>) => {
+      if (guard === mine) guard = undefined;
+    },
     requestChoice: async (_slug: string, id: string) => {
       if (guard !== undefined && !(await guard())) return false;
       calls.push(`choose:${id}`);

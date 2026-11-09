@@ -5,4 +5,5 @@
 export const switchStrings = {
   business: 'Business',
   switchBusiness: 'Switch business',
+  showingNow: (name: string) => `Showing ${name}`,
 } as const;

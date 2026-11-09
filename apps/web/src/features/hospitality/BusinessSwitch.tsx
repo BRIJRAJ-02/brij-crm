@@ -4,7 +4,7 @@
 // Leaves out: adding or removing a business (Settings › Business), and anything at all while there is only one.
 import type { DataLayer, HospitalityHeld, HospitalityStore, PropertiesView } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
-import { Menu, MenuItem, MenuTrigger, NavItem } from '@crm/ui';
+import { Menu, MenuItem, MenuTrigger, NavItem, useToasts } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { switchStrings as strings } from './switch-strings.ts';
@@ -46,6 +46,7 @@ export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
     };
   }, [data]);
   const listed = useHospitality<PropertiesView>(store === undefined ? NOT_HELD : store.properties(slug));
+  const toasts = useToasts();
   const choice = useHospitality<string | undefined>(store === undefined ? NOT_HELD : store.choice(slug));
   // A new choice, from here or from Settings › Business, reads the open page again, so its loader reads the business
   // now chosen: Menus, Design and the other hospitality screens follow it (AC-6517).
@@ -72,8 +73,15 @@ export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
         selectionMode="single"
         selectedKeys={current === undefined ? [] : [current]}
         onAction={(key) => {
-          // An open screen with unsaved changes asks first (the store's guard).
-          void store.requestChoice(slug, String(key));
+          const id = String(key);
+          // An open screen with unsaved changes asks first (the store's guard). A switch says where it went, so the
+          // page changing under the person is announced, with focus left on the switcher.
+          void store.requestChoice(slug, id).then((went) => {
+            const next = properties.find((each) => each.id === id)?.name;
+            if (went && id !== current && next !== undefined) {
+              toasts.toast({ tone: 'info', message: strings.showingNow(next) });
+            }
+          });
         }}
       >
         {properties.map((property) => (

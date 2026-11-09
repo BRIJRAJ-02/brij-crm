@@ -150,6 +150,8 @@ export const strings = {
   currencyHint: 'Prices use this currency. You can change it until something has a price.',
   showing: 'Showing',
   showingNow: (name: string) => `Showing ${name}`,
+  /** Beside a settings page's title, from two businesses (spec 0065 H7). */
+  forBusiness: (name: string) => `For ${name}`,
   businessAdded: (name: string) => `${name} added`,
   businessRemoved: (name: string) => `${name} removed`,
   removeBusiness: 'Remove business',
@@ -158,6 +160,7 @@ export const strings = {
   removeBusinessText: 'It has no places, menus or services, so nothing else changes.',
   discardTitle: 'Discard your changes?',
   discardText: 'Your profile changes aren’t saved. Switching business drops them.',
+  waitForSave: 'Wait for the save to finish, then switch business.',
   discardDesignText: 'Your design changes aren’t saved. Switching business drops them.',
   discard: 'Discard and switch',
   keepEditing: 'Keep editing',

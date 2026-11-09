@@ -544,8 +544,18 @@ export async function listServicePlaces(
         order by position, id
       `)
     ).rows;
+    // The other businesses' places, ids only: a link to one opens its business (AC-6517).
+    const elsewhere = (
+      await tx.execute<{ id: string; property_id: string }>(sql`
+        select id::text as id, property_id::text as property_id from places
+        where workspace_id = ${scope.workspaceId}::uuid and property_id <> ${property.id}::uuid
+      `)
+    ).rows;
     return {
       places: rows.map((row) => ({ id: row.id, name: row.name, timeZone: row.time_zone, hours: row.hours })),
+      ...(elsewhere.length === 0
+        ? {}
+        : { elsewhere: elsewhere.map((row) => ({ id: row.id, property: row.property_id })) }),
     };
   });
 }

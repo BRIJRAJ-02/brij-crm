@@ -390,13 +390,13 @@ import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/pict
 import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 import type { HospitalityStore } from './hospitality/store.ts';
-import type { MenuStore } from './menu/store.ts';
+import type { MenuStoreRoot } from './menu/store.ts';
 import type { MenuDraft as MenuDraftAnswer, MenuLookCover as MenuLookCoverAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
 export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
 import type { BusinessPageStore } from './business-page/store.ts';
-import type { ServicesStore } from './services/store.ts';
-export type { NewBlock, NewTimeOff, ServicesStore, TeamCopy } from './services/store.ts';
+import type { ServicesStoreRoot } from './services/store.ts';
+export type { NewBlock, NewTimeOff, ServicesStore, ServicesStoreRoot, TeamCopy } from './services/store.ts';
 // Services, staff and shifts (spec 0066 B1): the shapes Settings › Services, Staff and Shifts show.
 export type {
   AppointmentsSetup,
@@ -432,7 +432,7 @@ export type {
   UploadedBusinessPhoto,
 } from '@crm/contracts';
 export type { HospitalityHeld, HospitalityHeldState, HospitalityStore, ResourceChange } from './hospitality/store.ts';
-export type { MenuPhotoBlobs, MenuStore } from './menu/store.ts';
+export type { MenuPhotoBlobs, MenuStore, MenuStoreRoot } from './menu/store.ts';
 // The Hospitality suite's setup (spec 0065, H0): the shapes Settings › Apps and Business show.
 export type {
   AppsView,
@@ -3125,12 +3125,12 @@ export function createDataLayer({
   let brand: Promise<BrandStore> | undefined;
   // Settings › Apps and Business (spec 0065): the Hospitality setup, loaded with the first screen that asks.
   let hospitality: Promise<HospitalityStore> | undefined;
-  let menus: Promise<MenuStore> | undefined;
+  let menus: Promise<MenuStoreRoot> | undefined;
   let tables: Promise<TablesStore> | undefined;
   // Settings › Business › Page (spec 0066, B4 lite): the business page's editor, loaded with the first screen that asks.
   let businessPage: Promise<BusinessPageStore> | undefined;
   // Settings › Services, Staff and Shifts (spec 0066 B1), loaded with the first screen that asks.
-  let services: Promise<ServicesStore> | undefined;
+  let services: Promise<ServicesStoreRoot> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
   const sendImage = async (
     path: string,
@@ -6534,7 +6534,7 @@ export function createDataLayer({
      * drew again, with `x-crm-workspace`, and answers the whole draft.
      */
     menu: {
-      load: (): Promise<MenuStore> =>
+      load: (): Promise<MenuStoreRoot> =>
         (menus ??= Promise.all([import('./menu/store.ts'), loadHospitality()]).then(([{ openMenus }, held]) =>
           openMenus({
             api: api.menu,
@@ -6631,7 +6631,7 @@ export function createDataLayer({
      * desk's offered times. The store loads on first use; a `visits` event reads every held copy of the workspace again.
      */
     services: {
-      load: (): Promise<ServicesStore> =>
+      load: (): Promise<ServicesStoreRoot> =>
         (services ??= Promise.all([import('./services/store.ts'), loadHospitality()]).then(([{ openServices }, held]) =>
           openServices({
             api: api.services,

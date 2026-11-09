@@ -24,7 +24,7 @@ import {
   servingOf as readServing,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 const {
   menus,
@@ -545,16 +545,94 @@ export function parseKeptRows(value: unknown): MenuRows | undefined {
   };
 }
 
+/** The ids among `ids` that a row of `table` already holds in the workspace: another business's, after a delete. */
+async function heldIds(
+  tx: WorkspaceTx,
+  table: 'menus' | 'menu_sections' | 'menu_items' | 'menu_item_sizes' | 'menu_option_groups' | 'menu_options',
+  workspaceId: string,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (ids.length === 0) return new Set();
+  const found = await tx.execute<{ id: string }>(sql`
+    select id::text from ${sql.identifier(table)}
+    where workspace_id = ${workspaceId}::uuid and id = any(${`{${[...new Set(ids)].join(',')}}`}::uuid[])
+  `);
+  return new Set(found.rows.map((row) => row.id));
+}
+
 /**
- * Puts `rows` back as one property's whole draft (Discard, AC-6525): every menu row of that property now is deleted
+ * The kept rows less any whose id another business holds now, with everything hanging off them (spec 0065 H7): a
+ * Discard puts back only what is still this business's to put back, so it never collides with another's rows (an id
+ * freed by a delete can be taken by another business before the Discard), and never takes another's row over.
+ */
+async function withoutHeld(tx: WorkspaceTx, workspaceId: string, rows: MenuRows): Promise<MenuRows> {
+  const menuIds = await heldIds(
+    tx,
+    'menus',
+    workspaceId,
+    rows.menus.map((row) => row.id),
+  );
+  const itemIds = await heldIds(
+    tx,
+    'menu_items',
+    workspaceId,
+    rows.items.map((row) => row.id),
+  );
+  const groupIds = await heldIds(
+    tx,
+    'menu_option_groups',
+    workspaceId,
+    rows.groups.map((row) => row.id),
+  );
+  const sectionIds = new Set(
+    await heldIds(
+      tx,
+      'menu_sections',
+      workspaceId,
+      rows.sections.map((row) => row.id),
+    ),
+  );
+  const sizeIds = await heldIds(
+    tx,
+    'menu_item_sizes',
+    workspaceId,
+    rows.sizes.map((row) => row.id),
+  );
+  const optionIds = await heldIds(
+    tx,
+    'menu_options',
+    workspaceId,
+    rows.options.map((row) => row.id),
+  );
+  if (menuIds.size + itemIds.size + groupIds.size + sectionIds.size + sizeIds.size + optionIds.size === 0) {
+    return rows;
+  }
+  // A section goes with its menu, and a sub section with its parent.
+  for (const row of rows.sections) if (menuIds.has(row.menuId)) sectionIds.add(row.id);
+  for (const row of rows.sections) if (row.parentId !== null && sectionIds.has(row.parentId)) sectionIds.add(row.id);
+  return {
+    menus: rows.menus.filter((row) => !menuIds.has(row.id)),
+    menuPlaces: rows.menuPlaces.filter((row) => !menuIds.has(row.menuId)),
+    sections: rows.sections.filter((row) => !sectionIds.has(row.id)),
+    items: rows.items.filter((row) => !itemIds.has(row.id)),
+    placements: rows.placements.filter((row) => !sectionIds.has(row.sectionId) && !itemIds.has(row.itemId)),
+    sizes: rows.sizes.filter((row) => !sizeIds.has(row.id) && !itemIds.has(row.itemId)),
+    groups: rows.groups.filter((row) => !groupIds.has(row.id)),
+    options: rows.options.filter((row) => !optionIds.has(row.id) && !groupIds.has(row.groupId)),
+    itemGroups: rows.itemGroups.filter((row) => !itemIds.has(row.itemId) && !groupIds.has(row.groupId)),
+  };
+}
+
+/**
+ * Puts the kept rows back as one property's whole draft (Discard, AC-6525): every menu row of that property now is deleted
  * and the kept ones inserted under it, in the order their keys need. Places deleted since (or never the property's)
- * and photos gone since are left out; Sold out keeps its live value for items that come back.
+ * photos gone since and rows another business holds now are left out; Sold out keeps its live value for items that come back.
  */
 export async function restoreMenuRows(
   tx: WorkspaceTx,
   workspaceId: string,
   propertyId: string,
-  rows: MenuRows,
+  given: MenuRows,
   live: {
     readonly placeIds: ReadonlySet<string>;
     readonly photoIds: ReadonlySet<string>;
@@ -566,6 +644,7 @@ export async function restoreMenuRows(
   await tx
     .delete(menuOptionGroups)
     .where(and(eq(menuOptionGroups.workspaceId, workspaceId), eq(menuOptionGroups.propertyId, propertyId)));
+  const rows = await withoutHeld(tx, workspaceId, given);
   const ws = { workspaceId };
   if (rows.menus.length > 0) {
     await tx.insert(menus).values(

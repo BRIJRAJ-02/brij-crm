@@ -159,7 +159,7 @@ async function edit(
     await lockKey(tx, `menu:${scope.workspaceId}`);
     await change(tx, by, property.id);
     await noteChange(tx, scope.workspaceId, property.id);
-    await auditSetup(tx, scope, what, ids);
+    await auditSetup(tx, scope, what, { ...ids, propertyId: property.id });
     return readDraft(tx, scope, property);
   });
 }

@@ -154,12 +154,34 @@ export interface ReservationsScreenProps {
   readonly search: ReservationsSearch;
   /** Another day or place picked: today and the first place are left out, so the address stays plain. */
   readonly onSearch: (search: ReservationsSearch) => void;
+  /** A `?place=` of another business (spec 0065 H7): switch to that business, which shows the place. */
+  readonly onOtherBusiness?: (property: string) => void;
 }
 
 /** The page: the place, then its day. */
-export function ReservationsScreen({ slug, tables, toasts, search, onSearch }: ReservationsScreenProps) {
+export function ReservationsScreen({
+  slug,
+  tables,
+  toasts,
+  search,
+  onSearch,
+  onOtherBusiness,
+}: ReservationsScreenProps) {
   const held = tables.places(slug);
   const loaded = useHospitality(held);
+  // A `?place=` this business doesn't have: another business's opens that business (a link from an email or another
+  // page, AC-6517); one that isn't there leaves the address, so it never names a place the page doesn't show.
+  const listed = loaded.status === 'ready' ? loaded.value : undefined;
+  useEffect(() => {
+    if (listed === undefined || search.place === undefined) return;
+    if (listed.places.some((each) => each.id === search.place)) return;
+    const other = listed.elsewhere?.find((each) => each.id === search.place);
+    if (other !== undefined && onOtherBusiness !== undefined) onOtherBusiness(other.property);
+    else {
+      const { place: _gone, ...rest } = search;
+      onSearch(rest);
+    }
+  }, [listed, search, onSearch, onOtherBusiness]);
   const topBar = <TopBar title={strings.reservations} icon="calendar-check" />;
   if (loaded.status !== 'ready') {
     return (

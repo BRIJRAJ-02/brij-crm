@@ -244,8 +244,15 @@ export const TablePlace = Place.pick({ id: true, name: true, timeZone: true, hou
 /** A place as the Reservations page draws it. */
 export type TablePlace = z.infer<typeof TablePlace>;
 
-/** The places those who run the floor can pick between, in the business's order. */
-export const ServicePlaces = z.object({ places: z.array(TablePlace) });
+/**
+ * The places those who run the floor can pick between, in the business's order: the chosen business's (spec 0065
+ * H7). `elsewhere` names the workspace's other businesses' places, ids only, so a link to one (`?place=`) opens the
+ * business it belongs to (AC-6517).
+ */
+export const ServicePlaces = z.object({
+  places: z.array(TablePlace),
+  elsewhere: z.array(z.object({ id: Uuid, property: Uuid })).optional(),
+});
 /** The places those who run the floor can pick between. */
 export type ServicePlaces = z.infer<typeof ServicePlaces>;
 

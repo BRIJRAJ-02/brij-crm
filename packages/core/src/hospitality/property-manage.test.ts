@@ -356,3 +356,50 @@ describe('each business has its own services and places to serve (spec 0065 H7, 
     ]);
   });
 });
+
+describe('review fixes (spec 0065 H7)', () => {
+  it('discards around an id another business took since, rather than failing', async () => {
+    const w = await twoBusinesses();
+    const menuId = randomUUID();
+    await saveMenu(w.owner, { id: menuId, name: 'Dinner', placeIds: [w.placeId] });
+    const sectionId = randomUUID();
+    await saveSection(w.owner, { id: sectionId, menuId, name: 'Mains', layout: 'list' });
+    const itemId = randomUUID();
+    await saveItem(w.owner, { id: itemId, sectionId, item: DISH });
+    await publishMenus(w.owner);
+    // The first deletes the dish in its draft, and the second takes the id for a dish of its own.
+    await deleteItem(w.owner, { itemId });
+    await saveItem(w.owner, { id: itemId, item: { ...DISH, name: 'Theirs' }, propertyId: w.second });
+    const back = await discardMenuDraft(w.owner);
+    expect(back.draft.items).toEqual([]);
+    expect(back.draft.menus.map((menu) => menu.id)).toEqual([menuId]);
+    expect((await readMenuDraft(w.owner, { propertyId: w.second })).items.map((item) => item.name)).toEqual(['Theirs']);
+  });
+
+  it('refuses a service needing another business’s room or chair', async () => {
+    const w = await visitWorkspace(db, 'appointments');
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Spa', kind: 'spa', currency: 'EUR' });
+    const secondPlace = randomUUID();
+    await createPlace(w.owner, { id: secondPlace, place: PLACE, propertyId: second });
+    const chair = randomUUID();
+    await w.sql(sql`
+      insert into resources (workspace_id, id, place_id, kind, label, min_capacity, max_capacity, position, joins)
+      values (${w.workspaceId}::uuid, ${chair}::uuid, ${secondPlace}::uuid, 'chair', 'Chair 1', 1, 1, 0, '{}'::uuid[])
+    `);
+    const service: ServiceFields = {
+      name: 'Cut',
+      categoryId: null,
+      bufferAfterMin: 0,
+      online: true,
+      staffRule: 'all',
+      staffIds: [],
+      placeIds: [w.placeId],
+      needs: [{ resourceId: chair }],
+      variants: [{ name: 'Short', minutes: 30, priceMinor: 2000, priceType: 'fixed', bufferBeforeMin: 0 }],
+    };
+    await expect(saveService(w.owner, { id: randomUUID(), service })).rejects.toThrow(
+      'One of those rooms or chairs doesn’t exist.',
+    );
+  });
+});

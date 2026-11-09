@@ -538,6 +538,10 @@ export function openHospitality(given: {
       if (guard === undefined) guards.delete(workspace);
       else guards.set(workspace, guard);
     },
+    /** Lets go of `guard` only while it is still the one holding switches, so a screen never drops another's. */
+    dropGuard: (workspace: string, guard: () => Promise<boolean>): void => {
+      if (guards.get(workspace) === guard) guards.delete(workspace);
+    },
     /** Switches the business shown (the sidebar's switcher, a Businesses row), once the guard, if any, agrees. */
     requestChoice: async (workspace: string, property: string): Promise<boolean> => {
       const guard = guards.get(workspace);

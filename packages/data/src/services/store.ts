@@ -166,427 +166,450 @@ export function openServices(given: {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
   const catalogues = new Map<string, ReturnType<typeof holder<CatalogueView>>>();
-  const at = (workspace: string): InProperty => {
-    const property = given.propertyOf?.(workspace);
-    return property === undefined ? {} : { property };
-  };
   const teams = new Map<string, ReturnType<typeof holder<StaffTeamView>>>();
-
-  /** The chosen business's catalogue (spec 0065 H7): one held copy per workspace and business. */
-  const catalogueOf = (workspace: string, where: InProperty = at(workspace)) => {
-    const key = `${workspace}:${where.property ?? ''}`;
-    let found = catalogues.get(key);
-    if (found === undefined) {
-      found = holder(() => call((options) => api.catalogue({ workspace, ...where }, options)), now);
-      catalogues.set(key, found);
-    }
-    return found;
-  };
-  /** Every held catalogue of a workspace, whichever business. */
-  const cataloguesOf = (workspace: string) =>
-    [...catalogues.entries()].filter(([key]) => key.startsWith(`${workspace}:`)).map(([, held]) => held);
-  const teamOf = (workspace: string, copy: TeamCopy) => {
-    const key = `${workspace}:${copy}`;
-    let found = teams.get(key);
-    if (found === undefined) {
-      found = holder(
-        () =>
-          call((options) => (copy === 'team' ? api.team({ workspace }, options) : api.shifts({ workspace }, options))),
-        now,
-      );
-      teams.set(key, found);
-    }
-    return found;
-  };
-  /** A catalogue change: `next` shows at once, `send` answers the whole catalogue. */
-  const catalogueChange = (
-    workspace: string,
-    next: (view: CatalogueView) => CatalogueView,
-    send: (mutationId: string, options: Options, where: InProperty) => Promise<CatalogueView>,
-  ): Promise<DataError | undefined> => {
-    const where = at(workspace);
-    return catalogueOf(workspace, where).change(next, () => call((options) => send(mintId(), options, where)));
-  };
-  /** A team change on the copy the screen holds; the other copy, if held, reads again after. */
-  const teamChange = async (
-    workspace: string,
-    copy: TeamCopy,
-    next: (view: StaffTeamView) => StaffTeamView,
-    send: (mutationId: string, options: Options) => Promise<StaffTeamView>,
-  ): Promise<DataError | undefined> => {
-    const refused = await teamOf(workspace, copy).change(next, () => call((options) => send(mintId(), options)));
-    if (refused === undefined) {
-      const other = teams.get(`${workspace}:${copy === 'team' ? 'shifts' : 'team'}`);
-      void other?.read().catch(() => undefined);
-      // A profile's places and services show in the catalogue's pickers too.
-      for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
-    }
-    return refused;
-  };
-
-  return {
-    /** A new id for a service, a category or a profile a screen is about to make (a retry makes one). */
-    newId: (): string => mintId(),
-    /** Settings › Services: the catalogue, the places, staff and resources a service may name, and the checklist. */
-    catalogue: (workspace: string): HospitalityHeld<CatalogueView> => catalogueOf(workspace).held,
-    /** Adds a category (`id` new) or renames one. */
-    saveCategory: (workspace: string, id: string, name: string) =>
-      catalogueChange(
-        workspace,
-        (view) =>
-          view.categories.some((category) => category.id === id)
-            ? { ...view, categories: view.categories.map((each) => (each.id === id ? { ...each, name } : each)) }
-            : { ...view, categories: [...view.categories, { id, name }] },
-        (mutationId, options, where) => api.saveCategory({ workspace, ...where, id, name, mutationId }, options),
-      ),
-    /** Deletes a category; its services stay, with no category. */
-    deleteCategory: (workspace: string, categoryId: string) =>
-      catalogueChange(
-        workspace,
-        (view) => ({
-          ...view,
-          categories: view.categories.filter((each) => each.id !== categoryId),
-          services: view.services.map((service) => {
-            if (service.categoryId !== categoryId) return service;
-            const { categoryId: _gone, ...rest } = service;
-            return rest;
-          }),
-        }),
-        (mutationId, options, where) => api.deleteCategory({ workspace, ...where, categoryId, mutationId }, options),
-      ),
-    /** Moves a category to `toIndex`. */
-    moveCategory: (workspace: string, categoryId: string, toIndex: number) =>
-      catalogueChange(
-        workspace,
-        (view) => ({ ...view, categories: placed(view.categories, categoryId, toIndex) }),
-        (mutationId, options, where) =>
-          api.moveCategory({ workspace, ...where, categoryId, toIndex, mutationId }, options),
-      ),
-    /** Adds a service (`id` new, from `newId()`) or changes one, whole. */
-    saveService: (workspace: string, id: string, service: ServiceFields) =>
-      catalogueChange(
-        workspace,
-        (view) => {
-          const made = serviceOf(id, service, mintId);
-          return view.services.some((each) => each.id === id)
-            ? { ...view, services: view.services.map((each) => (each.id === id ? made : each)) }
-            : { ...view, services: [...view.services, made] };
-        },
-        (mutationId, options, where) => api.saveService({ workspace, ...where, id, service, mutationId }, options),
-      ),
-    /** Moves a service into a category (null: none) at `toIndex` there. */
-    moveService: (workspace: string, serviceId: string, categoryId: string | null, toIndex: number) =>
-      catalogueChange(
-        workspace,
-        (view) => withServiceMoved(view, serviceId, categoryId, toIndex),
-        (mutationId, options, where) =>
-          api.moveService({ workspace, ...where, serviceId, categoryId, toIndex, mutationId }, options),
-      ),
-    /** Several services online or off. */
-    setOnline: (workspace: string, serviceIds: readonly string[], online: boolean) =>
-      catalogueChange(
-        workspace,
-        (view) => ({
-          ...view,
-          services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, online } : each)),
-        }),
-        (mutationId, options, where) =>
-          api.setOnline({ workspace, ...where, serviceIds: [...serviceIds], online, mutationId }, options),
-      ),
-    /** Several services into one category (null: none). */
-    setCategory: (workspace: string, serviceIds: readonly string[], categoryId: string | null) =>
-      catalogueChange(
-        workspace,
-        (view) => ({
-          ...view,
-          services: view.services.map((each) => {
-            if (!serviceIds.includes(each.id)) return each;
-            const { categoryId: _was, ...rest } = each;
-            return categoryId === null ? rest : { ...rest, categoryId };
-          }),
-        }),
-        (mutationId, options, where) =>
-          api.setCategory({ workspace, ...where, serviceIds: [...serviceIds], categoryId, mutationId }, options),
-      ),
-    /** Archives services (Undo restores them). */
-    archive: (workspace: string, serviceIds: readonly string[]) =>
-      catalogueChange(
-        workspace,
-        (view) => ({
-          ...view,
-          services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: true } : each)),
-        }),
-        (mutationId, options, where) =>
-          api.archive({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
-      ),
-    /** Restores archived services. */
-    restore: (workspace: string, serviceIds: readonly string[]) =>
-      catalogueChange(
-        workspace,
-        (view) => ({
-          ...view,
-          services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: false } : each)),
-        }),
-        (mutationId, options, where) =>
-          api.restore({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
-      ),
-    /** The team: Staff's copy (`team`) or Shifts' (`shifts`). */
-    team: (workspace: string, copy: TeamCopy = 'team'): HospitalityHeld<StaffTeamView> => teamOf(workspace, copy).held,
-    /** Adds a profile (`id` new) or changes one. */
-    saveStaff: (workspace: string, id: string, staff: StaffFields) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) =>
-          view.staff.some((each) => each.id === id)
-            ? withStaff(view, id, (each) => ({
-                ...each,
-                name: staff.name.trim(),
-                ...(staff.title === undefined ? {} : { title: staff.title }),
-                ...(staff.bio === undefined ? {} : { bio: staff.bio }),
-                ...(staff.color === null ? {} : { color: staff.color }),
-                serviceIds: [...staff.serviceIds],
-              }))
-            : {
-                ...view,
-                staff: [
-                  ...view.staff,
-                  {
-                    id,
-                    name: staff.name.trim(),
-                    ...(staff.title === undefined ? {} : { title: staff.title }),
-                    ...(staff.color === null ? {} : { color: staff.color }),
-                    archived: false,
-                    places: [],
-                    serviceIds: [...staff.serviceIds],
-                    timeOff: [],
-                    blocks: [],
-                    upcoming: 0,
-                  },
-                ],
-              },
-        (mutationId, options) => api.saveStaff({ workspace, id, staff, mutationId }, options),
-      ),
-    /** Moves a profile to `toIndex` among the live ones. */
-    moveStaff: (workspace: string, staffId: string, toIndex: number) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) => {
-          const live = placed(
-            view.staff.filter((each) => !each.archived),
-            staffId,
-            toIndex,
-          );
-          return { ...view, staff: [...live, ...view.staff.filter((each) => each.archived)] };
-        },
-        (mutationId, options) => api.moveStaff({ workspace, staffId, toIndex, mutationId }, options),
-      ),
-    /** Links a profile to a member (null unlinks). Refused CONFLICT while their visits and meetings overlap. */
-    linkStaff: (workspace: string, staffId: string, memberId: string | null, memberName?: string) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) =>
-          withStaff(view, staffId, (each) => {
-            const { memberId: _was, memberName: _name, ...rest } = each;
-            return memberId === null
-              ? rest
-              : { ...rest, memberId, ...(memberName === undefined ? {} : { memberName }) };
-          }),
-        (mutationId, options) => api.linkStaff({ workspace, staffId, memberId, mutationId }, options),
-      ),
-    /** Archives a profile (refused while they have visits to come). */
-    archiveStaff: (workspace: string, staffId: string) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) => withStaff(view, staffId, (each) => ({ ...each, archived: true })),
-        (mutationId, options) => api.archiveStaff({ workspace, staffId, mutationId }, options),
-      ),
-    /** Restores an archived profile. */
-    restoreStaff: (workspace: string, staffId: string) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) => withStaff(view, staffId, (each) => ({ ...each, archived: false })),
-        (mutationId, options) => api.restoreStaff({ workspace, staffId, mutationId }, options),
-      ),
-    /** Takes a profile's photo away. */
-    removeStaffPhoto: (workspace: string, staffId: string) =>
-      teamChange(
-        workspace,
-        'team',
-        (view) =>
-          withStaff(view, staffId, (each) => {
-            const { photo: _gone, ...rest } = each;
-            return rest;
-          }),
-        (mutationId, options) => api.removeStaffPhoto({ workspace, staffId, mutationId }, options),
-      ),
-    /**
-     * Uploads a profile's photo (already cropped square and drawn again by the screen), then reads the team again so
-     * every screen shows it. Answers the refusal, or undefined.
-     */
-    uploadStaffPhoto: async (workspace: string, staffId: string, body: Blob): Promise<DataError | undefined> => {
-      try {
-        await given.upload(workspace, staffId, body);
-      } catch (error) {
-        return toDataError(error);
+  /**
+   * The store's calls, the catalogue's in the business `at` names. The store itself follows the device's choice; a
+   * screen holds `at(property)`, bound to the business it shows, so a press made while a switch is on its way still
+   * lands on the business on screen (spec 0065 H7).
+   */
+  const bind = (whereOf: (workspace: string) => InProperty) => {
+    /** The chosen business's catalogue (spec 0065 H7): one held copy per workspace and business. */
+    const catalogueOf = (workspace: string, where: InProperty = whereOf(workspace)) => {
+      const key = `${workspace}:${where.property ?? ''}`;
+      let found = catalogues.get(key);
+      if (found === undefined) {
+        found = holder(() => call((options) => api.catalogue({ workspace, ...where }, options)), now);
+        catalogues.set(key, found);
       }
-      for (const copy of ['team', 'shifts'] as const)
-        void teams
-          .get(`${workspace}:${copy}`)
-          ?.read()
-          .catch(() => undefined);
-      return undefined;
-    },
-    /** A profile's photo address, by its version (a new upload, a new address). */
-    staffPhotoSrc: (workspace: string, staffId: string, version: string): string =>
-      new URL(
-        `/api/services/staff/${encodeURIComponent(staffId)}/photo?${new URLSearchParams({ workspace, v: version }).toString()}`,
-        given.origin,
-      ).href,
-    /**
-     * A staff member's shifts at a place, whole (the weekly pattern and every date change), on the copy the screen
-     * holds: copying a week to every week is this one write, so all seven days are saved together.
-     */
-    setShifts: (
+      return found;
+    };
+    /** Every held catalogue of a workspace, whichever business. */
+    const cataloguesOf = (workspace: string) =>
+      [...catalogues.entries()].filter(([key]) => key.startsWith(`${workspace}:`)).map(([, held]) => held);
+    const teamOf = (workspace: string, copy: TeamCopy) => {
+      const key = `${workspace}:${copy}`;
+      let found = teams.get(key);
+      if (found === undefined) {
+        found = holder(
+          () =>
+            call((options) =>
+              copy === 'team' ? api.team({ workspace }, options) : api.shifts({ workspace }, options),
+            ),
+          now,
+        );
+        teams.set(key, found);
+      }
+      return found;
+    };
+    /** A catalogue change: `next` shows at once, `send` answers the whole catalogue. */
+    const catalogueChange = (
+      workspace: string,
+      next: (view: CatalogueView) => CatalogueView,
+      send: (mutationId: string, options: Options, where: InProperty) => Promise<CatalogueView>,
+    ): Promise<DataError | undefined> => {
+      const where = whereOf(workspace);
+      return catalogueOf(workspace, where).change(next, () => call((options) => send(mintId(), options, where)));
+    };
+    /** A team change on the copy the screen holds; the other copy, if held, reads again after. */
+    const teamChange = async (
       workspace: string,
       copy: TeamCopy,
-      staffId: string,
-      placeId: string,
-      shifts: PlaceHours,
-      outsideHours: boolean,
-    ) =>
-      teamChange(
-        workspace,
-        copy,
-        (view) =>
-          withStaff(view, staffId, (each) => ({
-            ...each,
-            places: each.places.map((at) => (at.placeId === placeId ? { placeId, shifts, outsideHours } : at)),
-          })),
-        (mutationId, options) =>
-          api.setShifts({ workspace, staffId, placeId, shifts, outsideHours, mutationId }, options),
-      ),
-    /** Copies one staff member's weekly shifts at a place to others there (each keeps their own date changes). */
-    copyShifts: (workspace: string, copy: TeamCopy, staffId: string, placeId: string, toStaffIds: readonly string[]) =>
-      teamChange(
-        workspace,
-        copy,
-        (view) => {
-          const from = view.staff.find((each) => each.id === staffId)?.places.find((at) => at.placeId === placeId);
-          if (from === undefined) return view;
-          return {
+      next: (view: StaffTeamView) => StaffTeamView,
+      send: (mutationId: string, options: Options) => Promise<StaffTeamView>,
+    ): Promise<DataError | undefined> => {
+      const refused = await teamOf(workspace, copy).change(next, () => call((options) => send(mintId(), options)));
+      if (refused === undefined) {
+        const other = teams.get(`${workspace}:${copy === 'team' ? 'shifts' : 'team'}`);
+        void other?.read().catch(() => undefined);
+        // A profile's places and services show in the catalogue's pickers too.
+        for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
+      }
+      return refused;
+    };
+
+    return {
+      /** A new id for a service, a category or a profile a screen is about to make (a retry makes one). */
+      newId: (): string => mintId(),
+      /** Settings › Services: the catalogue, the places, staff and resources a service may name, and the checklist. */
+      catalogue: (workspace: string): HospitalityHeld<CatalogueView> => catalogueOf(workspace).held,
+      /** Adds a category (`id` new) or renames one. */
+      saveCategory: (workspace: string, id: string, name: string) =>
+        catalogueChange(
+          workspace,
+          (view) =>
+            view.categories.some((category) => category.id === id)
+              ? { ...view, categories: view.categories.map((each) => (each.id === id ? { ...each, name } : each)) }
+              : { ...view, categories: [...view.categories, { id, name }] },
+          (mutationId, options, where) => api.saveCategory({ workspace, ...where, id, name, mutationId }, options),
+        ),
+      /** Deletes a category; its services stay, with no category. */
+      deleteCategory: (workspace: string, categoryId: string) =>
+        catalogueChange(
+          workspace,
+          (view) => ({
             ...view,
-            staff: view.staff.map((each) =>
-              toStaffIds.includes(each.id)
-                ? {
-                    ...each,
-                    places: each.places.map((at) =>
-                      at.placeId === placeId
-                        ? {
-                            ...at,
-                            outsideHours: from.outsideHours,
-                            shifts: { ...at.shifts, weekly: from.shifts.weekly },
-                          }
-                        : at,
-                    ),
-                  }
-                : each,
-            ),
-          };
-        },
-        (mutationId, options) =>
-          api.copyShifts({ workspace, staffId, placeId, toStaffIds: [...toStaffIds], mutationId }, options),
-      ),
-    /** Adds time off for an unlinked staff member. */
-    addTimeOff: (workspace: string, copy: TeamCopy, off: NewTimeOff) => {
-      const id = mintId();
-      return teamChange(
-        workspace,
-        copy,
-        (view) =>
-          withStaff(view, off.staffId, (each) => ({
-            ...each,
-            timeOff: [
-              ...each.timeOff,
-              {
-                id,
-                start: off.start,
-                end: off.end,
-                reason: off.reason,
-                ...(off.placeId === undefined ? {} : { placeId: off.placeId }),
-              },
-            ],
-          })),
-        (mutationId, options) => api.addTimeOff({ ...off, id, workspace, mutationId }, options),
-      );
-    },
-    /** Removes one time off. */
-    removeTimeOff: (workspace: string, copy: TeamCopy, id: string) =>
-      teamChange(
-        workspace,
-        copy,
-        (view) => ({
-          ...view,
-          staff: view.staff.map((each) => ({ ...each, timeOff: each.timeOff.filter((off) => off.id !== id) })),
-        }),
-        (mutationId, options) => api.removeTimeOff({ workspace, id, mutationId }, options),
-      ),
-    /** Blocks time at a place for an unlinked staff member. */
-    addBlock: (workspace: string, copy: TeamCopy, block: NewBlock) => {
-      const id = mintId();
-      return teamChange(
-        workspace,
-        copy,
-        (view) =>
-          withStaff(view, block.staffId, (each) => ({
-            ...each,
-            blocks: [
-              ...each.blocks,
-              {
-                id,
-                placeId: block.placeId,
-                start: block.start,
-                end: block.end,
-                ...(block.reason === undefined ? {} : { reason: block.reason }),
-              },
-            ],
-          })),
-        (mutationId, options) => api.addBlock({ ...block, id, workspace, mutationId }, options),
-      );
-    },
-    /** Removes one block. */
-    removeBlock: (workspace: string, copy: TeamCopy, id: string) =>
-      teamChange(
-        workspace,
-        copy,
-        (view) => ({
-          ...view,
-          staff: view.staff.map((each) => ({ ...each, blocks: each.blocks.filter((block) => block.id !== id) })),
-        }),
-        (mutationId, options) => api.removeBlock({ workspace, id, mutationId }, options),
-      ),
-    /** The desk's offered times for one service on a place date, read fresh. Throws the DataError on a refusal. */
-    times: (query: ServiceTimesInput): Promise<ServiceTimesView> => call((options) => api.times(query, options)),
-    /** A `visits` change event: every held copy of the workspace reads again (each read is permission checked). */
-    placesChanged(workspace: string) {
-      for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
-      for (const copy of ['team', 'shifts'] as const)
-        void teams
-          .get(`${workspace}:${copy}`)
-          ?.read()
-          .catch(() => undefined);
-    },
-    /** Sign out: every held copy goes. */
-    clear() {
-      catalogues.clear();
-      teams.clear();
-    },
+            categories: view.categories.filter((each) => each.id !== categoryId),
+            services: view.services.map((service) => {
+              if (service.categoryId !== categoryId) return service;
+              const { categoryId: _gone, ...rest } = service;
+              return rest;
+            }),
+          }),
+          (mutationId, options, where) => api.deleteCategory({ workspace, ...where, categoryId, mutationId }, options),
+        ),
+      /** Moves a category to `toIndex`. */
+      moveCategory: (workspace: string, categoryId: string, toIndex: number) =>
+        catalogueChange(
+          workspace,
+          (view) => ({ ...view, categories: placed(view.categories, categoryId, toIndex) }),
+          (mutationId, options, where) =>
+            api.moveCategory({ workspace, ...where, categoryId, toIndex, mutationId }, options),
+        ),
+      /** Adds a service (`id` new, from `newId()`) or changes one, whole. */
+      saveService: (workspace: string, id: string, service: ServiceFields) =>
+        catalogueChange(
+          workspace,
+          (view) => {
+            const made = serviceOf(id, service, mintId);
+            return view.services.some((each) => each.id === id)
+              ? { ...view, services: view.services.map((each) => (each.id === id ? made : each)) }
+              : { ...view, services: [...view.services, made] };
+          },
+          (mutationId, options, where) => api.saveService({ workspace, ...where, id, service, mutationId }, options),
+        ),
+      /** Moves a service into a category (null: none) at `toIndex` there. */
+      moveService: (workspace: string, serviceId: string, categoryId: string | null, toIndex: number) =>
+        catalogueChange(
+          workspace,
+          (view) => withServiceMoved(view, serviceId, categoryId, toIndex),
+          (mutationId, options, where) =>
+            api.moveService({ workspace, ...where, serviceId, categoryId, toIndex, mutationId }, options),
+        ),
+      /** Several services online or off. */
+      setOnline: (workspace: string, serviceIds: readonly string[], online: boolean) =>
+        catalogueChange(
+          workspace,
+          (view) => ({
+            ...view,
+            services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, online } : each)),
+          }),
+          (mutationId, options, where) =>
+            api.setOnline({ workspace, ...where, serviceIds: [...serviceIds], online, mutationId }, options),
+        ),
+      /** Several services into one category (null: none). */
+      setCategory: (workspace: string, serviceIds: readonly string[], categoryId: string | null) =>
+        catalogueChange(
+          workspace,
+          (view) => ({
+            ...view,
+            services: view.services.map((each) => {
+              if (!serviceIds.includes(each.id)) return each;
+              const { categoryId: _was, ...rest } = each;
+              return categoryId === null ? rest : { ...rest, categoryId };
+            }),
+          }),
+          (mutationId, options, where) =>
+            api.setCategory({ workspace, ...where, serviceIds: [...serviceIds], categoryId, mutationId }, options),
+        ),
+      /** Archives services (Undo restores them). */
+      archive: (workspace: string, serviceIds: readonly string[]) =>
+        catalogueChange(
+          workspace,
+          (view) => ({
+            ...view,
+            services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: true } : each)),
+          }),
+          (mutationId, options, where) =>
+            api.archive({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
+        ),
+      /** Restores archived services. */
+      restore: (workspace: string, serviceIds: readonly string[]) =>
+        catalogueChange(
+          workspace,
+          (view) => ({
+            ...view,
+            services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: false } : each)),
+          }),
+          (mutationId, options, where) =>
+            api.restore({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
+        ),
+      /** The team: Staff's copy (`team`) or Shifts' (`shifts`). */
+      team: (workspace: string, copy: TeamCopy = 'team'): HospitalityHeld<StaffTeamView> =>
+        teamOf(workspace, copy).held,
+      /** Adds a profile (`id` new) or changes one. */
+      saveStaff: (workspace: string, id: string, staff: StaffFields) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) =>
+            view.staff.some((each) => each.id === id)
+              ? withStaff(view, id, (each) => ({
+                  ...each,
+                  name: staff.name.trim(),
+                  ...(staff.title === undefined ? {} : { title: staff.title }),
+                  ...(staff.bio === undefined ? {} : { bio: staff.bio }),
+                  ...(staff.color === null ? {} : { color: staff.color }),
+                  serviceIds: [...staff.serviceIds],
+                }))
+              : {
+                  ...view,
+                  staff: [
+                    ...view.staff,
+                    {
+                      id,
+                      name: staff.name.trim(),
+                      ...(staff.title === undefined ? {} : { title: staff.title }),
+                      ...(staff.color === null ? {} : { color: staff.color }),
+                      archived: false,
+                      places: [],
+                      serviceIds: [...staff.serviceIds],
+                      timeOff: [],
+                      blocks: [],
+                      upcoming: 0,
+                    },
+                  ],
+                },
+          (mutationId, options) => api.saveStaff({ workspace, id, staff, mutationId }, options),
+        ),
+      /** Moves a profile to `toIndex` among the live ones. */
+      moveStaff: (workspace: string, staffId: string, toIndex: number) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) => {
+            const live = placed(
+              view.staff.filter((each) => !each.archived),
+              staffId,
+              toIndex,
+            );
+            return { ...view, staff: [...live, ...view.staff.filter((each) => each.archived)] };
+          },
+          (mutationId, options) => api.moveStaff({ workspace, staffId, toIndex, mutationId }, options),
+        ),
+      /** Links a profile to a member (null unlinks). Refused CONFLICT while their visits and meetings overlap. */
+      linkStaff: (workspace: string, staffId: string, memberId: string | null, memberName?: string) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) =>
+            withStaff(view, staffId, (each) => {
+              const { memberId: _was, memberName: _name, ...rest } = each;
+              return memberId === null
+                ? rest
+                : { ...rest, memberId, ...(memberName === undefined ? {} : { memberName }) };
+            }),
+          (mutationId, options) => api.linkStaff({ workspace, staffId, memberId, mutationId }, options),
+        ),
+      /** Archives a profile (refused while they have visits to come). */
+      archiveStaff: (workspace: string, staffId: string) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) => withStaff(view, staffId, (each) => ({ ...each, archived: true })),
+          (mutationId, options) => api.archiveStaff({ workspace, staffId, mutationId }, options),
+        ),
+      /** Restores an archived profile. */
+      restoreStaff: (workspace: string, staffId: string) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) => withStaff(view, staffId, (each) => ({ ...each, archived: false })),
+          (mutationId, options) => api.restoreStaff({ workspace, staffId, mutationId }, options),
+        ),
+      /** Takes a profile's photo away. */
+      removeStaffPhoto: (workspace: string, staffId: string) =>
+        teamChange(
+          workspace,
+          'team',
+          (view) =>
+            withStaff(view, staffId, (each) => {
+              const { photo: _gone, ...rest } = each;
+              return rest;
+            }),
+          (mutationId, options) => api.removeStaffPhoto({ workspace, staffId, mutationId }, options),
+        ),
+      /**
+       * Uploads a profile's photo (already cropped square and drawn again by the screen), then reads the team again so
+       * every screen shows it. Answers the refusal, or undefined.
+       */
+      uploadStaffPhoto: async (workspace: string, staffId: string, body: Blob): Promise<DataError | undefined> => {
+        try {
+          await given.upload(workspace, staffId, body);
+        } catch (error) {
+          return toDataError(error);
+        }
+        for (const copy of ['team', 'shifts'] as const)
+          void teams
+            .get(`${workspace}:${copy}`)
+            ?.read()
+            .catch(() => undefined);
+        return undefined;
+      },
+      /** A profile's photo address, by its version (a new upload, a new address). */
+      staffPhotoSrc: (workspace: string, staffId: string, version: string): string =>
+        new URL(
+          `/api/services/staff/${encodeURIComponent(staffId)}/photo?${new URLSearchParams({ workspace, v: version }).toString()}`,
+          given.origin,
+        ).href,
+      /**
+       * A staff member's shifts at a place, whole (the weekly pattern and every date change), on the copy the screen
+       * holds: copying a week to every week is this one write, so all seven days are saved together.
+       */
+      setShifts: (
+        workspace: string,
+        copy: TeamCopy,
+        staffId: string,
+        placeId: string,
+        shifts: PlaceHours,
+        outsideHours: boolean,
+      ) =>
+        teamChange(
+          workspace,
+          copy,
+          (view) =>
+            withStaff(view, staffId, (each) => ({
+              ...each,
+              places: each.places.map((at) => (at.placeId === placeId ? { placeId, shifts, outsideHours } : at)),
+            })),
+          (mutationId, options) =>
+            api.setShifts({ workspace, staffId, placeId, shifts, outsideHours, mutationId }, options),
+        ),
+      /** Copies one staff member's weekly shifts at a place to others there (each keeps their own date changes). */
+      copyShifts: (
+        workspace: string,
+        copy: TeamCopy,
+        staffId: string,
+        placeId: string,
+        toStaffIds: readonly string[],
+      ) =>
+        teamChange(
+          workspace,
+          copy,
+          (view) => {
+            const from = view.staff.find((each) => each.id === staffId)?.places.find((at) => at.placeId === placeId);
+            if (from === undefined) return view;
+            return {
+              ...view,
+              staff: view.staff.map((each) =>
+                toStaffIds.includes(each.id)
+                  ? {
+                      ...each,
+                      places: each.places.map((at) =>
+                        at.placeId === placeId
+                          ? {
+                              ...at,
+                              outsideHours: from.outsideHours,
+                              shifts: { ...at.shifts, weekly: from.shifts.weekly },
+                            }
+                          : at,
+                      ),
+                    }
+                  : each,
+              ),
+            };
+          },
+          (mutationId, options) =>
+            api.copyShifts({ workspace, staffId, placeId, toStaffIds: [...toStaffIds], mutationId }, options),
+        ),
+      /** Adds time off for an unlinked staff member. */
+      addTimeOff: (workspace: string, copy: TeamCopy, off: NewTimeOff) => {
+        const id = mintId();
+        return teamChange(
+          workspace,
+          copy,
+          (view) =>
+            withStaff(view, off.staffId, (each) => ({
+              ...each,
+              timeOff: [
+                ...each.timeOff,
+                {
+                  id,
+                  start: off.start,
+                  end: off.end,
+                  reason: off.reason,
+                  ...(off.placeId === undefined ? {} : { placeId: off.placeId }),
+                },
+              ],
+            })),
+          (mutationId, options) => api.addTimeOff({ ...off, id, workspace, mutationId }, options),
+        );
+      },
+      /** Removes one time off. */
+      removeTimeOff: (workspace: string, copy: TeamCopy, id: string) =>
+        teamChange(
+          workspace,
+          copy,
+          (view) => ({
+            ...view,
+            staff: view.staff.map((each) => ({ ...each, timeOff: each.timeOff.filter((off) => off.id !== id) })),
+          }),
+          (mutationId, options) => api.removeTimeOff({ workspace, id, mutationId }, options),
+        ),
+      /** Blocks time at a place for an unlinked staff member. */
+      addBlock: (workspace: string, copy: TeamCopy, block: NewBlock) => {
+        const id = mintId();
+        return teamChange(
+          workspace,
+          copy,
+          (view) =>
+            withStaff(view, block.staffId, (each) => ({
+              ...each,
+              blocks: [
+                ...each.blocks,
+                {
+                  id,
+                  placeId: block.placeId,
+                  start: block.start,
+                  end: block.end,
+                  ...(block.reason === undefined ? {} : { reason: block.reason }),
+                },
+              ],
+            })),
+          (mutationId, options) => api.addBlock({ ...block, id, workspace, mutationId }, options),
+        );
+      },
+      /** Removes one block. */
+      removeBlock: (workspace: string, copy: TeamCopy, id: string) =>
+        teamChange(
+          workspace,
+          copy,
+          (view) => ({
+            ...view,
+            staff: view.staff.map((each) => ({ ...each, blocks: each.blocks.filter((block) => block.id !== id) })),
+          }),
+          (mutationId, options) => api.removeBlock({ workspace, id, mutationId }, options),
+        ),
+      /** The desk's offered times for one service on a place date, read fresh. Throws the DataError on a refusal. */
+      times: (query: ServiceTimesInput): Promise<ServiceTimesView> => call((options) => api.times(query, options)),
+      /** A `visits` change event: every held copy of the workspace reads again (each read is permission checked). */
+      placesChanged(workspace: string) {
+        for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
+        for (const copy of ['team', 'shifts'] as const)
+          void teams
+            .get(`${workspace}:${copy}`)
+            ?.read()
+            .catch(() => undefined);
+      },
+      /** Sign out: every held copy goes. */
+      clear() {
+        catalogues.clear();
+        teams.clear();
+      },
+    };
+  };
+  const following = bind((workspace) => {
+    const property = given.propertyOf?.(workspace);
+    return property === undefined ? {} : { property };
+  });
+  return {
+    ...following,
+    /** The same store bound to one business (undefined is the first), for the screen that shows it. */
+    at: (property: string | undefined): typeof following => bind(() => (property === undefined ? {} : { property })),
   };
 }
 
-/** The store's public face. */
-export type ServicesStore = ReturnType<typeof openServices>;
+/** The store as `data.services.load()` answers it: it follows the device's choice of business, and `at` binds it. */
+export type ServicesStoreRoot = ReturnType<typeof openServices>;
+
+/** The store a screen holds: bound to the business on screen (or following the choice, the root). */
+export type ServicesStore = ReturnType<ServicesStoreRoot['at']>;

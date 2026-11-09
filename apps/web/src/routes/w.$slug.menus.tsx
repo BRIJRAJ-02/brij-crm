@@ -1,7 +1,9 @@
-import { isDataError, type MenuStore, type PlaceHours } from '@crm/data';
+import { isDataError, type HospitalityStore, type MenuStoreRoot, type PlaceHours } from '@crm/data';
+import { useMemo } from 'react';
 import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AppOffScreen } from '../features/hospitality/AppOffScreen.tsx';
+import { useShownBusiness } from '../features/hospitality/shown-business.ts';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
 import { MenusPending } from '../features/menus/MenusPending.tsx';
 import { MenusScreen } from '../features/menus/MenusScreen.tsx';
@@ -12,8 +14,9 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 /** What the Menus screen opens on: the store with the draft read, and the business for the preview's header. */
 interface MenusData {
   readonly isInstalled: boolean;
-  readonly store?: MenuStore;
-  /** The business shown (spec 0065 H7): undefined is the first. A switch reads the page again. */
+  readonly store?: MenuStoreRoot;
+  readonly hospitality?: HospitalityStore;
+  /** The business the loader read (spec 0065 H7): undefined is the first. */
   readonly property?: string | undefined;
   readonly business: {
     readonly name: string;
@@ -45,6 +48,7 @@ export const Route = createFileRoute('/w/$slug/menus')({
     return {
       isInstalled,
       store,
+      hospitality,
       property: store.property(params.slug),
       business: {
         name: view?.profile?.name ?? '',
@@ -59,13 +63,37 @@ export const Route = createFileRoute('/w/$slug/menus')({
 });
 
 function PageRoute() {
-  const { isInstalled, store, business, property } = Route.useLoaderData();
+  const { isInstalled, store, hospitality, business, property } = Route.useLoaderData();
+  const { slug } = Route.useParams();
+  if (!isInstalled || store === undefined || hospitality === undefined) {
+    return <AppOffScreen slug={slug} page="menus" />;
+  }
+  return <ShownMenus store={store} hospitality={hospitality} fromLoader={property} business={business} />;
+}
+
+/**
+ * The chosen business's Menus (spec 0065 H7): a switch remounts the screen at once on that business's draft (loading
+ * until it arrives), and the store it holds is bound to it, so a press never reaches another business.
+ */
+function ShownMenus({
+  store,
+  hospitality,
+  fromLoader,
+  business,
+}: {
+  readonly store: MenuStoreRoot;
+  readonly hospitality: HospitalityStore;
+  readonly fromLoader: string | undefined;
+  readonly business: MenusData['business'];
+}) {
   const { slug } = Route.useParams();
   const view = Route.useSearch();
   const { toasts } = Route.useRouteContext();
-  if (!isInstalled || store === undefined) return <AppOffScreen slug={slug} page="menus" />;
-  // A business of its own starts the screen afresh: no open drawer or chosen place carries over (spec 0065 H7).
-  return <MenusScreen key={property ?? ''} store={store} slug={slug} toasts={toasts} business={business} view={view} />;
+  const property = useShownBusiness(hospitality, slug, fromLoader);
+  const bound = useMemo(() => store.at(property), [store, property]);
+  // The preview's header is the loader's business until its answer for the new one lands.
+  const shown = property === fromLoader ? business : { name: '', hours: {} };
+  return <MenusScreen key={property ?? ''} store={bound} slug={slug} toasts={toasts} business={shown} view={view} />;
 }
 
 function MenusError({ error }: ErrorComponentProps) {

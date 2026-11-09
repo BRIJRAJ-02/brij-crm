@@ -79,6 +79,7 @@ function dataOf(count: 1 | 2) {
       return Promise.resolve(true);
     },
     guardChoice: () => undefined,
+    dropGuard: () => undefined,
     business: () => heldOf(BUSINESS).held,
     apps: () => heldOf({ canManage: true, hasBusiness: true, apps: [] }).held,
   } as unknown as HospitalityStore;

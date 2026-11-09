@@ -552,6 +552,7 @@ function DesignBody({
                 store={hospitality}
                 slug={slug}
                 isDirty={isDirty}
+                isSaving={isSaving}
                 text={hospitalityStrings.discardDesignText}
               />
             )}
