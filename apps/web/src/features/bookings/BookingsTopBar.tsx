@@ -10,7 +10,8 @@ import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/rea
 import { useEffect, useRef, useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
 import { busyOf, findFreeSpan, freeSpanIn } from './free.ts';
-import { NewMeetingDialog } from './NewMeetingDialog.tsx';
+import { NewMeetingDialog, NewPageDialog, usePreloadParts } from './lazy-parts.tsx';
+import { useSettled } from './settling.ts';
 import { bookingsSearchOf, parseBookingsSearch } from './search.ts';
 import type { DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
@@ -19,7 +20,6 @@ import { useFirstDay } from '../workspace/first-day.ts';
 import { useCan, useWorkspaceObjects } from '../workspace/WorkspacePage.tsx';
 import { peopleSearchOf } from './people.ts';
 import { pageEditorHref } from '../booking/links.ts';
-import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 
 /** Props for BookingsTopBar. */
 export interface BookingsTopBarProps {
@@ -44,6 +44,8 @@ export interface BookingsTopBarProps {
  */
 export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAddPageClose }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  // The dialogs and the jump month, loaded once the tab has drawn: on every Bookings tab, since this bar is.
+  usePreloadParts();
   // The week on screen: the Calendar's, else this week.
   const { timeZone } = useFormatSettings();
   const { week } = bookingsSearchOf(
@@ -53,7 +55,9 @@ export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAd
     timeZone,
   );
   // The member's hours, when the Calendar has read them; else nine to five on weekdays.
-  const calendarData = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData;
+  const calendarData = useSettled(
+    useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData?.extras,
+  );
   const availability = calendarData?.availability;
   // Whom the member Manages, for New meeting's For (spec 0037, AC-1272), as the Calendar read them.
   const forPeople = calendarData?.forPeople;

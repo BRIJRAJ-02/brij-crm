@@ -21,6 +21,7 @@ import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 import { peopleSearchOf } from '../features/bookings/people.ts';
 import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
+import { settling, useSettled } from '../features/bookings/settling.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
@@ -58,29 +59,11 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
           .ready()
           .catch(() => undefined);
     }
-    const calendar = data.calendar.view(params.slug);
-    const [objects, pages, hours, , , , visible] = await Promise.all([
-      data.objects.list(params.slug),
-      // The Link filter's choices; a member without booking pages has none.
-      data.bookingPages.held(params.slug).catch(() => []),
-      // Where a day starts when time is drawn from the keyboard; without it, 9:00.
-      data.bookings.hours(params.slug, zone).catch(() => undefined),
-      week?.ready(),
-      calendar.ready().catch(() => undefined),
-      teamDay?.ready().catch(() => undefined),
-      // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
-      data.scheduling
-        .open()
-        .then((scheduling) => scheduling.visible(params.slug))
-        .catch(() => []),
-    ]);
-    const state = calendar.getSnapshot();
-    const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
-    // The caller comes first in their own reach: For lists the others they Manage.
-    const forPeople = visible.slice(1).filter((member) => member.canManage);
-    // Everyone the reader may see, for the Team day's People filter (spec 0030, AC-1434).
-    const members = visible.map(({ id, name }) => ({ id, name }));
-    return { objects, pages, connections, availability: hours?.availability, forPeople, members };
+    // Everything beside the week feeds menus, filters and dialogs, so the page waits for the week alone (load time,
+    // bookings redesign step 1): the rest starts now, beside it, and fills in as it lands (at once when cached).
+    const extras = settling(calendarExtras(data, params.slug, zone));
+    await Promise.all([week?.ready(), teamDay?.ready().catch(() => undefined)]);
+    return { extras };
   },
   pendingComponent: CalendarPending,
   errorComponent: CalendarError,
@@ -113,6 +96,50 @@ function heldTeamDay(search: BookingsSearch, data: DataLayer, slug: string, zone
   });
 }
 
+/** What the page shows before what it reads beside the week has landed: no choices yet, a 9:00 day. */
+const NO_EXTRAS: CalendarLoaded = {
+  objects: [],
+  pages: [],
+  connections: [],
+  availability: undefined,
+  forPeople: [],
+  members: [],
+};
+
+/**
+ * What the page reads beside the week, in parallel, none of it holding the page: the objects (record search), the Link
+ * filter's pages, the member's hours, their calendar connections and whom they may see and Manage. Each part that
+ * fails leaves its empty answer.
+ */
+async function calendarExtras(data: DataLayer, slug: string, zone: string): Promise<CalendarLoaded> {
+  const calendar = data.calendar.view(slug);
+  const [objects, pages, hours, , visible] = await Promise.all([
+    data.objects.list(slug).catch(() => []),
+    // The Link filter's choices; a member without booking pages has none.
+    data.bookingPages.held(slug).catch(() => []),
+    // Where a day starts when time is drawn from the keyboard; without it, 9:00.
+    data.bookings.hours(slug, zone).catch(() => undefined),
+    calendar.ready().catch(() => undefined),
+    // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
+    data.scheduling
+      .open()
+      .then((scheduling) => scheduling.visible(slug))
+      .catch(() => []),
+  ]);
+  const state = calendar.getSnapshot();
+  const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
+  return {
+    objects,
+    pages,
+    connections,
+    availability: hours?.availability,
+    // The caller comes first in their own reach: For lists the others they Manage.
+    forPeople: visible.slice(1).filter((member) => member.canManage),
+    // Everyone the reader may see, for the Team day's People filter (spec 0030, AC-1434).
+    members: visible.map(({ id, name }) => ({ id, name })),
+  };
+}
+
 /** What the loader read beside the week. */
 interface CalendarLoaded {
   readonly objects: readonly ObjectSummary[];
@@ -126,7 +153,8 @@ interface CalendarLoaded {
 }
 
 function CalendarRoute() {
-  return <Calendar {...Route.useLoaderData()} />;
+  const { extras } = Route.useLoaderData();
+  return <Calendar {...(useSettled(extras) ?? NO_EXTRAS)} />;
 }
 
 /**
@@ -136,7 +164,7 @@ function CalendarRoute() {
 function CalendarPending() {
   return (
     <LoadingNow>
-      <Calendar objects={[]} pages={[]} connections={[]} availability={undefined} forPeople={[]} members={[]} />
+      <Calendar {...NO_EXTRAS} />
     </LoadingNow>
   );
 }

@@ -53,10 +53,8 @@ import {
   useSchedulingStore,
 } from '../booking/CalendarHealth.tsx';
 import { newLinkOnlyPageHref } from '../booking/links.ts';
-import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
-import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import {
   BlockCard,
@@ -69,8 +67,8 @@ import {
   type BlockPreview,
 } from './BookingsScreen.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
-import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
-import { ReassignDialog } from './ReassignDialog.tsx';
+import type { NewMeeting, NewMeetingDialogProps } from './NewMeetingDialog.tsx';
+import { AwayReassignDialog, NewMeetingDialog, ReassignDialog, TimeOffDialog } from './lazy-parts.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 import { openingMinute, type MinuteSpan } from './team-grid.ts';

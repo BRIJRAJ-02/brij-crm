@@ -11,7 +11,6 @@ import {
   Callout,
   CalendarList,
   Link,
-  MonthCalendar,
   Skeleton,
   type CalendarListAccount,
 } from '@crm/ui';
@@ -20,6 +19,7 @@ import type { BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
 import { calendarsHref } from '../booking/links.ts';
 import { useCanConnectCalendar } from './toolbarSlot.ts';
+import { MonthCalendar } from './lazy-parts.tsx';
 
 /** Where the open or folded panel is kept, per browser. */
 const PANEL_KEY = 'crm.bookings.calendarsPanel';

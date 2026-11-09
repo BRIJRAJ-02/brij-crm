@@ -2502,6 +2502,7 @@ export function createDataLayer({
   // a team never reads in step.
   const schedulesDue = new Set<string>();
   router.on('schedules', (workspace) => {
+    dropHours(workspace);
     if (schedulesDue.has(workspace)) return;
     schedulesDue.add(workspace);
     setTimeout(
@@ -2668,6 +2669,7 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     schedules.changed(workspace);
+    dropHours(workspace);
     // Bookings hear of changes by their own event now (B-17): a reset reads what Bookings holds again.
     refreshBookings(workspace);
     accessLoaded?.teamWeek.changed(workspace);
@@ -2945,6 +2947,20 @@ export function createDataLayer({
     mintId,
   });
 
+  // The member's default schedule's hours, as Bookings' Calendar reads them for where a day starts and its open hours:
+  // one read per workspace and zone, kept until a schedule changes (a write here, a `schedules` event, a resync), so a
+  // hover's preload of the Calendar never reads them again. A failed read is dropped, to be tried again next time.
+  const hoursRead = new Map<string, Promise<{ availability: BookingAvailability }>>();
+  const hoursKey = (workspace: string, timeZone: string) => `${workspace}\u0000${timeZone}`;
+  const dropHours = (workspace: string) => {
+    for (const key of [...hoursRead.keys()]) if (key.startsWith(`${workspace}\u0000`)) hoursRead.delete(key);
+  };
+  /** A schedule write, dropping the cached hours once it settles (landed or refused, either may have changed them). */
+  const schedulesWrite = <T>(workspace: string, write: Promise<T>): Promise<T> =>
+    write.finally(() => {
+      dropHours(workspace);
+    });
+
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
   const schedules = lazySchedules(() =>
@@ -2953,12 +2969,31 @@ export function createDataLayer({
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() => call((options) => api.schedules.list(input, options))),
-          create: (input) => call((options) => api.schedules.create({ ...input, mutationId: mintId() }, options)),
-          update: (input) => call((options) => api.schedules.update({ ...input, mutationId: mintId() }, options)),
+          create: (input) =>
+            schedulesWrite(
+              input.workspace,
+              call((options) => api.schedules.create({ ...input, mutationId: mintId() }, options)),
+            ),
+          update: (input) =>
+            schedulesWrite(
+              input.workspace,
+              call((options) => api.schedules.update({ ...input, mutationId: mintId() }, options)),
+            ),
           setDefault: (input) =>
-            call((options) => api.schedules.setDefault({ ...input, mutationId: mintId() }, options)),
-          duplicate: (input) => call((options) => api.schedules.duplicate({ ...input, mutationId: mintId() }, options)),
-          remove: (input) => call((options) => api.schedules.delete({ ...input, mutationId: mintId() }, options)),
+            schedulesWrite(
+              input.workspace,
+              call((options) => api.schedules.setDefault({ ...input, mutationId: mintId() }, options)),
+            ),
+          duplicate: (input) =>
+            schedulesWrite(
+              input.workspace,
+              call((options) => api.schedules.duplicate({ ...input, mutationId: mintId() }, options)),
+            ),
+          remove: (input) =>
+            schedulesWrite(
+              input.workspace,
+              call((options) => api.schedules.delete({ ...input, mutationId: mintId() }, options)),
+            ),
         },
         mintId,
         watch: (workspace) => watch(workspace),
@@ -5435,15 +5470,30 @@ export function createDataLayer({
       reloadAll: (workspace: string): void => {
         reloadBookings(workspace);
       },
-      /** The member's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone`. */
-      hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
-        call((options) => api.bookings.hours({ workspace, timeZone }, options)),
+      /**
+       * The member's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone`. Read once per
+       * workspace and zone and kept until a schedule changes, so a preload never reads them again.
+       */
+      hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> => {
+        const key = hoursKey(workspace, timeZone);
+        const held = hoursRead.get(key);
+        if (held !== undefined) return held;
+        const reading = call((options) => api.bookings.hours({ workspace, timeZone }, options));
+        hoursRead.set(key, reading);
+        reading.catch(() => {
+          if (hoursRead.get(key) === reading) hoursRead.delete(key);
+        });
+        return reading;
+      },
       /** Replaces the member's default schedule's hours; their pages that follow the default book by them at once. */
       setHours: (
         workspace: string,
         availability: BookingAvailability,
       ): Promise<{ availability: BookingAvailability }> =>
-        call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
+        schedulesWrite(
+          workspace,
+          call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
+        ),
       /**
        * Book someone in, in the member's own time (spec 0027): settles once the
        * booking is made, and every bookings list and range is read again.
