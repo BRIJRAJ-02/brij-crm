@@ -10,7 +10,7 @@ import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { bookingsSettingsNav, visibleBookingsSettingsNav } from '../bookings/settings-nav.ts';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
-import { availabilityHref, calendarsHref, linksHref } from '../booking/links.ts';
+import { availabilityHref, calendarsHref, linksHref, routingHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
 import { importHref } from '../imports/paths.ts';
 import { listHref } from '../lists/paths.ts';
@@ -121,6 +121,18 @@ export function pageCommands(
           terms: strings.availabilityTerms,
           run: go(availabilityHref(slug)),
         },
+        // Bookings › Routing, for holders of routing.manage, as its tab is (its Settings entry went, 9 November 2026).
+        ...(permissions?.includes('routing.manage') === true
+          ? [
+              {
+                id: 'page:routing',
+                name: strings.routing,
+                icon: 'git-branch',
+                terms: strings.routingTerms,
+                run: go(routingHref(slug)),
+              } satisfies Command,
+            ]
+          : []),
         // Connecting a calendar is the one thing every Bookings tab needs (critic B, 5 November 2026: "calendar" in
         // the menu found nothing to do): an action, opening Bookings settings › Calendars. Teams and the Calendars
         // page itself are Bookings settings' pages (9 November 2026), so the menu lists them under it. Only where the

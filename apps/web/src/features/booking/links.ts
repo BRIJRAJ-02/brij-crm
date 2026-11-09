@@ -77,6 +77,9 @@ export const bookingsSettingsHref = (slug: string, page?: BookingsSettingsPage) 
 /** Bookings settings › Calendars: the one place a member connects a calendar (specs 0024 and 0026). */
 export const calendarsHref = (slug: string) => bookingsSettingsHref(slug, 'calendars');
 
+/** Bookings › Routing, for holders of `routing.manage` (spec 0037, AC-1383). */
+export const routingHref = (slug: string) => `/w/${slug}/bookings/routing`;
+
 /** Bookings' own tab (its week or list, as the member left it). */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 

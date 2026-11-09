@@ -18,7 +18,7 @@ import {
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import type { ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
-import { bookingsHref } from '../booking/links.ts';
+import { bookingsHref, bookingsSettingsHref } from '../booking/links.ts';
 import { useBookingsSettingsFrame } from '../bookings/settings-frame.ts';
 import { strings as bookingsSettings } from '../bookings/settings-strings.ts';
 import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -238,7 +238,7 @@ export function SettingsPage({
             ) : (
               <SettingsLayout
                 header="bar"
-                {...(bookingsFrame === undefined
+                {...(bookingsFrame === undefined || bookingsFrame.nav.length === 0
                   ? {}
                   : {
                       nav: bookingsFrame.nav,
@@ -331,6 +331,20 @@ export function settingsCrumbs(slug: string): readonly Crumb[] {
 export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'objects' | 'home' }) {
   const { slug = '' } = useParams({ strict: false });
   const isObject = backTo === 'objects';
+  // Inside Bookings settings the way back stays there, never the app's Settings.
+  const bookingsFrame = useBookingsSettingsFrame();
+  if (bookingsFrame !== undefined) {
+    return (
+      <SettingsPage title={strings.missingTitle} keepsTitle>
+        <EmptyState
+          layout="block"
+          icon="search"
+          title={strings.missingText}
+          actions={<Link href={bookingsSettingsHref(slug)}>{bookingsSettings.backToSettings}</Link>}
+        />
+      </SettingsPage>
+    );
+  }
   return (
     <SettingsPage title={strings.missingTitle} keepsTitle {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
       <EmptyState

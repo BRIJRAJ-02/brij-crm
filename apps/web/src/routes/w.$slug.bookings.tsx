@@ -1,7 +1,7 @@
 import { useCalendar } from '@crm/data/react';
 import { createFileRoute, Outlet, useLocation, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { BookingsModuleTabs, BookingsScope, BookingsTabBody } from '../features/bookings/BookingsTabs.tsx';
+import { BookingsModuleTabs, BookingsScope, viewHasTools } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
 import { rosterIsShown } from '../features/booking/links.ts';
 import { BOOKINGS_TABS, bookingsViewOf, tabOfView, type BookingsView } from '../features/bookings/tabs.ts';
@@ -11,6 +11,7 @@ import {
   BookingsCalendarSync,
   BookingsHosts,
   BookingsNewPage,
+  BookingsToolbarSlot,
 } from '../features/bookings/toolbarSlot.ts';
 import { useBookingArrivals } from '../features/bookings/useBookingArrivals.ts';
 import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -60,6 +61,9 @@ function BookingsRoute() {
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
   // screen): Availability's New schedule, the Roster's Set usual hours, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  // Pages' search and Routing's views, in the TopBar before whose bookings show: no second bar under the header.
+  const [toolsSlot, setToolsSlot] = useState<HTMLElement | null>(null);
+  const hasTools = viewHasTools(view);
   // Mine or Everyone (the owner's ask of 29 October 2026): an admin's choice, and anyone's whose scheduling reach
   // sees a colleague (spec 0037, AC-1262), kept here so Calendar and List share it and its switch stands still on
   // the strip as they swap.
@@ -95,13 +99,16 @@ function BookingsRoute() {
                     slug={slug}
                     tabs={<BookingsModuleTabs slug={slug} tab={tab} tabs={tabs} />}
                     scope={
-                      <BookingsScope
-                        slug={slug}
-                        tab={tab}
-                        view={view}
-                        hasRoster={hasRoster}
-                        hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
-                      />
+                      <>
+                        {hasTools && <div ref={setToolsSlot} />}
+                        <BookingsScope
+                          slug={slug}
+                          tab={tab}
+                          view={view}
+                          hasRoster={hasRoster}
+                          hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
+                        />
+                      </>
                     }
                     actionSlot={ownsAction ? setActionSlot : undefined}
                     isAddingPage={isAddingPage}
@@ -112,9 +119,9 @@ function BookingsRoute() {
                   />
                 ),
                 body: (
-                  <BookingsTabBody view={view}>
+                  <BookingsToolbarSlot value={hasTools ? toolsSlot : null}>
                     <Outlet />
-                  </BookingsTabBody>
+                  </BookingsToolbarSlot>
                 ),
               }}
             />

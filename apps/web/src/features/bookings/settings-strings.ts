@@ -16,4 +16,6 @@ export const strings = {
   brand: 'Brand',
   /** On a phone, where the sidebar is hidden: the chevron back to Bookings. */
   backToBookings: 'Bookings',
+  /** A Bookings settings address that names nothing (or a page the member may not open): the way back. */
+  backToSettings: 'Back to Bookings settings',
 } as const;
