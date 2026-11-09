@@ -271,6 +271,7 @@ export const ACCESS_TABLE = {
   // Page only people (9 Nov 2026): added, removed and their handle checked from Team pages.
   addPageOnlyPerson: { permission: 'link_pages.manage_team' },
   removePageOnlyPerson: { permission: 'link_pages.manage_team' },
+  namePageOnlyPerson: { permission: 'link_pages.manage_team' },
   checkTeamHandle: { permission: 'link_pages.manage_team' },
   suggestTeamHandle: { permission: 'link_pages.manage_team' },
   readLinkPageEditedBy: { anyMember: true },
