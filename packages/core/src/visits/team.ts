@@ -28,7 +28,14 @@ import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { CatalogueDeps } from './catalogue.ts';
-import { ALL_REACH, PLACE_OUT_OF_REACH, reachesPlace, reachOf, type Reach } from '../hospitality/reach.ts';
+import {
+  ALL_REACH,
+  PLACE_OUT_OF_REACH,
+  propertyReachSql,
+  reachesPlace,
+  reachOf,
+  type Reach,
+} from '../hospitality/reach.ts';
 import { readServicePlaces } from './catalogue.ts';
 
 /** The refusal for a change to a staff profile by someone who works in only some businesses or places. */
@@ -110,16 +117,18 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean, reach: Reach
       where ends_at > now() - interval '35 days' order by starts_at limit 2000
     `)
   ).rows;
+  // Services and categories of the businesses the reader sees only (AC-6596).
+  const seenBusiness = propertyReachSql(reach, sql`property_id`) ?? sql`true`;
   const services = (
     await tx.execute<{ id: string; name: string; category_id: string | null; staff_rule: 'all' | 'chosen' }>(sql`
       select id::text, name, category_id::text, staff_rule from services
-      where archived_at is null and capacity_mode = 'one' and staff_rule <> 'none'
+      where archived_at is null and capacity_mode = 'one' and staff_rule <> 'none' and ${seenBusiness}
       order by position, id
     `)
   ).rows;
   const categories = (
     await tx.execute<{ id: string; name: string }>(
-      sql`select id::text, name from service_categories order by position, id`,
+      sql`select id::text, name from service_categories where ${seenBusiness} order by position, id`,
     )
   ).rows;
   const members = canManage

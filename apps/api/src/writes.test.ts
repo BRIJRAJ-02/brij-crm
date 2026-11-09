@@ -146,6 +146,7 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.resources',
   // The workspace's properties (spec 0065 H7, slice 2).
   'hospitality.properties',
+  'hospitality.memberReach',
   // Menu QR's codes (spec 0065, H2).
   'hospitality.qrCodes',
   // The places a link page's Menu or Reserve block can name (spec 0065, AC-6528).

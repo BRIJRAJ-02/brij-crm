@@ -187,7 +187,11 @@ export async function readCatalogue(
       archived: row.archived,
     })),
     places,
-    staff: staff.map((row) => ({ id: row.id, name: row.name, placeIds: row.place_ids ?? [] })),
+    // The staff who work in a place the reader reaches, with only those places (AC-6596).
+    staff: staff.flatMap((row) => {
+      const placeIds = (row.place_ids ?? []).filter((placeId) => reachesPlace(reach, placeId));
+      return reach.all || placeIds.length > 0 ? [{ id: row.id, name: row.name, placeIds }] : [];
+    }),
     resources: resources
       .filter((row) => reachesPlace(reach, row.place_id))
       .map((row) => ({ id: row.id, placeId: row.place_id, label: row.label, kind: row.kind })),
