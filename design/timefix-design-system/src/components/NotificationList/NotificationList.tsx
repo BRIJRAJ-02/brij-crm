@@ -22,12 +22,12 @@ export interface Notification {
   readonly read: boolean;
 }
 
-/** A bell with a count badge that slides and pops in when something new arrives (transitions.dev 03 notification badge). Pressing it opens `children` in a popover. */
-export function NotificationBell({ count, children }: { readonly count: number; readonly children: ReactNode }) {
+/** A bell with a count badge that slides and pops in when something new arrives (transitions.dev 03 notification badge). Pressing it opens `children` in a popover. Pass `isOpen`/`onOpenChange` to close it from outside, e.g. once a notification is opened. */
+export function NotificationBell({ count, children, isOpen, onOpenChange }: { readonly count: number; readonly children: ReactNode; readonly isOpen?: boolean; readonly onOpenChange?: (open: boolean) => void }) {
   const shown = useRef(count);
   if (count > 0) shown.current = count;
   return (
-    <DialogTrigger>
+    <DialogTrigger isOpen={isOpen} onOpenChange={onOpenChange}>
       <span className="tf-bell">
         <Tooltip label="Notifications" shortcut="G N"><IconButton label={count ? `Notifications, ${count} unread` : 'Notifications'} variant="secondary"><Bell size={16} strokeWidth={1.75} /></IconButton></Tooltip>
         <span className="tf-bell__badge" data-open={count > 0} aria-hidden="true"><span className="tf-bell__dot">{shown.current > 9 ? '9+' : shown.current}</span></span>

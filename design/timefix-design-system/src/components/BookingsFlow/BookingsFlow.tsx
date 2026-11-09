@@ -58,6 +58,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const [editor, setEditor] = useState<{ readonly id: string; readonly draft: BookingPage; readonly section?: EditorSection }>();
   const [guest, setGuest] = useState<{ readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string }>();
   const [meetingId, setMeetingId] = useState<string>();
+  const [bellOpen, setBellOpen] = useState(false);
   const [share, setShare] = useState<{ readonly kind: ShareDialogKind; readonly id: string }>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [freshPage, setFreshPage] = useState<string>();
@@ -241,8 +242,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   );
 
   const bell = (
-    <NotificationBell count={unread}>
-      <NotificationList items={state.notifications} onOpen={(id) => { dispatch({ type: 'note/read', id, read: true }); setMeetingId(id); }}
+    <NotificationBell count={unread} isOpen={bellOpen} onOpenChange={setBellOpen}>
+      <NotificationList items={state.notifications} onOpen={(id) => {
+        /* Picking a notification closes the inbox first; the meeting opens as the popover leaves, so the two never stack. */
+        dispatch({ type: 'note/read', id, read: true });
+        setBellOpen(false);
+        window.setTimeout(() => setMeetingId(id), 150);
+      }}
         onReadChange={(id, read) => dispatch({ type: 'note/read', id, read })} onReadAll={() => dispatch({ type: 'note/read-all' })} onArchive={(id) => dispatch({ type: 'note/archive', id })} />
     </NotificationBell>
   );
