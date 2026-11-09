@@ -31,7 +31,7 @@ import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import { addDays, wallToInstant } from '../hospitality/hours.ts';
-import { currentProperty } from '../hospitality/property.ts';
+import { placeReachSql, propertyInReach, reachesPlace, reachOf, requirePlaceInReach } from '../hospitality/reach.ts';
 import { type SlotCache } from './book.ts';
 import { loadVisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
@@ -339,6 +339,8 @@ export async function getTableSetup(scope: EngineScope, input: { readonly placeI
   const placeId = checkId(input.placeId, 'That place doesn’t exist.');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    // A place outside the member's reach is no such place (spec 0065 H7, AC-6595), here and in every call below.
+    await requirePlaceInReach(tx, scope, placeId);
     return readSetup(tx, placeId, readerOf(scope));
   });
 }
@@ -362,6 +364,7 @@ export async function saveTableSetup(
   const holds = JSON.stringify([...rules.holds].sort((a, b) => a.size - b.size));
   const { result } = await runWrite(scope, async ({ tx }) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    await requirePlaceInReach(tx, scope, placeId);
     const facts = await placeFacts(tx, placeId);
     await lockVisit(tx, scope.workspaceId, placeId, []);
     // Publish refuses a page that would be broken (spec 0068): the first step not done, as its one line fix.
@@ -425,6 +428,7 @@ export async function setReservationAlert(
   if (typeof input.on !== 'boolean') throw inputInvalid('on', 'Choose on or off.');
   const { result } = await runWrite(scope, async ({ tx }) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    await requirePlaceInReach(tx, scope, placeId);
     await placeFacts(tx, placeId);
     await tx.execute(sql`
       insert into reservation_alerts (workspace_id, place_id, member_id, enabled)
@@ -536,11 +540,14 @@ export async function listServicePlaces(
   requireFloorReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
-    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    // Only the businesses and places the member reaches (spec 0065 H7, AC-6596), on both lists.
+    const reach = await reachOf(tx, scope);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'see', reach);
+    const reached = placeReachSql(reach, sql`id`) ?? sql`true`;
     const rows = (
       await tx.execute<{ id: string; name: string; time_zone: string; hours: PlaceHours }>(sql`
         select id::text as id, name, time_zone, hours from places
-        where workspace_id = ${scope.workspaceId}::uuid and property_id = ${property.id}::uuid
+        where workspace_id = ${scope.workspaceId}::uuid and property_id = ${property.id}::uuid and ${reached}
         order by position, id
       `)
     ).rows;
@@ -548,7 +555,7 @@ export async function listServicePlaces(
     const elsewhere = (
       await tx.execute<{ id: string; property_id: string }>(sql`
         select id::text as id, property_id::text as property_id from places
-        where workspace_id = ${scope.workspaceId}::uuid and property_id <> ${property.id}::uuid
+        where workspace_id = ${scope.workspaceId}::uuid and property_id <> ${property.id}::uuid and ${reached}
       `)
     ).rows;
     return {
@@ -566,6 +573,7 @@ export async function readServiceFloor(scope: EngineScope, input: { readonly pla
   const placeId = checkId(input.placeId, 'That place doesn’t exist.');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    await requirePlaceInReach(tx, scope, placeId);
     await placeFacts(tx, placeId);
     const areas = (
       await tx.execute<{ id: string; name: string; position: number }>(sql`
@@ -616,6 +624,7 @@ export async function listServiceDay(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw inputInvalid('date', 'Pick a day.');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    await requirePlaceInReach(tx, scope, placeId);
     const { zone } = await placeFacts(tx, placeId);
     const from = wallToInstant(input.date, 0, zone);
     const to = wallToInstant(addDays(input.date, 1), 0, zone);
@@ -800,7 +809,12 @@ export async function setVisitStatus(
         select a.place_id::text, ${TABLE_ONLY} as table_only from appointments a where a.id = ${id}::uuid
       `)
       ).rows;
-      if (found === undefined || (!found.table_only && !calendar)) {
+      // A reservation at a place outside the member's reach is no such reservation (AC-6595).
+      if (
+        found === undefined ||
+        (!found.table_only && !calendar) ||
+        !reachesPlace(await reachOf(tx, scope), found.place_id)
+      ) {
         throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
       }
       if (found.table_only) await requireApp(tx, scope.workspaceId, 'table_seating');

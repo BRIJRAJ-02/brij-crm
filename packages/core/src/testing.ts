@@ -27,6 +27,8 @@ export interface TestScopeInput {
   readonly limits?: Partial<Limits>;
   /** A member's signed in identity (`auth.user.id`), for what belongs to the person: their handle. */
   readonly userId?: string;
+  /** A custom role the member holds (spec 0037), with the permissions it grants; `role` is then `member`. */
+  readonly customRole?: { readonly id: string; readonly permissions: readonly string[] };
 }
 
 function accessOf(input: TestScopeInput): Access {
@@ -43,8 +45,12 @@ function accessOf(input: TestScopeInput): Access {
         teamIds: input.rules?.teamIds ?? [],
         ...(input.rules?.teamMemberIds === undefined ? {} : { teamMemberIds: input.rules.teamMemberIds }),
         ...(input.userId === undefined ? {} : { userId: input.userId }),
+        ...(input.customRole === undefined ? {} : { customRoleId: input.customRole.id }),
       },
       input.rules ?? NO_RULES,
+      input.customRole === undefined
+        ? undefined
+        : { permissions: input.customRole.permissions, defaultObjectLevel: 'write' },
     );
   }
   throw new Error('An automation has no access of its own yet.');

@@ -33,6 +33,7 @@ import { inputInvalid, isRefusal, postgresError, refuse, type RefusalError } fro
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { APP_NOT_INSTALLED_MESSAGE, auditSetup, installedHospitalityApps } from '../hospitality/gate.ts';
 import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
+import { requirePlaceInReach } from '../hospitality/reach.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { queueVisitMail, visitManageToken } from './mail.ts';
@@ -266,7 +267,12 @@ export async function offerVisitTimes(
   const onlineOnly = query.online;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(query.date)) throw inputInvalid('date', 'Pick a day.');
   // The app is checked before the cache, so an answer cached before a removal is never served after it.
-  await inWorkspace(scope, (tx) => requireVisitApp(tx, scope.workspaceId, items));
+  await inWorkspace(scope, async (tx) => {
+    await requireVisitApp(tx, scope.workspaceId, items);
+    // Before the cache too: a place outside the member's reach is no such place (spec 0065 H7, AC-6595). A guest's
+    // door is never narrowed (`reachOf` reaches everything for anyone but a member).
+    await requirePlaceInReach(tx, scope, placeId);
+  });
   const key = [
     scope.workspaceId,
     placeId,
@@ -528,6 +534,7 @@ export async function placeVisit(
     scope,
     async (tx): Promise<{ readonly again: BookedVisit } | { readonly inputs: VisitInputs }> => {
       await requireVisitApp(tx, scope.workspaceId, items);
+      await requirePlaceInReach(tx, scope, placeId);
       const again = await replayOf(tx, scope.workspaceId, placeId, key);
       if (again !== undefined) return { again };
       return {

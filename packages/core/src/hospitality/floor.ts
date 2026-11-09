@@ -23,6 +23,7 @@ import { checkId, isUuid } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
+import { requirePlaceInReach } from './reach.ts';
 
 const { areas, places, resources } = schema;
 
@@ -88,6 +89,8 @@ async function onPlace(
   const id = checkId(placeId, PLACE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    // A place outside the member's reach is no such place (AC-6595).
+    await requirePlaceInReach(tx, scope, id);
     // Only a write takes the place's lock; a read never waits behind one.
     if (what !== undefined) await lockKey(tx, `place:${scope.workspaceId}:${id}`);
     const [place] = await tx

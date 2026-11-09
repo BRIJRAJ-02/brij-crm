@@ -15,6 +15,7 @@ import { auditSetup, hospitalityMember } from '../hospitality/gate.ts';
 import { writeAudits, type AuditEntry } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { requireApp } from '../hospitality/gate.ts';
+import { reachOf } from '../hospitality/reach.ts';
 import { personLockKeys } from './locks.ts';
 
 /** One overlap that stops a link: the visit's hold and the meeting, by their times. */
@@ -51,6 +52,10 @@ export async function linkStaffMember(
     async (context) => {
       const { tx } = context;
       await requireApp(tx, scope.workspaceId, 'appointments');
+      // A profile works across every business (spec 0065 H7): only someone who reaches all of them links it.
+      if (!(await reachOf(tx, scope)).all) {
+        throw refuse('FORBIDDEN', 'Staff profiles work across every business. Ask an admin to change this one.');
+      }
       // The person locks come BEFORE the staff row's lock, in the order a booking takes them (a booking holds a person
       // lock while its holds take a key share on this row), so a link and a booking never wait on each other in a ring.
       const read = async (lock: boolean) =>

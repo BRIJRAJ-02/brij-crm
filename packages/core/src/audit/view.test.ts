@@ -126,6 +126,12 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'member.role_changed': [
     row('member.role_changed', 'member', bea, { before: { role: 'member' }, after: { role: 'admin' } }),
   ],
+  'member.reach_changed': [
+    row('member.reach_changed', 'member', bea, {
+      before: { all: true, properties: [], places: [] },
+      after: { all: false, properties: ['p1'], places: ['a', 'b'] },
+    }),
+  ],
   'member.removed': [
     row('member.removed', 'member', bea, { before: { status: 'active' }, after: { status: 'removed' } }),
   ],
@@ -468,6 +474,8 @@ describe('toEntryView, per action', () => {
   });
 
   it('names people as they are now: active, former, deleted, the system, and a row it can’t read', () => {
+    // Where a member may work (spec 0065 H7): counted, never named.
+    expect(only('member.reach_changed').params).toEqual({ all: false, businesses: 1, places: 2 });
     expect(only('member.role_changed')).toMatchObject({
       actor: { kind: 'member', memberId: ada, name: 'Ada Lovelace', state: 'active' },
       target: { type: 'member', person: { kind: 'member', name: 'Bea Rao', state: 'former' } },

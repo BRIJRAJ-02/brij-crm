@@ -15,6 +15,7 @@ import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { isUuid } from '../engine/ids.ts';
 import { installedHospitalityApps } from '../hospitality/gate.ts';
+import { placeReachSql, reachOf } from '../hospitality/reach.ts';
 import { reservePathOf } from '../hospitality/public-page.ts';
 import { businessMenuOf } from '../hospitality/public-menu.ts';
 import { readTableService } from '../visits/table-service.ts';
@@ -104,10 +105,12 @@ export async function listPlaceChoices(scope: EngineScope): Promise<readonly Pro
   return inWorkspace(scope, async (tx) => {
     const apps = await installedHospitalityApps(tx, scope.workspaceId);
     if (!apps.has('menu') && !apps.has('table_seating')) return [];
+    // Only the places the member reaches (spec 0065 H7, AC-6596).
+    const reach = await reachOf(tx, scope);
     const rows = await tx
       .select({ id: places.id })
       .from(places)
-      .where(eq(places.workspaceId, scope.workspaceId))
+      .where(and(eq(places.workspaceId, scope.workspaceId), placeReachSql(reach, places.id)))
       .orderBy(places.position, places.id);
     const facts = await placeFactsOf(
       tx,

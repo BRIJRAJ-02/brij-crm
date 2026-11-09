@@ -40,6 +40,7 @@ import { appointmentsReadiness } from '../visits/readiness.ts';
 import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp, requireBusiness } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
 import { currentProperty, type CurrentProperty } from './property.ts';
+import { propertyInReach, propertyReachSql, reachOf } from './reach.ts';
 
 const { businessPages, businessPhotos, placePages, placeSlugs, places, propertyHandles } = schema;
 
@@ -52,9 +53,16 @@ export interface InBusiness {
   readonly propertyId?: string | undefined;
 }
 
-/** The business a call names (another workspace's reads as none: `NOT_FOUND`), else the first. */
-const businessOf = (tx: WorkspaceTx, workspaceId: string, where: InBusiness): Promise<CurrentProperty> =>
-  currentProperty(tx, workspaceId, where.propertyId);
+/**
+ * The business a call names (another workspace's, or one outside the member's reach, reads as none: `NOT_FOUND`),
+ * else the first the member sees. The page is the whole business's: changing it needs all of it in reach (AC-6594).
+ */
+const businessOf = (
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  where: InBusiness,
+  need: 'see' | 'whole' = 'whole',
+): Promise<CurrentProperty> => propertyInReach(tx, scope, where.propertyId, need);
 
 /** Whether a business is its workspace's first: the one that keeps the workspace's handle and claims at once. */
 async function isFirst(tx: WorkspaceTx, workspaceId: string, property: CurrentProperty): Promise<boolean> {
@@ -230,7 +238,7 @@ export async function getBusinessPage(scope: EngineScope, where: InBusiness = {}
   requirePermission(scope, 'hospitality.manage');
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    return viewOf(tx, scope.workspaceId, await businessOf(tx, scope.workspaceId, where));
+    return viewOf(tx, scope.workspaceId, await businessOf(tx, scope, where, 'see'));
   });
 }
 
@@ -329,7 +337,7 @@ export async function claimBusinessHandle(
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     await requireBusiness(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, input);
+    const property = await businessOf(tx, scope, input);
     if (property.name === null) throw refuse('CONFLICT', 'Set up your business first.');
     await ensurePageRow(tx, scope.workspaceId, property.id, by);
     const before = await pageRowOf(tx, scope.workspaceId, property.id);
@@ -397,7 +405,7 @@ export async function setPlaceSlug(
   const placeId = checkId(input.placeId, PLACE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, input);
+    const property = await businessOf(tx, scope, input);
     await lockKey(tx, `place-slugs:${scope.workspaceId}`);
     const [place] = await tx
       .select({ id: places.id, propertyId: places.propertyId })
@@ -445,7 +453,7 @@ export async function saveBusinessPage(
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, input);
+    const property = await businessOf(tx, scope, input);
     const photoIds = input.draft.gallery.map((photo) => photo.id);
     if (photoIds.length > 0) {
       const found = await tx
@@ -530,7 +538,7 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, where);
+    const property = await businessOf(tx, scope, where);
     await lockKey(tx, `business-page:${scope.workspaceId}`);
     await ensurePageRow(tx, scope.workspaceId, property.id, by);
     await ensurePlaceSlugs(tx, scope.workspaceId, property.id);
@@ -592,7 +600,7 @@ export async function discardBusinessPage(scope: EngineScope, where: InBusiness 
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, where);
+    const property = await businessOf(tx, scope, where);
     await tx
       .update(businessPages)
       .set({
@@ -627,7 +635,7 @@ export async function addBusinessPhoto(
   const id = checkId(input.id, 'That photo doesn’t exist.');
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await businessOf(tx, scope.workspaceId, input);
+    const property = await businessOf(tx, scope, input);
     await lockKey(tx, `business-page:${scope.workspaceId}`);
     const [held] = await tx
       .select({ n: count() })
@@ -664,7 +672,14 @@ export async function readBusinessPhoto(
     const [row] = await tx
       .select({ path: businessPhotos.path, type: businessPhotos.type })
       .from(businessPhotos)
-      .where(and(eq(businessPhotos.workspaceId, scope.workspaceId), eq(businessPhotos.id, id)));
+      .where(
+        and(
+          eq(businessPhotos.workspaceId, scope.workspaceId),
+          eq(businessPhotos.id, id),
+          // A picture of a business outside the reader's reach is absent (AC-6595).
+          propertyReachSql(await reachOf(tx, scope), businessPhotos.propertyId),
+        ),
+      );
     return row;
   });
 }

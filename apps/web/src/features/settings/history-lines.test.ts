@@ -175,6 +175,28 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed a deleted user’s role from Admin to Member',
   ],
   [
+    {
+      ...base,
+      action: 'member.reach_changed',
+      target: member(bea),
+      params: { all: false, businesses: 1, places: 2 },
+    },
+    'Ada Lovelace limited Bea Rao to 1 business and 2 places',
+  ],
+  [
+    {
+      ...base,
+      action: 'member.reach_changed',
+      target: member(bea),
+      params: { all: false, businesses: 0, places: 1 },
+    },
+    'Ada Lovelace limited Bea Rao to 1 place',
+  ],
+  [
+    { ...base, action: 'member.reach_changed', target: member(bea), params: { all: true, businesses: 0, places: 0 } },
+    'Ada Lovelace let Bea Rao work in every business',
+  ],
+  [
     { ...base, action: 'member.removed', target: member(bea), params: {} },
     'Ada Lovelace removed Bea Rao from the workspace',
   ],

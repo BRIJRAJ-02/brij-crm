@@ -3469,6 +3469,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // Properties (spec 0065 H7): the business set up first (and a second property added before a removal).
   'hospitality.createProperty': 2,
   'hospitality.removeProperty': 3,
+  // The business set up and a teammate invited and accepted first.
+  'hospitality.setMemberReach': 4,
   'hospitality.updatePlace': 2,
   'hospitality.saveArea': 2,
   'hospitality.deleteArea': 3,
@@ -3901,6 +3903,18 @@ Object.assign(WRITES, {
     });
     await m.client.hospitality.removeProperty({ workspace: m.slug, property, mutationId });
     return [{ kind: 'nav' }, { kind: 'nav' }, { kind: 'nav', mutation_id: mutationId }];
+  },
+  // Where a teammate may work (spec 0065 H7, AC-6597): one `nav` row naming them, so their switcher reads again.
+  'hospitality.setMemberReach': async (m: Member, mutationId: string) => {
+    const { placeId } = await hospitalityOf(m);
+    const mate = await teammate(m);
+    await m.client.hospitality.setMemberReach({
+      workspace: m.slug,
+      memberId: mate.memberId,
+      reach: { all: false, properties: [], places: [placeId] },
+      mutationId,
+    });
+    return [{ kind: 'nav' }, { kind: 'members' }, { kind: 'nav', item_ids: [mate.memberId], mutation_id: mutationId }];
   },
   'hospitality.createPlace': async (m: Member, mutationId: string) => {
     await hospitalityOf(m);

@@ -19,6 +19,7 @@ import { refuse } from '../engine/refusals.ts';
 import { countPageVisit } from '../insights/visits.ts';
 import { auditSetup, appInstalled, hospitalityMember, requireApp } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
+import { requirePlaceInReach } from './reach.ts';
 import type { MenuEntry } from './public-menu.ts';
 
 const { areas, menuDrafts, menuVersions, places, resources } = schema;
@@ -89,6 +90,8 @@ export async function listQrCodes(scope: EngineScope, input: { readonly placeId:
   const id = checkId(input.placeId, PLACE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu_qr');
+    // Outside reach reads as no such place (AC-6595).
+    await requirePlaceInReach(tx, scope, id);
     return readQrCodes(tx, scope.workspaceId, id);
   });
 }
@@ -107,6 +110,7 @@ export async function regenerateTableCode(
   const resourceId = checkId(input.resourceId, TABLE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu_qr');
+    await requirePlaceInReach(tx, scope, placeId);
     await lockKey(tx, `place:${scope.workspaceId}:${placeId}`);
     const changed = await tx
       .update(resources)

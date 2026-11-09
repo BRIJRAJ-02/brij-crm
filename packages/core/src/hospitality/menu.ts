@@ -41,7 +41,8 @@ import {
   snapshotFor,
   soldOutIds,
 } from './menu-rows.ts';
-import { currentProperty, type CurrentProperty } from './property.ts';
+import type { CurrentProperty } from './property.ts';
+import { propertyInReach, propertyReachSql, reachesPlace, reachOf } from './reach.ts';
 
 const {
   menus,
@@ -104,6 +105,7 @@ async function menuOf(tx: WorkspaceTx, workspaceId: string, propertyId: string, 
 /** The business's draft as the reader sees it, read in the caller's transaction. */
 async function readDraft(tx: WorkspaceTx, scope: EngineScope, property: CurrentProperty): Promise<MenuDraft> {
   const workspaceId = scope.workspaceId;
+  const reach = await reachOf(tx, scope);
   const rows = await readMenuRows(tx, workspaceId, property.id);
   const [state] = await tx
     .select({ changes: menuDrafts.changes, publishedAt: menuDrafts.publishedAt, hidden: menuDrafts.hidden })
@@ -117,7 +119,8 @@ async function readDraft(tx: WorkspaceTx, scope: EngineScope, property: CurrentP
       ...(brand.accents.accent === undefined ? {} : { accent: brand.accents.accent }),
       ...(brand.accents.accentDark === undefined ? {} : { accentDark: brand.accents.accentDark }),
     },
-    places: await placesOf(tx, workspaceId, property.id),
+    // Only the places the reader reaches (AC-6596): someone who works in some of the business's places sees those.
+    places: (await placesOf(tx, workspaceId, property.id)).filter((place) => reachesPlace(reach, place.id)),
     changes: state?.changes ?? 0,
     ...(state?.publishedAt === null || state?.publishedAt === undefined
       ? {}
@@ -155,7 +158,7 @@ async function edit(
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
+    const property = await propertyInReach(tx, scope, where.propertyId, 'whole');
     await lockKey(tx, `menu:${scope.workspaceId}`);
     await change(tx, by, property.id);
     await noteChange(tx, scope.workspaceId, property.id);
@@ -169,7 +172,7 @@ export async function readMenuDraft(scope: EngineScope, where: InProperty = {}):
   requireMenuReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    return readDraft(tx, scope, await currentProperty(tx, scope.workspaceId, where.propertyId));
+    return readDraft(tx, scope, await propertyInReach(tx, scope, where.propertyId));
   });
 }
 
@@ -182,7 +185,7 @@ export async function readMenuDraftLook(scope: EngineScope, where: InProperty = 
   requireMenuReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
+    const property = await propertyInReach(tx, scope, where.propertyId);
     return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId, property.id), { inApp: true });
   });
 }
@@ -802,7 +805,7 @@ export async function setItemSoldOut(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, input.propertyId);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'whole');
     const changed = await tx
       .update(menuItems)
       .set({ soldOut: input.soldOut, soldOutAt: input.soldOut ? sql`now()` : null })
@@ -832,7 +835,7 @@ export async function setMenuHidden(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, input.propertyId);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'whole');
     await lockKey(tx, `menu:${ws}`);
     const changed = await tx
       .update(menuDrafts)
@@ -877,7 +880,7 @@ export async function saveMenuLook(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, input.propertyId);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'whole');
     await lockKey(tx, `menu:${ws}`);
     if (look.cover !== undefined) {
       // A cover is one of the business's own photos.
@@ -970,7 +973,7 @@ export async function addMenuCover(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, input.propertyId);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'whole');
     await lockKey(tx, `menu:${ws}`);
     await requirePhotoRoom(tx, ws, property.id);
     const [photo] = await tx
@@ -995,6 +998,8 @@ export async function readMenuPhotoFile(
   const photoId = checkId(input.photoId, 'That photo doesn’t exist.');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
+    // A photo of a business outside the reader's reach is absent (AC-6595).
+    const reach = await reachOf(tx, scope);
     const [row] = await tx
       .select({
         largePath: menuPhotos.largePath,
@@ -1003,7 +1008,13 @@ export async function readMenuPhotoFile(
         version: menuPhotos.version,
       })
       .from(menuPhotos)
-      .where(and(eq(menuPhotos.workspaceId, scope.workspaceId), eq(menuPhotos.id, photoId)));
+      .where(
+        and(
+          eq(menuPhotos.workspaceId, scope.workspaceId),
+          eq(menuPhotos.id, photoId),
+          propertyReachSql(reach, menuPhotos.propertyId),
+        ),
+      );
     if (row === undefined) return undefined;
     return { path: input.size === 'large' ? row.largePath : row.smallPath, type: row.type, version: row.version };
   });
@@ -1144,7 +1155,7 @@ export async function publishMenus(scope: EngineScope, where: InProperty = {}): 
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, where.propertyId);
+    const property = await propertyInReach(tx, scope, where.propertyId, 'whole');
     await lockKey(tx, `menu:${ws}`);
     const rows = await readMenuRows(tx, ws, property.id);
     publishProblem(rows);
@@ -1204,7 +1215,7 @@ export async function discardMenuDraft(scope: EngineScope, where: InProperty = {
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const property = await currentProperty(tx, ws, where.propertyId);
+    const property = await propertyInReach(tx, scope, where.propertyId, 'whole');
     await lockKey(tx, `menu:${ws}`);
     const ownDraft = and(eq(menuDrafts.workspaceId, ws), eq(menuDrafts.propertyId, property.id));
     const [state] = await tx.select({ published: menuDrafts.published }).from(menuDrafts).where(ownDraft);
@@ -1245,8 +1256,8 @@ export async function duplicateMenu(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
-    const from = await currentProperty(tx, ws, input.propertyId);
-    const to = await currentProperty(tx, ws, input.toPropertyId);
+    const from = await propertyInReach(tx, scope, input.propertyId);
+    const to = await propertyInReach(tx, scope, input.toPropertyId, 'whole');
     if (from.id === to.id) throw inputInvalid('toPropertyId', 'Pick another business.');
     await lockKey(tx, `menu:${ws}`);
     // A retry: the copy is already there. An id another menu holds anywhere else answers as a menu that isn't there.
@@ -1412,7 +1423,11 @@ export async function duplicateMenu(
   });
 }
 
-/** The ids of every place of every business, for purging every guest menu at once (a profile change, removing Menu). */
+/**
+ * The ids of every place of every business, for purging every guest menu at once (a profile change, removing Menu).
+ * Not narrowed by reach (spec 0065 H7): the ids never leave the server, and a purge that skipped a place would leave
+ * its guests a stale menu.
+ */
 export async function menuPlaceIds(scope: EngineScope): Promise<readonly string[]> {
   hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {

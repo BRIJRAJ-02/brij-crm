@@ -26,6 +26,7 @@ import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireAnyApp, requireBusiness } from './gate.ts';
 import { currentProperty, requireCurrencyFree } from './property.ts';
+import { placeReachSql, propertyInReach, reachesProperty, reachOf, requirePlaceInReach, type Reach } from './reach.ts';
 
 const { places, properties, resources } = schema;
 
@@ -95,7 +96,8 @@ export async function insertPlace(
   if (again !== undefined) return;
   // The properties lock first, so a business can't be removed while a place is being added to it.
   await lockKey(tx, `properties:${scope.workspaceId}`);
-  const property = await currentProperty(tx, scope.workspaceId, propertyId);
+  // A place joins a whole business: someone who works in only some of its places can't add one (AC-6594).
+  const property = await propertyInReach(tx, scope, propertyId, 'whole');
   const [counted] = await tx
     .select({ n: count() })
     .from(places)
@@ -174,6 +176,7 @@ async function readPlaces(
   tx: WorkspaceTx,
   workspaceId: string,
   only: { readonly placeId: string } | { readonly propertyId: string },
+  reach?: Reach,
 ): Promise<Place[]> {
   const rows = await tx
     .select(PLACE_COLUMNS)
@@ -182,6 +185,7 @@ async function readPlaces(
       and(
         eq(places.workspaceId, workspaceId),
         'placeId' in only ? eq(places.id, only.placeId) : eq(places.propertyId, only.propertyId),
+        reach === undefined ? undefined : placeReachSql(reach, places.id),
       ),
     )
     .orderBy(asc(places.position), asc(places.id));
@@ -235,12 +239,15 @@ export async function getBusiness(
   requirePermission(scope, 'hospitality.manage');
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    // Only the places the reader reaches (AC-6596); a business outside reach is NOT_FOUND (AC-6595).
+    const reach = await reachOf(tx, scope);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'see', reach);
     const profile = await readProperty(tx, scope.workspaceId, property.id);
     return {
       ...(profile === undefined ? {} : { profile }),
-      places: await readPlaces(tx, scope.workspaceId, { propertyId: property.id }),
-      canEdit: true,
+      places: await readPlaces(tx, scope.workspaceId, { propertyId: property.id }, reach),
+      // The business's own details change only with all of it in reach.
+      canEdit: reachesProperty(reach, property.id, 'whole'),
     };
   });
 }
@@ -259,7 +266,7 @@ export async function saveBusiness(
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     await requireBusiness(tx, scope.workspaceId);
-    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    const property = await propertyInReach(tx, scope, input.propertyId, 'whole');
     if (fields.currency !== undefined) {
       await requireCurrencyFree(tx, scope.workspaceId, property, fields.currency);
     }
@@ -329,6 +336,8 @@ export async function updatePlace(
   if (input.place !== undefined) checkZone(input.place.timeZone);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    // Outside reach reads as no such place (AC-6595).
+    await requirePlaceInReach(tx, scope, placeId);
     const changed = await tx
       .update(places)
       .set({

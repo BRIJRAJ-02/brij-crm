@@ -309,3 +309,39 @@ describe('properties (spec 0065 H7)', () => {
     ).rejects.toMatchObject({ cause: { code: '23503' } });
   });
 });
+
+describe('who can work where (migration 0201, spec 0065 H7 AC-6594)', () => {
+  it('names one business or one place per row, never another workspace’s, and keeps what it names', async () => {
+    const id = await workspace('reach');
+    const first = await firstId(id);
+    const second = await secondProperty(id);
+    const at = await place(id, second);
+    const member = randomUUID();
+    await db.withWorkspace(id, (tx) =>
+      tx.execute(sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+        values (${id}, ${member}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`),
+    );
+    const reach = (propertyId: string | null, placeId: string | null) =>
+      db.withWorkspace(id, (tx) =>
+        tx.execute(sql`insert into member_reach (workspace_id, member_id, property_id, place_id)
+          values (${id}, ${member}, ${propertyId}, ${placeId})`),
+      );
+    await reach(first, null);
+    await reach(null, at);
+    // Both, or neither, in one row: refused.
+    await expect(reach(second, at)).rejects.toMatchObject({ cause: { code: '23514' } });
+    await expect(reach(null, null)).rejects.toMatchObject({ cause: { code: '23514' } });
+    // The same business twice: refused.
+    await expect(reach(first, null)).rejects.toMatchObject({ cause: { code: '23505' } });
+    // Another workspace's business: no such business here.
+    const other = await workspace('reach-other');
+    await expect(reach(await firstId(other), null)).rejects.toMatchObject({ cause: { code: '23503' } });
+    // A named place can't go: a reach that lost its only row would read as every business.
+    await expect(
+      db.withWorkspace(id, (tx) => tx.execute(sql`delete from places where id = ${at}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
+    // Another workspace reads none of it.
+    const seen = await db.withWorkspace(other, (tx) => tx.execute(sql`select 1 from member_reach`));
+    expect(seen.rows).toEqual([]);
+  });
+});

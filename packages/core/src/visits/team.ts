@@ -28,7 +28,11 @@ import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { CatalogueDeps } from './catalogue.ts';
+import { ALL_REACH, PLACE_OUT_OF_REACH, reachesPlace, reachOf, type Reach } from '../hospitality/reach.ts';
 import { readServicePlaces } from './catalogue.ts';
+
+/** The refusal for a change to a staff profile by someone who works in only some businesses or places. */
+const STAFF_WHOLE_WORKSPACE = 'Staff profiles work across every business. Ask an admin to change this one.';
 import { personLockKeys } from './locks.ts';
 import { linkStaffMember } from './staff-link.ts';
 
@@ -49,7 +53,7 @@ const DOES = sql`
 `;
 
 /** The team as the screens show it, read in the caller's transaction; the members list only for `services.manage`. */
-export async function readTeam(tx: WorkspaceTx, canManage: boolean): Promise<StaffTeamView> {
+export async function readTeam(tx: WorkspaceTx, canManage: boolean, reach: Reach = ALL_REACH): Promise<StaffTeamView> {
   const staff = (
     await tx.execute<{
       id: string;
@@ -128,8 +132,14 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean): Promise<Sta
       ).rows
     : undefined;
   const iso = (value: string) => new Date(value).toISOString();
+  // A member with limited reach (spec 0065 H7, AC-6596) sees the staff who work in a place they reach, and only those
+  // places' shifts, time off and blocks; time off at every place (no place) stays.
+  const inReach = (placeId: string | null) => placeId === null || reachesPlace(reach, placeId);
+  const reachedStaff = reach.all
+    ? staff
+    : staff.filter((row) => works.some((each) => each.staff_id === row.id && reachesPlace(reach, each.place_id)));
   return {
-    staff: staff.map((row): StaffView => ({
+    staff: reachedStaff.map((row): StaffView => ({
       id: row.id,
       name: row.name,
       ...(row.title === null ? {} : { title: row.title }),
@@ -141,11 +151,11 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean): Promise<Sta
       ...(row.member_name === null ? {} : { memberName: row.member_name }),
       archived: row.archived,
       places: works
-        .filter((each) => each.staff_id === row.id)
+        .filter((each) => each.staff_id === row.id && inReach(each.place_id))
         .map((each) => ({ placeId: each.place_id, shifts: each.shifts, outsideHours: each.outside_hours })),
       serviceIds: row.service_ids ?? [],
       timeOff: timeOff
-        .filter((each) => each.staff_id === row.id)
+        .filter((each) => each.staff_id === row.id && inReach(each.place_id))
         .map((each) => ({
           id: each.id,
           ...(each.place_id === null ? {} : { placeId: each.place_id }),
@@ -154,7 +164,7 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean): Promise<Sta
           reason: each.reason,
         })),
       blocks: blocks
-        .filter((each) => each.staff_id === row.id)
+        .filter((each) => each.staff_id === row.id && inReach(each.place_id))
         .map((each) => ({
           id: each.id,
           placeId: each.place_id,
@@ -164,7 +174,7 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean): Promise<Sta
         })),
       upcoming: row.upcoming,
     })),
-    places: await readServicePlaces(tx),
+    places: await readServicePlaces(tx, undefined, reach),
     services: services.map((row) => ({
       id: row.id,
       name: row.name,
@@ -190,7 +200,7 @@ export async function getTeam(scope: EngineScope): Promise<StaffTeamView> {
   requirePermission(scope, 'services.manage');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'appointments');
-    return readTeam(tx, true);
+    return readTeam(tx, true, await reachOf(tx, scope));
   });
 }
 
@@ -199,7 +209,7 @@ export async function getShifts(scope: EngineScope): Promise<StaffTeamView> {
   requirePermission(scope, 'services.calendar');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'appointments');
-    return readTeam(tx, can(scope.access, 'services.manage'));
+    return readTeam(tx, can(scope.access, 'services.manage'), await reachOf(tx, scope));
   });
 }
 
@@ -250,11 +260,18 @@ async function teamWrite(
     async (context) => {
       const { tx } = context;
       await requireApp(tx, scope.workspaceId, 'appointments');
+      // Staff are the workspace's, working across businesses (spec 0065 H7): a profile changes only for someone who
+      // reaches every business, and a shift, time off or block only in places the member reaches (AC-6595).
+      const reach = await reachOf(tx, scope);
+      if (!reach.all && permission === 'services.manage') throw refuse('FORBIDDEN', STAFF_WHOLE_WORKSPACE);
       await lockKey(tx, `staff:${scope.workspaceId}`);
       const done = await work(context, by);
+      if (done.places.some((placeId) => !reachesPlace(reach, placeId))) {
+        throw refuse('NOT_FOUND', PLACE_OUT_OF_REACH);
+      }
       await auditSetup(tx, scope, what, done.ids ?? {});
       if (done.places.length > 0) context.record({ visits: [...done.places] });
-      return { view: await readTeam(tx, can(scope.access, 'services.manage')), places: done.places };
+      return { view: await readTeam(tx, can(scope.access, 'services.manage'), reach), places: done.places };
     },
     hooks,
   );
@@ -489,7 +506,11 @@ export async function linkStaff(
 ): Promise<StaffTeamView> {
   requirePermission(scope, 'services.manage');
   // The engine's link gates on either engine app; these screens are Appointments', so refuse first, before writing.
-  await inWorkspace(scope, (tx) => requireApp(tx, scope.workspaceId, 'appointments'));
+  await inWorkspace(scope, async (tx) => {
+    await requireApp(tx, scope.workspaceId, 'appointments');
+    // A profile is the whole workspace's (spec 0065 H7): only someone who reaches every business links it.
+    if (!(await reachOf(tx, scope)).all) throw refuse('FORBIDDEN', STAFF_WHOLE_WORKSPACE);
+  });
   await linkStaffMember(scope, input, deps, hooks);
   return getTeam(scope);
 }

@@ -187,6 +187,51 @@ export const places = pgTable(
   ],
 );
 
+/**
+ * A member's reach (spec 0065 H7, AC-6594, migration 0201): one business (property) or one place they may work in. No
+ * rows means every business, so a workspace that never limits anyone changes nothing; owners and admins are always
+ * every business, whatever is stored. Exactly one of `property_id` and `place_id` is set. Neither foreign key cascades:
+ * a business or place a reach names can't go, since a cascade would widen someone's reach to everything.
+ */
+export const memberReach = pgTable(
+  'member_reach',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    memberId: uuid('member_id').notNull(),
+    propertyId: uuid('property_id'),
+    placeId: uuid('place_id'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    createdByMemberId: uuid('created_by_member_id'),
+  },
+  (t) => [
+    primaryKey({ name: 'member_reach_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({ name: 'member_reach_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
+      'cascade',
+    ),
+    foreignKey({
+      name: 'member_reach_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'member_reach_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    foreignKey({
+      name: 'member_reach_place',
+      columns: [t.workspaceId, t.placeId],
+      foreignColumns: [places.workspaceId, places.id],
+    }),
+    uniqueIndex('member_reach_property_once').on(t.workspaceId, t.memberId, t.propertyId),
+    uniqueIndex('member_reach_place_once').on(t.workspaceId, t.memberId, t.placeId),
+    index('member_reach_by_property').on(t.workspaceId, t.propertyId),
+    index('member_reach_by_place').on(t.workspaceId, t.placeId),
+    check('member_reach_one', sql`num_nonnulls(${t.propertyId}, ${t.placeId}) = 1`),
+  ],
+);
+
 /** An area of a place (Inside, Terrace, Bar; up to 12, AC-6509). */
 export const areas = pgTable(
   'areas',

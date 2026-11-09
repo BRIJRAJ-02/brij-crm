@@ -244,6 +244,19 @@ export const AuditEntryView = z.discriminatedUnion('action', [
       toName: z.string().optional(),
     }),
   ),
+  /**
+   * Where a member may work changed (spec 0065 H7, AC-6597): every business, or how many businesses and places were
+   * chosen. Counts, never names: a business renamed later reads the same.
+   */
+  entry(
+    ['member.reach_changed'],
+    member,
+    z.strictObject({
+      all: z.boolean(),
+      businesses: z.number().int().nonnegative(),
+      places: z.number().int().nonnegative(),
+    }),
+  ),
   entry(['member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
   /** `pageOnly`: a page only person removed from Team pages (9 Nov 2026). */
   entry(['member.removed'], member, z.strictObject({ pageOnly: z.literal(true).optional() })),

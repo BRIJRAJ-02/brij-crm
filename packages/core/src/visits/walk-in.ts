@@ -18,6 +18,7 @@ import { checkId, newId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
+import { requirePlaceInReach } from '../hospitality/reach.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
 import type { ManageLinkKey } from '../booking/tokens.ts';
 import { newLookupCode, placeVisit, type SlotCache } from './book.ts';
@@ -132,6 +133,8 @@ export async function freeTables(
   const now = deps.now?.() ?? new Date();
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    // A place outside the member's reach is no such place (spec 0065 H7, AC-6595), here and below.
+    await requirePlaceInReach(tx, scope, placeId);
     const { inputs, end, holdMinutes } = await walkInputs(tx, scope.workspaceId, placeId, party, now);
     const labels = await labelsOf(tx, placeId);
     const seated = await seatedTables(tx, scope.workspaceId, placeId, now);
@@ -182,6 +185,7 @@ export async function seatWalkIn(
       async (context) => {
         const { tx } = context;
         await requireApp(tx, scope.workspaceId, 'table_seating');
+        await requirePlaceInReach(tx, scope, placeId);
         // Tables have no staff, so the place lock is the only one (the global order: place, then people).
         await lockVisit(tx, scope.workspaceId, placeId, []);
         const [again] = (
@@ -286,6 +290,7 @@ export async function reserveForGuest(
   }
   const service = await inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    await requirePlaceInReach(tx, scope, placeId);
     return tableServiceAt(tx, placeId);
   });
   const booked = await placeVisit(

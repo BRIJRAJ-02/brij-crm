@@ -14,8 +14,10 @@ import { checkId } from '../engine/ids.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
+// reach.ts builds on `currentProperty` here; the cycle is safe, since each side calls the other only at run time.
+import { propertyReachSql, reachOf } from './reach.ts';
 
-const { businessPages, menuDrafts, properties, workspaces } = schema;
+const { businessPages, memberReach, menuDrafts, properties, workspaces } = schema;
 
 /** The refusal for a property that isn't there, or is another workspace's: the same answer either way. */
 export const PROPERTY_NOT_FOUND = 'That business doesn’t exist.';
@@ -152,12 +154,16 @@ export async function requireCurrencyFree(
   }
 }
 
-/** The workspace's properties in order, each with what it holds, in the caller's transaction. */
+/**
+ * The workspace's properties in order, each with what it holds, in the caller's transaction: only those the reader's
+ * reach sees (AC-6596), so the switcher and ⌘K's Switch to never name a business they can't open.
+ */
 async function readProperties(tx: WorkspaceTx, scope: EngineScope): Promise<PropertiesView> {
+  const reach = await reachOf(tx, scope);
   const rows = await tx
     .select(PROPERTY_COLUMNS)
     .from(properties)
-    .where(eq(properties.workspaceId, scope.workspaceId))
+    .where(and(eq(properties.workspaceId, scope.workspaceId), propertyReachSql(reach, properties.id)))
     .orderBy(asc(properties.position), asc(properties.id));
   const holds = await holdsByProperty(tx, scope.workspaceId);
   const listed: PropertySummary[] = [];
@@ -269,6 +275,15 @@ export async function removeProperty(
       if (first.id === property.id) throw refuse('IN_USE', 'The first business can’t be removed.');
       if (((await holdsByProperty(tx, scope.workspaceId)).get(property.id) ?? 0) > 0) {
         throw refuse('IN_USE', 'Remove this business’s places, menus, dishes and services first.');
+      }
+      // A reach naming it would otherwise lose its row and widen to every business (AC-6594): ask first.
+      const [reached] = await tx
+        .select({ id: memberReach.id })
+        .from(memberReach)
+        .where(and(eq(memberReach.workspaceId, scope.workspaceId), eq(memberReach.propertyId, property.id)))
+        .limit(1);
+      if (reached !== undefined) {
+        throw refuse('IN_USE', 'Someone works in this business. Change where they work in Members first.');
       }
       const [page] = await tx
         .select({ handle: businessPages.handle })

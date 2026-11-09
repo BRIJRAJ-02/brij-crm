@@ -1013,6 +1013,8 @@ export { listApps, installApp, removeApp } from './hospitality/apps.ts';
 export { appInstalled, requireApp, requireAnyApp, APP_NOT_INSTALLED_MESSAGE } from './hospitality/gate.ts';
 export { getBusiness, saveBusiness, createPlace, updatePlace, localeForCountry } from './hospitality/places.ts';
 export { listProperties, createProperty, removeProperty, PROPERTY_NOT_FOUND } from './hospitality/property.ts';
+/** Where a member may work in the business apps (spec 0065 H7, AC-6594): the member panel's picker. */
+export { getMemberReach, setMemberReach } from './hospitality/member-reach.ts';
 export {
   listResources,
   saveArea,

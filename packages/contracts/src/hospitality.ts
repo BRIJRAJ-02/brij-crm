@@ -293,6 +293,51 @@ export const CreatePropertyInput = WorkspaceScoped.extend({
 /** Adding a property. */
 export type CreatePropertyInput = z.infer<typeof CreatePropertyInput>;
 
+/**
+ * Where a member may work (spec 0065 H7, AC-6594): every business (`all`), or the businesses and places chosen. A
+ * business chosen whole takes in every place it has now and later; a place is chosen on its own only when its business
+ * isn't. Owners and admins are always every business.
+ */
+export const MemberReach = z.object({
+  all: z.boolean(),
+  properties: z.array(Uuid).max(20),
+  places: z.array(Uuid).max(400),
+});
+/** Where a member may work. */
+export type MemberReach = z.infer<typeof MemberReach>;
+
+/** One business as the reach picker offers it, with its places. */
+export const ReachBusiness = z.object({
+  id: Uuid,
+  name: z.string(),
+  places: z.array(z.object({ id: Uuid, name: z.string() })),
+});
+/** One business as the reach picker offers it. */
+export type ReachBusiness = z.infer<typeof ReachBusiness>;
+
+/**
+ * A member's reach as their panel shows it (AC-6594): what is stored, whether it is fixed (an owner or an admin is
+ * always every business) and the businesses and places to choose from. Only for `workspace.manage`.
+ */
+export const MemberReachView = z.object({
+  memberId: Uuid,
+  reach: MemberReach,
+  fixed: z.boolean(),
+  businesses: z.array(ReachBusiness),
+});
+/** A member's reach as their panel shows it. */
+export type MemberReachView = z.infer<typeof MemberReachView>;
+
+/** Reading one member's reach. */
+export const MemberReachInput = WorkspaceScoped.extend({ memberId: Uuid });
+/** Reading one member's reach. */
+export type MemberReachInput = z.infer<typeof MemberReachInput>;
+
+/** Changing one member's reach (AC-6597): applies on their next request and is written to History. */
+export const SetMemberReachInput = WorkspaceScoped.extend({ memberId: Uuid, reach: MemberReach, mutationId: Uuid });
+/** Changing one member's reach. */
+export type SetMemberReachInput = z.infer<typeof SetMemberReachInput>;
+
 /** Removing an empty property (AC-6590): never the first one left. */
 export const RemovePropertyInput = WorkspaceScoped.extend({ property: Uuid, mutationId: Uuid });
 /** Removing a property. */
@@ -496,6 +541,10 @@ export const hospitalityContract = {
   createProperty: oc.input(CreatePropertyInput).output(PropertiesView),
   /** Removes an empty property (AC-6590): `workspace.manage`; `IN_USE` while it holds anything, or is the first. */
   removeProperty: oc.input(RemovePropertyInput).output(PropertiesView),
+  /** A member's reach for their panel (AC-6594): `workspace.manage`. */
+  memberReach: oc.input(MemberReachInput).output(MemberReachView),
+  /** Sets a member's reach (AC-6594, AC-6597): `workspace.manage`, never narrowing an owner or an admin. */
+  setMemberReach: oc.input(SetMemberReachInput).output(MemberReachView),
   saveBusiness: oc.input(SaveBusinessInput).output(Property),
   createPlace: oc.input(CreatePlaceInput).output(Place),
   updatePlace: oc.input(UpdatePlaceInput).output(Place),

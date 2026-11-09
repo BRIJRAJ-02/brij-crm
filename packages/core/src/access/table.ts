@@ -293,6 +293,9 @@ export const ACCESS_TABLE = {
   listProperties: { anyMember: true },
   createProperty: { permission: 'workspace.manage' },
   removeProperty: { permission: 'workspace.manage' },
+  // Where a member may work (spec 0065 H7, AC-6594): an admin's, and only by someone who reaches every business.
+  getMemberReach: { permission: 'workspace.manage' },
+  setMemberReach: { permission: 'workspace.manage' },
   updatePlace: { permission: 'hospitality.manage' },
   listResources: { permission: 'hospitality.manage' },
   saveArea: { permission: 'hospitality.manage' },

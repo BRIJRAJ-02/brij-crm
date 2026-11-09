@@ -26,7 +26,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { SlotCache } from './book.ts';
 import { appointmentsSetup } from './readiness.ts';
-import { currentProperty } from '../hospitality/property.ts';
+import { ALL_REACH, propertyInReach, reachesPlace, reachOf, type Reach } from '../hospitality/reach.ts';
 
 /** The refusal for a service that isn't there (or is Table seating's). */
 export const SERVICE_MISSING = 'That service doesn’t exist.';
@@ -44,14 +44,21 @@ const L = CATALOGUE_LIMITS;
  * The places in order, as the catalogue and the team name them: one business's (spec 0065 H7) for the catalogue,
  * every business's for the team, whose staff work across them.
  */
-export async function readServicePlaces(tx: WorkspaceTx, propertyId?: string): Promise<CatalogueView['places']> {
+export async function readServicePlaces(
+  tx: WorkspaceTx,
+  propertyId?: string,
+  reach: Reach = ALL_REACH,
+): Promise<CatalogueView['places']> {
   const own = propertyId === undefined ? sql`true` : sql`property_id = ${propertyId}::uuid`;
   const rows = (
     await tx.execute<{ id: string; name: string; time_zone: string; hours: PlaceHours }>(sql`
       select id::text, name, time_zone, hours from places where ${own} order by position, id
     `)
   ).rows;
-  return rows.map((row) => ({ id: row.id, name: row.name, timeZone: row.time_zone, hours: row.hours }));
+  // Only the places the reader reaches (spec 0065 H7, AC-6596).
+  return rows
+    .filter((row) => reachesPlace(reach, row.id))
+    .map((row) => ({ id: row.id, name: row.name, timeZone: row.time_zone, hours: row.hours }));
 }
 
 /** Which business a catalogue call works in (spec 0065 H7): left out, the workspace's first. */
@@ -64,7 +71,11 @@ export interface InProperty {
  * rooms and chairs, currency and kind (spec 0065 H7, AC-6517). Staff are the workspace's, since a person can work in
  * two businesses.
  */
-export async function readCatalogue(tx: WorkspaceTx, propertyId: string): Promise<CatalogueView> {
+export async function readCatalogue(
+  tx: WorkspaceTx,
+  propertyId: string,
+  reach: Reach = ALL_REACH,
+): Promise<CatalogueView> {
   const ownService = sql`service_id in (select s.id from services s where s.property_id = ${propertyId}::uuid)`;
   const categories = (
     await tx.execute<{ id: string; name: string }>(sql`
@@ -118,7 +129,7 @@ export async function readCatalogue(tx: WorkspaceTx, propertyId: string): Promis
       select service_id::text, kind, count, resource_id::text from service_resources where ${ownService} order by id
     `)
   ).rows;
-  const places = await readServicePlaces(tx, propertyId);
+  const places = await readServicePlaces(tx, propertyId, reach);
   const staff = (
     await tx.execute<{ id: string; name: string; place_ids: string[] | null }>(sql`
       select st.id::text, st.name,
@@ -177,7 +188,9 @@ export async function readCatalogue(tx: WorkspaceTx, propertyId: string): Promis
     })),
     places,
     staff: staff.map((row) => ({ id: row.id, name: row.name, placeIds: row.place_ids ?? [] })),
-    resources: resources.map((row) => ({ id: row.id, placeId: row.place_id, label: row.label, kind: row.kind })),
+    resources: resources
+      .filter((row) => reachesPlace(reach, row.place_id))
+      .map((row) => ({ id: row.id, placeId: row.place_id, label: row.label, kind: row.kind })),
     ...(facts?.currency === null || facts?.currency === undefined ? {} : { currency: facts.currency }),
     ...(facts?.kind === null || facts?.kind === undefined ? {} : { businessKind: facts.kind }),
     setup: await appointmentsSetup(tx, places),
@@ -226,7 +239,8 @@ async function catalogueWrite(
     async (context) => {
       const { tx } = context;
       await requireApp(tx, scope.workspaceId, 'appointments');
-      const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
+      // The catalogue is the whole business's: changing it needs all of it in reach (AC-6594).
+      const property = await propertyInReach(tx, scope, where.propertyId, 'whole');
       await lockKey(tx, `services:${scope.workspaceId}`);
       const done = await work(context, by, property.id);
       await auditSetup(tx, scope, what, done.ids ?? {});
@@ -244,7 +258,8 @@ export async function getCatalogue(scope: EngineScope, where: InProperty = {}): 
   requirePermission(scope, 'services.manage');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'appointments');
-    return readCatalogue(tx, (await currentProperty(tx, scope.workspaceId, where.propertyId)).id);
+    const reach = await reachOf(tx, scope);
+    return readCatalogue(tx, (await propertyInReach(tx, scope, where.propertyId, 'see', reach)).id, reach);
   });
 }
 
@@ -766,7 +781,7 @@ export async function duplicateService(
   const id = checkId(input.id, SERVICE_MISSING);
   const where = { propertyId: input.toPropertyId };
   return catalogueWrite(scope, where, deps, hooks, 'service.duplicated', async ({ tx }, by, toPropertyId) => {
-    const from = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    const from = await propertyInReach(tx, scope, input.propertyId);
     if (from.id === toPropertyId) throw inputInvalid('toPropertyId', 'Pick another business.');
     await requireServices(tx, from.id, [serviceId]);
     // Filed under the business that changed; the source beside it.

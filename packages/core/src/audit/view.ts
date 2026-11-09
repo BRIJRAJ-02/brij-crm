@@ -396,6 +396,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: change('role', role(before.role), role(after.role)),
       };
     }
+    case 'member.reach_changed': {
+      // Where a member may work (spec 0065 H7, AC-6597): counted, never named.
+      const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { all: after.all === true, businesses: count(after.properties), places: count(after.places) },
+        changes: [],
+      };
+    }
     case 'workspace.ownership_transferred':
       return {
         ...base,

@@ -18,6 +18,8 @@ export type AuditKindName = (typeof AUDIT_KIND_NAMES)[number];
 export const AUDIT_KINDS = {
   people: [
     'member.role_changed',
+    // Where a member may work in the business apps (spec 0065 H7).
+    'member.reach_changed',
     'member.removed',
     'member.left',
     'workspace.ownership_transferred',

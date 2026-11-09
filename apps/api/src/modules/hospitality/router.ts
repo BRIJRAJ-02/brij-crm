@@ -10,6 +10,8 @@ import {
   deleteArea,
   deleteResource,
   getBusiness,
+  getMemberReach,
+  setMemberReach,
   menuPlaceIds,
   installApp,
   listApps,
@@ -90,6 +92,16 @@ export const hospitalityRouter = h.router({
   removeProperty: h.removeProperty.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       removeProperty(context.scope, { propertyId: input.property }, hooks),
+    ),
+  ),
+  // Where a member may work (spec 0065 H7, AC-6594): the member panel's picker. A change stores one `nav` change event
+  // for that member; it changes no guest page, so nothing at the edge is purged.
+  memberReach: h.memberReach.handler(({ context, input }) =>
+    getMemberReach(context.scope, { memberId: input.memberId }),
+  ),
+  setMemberReach: h.setMemberReach.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setMemberReach(context.scope, { memberId: input.memberId, reach: input.reach }, hooks),
     ),
   ),
   saveBusiness: h.saveBusiness.handler(async ({ context, input }) => {

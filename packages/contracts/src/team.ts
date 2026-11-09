@@ -48,6 +48,8 @@ export const AUDIT_ACTIONS = [
   'join_request.approved',
   'join_request.declined',
   'member.role_changed',
+  // Spec 0065 H7 (AC-6597): where a member may work in the business apps.
+  'member.reach_changed',
   'member.removed',
   'member.left',
   'workspace.ownership_transferred',

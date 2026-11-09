@@ -166,6 +166,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   page_versions_published_by: 'history: who published a booking or link page version (spec 0068)',
   business_pages_published_by: 'history: who last published the business page (spec 0066, B4)',
   workspace_apps_installed_by: 'history: who installed a business app (spec 0065, H0)',
+  member_reach_member:
+    'where they could work (spec 0065 H7): a removed member reaches nothing, and owners and admins never read theirs',
   reservation_alerts_member:
     'their own new reservation email choice: reservation emails go to active members only (spec 0066 B7)',
   forms_owner:

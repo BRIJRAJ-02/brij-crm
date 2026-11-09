@@ -159,6 +159,16 @@ const SENTENCES: SentenceTemplates = {
         : `changed ${w.persons(entry.target.person)} role from ${from} to ${to}`,
     );
   },
+  // Where a member may work in the business apps (spec 0065 H7, AC-6597): counted, never named.
+  'member.reach_changed': (entry, w) => {
+    const { all, businesses, places } = entry.params;
+    if (all) return actor(`let ${w.person(entry.target.person)} work in every business`);
+    const parts = [
+      ...(businesses === 0 ? [] : [businesses === 1 ? '1 business' : `${String(businesses)} businesses`]),
+      ...(places === 0 ? [] : [places === 1 ? '1 place' : `${String(places)} places`]),
+    ];
+    return actor(`limited ${w.person(entry.target.person)} to ${parts.join(' and ')}`);
+  },
   'member.removed': (entry, w) =>
     actor(
       entry.params.pageOnly === true

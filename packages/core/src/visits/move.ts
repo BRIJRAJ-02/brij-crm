@@ -12,6 +12,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup } from '../hospitality/gate.ts';
 import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
 import { VISIT_TAKEN_MESSAGE, type SlotCache, type VisitDeps, type VisitTakenError } from './book.ts';
+import { reachesPlace, reachOf } from '../hospitality/reach.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit, type LockedStaff } from './locks.ts';
 import { queueVisitMail } from './mail.ts';
@@ -39,7 +40,10 @@ async function visitOf(scope: EngineScope, appointmentId: string) {
         select id::text, place_id::text, status, starts_at, ends_at, party_size from appointments where id = ${appointmentId}::uuid
       `)
     ).rows;
-    if (row === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+    // At a place outside a member's reach it is no such reservation (spec 0065 H7, AC-6595); a guest's door reaches.
+    if (row === undefined || !reachesPlace(await reachOf(tx, scope), row.place_id)) {
+      throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+    }
     const items = (
       await tx.execute<{ service_id: string; variant_id: string }>(sql`
         select service_id::text, variant_id::text from appointment_items
@@ -304,7 +308,9 @@ export async function cancelVisit(
           sql`select place_id::text from appointments where id = ${input.appointmentId}::uuid`,
         )
       ).rows;
-      if (found === undefined) throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+      if (found === undefined || !reachesPlace(await reachOf(tx, scope), found.place_id)) {
+        throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
+      }
       await lockVisit(tx, scope.workspaceId, found.place_id, []);
       const [row] = (
         await tx.execute<{ status: AppointmentStatus; starts_at: string }>(
