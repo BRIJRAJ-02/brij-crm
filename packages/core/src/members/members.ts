@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
@@ -44,7 +44,7 @@ import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
 import { readCustomRole } from '../roles/roles.ts';
 import { workspaceLogoVersion } from '../brand/brand.ts';
 
-const { members, workspaceRoles, workspaces } = schema;
+const { managedMembers, members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
 const isGuest = (scope: EngineScope): boolean =>
@@ -124,7 +124,11 @@ const likeLiteral = (text: string): string => text.replace(/[\\%_]/g, (char) => 
 export async function listMembers(
   scope: EngineScope,
   input: { readonly search?: string; readonly cursor?: string; readonly limit?: number } = {},
-  options: { readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>> } = {},
+  options: {
+    readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
+    /** A connected app's name by its partner id (the registry's), for the people it added (spec 0070). */
+    readonly partnerName?: (partnerId: string) => Promise<string | undefined>;
+  } = {},
 ): Promise<MembersPage> {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? MEMBERS_PAGE), 1), MEMBERS_PAGE_MAX);
   const search = input.search?.trim() ?? '';
@@ -143,8 +147,17 @@ export async function listMembers(
   );
   const { rows, total } = await inWorkspace(scope, async (tx) => {
     const read = await tx
-      .select({ ...VIEW_COLUMNS, userId: members.userId, sortName })
+      .select({ ...VIEW_COLUMNS, userId: members.userId, sortName, partnerId: managedMembers.partnerId })
       .from(members)
+      // A person a connected app added (spec 0070, AC-7020) has no Timefix login: the list says which app.
+      .leftJoin(
+        managedMembers,
+        and(
+          eq(managedMembers.workspaceId, members.workspaceId),
+          eq(managedMembers.memberId, members.id),
+          isNull(managedMembers.removedAt),
+        ),
+      )
       .where(
         and(
           matching,
@@ -165,11 +178,22 @@ export async function listMembers(
     options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
       ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
       : undefined;
+  // Each app's name once, from the registry; a name it can't give still marks the person as added by an app.
+  const partnerIds = [...new Set(page.flatMap((row) => (row.partnerId === null ? [] : [row.partnerId])))];
+  const appNames = new Map(
+    await Promise.all(
+      partnerIds.map(async (partnerId) => [partnerId, await options.partnerName?.(partnerId)] as const),
+    ),
+  );
   return {
-    members: page.map((row) => ({
-      ...toView(row, seesEmails),
-      ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
-    })),
+    members: page.map((row) => {
+      const appName = row.partnerId === null ? undefined : appNames.get(row.partnerId);
+      return {
+        ...toView(row, seesEmails),
+        ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
+        ...(row.partnerId === null ? {} : { viaApp: appName === undefined ? {} : { name: appName } }),
+      };
+    }),
     total,
     ...(rows.length > limit && last !== undefined ? { nextCursor: encodeMemberCursor(last.sortName, last.id) } : {}),
   };

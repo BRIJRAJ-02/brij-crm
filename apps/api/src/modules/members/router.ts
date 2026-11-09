@@ -48,7 +48,10 @@ export const membersRouter = member.members.router({
         ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       },
-      { secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds) },
+      {
+        secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds),
+        partnerName: async (partnerId) => (await context.partners.partnerById(partnerId))?.name,
+      },
     ),
   ),
   setRole: member.members.setRole.handler(({ context, input }) =>

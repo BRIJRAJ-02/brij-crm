@@ -691,14 +691,25 @@ export function MembersScreen({
       >
         {strings.approve}
       </Button>
-      <Button
-        variant="ghost"
-        label={strings.declineFor(request.name)}
-        isDisabled={approving === request.id}
-        onPress={() => decline(request)}
-      >
-        {strings.decline}
-      </Button>
+      {/* On a phone Decline is its cross alone (named for screen readers), so the name keeps its room. */}
+      {isPhone ? (
+        <Button
+          variant="ghost"
+          icon="x"
+          label={strings.declineFor(request.name)}
+          isDisabled={approving === request.id}
+          onPress={() => decline(request)}
+        />
+      ) : (
+        <Button
+          variant="ghost"
+          label={strings.declineFor(request.name)}
+          isDisabled={approving === request.id}
+          onPress={() => decline(request)}
+        >
+          {strings.decline}
+        </Button>
+      )}
     </ButtonGroup>
   );
 
@@ -724,8 +735,11 @@ export function MembersScreen({
               size="lg"
               // Their email under the name; a guest is told nobody's address (spec 0031, AC-829). The reader's own row
               // says "You" first, beside the name rather than across a wide column at the line's end.
+              // Someone a connected app added, with no Timefix login of their own (spec 0070), says which app there too:
+              // a tag by the name cut their email short.
               meta={[
                 ...(member.id === access.memberId ? [strings.you] : []),
+                ...(member.viaApp === undefined ? [] : [strings.viaApp(member.viaApp.name)]),
                 ...(member.email === undefined ? [] : [member.email]),
               ]}
               {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
@@ -990,7 +1004,7 @@ export function MembersScreen({
                 })}
             // Checkboxes only once a bulk change could mean anything: two people or more this reader can change. A search
             // narrowing the list, or someone ticked, keeps them, so the column never leaves mid typing.
-            {...(canManage && (search !== '' || ticked.size > 0 || members.filter(mayRechange).length > 1)
+            {...(canManage && !isPhone && (search !== '' || ticked.size > 0 || members.filter(mayRechange).length > 1)
               ? {
                   selected: ticked,
                   isSelectionQuiet: true,
