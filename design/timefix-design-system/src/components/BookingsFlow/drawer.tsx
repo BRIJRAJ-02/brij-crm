@@ -1,6 +1,6 @@
 // Step 7: the meeting drawer, and its Reschedule and Reassign dialogs.
 import { useEffect, useMemo, useState } from 'react';
-import { type Key } from 'react-aria-components';
+import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'react-aria-components';
 import { Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -13,8 +13,8 @@ import { TextArea } from '../Field/Field.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { RadioGroup, Radio } from '../Checkbox/Checkbox.tsx';
 import { ReferencePicker } from '../ComboBox/ComboBox.tsx';
-import { formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
-import { formatDay, formatLongDay } from '../../lib/format.ts';
+import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
+import { formatDay, formatLongDay, relativeDayLabel } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
@@ -138,24 +138,37 @@ export function RescheduleDialog({ meeting, state, onClose, onMove }: { readonly
     for (let n = 0; n < 14; n += 1) {
       const d = dayFrom(now, n);
       const times = page ? openTimes(page, others, d, now, len) : d.getDay() === 0 || d.getDay() === 6 ? [] : [10, 11, 14, 15, 16].map((h) => h * 60);
-      if (times.length) out.push({ day: d, times: times.slice(0, 8) });
+      if (times.length) out.push({ day: d, times });
     }
     return out;
   }, [meeting, state]);
+  const [dayKey, setDayKey] = useState<string>('');
+  useEffect(() => { setDayKey(days[0] ? isoDay(days[0].day) : ''); }, [days]);
+  const shownDay = days.find((d) => isoDay(d.day) === dayKey) ?? days[0];
   return (
-    <Dialog isOpen={meeting !== undefined} onOpenChange={(o) => { if (!o) onClose(); }} size="wide" title={`Reschedule ${meeting?.title ?? ''}`}
+    <Dialog isOpen={meeting !== undefined} onOpenChange={(o) => { if (!o) onClose(); }} size="wide" title={meeting ? `Reschedule ${meeting.title.charAt(0).toLowerCase()}${meeting.title.slice(1)}` : 'Reschedule'}
       description={meeting ? `Now ${formatDay(meeting.start)}, ${formatClockRange(minutesOf(meeting.start), minutesOf(meeting.end))}. ${meeting.invitee.name} gets an email with the new time.` : undefined}
       actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!picked} onPress={() => { if (meeting && picked) { const [day, min] = picked.split('T'); const d = days.find((x) => isoDay(x.day) === day)?.day; if (d) onMove(meeting, at(d, Number(min))); } }}>Move meeting</Button></>}>
-      <div className="tf-bkf__reslots">
-        {days.length === 0 ? <p className="tf-bkf__muted">No open times in the next two weeks.</p> : days.map((d) => (
-          <div key={isoDay(d.day)} className="tf-bkf__reslot-day">
-            <span className="tf-bkf__label tf-num">{formatDay(d.day)}</span>
-            <ChoiceChips label={formatLongDay(d.day)} isLabelHidden size="sm" selectedKeys={picked && picked.startsWith(isoDay(d.day)) ? [picked] : []}
-              items={d.times.map((t) => ({ id: `${isoDay(d.day)}T${t}`, label: formatClockRange(t, t).split(' – ')[0] ?? '' }))}
-              onSelectionChange={(keys) => { const k = [...keys][0]; if (k) setPicked(k); }} />
+      {days.length === 0 ? <p className="tf-bkf__muted">No open times in the next two weeks.</p> : (
+        <div className="tf-bkf-resched">
+          <AriaRadioGroup aria-label="Day" value={dayKey} onChange={(k) => { setDayKey(k); setPicked(undefined); }} className="tf-bkf-resched__days">
+            {days.map((d) => (
+              <AriaRadio key={isoDay(d.day)} value={isoDay(d.day)} className="tf-bkf-resched__day">
+                <span className="tf-bkf-resched__dayname">{relativeDayLabel(d.day)}</span>
+                <span className="tf-bkf-resched__count tf-num">{plural(d.times.length, 'time')}</span>
+              </AriaRadio>
+            ))}
+          </AriaRadioGroup>
+          <div className="tf-bkf-resched__times">
+            <span className="tf-bkf__label">{shownDay ? formatLongDay(shownDay.day) : ''}</span>
+            {shownDay && (
+              <ChoiceChips key={dayKey} label={`Times on ${formatLongDay(shownDay.day)}`} isLabelHidden size="md" className="tf-bkf-resched__grid" selectedKeys={picked ? [picked] : []}
+                items={shownDay.times.map((t) => ({ id: `${isoDay(shownDay.day)}T${t}`, label: formatClock(t) }))}
+                onSelectionChange={(keys) => { const k = [...keys][0]; if (k) setPicked(k); }} />
+            )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </Dialog>
   );
 }

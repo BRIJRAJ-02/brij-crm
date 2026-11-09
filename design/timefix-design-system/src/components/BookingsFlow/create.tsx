@@ -1,7 +1,8 @@
-// Steps 2 and 3: the Create sheet (three questions beside the guest's view), then "Your page is live".
+// Steps 2 and 3: the Create sheet (name, length, where, when; nothing else), then "Your page is live".
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay, Radio as AriaRadio, RadioGroup as AriaRadioGroup, Label, Button as AriaButton } from 'react-aria-components';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { CalendarDays, Check, Code2, Eye, EyeOff, LayoutList, Mail, MapPin, Phone, Play, Video, Webcam } from 'lucide-react';
+import { CalendarDays, Check, Code2, LayoutList, Mail, MapPin, Phone, Play, Video, Webcam } from 'lucide-react';
+import { Select } from '../Select/Select.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { NumberField } from '../NumberField/NumberField.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
@@ -11,14 +12,12 @@ import { Button } from '../Button/Button.tsx';
 import { Kbd } from '../Kbd/Kbd.tsx';
 import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
-import { CopyButton, Eyebrow, GuestView, ScaledPreview, SlidePages, i14, i16, noBook } from './parts.tsx';
+import { CopyButton, SlidePages, i14, i16 } from './parts.tsx';
 import { newPage, uniqueSlug } from './seed.ts';
 import { PLACES, PLACE_ORDER, hoursFor, lengthOf, pageUrl, placeOf, slugify, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
 
 const DURATIONS = ['15', '30', '45', '60'];
 const PLACE_ICON: Readonly<Record<PlaceKind, typeof Video>> = { meet: Video, zoom: Webcam, phone: Phone, 'in-person': MapPin };
-/** BookingFlow's phone layout width (its own breakpoint is 864px): the preview draws it here, then scales to the column. */
-const PHONE_WIDTH = 400;
 
 /** Where: four compact tiles in a 2 × 2 grid (icon well and label; the chosen one gets an accent edge and a check badge). */
 export function PlaceTiles({ value, onChange }: { readonly value: PlaceKind; readonly onChange: (k: PlaceKind) => void }) {
@@ -53,7 +52,7 @@ export interface CreateSheetProps {
   readonly onConnect: () => Promise<void>;
 }
 
-/** One sheet, three questions beside a readable guest preview; then "Your page is live" slides in (08 page side-by-side). */
+/** One short sheet: name, length, where and when. Then "Your page is live" slides in (08 page side-by-side). */
 export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConnect }: CreateSheetProps) {
   const [draft, setDraft] = useState<BookingPage>(() => newPage(state.pages));
   const [step, setStep] = useState<0 | 1>(0);
@@ -62,12 +61,11 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   const [slugTouched, setSlugTouched] = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const liveRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isOpen) return;
     // A fresh sheet every time it opens.
-    setDraft(newPage(state.pages)); setStep(0); setCustom(false); setNameTouched(false); setSlugTouched(false); setHoursOpen(false); setConnecting(false); setShowPreview(false);
+    setDraft(newPage(state.pages)); setStep(0); setCustom(false); setNameTouched(false); setSlugTouched(false); setHoursOpen(false); setConnecting(false);
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (step !== 1) return undefined;
@@ -91,29 +89,12 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   const hours = hoursFor(draft, state);
   const url = pageUrl(draft.slug);
 
-  const preview = (
-    <aside className="tf-bkf-sheet__aside" data-shown={showPreview || undefined} aria-label="What guests see">
-      <Eyebrow>What guests see</Eyebrow>
-      <div className="tf-bkf-sheet__preview">
-        <div className="tf-bkf__soft" key={`${length}-${place}`}>
-          <ScaledPreview label="Booking page preview" designWidth={PHONE_WIDTH}>
-            <GuestView page={draft} state={state} onBook={noBook} />
-          </ScaledPreview>
-        </div>
-      </div>
-    </aside>
-  );
-
   const form = (
     <div className="tf-bkf-sheet__grid">
       <div className="tf-bkf-sheet__form">
         <div className="tf-bkf__group">
-          <TextField label="Name" size="lg" value={draft.name} autoFocus onFocus={(e) => (e.target as HTMLInputElement).select()} onChange={setName} isRequired />
-          <TextField label="Link" value={draft.slug} className="tf-bkf__linkinput"
-            icon={<span className="tf-bkf__prefix">timefix.com/priya/</span>}
-            onChange={(v) => { setSlugTouched(true); set({ slug: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') }); }}
-            isInvalid={taken} errorMessage="Another page has this link. Try another."
-            suffix={draft.slug && !taken ? <span className="tf-bkf__ok-word"><Check size={14} strokeWidth={2} aria-hidden="true" />Available</span> : undefined} />
+          <TextField label="Name" size="lg" value={draft.name} autoFocus onFocus={(e) => (e.target as HTMLInputElement).select()} onChange={setName} isRequired
+            description={<span className="tf-num">{url}</span>} />
         </div>
         <div className="tf-bkf__group">
           <span className="tf-bkf__label" aria-hidden="true">Duration</span>
@@ -127,7 +108,8 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
           </div>
         </div>
         <div className="tf-bkf__group">
-          <PlaceTiles value={place} onChange={(k) => set({ places: [k] })} />
+          <Select label="Where" value={place} onChange={(k) => { if (k) set({ places: [k as PlaceKind] }); }}
+            items={PLACE_ORDER.map((k) => { const Icon = PLACE_ICON[k]; return { id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label, icon: <Icon {...i16} /> }; })} />
           <div className="tf-bkf__reveal tf-bkf__reveal--tight" data-open={place === 'in-person' || undefined}>
             <div className="tf-bkf__reveal-clip" inert={place !== 'in-person'}>
               <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" icon={<MapPin {...i16} />} />
@@ -166,7 +148,6 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
           )}
         </div>
       </div>
-      {preview}
     </div>
   );
 
@@ -188,7 +169,6 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
         </div>
         <AriaButton className="tf-bkf__textbtn tf-bkf__guestlink" onPress={() => onAfter(draft, 'guest')}><Play {...i14} aria-hidden="true" />See it as a guest</AriaButton>
       </div>
-      {preview}
     </div>
   );
 
@@ -202,7 +182,6 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
               <Heading slot="title" className="tf-bkf-sheet__title"><TextSwap swapKey={String(step)}>{step === 0 ? 'New booking page' : 'Your page is live'}</TextSwap></Heading>
               <p className="tf-bkf-sheet__desc">{step === 0 ? 'You can change everything later.' : 'Share the link anywhere. Changes you make later show up at once.'}</p>
             </div>
-            <Button size="sm" variant="ghost" className="tf-bkf-sheet__toggle" icon={showPreview ? <EyeOff {...i14} /> : <Eye {...i14} />} aria-pressed={showPreview} onPress={() => setShowPreview((v) => !v)}>Preview</Button>
           </header>
           <div className="tf-bkf-sheet__body">
             <SlidePages step={step} pages={[<div key="create">{form}</div>, <div key="live">{live}</div>]} />

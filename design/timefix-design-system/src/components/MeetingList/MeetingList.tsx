@@ -1,7 +1,7 @@
 import { Button as AriaButton } from 'react-aria-components';
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, CalendarClock, CalendarX2, Link2, MapPin, MoreHorizontal, Phone, StickyNote, UserX, Video, X } from 'lucide-react';
-import { PersonLine, AvatarGroup } from '../Avatar/Avatar.tsx';
+import { AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
@@ -194,9 +194,8 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
       return (
         <section key={g.key} className="tf-meetings__group" aria-label={t.main}>
           <h3 className="tf-meetings__day">
-            {t.chip && <span className={cx('tf-meetings__chip', isToday && 'tf-meetings__chip--today')}>{t.chip}</span>}
-            <span>{t.main}</span>
-            <span className="tf-meetings__count tf-num">{g.items.length}</span>
+            {t.chip ? <span className={cx('tf-meetings__rel', isToday && 'tf-meetings__rel--today')}>{t.chip}</span> : null}
+            <span className={cx(t.chip && 'tf-meetings__date')}>{t.main}</span>
           </h3>
           <ul className="tf-meetings__rows">
             {g.items.map((m, n) => {
@@ -217,11 +216,10 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
                     <div className="tf-meetings__main" inert={strip}>
                       <span className="tf-meetings__time tf-num">{g.title && <span className="tf-meetings__time-day">{formatDay(m.start)}</span>}{span(m.start, m.end, hour12)}</span>
                       <span className="tf-meetings__what">
-                        <span className="tf-meetings__title">{m.title}</span>
+                        <span className="tf-meetings__title">{m.title} <span className="tf-meetings__with">with {m.invitee.name}</span></span>
                         <span className="tf-meetings__place"><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</span>
                       </span>
-                      <span className="tf-meetings__who"><PersonLine name={m.invitee.name} sub={m.invitee.email} /></span>
-                      <span className="tf-meetings__status"><MeetingStatusTag status={m.status} />{conflictIds?.has(m.id) && <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} aria-hidden />}>Clash</Tag>}</span>
+                      <span className="tf-meetings__status">{m.status !== 'confirmed' && m.status !== 'pending' && <MeetingStatusTag status={m.status} />}{conflictIds?.has(m.id) && <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} aria-hidden />}>Clash</Tag>}</span>
                       <RowActions m={m} onReschedule={onReschedule} onCancel={cancel} onCopyLink={onCopyLink} onNoShow={onNoShow} onNote={onNote} onConfirm={onConfirm} onDecline={onDecline} />
                     </div>
                     <div className="tf-meetings__strip" inert={!strip} role={strip ? 'status' : undefined}>
@@ -282,7 +280,7 @@ export function MeetingCard({ meeting: m, hour12 = true, strip }: MeetingCardPro
       <div className="tf-meetcard__card">
         <div className="tf-meetcard__top">
           <span className="tf-meetcard__time tf-num">{formatDay(m.start)} · {span(m.start, m.end, hour12)}</span>
-          <MeetingStatusTag status={m.status} />
+          {m.status !== 'confirmed' && <MeetingStatusTag status={m.status} />}
         </div>
         <p className="tf-meetcard__title">{m.title}</p>
         <p className="tf-meetcard__place"><PlaceIcon place={m.place} />{m.placeLabel}</p>

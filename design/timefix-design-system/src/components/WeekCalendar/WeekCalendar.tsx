@@ -1,5 +1,5 @@
 import { Button as AriaButton, DialogTrigger, Heading } from 'react-aria-components';
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { AlertTriangle, MapPin, Users, Video } from 'lucide-react';
 import { AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -41,6 +41,8 @@ export interface WeekCalendarProps {
   readonly now?: { readonly day: number; readonly minutes: number };
   readonly hour12?: boolean;
   readonly onSelect?: (selection: WeekSelection | undefined) => void;
+  /** What to offer for a picked span: drawn in a popover beside it once the drag ends (or Enter picks one). `close` clears the pick. */
+  readonly selectionMenu?: (selection: WeekSelection, close: () => void) => ReactNode;
   readonly onJoin?: (event: WeekEvent) => void;
   readonly onReschedule?: (event: WeekEvent) => void;
   /** Makes events movable: drag one (or Enter, arrows, Enter) to move it, drag its bottom edge to change its length. Called once, on drop. */
@@ -87,7 +89,9 @@ interface Moving {
 interface Pressing { readonly id: string; readonly mode: 'move' | 'resize'; readonly x: number; readonly y: number; readonly origin: WeekSelection; readonly started: boolean }
 
 /** The team week: hour gutter, day headers, now-line, tinted events with a popover, hatched busy time, drag to select, and events that move and resize. */
-export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, onJoin, onReschedule, onEventChange, scrollHeight }: WeekCalendarProps) {
+export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour = 18, now, hour12 = true, onSelect, selectionMenu, onJoin, onReschedule, onEventChange, scrollHeight }: WeekCalendarProps) {
+  const selRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const hours = endHour - startHour;
   const from = startHour * 60;
   const [sel, setSel] = useState<WeekSelection>();
@@ -200,7 +204,8 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
   const conflictAt = (id: string, at: WeekSelection) =>
     busy.some((b) => b.day === at.day && overlaps(b, at)) || events.some((o) => o.id !== id && o.day === at.day && overlaps(o, at));
 
-  const update = (next: WeekSelection | undefined) => { setSel(next); onSelect?.(next); };
+  const update = (next: WeekSelection | undefined) => { setSel(next); onSelect?.(next); if (!next) setMenuOpen(false); };
+  const closeMenu = () => { setMenuOpen(false); update(undefined); };
   const minuteAt = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const m = from + Math.floor(((e.clientY - r.top) / r.height) * hours * (60 / STEP)) * STEP;
@@ -211,6 +216,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
     e.currentTarget.setPointerCapture(e.pointerId);
     const m = minuteAt(e);
     drag.current = { day, anchor: m };
+    setMenuOpen(false);
     setSel({ day, start: m, end: m + STEP });
   };
   const move = (e: PointerEvent<HTMLDivElement>) => {
@@ -219,7 +225,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
     const m = minuteAt(e);
     setSel({ day: d.day, start: Math.min(d.anchor, m), end: Math.max(d.anchor, m) + STEP });
   };
-  const up = () => { if (drag.current) { drag.current = undefined; onSelect?.(sel); } };
+  const up = () => { if (drag.current) { drag.current = undefined; onSelect?.(sel); if (selectionMenu && sel) setMenuOpen(true); } };
   const keys = (day: number) => (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     const cur = sel?.day === day ? sel : undefined;
@@ -233,6 +239,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
     } else return;
     e.preventDefault();
     update(next);
+    if ((e.key === 'Enter' || e.key === ' ') && selectionMenu) setMenuOpen(true);
   };
 
   return (
@@ -291,11 +298,11 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
                             {ev.location && <p className="tf-week__pop-row">{ev.kind === 'in-person' ? <MapPin size={14} strokeWidth={1.75} aria-hidden /> : <Video size={14} strokeWidth={1.75} aria-hidden />}{ev.location}</p>}
                             {conflict && <p className="tf-week__pop-row tf-week__pop-row--warn"><AlertTriangle size={14} strokeWidth={1.75} aria-hidden />Overlaps other busy time</p>}
                             {ev.guests && ev.guests.length > 0 && (
-                              <div className="tf-week__pop-row"><Users size={14} strokeWidth={1.75} aria-hidden /><AvatarGroup names={ev.guests} size={20} max={4} /><span className="tf-num">{ev.guests.length} guests</span></div>
+                              <div className="tf-week__pop-row"><Users size={14} strokeWidth={1.75} aria-hidden /><AvatarGroup names={ev.guests} size={20} max={4} /><span className="tf-num">{ev.guests.length} {ev.guests.length === 1 ? 'guest' : 'guests'}</span></div>
                             )}
                             <div className="tf-week__pop-actions">
-                              {ev.kind === 'meeting' && <Button size="sm" variant="primary" icon={<Video size={14} strokeWidth={1.75} />} onPress={() => onJoin?.(ev)}>Join</Button>}
-                              <Button size="sm" onPress={() => onReschedule?.(ev)}>Reschedule</Button>
+                              {ev.kind === 'meeting' && <Button size="sm" variant="primary" icon={<Video size={14} strokeWidth={1.75} />} onPress={() => { setOpenId(undefined); onJoin?.(ev); }}>Join</Button>}
+                              <Button size="sm" onPress={() => { setOpenId(undefined); window.setTimeout(() => onReschedule?.(ev), 150); }}>Reschedule</Button>
                             </div>
                           </div>
                         </Popover>
@@ -317,7 +324,7 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
                   );
                 })()}
                 {sel?.day === day && (
-                  <div className="tf-week__sel" style={{ '--tf-top': pos(sel.start), '--tf-len': (sel.end - sel.start) / 60 } as React.CSSProperties} aria-hidden="true">
+                  <div ref={selRef} className="tf-week__sel" style={{ '--tf-top': pos(sel.start), '--tf-len': (sel.end - sel.start) / 60 } as React.CSSProperties} aria-hidden="true">
                     <span className="tf-num">{range(sel.start, sel.end)}</span>
                   </div>
                 )}
@@ -329,6 +336,11 @@ export function WeekCalendar({ days, events, busy = [], startHour = 8, endHour =
           })}
         </div>
       </div>
+      {selectionMenu && sel && (
+        <Popover triggerRef={selRef} isOpen={menuOpen} onOpenChange={(o) => { if (!o) closeMenu(); }} placement="end top" offset={8} label={`${days[sel.day]?.label ?? ''}, ${range(sel.start, sel.end)}`}>
+          {selectionMenu(sel, closeMenu)}
+        </Popover>
+      )}
       <p className="tf-sr-only" aria-live="polite">{said || (sel ? `Selected ${days[sel.day]?.label ?? ''}, ${range(sel.start, sel.end)}` : '')}</p>
       {editable && <p id={hintId} className="tf-sr-only">Enter picks the event up: arrows move it 15 minutes or a day, Shift with arrows changes its length, Enter drops it, Esc puts it back. Space opens its details.</p>}
     </div>

@@ -1,12 +1,12 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { parseDate, type CalendarDate } from '@internationalized/date';
-import { Ban, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Hand, LayoutList, Plus, Users, X } from 'lucide-react';
-import { MeetingList, type Meeting } from '../MeetingList/MeetingList.tsx';
+import { Ban, CalendarDays, CalendarOff, CalendarPlus, ChevronLeft, ChevronRight, Hand, LayoutList, Plus, UserPlus, Users, X } from 'lucide-react';
+import { MenuList, MenuItem } from '../Menu/Menu.tsx';
+import { MeetingCard, MeetingList, type Meeting } from '../MeetingList/MeetingList.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { WeekCalendar, type WeekBusy, type WeekEvent, type WeekSelection } from '../WeekCalendar/WeekCalendar.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
-import { Tabs } from '../Tabs/Tabs.tsx';
 import { Select } from '../Select/Select.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -18,12 +18,11 @@ import { ReferencePicker, type RecordRef } from '../ComboBox/ComboBox.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
-import { NumberRoll } from '../Motion/Motion.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
-import { formatDay, formatLongDay } from '../../lib/format.ts';
+import { formatDay, formatLongDay, relativeDayLabel } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
-import { Button as AriaButton } from 'react-aria-components';
+import { Button as AriaButton, type Key } from 'react-aria-components';
 import {
   HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, busyOn, conflicted, dayFrom, first, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
   type BookedMeeting, type BookingsState, type PlaceKind, type TimeBlock,
@@ -67,10 +66,19 @@ export interface MeetingsTabProps {
   readonly onConfirm: (id: string) => void; readonly onDecline: (id: string) => void;
   readonly onCreatePage: () => void; readonly onCopyFirstLink: () => void;
   readonly onNewMeeting: (at?: PickedTime) => void;
-  readonly onBlock: (block: TimeBlock) => void; readonly onHold: (picked: PickedTime) => void; readonly onMoveBlock: (block: TimeBlock) => void;
+  readonly onBlock: (block: TimeBlock) => void; readonly onHold: (picked: PickedTime) => void; readonly onTimeOff: (picked: PickedTime) => void; readonly onMoveBlock: (block: TimeBlock) => void;
   readonly onMove: (id: string, day: Date, start: number, end: number) => void;
   readonly onSeeConflict: (m: Meeting) => void;
   readonly onJoin: (id: string) => void;
+}
+
+/** "Starting now", "In 25 min", "In 3 hr", "Tomorrow at 10:00 AM". */
+function startsIn(start: Date, now: Date): string {
+  const min = Math.round((start.getTime() - now.getTime()) / 60_000);
+  if (min <= 0) return 'Starting now';
+  if (min < 60) return `In ${min} min`;
+  if (start.toDateString() === now.toDateString()) return `In ${Math.round(min / 60)} hr`;
+  return `${relativeDayLabel(start, now)} at ${formatClock(minutesOf(start))}`;
 }
 
 /** The Meetings tab. */
@@ -89,6 +97,8 @@ export function MeetingsTab(props: MeetingsTabProps) {
     cancelled: scoped.filter((m) => m.status === 'cancelled'),
   };
   const shown = (list: ReadonlyArray<BookedMeeting>): ReadonlyArray<Meeting> => list.map((m) => ({ ...m, host: whose === 'mine' ? undefined : first(m.host) }));
+  const nextRaw = lists.upcoming[0];
+  const nextUp = nextRaw ? shown([nextRaw])[0] : undefined;
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const clashes = conflicted(state, now).filter(mine);
   const firstClash = clashes.find((m) => !dismissed.has(m.id));
@@ -111,8 +121,9 @@ export function MeetingsTab(props: MeetingsTabProps) {
           <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={(v) => { setPicked(undefined); onView(v); }}
             items={[{ id: 'list', label: 'List', icon: <LayoutList {...i14} /> }, { id: 'week', label: 'Week', icon: <CalendarDays {...i14} /> }, { id: 'team', label: 'Team day', icon: <Users {...i14} /> }]} />
           {view !== 'team' && <Select label="Whose meetings" isLabelHidden className="tf-bkf__whose" items={whoseItems} value={whose} onChange={(v) => { if (v) onWhose(v); }} />}
+          {view === 'list' && <Select label="Which meetings" isLabelHidden className="tf-bkf__whose" value={range} onChange={(k) => { if (k) setRange(k as Range); }}
+            items={[{ id: 'upcoming', label: `Upcoming · ${lists.upcoming.length + requests.length}` }, { id: 'past', label: `Past · ${lists.past.length}` }, { id: 'cancelled', label: `Cancelled · ${lists.cancelled.length}` }]} />}
         </>}
-        count={<><NumberRoll value={upcomingAll.length} /> upcoming</>}
         action={<Button variant="primary" icon={<CalendarPlus {...i14} />} onPress={() => props.onNewMeeting()}>New meeting</Button>} />
       {firstClash && (
         <Callout key={firstClash.id} tone="warning" onDismiss={() => setDismissed((d) => new Set(d).add(firstClash.id))}>
@@ -124,9 +135,13 @@ export function MeetingsTab(props: MeetingsTabProps) {
       )}
       {view === 'list' && (
         <>
-          <Tabs aria-label="Which meetings" selectedKey={range} onSelectionChange={(k) => setRange(k as Range)}
-            items={[{ id: 'upcoming', label: 'Upcoming', count: lists.upcoming.length + requests.length }, { id: 'past', label: 'Past', count: lists.past.length }, { id: 'cancelled', label: 'Cancelled', count: lists.cancelled.length }]} />
-          <MeetingList isFullWidth meetings={shown(lists[range])} requests={range === 'upcoming' ? shown(requests) : []} now={now} highlightId={fresh} conflictIds={new Set(clashes.map((m) => m.id))} onOpen={(m) => props.onOpen(m.id)}
+          {range === 'upcoming' && nextUp && (
+            <section className="tf-bkf-next" aria-label="Next up">
+              <span className="tf-bkf__label">Next up</span>
+              <MeetingCard meeting={nextUp} strip={{ tone: 'success', text: startsIn(nextUp.start, now), action: nextUp.place === 'in-person' ? 'Open' : 'Join', onAction: () => (nextUp.place === 'in-person' ? props.onOpen(nextUp.id) : props.onJoin(nextUp.id)) }} />
+            </section>
+          )}
+          <MeetingList isFullWidth meetings={shown(range === 'upcoming' ? lists.upcoming.slice(1) : lists[range])} requests={range === 'upcoming' ? shown(requests) : []} now={now} highlightId={fresh} conflictIds={new Set(clashes.map((m) => m.id))} onOpen={(m) => props.onOpen(m.id)}
             onCancel={props.onCancel} onUndoCancel={props.onUndoCancel} onReschedule={(m) => props.onReschedule(m.id)} onNoShow={(m) => props.onNoShow(m.id)}
             onConfirm={(m) => props.onConfirm(m.id)} onDecline={(m) => props.onDecline(m.id)}
             onNote={(m) => props.onOpen(m.id)} onCopyLink={() => undefined}
@@ -155,6 +170,36 @@ function PickedBar({ picked, onBlock, onHold, onBook, onClose }: { readonly pick
       <Button size="sm" variant="ghost" icon={<Hand {...i14} />} onPress={onHold}>Hold for someone</Button>
       <Button size="sm" variant="secondary" icon={<CalendarPlus {...i14} />} onPress={onBook}>Book a meeting</Button>
       <IconButton size="sm" label="Clear the picked time" onPress={onClose}><X {...i14} /></IconButton>
+    </div>
+  );
+}
+
+/** "1 hr 30 min", "45 min", "2 hr". */
+function lengthLabel(min: number): string {
+  const h = Math.floor(min / 60), m = min % 60;
+  return [h ? `${h} hr` : '', m ? `${m} min` : ''].filter(Boolean).join(' ');
+}
+
+/** What a dragged span of the week can become: the time on top, then four plain actions. Picking one closes it. */
+function PickedMenu({ picked, close, onBook, onBlock, onHold, onTimeOff }: { readonly picked: PickedTime; readonly close: () => void; readonly onBook: () => void; readonly onBlock: () => void; readonly onHold: () => void; readonly onTimeOff: () => void }) {
+  const run = (fn: () => void) => { close(); window.setTimeout(fn, 150); };
+  return (
+    <div className="tf-bkf-pickmenu">
+      <div className="tf-bkf-pickmenu__head">
+        <span className="tf-bkf-pickmenu__time tf-num">{formatClockRange(picked.start, picked.end)}</span>
+        <span className="tf-bkf-pickmenu__sub tf-num">{formatLongDay(picked.day)} · {lengthLabel(picked.end - picked.start)}</span>
+      </div>
+      <MenuList aria-label="Use this time" onAction={(k: Key) => {
+        if (k === 'book') run(onBook);
+        else if (k === 'block') run(onBlock);
+        else if (k === 'hold') run(onHold);
+        else if (k === 'off') run(onTimeOff);
+      }}>
+        <MenuItem id="book" icon={<UserPlus {...i16} />}>Book someone in</MenuItem>
+        <MenuItem id="block" icon={<Ban {...i16} />}>Block this time</MenuItem>
+        <MenuItem id="hold" icon={<Hand {...i16} />}>Hold for someone</MenuItem>
+        <MenuItem id="off" icon={<CalendarOff {...i16} />}>Time off</MenuItem>
+      </MenuList>
     </div>
   );
 }
@@ -200,7 +245,14 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
       </div>
       <WeekCalendar scrollHeight="max(calc(var(--tf-week-hour) * 6), calc(100dvh - 300px))" days={days.map((d, n) => ({ weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), isToday: n === todayIndex }))}
         events={events} busy={busy} startHour={startHour} endHour={endHour} now={todayIndex >= 0 ? { day: todayIndex, minutes: minutesOf(now) } : undefined}
-        onSelect={(sel: WeekSelection | undefined) => { const d = sel ? days[sel.day] : undefined; props.onPick(sel && d ? { member, day: d, start: sel.start, end: sel.end } : undefined); }}
+        selectionMenu={(sel: WeekSelection, close) => {
+          const d = days[sel.day];
+          if (!d) return null;
+          const picked: PickedTime = { member, day: d, start: sel.start, end: sel.end };
+          return <PickedMenu picked={picked} close={close} onBook={() => props.onNewMeeting(picked)}
+            onBlock={() => props.onBlock({ id: nextId('blk'), member, day: isoDay(d), start: sel.start, end: sel.end, kind: 'block', label: 'Blocked' })}
+            onHold={() => props.onHold(picked)} onTimeOff={() => props.onTimeOff(picked)} />;
+        }}
         onJoin={(ev) => props.onJoin(ev.id)} onReschedule={(ev) => props.onReschedule(ev.id)}
         onEventChange={(ev, next) => {
           const d = days[next.day];

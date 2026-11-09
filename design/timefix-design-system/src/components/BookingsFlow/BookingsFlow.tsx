@@ -313,6 +313,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onNewMeeting={(initial) => setNewMeeting({ initial })}
                   onBlock={(block) => { dispatch({ type: 'block/add', block }); toast({ message: `${formatDay(parseDay(block.day))}, ${formatClockRange(block.start, block.end)} is blocked`, action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
                   onHold={setHoldAt}
+                  onTimeOff={(p) => {
+                    const day = isoDay(p.day);
+                    const entry = { id: nextId('off'), member: p.member, from: day, to: day, allDay: false, start: p.start, end: p.end, note: '' };
+                    const before = state.timeOff;
+                    dispatch({ type: 'timeoff/set', timeOff: [...before, entry] });
+                    toast({ message: `Time off ${formatDay(p.day)}, ${formatClockRange(p.start, p.end)}`, action: { label: 'Undo', onAction: () => dispatch({ type: 'timeoff/set', timeOff: before }) } });
+                  }}
                   onMoveBlock={(block) => { dispatch({ type: 'block/remove', id: block.id }); dispatch({ type: 'block/add', block }); }}
                   onMove={(id, day, startMin) => { const m = meetingById(id); if (m) move(m, at(day, startMin), 'is emailed the new time'); }}
                   onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
