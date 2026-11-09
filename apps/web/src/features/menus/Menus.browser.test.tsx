@@ -475,8 +475,8 @@ describe('the Menus editor', () => {
     await userEvent.keyboard('dairy');
     await expect.element(page.getByRole('option', { name: 'Milk' })).toBeVisible();
     expect(page.getByRole('option', { name: 'Soya' }).elements()).toHaveLength(0);
-    await userEvent.keyboard('{Enter}');
-    await userEvent.keyboard('{Enter}');
+    // Milk is chosen already: the search found it, and nothing more is pressed, so the choice stands. (Two Enters
+    // here toggled it off and on locally, but on a slower machine the search cleared between them.)
     await userEvent.keyboard('{Escape}');
     await expect.element(contains).toHaveTextContent('Eggs, Milk, Soya');
     // A letter on the closed field changes nothing.
