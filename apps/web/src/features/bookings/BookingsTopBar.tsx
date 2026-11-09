@@ -1,13 +1,15 @@
 // Brief
-// Purpose: the Bookings TopBar, drawn once by the layout: the scheduling tile, the title and New, as People's TopBar has.
+// Purpose: the Bookings TopBar, drawn once by the layout: the scheduling tile, the title, the module's tabs on its
+// line, and at its end whose bookings or hours show, New and the settings gear (the mock's shell, 9 November 2026).
 // Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen,
 // else of the next two weeks.
-// Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
+// Leaves out: drawing a span on the week (the calendar's own way into the same dialog), and which tab is chosen (the
+// layout hands the tabs in).
 import type { BookingPageView } from '@crm/data';
 import { useCalendar, useCalendarList, useCaptureList } from '@crm/data/react';
-import { Button, Menu, MenuItem, MenuTrigger, TopBar, useFormatSettings } from '@crm/ui';
+import { Button, ButtonLink, Menu, MenuItem, MenuTrigger, Tooltip, TopBar, useFormatSettings } from '@crm/ui';
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
 import { busyOf, findFreeSpan, freeSpanIn } from './free.ts';
 import { NewMeetingDialog, NewPageDialog, usePreloadParts } from './lazy-parts.tsx';
@@ -19,11 +21,15 @@ import { weekRange } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
 import { useCan, useWorkspaceObjects } from '../workspace/WorkspacePage.tsx';
 import { peopleSearchOf } from './people.ts';
-import { pageEditorHref } from '../booking/links.ts';
+import { bookingsSettingsHref, pageEditorHref } from '../booking/links.ts';
 
 /** Props for BookingsTopBar. */
 export interface BookingsTopBarProps {
   readonly slug: string;
+  /** The module's tabs, on the bar's line after its title (`BookingsModuleTabs`). */
+  readonly tabs: ReactNode;
+  /** Whose bookings or hours the tab shows (`BookingsScope`), before the primary action; absent when nothing to pick. */
+  readonly scope?: ReactNode;
   /**
    * On a tab with a primary action of its own (Availability's New schedule): where it goes, in place of New
    * meeting, so the screen has one primary (the owner, 22 October 2026).
@@ -42,7 +48,15 @@ export interface BookingsTopBarProps {
  * New on every tab, at one place and one width, and opens a menu: Booking page or Meeting (the bookings critique,
  * B-02). A meeting goes on a booking page, so with none on yet Meeting is turned off with the reason under it.
  */
-export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAddPageClose }: BookingsTopBarProps) {
+export function BookingsTopBar({
+  slug,
+  tabs,
+  scope,
+  actionSlot,
+  isAddingPage,
+  onAddPage,
+  onAddPageClose,
+}: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The dialogs and the jump month, loaded once the tab has drawn: on every Bookings tab, since this bar is.
   usePreloadParts();
@@ -158,8 +172,13 @@ export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAd
     </MenuTrigger>
   );
   return (
-    <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE}>
+    <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE} tabs={tabs}>
+      {scope}
       {actionSlot !== undefined ? <div ref={actionSlot} /> : button}
+      {/* Bookings' own settings, last on the bar (the mock's shell): Calendars, Teams and Scheduling access live there. */}
+      <Tooltip content={strings.settingsLabel}>
+        <ButtonLink variant="ghost" icon="settings" label={strings.settingsLabel} href={bookingsSettingsHref(slug)} />
+      </Tooltip>
       <NewPageDialog
         data={data}
         slug={slug}

@@ -1,8 +1,8 @@
 // Brief
-// Purpose: the Meetings · Pages · Availability · Routing bar under Bookings' TopBar (as Calendly and Cal.com lay theirs out), in the row People's ViewBar takes, with the tab's tools at its end, as Captures has.
+// Purpose: Bookings' Meetings · Pages · Availability · Routing on the TopBar's line (as Calendly and Cal.com lay theirs out), the page's one header with one line under it (the owner, 9 November 2026), and the tab's tools under it.
 // Main task: switch between the meetings, the booking pages, the hours and routing; each tab opens on its first view, and its views (Day, Week, Team, List; My hours, Roster) switch inside it.
-// Leaves out: what each view shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
-import { ButtonLink, SegmentedControl, TabPanel, Tabs, usePhoneWidth } from '@crm/ui';
+// Leaves out: what each view shows (its child route renders that under the bar, and portals its tools into the tools row).
+import { SectionBar, SegmentedControl, Tabs, usePhoneWidth } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -10,97 +10,102 @@ import { BOOKINGS_TABS, bookingsTabHref, isBookingsPageTab, type BookingsPageTab
 import { HostsSwitch } from './HostsSwitch.tsx';
 import { BookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
 
-/** Props for BookingsTabs. */
-export interface BookingsTabsProps {
+/** Props for BookingsModuleTabs. */
+export interface BookingsModuleTabsProps {
   readonly slug: string;
   /** The tab the address names. */
   readonly tab: BookingsPageTab;
-  /** The view the address names (Calendar and List under Meetings, Availability and Roster under Availability). */
-  readonly view: BookingsView;
-  /** The tabs this member has, in order (the Roster only for someone who sees a colleague's scheduling, Routing only for a holder of `routing.manage`). */
+  /** The tabs this member has, in order (Routing only for a holder of `routing.manage`). */
   readonly tabs?: readonly BookingsPageTab[];
-  /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
-  readonly children: ReactNode;
-  /**
-   * Mine · Everyone at the strip's very end, after the tab's tools, for an admin on Calendar and List: drawn by the
-   * layout, so it stands still as those tabs swap their tools in beside it.
-   */
-  readonly hosts?: HostsChoice | undefined;
-  /** My hours · Roster at the strip's end on Availability, for whoever sees a colleague's scheduling; else absent. */
-  readonly hasRoster?: boolean;
-  /**
-   * The tab's one way to the view it keeps without a tab of its own, a quiet link at the strip's start of tools:
-   * Meetings' Calendars and Pages' Round robin groups, and from each of those back to the tab's first view.
-   */
-  readonly aside?:
-    | { readonly label: string; readonly href: string; readonly icon: 'calendar' | 'users-round' | 'arrow-left' }
-    | undefined;
 }
 
 /**
- * Meetings · Pages · Availability · Routing. Choosing a tab moves to its first view's address; the panel holds
- * whatever that address renders, and the strip's end holds that view's tools.
+ * Meetings · Pages · Availability · Routing, in Bookings' TopBar on its hairline. Each tab is its own address:
+ * choosing one moves there, and the page under the bar is that address's.
  */
-export function BookingsTabs({
-  slug,
-  tab,
-  view,
-  tabs = BOOKINGS_TABS,
-  children,
-  hosts,
-  hasRoster = false,
-  aside,
-}: BookingsTabsProps) {
+export function BookingsModuleTabs({ slug, tab, tabs = BOOKINGS_TABS }: BookingsModuleTabsProps) {
   const navigate = useNavigate();
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
-  const isPhone = usePhoneWidth();
   return (
-    <BookingsToolbarSlot.Provider value={slot}>
-      <Tabs
-        variant="bar"
-        end={
-          <>
-            {aside !== undefined && (
-              <ButtonLink variant="ghost" icon={aside.icon} href={aside.href}>
-                {aside.label}
-              </ButtonLink>
-            )}
-            <div ref={setSlot} />
-            {/* On a phone Meetings' View menu holds Mine · Everyone with its views (A14), so it leaves the strip. */}
-            {hosts !== undefined && !(isPhone && (view === 'calendar' || view === 'list')) && (
-              <HostsSwitch value={hosts.value} onChange={hosts.onChange} />
-            )}
-            {/* The member's own hours or the team's week, as Cal.com's My availability · Team availability. Drawn here,
-                so it stands still as the two views swap their tools in beside it. */}
-            {hasRoster && tab === 'availability' && (
-              <SegmentedControl
-                label={strings.availabilityViewsLabel}
-                size="compact"
-                isFitted
-                value={view === 'roster' ? 'roster' : 'availability'}
-                onChange={(next) => {
-                  const to = next === 'roster' ? 'roster' : 'availability';
-                  if (to !== view) void navigate({ href: bookingsTabHref(slug, to) });
-                }}
-                segments={(['availability', 'roster'] as const).map((each) => ({
-                  value: each,
-                  label: strings.availabilityViews[each],
-                }))}
-              />
-            )}
-          </>
-        }
-        label={strings.pageTabsLabel}
-        selectedKey={tab}
-        onSelectionChange={(next) => {
-          if (isBookingsPageTab(next) && next !== tab) void navigate({ href: bookingsTabHref(slug, next) });
-        }}
-        tabs={tabs.map((id) => ({ id, label: strings.pageTabs[id], href: bookingsTabHref(slug, id) }))}
-      >
-        {/* One panel, always the chosen tab's: the page under it stays mounted while the next one loads, rather
-            than moving to another panel and mounting again before it is swapped. */}
-        <TabPanel id={tab}>{children}</TabPanel>
-      </Tabs>
+    <Tabs
+      variant="topbar"
+      label={strings.pageTabsLabel}
+      selectedKey={tab}
+      onSelectionChange={(next) => {
+        if (isBookingsPageTab(next) && next !== tab) void navigate({ href: bookingsTabHref(slug, next) });
+      }}
+      tabs={tabs.map((id) => ({ id, label: strings.pageTabs[id], href: bookingsTabHref(slug, id) }))}
+    />
+  );
+}
+
+/** The views whose screen portals its tools into the row under the bar (Pages' search, Routing's views). */
+const VIEWS_WITH_TOOLS = new Set<BookingsView>(['pages', 'routing']);
+
+/** Props for BookingsTabBody. */
+export interface BookingsTabBodyProps {
+  /** The view the address names. */
+  readonly view: BookingsView;
+  /** The child route's page (an `Outlet`). */
+  readonly children: ReactNode;
+}
+
+/**
+ * The chosen tab's page under the TopBar: on Pages and Routing, a row for the tools the screen portals in (Captures'
+ * search, Overview · Decisions · Skills · Test); the other views draw their own bar (the week's dates, the schedule
+ * switcher), so they get none and no empty row stands over them.
+ */
+export function BookingsTabBody({ view, children }: BookingsTabBodyProps) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const hasTools = VIEWS_WITH_TOOLS.has(view);
+  return (
+    <BookingsToolbarSlot.Provider value={hasTools ? slot : null}>
+      {hasTools && <SectionBar variant="bar" end={<div ref={setSlot} />} />}
+      {children}
     </BookingsToolbarSlot.Provider>
   );
+}
+
+/** Props for BookingsScope. */
+export interface BookingsScopeProps {
+  readonly slug: string;
+  readonly tab: BookingsPageTab;
+  readonly view: BookingsView;
+  /** Mine · Everyone on Calendar and List, for an admin; else absent. */
+  readonly hosts?: HostsChoice | undefined;
+  /** My hours · Roster on Availability, for whoever sees a colleague's scheduling; else absent. */
+  readonly hasRoster?: boolean;
+}
+
+/**
+ * Whose bookings or hours the tab shows, in the TopBar before its primary action: Mine · Everyone on Meetings'
+ * Calendar and List (an admin's), My hours · Roster on Availability. Drawn by the layout, so it stands still as the
+ * views swap under it. Nothing for anyone with only their own.
+ */
+export function BookingsScope({ slug, tab, view, hosts, hasRoster = false }: BookingsScopeProps) {
+  const navigate = useNavigate();
+  const isPhone = usePhoneWidth();
+  // On a phone Meetings' View menu holds Mine · Everyone with its views (A14), so it leaves the bar.
+  if (hosts !== undefined && !(isPhone && (view === 'calendar' || view === 'list'))) {
+    return <HostsSwitch value={hosts.value} onChange={hosts.onChange} />;
+  }
+  // The member's own hours or the team's week, as Cal.com's My availability · Team availability.
+  if (hasRoster && tab === 'availability') {
+    return (
+      <SegmentedControl
+        label={strings.availabilityViewsLabel}
+        size="compact"
+        isFitted
+        value={view === 'roster' ? 'roster' : 'availability'}
+        onChange={(next) => {
+          const to = next === 'roster' ? 'roster' : 'availability';
+          if (to !== view) void navigate({ href: bookingsTabHref(slug, to) });
+        }}
+        segments={(['availability', 'roster'] as const).map((each) => ({
+          value: each,
+          label: strings.availabilityViews[each],
+        }))}
+      />
+    );
+  }
+  return null;
 }

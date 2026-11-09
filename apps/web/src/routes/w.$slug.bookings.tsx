@@ -1,10 +1,9 @@
 import { useCalendar } from '@crm/data/react';
 import { createFileRoute, Outlet, useLocation, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
+import { BookingsModuleTabs, BookingsScope, BookingsTabBody } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
-import { calendarsHref, rosterIsShown, roundRobinHref } from '../features/booking/links.ts';
-import { strings } from '../features/bookings/strings.ts';
+import { rosterIsShown } from '../features/booking/links.ts';
 import { BOOKINGS_TABS, bookingsViewOf, tabOfView, type BookingsView } from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import {
@@ -16,13 +15,13 @@ import {
 import { useBookingArrivals } from '../features/bookings/useBookingArrivals.ts';
 import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// Bookings, after Records in the sidebar, laid out as Captures is: the frame, the TopBar (the tile, the upcoming
-// count and New, as People's) and the tab strip (Meetings · Pages · Availability · Routing, the IA brief of 5 November
-// 2026, as Calendly and Cal.com) in the row People's ViewBar takes, with the view's own route (`bookings.calendar`,
-// `bookings.roster`, …) drawn in the chosen panel. A view's own WorkspacePage draws only its body inside this frame.
-// The layout owns New, so it never moves or remounts as the tabs change. Bare `/bookings` (and `/bookings/meetings`)
-// goes to the calendar, or the list for an old `?view=list` link (`bookings.index`). Round robin's groups and
-// Calendars are set up in Settings (5 November 2026): a quiet link at the strip's end goes there.
+// Bookings, after Records in the sidebar: the frame and one header, the TopBar (the tile, Bookings, the tabs
+// Meetings · Pages · Availability · Routing on its line, then whose bookings or hours show, New and the settings gear;
+// the mock's shell, 9 November 2026: one header with one line under it), with the view's own route
+// (`bookings.calendar`, `bookings.roster`, …) under it. A view's own WorkspacePage draws only its body inside this
+// frame. The layout owns New, so it never moves or remounts as the tabs change. Bare `/bookings` (and
+// `/bookings/meetings`) goes to the calendar, or the list for an old `?view=list` link (`bookings.index`). Calendars,
+// Teams (round robin's groups) and Scheduling access are Bookings settings, behind the gear.
 /** The views that read bookings, where an admin's Mine · Everyone shows. */
 const READS_BOOKINGS = new Set<string>(['calendar', 'list']);
 /** The tabs that put their own primary action where New meeting sits, rather than letting the TopBar keep it. */
@@ -81,16 +80,6 @@ function BookingsRoute() {
   const tabs = useMemo(() => BOOKINGS_TABS.filter((each) => each !== 'routing' || canRoute), [canRoute]);
   // My hours · Roster only for someone who sees a colleague's scheduling (spec 0037, AC-1447).
   const hasRoster = access !== undefined && rosterIsShown(access);
-  // Setup that lives in Settings, one quiet link away (the bookings IA review; one home per screen, 5 November
-  // 2026): Calendars from Meetings, while there is calendar sync to manage, and Round robin groups from Pages, for
-  // whoever makes booking pages (`booking.manage`, as the groups' page asks).
-  const canBook = useCan('booking.manage');
-  const aside =
-    view === 'pages' && canBook
-      ? { label: strings.asideLinks.roundRobin, href: roundRobinHref(slug), icon: 'users-round' as const }
-      : (view === 'calendar' || view === 'list') && canConnectCalendar && !isTeamDay
-        ? { label: strings.asideLinks.calendars, href: calendarsHref(slug), icon: 'calendar' as const }
-        : undefined;
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);
   return (
@@ -104,6 +93,16 @@ function BookingsRoute() {
                 topBar: (
                   <BookingsTopBar
                     slug={slug}
+                    tabs={<BookingsModuleTabs slug={slug} tab={tab} tabs={tabs} />}
+                    scope={
+                      <BookingsScope
+                        slug={slug}
+                        tab={tab}
+                        view={view}
+                        hasRoster={hasRoster}
+                        hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
+                      />
+                    }
                     actionSlot={ownsAction ? setActionSlot : undefined}
                     isAddingPage={isAddingPage}
                     onAddPage={addPage}
@@ -113,17 +112,9 @@ function BookingsRoute() {
                   />
                 ),
                 body: (
-                  <BookingsTabs
-                    slug={slug}
-                    tab={tab}
-                    view={view}
-                    tabs={tabs}
-                    hasRoster={hasRoster}
-                    aside={aside}
-                    hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
-                  >
+                  <BookingsTabBody view={view}>
                     <Outlet />
-                  </BookingsTabs>
+                  </BookingsTabBody>
                 ),
               }}
             />
