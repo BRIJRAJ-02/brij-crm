@@ -14,11 +14,8 @@ export const strings = {
   /** Availability's two views, on the strip's end for whoever sees a colleague's scheduling (as Cal.com's toggle). */
   availabilityViewsLabel: 'Whose hours',
   availabilityViews: { availability: 'My hours', roster: 'Roster' },
-  /** Setup that lives in Settings, a quiet link at the strip's end. */
-  asideLinks: {
-    calendars: 'Calendars',
-    roundRobin: 'Round robin groups',
-  },
+  /** The gear at the TopBar's end, and the name of the page it opens. */
+  settingsLabel: 'Bookings settings',
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },
