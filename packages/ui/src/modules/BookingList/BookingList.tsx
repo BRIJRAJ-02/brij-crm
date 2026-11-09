@@ -218,8 +218,7 @@ export function BookingList({
                           <span className={styles.titleLine}>
                             <span className={styles.name}>
                               <Button
-                                variant="ghost"
-                                isFullWidth
+                                variant="value"
                                 aria-describedby={`${rowId}-when${row.subline === undefined ? '' : ` ${rowId}-sub`}`}
                                 onPress={(event) => {
                                   const element =

@@ -179,15 +179,7 @@ export function SegmentedControl({
             ) : (
               <HueLabel label={segment.label} hue={segment.hue} />
             )}
-            {segment.count !== undefined && (
-              // Keyed by the number, so each new one rolls in rather than swapping in place.
-              <span className={styles.count}>
-                <VisuallyHidden>, </VisuallyHidden>
-                <span key={segment.count} className={styles.countValue}>
-                  {segment.count}
-                </span>
-              </span>
-            )}
+            {segment.count !== undefined && <SegmentCount count={segment.count} />}
           </RadioButton>
         </RadioField>
       ))}
@@ -201,6 +193,22 @@ export function SegmentedControl({
       </span>
       {group}
     </div>
+  );
+}
+
+/**
+ * A segment's quiet count. Keyed by the number, so a new one rolls in rather than swapping in place; the first number
+ * it shows just sits there (no roll as the page or its count first loads).
+ */
+function SegmentCount({ count }: { readonly count: number }) {
+  const [first] = useState(count);
+  return (
+    <span className={styles.count}>
+      <VisuallyHidden>, </VisuallyHidden>
+      <span key={count} className={styles.countValue} data-roll={count === first ? undefined : ''}>
+        {count}
+      </span>
+    </span>
   );
 }
 

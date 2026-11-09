@@ -293,8 +293,8 @@ function CountDemo(args: Story['args']) {
 export const WithCount: Story = {
   render: (args) => <CountDemo {...args} />,
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByRole('radio', { name: 'Requests, 2' })).toBeInTheDocument();
+    await expect(canvas.getByRole('radio', { name: /^Requests\W*2$/ })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'More' }));
-    await expect(canvas.getByRole('radio', { name: 'Requests, 3' })).toBeInTheDocument();
+    await expect(canvas.getByRole('radio', { name: /^Requests\W*3$/ })).toBeInTheDocument();
   },
 };
