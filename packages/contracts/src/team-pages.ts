@@ -38,6 +38,11 @@ export const TeamLinkPage = z.object({
   views: z.number().int().min(0),
   /** The caller's own row: it opens their own editor, never the team one. */
   isSelf: z.boolean(),
+  /**
+   * A page only person (9 Nov 2026): added from Team pages with no Timefix login of their own. Only they can be
+   * removed from Team pages; anyone else leaves through Members (or their partner).
+   */
+  isPageOnly: z.boolean().optional(),
 });
 /** One member's link page as Team pages lists it. */
 export type TeamLinkPage = z.infer<typeof TeamLinkPage>;
@@ -64,6 +69,68 @@ export const ClaimTeamHandleInput = WorkspaceScoped.extend({
 export type ClaimTeamHandleInput = z.infer<typeof ClaimTeamHandleInput>;
 
 /**
+ * A page only person's name (9 Nov 2026): one line, no control characters, as a partner's person's is, since it is
+ * their link page's name and History's.
+ */
+export const PageOnlyName = z
+  .string()
+  .trim()
+  .min(1, 'Add their name.')
+  .max(80, 'Use at most 80 characters for the name.')
+  // eslint-disable-next-line no-control-regex
+  .regex(/^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]+$/, 'Use a name on one line.');
+/** A page only person's name. */
+export type PageOnlyName = z.infer<typeof PageOnlyName>;
+
+/**
+ * A page only person added from Team pages (9 Nov 2026): someone the workspace makes a link page for, who never signs
+ * up. A name, an email when there is one (never an invitation, never an email to them), and their handle; the page
+ * starts Private. `link_pages.manage_team` only. An address someone active here already uses, or an open invitation
+ * names, is refused (`UNIQUE_CONFLICT` on `email`), and so is a full workspace (`SEAT_LIMIT`).
+ */
+export const AddPageOnlyPersonInput = WorkspaceScoped.extend({
+  name: PageOnlyName,
+  email: z.email('Enter a valid email address, or leave it empty.').max(254).optional(),
+  handle: PublicHandle,
+  mutationId: Uuid,
+});
+/** A page only person added from Team pages. */
+export type AddPageOnlyPersonInput = z.infer<typeof AddPageOnlyPersonInput>;
+
+/**
+ * A page only person removed from Team pages: their handle stops working and their page's content is kept 30 days,
+ * as any removal's. Anyone else is `NOT_FOUND` here (Members removes them).
+ */
+export const RemovePageOnlyPersonInput = WorkspaceScoped.extend({ member: Uuid, mutationId: Uuid });
+/** A page only person removed from Team pages. */
+export type RemovePageOnlyPersonInput = z.infer<typeof RemovePageOnlyPersonInput>;
+
+/** A handle checked as it is typed in Add a page: free means nobody holds or ever held it, and it isn't reserved. */
+export const TeamHandleCheckInput = WorkspaceScoped.extend({ handle: z.string().trim().toLowerCase().max(64) });
+/** A handle checked as it is typed. */
+export type TeamHandleCheckInput = z.infer<typeof TeamHandleCheckInput>;
+
+/** Whether a handle can be claimed now. */
+export const TeamHandleCheck = z.object({ isFree: z.boolean() });
+/** Whether a handle can be claimed now. */
+export type TeamHandleCheck = z.infer<typeof TeamHandleCheck>;
+
+/** A free handle made from a name, for Add a page's first value. */
+export const TeamHandleSuggestInput = WorkspaceScoped.extend({ name: z.string().trim().max(80) });
+/** A free handle made from a name. */
+export type TeamHandleSuggestInput = z.infer<typeof TeamHandleSuggestInput>;
+
+/** The suggestion, absent when every try was taken. */
+export const TeamHandleSuggestion = z.object({ handle: z.string().optional() });
+/** The suggestion. */
+export type TeamHandleSuggestion = z.infer<typeof TeamHandleSuggestion>;
+
+/** Whether the removal changed anything (false when they were already gone). */
+export const PageOnlyRemoved = z.object({ removed: z.boolean() });
+/** Whether the removal changed anything. */
+export type PageOnlyRemoved = z.infer<typeof PageOnlyRemoved>;
+
+/**
  * Who last changed the caller's own link page, when it was someone else (AC-7004): "Edited by Ana", on their own
  * page. Absent when nobody else has.
  */
@@ -73,9 +140,16 @@ export const LinkPageEditedBy = z.object({
 /** Who last changed the caller's own link page. */
 export type LinkPageEditedBy = z.infer<typeof LinkPageEditedBy>;
 
-/** The team pages namespace. `list` and `claim` need `link_pages.manage_team`; `editedBy` is any member's own. */
+/**
+ * The team pages namespace. Everything but `editedBy` (any member's own) needs `link_pages.manage_team`: the list, a
+ * claim, and adding, removing and naming a page only person.
+ */
 export const teamPagesContract = {
   list: oc.input(WorkspaceScoped).output(TeamLinkPages),
   claim: oc.input(ClaimTeamHandleInput).output(TeamLinkPage),
+  addPerson: oc.input(AddPageOnlyPersonInput).output(TeamLinkPage),
+  removePerson: oc.input(RemovePageOnlyPersonInput).output(PageOnlyRemoved),
+  checkHandle: oc.input(TeamHandleCheckInput).output(TeamHandleCheck),
+  suggestHandle: oc.input(TeamHandleSuggestInput).output(TeamHandleSuggestion),
   editedBy: oc.input(WorkspaceScoped).output(LinkPageEditedBy),
 };

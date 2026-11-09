@@ -362,6 +362,13 @@
     block-size: 100%;
   }
 
+  /* One line, so a title that follows what is typed (a menu item's name) never moves the form under the fingers. */
+  .root[data-variant='drawer'] .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .root[data-variant='peek'] .dialog {
     block-size: 100%;
   }

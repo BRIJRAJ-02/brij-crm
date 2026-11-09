@@ -299,6 +299,12 @@ async function launch(connection, user, screen = 'link_pages.mine', theme) {
 | `link_pages.mine` | The person's own link page: share it, its QR code, and its editor. | Anyone you added. |
 | `link_pages.team` | Team pages: everyone's page and QR code, and each page's editor. | Only someone with the `admin` role; anyone else is `403 FORBIDDEN`. |
 
+**Pages for people who aren't in your product.** Inside `link_pages.team`, an admin can press **Add a page** to make
+a page for someone who never signs up anywhere (a name, an optional email, and their `timefix.com/<handle>`). Timefix
+sends them nothing. These page only people are the workspace's, not yours: they never appear in `GET …/members`, and
+your `PUT` and `DELETE` can't change or remove them, whatever external id you send. They take a seat like anyone else,
+and an email one of them uses is refused for your people (`409`). The admin removes them from the same screen.
+
 `theme` is `light` or `dark`; leave it out to follow the person's system. The answer (`200`, `no-store`):
 
 ```json

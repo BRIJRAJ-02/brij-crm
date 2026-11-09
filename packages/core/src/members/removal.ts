@@ -203,6 +203,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   partner_codes_approved_by: 'history: who approved a connect; a code lives 60 seconds and is swept a day on',
   managed_members_member:
     'a partner’s person keeps their row (spec 0070, AC-7022): the same external id brings the same identity back',
+  managed_members_created_by:
+    'history: who added a page only person from Team pages (migration 0196); the person outlives who added them',
   partner_launches_member:
     'history: whom a partner opened a screen for; a launch lives 60 seconds and is swept a day on (spec 0070)',
 };

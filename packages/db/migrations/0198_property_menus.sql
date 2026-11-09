@@ -1,5 +1,5 @@
 -- Properties, slice 2b (spec 0065 H7, AC-6517 to AC-6519): each business has its own menu library and its own draft.
--- Numbered 0197, after 0196 (properties).
+-- Numbered 0198, after 0197 (properties).
 --
 -- What changes:
 -- * `menu_items`, `menu_photos` and `menu_option_groups` gain `property_id` (not null), so the per business limits
@@ -15,7 +15,7 @@
 -- * A menu's position counts within its business, renumbered here.
 --
 -- While the deploy rolls out and after a rollback, the old code still runs: `crm_first_property_id()` is the new
--- columns' default, as in 0196, so an old insert lands on the first business. The old code's `on conflict
+-- columns' default, as in 0197, so an old insert lands on the first business. The old code's `on conflict
 -- (workspace_id)` write to `menu_drafts` (every menu edit counts a change through it) is refused during that window,
 -- with nothing written: the deploy window is short, and the menu editor says so and keeps nothing half done.
 --
@@ -31,7 +31,7 @@ alter table menu_option_groups add column property_id uuid;
 --> statement-breakpoint
 alter table menu_drafts add column property_id uuid;
 --> statement-breakpoint
--- Every step from here to `row_security = on` reads every workspace's rows, as the owner, like 0196.
+-- Every step from here to `row_security = on` reads every workspace's rows, as the owner, like 0197.
 set local row_security = off;
 --> statement-breakpoint
 update menu_items i set property_id = owner.property_id
@@ -155,7 +155,7 @@ begin
     select 1 from menu_drafts d
     where not exists (select 1 from properties p where p.workspace_id = d.workspace_id and p.id = d.property_id)
   ) then
-    raise exception '0197_property_menus: every menu row must be on its workspace''s own business';
+    raise exception '0198_property_menus: every menu row must be on its workspace''s own business';
   end if;
   if exists (
     select 1 from pg_class c
@@ -163,7 +163,7 @@ begin
       'public.menu_option_groups'::regclass, 'public.menu_drafts'::regclass)
       and not (c.relrowsecurity and c.relforcerowsecurity)
   ) then
-    raise exception '0197_property_menus: the menu tables keep their row level security';
+    raise exception '0198_property_menus: the menu tables keep their row level security';
   end if;
 end
 $$;

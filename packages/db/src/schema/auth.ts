@@ -1081,12 +1081,14 @@ export const managedUsers = auth.table(
     userId: uuid('user_id').notNull().primaryKey(),
     /** The workspace it was made for (no foreign key across schemas). */
     workspaceId: uuid('workspace_id').notNull(),
-    partnerId: uuid('partner_id').notNull(),
+    /** The partner that added them; null for a page only person (migration 0196), keyed by their managed row's id. */
+    partnerId: uuid('partner_id'),
     externalId: text('external_id').notNull(),
     createdAt: createdAt(),
   },
   (t) => [
     foreignKey({ name: 'managed_users_user', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    // NULLS NOT DISTINCT in migration 0196 (a page only person has no partner); Drizzle's index builder can't say it.
     uniqueIndex('managed_users_external').on(t.workspaceId, t.partnerId, t.externalId),
     check('managed_users_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
   ],

@@ -1377,15 +1377,22 @@
     {
       "idx": 196,
       "version": "7",
-      "when": 1795700017000,
-      "tag": "0196_properties",
+      "when": 1795700016500,
+      "tag": "0196_page_only_people",
       "breakpoints": true
     },
     {
       "idx": 197,
       "version": "7",
+      "when": 1795700017000,
+      "tag": "0197_properties",
+      "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
       "when": 1795700018000,
-      "tag": "0197_property_menus",
+      "tag": "0198_property_menus",
       "breakpoints": true
     }
   ]

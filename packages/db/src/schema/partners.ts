@@ -154,12 +154,17 @@ export const managedMembers = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** `auth.partners.id` (no foreign key across schemas). */
-    partnerId: uuid('partner_id').notNull(),
-    /** The partner's own id for the person: 1 to 128 URL safe characters. */
+    /** `auth.partners.id` (no foreign key across schemas); null for a page only person nobody's partner added. */
+    partnerId: uuid('partner_id'),
+    /** The partner's own id for the person: 1 to 128 URL safe characters. A page only person's is the row's own id. */
     externalId: text('external_id').notNull(),
-    /** The connection that last added or changed them. */
-    connectionId: uuid('connection_id').notNull(),
+    /** The connection that last added or changed them; null for a page only person. */
+    connectionId: uuid('connection_id'),
+    /**
+     * Who added a page only person from Team pages (9 Nov 2026); null for a partner's person. A page only person has no
+     * partner and no connection, so a partner's PUT and DELETE never find them.
+     */
+    createdByMemberId: uuid('created_by_member_id'),
     /** Their member row now (a new one each time they come back). */
     memberId: uuid('member_id').notNull(),
     /** Their managed identity, `auth.user.id`. */
@@ -186,7 +191,18 @@ export const managedMembers = pgTable(
       columns: [t.workspaceId, t.memberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    foreignKey({
+      name: 'managed_members_created_by',
+      columns: [t.workspaceId, t.createdByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
     check('managed_members_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
+    // A partner's person, or a page only one (migration 0196): never half of each.
+    check(
+      'managed_members_kind',
+      sql`(${t.partnerId} is not null and ${t.connectionId} is not null and ${t.createdByMemberId} is null) or (${t.partnerId} is null and ${t.connectionId} is null and ${t.createdByMemberId} is not null and ${t.externalId} = ${t.id}::text)`,
+    ),
+    index('managed_members_created_by_ix').on(t.workspaceId, t.createdByMemberId),
     uniqueIndex('managed_members_external').on(t.workspaceId, t.partnerId, t.externalId),
     uniqueIndex('managed_members_member_ix').on(t.workspaceId, t.memberId),
     index('managed_members_connection_ix').on(t.workspaceId, t.connectionId),

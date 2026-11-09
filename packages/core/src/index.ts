@@ -246,6 +246,14 @@ export {
 // Team link pages (spec 0070, slice 1): the list, a handle claimed for someone, History, and "Edited by".
 export { claimTeamHandle, listTeamLinkPages, readLinkPageEditedBy } from './profile/team-pages.ts';
 export {
+  addPageOnlyPerson,
+  checkTeamHandle,
+  removePageOnlyPerson,
+  suggestTeamHandle,
+  type PageOnlyUserEnder,
+  type PageOnlyUserMaker,
+} from './profile/page-only.ts';
+export {
   discardLinkDraft,
   listLinkPageVersions,
   publishLinkPage,

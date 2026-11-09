@@ -266,6 +266,11 @@ export const ACCESS_TABLE = {
   enterTeamLinkPage: { permission: 'link_pages.manage_team' },
   listTeamLinkPages: { permission: 'link_pages.manage_team' },
   claimTeamHandle: { permission: 'link_pages.manage_team' },
+  // Page only people (9 Nov 2026): added, removed and their handle checked from Team pages.
+  addPageOnlyPerson: { permission: 'link_pages.manage_team' },
+  removePageOnlyPerson: { permission: 'link_pages.manage_team' },
+  checkTeamHandle: { permission: 'link_pages.manage_team' },
+  suggestTeamHandle: { permission: 'link_pages.manage_team' },
   readLinkPageEditedBy: { anyMember: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },

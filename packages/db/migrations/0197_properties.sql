@@ -1,6 +1,6 @@
 -- Properties, slice 1 (spec 0065 H7, AC-6512 to AC-6515), invisible to everyone: `business_profiles` becomes
 -- `properties`, gains an id and a position and loses the one per workspace rule, and everything a property owns names
--- it. Numbered 0196, after 0195 (business apps on by default).
+-- it. Numbered 0197, after 0196 (page only people).
 --
 -- What changes:
 -- * `properties`: the old table renamed in place, so its row level security, grants and rows stay. New columns: `id`,
@@ -336,10 +336,10 @@ begin
     select 1 from workspaces w
     where (select count(*) from properties p where p.workspace_id = w.id and p.position = 0) <> 1
   ) then
-    raise exception '0196_properties: every workspace must have exactly one first property';
+    raise exception '0197_properties: every workspace must have exactly one first property';
   end if;
   if (select count(*) from properties) <> (select count(*) from workspaces) then
-    raise exception '0196_properties: one property per workspace in this slice';
+    raise exception '0197_properties: one property per workspace in this slice';
   end if;
   if exists (
     select 1 from pg_class c
@@ -348,7 +348,7 @@ begin
     select 1 from pg_policy p where p.polrelid = 'public.properties'::regclass and p.polname = 'properties_tenant'
   ) or not has_table_privilege('crm_app', 'public.properties', 'SELECT, INSERT, UPDATE, DELETE')
     or has_table_privilege('crm_app', 'public.business_profiles', 'DELETE') then
-    raise exception '0196_properties: properties keeps its row level security and its grants';
+    raise exception '0197_properties: properties keeps its row level security and its grants';
   end if;
 end
 $$;

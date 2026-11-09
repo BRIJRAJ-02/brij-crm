@@ -1,4 +1,4 @@
-// Properties in the database (spec 0065 H7, migration 0196): every workspace has one first property, row level
+// Properties in the database (spec 0065 H7, migration 0197): every workspace has one first property, row level
 // security holds on the table and on the old name's view, and a menu or a service can never reach another property's
 // place, whatever the code does.
 import { randomUUID } from 'node:crypto';
@@ -258,7 +258,7 @@ describe('properties (spec 0065 H7)', () => {
     expect(orphans.rows).toEqual([]);
   });
 
-  it('keeps each business’s dishes, photos and draft its own (migration 0197)', async () => {
+  it('keeps each business’s dishes, photos and draft its own (migration 0198)', async () => {
     const id = await workspace('menu-library');
     const first = await firstId(id);
     const second = await secondProperty(id);

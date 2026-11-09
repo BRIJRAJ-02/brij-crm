@@ -13,6 +13,7 @@ import {
   CircleCheck,
   Copy,
   GripVertical,
+  Image,
   Info,
   Lock,
   Minus,
@@ -36,6 +37,8 @@ export const baseIcons = {
   'circle-check': CircleCheck,
   copy: Copy,
   'grip-vertical': GripVertical,
+  // FileDrop's photo variant (a menu item's photo); the hosted form's upload may draw it too.
+  image: Image,
   info: Info,
   lock: Lock,
   minus: Minus,

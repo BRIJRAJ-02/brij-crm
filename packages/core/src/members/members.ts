@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
@@ -22,7 +22,7 @@ import {
   type SetRoleResult,
   type SetRolesResult,
 } from '@crm/contracts';
-import { schema, type WorkspaceTx } from '@crm/db';
+import { isManagedAddress, schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -44,9 +44,12 @@ import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
 import { readCustomRole } from '../roles/roles.ts';
 import { workspaceLogoVersion } from '../brand/brand.ts';
 
-const { members, workspaceRoles, workspaces } = schema;
+const { managedMembers, members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
+/** Whether the reader may see which connected app added someone: those who may see Connected apps (spec 0070). */
+const seesNames = (scope: EngineScope): boolean => can(scope.access, 'connected_apps.manage');
+
 const isGuest = (scope: EngineScope): boolean =>
   scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest';
 
@@ -79,7 +82,8 @@ function toView(
   return {
     id: row.id,
     name: row.name,
-    ...(withEmail ? { email: row.email } : {}),
+    // A page only person given no address holds their identity's made up one, which no screen shows.
+    ...(withEmail && !isManagedAddress(row.email) ? { email: row.email } : {}),
     role: storedRole(row.role),
     ...(row.customRoleId === null ? {} : { customRoleId: row.customRoleId }),
     joinedAt: new Date(row.joinedAt).toISOString(),
@@ -124,7 +128,11 @@ const likeLiteral = (text: string): string => text.replace(/[\\%_]/g, (char) => 
 export async function listMembers(
   scope: EngineScope,
   input: { readonly search?: string; readonly cursor?: string; readonly limit?: number } = {},
-  options: { readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>> } = {},
+  options: {
+    readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
+    /** A connected app's name by its partner id (the registry's), for the people it added (spec 0070). */
+    readonly partnerName?: (partnerId: string) => Promise<string | undefined>;
+  } = {},
 ): Promise<MembersPage> {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? MEMBERS_PAGE), 1), MEMBERS_PAGE_MAX);
   const search = input.search?.trim() ?? '';
@@ -143,8 +151,23 @@ export async function listMembers(
   );
   const { rows, total } = await inWorkspace(scope, async (tx) => {
     const read = await tx
-      .select({ ...VIEW_COLUMNS, userId: members.userId, sortName })
+      .select({
+        ...VIEW_COLUMNS,
+        userId: members.userId,
+        sortName,
+        partnerId: managedMembers.partnerId,
+        managedId: managedMembers.id,
+      })
       .from(members)
+      // A person a connected app added (spec 0070, AC-7020) has no Timefix login: the list says which app.
+      .leftJoin(
+        managedMembers,
+        and(
+          eq(managedMembers.workspaceId, members.workspaceId),
+          eq(managedMembers.memberId, members.id),
+          isNull(managedMembers.removedAt),
+        ),
+      )
       .where(
         and(
           matching,
@@ -165,11 +188,36 @@ export async function listMembers(
     options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
       ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
       : undefined;
+  // Each app's name once, from the registry, and only for who may see Connected apps (owners); everyone else but a
+  // guest sees the mark alone. A name the registry can't give (or a failed read) still marks the person.
+  const partnerIds = seesNames(scope)
+    ? [...new Set(page.flatMap((row) => (row.partnerId === null ? [] : [row.partnerId])))]
+    : [];
+  const appNames = new Map(
+    await Promise.all(
+      partnerIds.map(async (partnerId) => {
+        try {
+          return [partnerId, await options.partnerName?.(partnerId)] as const;
+        } catch {
+          return [partnerId, undefined] as const;
+        }
+      }),
+    ),
+  );
   return {
-    members: page.map((row) => ({
-      ...toView(row, seesEmails),
-      ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
-    })),
+    members: page.map((row) => {
+      const appName = row.partnerId === null ? undefined : appNames.get(row.partnerId);
+      return {
+        ...toView(row, seesEmails),
+        // Someone with no login of their own has no second factor to speak of.
+        ...(factors === undefined || row.managedId !== null
+          ? {}
+          : { twoFactor: row.userId !== null && factors.has(row.userId) }),
+        ...(row.partnerId === null || !seesEmails ? {} : { viaApp: appName === undefined ? {} : { name: appName } }),
+        // A page only person (9 Nov 2026): no login and no app. A guest learns nothing of how someone joined.
+        ...(row.managedId !== null && row.partnerId === null && seesEmails ? { pageOnly: true as const } : {}),
+      };
+    }),
     total,
     ...(rows.length > limit && last !== undefined ? { nextCursor: encodeMemberCursor(last.sortName, last.id) } : {}),
   };
@@ -473,6 +521,30 @@ async function changeRole(
 }
 
 /**
+ * Refuses a role a page only person can't hold (9 Nov 2026): they have no Timefix login and no partner's frame to
+ * open, so they never become an owner or an admin. A partner's person keeps spec 0070's rules (the workspace may make
+ * them an owner, AC-7024). One read of `managed_members`, none for other roles.
+ */
+async function checkPageOnlyRole(tx: WorkspaceTx, workspaceId: string, memberIds: readonly string[], role: Role) {
+  if ((role !== 'owner' && role !== 'admin') || memberIds.length === 0) return;
+  const managed = await tx
+    .select({ id: managedMembers.id })
+    .from(managedMembers)
+    .where(
+      and(
+        eq(managedMembers.workspaceId, workspaceId),
+        inArray(managedMembers.memberId, [...memberIds]),
+        sql`${managedMembers.partnerId} is null`,
+        sql`${managedMembers.removedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (managed.length > 0) throw refuse('FORBIDDEN', PAGE_ONLY_ROLE);
+}
+
+const PAGE_ONLY_ROLE = 'A page only person has no Timefix login, so they can’t be an owner or an admin.';
+
+/**
  * Changes a member's role (spec 0009, AC-137; spec 0037, AC-1233): to a built in `role`, or a custom role
  * (`customRoleId`, with `role` then `member`; one that doesn't exist is NOT_FOUND). Only an owner gives or takes
  * away the owner role; an admin moves members and admins between `member`, `admin`, `guest` and any custom role; a
@@ -498,6 +570,7 @@ export async function setMemberRole(
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       const next = await nextRoleOf(tx, scope.workspaceId, asked);
+      if (next.role !== target.role) await checkPageOnlyRole(tx, scope.workspaceId, [target.id], next.role);
       const { view, cancelled } = await changeRole(context, acting, target, next, options.source);
       return { ...view, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
     },
@@ -549,6 +622,12 @@ export async function setMemberRoles(
       const nextCustom = next.customRole?.id ?? null;
       const changing = targets.filter((target) => target.role !== next.role || target.customRoleId !== nextCustom);
       if (changing.length === 0) return { changed: 0 };
+      await checkPageOnlyRole(
+        tx,
+        scope.workspaceId,
+        changing.filter((target) => target.role !== next.role).map((target) => target.id),
+        next.role,
+      );
       const leavingOwners = changing.filter((target) => target.role === 'owner').map((target) => target.id);
       if (leavingOwners.length > 0) await keepAnOwner(tx, scope, leavingOwners);
       // Guests take no seat (spec 0031, AC-809): each one leaving the role takes one, counted once for all.
@@ -815,6 +894,7 @@ export async function transferOwnership(
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       if (acting.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+      await checkPageOnlyRole(tx, scope.workspaceId, [target.id], 'owner');
       // A guest made owner takes a seat (spec 0031, AC-809).
       if (target.role === 'guest') await checkSeats(tx, scope, 1);
       await tx

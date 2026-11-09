@@ -132,7 +132,7 @@ export const menuPhotos = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose dish or look shows it (spec 0065 H7, migration 0197). */
+    /** The business whose dish or look shows it (spec 0065 H7, migration 0198). */
     propertyId: uuid('property_id').notNull(),
     largePath: text('large_path').notNull(),
     smallPath: text('small_path').notNull(),
@@ -165,7 +165,7 @@ export const menuItems = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose library holds it (spec 0065 H7, migration 0197): its price is in that business's currency. */
+    /** The business whose library holds it (spec 0065 H7, migration 0198): its price is in that business's currency. */
     propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     description: text('description'),
@@ -201,7 +201,7 @@ export const menuItems = pgTable(
       columns: [t.workspaceId, t.propertyId],
       foreignColumns: [properties.workspaceId, properties.id],
     }),
-    // A dish shows only its own business's photo; the photo going sets `photo_id` alone null (migration 0197).
+    // A dish shows only its own business's photo; the photo going sets `photo_id` alone null (migration 0198).
     foreignKey({
       name: 'menu_items_photo',
       columns: [t.workspaceId, t.photoId, t.propertyId],
@@ -283,7 +283,7 @@ export const menuOptionGroups = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose dishes offer it (spec 0065 H7, migration 0197). */
+    /** The business whose dishes offer it (spec 0065 H7, migration 0198). */
     propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     rule: text('rule').notNull(),
@@ -394,7 +394,7 @@ export const menuVersions = pgTable(
 );
 
 /**
- * The draft's state, one row a property (AC-6525; spec 0065 H7, migration 0197): how many changes wait for Publish, when it last published, and
+ * The draft's state, one row a property (AC-6525; spec 0065 H7, migration 0198): how many changes wait for Publish, when it last published, and
  * the rows as published (`published`), which Discard puts back, and whether guests see it (`hidden`).
  */
 export const menuDrafts = pgTable(

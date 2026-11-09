@@ -2,10 +2,21 @@
 // Purpose: let an owner or admin share one link anyone can join the workspace through (spec 0031, AC-818).
 // Main task: turn the link on, copy it, and (folded under Link settings) limit how long and how many; reset or turn it
 // off (both ask first).
-// The first Card of Members' Other ways to join, under its list, Company email's after it.
+// The first rows of Members' Other ways to join, beside its list, Company email's after them.
 // Leaves out: guests (slice 9), email domains (the row after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
-import { Button, Callout, Disclosure, Field, Select, SettingsRow, sharedStrings, Switch, type Toasts } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Disclosure,
+  Field,
+  Select,
+  SettingsRow,
+  SettingsStack,
+  sharedStrings,
+  Switch,
+  type Toasts,
+} from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { UNDO_MS } from '../tasks/undo-delete.ts';
 import type { MemberQuestion } from './MemberConfirm.tsx';
@@ -143,29 +154,9 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
       : [{ id: String(link.maxUses), label: strings.linkCap(link.maxUses) }]),
   ];
   return (
-    <>
+    <SettingsStack variant="nested" rows="inline">
       {/* One quiet line: what the link does while it is off, then (on) how many joined with it, under the link. */}
       <SettingsRow title={strings.linkTitle} {...(link.enabled ? {} : { description: strings.linkDescription })}>
-        {link.enabled && (
-          <Button
-            icon="refresh-cw"
-            isDisabled={busy !== undefined}
-            onPress={() => {
-              ask({
-                title: strings.linkResetTitle,
-                text: strings.linkResetText,
-                action: strings.linkResetAction,
-                run: () => {
-                  closeUndo();
-                  return data.invitations.setLink(slug, { enabled: true, reset: true }).then(() => undefined);
-                },
-                done: strings.linkWasReset,
-              });
-            }}
-          >
-            {strings.linkReset}
-          </Button>
-        )}
         <Switch
           label={strings.linkTitle}
           isLabelHidden
@@ -195,54 +186,81 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
           <Field
             variant="copy"
             label={strings.linkField}
+            isLabelHidden
             value={url}
             copyLabel={strings.linkCopy}
             hint={strings.linkUses(link.uses)}
           />
           {/* The limits most links never need, folded (the owner, 30 October 2026: fewer choices). */}
           <Disclosure title={strings.linkSettings} variant="quiet">
-            <SettingsRow title={strings.linkExpires}>
-              <Select
-                savesOnPick
-                label={strings.linkExpires}
-                isLabelHidden
-                size="sm"
-                items={expiryItems}
-                value={expiry === undefined ? 'never' : 'current'}
-                isDisabled={busy !== undefined}
-                onChange={(id) => {
-                  if (id === null || id === 'current') return;
-                  change(
-                    'expiry',
-                    { enabled: true, expiresInDays: id === 'never' ? null : (Number(id) as InviteLinkDays) },
-                    // An expiry counts from now, so only Never comes back exactly; a date already set can't.
-                    expiry === undefined ? { enabled: true, expiresInDays: null } : undefined,
-                  );
-                }}
-              />
-            </SettingsRow>
-            <SettingsRow title={strings.linkMostUses}>
-              <Select
-                savesOnPick
-                label={strings.linkMostUses}
-                isLabelHidden
-                size="sm"
-                items={usesItems}
-                value={link.maxUses === undefined ? 'none' : String(link.maxUses)}
-                isDisabled={busy !== undefined}
-                onChange={(id) => {
-                  if (id === null) return;
-                  change(
-                    'uses',
-                    { enabled: true, maxUses: id === 'none' ? null : Number(id) },
-                    { enabled: true, maxUses: link.maxUses ?? null },
-                  );
-                }}
-              />
-            </SettingsRow>
+            <SettingsStack variant="plain" rows="inline">
+              <SettingsRow title={strings.linkExpires}>
+                <Select
+                  savesOnPick
+                  label={strings.linkExpires}
+                  isLabelHidden
+                  size="sm"
+                  items={expiryItems}
+                  value={expiry === undefined ? 'never' : 'current'}
+                  isDisabled={busy !== undefined}
+                  onChange={(id) => {
+                    if (id === null || id === 'current') return;
+                    change(
+                      'expiry',
+                      { enabled: true, expiresInDays: id === 'never' ? null : (Number(id) as InviteLinkDays) },
+                      // An expiry counts from now, so only Never comes back exactly; a date already set can't.
+                      expiry === undefined ? { enabled: true, expiresInDays: null } : undefined,
+                    );
+                  }}
+                />
+              </SettingsRow>
+              <SettingsRow title={strings.linkMostUses}>
+                <Select
+                  savesOnPick
+                  label={strings.linkMostUses}
+                  isLabelHidden
+                  size="sm"
+                  items={usesItems}
+                  value={link.maxUses === undefined ? 'none' : String(link.maxUses)}
+                  isDisabled={busy !== undefined}
+                  onChange={(id) => {
+                    if (id === null) return;
+                    change(
+                      'uses',
+                      { enabled: true, maxUses: id === 'none' ? null : Number(id) },
+                      { enabled: true, maxUses: link.maxUses ?? null },
+                    );
+                  }}
+                />
+              </SettingsRow>
+              {/* Ends the current link, so it sits with the rarely needed things, and asks first. */}
+              <SettingsRow title={strings.linkReset} description={strings.linkResetText}>
+                <Button
+                  icon="refresh-cw"
+                  label={strings.linkReset}
+                  // Its row's title says what is reset: the word, as the neighbouring settings' buttons have.
+
+                  isDisabled={busy !== undefined}
+                  onPress={() => {
+                    ask({
+                      title: strings.linkResetTitle,
+                      text: strings.linkResetText,
+                      action: strings.linkResetAction,
+                      run: () => {
+                        closeUndo();
+                        return data.invitations.setLink(slug, { enabled: true, reset: true }).then(() => undefined);
+                      },
+                      done: strings.linkWasReset,
+                    });
+                  }}
+                >
+                  {strings.linkResetShort}
+                </Button>
+              </SettingsRow>
+            </SettingsStack>
           </Disclosure>
         </>
       )}
-    </>
+    </SettingsStack>
   );
 }

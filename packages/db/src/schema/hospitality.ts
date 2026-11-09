@@ -1,5 +1,5 @@
 // The business apps' shared base (spec 0065, H0, migration 0181_hospitality_apps), Hospitality first: which apps a workspace installed,
-// its properties (migration 0196; spec 0065 H7), its places with opening hours, and each place's areas and tables. Tenant tables under forced
+// its properties (migration 0197; spec 0065 H7), its places with opening hours, and each place's areas and tables. Tenant tables under forced
 // row level security with the plain workspace policy; every index leads with workspace_id, but the places' two public
 // keys, which a guest page finds before the workspace is known (H1, H3), so they are unique everywhere.
 import { sql } from 'drizzle-orm';

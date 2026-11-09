@@ -1,7 +1,7 @@
 // Team pages (spec 0070, slice 1) in Chromium with a fake data layer: everyone's page with its handle, Live or
 // Private and this month's views (AC-7001), a handle claimed for someone with none (AC-7002), each page's QR codes
 // (AC-7003), the refusal for someone who may not manage them, axe in both themes, and "Edited by" on the person's own
-// page (AC-7004). With `VITE_TEAM_SHOTS=1` it saves the screens at 1280 and 390, light and dark, for the lane's eyes.
+// page (AC-7004); Add a page and Remove person for a page only person (9 Nov 2026). With `VITE_TEAM_SHOTS=1` it saves the screens at 1280 and 390, light and dark, for the lane's eyes.
 import '@crm/ui/styles.css';
 import type { DataLayer, InsightsState, LinkPageStore, QrStyleState, TeamLinkPage } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,7 +41,19 @@ const PAGES: readonly TeamLinkPage[] = [
     isSelf: false,
   },
   { memberId: '0192f0c8-7d2a-7000-8000-000000000004', name: 'Dee Marsh', isLive: false, views: 0, isSelf: false },
+  {
+    memberId: '0192f0c8-7d2a-7000-8000-000000000005',
+    name: 'Eve Page',
+    handle: 'eve',
+    isLive: false,
+    views: 0,
+    isSelf: false,
+    isPageOnly: true,
+  },
 ];
+
+/** A handle Add a page's check calls taken. */
+const TAKEN = 'nick';
 
 const stillLoading = {
   subscribe: () => () => undefined,
@@ -68,11 +80,36 @@ function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: 
       ? Promise.reject(new Error('Nobody'))
       : Promise.resolve({ ...found, handle, isLive: false });
   });
+  const addPerson = vi.fn(
+    (_slug: string, person: { readonly name: string; readonly email?: string; readonly handle: string }) =>
+      Promise.resolve<TeamLinkPage>({
+        memberId: '0192f0c8-7d2a-7000-8000-000000000009',
+        name: person.name,
+        handle: person.handle,
+        isLive: false,
+        views: 0,
+        isSelf: false,
+        isPageOnly: true,
+      }),
+  );
+  const removePerson = vi.fn((_slug: string, _member: string) => Promise.resolve({ removed: true }));
+  const checkHandle = vi.fn((_slug: string, handle: string, _signal?: AbortSignal) =>
+    Promise.resolve({ isFree: handle !== TAKEN }),
+  );
+  const suggestHandle = vi.fn(() => Promise.resolve({ handle: 'nick-2' }));
   const data = {
-    teamPages: { list, claim, editedBy: () => Promise.resolve({}) },
+    teamPages: {
+      list,
+      claim,
+      addPerson,
+      removePerson,
+      checkHandle,
+      suggestHandle,
+      editedBy: () => Promise.resolve({}),
+    },
     inbox: { unread: () => stillLoading },
   } as unknown as Partial<DataLayer>;
-  return { data, claim };
+  return { data, claim, addPerson, removePerson, checkHandle };
 }
 
 async function renderTeam(data: Partial<DataLayer>, permissions: readonly string[] = MANAGE) {
@@ -131,6 +168,61 @@ describe('a handle claimed for someone (AC-7002)', () => {
     await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
     expect(claim).toHaveBeenCalledWith('acme', PAGES[3]?.memberId, 'dee');
     expect(document.body.textContent).toContain('/dee');
+  });
+});
+
+describe('Add a page (9 Nov 2026)', () => {
+  it('makes the link from the name, checks it as typed, and adds the Private row with its mark', async () => {
+    const { data, addPerson, checkHandle } = layerWith(ready);
+    await renderTeam(data);
+    await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
+    await expect.element(page.getByRole('dialog', { name: 'Add a page' })).toBeVisible();
+    // Nothing named: refused before anything is sent.
+    await userEvent.click(page.getByRole('button', { name: 'Create page' }));
+    await expect.element(page.getByText('Add their name.')).toBeVisible();
+    expect(addPerson).not.toHaveBeenCalled();
+    // The link follows the name; the name's own link is taken, so the free one takes its place, saying nothing.
+    await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Nick');
+    await expect.element(page.getByRole('textbox', { name: 'Link' }), { timeout: 4000 }).toHaveValue('nick-2');
+    await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+    expect(document.body.textContent).not.toContain('Taken');
+    expect(checkHandle).toHaveBeenCalledWith('acme', 'nick-2', expect.anything());
+    // Typed by hand and taken: said on the field, with the free one to pick.
+    await userEvent.fill(page.getByRole('textbox', { name: 'Link' }), 'nick');
+    await expect.element(page.getByText('Taken. Pick another.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'nick-2' }));
+    await expect.element(page.getByRole('textbox', { name: 'Link' }), { timeout: 4000 }).toHaveValue('nick-2');
+    await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+    await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'not an email');
+    await userEvent.click(page.getByRole('button', { name: 'Create page' }));
+    await expect.element(page.getByText(/valid email address/)).toBeVisible();
+    await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'nick@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Create page' }));
+    await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+    expect(addPerson).toHaveBeenCalledWith('acme', { name: 'Nick', email: 'nick@example.com', handle: 'nick-2' });
+    await expect.element(page.getByRole('rowheader', { name: /Nick/ })).toBeVisible();
+    expect(document.body.textContent).toContain('/nick-2');
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations()).toEqual([]);
+    }
+  });
+
+  it('offers Remove person only for a page only person, and asks first', async () => {
+    const { data, removePerson } = layerWith(ready);
+    await renderTeam(data);
+    expect(document.body.textContent).toContain('Page only');
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+    expect(document.body.textContent).not.toContain('Remove person');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Remove person' }));
+    await expect.element(page.getByRole('alertdialog', { name: 'Remove Eve Page?' })).toBeVisible();
+    expect(removePerson).not.toHaveBeenCalled();
+    await userEvent.click(page.getByRole('button', { name: 'Remove person' }));
+    await vi.waitFor(() => expect(removePerson).toHaveBeenCalledWith('acme', PAGES[4]?.memberId));
+    await expect.element(page.getByRole('rowheader', { name: /Eve Page/ })).not.toBeInTheDocument();
   });
 });
 
@@ -202,32 +294,63 @@ describe('“Edited by” on the person’s own page (AC-7004)', () => {
 });
 
 describe('screenshots', () => {
-  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')('saves Team pages at 1280 and 390, light and dark', async () => {
-    for (const [width, height] of [
-      [1280, 860],
-      [390, 844],
-    ] as const) {
-      await page.viewport(width, height);
-      for (const theme of THEMES) {
-        await renderTeam(layerWith(ready).data);
-        applyTheme(theme);
-        await expect.element(page.getByRole('rowheader', { name: /Bea Rao/ })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/team-${String(width)}-${theme}.png` });
-        await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
-        await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
-        await expect.element(page.getByRole('dialog')).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/claim-${String(width)}-${theme}.png` });
-        await userEvent.keyboard('{Escape}');
-        await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
-        await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/menu-${String(width)}-${theme}.png` });
-        clear();
-        await renderOverview();
-        applyTheme(theme);
-        await expect.element(page.getByText(/Edited by Ada Lovelace/)).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/edited-by-${String(width)}-${theme}.png` });
-        clear();
+  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')(
+    'saves Team pages at 1280 and 390, light and dark',
+    async () => {
+      for (const [width, height] of [
+        [1280, 860],
+        [390, 844],
+      ] as const) {
+        await page.viewport(width, height);
+        for (const theme of THEMES) {
+          await renderTeam(layerWith(ready).data);
+          applyTheme(theme);
+          await expect.element(page.getByRole('rowheader', { name: /Bea Rao/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/team-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
+          await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
+          await expect.element(page.getByRole('dialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/claim-${String(width)}-${theme}.png` });
+          await userEvent.keyboard('{Escape}');
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+          await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/menu-${String(width)}-${theme}.png` });
+          await userEvent.keyboard('{Escape}');
+          // Add a page: empty, a taken link, filled, then the new row and a page only person's menu.
+          await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
+          await expect.element(page.getByRole('dialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-empty-${String(width)}-${theme}.png` });
+          await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Nick');
+          await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+          await userEvent.fill(page.getByRole('textbox', { name: 'Link' }), 'nick');
+          await expect.element(page.getByText('Taken. Pick another.')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-taken-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Cancel' }));
+          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+          await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
+          await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Kate Lim');
+          await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'kate@example.com');
+          await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-filled-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Create page' }));
+          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+          await expect.element(page.getByRole('rowheader', { name: /Kate Lim/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/added-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+          await expect.element(page.getByRole('menuitem', { name: 'Remove person' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/page-only-menu-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('menuitem', { name: 'Remove person' }));
+          await expect.element(page.getByRole('alertdialog', { name: /Remove/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/remove-${String(width)}-${theme}.png` });
+          clear();
+          await renderOverview();
+          applyTheme(theme);
+          await expect.element(page.getByText(/Edited by Ada Lovelace/)).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/edited-by-${String(width)}-${theme}.png` });
+          clear();
+        }
       }
-    }
-  });
+    },
+    120_000,
+  );
 });

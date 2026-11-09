@@ -80,6 +80,8 @@ interface SettingsPageBase {
 export interface SettingsTabBar {
   /** A count after the page's own tab (Members 12). */
   readonly count?: number;
+  /** The most that count shows before it reads "N+"; Tabs' own limit when left out. A real headcount gives no limit. */
+  readonly countMax?: number;
   /** The page's tools at the bar's end (Members' search), or atop the body when there is no bar. */
   readonly end?: ReactNode;
 }
@@ -294,6 +296,7 @@ function EntryTabs({
     label: tab.label,
     href: tab.href,
     ...(tab.id === page && tabBar?.count !== undefined ? { count: tabBar.count } : {}),
+    ...(tab.id === page && tabBar?.countMax !== undefined ? { countMax: tabBar.countMax } : {}),
   }));
   const selected = page ?? '';
   return (

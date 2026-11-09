@@ -44,6 +44,13 @@ export const MemberView = MemberSummary.extend({
    * (spec 0033, AC-895). Only owners and admins are told; absent for others.
    */
   twoFactor: z.boolean().optional(),
+  /**
+   * Added by a connected app (spec 0070, a managed member with no Timefix login of their own). Its name only for
+   * readers who may see Connected apps (owners); a guest is told nothing. Absent for everyone who joined themselves.
+   */
+  viaApp: z.object({ name: z.string().min(1).optional() }).optional(),
+  /** A page only person an admin added from Team pages (9 Nov 2026): no Timefix login and no app. Hidden from guests. */
+  pageOnly: z.literal(true).optional(),
 });
 /** One active member as the Members page lists them. */
 export type MemberView = z.infer<typeof MemberView>;

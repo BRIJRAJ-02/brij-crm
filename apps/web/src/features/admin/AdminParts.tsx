@@ -196,12 +196,13 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
   const commit = useRef<() => void>(() => undefined);
   const stepUp = useStepUp(data, security, { secondFactor: true, onComplete: () => commit.current() });
   const live = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set again on mounting: React's development double mount runs the cleanup once, which left Confirm spinning.
+    live.current = true;
+    return () => {
       live.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const isMounted = () => live.current;
   const confirm = async () => {
     setChecking(true);
@@ -231,6 +232,8 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
           onPress={() => {
             stepUp.reset();
             setOpen(true);
+            // The dialog's one task is the code: focus starts in the boxes, so it can be typed or pasted at once.
+            stepUp.focus();
           }}
         >
           {strings.signInAction}
@@ -243,7 +246,10 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
           {strings.stillHeld}
         </Callout>
       )}
+      {/* A confirm's shape (the owner, 6 November 2026, "this also should be better"): no title bar, the question,
+          its one line, the boxes and the way round, then Cancel and Continue; the boxes send themselves once full. */}
       <Modal
+        variant="confirm"
         title={strings.confirmTitle}
         isOpen={isOpen}
         isBusy={isChecking}
@@ -255,13 +261,20 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
             <Button slot="close" isDisabled={isChecking}>
               {strings.cancel}
             </Button>
-            <Button variant="primary" isPending={isChecking} onPress={() => commit.current()}>
+            <Button
+              variant="primary"
+              isPending={isChecking}
+              // The boxes send themselves once full, so this waits for what they can't: a backup code. No ↵ keycap:
+              // Enter in a part typed code has nothing to send.
+              isDisabled={!stepUp.isReady}
+              kbd={[]}
+              onPress={() => commit.current()}
+            >
               {strings.confirm}
             </Button>
           </>
         }
       >
-        {strings.confirmText}
         {stepUp.fields}
       </Modal>
     </EmptyState>

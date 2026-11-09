@@ -244,9 +244,18 @@ export const AuditEntryView = z.discriminatedUnion('action', [
       toName: z.string().optional(),
     }),
   ),
-  entry(['member.removed', 'member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
-  /** Someone a connected app added (spec 0070, AC-7020), with the role they joined with. */
-  entry(['member.added'], member, z.strictObject({ role: Role.optional() })),
+  entry(['member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
+  /** `pageOnly`: a page only person removed from Team pages (9 Nov 2026). */
+  entry(['member.removed'], member, z.strictObject({ pageOnly: z.literal(true).optional() })),
+  /**
+   * Someone a connected app added (spec 0070, AC-7020), with the role they joined with; or a page only person added
+   * from Team pages (`pageOnly`, 9 Nov 2026), with the handle their page started at.
+   */
+  entry(
+    ['member.added'],
+    member,
+    z.strictObject({ role: Role.optional(), pageOnly: z.literal(true).optional(), handle: z.string().optional() }),
+  ),
   /** `fields` holds only known fields; empty, the sentence says the profile changed. */
   entry(
     ['member.profile_updated'],

@@ -9,6 +9,10 @@
     min-inline-size: 0;
   }
 
+  .root[data-size='lg'] {
+    gap: var(--space-12);
+  }
+
   .picture {
     display: flex;
     flex: none;

@@ -107,7 +107,7 @@ async function holdsByProperty(tx: WorkspaceTx, workspaceId: string): Promise<Re
 
 /**
  * Whether a property has a price that a currency change would misread (AC-6519): a priced dish or size in its own
- * library (migration 0197), or a priced service of its own.
+ * library (migration 0198), or a priced service of its own.
  */
 async function isPriced(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<boolean> {
   const result = await tx.execute<{ priced: boolean }>(sql`

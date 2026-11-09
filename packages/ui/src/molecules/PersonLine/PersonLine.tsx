@@ -30,8 +30,8 @@ export interface PersonLineProps {
   readonly meta: readonly string[];
   /** The first part's tone. */
   readonly tone?: PersonLineTone;
-  /** `sm` in a calendar's column head, `md` in a table row (the Team week). */
-  readonly size?: 'sm' | 'md';
+  /** `sm` in a calendar's column head, `md` in a table row (the Team week), `lg` in a list of people to read through (Settings › Members). */
+  readonly size?: 'sm' | 'md' | 'lg';
   /** At the end, beside the name: a status chip, a view only mark, a row's menu. */
   readonly end?: ReactNode;
   /** Hidden from screen readers when the thing it heads already names the person in full (a calendar column). */

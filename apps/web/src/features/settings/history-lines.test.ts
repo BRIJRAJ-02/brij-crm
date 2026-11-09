@@ -192,6 +192,19 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace added Bea Rao to the workspace as Admin',
   ],
   [{ ...base, action: 'member.added', target: member(bea), params: {} }, 'Ada Lovelace added Bea Rao to the workspace'],
+  // A page only person, added and removed from Team pages (9 Nov 2026).
+  [
+    { ...base, action: 'member.added', target: member(bea), params: { pageOnly: true, handle: 'bea' } },
+    'Ada Lovelace added a page for Bea Rao at /bea',
+  ],
+  [
+    { ...base, action: 'member.added', target: member(bea), params: { pageOnly: true } },
+    'Ada Lovelace added a page for Bea Rao',
+  ],
+  [
+    { ...base, action: 'member.removed', target: member(bea), params: { pageOnly: true } },
+    'Ada Lovelace removed Bea Rao and their page from Team pages',
+  ],
   [{ ...base, actor: bea, action: 'member.left', target: member(bea), params: {} }, 'Bea Rao left the workspace'],
   [
     { ...base, action: 'workspace.ownership_transferred', target: member(bea), params: {} },

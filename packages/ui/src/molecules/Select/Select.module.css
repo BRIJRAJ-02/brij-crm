@@ -92,7 +92,10 @@
     max-inline-size: 100%;
   }
 
+  /* No border at its start, so the value's first letter stands where plain text in the same column does ("Owner" over
+     "Member"). */
   .root[data-variant='inline'] .trigger {
+    border-inline-start-width: 0;
     inline-size: auto;
     max-inline-size: 100%;
     block-size: auto;
@@ -195,6 +198,21 @@
   .plain {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .plain[data-nothing] {
+    color: var(--text-tertiary);
+  }
+
+  /* showsMarks: the closed field grows to name every choice in full, so what is chosen is never cut off. */
+  .root[data-marks] .trigger {
+    block-size: auto;
+    min-block-size: var(--size-input);
+    padding-block: var(--space-4);
+  }
+
+  .root[data-marks] .value {
+    white-space: normal;
   }
 
   .hint {
@@ -308,6 +326,11 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  /* Why it can't be chosen stays readable; only the option itself fades. */
+  .option[data-disabled] > .description {
+    opacity: 1;
   }
 
   .check {

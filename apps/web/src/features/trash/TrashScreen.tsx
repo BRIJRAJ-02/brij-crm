@@ -81,7 +81,14 @@ const PAGE = 100;
  */
 const COLUMNS: readonly TableColumn[] = [
   // Inline: a refused restore's words sit beside the name it is about.
-  { id: TRASH_COLUMNS.name, label: strings.columns.name, isRowHeader: true, isInline: true, phone: 'title' },
+  {
+    id: TRASH_COLUMNS.name,
+    label: strings.columns.name,
+    isRowHeader: true,
+    isInline: true,
+    size: 'lead',
+    phone: 'title',
+  },
   { id: TRASH_COLUMNS.object, label: strings.columns.kind },
   { id: TRASH_COLUMNS.deletedBy, label: strings.columns.deletedBy },
   { id: TRASH_COLUMNS.deletedAt, label: strings.columns.deletedAt },

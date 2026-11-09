@@ -159,13 +159,22 @@ const SENTENCES: SentenceTemplates = {
         : `changed ${w.persons(entry.target.person)} role from ${from} to ${to}`,
     );
   },
-  'member.removed': (entry, w) => actor(`removed ${w.person(entry.target.person)} from the workspace`),
-  // Someone a connected app added (spec 0070, AC-7020).
+  'member.removed': (entry, w) =>
+    actor(
+      entry.params.pageOnly === true
+        ? `removed ${w.person(entry.target.person)} and their page from Team pages`
+        : `removed ${w.person(entry.target.person)} from the workspace`,
+    ),
+  // Someone a connected app added (spec 0070, AC-7020), or a page only person added from Team pages (9 Nov 2026).
   'member.added': (entry, w) =>
     actor(
-      entry.params.role === undefined
-        ? `added ${w.person(entry.target.person)} to the workspace`
-        : `added ${w.person(entry.target.person)} to the workspace as ${w.role(entry.params.role)}`,
+      entry.params.pageOnly === true
+        ? entry.params.handle === undefined
+          ? `added a page for ${w.person(entry.target.person)}`
+          : `added a page for ${w.person(entry.target.person)} at /${entry.params.handle}`
+        : entry.params.role === undefined
+          ? `added ${w.person(entry.target.person)} to the workspace`
+          : `added ${w.person(entry.target.person)} to the workspace as ${w.role(entry.params.role)}`,
     ),
   'member.left': () => actor('left the workspace'),
   'workspace.ownership_transferred': (entry, w) =>

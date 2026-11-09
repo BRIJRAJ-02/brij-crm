@@ -153,6 +153,9 @@ import type {
   MyProfile,
   TeamLinkPage,
   TeamLinkPages,
+  TeamHandleCheck,
+  TeamHandleSuggestion,
+  PageOnlyRemoved,
   SocialLink,
   SubmissionsBeyond,
   WorkspaceSettings,
@@ -875,6 +878,9 @@ export type {
   MyProfile,
   TeamLinkPage,
   TeamLinkPages,
+  TeamHandleCheck,
+  TeamHandleSuggestion,
+  PageOnlyRemoved,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -6446,6 +6452,37 @@ export function createDataLayer({
         call((options) => api.teamPages.list({ workspace }, options)),
       claim: (workspace: string, member: string, handle: string): Promise<TeamLinkPage> =>
         call((options) => api.teamPages.claim({ workspace, member, handle, mutationId: mintId() }, options)),
+      /**
+       * Add a page (9 Nov 2026): a page only person and their Private page, waiting for the server (the screen adds
+       * the answered row). One mutation id per press, so a retry the network repeated makes one person.
+       */
+      addPerson: (
+        workspace: string,
+        person: { readonly name: string; readonly email?: string | undefined; readonly handle: string },
+      ): Promise<TeamLinkPage> => {
+        const mutationId = mintId();
+        return call((options) =>
+          api.teamPages.addPerson(
+            {
+              workspace,
+              name: person.name,
+              ...(person.email === undefined ? {} : { email: person.email }),
+              handle: person.handle,
+              mutationId,
+            },
+            options,
+          ),
+        );
+      },
+      /** Removes a page only person: their handle stops and their content is kept 30 days. */
+      removePerson: (workspace: string, member: string): Promise<PageOnlyRemoved> =>
+        call((options) => api.teamPages.removePerson({ workspace, member, mutationId: mintId() }, options)),
+      /** Whether a handle can be claimed now, for Add a page as it is typed. */
+      checkHandle: (workspace: string, handle: string, signal?: AbortSignal): Promise<TeamHandleCheck> =>
+        call((options) => api.teamPages.checkHandle({ workspace, handle }, options), signal),
+      /** A free handle from a name, for Add a page's first value. */
+      suggestHandle: (workspace: string, name: string): Promise<TeamHandleSuggestion> =>
+        call((options) => api.teamPages.suggestHandle({ workspace, name }, options)),
       editedBy: (workspace: string): Promise<LinkPageEditedBy> =>
         call((options) => api.teamPages.editedBy({ workspace }, options)),
     },

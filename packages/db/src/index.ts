@@ -74,6 +74,7 @@ export type {
 } from './identity/operator.ts';
 export type {
   ManagedPerson,
+  PageOnlyPerson,
   NewPartner,
   PartnerAudit,
   PartnerChange,
@@ -82,5 +83,6 @@ export type {
   PartnerRow,
   PartnerWithSecret,
 } from './identity/partners.ts';
+export { isManagedAddress, MANAGED_DOMAIN } from './identity/partners.ts';
 export * as schema from './schema/index.ts';
 export { type PoolTiming, type PoolTimingSink } from './timing.ts';
