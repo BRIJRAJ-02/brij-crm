@@ -144,6 +144,24 @@ export const FieldShape: Story = {
   },
 };
 
+/** A small Select's box (`size="sm"`): a compact settings row's control, shorter than a field. */
+export const FieldShapeSmall: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Skeleton shape="field" />
+      <Skeleton shape="field" size="sm" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const [field, small] = [...canvasElement.querySelectorAll('[data-shape="field"]')].map((each) =>
+      each.getBoundingClientRect(),
+    );
+    await expect(small?.height).toBeGreaterThan(0);
+    await expect(small?.height).toBeLessThan(field?.height ?? 0);
+  },
+};
+
 /** A square tile on the avatar scale: a picture in a row that isn't a face. */
 export const TileWithSize: Story = {
   parameters: { crm: { screenshot: false } },

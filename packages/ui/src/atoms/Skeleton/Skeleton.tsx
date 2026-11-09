@@ -30,7 +30,8 @@ export interface SkeletonProps {
   readonly align?: SkeletonAlign;
   /**
    * For `circle`: the avatar size it stands in for, so a loading face is the size the face will be. For `tile`: a
-   * square tile at that size, for a picture in a row (a menu item's photo).
+   * square tile at that size, for a picture in a row (a menu item's photo). For `field`: `sm` is a small Select's
+   * height (`size-control`), for a compact settings row.
    */
   readonly size?: SkeletonSize;
   /**

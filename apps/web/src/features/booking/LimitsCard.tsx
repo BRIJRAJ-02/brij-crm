@@ -141,7 +141,7 @@ export function LimitsCardPending({ member }: { readonly member?: { readonly nam
   const row = (label: string) => (
     // The box the row's Select will fill, never a disabled "No limit", which read as the person's real limit.
     <SettingsRow title={label} description={strings.loading} control="compact">
-      <Skeleton shape="field" />
+      <Skeleton shape="field" size="sm" />
     </SettingsRow>
   );
   return (
