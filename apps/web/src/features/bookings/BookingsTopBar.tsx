@@ -28,7 +28,7 @@ export interface BookingsTopBarProps {
   readonly slug: string;
   /** The module's tabs, on the bar's line after its title (`BookingsModuleTabs`). */
   readonly tabs: ReactNode;
-  /** Whose bookings or hours the tab shows (`BookingsScope`), before the primary action; absent when nothing to pick. */
+  /** The tab's tools and whose bookings or hours it shows (`BookingsScope`), before the primary action. */
   readonly scope?: ReactNode;
   /**
    * On a tab with a primary action of its own (Availability's New schedule): where it goes, in place of New
@@ -146,7 +146,14 @@ export function BookingsTopBar({
   const meetingReason = !hasNoPage ? undefined : hasPage ? strings.turnOnPageFirst : strings.makePageFirst;
   const button = (
     <MenuTrigger>
-      <Button variant="primary" icon="plus" iconRight="chevron-down" label={strings.newMenu} isPending={isFinding}>
+      <Button
+        variant="primary"
+        icon="plus"
+        iconRight="chevron-down"
+        label={strings.newMenu}
+        isPending={isFinding}
+        isLabelCollapsible
+      >
         {strings.newButton}
       </Button>
       <Menu

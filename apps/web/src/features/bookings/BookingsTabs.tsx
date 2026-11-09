@@ -1,14 +1,13 @@
 // Brief
-// Purpose: Bookings' Meetings · Pages · Availability · Routing on the TopBar's line (as Calendly and Cal.com lay theirs out), the page's one header with one line under it (the owner, 9 November 2026), and the tab's tools under it.
+// Purpose: Bookings' Meetings · Pages · Availability · Routing on the TopBar's line (as Calendly and Cal.com lay theirs out), the page's one header with one line under it (the owner, 9 November 2026).
 // Main task: switch between the meetings, the booking pages, the hours and routing; each tab opens on its first view, and its views (Day, Week, Team, List; My hours, Roster) switch inside it.
-// Leaves out: what each view shows (its child route renders that under the bar, and portals its tools into the tools row).
-import { SectionBar, SegmentedControl, Tabs, usePhoneWidth } from '@crm/ui';
+// Leaves out: what each view shows (its child route renders that under the bar; Pages and Routing portal their tools into it).
+import { SegmentedControl, Tabs, usePhoneWidth } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { BOOKINGS_TABS, bookingsTabHref, isBookingsPageTab, type BookingsPageTab, type BookingsView } from './tabs.ts';
 import { HostsSwitch } from './HostsSwitch.tsx';
-import { BookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
+import type { HostsChoice } from './toolbarSlot.ts';
 
 /** Props for BookingsModuleTabs. */
 export interface BookingsModuleTabsProps {
@@ -38,32 +37,15 @@ export function BookingsModuleTabs({ slug, tab, tabs = BOOKINGS_TABS }: Bookings
   );
 }
 
-/** The views whose screen portals its tools into the row under the bar (Pages' search, Routing's views). */
+/** The views whose screen portals its tools into the TopBar (Pages' search, Routing's views and period). */
 const VIEWS_WITH_TOOLS = new Set<BookingsView>(['pages', 'routing']);
 
-/** Props for BookingsTabBody. */
-export interface BookingsTabBodyProps {
-  /** The view the address names. */
-  readonly view: BookingsView;
-  /** The child route's page (an `Outlet`). */
-  readonly children: ReactNode;
-}
-
 /**
- * The chosen tab's page under the TopBar: on Pages and Routing, a row for the tools the screen portals in (Captures'
- * search, Overview · Decisions · Skills · Test); the other views draw their own bar (the week's dates, the schedule
- * switcher), so they get none and no empty row stands over them.
+ * Whether a view's screen puts its tools in the TopBar, before whose bookings show and the primary action: Pages and
+ * Routing, so no second bar stands under the header (the owner: one line under the module tabs). Calendar, List and
+ * Availability draw their own bar.
  */
-export function BookingsTabBody({ view, children }: BookingsTabBodyProps) {
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
-  const hasTools = VIEWS_WITH_TOOLS.has(view);
-  return (
-    <BookingsToolbarSlot.Provider value={hasTools ? slot : null}>
-      {hasTools && <SectionBar variant="bar" end={<div ref={setSlot} />} />}
-      {children}
-    </BookingsToolbarSlot.Provider>
-  );
-}
+export const viewHasTools = (view: BookingsView): boolean => VIEWS_WITH_TOOLS.has(view);
 
 /** Props for BookingsScope. */
 export interface BookingsScopeProps {

@@ -100,6 +100,14 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     expect(names(['booking.manage'])).toContain('Bookings settings › Teams');
   });
 
+  // Routing's Settings entry went (9 November 2026): the menu opens its Bookings tab, for holders of routing.manage.
+  it('offers Routing only to a holder of routing.manage, at its Bookings tab', () => {
+    const routing = (permissions: Permission[]) =>
+      pageCommands('acme', OBJECTS, permissions).find((command) => command.id === 'page:routing');
+    expect(routing([])).toBeUndefined();
+    expect(routing(['routing.manage'])?.run).toEqual({ kind: 'go', href: '/w/acme/bookings/routing' });
+  });
+
   // Critic B (5 November 2026): "calendar" in the menu found nothing to do.
   it('connects a calendar from the menu, in Bookings settings › Calendars', () => {
     const connect = pageCommands('acme', OBJECTS, undefined, [], false, true).find(
