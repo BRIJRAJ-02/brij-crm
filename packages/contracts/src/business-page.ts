@@ -101,9 +101,23 @@ export const BusinessPagePlace = z.object({
 /** One place in the page editor. */
 export type BusinessPagePlace = z.infer<typeof BusinessPagePlace>;
 
+/**
+ * Which business a page call works in (spec 0065 H7, AC-6592): the switcher's choice; left out, the workspace's first.
+ * One of another workspace answers `NOT_FOUND`. (The same shape as `PropertyScoped`, kept here so this file imports no
+ * hospitality schema.)
+ */
+export const BusinessPageScoped = WorkspaceScoped.extend({ property: Uuid.optional() });
+/** Which business a page call works in. */
+export type BusinessPageScoped = z.infer<typeof BusinessPageScoped>;
+
 /** Settings › Business › Page: the handle, the draft, what is live, and what Publish needs. */
 export const BusinessPageView = z.object({
   handle: z.string().optional(),
+  /**
+   * This business's address is taken only at its first Publish (spec 0065 H7, AC-6592): a business other than the
+   * first, holding none yet. `handle`, when present, is the one it chose, which Publish can still find taken.
+   */
+  handleOnPublish: z.literal(true).optional(),
   /**
    * While there is no handle yet: a free one the business's name suggests (`somewhere-nowhere`), for the editor to
    * start the field with. Absent once there is a handle, or when the name suggests none that is free.
@@ -125,23 +139,26 @@ export const BusinessPageView = z.object({
 /** The page editor's view. */
 export type BusinessPageView = z.infer<typeof BusinessPageView>;
 
-/** Claims the page's address (at once, not drafted). */
-export const ClaimBusinessHandleInput = WorkspaceScoped.extend({ handle: BusinessHandle, mutationId: Uuid });
+/**
+ * Claims the page's address: at once for the first business (not drafted); for another, kept until its first Publish
+ * takes it (AC-6592). A workspace takes at most 5 new addresses a day (`LIMIT_REACHED`).
+ */
+export const ClaimBusinessHandleInput = BusinessPageScoped.extend({ handle: BusinessHandle, mutationId: Uuid });
 /** Claims the page's address. */
 export type ClaimBusinessHandleInput = z.infer<typeof ClaimBusinessHandleInput>;
 
 /** Saves the draft, whole. */
-export const SaveBusinessPageInput = WorkspaceScoped.extend({ draft: BusinessPageContent, mutationId: Uuid });
+export const SaveBusinessPageInput = BusinessPageScoped.extend({ draft: BusinessPageContent, mutationId: Uuid });
 /** Saves the draft. */
 export type SaveBusinessPageInput = z.infer<typeof SaveBusinessPageInput>;
 
 /** Sets a place's slug (at once: the old one keeps finding it). */
-export const SetPlaceSlugInput = WorkspaceScoped.extend({ placeId: Uuid, slug: PlaceSlug, mutationId: Uuid });
+export const SetPlaceSlugInput = BusinessPageScoped.extend({ placeId: Uuid, slug: PlaceSlug, mutationId: Uuid });
 /** Sets a place's slug. */
 export type SetPlaceSlugInput = z.infer<typeof SetPlaceSlugInput>;
 
 /** Publish or Discard: the draft goes live, or goes back to what is live. */
-export const BusinessPageStepInput = WorkspaceScoped.extend({ mutationId: Uuid });
+export const BusinessPageStepInput = BusinessPageScoped.extend({ mutationId: Uuid });
 /** Publish or Discard. */
 export type BusinessPageStepInput = z.infer<typeof BusinessPageStepInput>;
 
@@ -156,7 +173,7 @@ export type UploadedBusinessPhoto = z.infer<typeof UploadedBusinessPhoto>;
  * of the business held; `publish` refuses `VALIDATION_FAILED` with the one line Publish needs fixed.
  */
 export const businessPageContract = {
-  page: oc.input(WorkspaceScoped).output(BusinessPageView),
+  page: oc.input(BusinessPageScoped).output(BusinessPageView),
   claimHandle: oc.input(ClaimBusinessHandleInput).output(BusinessPageView),
   save: oc.input(SaveBusinessPageInput).output(BusinessPageView),
   setPlaceSlug: oc.input(SetPlaceSlugInput).output(BusinessPageView),

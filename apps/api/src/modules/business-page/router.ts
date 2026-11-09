@@ -19,30 +19,34 @@ import { member } from '../../orpc.ts';
 // covers every place's answer), and Publish removes the pictures nothing uses any more from the store.
 const b = member.businessPage;
 
+/** The business a call names (spec 0065 H7, AC-6592): left out, core works in the first. */
+const inBusiness = (input: { readonly property?: string | undefined }) =>
+  input.property === undefined ? {} : { propertyId: input.property };
+
 export const businessPageRouter = b.router({
-  page: b.page.handler(({ context }) => getBusinessPage(context.scope)),
+  page: b.page.handler(({ context, input }) => getBusinessPage(context.scope, inBusiness(input))),
   claimHandle: b.claimHandle.handler(async ({ context, input }) => {
     const changed = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      claimBusinessHandle(context.scope, { handle: input.handle }),
+      claimBusinessHandle(context.scope, { handle: input.handle, ...inBusiness(input) }),
     );
     if (changed.stale) await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return changed.view;
   }),
   save: b.save.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveBusinessPage(context.scope, { draft: input.draft }),
+      saveBusinessPage(context.scope, { draft: input.draft, ...inBusiness(input) }),
     ),
   ),
   setPlaceSlug: b.setPlaceSlug.handler(async ({ context, input }) => {
     const changed = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      setPlaceSlug(context.scope, { placeId: input.placeId, slug: input.slug }),
+      setPlaceSlug(context.scope, { placeId: input.placeId, slug: input.slug, ...inBusiness(input) }),
     );
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, [input.placeId]));
     return changed.view;
   }),
   publish: b.publish.handler(async ({ context, input }) => {
     const published = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      publishBusinessPage(context.scope),
+      publishBusinessPage(context.scope, inBusiness(input)),
     );
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     if (published.unusedPaths.length > 0 && context.files !== undefined) {
@@ -54,6 +58,6 @@ export const businessPageRouter = b.router({
     return published.view;
   }),
   discard: b.discard.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => discardBusinessPage(context.scope)),
+    commitWrite(context, { mutationId: input.mutationId }, () => discardBusinessPage(context.scope, inBusiness(input))),
   ),
 });

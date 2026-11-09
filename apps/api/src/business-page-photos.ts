@@ -9,7 +9,12 @@
 // - `GET /business/page/photos/:id?workspace=`: the business's own copy, for the editor (drafted or published).
 // Guests read published pictures through `public/business.ts`. Nothing here logs a picture or its path.
 import { randomUUID } from 'node:crypto';
-import { PROFILE_IMAGE_TYPES, UPLOAD_WORKSPACE_HEADER, type UploadedBusinessPhoto } from '@crm/contracts';
+import {
+  PROFILE_IMAGE_TYPES,
+  UPLOAD_PROPERTY_HEADER,
+  UPLOAD_WORKSPACE_HEADER,
+  type UploadedBusinessPhoto,
+} from '@crm/contracts';
 import { addBusinessPhoto, checkProfileImage, readBusinessPhoto } from '@crm/core';
 import type { Context, Hono } from 'hono';
 import {
@@ -63,6 +68,7 @@ export function mountBusinessPagePhotos(app: Hono<{ Variables: ImageVariables }>
         );
       }
       const id = randomUUID();
+      const property = c.req.header(UPLOAD_PROPERTY_HEADER);
       let path: string;
       try {
         // The row first: it checks the permission and the limit before a byte is stored.
@@ -72,6 +78,8 @@ export function mountBusinessPagePhotos(app: Hono<{ Variables: ImageVariables }>
           bytes: checked.bytes.byteLength,
           width: checked.width,
           height: checked.height,
+          // The business the picture is for (spec 0065 H7, `x-crm-property`); core refuses another workspace's.
+          ...(property === undefined || property === '' ? {} : { propertyId: property }),
         }));
       } catch (error) {
         return refusalResponse(error, errorResponse);

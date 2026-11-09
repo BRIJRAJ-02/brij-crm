@@ -225,6 +225,43 @@ export const ReserveOpen: Story = {
   },
 };
 
+/**
+ * Reserve at a business's own address with two places taking reservations (spec 0065 H7, AC-6593): it asks which
+ * place first, a menu of the places, each going to its own reservation page.
+ */
+export const ReserveChoosesPlace: Story = {
+  // Restaurant's page with one difference, checked in play, so no shot of its own (the full page is over 200 KB).
+  parameters: { crm: { screenshot: false } },
+  args: {
+    places: [
+      { name: 'Indiranagar', href: '/somewhere-nowhere/indiranagar', isCurrent: true },
+      { name: 'Koramangala', href: '/somewhere-nowhere/koramangala', isCurrent: false },
+    ],
+    reserve: {
+      kind: 'choose',
+      places: [
+        { name: 'Indiranagar', href: '/r/AbCdEfGhIjKlMnOp' },
+        { name: 'Koramangala', href: '/r/QrStUvWxYzAbCdEf' },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // A button, not a link: it opens the places rather than going anywhere.
+    await expect(canvas.queryByRole('link', { name: 'Reserve a table' })).toBeNull();
+    const [reserve] = canvas.getAllByRole('button', { name: 'Reserve a table' });
+    if (reserve === undefined) throw new Error('No Reserve button.');
+    await userEvent.click(reserve);
+    const menu = await within(document.body).findByRole('menu', { name: 'Which place?' });
+    await settleAnimations();
+    await expect(within(menu).getByRole('menuitem', { name: 'Koramangala' })).toHaveAttribute(
+      'href',
+      '/r/QrStUvWxYzAbCdEf',
+    );
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
 /** The Menu app's whole guest menu linked under the Menu section (`/m/<key>`). */
 export const FullMenuLink: Story = {
   // The page is Restaurant's with one more link; checked in play, so no shot of its own.

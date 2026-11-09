@@ -42,6 +42,7 @@ export {
   businessAction,
   BusinessReserve,
   type BusinessAction,
+  type BusinessReservePlace,
   type BusinessReserveProps,
   type BusinessReserveState,
 } from './BusinessReserve.tsx';

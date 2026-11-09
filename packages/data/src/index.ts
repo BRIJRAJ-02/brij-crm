@@ -394,7 +394,7 @@ import type { MenuStoreRoot } from './menu/store.ts';
 import type { MenuDraft as MenuDraftAnswer, MenuLookCover as MenuLookCoverAnswer } from '@crm/contracts';
 import type { TablesStore } from './tables/store.ts';
 export type { StaffBooking, TablesStore, WalkIn } from './tables/store.ts';
-import type { BusinessPageStore } from './business-page/store.ts';
+import type { BusinessPageStoreRoot } from './business-page/store.ts';
 import type { ServicesStoreRoot } from './services/store.ts';
 export type { NewBlock, NewTimeOff, ServicesStore, ServicesStoreRoot, TeamCopy } from './services/store.ts';
 // Services, staff and shifts (spec 0066 B1): the shapes Settings › Services, Staff and Shifts show.
@@ -420,7 +420,7 @@ export type {
   StaffView,
   VariantFields,
 } from '@crm/contracts';
-export type { BusinessPageStore, PhotoUpload } from './business-page/store.ts';
+export type { BusinessPageStore, BusinessPageStoreRoot, PhotoUpload } from './business-page/store.ts';
 // The business page's editor (spec 0066, B4 lite): the shapes Settings › Business › Page shows.
 export type {
   BusinessAmenity,
@@ -3128,7 +3128,7 @@ export function createDataLayer({
   let menus: Promise<MenuStoreRoot> | undefined;
   let tables: Promise<TablesStore> | undefined;
   // Settings › Business › Page (spec 0066, B4 lite): the business page's editor, loaded with the first screen that asks.
-  let businessPage: Promise<BusinessPageStore> | undefined;
+  let businessPage: Promise<BusinessPageStoreRoot> | undefined;
   // Settings › Services, Staff and Shifts (spec 0066 B1), loaded with the first screen that asks.
   let services: Promise<ServicesStoreRoot> | undefined;
   /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
@@ -6598,32 +6598,39 @@ export function createDataLayer({
      * Publish. The store loads on first use.
      */
     businessPage: {
-      load: (): Promise<BusinessPageStore> =>
-        (businessPage ??= import('./business-page/store.ts').then(({ openBusinessPage }) =>
-          openBusinessPage({
-            api: api.businessPage,
-            call,
-            mintId,
-            origin,
-            upload: async (workspace, body) => {
-              const response = await fetch(new URL('/api/business/page/photos', origin).href, {
-                method: 'POST',
-                headers: { 'x-crm-workspace': workspace, 'content-type': body.type },
-                body,
-                credentials: 'include',
-              }).catch((error: unknown) => {
-                throw toDataError(error);
-              });
-              const answer: unknown = await response.json().catch(() => undefined);
-              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
-              if (!response.ok) throw toDataError({ ...fields, status: response.status });
-              const { id, width, height } = fields;
-              if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
-                throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
-              }
-              return { id, width, height };
-            },
-          }),
+      load: (): Promise<BusinessPageStoreRoot> =>
+        (businessPage ??= Promise.all([import('./business-page/store.ts'), loadHospitality()]).then(
+          ([{ openBusinessPage }, held]) =>
+            openBusinessPage({
+              api: api.businessPage,
+              call,
+              mintId,
+              origin,
+              // Each business has its own page (spec 0065 H7): every call names the one the switcher chose.
+              propertyOf: (workspace) => held.current(workspace),
+              upload: async (workspace, property, body) => {
+                const response = await fetch(new URL('/api/business/page/photos', origin).href, {
+                  method: 'POST',
+                  headers: {
+                    'x-crm-workspace': workspace,
+                    'content-type': body.type,
+                    ...(property === undefined ? {} : { 'x-crm-property': property }),
+                  },
+                  body,
+                  credentials: 'include',
+                }).catch((error: unknown) => {
+                  throw toDataError(error);
+                });
+                const answer: unknown = await response.json().catch(() => undefined);
+                const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+                if (!response.ok) throw toDataError({ ...fields, status: response.status });
+                const { id, width, height } = fields;
+                if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+                  throw toDataError({ code: 'INTERNAL', message: 'The photo’s answer couldn’t be read.' });
+                }
+                return { id, width, height };
+              },
+            }),
         )),
     },
     /**

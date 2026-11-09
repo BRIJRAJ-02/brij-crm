@@ -46,6 +46,7 @@ function fakeApi(first: BusinessPageView) {
     claimHandle: ({ handle }) => {
       calls.push({ kind: 'claim', handle });
       return later(() => {
+        // Another business's address waits for its first Publish (spec 0065 H7): it stays `handleOnPublish`.
         const { suggestedHandle: _suggested, ...rest } = current;
         current = { ...rest, handle };
         return current;
@@ -147,6 +148,24 @@ describe('Settings › Business › Page', () => {
     await userEvent.click(claim);
     await expect.poll(() => calls.map((call) => call.handle)).toEqual(['somewhere-nowhere']);
     await expect.element(page.getByRole('button', { name: 'Claim' })).not.toBeInTheDocument();
+  });
+
+  it('saves another business’s address for its first Publish, saying it is not held yet (spec 0065 H7)', async () => {
+    const { store, calls } = await editorOf({ ...BASE, suggestedHandle: 'harbour-bar', handleOnPublish: true });
+    const { toasts, said } = recordingToasts();
+    await show(store, toasts);
+    await expect
+      .element(page.getByText('We started it from your business’s name. Save it, or change it first.'))
+      .toBeVisible();
+    // Nothing is held yet, so there is no Claim and nothing to copy.
+    await expect.element(page.getByRole('button', { name: 'Claim' })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: 'Save' }));
+    await expect.poll(() => calls.map((call) => call.handle)).toEqual(['harbour-bar']);
+    await expect
+      .poll(() => said.map((content) => content.message))
+      .toContain('Address saved. It’s yours when you publish.');
+    await expect.element(page.getByText('Until then, someone else could take this address.')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Copy address' })).not.toBeInTheDocument();
   });
 
   it('saves typed About without leaving the field, and Publish publishes the last keystroke', async () => {

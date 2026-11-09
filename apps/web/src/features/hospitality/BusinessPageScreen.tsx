@@ -216,7 +216,9 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
     );
   }
   const view = state.value;
-  const address = view.handle === undefined ? undefined : `${publicBookingOrigin()}/${view.handle}`;
+  // An address a business only chose (it is taken at its first Publish, spec 0065 H7) has no page to copy or open yet.
+  const address =
+    view.handle === undefined || view.handleOnPublish === true ? undefined : `${publicBookingOrigin()}/${view.handle}`;
   /**
    * Changes the draft as it stands when the change goes out (never as this render drew it, so a photo landing while a
    * description saves keeps both); a refusal says so and the copy goes back.
@@ -310,7 +312,9 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
         address={address}
         onClaim={async (handle) => {
           const refused = await store.claimHandle(slug, handle);
-          if (refused === undefined) toasts.toast({ tone: 'success', message: words.claimed });
+          if (refused === undefined) {
+            toasts.toast({ tone: 'success', message: view.handleOnPublish === true ? words.chosen : words.claimed });
+          }
           return refused;
         }}
       />
@@ -422,15 +426,17 @@ function AddressSection({
     });
   };
   const host = publicBookingOrigin().replace(/^https?:\/\//, '');
+  // A business other than the first takes its address at its first Publish (spec 0065 H7, AC-6592): Save, not Claim.
+  const onPublish = view.handleOnPublish === true;
   return (
-    <SettingsSection title={words.address} description={words.addressText}>
+    <SettingsSection title={words.address} description={onPublish ? words.addressTextOnPublish : words.addressText}>
       <Card
         // Claim shows only while the field says something new: a claimed address has nothing to press.
         {...(changed || isBusy
           ? {
               footer: (
                 <Button type="submit" form={formId} isPending={isBusy}>
-                  {isBusy ? words.claiming : words.claim}
+                  {isBusy ? (onPublish ? words.saving : words.claiming) : onPublish ? words.save : words.claim}
                 </Button>
               ),
             }
@@ -438,7 +444,16 @@ function AddressSection({
       >
         {view.handle === undefined && (
           <Callout tone="info" title={words.firstAddress}>
-            {view.suggestedHandle === undefined ? words.firstAddressText : words.suggestedAddressText}
+            {view.suggestedHandle === undefined
+              ? words.firstAddressText
+              : onPublish
+                ? words.suggestedAddressTextOnPublish
+                : words.suggestedAddressText}
+          </Callout>
+        )}
+        {view.handle !== undefined && onPublish && (
+          <Callout tone="info" title={words.takenOnPublish}>
+            {words.takenOnPublishText}
           </Callout>
         )}
         <Form id={formId} onSubmit={claim} label={words.address} isBusy={isBusy}>

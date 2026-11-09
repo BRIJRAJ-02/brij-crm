@@ -615,7 +615,8 @@ describe('the purge (AC-823)', () => {
       );
       await testQuery(
         ownerUrl,
-        `insert into auth.business_listings (workspace_id, handle, places, changed_at) values ($1, $2, '{}', now())`,
+        `insert into auth.business_listings (workspace_id, property_id, handle, places, changed_at)
+          values ($1, (select id from properties where workspace_id = $1 and position = 0), $2, '{}', now())`,
         [workspaceId, name],
       );
     }

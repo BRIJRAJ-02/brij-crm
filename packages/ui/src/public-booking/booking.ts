@@ -95,6 +95,7 @@ export {
   type BusinessPagePlace,
   type BusinessPageProps,
   type BusinessPhotoItem,
+  type BusinessReservePlace,
   type BusinessReserveProps,
   type BusinessReserveState,
   type DirectionsLinks,

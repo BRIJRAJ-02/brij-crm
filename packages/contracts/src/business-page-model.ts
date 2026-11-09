@@ -198,6 +198,12 @@ export interface PublicBusinessPage {
    * Table seating, spec 0066 B7).
    */
   readonly reservePath?: string | undefined;
+  /**
+   * At the business's own address (no place slug) with two or more places taking reservations online, Reserve asks for
+   * the place first (spec 0065 H7, AC-6593): each place and its reservation page, in the page's order. `reservePath` is
+   * then absent.
+   */
+  readonly reservePlaces?: readonly { readonly id: string; readonly name: string; readonly path: string }[] | undefined;
   /** The workspace's brand kit versions: its accent stylesheet's and its logo's (`/brand.css?v=`, `/logo?v=`). */
   readonly brand?: { readonly version?: string | undefined; readonly logo?: string | undefined } | undefined;
   /**

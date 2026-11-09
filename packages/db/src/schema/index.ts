@@ -34,7 +34,7 @@ export { memberPreferences } from './preferences.ts';
 export { workspaceBrands } from './brand.ts';
 export { PAGE_VERSION_KINDS, pageVersions } from './pages.ts';
 export { areas, places, properties, resources, workspaceApps } from './hospitality.ts';
-export { businessPages, businessPhotos, placePages, placeSlugs } from './business-pages.ts';
+export { businessPages, businessPhotos, placePages, placeSlugs, propertyHandles } from './business-pages.ts';
 export {
   menuDrafts,
   menuItemOptionGroups,

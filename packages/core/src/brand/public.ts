@@ -135,11 +135,12 @@ export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string, prop
 }
 
 /**
- * A business page's brand (spec 0066, AC-6643): its workspace's accent and logo, in the caller's transaction, which
- * the business handle's own entry opened in that workspace. The same read as a guest menu's.
+ * A business page's brand (spec 0066, AC-6643): its workspace's accent and logo and its business's own look (spec
+ * 0065 H7, AC-6593: `propertyId`, else the first), in the caller's transaction, which the business handle's own entry
+ * opened in that workspace. The same read as a guest menu's.
  */
-export async function businessBrandOf(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
-  return readMenuBrandIn(tx, workspaceId);
+export async function businessBrandOf(tx: WorkspaceTx, workspaceId: string, propertyId?: string): Promise<PageBrand> {
+  return readMenuBrandIn(tx, workspaceId, propertyId);
 }
 
 /** One photo of a link page: where the store keeps it, its checked type, and the version its path carries. */

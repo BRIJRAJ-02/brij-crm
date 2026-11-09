@@ -30,6 +30,11 @@ export const businessPages = pgTable(
     workspaceId: workspaceId(),
     propertyId: uuid('property_id').notNull(),
     handle: text('handle'),
+    /**
+     * The address a business other than the first chose before its first Publish (spec 0065 H7, AC-6592): only a
+     * wish, held for nobody, until Publish claims it.
+     */
+    pendingHandle: text('pending_handle'),
     draft: jsonb('draft')
       .notNull()
       .default(sql`'{}'::jsonb`),
@@ -64,6 +69,10 @@ export const businessPages = pgTable(
       'business_pages_handle',
       sql`${t.handle} is null or (${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40)`,
     ),
+    check(
+      'business_pages_pending_handle',
+      sql`${t.pendingHandle} is null or (${t.pendingHandle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.pendingHandle}) between 3 and 40)`,
+    ),
     check('business_pages_draft', sql`jsonb_typeof(${t.draft}) = 'object' and octet_length(${t.draft}::text) <= 32768`),
     check(
       'business_pages_published',
@@ -71,6 +80,39 @@ export const businessPages = pgTable(
     ),
     check('business_pages_live', sql`(${t.published} is null) = (${t.publishedAt} is null)`),
     check('business_pages_version', sql`${t.version} >= 0`),
+  ],
+);
+
+/**
+ * Every business handle a workspace holds or held, and the business (property) it belongs to (spec 0065 H7, AC-6592,
+ * migration 0199): `auth.public_handles` says which workspace holds a handle, this says which of its businesses, so the
+ * public lookup finds the right page and an old handle keeps finding it. Goes with its business.
+ */
+export const propertyHandles = pgTable(
+  'property_handles',
+  {
+    workspaceId: workspaceId(),
+    handle: text('handle').notNull(),
+    propertyId: uuid('property_id').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'property_handles_pkey', columns: [t.workspaceId, t.handle] }),
+    foreignKey({
+      name: 'property_handles_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'property_handles_workspace',
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    index('property_handles_property').on(t.workspaceId, t.propertyId, t.createdAt),
+    check(
+      'property_handles_shape',
+      sql`${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40`,
+    ),
   ],
 );
 

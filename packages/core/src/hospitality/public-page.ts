@@ -3,6 +3,10 @@
 // crm_handle's definer (`crm_business_handle_owner`), and everything after is read inside that one workspace, under
 // its row level security, and only from what was published: a draft is never read here. A page that was never
 // published, a deleted workspace, and a business whose apps are all off answer the same NOT_FOUND as no page at all.
+//
+// One page per business (spec 0065 H7, AC-6592, AC-6593): the handle names its workspace through the definer, then
+// its business through `property_handles` inside that workspace, and every read after is that business's own: its
+// places, its snapshot, its pictures and its look. A handle no business names any more (a removed one's) is no page.
 import {
   APPOINTMENT_KINDS,
   BUSINESS_SECOND_SEGMENTS,
@@ -27,7 +31,7 @@ import { installedHospitalityApps } from './gate.ts';
 import { currentProperty } from './property.ts';
 import { readTableService } from '../visits/table-service.ts';
 
-const { businessPages, businessPhotos, places, placeSlugs, workspaces } = schema;
+const { businessPages, businessPhotos, places, placeSlugs, propertyHandles, workspaces } = schema;
 
 /** The id `withWorkspace` takes for a read that belongs to no workspace: the definer reads past it. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
@@ -59,6 +63,29 @@ async function workspaceOfHandle(db: Database, handle: string): Promise<string |
   );
   const id = found.rows[0]?.workspace_id;
   return id !== undefined && isUuid(id) ? id : undefined;
+}
+
+/** The business a handle names inside its workspace (current or old), or undefined. */
+async function businessOfHandle(tx: WorkspaceTx, workspaceId: string, handle: string): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ propertyId: propertyHandles.propertyId })
+    .from(propertyHandles)
+    .where(and(eq(propertyHandles.workspaceId, workspaceId), eq(propertyHandles.handle, handle)));
+  return row?.propertyId;
+}
+
+/** The business a handle names and its workspace, read with the page's own steps: workspace, then business. */
+async function openHandle<T>(
+  db: Database,
+  handle: string,
+  read: (tx: WorkspaceTx, workspaceId: string, propertyId: string) => Promise<T | undefined>,
+): Promise<T | undefined> {
+  const workspaceId = await workspaceOfHandle(db, handle);
+  if (workspaceId === undefined) return undefined;
+  return db.withWorkspace(workspaceId, async (tx) => {
+    const propertyId = await businessOfHandle(tx, workspaceId, handle);
+    return propertyId === undefined ? undefined : read(tx, workspaceId, propertyId);
+  });
 }
 
 /**
@@ -96,11 +123,9 @@ export async function enterBusinessPage(
   ) {
     throw noPage();
   }
-  const workspaceId = await workspaceOfHandle(deps.db, handle);
-  if (workspaceId === undefined) throw noPage();
   const menus = deps.menus ?? NO_MENUS;
-  return deps.db.withWorkspace(workspaceId, async (tx) => {
-    if (!(await isLive(tx, workspaceId))) throw noPage();
+  const entry = await openHandle(deps.db, handle, async (tx, workspaceId, propertyId) => {
+    if (!(await isLive(tx, workspaceId))) return undefined;
     const apps = await installedHospitalityApps(tx, workspaceId);
     const [row] = await tx
       .select({
@@ -109,8 +134,8 @@ export async function enterBusinessPage(
         publishedAt: businessPages.publishedAt,
       })
       .from(businessPages)
-      .where(thePage(workspaceId));
-    const property = await currentProperty(tx, workspaceId);
+      .where(thePage(workspaceId, propertyId));
+    const property = await currentProperty(tx, workspaceId, propertyId);
     if (
       row === undefined ||
       row.handle === null ||
@@ -119,22 +144,22 @@ export async function enterBusinessPage(
       property.name === null ||
       property.kind === null
     ) {
-      throw noPage();
+      return undefined;
     }
     const content = businessContentOf(row.published);
     // Only places Publish saw (its snapshot names them): a place added or given an address since waits for Publish.
     const publishedPlaces = publishedPlaceIds(row.published);
-    const shown = (await pagePlaces(tx, workspaceId)).filter(
+    const shown = (await pagePlaces(tx, workspaceId, property.id)).filter(
       (place) => place.slug !== null && (publishedPlaces === undefined || publishedPlaces.has(place.id)),
     );
-    if (shown.length === 0) throw noPage();
+    if (shown.length === 0) return undefined;
     let placeId = shown[0]?.id ?? '';
     if (slug !== undefined) {
       const [held] = await tx
         .select({ placeId: placeSlugs.placeId })
         .from(placeSlugs)
         .where(and(eq(placeSlugs.workspaceId, workspaceId), eq(placeSlugs.slug, slug)));
-      if (held === undefined || !shown.some((place) => place.id === held.placeId)) throw noPage();
+      if (held === undefined || !shown.some((place) => place.id === held.placeId)) return undefined;
       placeId = held.placeId;
     }
     // Only pictures still kept: one removed since (it can't be, Publish keeps what it shows) is left out, not broken.
@@ -150,8 +175,25 @@ export async function enterBusinessPage(
     const menu = apps.has('menu') ? await menus(tx, workspaceId, placeId) : undefined;
     // Reserve opens the place's reservation page (spec 0066 B7, `/r/<public key>`) once its table service takes
     // reservations online; installed but not yet taking them, the page offers Call to book or Directions instead.
-    const reservePath = apps.has('table_seating') ? await reservePathOf(tx, workspaceId, placeId) : undefined;
-    const brand = await businessBrandOf(tx, workspaceId);
+    // At the business's own address with two or more places, Reserve asks for the place first (AC-6593): each place
+    // that takes reservations online; with only one of them, Reserve goes straight to it.
+    const choosing = slug === undefined && shown.length > 1;
+    const open =
+      apps.has('table_seating') && choosing
+        ? (
+            await Promise.all(
+              shown.map(async (place) => ({ place, path: await reservePathOf(tx, workspaceId, place.id) })),
+            )
+          ).flatMap(({ place, path }) => (path === undefined ? [] : [{ id: place.id, name: place.name, path }]))
+        : [];
+    const reservePath = choosing
+      ? open.length === 1
+        ? open[0]?.path
+        : undefined
+      : apps.has('table_seating')
+        ? await reservePathOf(tx, workspaceId, placeId)
+        : undefined;
+    const brand = await businessBrandOf(tx, workspaceId, property.id);
     const page: PublicBusinessPage = {
       handle: current,
       name: property.name,
@@ -181,11 +223,13 @@ export async function enterBusinessPage(
       ...(menu === undefined || menu.sections.length === 0 ? {} : { menu }),
       // Table seating is on by default, so "soon" is only for a business that seats people: a salon's page shows
       // Reserve only once it really opens reservations.
-      ...(reservePath !== undefined
-        ? { reserve: 'open' as const, reservePath }
-        : apps.has('table_seating') && !APPOINTMENT_KINDS.includes(property.kind as BusinessKind)
-          ? { reserve: 'soon' as const }
-          : {}),
+      ...(open.length > 1
+        ? { reserve: 'open' as const, reservePlaces: open }
+        : reservePath !== undefined
+          ? { reserve: 'open' as const, reservePath }
+          : apps.has('table_seating') && !APPOINTMENT_KINDS.includes(property.kind as BusinessKind)
+            ? { reserve: 'soon' as const }
+            : {}),
       ...(brand.answer === undefined ? {} : { brand: brand.answer }),
       indexable: !content.hiddenPlaces.includes(placeId),
       publishedAt: new Date(row.publishedAt).toISOString(),
@@ -193,6 +237,8 @@ export async function enterBusinessPage(
     };
     return { page, workspaceId, brand };
   });
+  if (entry === undefined) throw noPage();
+  return entry;
 }
 
 /** The place's reservation page's path while its table service takes reservations online, else undefined. */
@@ -225,38 +271,41 @@ export async function publicBusinessPhoto(
   photoId: string,
 ): Promise<{ readonly path: string; readonly type: string; readonly workspaceId: string } | undefined> {
   if (!isUuid(photoId)) return undefined;
-  const workspaceId = await workspaceOfHandle(deps.db, handle);
-  if (workspaceId === undefined) return undefined;
-  return deps.db.withWorkspace(workspaceId, async (tx) => {
+  return openHandle(deps.db, handle, async (tx, workspaceId, propertyId) => {
     if (!(await isLive(tx, workspaceId))) return undefined;
     const [row] = await tx
       .select({ published: businessPages.published })
       .from(businessPages)
-      .where(thePage(workspaceId));
+      .where(thePage(workspaceId, propertyId));
     if (row === undefined || row.published === null) return undefined;
     if (!businessContentOf(row.published).gallery.some((photo) => photo.id === photoId)) return undefined;
+    // Only this business's own picture: another business's, even of the same workspace, is none.
     const [photo] = await tx
       .select({ path: businessPhotos.path, type: businessPhotos.type })
       .from(businessPhotos)
-      .where(and(eq(businessPhotos.workspaceId, workspaceId), eq(businessPhotos.id, photoId)));
+      .where(
+        and(
+          eq(businessPhotos.workspaceId, workspaceId),
+          eq(businessPhotos.propertyId, propertyId),
+          eq(businessPhotos.id, photoId),
+        ),
+      );
     return photo === undefined ? undefined : { ...photo, workspaceId };
   });
 }
 
-/** The brand of the business a handle names, for its stylesheet and logo routes, or undefined. */
+/** The brand of the business a handle names (its own look), for its stylesheet and logo routes, or undefined. */
 export async function publicBusinessBrand(
   deps: { readonly db: Database },
   handle: string,
 ): Promise<{ readonly brand: PageBrand; readonly workspaceId: string } | undefined> {
-  const workspaceId = await workspaceOfHandle(deps.db, handle);
-  if (workspaceId === undefined) return undefined;
-  return deps.db.withWorkspace(workspaceId, async (tx) => {
+  return openHandle(deps.db, handle, async (tx, workspaceId, propertyId) => {
     const [row] = await tx
       .select({ published: businessPages.publishedAt })
       .from(businessPages)
-      .where(thePage(workspaceId));
+      .where(thePage(workspaceId, propertyId));
     if (row === undefined || row.published === null || !(await isLive(tx, workspaceId))) return undefined;
-    return { brand: await businessBrandOf(tx, workspaceId), workspaceId };
+    return { brand: await businessBrandOf(tx, workspaceId, propertyId), workspaceId };
   });
 }
 
@@ -279,14 +328,16 @@ export async function listSitemapBusinesses(
 }
 
 /**
- * The company page a workspace's link pages lock up to (AC-6646): its business handle while its page is published,
- * else undefined (the lockup then links the company site as today). Read in the caller's workspace transaction.
+ * The company page a workspace's link pages lock up to (AC-6646): its first business's handle while its page is
+ * published, else undefined (the lockup then links the company site as today). Read in the caller's workspace
+ * transaction. The first business keeps the workspace's handle (spec 0065 H7), so this is the workspace's page.
  */
 export async function publishedBusinessHandle(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
+  const first = await currentProperty(tx, workspaceId);
   const [row] = await tx
     .select({ handle: businessPages.handle })
     .from(businessPages)
-    .where(and(thePage(workspaceId), sql`${businessPages.publishedAt} is not null`));
+    .where(and(thePage(workspaceId, first.id), sql`${businessPages.publishedAt} is not null`));
   if (row?.handle === null || row?.handle === undefined) return undefined;
   return (await isLive(tx, workspaceId)) ? row.handle : undefined;
 }

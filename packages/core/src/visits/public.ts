@@ -15,6 +15,7 @@ import {
   type PublicTablePage,
   type PublicTableVisit,
 } from '@crm/contracts';
+import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import type { TableEntry } from '../access/table-door.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -88,7 +89,7 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
 }> {
   const workspaceId = entry.scope.workspaceId;
   return inWorkspace(entry.scope, async (tx) => {
-    const brand = await readMenuBrandIn(tx, workspaceId);
+    const brand = await placeBrandOf(tx, entry);
     const areas = (
       await tx.execute<{ name: string }>(sql`
         select a.name from areas a
@@ -106,6 +107,17 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
   });
 }
 
+/**
+ * The brand the place's guest pages wear (the reservation page, its manage page and its stylesheet): the workspace's
+ * accent and logo with the look of the business the place belongs to (spec 0065 H7, AC-6593), never another's.
+ */
+async function placeBrandOf(tx: WorkspaceTx, entry: TableEntry): Promise<PageBrand> {
+  const found = await tx.execute<{ property_id: string }>(
+    sql`select property_id::text from places where id = ${entry.placeId}::uuid`,
+  );
+  return readMenuBrandIn(tx, entry.scope.workspaceId, found.rows[0]?.property_id);
+}
+
 /** The side the look pins the page to, as the answer says it: nothing while it follows the visitor. */
 function pinnedScheme(brand: PageBrand): { readonly scheme?: 'light' | 'dark' } {
   const pin = menuLookPin(brand);
@@ -117,7 +129,7 @@ export async function readTableLook(
   entry: TableEntry,
 ): Promise<{ readonly brand: PageBrand; readonly version: string }> {
   // The brand alone: a stylesheet's read never reads the areas or the menu.
-  const brand = await inWorkspace(entry.scope, (tx) => readMenuBrandIn(tx, entry.scope.workspaceId));
+  const brand = await inWorkspace(entry.scope, (tx) => placeBrandOf(tx, entry));
   return { brand, version: menuLookVersion(brand) };
 }
 

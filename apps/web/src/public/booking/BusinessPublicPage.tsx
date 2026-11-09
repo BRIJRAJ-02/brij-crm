@@ -40,10 +40,13 @@ type Loaded =
 /** A version as the api writes it, for the brand's stylesheet and logo paths. */
 const VERSION = /^[0-9a-f]{12}$/;
 
-/** The page's path for the place it shows: the handle alone for one place, else the place's own. */
-function pathOf(page: PublicBusinessPage): string {
+/**
+ * The page's path for what it shows: the business's own address when it was asked for (spec 0065 H7, AC-6593: a
+ * business's page, which lists its places and asks which one on Reserve) or has one place, else the place's own.
+ */
+function pathOf(page: PublicBusinessPage, slug: string | undefined): string {
   const place = page.places.find((each) => each.id === page.placeId);
-  return page.places.length <= 1 || place === undefined
+  return slug === undefined || page.places.length <= 1 || place === undefined
     ? `/${encodeURIComponent(page.handle)}`
     : `/${encodeURIComponent(page.handle)}/${encodeURIComponent(place.slug)}`;
 }
@@ -76,10 +79,10 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
   // The address in the bar follows the page's current one; the tab says whose page it is.
   useEffect(() => {
     if (page === undefined) return;
-    const path = pathOf(page);
+    const path = pathOf(page, slug);
     if (path !== globalThis.location.pathname) onMoved(path);
     document.title = tabTitle(page.name);
-  }, [page, onMoved]);
+  }, [page, slug, onMoved]);
   // The guest look (the guest menu's, with the workspace's accent in it, spec 0060), through our own api.
   const lookVersion = page?.look;
   useEffect(() => {
@@ -155,9 +158,14 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
         ? {}
         : {
             reserve:
-              shown.reserve === 'open' && shown.reservePath !== undefined
-                ? { kind: 'open' as const, href: shown.reservePath }
-                : { kind: 'soon' as const },
+              shown.reserve === 'open' && shown.reservePlaces !== undefined && shown.reservePlaces.length > 1
+                ? {
+                    kind: 'choose' as const,
+                    places: shown.reservePlaces.map((each) => ({ name: each.name, href: each.path })),
+                  }
+                : shown.reserve === 'open' && shown.reservePath !== undefined
+                  ? { kind: 'open' as const, href: shown.reservePath }
+                  : { kind: 'soon' as const },
           })}
       directions={directions}
       mapsApp={mapsAppFor(globalThis.navigator.userAgent)}

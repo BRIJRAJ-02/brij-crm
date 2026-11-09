@@ -769,7 +769,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_look_public(uuid, uuid)',
         'crm_business_handle_owner(text)',
         'crm_claim_business_handle(uuid, text)',
-        'crm_list_business(uuid, text, text[], boolean)',
+        'crm_list_business(uuid, uuid, text, text[], boolean)',
         'crm_sitemap_businesses(text, integer)',
         // The seven that run only inside the others: crm_handle's own to call, never the app's or the worker's.
         'crm_check_profile_item(text, jsonb, uuid, uuid, uuid)',
@@ -1695,13 +1695,13 @@ describe('isolation', () => {
     // Listing is for the transaction's own workspace and its own handle only; the sitemap reads only listings.
     const listedElsewhere = await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute<{ listed: boolean }>(
-        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-1-${tag}`}, '{}'::text[], true) as listed`,
+        sql`select crm_list_business(${a.workspaceId}::uuid, (select id from properties limit 1), ${`biz-1-${tag}`}, '{}'::text[], true) as listed`,
       ),
     );
     expect(listedElsewhere.rows).toEqual([{ listed: false }]);
     const listed = await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute<{ listed: boolean }>(
-        sql`select crm_list_business(${a.workspaceId}::uuid, ${`biz-0-${tag}`}, '{main}'::text[], true) as listed`,
+        sql`select crm_list_business(${a.workspaceId}::uuid, (select id from properties limit 1), ${`biz-0-${tag}`}, '{main}'::text[], true) as listed`,
       ),
     );
     expect(listed.rows).toEqual([{ listed: true }]);
@@ -1718,6 +1718,47 @@ describe('isolation', () => {
     ).rejects.toMatchObject({
       cause: { code: '42501' },
     });
+  });
+
+  it('lets a workspace make at most 5 new business handles a day, keeps its own free, and its businesses apart (spec 0065 H7, AC-6592)', async () => {
+    const a = await workspaceWithMember('biz-day-a');
+    const b = await workspaceWithMember('biz-day-b');
+    const tag = randomUUID().slice(0, 8);
+    const claim = (handle: string) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ handle: string }>(
+          sql`select crm_claim_business_handle(${a.workspaceId}::uuid, ${handle}) as handle`,
+        ),
+      );
+    for (let n = 0; n < 5; n += 1) await claim(`day-${String(n)}-${tag}`);
+    await expect(claim(`day-5-${tag}`)).rejects.toMatchObject({ cause: { code: 'P0001' } });
+    // One it holds already is its own again, past the day's five.
+    expect((await claim(`day-0-${tag}`)).rows).toEqual([{ handle: `day-0-${tag}` }]);
+    // A day on, it may make new ones again.
+    await owner.query(
+      `update auth.public_handles set created_at = now() - interval '25 hours' where workspace_id = $1 and owner_kind = 'business'`,
+      [a.workspaceId],
+    );
+    expect((await claim(`day-5-${tag}`)).rows).toEqual([{ handle: `day-5-${tag}` }]);
+    // Which business holds a handle is the workspace's own to read, never another's.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into property_handles (workspace_id, handle, property_id)
+          select ${a.workspaceId}::uuid, ${`day-5-${tag}`}, id from properties limit 1`,
+      ),
+    );
+    const seen = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute(sql`select handle from property_handles where handle = ${`day-5-${tag}`}`),
+    );
+    expect(seen.rows).toEqual([]);
+    // A row written into another workspace is refused.
+    await expect(
+      db.withWorkspace(b.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into property_handles (workspace_id, handle, property_id) values (${a.workspaceId}::uuid, ${`by-${tag}`}, ${randomUUID()})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
   });
 
   it('switches early access through crm_set_early_access only, keeping the closed list (spec 0065, AC-6502)', async () => {
