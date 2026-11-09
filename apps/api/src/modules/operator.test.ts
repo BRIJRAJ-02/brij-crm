@@ -4,12 +4,10 @@
 // booking page's view is counted in public/booking.test.ts.
 import { randomUUID } from 'node:crypto';
 import { ORPCError } from '@orpc/client';
-import { businessCacheTags, menuWorkspaceCacheTags } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newEmail, rpcClient, signIn, signInApp, testConnections, turnOnTwoFactor } from '../../test/sign-in.ts';
-import { memberWithWorkspace } from '../../test/workspace.ts';
 import { totpCode } from '../auth/two-factor.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
 import { EDGE_HEADER } from '../edge.ts';
@@ -24,26 +22,10 @@ const CHROME =
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
-/** Every tag list the edge cache was asked to forget. */
-const forgotten: string[][] = [];
-/** While set, every purge rejects after it is recorded, as a platform outage would. */
-let purgesFail = false;
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp(
-    { db, identity },
-    { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] },
-    {
-      edgeCache: {
-        tag: () => undefined,
-        forget: (tags) => {
-          forgotten.push([...tags]);
-          return purgesFail ? Promise.reject(new Error('purge failed')) : Promise.resolve();
-        },
-      },
-    },
-  ));
+  ({ app } = signInApp({ db, identity }, { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] }));
 });
 afterAll(async () => {
   await identity.close();

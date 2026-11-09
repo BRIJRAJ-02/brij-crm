@@ -244,8 +244,7 @@ export const strings = {
   searchDishes: 'Search items',
   newDish: 'New item',
   startTitle: 'Put your menu online',
-  startText:
-    'Add dishes and publish when you’re ready. Guests see nothing until you do.',
+  startText: 'Add dishes and publish when you’re ready. Guests see nothing until you do.',
   noDishes: 'No items yet',
   noDishesLine: 'Add items in Structure, or make one here.',
   noMatches: 'No items match',

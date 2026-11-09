@@ -4,14 +4,12 @@
 // address. Real sessions, real Postgres.
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { testQuery } from '@crm/db/testing';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newIp, signInApp, testConnections } from '../test/sign-in.ts';
 import { memberWithWorkspace } from '../test/workspace.ts';
 import { EDGE_HEADER } from './edge.ts';
 import { TEST_EDGE_SECRET } from './testing.ts';
 
-const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];

@@ -51,8 +51,7 @@ export const strings = {
   openMenus: 'Open Menus',
   noPlace: 'Add your place first',
   startTitle: 'A QR code for every table',
-  startText:
-    'Add your tables and print a code for each. Guests scan it to see your menu.',
+  startText: 'Add your tables and print a code for each. Guests scan it to see your menu.',
   addPlace: 'Add your place',
   failed: 'Tables didn’t load',
   floorFailed: 'Seats and zones didn’t load, so tables can’t be added or changed right now.',
