@@ -511,7 +511,8 @@ describe('the Menus editor', () => {
           { code: 'soya', level: 'contains' },
         ],
       });
-  });
+    // Five lists opened and closed in one walk: on a busy CI runner it ran out of the default test time (9 Nov 2026).
+  }, 40_000);
 
   it('saves and starts the next with Add another, focus back in Name', async () => {
     await page.viewport(1280, 900);
