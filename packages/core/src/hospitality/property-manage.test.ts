@@ -2,6 +2,7 @@
 // reads its own places, a place is made in the property named, a property's currency holds while it has prices
 // (AC-6519), and another workspace's property is not found.
 import { randomUUID } from 'node:crypto';
+import type { ItemFields, ServiceFields } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -22,6 +23,8 @@ import {
 } from './menu.ts';
 import { createPlace, getBusiness, saveBusiness } from './places.ts';
 import { createProperty, listProperties, removeProperty } from './property.ts';
+import { archiveServices, getCatalogue, saveService, saveServiceCategory } from '../visits/catalogue.ts';
+import { listServicePlaces } from '../visits/table-service.ts';
 
 let db: Database;
 
@@ -208,7 +211,7 @@ describe('a menu serves its own business’s places (AC-6514)', () => {
 });
 
 /** A dish with a price, as the editor saves one. */
-const DISH = {
+const DISH: ItemFields = {
   name: 'Soup',
   priceMinor: 650,
   diet: [],
@@ -217,7 +220,7 @@ const DISH = {
   featured: false,
   sizes: [],
   groupIds: [],
-} as const;
+};
 
 /** A workspace with Menu on and a second business with a place of its own. */
 async function twoBusinesses() {
@@ -296,5 +299,60 @@ describe('each business has its own menus (spec 0065 H7, slice 2b)', () => {
     const theirs = (await listProperties(elsewhere.owner)).properties[0]?.id ?? '';
     expect(await refusalOf(readMenuDraft(w.owner, { propertyId: theirs }))).toBe('NOT_FOUND');
     expect(await refusalOf(publishMenus(w.owner, { propertyId: theirs }))).toBe('NOT_FOUND');
+  });
+});
+
+describe('each business has its own services and places to serve (spec 0065 H7, slice 2c)', () => {
+  it('lists, adds and changes a business’s own services only, and the first reads as it did', async () => {
+    const w = await visitWorkspace(db, 'appointments');
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Spa', kind: 'spa', currency: 'EUR' });
+    const secondPlace = randomUUID();
+    await createPlace(w.owner, { id: secondPlace, place: PLACE, propertyId: second });
+    const at = { propertyId: second };
+    const service = (placeId: string): ServiceFields => ({
+      name: 'Massage',
+      categoryId: null,
+      bufferAfterMin: 0,
+      online: true,
+      staffRule: 'all',
+      staffIds: [],
+      placeIds: [placeId],
+      needs: [],
+      variants: [{ name: 'Hour', minutes: 60, priceMinor: 6000, priceType: 'fixed', bufferBeforeMin: 0 }],
+    });
+    const serviceId = randomUUID();
+    // Named nothing, the call works in the first business, where the second's place doesn't exist.
+    await expect(saveService(w.owner, { id: serviceId, service: service(secondPlace) })).rejects.toThrow(
+      'One of those places doesn’t exist.',
+    );
+    const made = await saveService(w.owner, { id: serviceId, service: service(secondPlace), ...at });
+    expect(made).toMatchObject({ currency: 'EUR', businessKind: 'spa' });
+    expect(made.places.map((place) => place.id)).toEqual([secondPlace]);
+    expect(made.services.map((each) => each.id)).toEqual([serviceId]);
+    const first = await getCatalogue(w.owner);
+    expect(first.currency).toBe('GBP');
+    expect(first.places.map((place) => place.id)).toEqual([w.placeId]);
+    expect(first.services.map((each) => each.id)).not.toContain(serviceId);
+    // The first business can't reach the second's service by its id.
+    expect(await refusalOf(archiveServices(w.owner, { serviceIds: [serviceId] }))).toBe('NOT_FOUND');
+    expect(await refusalOf(saveService(w.owner, { id: serviceId, service: service(w.placeId) }))).toBe('NOT_FOUND');
+    const category = randomUUID();
+    await saveServiceCategory(w.owner, { id: category, name: 'Body', ...at });
+    expect((await getCatalogue(w.owner)).categories).toEqual([]);
+    expect(await refusalOf(saveServiceCategory(w.owner, { id: category, name: 'Mine' }))).toBe('NOT_FOUND');
+    expect((await archiveServices(w.owner, { serviceIds: [serviceId], ...at })).services[0]?.archived).toBe(true);
+  });
+
+  it('lists the chosen business’s places on Reservations', async () => {
+    const w = await business();
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Bar', kind: 'bar', currency: 'EUR' });
+    const placeId = randomUUID();
+    await createPlace(w.owner, { id: placeId, place: PLACE, propertyId: second });
+    expect((await listServicePlaces(w.owner)).places.map((place) => place.id)).toEqual([w.placeId]);
+    expect((await listServicePlaces(w.owner, { propertyId: second })).places.map((place) => place.id)).toEqual([
+      placeId,
+    ]);
   });
 });

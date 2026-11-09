@@ -31,6 +31,7 @@ import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import { addDays, wallToInstant } from '../hospitality/hours.ts';
+import { currentProperty } from '../hospitality/property.ts';
 import { type SlotCache } from './book.ts';
 import { loadVisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
@@ -524,15 +525,23 @@ function requireFloorReader(scope: EngineScope): void {
   if (!can(scope.access, 'hospitality.manage')) requirePermission(scope, 'hospitality.service');
 }
 
-/** The places the Reservations page picks between: only what it draws (AC-6560). Whoever opens the page. */
-export async function listServicePlaces(scope: EngineScope): Promise<ServicePlaces> {
+/**
+ * The places the Reservations page picks between: only what it draws (AC-6560), the chosen business's (spec 0065 H7,
+ * AC-6517; `propertyId`, else the first). Whoever opens the page.
+ */
+export async function listServicePlaces(
+  scope: EngineScope,
+  input: { readonly propertyId?: string } = {},
+): Promise<ServicePlaces> {
   requireFloorReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'table_seating');
+    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
     const rows = (
       await tx.execute<{ id: string; name: string; time_zone: string; hours: PlaceHours }>(sql`
         select id::text as id, name, time_zone, hours from places
-        where workspace_id = ${scope.workspaceId}::uuid order by position, id
+        where workspace_id = ${scope.workspaceId}::uuid and property_id = ${property.id}::uuid
+        order by position, id
       `)
     ).rows;
     return {

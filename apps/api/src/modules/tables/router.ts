@@ -38,7 +38,9 @@ export const tablesRouter = t.router({
     ]);
     return saved;
   }),
-  places: t.places.handler(({ context }) => listServicePlaces(context.scope)),
+  places: t.places.handler(({ context, input }) =>
+    listServicePlaces(context.scope, input.property === undefined ? {} : { propertyId: input.property }),
+  ),
   floor: t.floor.handler(({ context, input }) => readServiceFloor(context.scope, { placeId: input.placeId })),
   day: t.day.handler(({ context, input }) =>
     listServiceDay(context.scope, { placeId: input.placeId, date: input.date }),

@@ -4,7 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { hasControl } from './booking/public.ts';
-import { Area, Place, PlaceHours, Resource } from './hospitality.ts';
+import { Area, Place, PlaceHours, PropertyScoped, Resource } from './hospitality.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 import { APPOINTMENT_STATUSES, LOOKUP_PATTERN, VISIT_LIMITS } from './visits-model.ts';
@@ -398,7 +398,8 @@ export type StaffBookInput = z.infer<typeof StaffBookInput>;
 export const tablesContract = {
   setup: oc.input(TablePlaceInput).output(TableSetupView),
   saveSetup: oc.input(SaveTableSetupInput).output(TableSetupView),
-  places: oc.input(WorkspaceScoped).output(ServicePlaces),
+  /** The chosen business's places (spec 0065 H7): `property` left out is the first. */
+  places: oc.input(PropertyScoped).output(ServicePlaces),
   floor: oc.input(TablePlaceInput).output(ServiceFloor),
   day: oc.input(ServiceDayInput).output(ServiceDayView),
   setStatus: oc.input(SetVisitStatusInput).output(VisitStatusMoved),

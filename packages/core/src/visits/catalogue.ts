@@ -26,7 +26,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { SlotCache } from './book.ts';
 import { appointmentsSetup } from './readiness.ts';
-import { currentProperty, currentPropertyRef } from '../hospitality/property.ts';
+import { currentProperty } from '../hospitality/property.ts';
 
 /** The refusal for a service that isn't there (or is Table seating's). */
 export const SERVICE_MISSING = 'That service doesn’t exist.';
@@ -40,21 +40,35 @@ export interface CatalogueDeps {
 
 const L = CATALOGUE_LIMITS;
 
-/** Every place of the workspace, in order, as the catalogue and the team name them. */
-export async function readServicePlaces(tx: WorkspaceTx): Promise<CatalogueView['places']> {
+/**
+ * The places in order, as the catalogue and the team name them: one business's (spec 0065 H7) for the catalogue,
+ * every business's for the team, whose staff work across them.
+ */
+export async function readServicePlaces(tx: WorkspaceTx, propertyId?: string): Promise<CatalogueView['places']> {
+  const own = propertyId === undefined ? sql`true` : sql`property_id = ${propertyId}::uuid`;
   const rows = (
     await tx.execute<{ id: string; name: string; time_zone: string; hours: PlaceHours }>(sql`
-      select id::text, name, time_zone, hours from places order by position, id
+      select id::text, name, time_zone, hours from places where ${own} order by position, id
     `)
   ).rows;
   return rows.map((row) => ({ id: row.id, name: row.name, timeZone: row.time_zone, hours: row.hours }));
 }
 
-/** The catalogue as the screen shows it, read in the caller's transaction. */
-export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
+/** Which business a catalogue call works in (spec 0065 H7): left out, the workspace's first. */
+export interface InProperty {
+  readonly propertyId?: string;
+}
+
+/**
+ * The catalogue as the screen shows it, read in the caller's transaction: one business's categories, services, places,
+ * rooms and chairs, currency and kind (spec 0065 H7, AC-6517). Staff are the workspace's, since a person can work in
+ * two businesses.
+ */
+export async function readCatalogue(tx: WorkspaceTx, propertyId: string): Promise<CatalogueView> {
+  const ownService = sql`service_id in (select s.id from services s where s.property_id = ${propertyId}::uuid)`;
   const categories = (
     await tx.execute<{ id: string; name: string }>(sql`
-      select id::text, name from service_categories order by position, id
+      select id::text, name from service_categories where property_id = ${propertyId}::uuid order by position, id
     `)
   ).rows;
   const services = (
@@ -71,7 +85,7 @@ export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
     }>(sql`
       select id::text, name, description, category_id::text, buffer_after_min, online, staff_rule, cancel_note,
         archived_at is not null as archived
-      from services where capacity_mode = 'one' and staff_rule <> 'none'
+      from services where capacity_mode = 'one' and staff_rule <> 'none' and property_id = ${propertyId}::uuid
       order by position, id
     `)
   ).rows;
@@ -86,25 +100,25 @@ export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
       buffer_before_min: number;
     }>(sql`
       select id::text, service_id::text, name, minutes, price_minor, price_type, buffer_before_min
-      from service_variants where archived_at is null order by position, id
+      from service_variants where archived_at is null and ${ownService} order by position, id
     `)
   ).rows;
   const offered = (
     await tx.execute<{ service_id: string; place_id: string }>(sql`
-      select service_id::text, place_id::text from service_places
+      select service_id::text, place_id::text from service_places where property_id = ${propertyId}::uuid
     `)
   ).rows;
   const chosen = (
     await tx.execute<{ service_id: string; staff_id: string }>(sql`
-      select service_id::text, staff_id::text from service_staff
+      select service_id::text, staff_id::text from service_staff where ${ownService}
     `)
   ).rows;
   const needs = (
     await tx.execute<{ service_id: string; kind: string | null; count: number; resource_id: string | null }>(sql`
-      select service_id::text, kind, count, resource_id::text from service_resources order by id
+      select service_id::text, kind, count, resource_id::text from service_resources where ${ownService} order by id
     `)
   ).rows;
-  const places = await readServicePlaces(tx);
+  const places = await readServicePlaces(tx, propertyId);
   const staff = (
     await tx.execute<{ id: string; name: string; place_ids: string[] | null }>(sql`
       select st.id::text, st.name,
@@ -115,12 +129,13 @@ export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
   ).rows;
   const resources = (
     await tx.execute<{ id: string; place_id: string; label: string; kind: CatalogueView['resources'][number]['kind'] }>(
-      sql`select id::text, place_id::text, label, kind from resources where archived_at is null order by position, id`,
+      sql`select id::text, place_id::text, label, kind from resources where archived_at is null
+        and place_id in (select p.id from places p where p.property_id = ${propertyId}::uuid) order by position, id`,
     )
   ).rows;
   const [facts] = (
     await tx.execute<{ currency: string | null; kind: string | null }>(sql`
-      select currency, kind from properties order by position, id limit 1
+      select currency, kind from properties where id = ${propertyId}::uuid
     `)
   ).rows;
   const group = <Row extends { service_id: string }>(rows: readonly Row[]) => {
@@ -169,9 +184,11 @@ export async function readCatalogue(tx: WorkspaceTx): Promise<CatalogueView> {
   };
 }
 
-/** The ids of every place, for a write that touches them all (a category's name shows wherever its services do). */
-async function allPlaceIds(tx: WorkspaceTx): Promise<string[]> {
-  return (await tx.execute<{ id: string }>(sql`select id::text from places`)).rows.map((row) => row.id);
+/** The ids of a business's places, for a write that touches them all (a category's name shows wherever it does). */
+async function allPlaceIds(tx: WorkspaceTx, propertyId: string): Promise<string[]> {
+  return (
+    await tx.execute<{ id: string }>(sql`select id::text from places where property_id = ${propertyId}::uuid`)
+  ).rows.map((row) => row.id);
 }
 
 /** The places that offer these services now. */
@@ -186,17 +203,20 @@ async function placesOfServices(tx: WorkspaceTx, serviceIds: readonly string[]):
 }
 
 /**
- * Runs one catalogue write: the permission, the member, the app, the work, its audit line, one `visits` event naming
- * the places it touched, and their offered times purged once it commits. Answers the catalogue as it now stands.
+ * Runs one catalogue write in one business (`where.propertyId`, else the first; spec 0065 H7): the permission, the
+ * member, the app, the work, its audit line, one `visits` event naming the places it touched, and their offered times
+ * purged once it commits. Answers that business's catalogue as it now stands.
  */
 async function catalogueWrite(
   scope: EngineScope,
+  where: InProperty,
   deps: CatalogueDeps,
   hooks: readonly AfterWrite[],
   what: string,
   work: (
     context: WriteContext,
     by: string,
+    propertyId: string,
   ) => Promise<{ readonly places: readonly string[]; readonly ids?: Record<string, string> }>,
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
@@ -206,11 +226,12 @@ async function catalogueWrite(
     async (context) => {
       const { tx } = context;
       await requireApp(tx, scope.workspaceId, 'appointments');
+      const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
       await lockKey(tx, `services:${scope.workspaceId}`);
-      const done = await work(context, by);
+      const done = await work(context, by, property.id);
       await auditSetup(tx, scope, what, done.ids ?? {});
       if (done.places.length > 0) context.record({ visits: [...done.places] });
-      return { view: await readCatalogue(tx), places: done.places };
+      return { view: await readCatalogue(tx, property.id), places: done.places };
     },
     hooks,
   );
@@ -218,19 +239,29 @@ async function catalogueWrite(
   return result.view;
 }
 
-/** Settings › Services: the catalogue, for `services.manage` while Appointments is installed. */
-export async function getCatalogue(scope: EngineScope): Promise<CatalogueView> {
+/** Settings › Services: one business's catalogue, for `services.manage` while Appointments is installed. */
+export async function getCatalogue(scope: EngineScope, where: InProperty = {}): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'appointments');
-    return readCatalogue(tx);
+    return readCatalogue(tx, (await currentProperty(tx, scope.workspaceId, where.propertyId)).id);
   });
+}
+
+/** A category of the business, or undefined: one of another business reads as none. */
+async function categoryOf(tx: WorkspaceTx, propertyId: string, id: string): Promise<string | undefined> {
+  const [row] = (
+    await tx.execute<{ id: string }>(
+      sql`select id::text from service_categories where id = ${id}::uuid and property_id = ${propertyId}::uuid`,
+    )
+  ).rows;
+  return row?.id;
 }
 
 /** Adds a category (up to 50, `LIMIT_REACHED` past it) or renames one; `id` is the caller's, so a retry makes one. */
 export async function saveServiceCategory(
   scope: EngineScope,
-  input: { readonly id: string; readonly name: string },
+  input: { readonly id: string; readonly name: string } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
@@ -238,43 +269,49 @@ export async function saveServiceCategory(
   const id = checkId(input.id, CATEGORY_MISSING);
   const name = input.name.trim();
   if (name === '' || name.length > L.categoryNameMax) throw inputInvalid('name', 'Name the category.');
-  return catalogueWrite(scope, deps, hooks, 'service_category.saved', async ({ tx }, by) => {
+  return catalogueWrite(scope, input, deps, hooks, 'service_category.saved', async ({ tx }, by, propertyId) => {
     const renamed = await tx.execute(sql`
       update service_categories set name = ${name}, updated_at = now(), updated_by_member_id = ${by}::uuid
-      where id = ${id}::uuid
+      where id = ${id}::uuid and property_id = ${propertyId}::uuid
     `);
     if ((renamed.rowCount ?? 0) === 0) {
       const [counted] = (
         await tx.execute<{ n: number; next: number }>(sql`
           select count(*)::int as n, coalesce(max(position) + 1, 0)::int as next from service_categories
+          where property_id = ${propertyId}::uuid
         `)
       ).rows;
       if ((counted?.n ?? 0) >= L.categories) {
-        throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.categories)} categories.`);
+        throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.categories)} categories.`);
       }
-      await tx.execute(sql`
+      // An id another business's category holds answers as a category that doesn't exist.
+      const made = await tx.execute(sql`
         insert into service_categories (workspace_id, id, property_id, name, position, created_by_member_id,
           updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${currentPropertyRef(scope.workspaceId)}, ${name}, ${counted?.next ?? 0}, ${by}::uuid, ${by}::uuid)
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${propertyId}::uuid, ${name}, ${counted?.next ?? 0}, ${by}::uuid, ${by}::uuid)
+        on conflict (workspace_id, id) do nothing
       `);
+      if ((made.rowCount ?? 0) === 0) throw refuse('NOT_FOUND', CATEGORY_MISSING);
     }
-    return { places: await allPlaceIds(tx), ids: { categoryId: id } };
+    return { places: await allPlaceIds(tx, propertyId), ids: { categoryId: id } };
   });
 }
 
 /** Deletes a category; its services stay, at the end of the services with no category. */
 export async function deleteServiceCategory(
   scope: EngineScope,
-  input: { readonly categoryId: string },
+  input: { readonly categoryId: string } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const id = checkId(input.categoryId, CATEGORY_MISSING);
-  return catalogueWrite(scope, deps, hooks, 'service_category.deleted', async ({ tx }) => {
+  return catalogueWrite(scope, input, deps, hooks, 'service_category.deleted', async ({ tx }, _by, propertyId) => {
+    if ((await categoryOf(tx, propertyId, id)) === undefined) throw refuse('NOT_FOUND', CATEGORY_MISSING);
     const [next] = (
       await tx.execute<{ next: number }>(sql`
-        select coalesce(max(position) + 1, 0)::int as next from services where category_id is null
+        select coalesce(max(position) + 1, 0)::int as next from services
+        where category_id is null and property_id = ${propertyId}::uuid
       `)
     ).rows;
     await tx.execute(sql`
@@ -284,28 +321,29 @@ export async function deleteServiceCategory(
       update services s set category_id = null, position = ${next?.next ?? 0} + moving.at, updated_at = now()
       from moving where s.id = moving.id
     `);
-    const gone = await tx.execute(sql`delete from service_categories where id = ${id}::uuid`);
-    if ((gone.rowCount ?? 0) === 0) throw refuse('NOT_FOUND', CATEGORY_MISSING);
-    return { places: await allPlaceIds(tx), ids: { categoryId: id } };
+    await tx.execute(sql`delete from service_categories where id = ${id}::uuid`);
+    return { places: await allPlaceIds(tx, propertyId), ids: { categoryId: id } };
   });
 }
 
 /** Moves a category to `toIndex` among the categories (drag, or Move up and down). */
 export async function moveServiceCategory(
   scope: EngineScope,
-  input: { readonly categoryId: string; readonly toIndex: number },
+  input: { readonly categoryId: string; readonly toIndex: number } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const id = checkId(input.categoryId, CATEGORY_MISSING);
-  return catalogueWrite(scope, deps, hooks, 'service_category.moved', async ({ tx }) => {
+  return catalogueWrite(scope, input, deps, hooks, 'service_category.moved', async ({ tx }, _by, propertyId) => {
     const order = (
-      await tx.execute<{ id: string }>(sql`select id::text from service_categories order by position, id`)
+      await tx.execute<{ id: string }>(
+        sql`select id::text from service_categories where property_id = ${propertyId}::uuid order by position, id`,
+      )
     ).rows.map((row) => row.id);
     if (!order.includes(id)) throw refuse('NOT_FOUND', CATEGORY_MISSING);
     await renumber(tx, 'service_categories', placeAt(order, id, input.toIndex));
-    return { places: await allPlaceIds(tx), ids: { categoryId: id } };
+    return { places: await allPlaceIds(tx, propertyId), ids: { categoryId: id } };
   });
 }
 
@@ -381,7 +419,7 @@ async function requireRows(
  */
 export async function saveService(
   scope: EngineScope,
-  input: { readonly id: string; readonly service: ServiceFields },
+  input: { readonly id: string; readonly service: ServiceFields } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
@@ -398,7 +436,7 @@ export async function saveService(
     each.id === undefined ? [] : [checkId(each.id, 'That option doesn’t exist.')],
   );
   if (new Set(variantIds).size !== variantIds.length) throw inputInvalid('variants', 'Each option appears once.');
-  return catalogueWrite(scope, deps, hooks, 'service.saved', async ({ tx }, by) => {
+  return catalogueWrite(scope, input, deps, hooks, 'service.saved', async ({ tx }, by, propertyId) => {
     const [found] = (
       await tx.execute<{
         capacity_mode: string;
@@ -410,20 +448,11 @@ export async function saveService(
         where id = ${id}::uuid for update
       `)
     ).rows;
-    if (found !== undefined && (found.capacity_mode !== 'one' || found.archived)) {
+    if (found !== undefined && (found.capacity_mode !== 'one' || found.archived || found.property_id !== propertyId)) {
       throw refuse('NOT_FOUND', SERVICE_MISSING);
     }
-    // A service serves only its own business's places, under its own business's category (spec 0065 H7, AC-6514): an
-    // existing service keeps its business; a new one takes its first place's, else its category's, else the first
-    // business's. A place or category of another business reads as none.
-    const firstPlace =
-      placeIds[0] === undefined
-        ? undefined
-        : (
-            await tx.execute<{ property_id: string }>(
-              sql`select property_id::text from places where id = ${placeIds[0]}::uuid`,
-            )
-          ).rows[0]?.property_id;
+    // A service serves only its own business's places, under its own business's category (spec 0065 H7, AC-6514): the
+    // business the call works in. A service, place or category of another business reads as none.
     const [category] =
       categoryId === null
         ? []
@@ -433,8 +462,6 @@ export async function saveService(
             )
           ).rows;
     if (categoryId !== null && category === undefined) throw inputInvalid('categoryId', CATEGORY_MISSING);
-    const propertyId =
-      found?.property_id ?? firstPlace ?? category?.property_id ?? (await currentProperty(tx, scope.workspaceId)).id;
     if (category !== undefined && category.property_id !== propertyId) {
       throw inputInvalid('categoryId', CATEGORY_MISSING);
     }
@@ -450,7 +477,7 @@ export async function saveService(
       ? (
           await tx.execute<{ next: number }>(sql`
             select coalesce(max(position) + 1, 0)::int as next from services
-            where category_id is not distinct from ${categoryId}::uuid
+            where category_id is not distinct from ${categoryId}::uuid and property_id = ${propertyId}::uuid
           `)
         ).rows
       : [];
@@ -552,20 +579,17 @@ export async function saveService(
 /** Moves a service into a category (null: none) at `toIndex` there (drag, or Move up and down). */
 export async function moveService(
   scope: EngineScope,
-  input: { readonly serviceId: string; readonly categoryId: string | null; readonly toIndex: number },
+  input: { readonly serviceId: string; readonly categoryId: string | null; readonly toIndex: number } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const id = checkId(input.serviceId, SERVICE_MISSING);
   const categoryId = input.categoryId === null ? null : checkId(input.categoryId, CATEGORY_MISSING);
-  return catalogueWrite(scope, deps, hooks, 'service.moved', async ({ tx }) => {
-    await requireServices(tx, [id]);
-    if (categoryId !== null) {
-      const [category] = (
-        await tx.execute<{ id: string }>(sql`select id::text from service_categories where id = ${categoryId}::uuid`)
-      ).rows;
-      if (category === undefined) throw refuse('NOT_FOUND', CATEGORY_MISSING);
+  return catalogueWrite(scope, input, deps, hooks, 'service.moved', async ({ tx }, _by, propertyId) => {
+    await requireServices(tx, propertyId, [id]);
+    if (categoryId !== null && (await categoryOf(tx, propertyId, categoryId)) === undefined) {
+      throw refuse('NOT_FOUND', CATEGORY_MISSING);
     }
     await tx.execute(
       sql`update services set category_id = ${categoryId}::uuid, updated_at = now() where id = ${id}::uuid`,
@@ -573,7 +597,7 @@ export async function moveService(
     const order = (
       await tx.execute<{ id: string }>(sql`
         select id::text from services where category_id is not distinct from ${categoryId}::uuid
-          and capacity_mode = 'one' and archived_at is null
+          and capacity_mode = 'one' and archived_at is null and property_id = ${propertyId}::uuid
         order by position, id
       `)
     ).rows.map((row) => row.id);
@@ -582,13 +606,21 @@ export async function moveService(
   });
 }
 
-/** Refuses NOT_FOUND unless every id is a live service of this catalogue (never Table seating's). */
-async function requireServices(tx: WorkspaceTx, ids: readonly string[], archived = false): Promise<void> {
+/**
+ * Refuses NOT_FOUND unless every id is a live service of this business's catalogue (never Table seating's, nor another
+ * business's).
+ */
+async function requireServices(
+  tx: WorkspaceTx,
+  propertyId: string,
+  ids: readonly string[],
+  archived = false,
+): Promise<void> {
   const [row] = (
     await tx.execute<{ n: number }>(sql`
       select count(*)::int as n from services
       where id = any(${`{${ids.join(',')}}`}::uuid[]) and capacity_mode = 'one' and staff_rule <> 'none'
-        and (archived_at is not null) = ${archived}
+        and (archived_at is not null) = ${archived} and property_id = ${propertyId}::uuid
     `)
   ).rows;
   if ((row?.n ?? 0) !== new Set(ids).size) throw refuse('NOT_FOUND', SERVICE_MISSING);
@@ -599,14 +631,15 @@ const serviceIdsOf = (ids: readonly string[]) => [...new Set(ids.map((each) => c
 /** Several services online or off (bulk). */
 export async function setServicesOnline(
   scope: EngineScope,
-  input: { readonly serviceIds: readonly string[]; readonly online: boolean },
+  input: { readonly serviceIds: readonly string[]; readonly online: boolean } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const ids = serviceIdsOf(input.serviceIds);
-  return catalogueWrite(scope, deps, hooks, input.online ? 'service.online' : 'service.offline', async ({ tx }) => {
-    await requireServices(tx, ids);
+  const what = input.online ? 'service.online' : 'service.offline';
+  return catalogueWrite(scope, input, deps, hooks, what, async ({ tx }, _by, propertyId) => {
+    await requireServices(tx, propertyId, ids);
     await tx.execute(sql`
       update services set online = ${input.online}, updated_at = now() where id = any(${`{${ids.join(',')}}`}::uuid[])
     `);
@@ -617,25 +650,23 @@ export async function setServicesOnline(
 /** Several services into one category (null: none), after its last, in their present order (bulk). */
 export async function setServicesCategory(
   scope: EngineScope,
-  input: { readonly serviceIds: readonly string[]; readonly categoryId: string | null },
+  input: { readonly serviceIds: readonly string[]; readonly categoryId: string | null } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const ids = serviceIdsOf(input.serviceIds);
   const categoryId = input.categoryId === null ? null : checkId(input.categoryId, CATEGORY_MISSING);
-  return catalogueWrite(scope, deps, hooks, 'service.moved', async ({ tx }) => {
-    await requireServices(tx, ids);
-    if (categoryId !== null) {
-      const [category] = (
-        await tx.execute<{ id: string }>(sql`select id::text from service_categories where id = ${categoryId}::uuid`)
-      ).rows;
-      if (category === undefined) throw refuse('NOT_FOUND', CATEGORY_MISSING);
+  return catalogueWrite(scope, input, deps, hooks, 'service.moved', async ({ tx }, _by, propertyId) => {
+    await requireServices(tx, propertyId, ids);
+    if (categoryId !== null && (await categoryOf(tx, propertyId, categoryId)) === undefined) {
+      throw refuse('NOT_FOUND', CATEGORY_MISSING);
     }
     const [end] = (
       await tx.execute<{ next: number }>(sql`
         select coalesce(max(position) + 1, 0)::int as next from services
         where category_id is not distinct from ${categoryId}::uuid and not (id = any(${`{${ids.join(',')}}`}::uuid[]))
+          and property_id = ${propertyId}::uuid
       `)
     ).rows;
     await tx.execute(sql`
@@ -653,14 +684,14 @@ export async function setServicesCategory(
 /** Archives services (bulk): they leave the catalogue and online booking; booked visits keep them. Restore undoes. */
 export async function archiveServices(
   scope: EngineScope,
-  input: { readonly serviceIds: readonly string[] },
+  input: { readonly serviceIds: readonly string[] } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const ids = serviceIdsOf(input.serviceIds);
-  return catalogueWrite(scope, deps, hooks, 'service.archived', async ({ tx }) => {
-    await requireServices(tx, ids);
+  return catalogueWrite(scope, input, deps, hooks, 'service.archived', async ({ tx }, _by, propertyId) => {
+    await requireServices(tx, propertyId, ids);
     await tx.execute(sql`
       update services set archived_at = now(), updated_at = now() where id = any(${`{${ids.join(',')}}`}::uuid[])
     `);
@@ -671,14 +702,14 @@ export async function archiveServices(
 /** Restores archived services, each at the end of its category; a slug a live service took since gets a new one. */
 export async function restoreServices(
   scope: EngineScope,
-  input: { readonly serviceIds: readonly string[] },
+  input: { readonly serviceIds: readonly string[] } & InProperty,
   deps: CatalogueDeps = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<CatalogueView> {
   requirePermission(scope, 'services.manage');
   const ids = serviceIdsOf(input.serviceIds);
-  return catalogueWrite(scope, deps, hooks, 'service.restored', async ({ tx }) => {
-    await requireServices(tx, ids, true);
+  return catalogueWrite(scope, input, deps, hooks, 'service.restored', async ({ tx }, _by, propertyId) => {
+    await requireServices(tx, propertyId, ids, true);
     const [counted] = (
       await tx.execute<{ n: number }>(sql`select count(*)::int as n from services where archived_at is null`)
     ).rows;
@@ -701,6 +732,7 @@ export async function restoreServices(
         await tx.execute<{ next: number }>(sql`
           select coalesce(max(position) + 1, 0)::int as next from services
           where category_id is not distinct from ${row.category_id}::uuid and archived_at is null
+            and property_id = ${propertyId}::uuid
         `)
       ).rows;
       await tx.execute(sql`

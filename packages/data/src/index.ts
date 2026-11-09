@@ -6477,8 +6477,15 @@ export function createDataLayer({
      */
     tables: {
       load: (): Promise<TablesStore> =>
-        (tables ??= import('./tables/store.ts').then(({ openTables }) =>
-          openTables({ api: api.tables, call, mintId, isLive: () => liveStatus === 'live' }),
+        (tables ??= Promise.all([import('./tables/store.ts'), loadHospitality()]).then(([{ openTables }, held]) =>
+          openTables({
+            api: api.tables,
+            call,
+            mintId,
+            isLive: () => liveStatus === 'live',
+            // The Reservations page lists the chosen business's places (spec 0065 H7).
+            propertyOf: (workspace) => held.current(workspace),
+          }),
         )),
     },
     hospitality: {
@@ -6588,12 +6595,14 @@ export function createDataLayer({
      */
     services: {
       load: (): Promise<ServicesStore> =>
-        (services ??= import('./services/store.ts').then(({ openServices }) =>
+        (services ??= Promise.all([import('./services/store.ts'), loadHospitality()]).then(([{ openServices }, held]) =>
           openServices({
             api: api.services,
             call,
             mintId,
             origin,
+            // Settings › Services shows the chosen business's catalogue (spec 0065 H7).
+            propertyOf: (workspace) => held.current(workspace),
             upload: async (workspace, staffId, body) => {
               const response = await fetch(
                 new URL(`/api/services/staff/${encodeURIComponent(staffId)}/photo`, origin).href,

@@ -13,14 +13,17 @@ export const Route = createFileRoute('/w/$slug/reservations')({
   validateSearch: reservationsSearch,
   loader: async ({ context, params }) => {
     const isInstalled = await isPageInstalled(context.data, params.slug, 'reservations');
-    return { isInstalled, tables: await context.data.tables.load() };
+    // The businesses come first, so the places listed are the chosen one's (spec 0065 H7); a switch reads this again.
+    const hospitality = await context.data.hospitality.load();
+    await hospitality.readProperties(params.slug).catch(() => undefined);
+    return { isInstalled, tables: await context.data.tables.load(), property: hospitality.current(params.slug) };
   },
   pendingComponent: () => <WorkspacePage currentPage="reservations" page={pendingPage()} />,
   component: PageRoute,
 });
 
 function PageRoute() {
-  const { isInstalled, tables } = Route.useLoaderData();
+  const { isInstalled, tables, property } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const search = Route.useSearch();
   const { toasts } = Route.useRouteContext();
@@ -29,6 +32,8 @@ function PageRoute() {
   if (!reaches || !isInstalled) return <AppOffScreen slug={slug} page="reservations" />;
   return (
     <ReservationsScreen
+      // Another business starts the page afresh (spec 0065 H7).
+      key={property ?? ''}
       slug={slug}
       tables={tables}
       toasts={toasts}

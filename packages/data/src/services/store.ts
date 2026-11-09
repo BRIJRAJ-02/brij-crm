@@ -25,34 +25,40 @@ import { holder, type HospitalityHeld } from '../hospitality/store.ts';
 type Options = { signal?: AbortSignal };
 type Scoped = { workspace: string };
 type Write = Scoped & { mutationId: string };
+/** A catalogue call in one business (spec 0065 H7): left out, the workspace's first. */
+type InProperty = { property?: string };
+type CatalogueWrite = Write & InProperty;
 
 /** The services procedures the store calls, as the data layer's client answers them. */
 export interface ServicesProcedures {
-  readonly catalogue: (input: Scoped, options: Options) => Promise<CatalogueView>;
-  readonly saveCategory: (input: Write & { id: string; name: string }, options: Options) => Promise<CatalogueView>;
-  readonly deleteCategory: (input: Write & { categoryId: string }, options: Options) => Promise<CatalogueView>;
+  readonly catalogue: (input: Scoped & InProperty, options: Options) => Promise<CatalogueView>;
+  readonly saveCategory: (
+    input: CatalogueWrite & { id: string; name: string },
+    options: Options,
+  ) => Promise<CatalogueView>;
+  readonly deleteCategory: (input: CatalogueWrite & { categoryId: string }, options: Options) => Promise<CatalogueView>;
   readonly moveCategory: (
-    input: Write & { categoryId: string; toIndex: number },
+    input: CatalogueWrite & { categoryId: string; toIndex: number },
     options: Options,
   ) => Promise<CatalogueView>;
   readonly saveService: (
-    input: Write & { id: string; service: ServiceFields },
+    input: CatalogueWrite & { id: string; service: ServiceFields },
     options: Options,
   ) => Promise<CatalogueView>;
   readonly moveService: (
-    input: Write & { serviceId: string; categoryId: string | null; toIndex: number },
+    input: CatalogueWrite & { serviceId: string; categoryId: string | null; toIndex: number },
     options: Options,
   ) => Promise<CatalogueView>;
   readonly setOnline: (
-    input: Write & { serviceIds: string[]; online: boolean },
+    input: CatalogueWrite & { serviceIds: string[]; online: boolean },
     options: Options,
   ) => Promise<CatalogueView>;
   readonly setCategory: (
-    input: Write & { serviceIds: string[]; categoryId: string | null },
+    input: CatalogueWrite & { serviceIds: string[]; categoryId: string | null },
     options: Options,
   ) => Promise<CatalogueView>;
-  readonly archive: (input: Write & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
-  readonly restore: (input: Write & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
+  readonly archive: (input: CatalogueWrite & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
+  readonly restore: (input: CatalogueWrite & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
   readonly team: (input: Scoped, options: Options) => Promise<StaffTeamView>;
   readonly shifts: (input: Scoped, options: Options) => Promise<StaffTeamView>;
   readonly saveStaff: (input: Write & { id: string; staff: StaffFields }, options: Options) => Promise<StaffTeamView>;
@@ -154,20 +160,31 @@ export function openServices(given: {
   readonly origin: string;
   readonly upload: (workspace: string, staffId: string, body: Blob) => Promise<{ photo: string }>;
   readonly now?: () => number;
+  /** The business each workspace works in on this device (spec 0065 H7); undefined is the first. */
+  readonly propertyOf?: (workspace: string) => string | undefined;
 }) {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
   const catalogues = new Map<string, ReturnType<typeof holder<CatalogueView>>>();
+  const at = (workspace: string): InProperty => {
+    const property = given.propertyOf?.(workspace);
+    return property === undefined ? {} : { property };
+  };
   const teams = new Map<string, ReturnType<typeof holder<StaffTeamView>>>();
 
-  const catalogueOf = (workspace: string) => {
-    let found = catalogues.get(workspace);
+  /** The chosen business's catalogue (spec 0065 H7): one held copy per workspace and business. */
+  const catalogueOf = (workspace: string, where: InProperty = at(workspace)) => {
+    const key = `${workspace}:${where.property ?? ''}`;
+    let found = catalogues.get(key);
     if (found === undefined) {
-      found = holder(() => call((options) => api.catalogue({ workspace }, options)), now);
-      catalogues.set(workspace, found);
+      found = holder(() => call((options) => api.catalogue({ workspace, ...where }, options)), now);
+      catalogues.set(key, found);
     }
     return found;
   };
+  /** Every held catalogue of a workspace, whichever business. */
+  const cataloguesOf = (workspace: string) =>
+    [...catalogues.entries()].filter(([key]) => key.startsWith(`${workspace}:`)).map(([, held]) => held);
   const teamOf = (workspace: string, copy: TeamCopy) => {
     const key = `${workspace}:${copy}`;
     let found = teams.get(key);
@@ -185,9 +202,11 @@ export function openServices(given: {
   const catalogueChange = (
     workspace: string,
     next: (view: CatalogueView) => CatalogueView,
-    send: (mutationId: string, options: Options) => Promise<CatalogueView>,
-  ): Promise<DataError | undefined> =>
-    catalogueOf(workspace).change(next, () => call((options) => send(mintId(), options)));
+    send: (mutationId: string, options: Options, where: InProperty) => Promise<CatalogueView>,
+  ): Promise<DataError | undefined> => {
+    const where = at(workspace);
+    return catalogueOf(workspace, where).change(next, () => call((options) => send(mintId(), options, where)));
+  };
   /** A team change on the copy the screen holds; the other copy, if held, reads again after. */
   const teamChange = async (
     workspace: string,
@@ -200,10 +219,7 @@ export function openServices(given: {
       const other = teams.get(`${workspace}:${copy === 'team' ? 'shifts' : 'team'}`);
       void other?.read().catch(() => undefined);
       // A profile's places and services show in the catalogue's pickers too.
-      void catalogues
-        .get(workspace)
-        ?.read()
-        .catch(() => undefined);
+      for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
     }
     return refused;
   };
@@ -221,7 +237,7 @@ export function openServices(given: {
           view.categories.some((category) => category.id === id)
             ? { ...view, categories: view.categories.map((each) => (each.id === id ? { ...each, name } : each)) }
             : { ...view, categories: [...view.categories, { id, name }] },
-        (mutationId, options) => api.saveCategory({ workspace, id, name, mutationId }, options),
+        (mutationId, options, where) => api.saveCategory({ workspace, ...where, id, name, mutationId }, options),
       ),
     /** Deletes a category; its services stay, with no category. */
     deleteCategory: (workspace: string, categoryId: string) =>
@@ -236,14 +252,15 @@ export function openServices(given: {
             return rest;
           }),
         }),
-        (mutationId, options) => api.deleteCategory({ workspace, categoryId, mutationId }, options),
+        (mutationId, options, where) => api.deleteCategory({ workspace, ...where, categoryId, mutationId }, options),
       ),
     /** Moves a category to `toIndex`. */
     moveCategory: (workspace: string, categoryId: string, toIndex: number) =>
       catalogueChange(
         workspace,
         (view) => ({ ...view, categories: placed(view.categories, categoryId, toIndex) }),
-        (mutationId, options) => api.moveCategory({ workspace, categoryId, toIndex, mutationId }, options),
+        (mutationId, options, where) =>
+          api.moveCategory({ workspace, ...where, categoryId, toIndex, mutationId }, options),
       ),
     /** Adds a service (`id` new, from `newId()`) or changes one, whole. */
     saveService: (workspace: string, id: string, service: ServiceFields) =>
@@ -255,14 +272,15 @@ export function openServices(given: {
             ? { ...view, services: view.services.map((each) => (each.id === id ? made : each)) }
             : { ...view, services: [...view.services, made] };
         },
-        (mutationId, options) => api.saveService({ workspace, id, service, mutationId }, options),
+        (mutationId, options, where) => api.saveService({ workspace, ...where, id, service, mutationId }, options),
       ),
     /** Moves a service into a category (null: none) at `toIndex` there. */
     moveService: (workspace: string, serviceId: string, categoryId: string | null, toIndex: number) =>
       catalogueChange(
         workspace,
         (view) => withServiceMoved(view, serviceId, categoryId, toIndex),
-        (mutationId, options) => api.moveService({ workspace, serviceId, categoryId, toIndex, mutationId }, options),
+        (mutationId, options, where) =>
+          api.moveService({ workspace, ...where, serviceId, categoryId, toIndex, mutationId }, options),
       ),
     /** Several services online or off. */
     setOnline: (workspace: string, serviceIds: readonly string[], online: boolean) =>
@@ -272,7 +290,8 @@ export function openServices(given: {
           ...view,
           services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, online } : each)),
         }),
-        (mutationId, options) => api.setOnline({ workspace, serviceIds: [...serviceIds], online, mutationId }, options),
+        (mutationId, options, where) =>
+          api.setOnline({ workspace, ...where, serviceIds: [...serviceIds], online, mutationId }, options),
       ),
     /** Several services into one category (null: none). */
     setCategory: (workspace: string, serviceIds: readonly string[], categoryId: string | null) =>
@@ -286,8 +305,8 @@ export function openServices(given: {
             return categoryId === null ? rest : { ...rest, categoryId };
           }),
         }),
-        (mutationId, options) =>
-          api.setCategory({ workspace, serviceIds: [...serviceIds], categoryId, mutationId }, options),
+        (mutationId, options, where) =>
+          api.setCategory({ workspace, ...where, serviceIds: [...serviceIds], categoryId, mutationId }, options),
       ),
     /** Archives services (Undo restores them). */
     archive: (workspace: string, serviceIds: readonly string[]) =>
@@ -297,7 +316,8 @@ export function openServices(given: {
           ...view,
           services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: true } : each)),
         }),
-        (mutationId, options) => api.archive({ workspace, serviceIds: [...serviceIds], mutationId }, options),
+        (mutationId, options, where) =>
+          api.archive({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
       ),
     /** Restores archived services. */
     restore: (workspace: string, serviceIds: readonly string[]) =>
@@ -307,7 +327,8 @@ export function openServices(given: {
           ...view,
           services: view.services.map((each) => (serviceIds.includes(each.id) ? { ...each, archived: false } : each)),
         }),
-        (mutationId, options) => api.restore({ workspace, serviceIds: [...serviceIds], mutationId }, options),
+        (mutationId, options, where) =>
+          api.restore({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
       ),
     /** The team: Staff's copy (`team`) or Shifts' (`shifts`). */
     team: (workspace: string, copy: TeamCopy = 'team'): HospitalityHeld<StaffTeamView> => teamOf(workspace, copy).held,
@@ -552,10 +573,7 @@ export function openServices(given: {
     times: (query: ServiceTimesInput): Promise<ServiceTimesView> => call((options) => api.times(query, options)),
     /** A `visits` change event: every held copy of the workspace reads again (each read is permission checked). */
     placesChanged(workspace: string) {
-      void catalogues
-        .get(workspace)
-        ?.read()
-        .catch(() => undefined);
+      for (const held of cataloguesOf(workspace)) void held.read().catch(() => undefined);
       for (const copy of ['team', 'shifts'] as const)
         void teams
           .get(`${workspace}:${copy}`)

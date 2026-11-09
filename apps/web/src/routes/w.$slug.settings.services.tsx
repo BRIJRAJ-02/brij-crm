@@ -8,10 +8,14 @@ import { SettingsFailed, SettingsPage } from '../features/settings/SettingsPage.
 // Settings › Workspace › Services (spec 0066 B1, AC-6613): the catalogue, for `services.manage` while Appointments is
 // installed. The store loads with the page; the screen draws its own refusal (no app, no permission).
 export const Route = createFileRoute('/w/$slug/settings/services')({
-  loader: async ({ context, params }): Promise<{ readonly store: ServicesStore }> => {
+  loader: async ({ context, params }): Promise<{ readonly store: ServicesStore; readonly property?: string }> => {
+    // The businesses come first, so the catalogue held is the chosen one's (spec 0065 H7); a switch reads this again.
+    const hospitality = await context.data.hospitality.load();
+    await hospitality.readProperties(params.slug).catch(() => undefined);
     const store = await context.data.services.load();
     store.catalogue(params.slug).retain();
-    return { store };
+    const property = hospitality.current(params.slug);
+    return { store, ...(property === undefined ? {} : { property }) };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -25,10 +29,11 @@ export const Route = createFileRoute('/w/$slug/settings/services')({
 });
 
 function ServicesRoute() {
-  const { store } = Route.useLoaderData();
+  const { store, property } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { toasts } = Route.useRouteContext();
-  return <ServicesScreen store={store} slug={slug} toasts={toasts} />;
+  // Another business starts the screen afresh: no open drawer or selection carries over.
+  return <ServicesScreen key={property ?? ''} store={store} slug={slug} toasts={toasts} />;
 }
 
 function ServicesError({ error }: ErrorComponentProps) {

@@ -5,7 +5,7 @@
 // schema per shape, the type beside it under the same name.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { PlaceHours } from './hospitality.ts';
+import { PlaceHours, PropertyScoped } from './hospitality.ts';
 import { RESOURCE_KINDS } from './hospitality-model.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Hue } from './values/hues.ts';
@@ -252,14 +252,19 @@ export const StaffFields = z.object({
 export type StaffFields = z.infer<typeof StaffFields>;
 
 const Write = WorkspaceScoped.extend({ mutationId: Uuid });
+/** A catalogue write: in one business (spec 0065 H7), `property` left out being the first. */
+const CatalogueWrite = PropertyScoped.extend({ mutationId: Uuid });
 
 /** Adds or renames a category; `id` is the caller's own, so a retry makes one. */
-export const SaveCategoryInput = Write.extend({ id: Uuid, name: Name(L.categoryNameMax, 'Name the category.') });
+export const SaveCategoryInput = CatalogueWrite.extend({
+  id: Uuid,
+  name: Name(L.categoryNameMax, 'Name the category.'),
+});
 /** Adds or renames a category. */
 export type SaveCategoryInput = z.infer<typeof SaveCategoryInput>;
 
 /** One category; its services stay, under no category. */
-export const CategoryInput = Write.extend({ categoryId: Uuid });
+export const CategoryInput = CatalogueWrite.extend({ categoryId: Uuid });
 /** One category. */
 export type CategoryInput = z.infer<typeof CategoryInput>;
 
@@ -269,12 +274,12 @@ export const MoveCategoryInput = CategoryInput.extend({ toIndex: z.number().int(
 export type MoveCategoryInput = z.infer<typeof MoveCategoryInput>;
 
 /** Adds or changes a service, whole; `id` is the caller's own, so a retry makes one. */
-export const SaveServiceInput = Write.extend({ id: Uuid, service: ServiceFields });
+export const SaveServiceInput = CatalogueWrite.extend({ id: Uuid, service: ServiceFields });
 /** Adds or changes a service. */
 export type SaveServiceInput = z.infer<typeof SaveServiceInput>;
 
 /** Moves a service into a category (null: none) at `toIndex` there. */
-export const MoveServiceInput = Write.extend({
+export const MoveServiceInput = CatalogueWrite.extend({
   serviceId: Uuid,
   categoryId: Uuid.nullable(),
   toIndex: z.number().int().min(0).max(L.services),
@@ -283,7 +288,7 @@ export const MoveServiceInput = Write.extend({
 export type MoveServiceInput = z.infer<typeof MoveServiceInput>;
 
 /** Several services at once (bulk actions). */
-export const ServicesInput = Write.extend({ serviceIds: z.array(Uuid).min(1).max(L.bulk) });
+export const ServicesInput = CatalogueWrite.extend({ serviceIds: z.array(Uuid).min(1).max(L.bulk) });
 /** Several services at once. */
 export type ServicesInput = z.infer<typeof ServicesInput>;
 
@@ -385,7 +390,8 @@ export type UploadedStaffPhoto = z.infer<typeof UploadedStaffPhoto>;
 
 /** The services procedures (spec 0066 B1). */
 export const servicesContract = {
-  catalogue: oc.input(WorkspaceScoped).output(CatalogueView),
+  /** One business's catalogue (spec 0065 H7): `property` left out is the first. */
+  catalogue: oc.input(PropertyScoped).output(CatalogueView),
   saveCategory: oc.input(SaveCategoryInput).output(CatalogueView),
   deleteCategory: oc.input(CategoryInput).output(CatalogueView),
   moveCategory: oc.input(MoveCategoryInput).output(CatalogueView),

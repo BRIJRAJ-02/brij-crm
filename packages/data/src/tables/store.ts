@@ -30,7 +30,7 @@ export interface TablesProcedures {
     input: Scoped & { placeId: string; rules: TableRules; mutationId: string },
     options: Options,
   ) => Promise<TableSetupView>;
-  readonly places: (input: Scoped, options: Options) => Promise<ServicePlaces>;
+  readonly places: (input: Scoped & { property?: string }, options: Options) => Promise<ServicePlaces>;
   readonly floor: (input: Scoped & { placeId: string }, options: Options) => Promise<ServiceFloor>;
   readonly day: (input: Scoped & { placeId: string; date: string }, options: Options) => Promise<ServiceDayView>;
   readonly setStatus: (
@@ -127,6 +127,8 @@ export function openTables(given: {
   readonly now?: () => number;
   /** Whether live updates reach this tab; without them a shown day polls. */
   readonly isLive?: () => boolean;
+  /** The business each workspace works in on this device (spec 0065 H7); undefined is the first. */
+  readonly propertyOf?: (workspace: string) => string | undefined;
 }) {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
@@ -148,11 +150,17 @@ export function openTables(given: {
     }
     return found;
   };
+  /** The chosen business's places (spec 0065 H7): one held list per workspace and business. */
   const placesOf = (workspace: string) => {
-    let found = placesHeld.get(workspace);
+    const property = given.propertyOf?.(workspace);
+    const key = `${workspace}:${property ?? ''}`;
+    let found = placesHeld.get(key);
     if (found === undefined) {
-      found = holder(() => call((options) => api.places({ workspace }, options)), now);
-      placesHeld.set(workspace, found);
+      found = holder(
+        () => call((options) => api.places({ workspace, ...(property === undefined ? {} : { property }) }, options)),
+        now,
+      );
+      placesHeld.set(key, found);
     }
     return found;
   };
@@ -215,7 +223,7 @@ export function openTables(given: {
         (view) => ({ ...view, rules }),
         () => call((options) => api.saveSetup({ workspace, placeId, rules, mutationId: mintId() }, options)),
       ),
-    /** The places the Reservations page picks between, for whoever opens it. */
+    /** The places the Reservations page picks between, for whoever opens it: the chosen business's. */
     places: (workspace: string): HospitalityHeld<ServicePlaces> => placesOf(workspace).held,
     /** A place's areas and live tables for the Reservations page, for whoever opens it. */
     floor: (workspace: string, placeId: string): HospitalityHeld<ServiceFloor> => floorOf(workspace, placeId).held,

@@ -35,23 +35,37 @@ import { member } from '../../orpc.ts';
 // open catalogue, team or day reads again; it purges those places' offered times too.
 const s = member.services;
 
+/** The business a catalogue call names (spec 0065 H7), as core takes it: left out, the workspace's first. */
+const inProperty = (input: { readonly property?: string | undefined }) =>
+  input.property === undefined ? {} : { propertyId: input.property };
+
 export const servicesRouter = s.router({
-  catalogue: s.catalogue.handler(({ context }) => getCatalogue(context.scope)),
+  catalogue: s.catalogue.handler(({ context, input }) => getCatalogue(context.scope, inProperty(input))),
   saveCategory: s.saveCategory.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      saveServiceCategory(context.scope, { id: input.id, name: input.name }, { slotCache: context.visitSlots }, hooks),
+      saveServiceCategory(
+        context.scope,
+        { ...inProperty(input), id: input.id, name: input.name },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
     ),
   ),
   deleteCategory: s.deleteCategory.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      deleteServiceCategory(context.scope, { categoryId: input.categoryId }, { slotCache: context.visitSlots }, hooks),
+      deleteServiceCategory(
+        context.scope,
+        { ...inProperty(input), categoryId: input.categoryId },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
     ),
   ),
   moveCategory: s.moveCategory.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       moveServiceCategory(
         context.scope,
-        { categoryId: input.categoryId, toIndex: input.toIndex },
+        { ...inProperty(input), categoryId: input.categoryId, toIndex: input.toIndex },
         { slotCache: context.visitSlots },
         hooks,
       ),
@@ -59,14 +73,19 @@ export const servicesRouter = s.router({
   ),
   saveService: s.saveService.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      saveService(context.scope, { id: input.id, service: input.service }, { slotCache: context.visitSlots }, hooks),
+      saveService(
+        context.scope,
+        { ...inProperty(input), id: input.id, service: input.service },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
     ),
   ),
   moveService: s.moveService.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       moveService(
         context.scope,
-        { serviceId: input.serviceId, categoryId: input.categoryId, toIndex: input.toIndex },
+        { ...inProperty(input), serviceId: input.serviceId, categoryId: input.categoryId, toIndex: input.toIndex },
         { slotCache: context.visitSlots },
         hooks,
       ),
@@ -76,7 +95,7 @@ export const servicesRouter = s.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setServicesOnline(
         context.scope,
-        { serviceIds: input.serviceIds, online: input.online },
+        { ...inProperty(input), serviceIds: input.serviceIds, online: input.online },
         { slotCache: context.visitSlots },
         hooks,
       ),
@@ -86,7 +105,7 @@ export const servicesRouter = s.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setServicesCategory(
         context.scope,
-        { serviceIds: input.serviceIds, categoryId: input.categoryId },
+        { ...inProperty(input), serviceIds: input.serviceIds, categoryId: input.categoryId },
         { slotCache: context.visitSlots },
         hooks,
       ),
@@ -94,12 +113,22 @@ export const servicesRouter = s.router({
   ),
   archive: s.archive.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      archiveServices(context.scope, { serviceIds: input.serviceIds }, { slotCache: context.visitSlots }, hooks),
+      archiveServices(
+        context.scope,
+        { ...inProperty(input), serviceIds: input.serviceIds },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
     ),
   ),
   restore: s.restore.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      restoreServices(context.scope, { serviceIds: input.serviceIds }, { slotCache: context.visitSlots }, hooks),
+      restoreServices(
+        context.scope,
+        { ...inProperty(input), serviceIds: input.serviceIds },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
     ),
   ),
   team: s.team.handler(({ context }) => getTeam(context.scope)),
