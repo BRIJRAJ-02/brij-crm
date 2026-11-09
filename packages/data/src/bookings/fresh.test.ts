@@ -1,8 +1,8 @@
 // Keeping a held Bookings read current (owner ask A115), against a clock, a page and live updates moved by hand: read
 // at once and on every return, every minute while live updates are paused or off and the page shows, never while it
 // is hidden or a read is out, waiting twice as long after each failure, and nothing once stopped.
-import { describe, expect, it } from 'vitest';
-import { FRESH_EVERY_MS, FRESH_MAX_MS, keepFresh } from './fresh.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { browserReturn, FRESH_EVERY_MS, FRESH_MAX_MS, FRESH_RECENT_MS, keepFresh, RETURN_ONCE_MS } from './fresh.ts';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -210,5 +210,57 @@ describe('keeping a held Bookings read current', () => {
     expect(held.reads()).toBe(2);
     await settle();
     expect(held.clock.pending()).toEqual([FRESH_EVERY_MS]);
+  });
+});
+
+describe('one read per visit and per return (bookings redesign step 1)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('skips the first read when the last one landed a moment ago (the loader’s), and reads when it is older', async () => {
+    let reads = 0;
+    const read = () => {
+      reads += 1;
+      return Promise.resolve(true);
+    };
+    const deps = { onReturn: () => () => undefined, later: () => () => undefined, now: () => 100_000 };
+    const recent = keepFresh(read, deps, { landedAt: 100_000 - FRESH_RECENT_MS + 1 });
+    await settle();
+    expect(reads).toBe(0);
+    recent.stop();
+    const old = keepFresh(read, deps, { landedAt: 100_000 - FRESH_RECENT_MS });
+    await settle();
+    expect(reads).toBe(1);
+    old.stop();
+    const never = keepFresh(read, deps);
+    await settle();
+    expect(reads).toBe(2);
+    never.stop();
+  });
+
+  it('counts focus and the tab shown again as one return, and a later return as another', () => {
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', doc);
+    let at = 0;
+    let returns = 0;
+    const stop = browserReturn(
+      () => {
+        returns += 1;
+      },
+      () => at,
+    );
+    doc.dispatchEvent(new Event('visibilitychange'));
+    win.dispatchEvent(new Event('focus'));
+    expect(returns).toBe(1);
+    at += RETURN_ONCE_MS;
+    win.dispatchEvent(new Event('focus'));
+    expect(returns).toBe(2);
+    stop();
+    at += RETURN_ONCE_MS;
+    win.dispatchEvent(new Event('focus'));
+    expect(returns).toBe(2);
   });
 });

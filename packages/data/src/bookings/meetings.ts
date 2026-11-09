@@ -114,6 +114,8 @@ export function createMeetingsStore(deps: MeetingsDeps) {
     let generation = 0;
     // Each read from the top that landed counts; a next page asked for before one landed is dropped.
     let landed = 0;
+    // When the last read from the top landed: a screen holding it a moment after the loader's read doesn't read again.
+    let landedAt: number | undefined;
     // The read from the top that is out, and the next page that is out: a read of what is shown waits for either.
     let topRead: Promise<boolean> | undefined;
     let moreRead: Promise<void> | undefined;
@@ -153,6 +155,7 @@ export function createMeetingsStore(deps: MeetingsDeps) {
         } while (next !== undefined && page.items.length > 0 && items.length < rows);
         cursor = next;
         landed += 1;
+        landedAt = (deps.now ?? Date.now)();
         set({ status: 'ready', items, hasMore: next !== undefined, isLoadingMore: false, moreFailed: false });
         return true;
       };
@@ -187,7 +190,7 @@ export function createMeetingsStore(deps: MeetingsDeps) {
       getSnapshot: () => state,
       retain() {
         held += 1;
-        if (held === 1) fresh = keepFresh(readShown, deps);
+        if (held === 1) fresh = keepFresh(readShown, deps, { landedAt });
         return () => {
           held -= 1;
           if (held === 0) {

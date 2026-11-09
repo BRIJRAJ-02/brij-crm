@@ -136,6 +136,8 @@ export function createBookingsStore(deps: BookingsDeps) {
     let reading: Promise<boolean> | undefined;
     let settled: Promise<void> | undefined;
     let fresh: Freshness | undefined;
+    // When the last read landed: a screen holding it a moment after the loader's read doesn't read it again.
+    let landedAt: number | undefined;
     const listeners = new Set<() => void>();
     const set = (next: HeldState<T>) => {
       state = next;
@@ -145,6 +147,7 @@ export function createBookingsStore(deps: BookingsDeps) {
       reading ??= load()
         .then(
           (answer) => {
+            landedAt = (deps.now ?? Date.now)();
             set({ status: 'ready', ...answer });
             return true;
           },
@@ -166,7 +169,7 @@ export function createBookingsStore(deps: BookingsDeps) {
       getSnapshot: () => state,
       retain() {
         held += 1;
-        if (held === 1) fresh = keepFresh(read, deps);
+        if (held === 1) fresh = keepFresh(read, deps, { landedAt });
         return () => {
           held -= 1;
           if (held === 0) {
