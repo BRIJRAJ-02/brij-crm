@@ -38,10 +38,10 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { saveFile } from '../link-page/qr-png.ts';
 import { useIsNarrow } from '../menus/narrow.ts';
-import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { qrPrintHref, type QrLook } from './look.ts';
 import { codeFile, codeFileName, tableMenuAddress, zipCodes, type DrawnCode } from './codes.ts';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { strings } from './strings.ts';
 import { TableDrawer } from './TableDrawer.tsx';
 import { ALL_ZONES, UNZONED, zoneGroups, type ZoneGroup } from './zones.ts';
@@ -105,14 +105,13 @@ export function QrScreen({
         page={{
           topBar,
           body: (
-            <EmptyState
-              icon="store"
-              title={strings.noPlace}
-              actions={
-                <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
-                  {strings.addPlace}
-                </ButtonLink>
-              }
+            <StartBusiness
+              slug={slug}
+              app="menu_qr"
+              icon="qr-code"
+              title={strings.startTitle}
+              text={strings.startText}
+              onDone={held.retry}
             />
           ),
         }}

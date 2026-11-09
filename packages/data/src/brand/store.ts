@@ -110,6 +110,8 @@ export type ImageSend = (
   path: string,
   workspace: string,
   body?: Blob,
+  /** Whose link page a photo is for (spec 0070): absent, the caller's own. */
+  member?: string,
 ) => Promise<{ readonly version?: string; readonly removed?: boolean; readonly same?: boolean }>;
 
 /** A read this recent serves a new holder as it is: the route's loader and the screen it opens hold it together. */
@@ -226,8 +228,14 @@ export function openBrand(given: {
   readonly now?: () => number;
   /** A logo landed or was removed: the sidebar's head and the tab's icon follow it at once (undefined: none). */
   readonly onLogo?: (workspace: string, version: string | undefined) => void;
+  /**
+   * Whose link page the Design panel dresses (spec 0070, AC-7002): absent, the caller's own; else that member's, its
+   * look, accent and photos read and sent with `member`. The workspace's own kit is the same either way.
+   */
+  readonly member?: string;
 }) {
   const { call, send } = given;
+  const page: { readonly member?: string } = given.member === undefined ? {} : { member: given.member };
   const now = given.now ?? Date.now;
   const kits = new Map<string, ReturnType<typeof holder<BrandKit>>>();
   const looks = new Map<string, ReturnType<typeof holder<PageLookExtras>>>();
@@ -247,7 +255,7 @@ export function openBrand(given: {
       found = holder<PageLookExtras>(async () => {
         // The page's own, and the workspace's accent it follows until it has one: read together.
         const [own, kit] = await Promise.all([
-          call((options) => given.profile.look({ workspace }, options)),
+          call((options) => given.profile.look({ workspace, ...page }, options)),
           call((options) => given.brand.get({ workspace }, options)),
         ]);
         return {
@@ -397,6 +405,7 @@ export function openBrand(given: {
             given.profile.saveAccent(
               {
                 workspace,
+                ...page,
                 accent: accent ?? null,
                 accentDark: accent === undefined ? null : (accentDark ?? null),
                 mutationId: given.mintId(),
@@ -427,7 +436,7 @@ export function openBrand(given: {
       const refused = await lookOf(workspace).change(
         (look) => look,
         async () => {
-          const { version, same } = await send(`/api/me/link-page/${slot}`, workspace, image);
+          const { version, same } = await send(`/api/me/link-page/${slot}`, workspace, image, given.member);
           answered.isSame = same === true;
           return (look) => withField(look, slot, version);
         },
@@ -439,7 +448,7 @@ export function openBrand(given: {
       lookOf(workspace).change(
         (look) => withField(look, slot, undefined),
         async () => {
-          await send(`/api/me/link-page/${slot}`, workspace);
+          await send(`/api/me/link-page/${slot}`, workspace, undefined, given.member);
           return (look) => withField(look, slot, undefined);
         },
       ),

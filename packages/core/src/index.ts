@@ -12,7 +12,11 @@ export {
   enterWithKey,
   noteKeyUse,
   type KeyEntry,
+  enterAsPartner,
+  notePartnerCall,
+  type PartnerEntry,
   enterWorkspace,
+  enterTeamLinkPage,
   mayPreviewDraft,
   type DeletedEntry,
   NO_RULE_SOURCE,
@@ -149,6 +153,61 @@ export {
 export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
 // A key's shape (pure): the api's tests make one to prove an unknown or misplaced key opens nothing.
 export { keyToken, parseKeyToken } from './developer/tokens.ts';
+// Partners (spec 0070, slice 2): the console's registry, the OAuth connect and its token exchange, Settings ›
+// Connected apps, and a partner's read of its own connection; the door's part is `enterAsPartner`.
+export {
+  listPartners,
+  registerPartner,
+  replacePartnerSecret,
+  toPartnerView,
+  updatePartner,
+  type PartnerRegistryDeps,
+} from './partners/registry.ts';
+export {
+  approvePartnerConnect,
+  checkConnectRequest,
+  denyPartnerConnect,
+  partnerConnectOffer,
+  type ConnectOfferDeps,
+  type ConnectPartners,
+} from './partners/connect.ts';
+export {
+  exchangePartnerCode,
+  type PartnerExchange,
+  type PartnerExchangeDeps,
+  type PartnerExchangeInput,
+} from './partners/exchange.ts';
+export {
+  disconnectApp,
+  listConnectedApps,
+  readPartnerConnection,
+  setConnectedAppModules,
+  type ConnectedAppsDeps,
+} from './partners/connections.ts';
+// A partner's managed members (spec 0070, slice 3): its own connection's people, added, changed, listed and removed.
+export {
+  listPartnerMembers,
+  putPartnerMember,
+  removePartnerMember,
+  type ManagedUserEnder,
+  type ManagedUserMaker,
+} from './partners/members.ts';
+export { frameOriginProblem, partnerLogoPath, redirectUriProblem } from './partners/addresses.ts';
+// Embedded screens and the sandbox (spec 0070, slice 4): a launch and its redemption, an embedded session's reads,
+// and the console's wipe of a sandbox partner's test connections.
+export {
+  describeEmbedSession,
+  embedConnectionModules,
+  launchPartnerScreen,
+  parsePartnerLaunchCode,
+  redeemPartnerLaunch,
+  wipeTestConnections,
+  type EmbedSessionFacts,
+  type PartnerLaunch,
+  type RedeemedLaunch,
+} from './partners/launch.ts';
+// A partner's token shapes and PKCE (pure): the api's tests and the sample partner page make them.
+export { parsePartnerAccessToken, s256Challenge } from './partners/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
@@ -184,6 +243,8 @@ export {
   saveQrStyle,
   type ResolvedMedia,
 } from './profile/items.ts';
+// Team link pages (spec 0070, slice 1): the list, a handle claimed for someone, History, and "Edited by".
+export { claimTeamHandle, listTeamLinkPages, readLinkPageEditedBy } from './profile/team-pages.ts';
 export {
   discardLinkDraft,
   listLinkPageVersions,
@@ -1104,8 +1165,6 @@ export {
 } from './hospitality/public-page.ts';
 /** A place's published menu as its business page shows it (spec 0066 B4 with 0065 H1): the page's `MenuSource`. */
 export { businessMenuOf } from './hospitality/public-menu.ts';
-/** The operator console's one write (spec 0065, AC-6502): a workspace's early access flag, behind the operator gate. */
-export { setEarlyAccess } from './operator/early-access.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
 export {
   operatorOverview,

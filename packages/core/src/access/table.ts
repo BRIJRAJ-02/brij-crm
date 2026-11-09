@@ -97,7 +97,12 @@ export type AccessEntry =
    * answers as absent (`NOT_FOUND`), so no refusal tells them a template exists; the list answers only the
    * templates they may change, so a member with none gets an empty list rather than a refusal.
    */
-  | { readonly managedPage: true };
+  | { readonly managedPage: true }
+  /**
+   * A partner's own connection (spec 0070, slice 2): only the scope `enterAsPartner` minted, and only the connection
+   * it names. Any other principal is 403 `FORBIDDEN`; another connection's id answers as absent (`NOT_FOUND`).
+   */
+  | { readonly ownConnectionAsPartner: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -256,14 +261,20 @@ export const ACCESS_TABLE = {
   discardLinkDraft: { ownLinkPage: true },
   listLinkPageVersions: { ownLinkPage: true },
   restoreLinkPageVersion: { ownLinkPage: true },
+  // Team link pages (spec 0070, AC-7001 to AC-7004): someone else's page, the list and a claim are the permission's;
+  // "Edited by" is any member's own.
+  enterTeamLinkPage: { permission: 'link_pages.manage_team' },
+  listTeamLinkPages: { permission: 'link_pages.manage_team' },
+  claimTeamHandle: { permission: 'link_pages.manage_team' },
+  readLinkPageEditedBy: { anyMember: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
   countSubmissionsBeyond: { permission: 'workspace.manage' },
   // The brand kit (spec 0060, AC-1, AC-23): every member reads it; owners and admins change it and its logo.
   getWorkspaceBrand: { anyMember: true },
-  // The Hospitality suite (spec 0065, H0): any member reads the Apps page (empty without early access); owners and
-  // admins install and remove; the business, places and floors are `hospitality.manage`'s.
+  // The Hospitality suite (spec 0065, H0): any member reads the Apps page; owners and admins switch the apps on
+  // and off; the business, places and floors are `hospitality.manage`'s.
   listApps: { anyMember: true },
   installApp: { permission: 'workspace.manage' },
   removeApp: { permission: 'workspace.manage' },
@@ -621,6 +632,19 @@ export const ACCESS_TABLE = {
   createApiKey: { permission: 'api_keys.manage' },
   revokeApiKey: { permission: 'api_keys.manage' },
   restoreApiKey: { permission: 'api_keys.manage' },
+  // Partner connect (spec 0070, AC-7011, AC-7013): an owner's approval and Settings › Connected apps, owners only.
+  approvePartnerConnect: { permission: 'connected_apps.manage' },
+  listConnectedApps: { permission: 'connected_apps.manage' },
+  setConnectedAppModules: { permission: 'connected_apps.manage' },
+  disconnectApp: { permission: 'connected_apps.manage' },
+  // A partner's read of its own connection: the partner door's scope only.
+  readPartnerConnection: { ownConnectionAsPartner: true },
+  // A partner's managed members (spec 0070, AC-7020 to AC-7025): its own connection's people only.
+  putPartnerMember: { ownConnectionAsPartner: true },
+  removePartnerMember: { ownConnectionAsPartner: true },
+  listPartnerMembers: { ownConnectionAsPartner: true },
+  // A launch of an embedded screen for one of its people (spec 0070, AC-7030): its own connection only.
+  launchPartnerScreen: { ownConnectionAsPartner: true },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

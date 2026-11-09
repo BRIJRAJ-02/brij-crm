@@ -7,6 +7,7 @@
 // The draft and snapshot live on the page's own row (`draft`, `published`, `version`) until spec 0068's shared
 // `page_versions` lands; moving them there is a copy of these two columns.
 import {
+  APPOINTMENT_KINDS,
   BUSINESS_PAGE_LIMITS,
   businessContentOf,
   businessPageChanges,
@@ -15,6 +16,7 @@ import {
   hasWeeklyHours,
   isReservedHandle,
   placeSlugFromName,
+  type BusinessKind,
   type BusinessPageContent,
   type BusinessPageContentShape,
   type BusinessPageView,
@@ -29,7 +31,7 @@ import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { appointmentsReadiness } from '../visits/readiness.ts';
-import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp } from './gate.ts';
+import { auditSetup, hospitalityMember, installedHospitalityApps, requireAnyApp, requireBusiness } from './gate.ts';
 import { PLACE_NOT_FOUND } from './places.ts';
 
 const { businessPages, businessPhotos, businessProfiles, placePages, placeSlugs, places } = schema;
@@ -120,10 +122,13 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
   const row = await pageRowOf(tx, workspaceId);
   const placeRows = await pagePlaces(tx, workspaceId);
   const [profile] = await tx
-    .select({ name: businessProfiles.name })
+    .select({ name: businessProfiles.name, kind: businessProfiles.kind })
     .from(businessProfiles)
     .where(eq(businessProfiles.workspaceId, workspaceId));
   const apps = await installedHospitalityApps(tx, workspaceId);
+  // Every app is on by default, so what the page says and asks for follows the kind of business: a restaurant is never
+  // asked for a service, and a salon's page never offers a table.
+  const booksPeople = profile !== undefined && APPOINTMENT_KINDS.includes(profile.kind as BusinessKind);
   const draft = businessContentOf(row?.draft);
   const published =
     row?.published === null || row?.published === undefined ? undefined : businessContentOf(row.published);
@@ -146,7 +151,7 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
       hours: place.hours as PlaceHours,
     })),
     // With Appointments, Book needs something bookable behind it (spec 0066 B1; spec 0068, Foolproof).
-    ...(apps.has('appointments') ? { appointments: await appointmentsReadiness(tx) } : {}),
+    ...(apps.has('appointments') && booksPeople ? { appointments: await appointmentsReadiness(tx) } : {}),
   });
   const hasHandle = row?.handle !== null && row?.handle !== undefined;
   const suggested = hasHandle || profile === undefined ? undefined : await freeHandleFor(tx, profile.name);
@@ -166,8 +171,8 @@ async function viewOf(tx: WorkspaceTx, workspaceId: string): Promise<BusinessPag
       hasAddress: (place.addressLine ?? '').trim() !== '' && (place.city ?? '').trim() !== '',
       hasHours: hasWeeklyHours(place.hours as PlaceHours),
     })),
-    showsMenu: apps.has('menu'),
-    showsReserve: apps.has('table_seating'),
+    showsMenu: apps.has('menu') && !booksPeople,
+    showsReserve: apps.has('table_seating') && !booksPeople,
     ...(problem === undefined ? {} : { problem }),
   };
 }
@@ -216,6 +221,7 @@ export async function claimBusinessHandle(
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    await requireBusiness(tx, scope.workspaceId);
     await ensurePageRow(tx, scope.workspaceId, by);
     try {
       await tx.transaction((savepoint) =>

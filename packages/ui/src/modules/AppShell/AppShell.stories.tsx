@@ -128,6 +128,30 @@ export const WithBanner: Story = {
   },
 };
 
+/**
+ * No sidebar (spec 0070): a screen embedded in another product's frame, which brings its own navigation. The page
+ * has the whole width, and with nothing to skip there is no skip link.
+ */
+export const WithoutSidebar: Story = {
+  render: () => (
+    <Stage height="page">
+      <AppShell topBar={<TopBar title="Link page" icon="id-card" />}>
+        <EmptyState title="No blocks yet">Links and sections you add show here.</EmptyState>
+      </AppShell>
+    </Stage>
+  ),
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole('navigation')).toBeNull();
+    await expect(canvas.queryByRole('link', { name: 'Skip to content' })).toBeNull();
+    await expect(canvas.getByRole('main')).toContainElement(
+      canvas.getByRole('heading', { level: 1, name: 'Link page' }),
+    );
+    await userEvent.tab();
+    await expect(canvas.queryByRole('link', { name: 'Skip to content' })).toBeNull();
+  },
+};
+
 /** A side panel beside the view, as a record's details sit. */
 export const WithPanel: Story = {
   args: { withPanel: true },

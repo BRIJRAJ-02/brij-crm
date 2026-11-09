@@ -1,0 +1,19 @@
+{
+  "name": "@crm/partner-sample",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "setup": "node setup.ts",
+    "start": "node server.ts"
+  },
+  "devDependencies": {
+    "@crm/config": "workspace:*",
+    "@crm/core": "workspace:*",
+    "@crm/db": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

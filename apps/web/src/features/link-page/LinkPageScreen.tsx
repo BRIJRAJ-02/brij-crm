@@ -20,6 +20,7 @@ import {
 import {
   BookingFoot,
   Button,
+  ButtonLink,
   Callout,
   Card,
   CopyButton,
@@ -61,6 +62,7 @@ import { IdentityFields, identityOf, type PageIdentity } from './IdentityFields.
 import { SharingFields } from './SharingFields.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useLinkPagePlace } from './place.tsx';
 import {
   ADDABLE,
   blockKindOf,
@@ -81,6 +83,7 @@ import { LiveSwitch, useLinkPageLive, useWalletLink, type LinkPageLive } from '.
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
+import { teamStrings } from './team-strings.ts';
 
 /** Props for the Link page screen. */
 export interface LinkPageScreenProps {
@@ -92,6 +95,12 @@ export interface LinkPageScreenProps {
   readonly brand: BrandStore;
   readonly slug: string;
   readonly profile: MyProfile;
+  /**
+   * Someone else's page, by member id (spec 0070, AC-7002), opened from Team pages: the same editor on their own
+   * stores, with what is the account's own (social links, who the page is from, sharing and search, the wallet, Bring a
+   * page across, Email signup) left out, and nothing put live but by the switch.
+   */
+  readonly member?: string;
   /** The editor is open; without it the page opens on the overview, which shares it (27 Oct 2026). */
   readonly isEditing: boolean;
   /** Opens or closes the editor, as a change of the page's own address, so Back leaves the editor. */
@@ -214,10 +223,26 @@ function useWindowClock(items: readonly ProfileItem[]): Date {
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
+export function LinkPageScreen({
+  data,
+  linkPage,
+  brand,
+  slug,
+  profile,
+  member,
+  isEditing,
+  onEditing,
+}: LinkPageScreenProps) {
   const handle = profile.handle;
-  // Live or Private (spec 0058, AC-23): opening the screen is what puts a page made for its owner live, once.
-  const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined });
+  const isTeam = member !== undefined;
+  // Live or Private (spec 0058, AC-23): opening the screen is what puts a page made for its owner live, once. Someone
+  // else opening it (spec 0070) never does: only the switch.
+  const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined && !isTeam, linkPage });
+  // Team pages (spec 0070, AC-7001): one way there, on the person's own overview, for those who may manage them.
+  // Its addresses are the place's: the app's, or the partner's frame's (AC-7032).
+  const place = useLinkPagePlace(slug);
+  const canManageTeam = place.canManageTeam;
+  const teamHref = place.href({ team: true });
   return (
     // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
     // in the sidebar, its own bar, and no trail of configuration above it (the owner).
@@ -225,9 +250,27 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
       currentPage="linkPage"
       page={{
         topBar: (
-          <TopBar title={strings.title} icon="id-card">
+          <TopBar
+            title={isTeam ? teamStrings.memberTitle(profile.name) : strings.title}
+            icon="id-card"
+            {...(isTeam
+              ? {
+                  crumbs: [
+                    { id: 'link-page', label: teamStrings.linkPage, href: place.href() },
+                    { id: 'team', label: teamStrings.title, href: teamHref },
+                  ],
+                  back: { label: teamStrings.back, href: teamHref },
+                }
+              : {})}
+          >
+            {!isTeam && canManageTeam && !isEditing && (
+              <ButtonLink href={teamHref} icon="users" isLabelCollapsible label={teamStrings.openList}>
+                {teamStrings.openList}
+              </ButtonLink>
+            )}
             {handle === undefined ? undefined : (
               <HeaderActions
+                isTeam={isTeam}
                 data={data}
                 live={live}
                 handle={handle}
@@ -246,12 +289,23 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
           handle === undefined ? (
             <PreviewLayout>
               <Card>
-                <ClaimLink data={data} slug={slug} suggested={profile.suggestedHandle} />
+                {isTeam ? (
+                  // A member with no page is claimed for from Team pages, where the claim asks for the handle.
+                  <EmptyState
+                    layout="block"
+                    illustration={<SpotIllustration kind="link-page" />}
+                    title={teamStrings.noPage}
+                    actions={<ButtonLink href={teamHref}>{teamStrings.back}</ButtonLink>}
+                  />
+                ) : (
+                  <ClaimLink data={data} slug={slug} suggested={profile.suggestedHandle} />
+                )}
               </Card>
             </PreviewLayout>
           ) : (
             <Blocks
               data={data}
+              isTeam={isTeam}
               linkPage={linkPage}
               brand={brand}
               slug={slug}
@@ -277,6 +331,7 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
  */
 export function HeaderActions({
   data,
+  isTeam = false,
   live,
   handle,
   workspaceName,
@@ -289,6 +344,8 @@ export function HeaderActions({
 }: {
   /** For the Wallet pass's link, read once Share opens. */
   readonly data: DataLayer;
+  /** Someone else's page (spec 0070): the wallet pass is its member's own, so it isn't offered. */
+  readonly isTeam?: boolean;
   readonly live: LinkPageLive;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
@@ -310,7 +367,7 @@ export function HeaderActions({
   const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   // The Wallet pass is read once Share has opened, not on every visit to the page.
   const [hasShared, setShared] = useState(false);
-  const wallet = useWalletLink(data, slug, live.isLive && hasShared);
+  const wallet = useWalletLink(data, slug, live.isLive && hasShared && !isTeam);
   return (
     <>
       <LiveSwitch live={live} />
@@ -390,9 +447,16 @@ export function HeaderActions({
   );
 }
 
+/**
+ * The kinds that belong to modules other than Link pages (booking pages, forms, places): an embedded frame, which
+ * shares Link pages alone (spec 0070, AC-7033), never offers them.
+ */
+const OTHER_MODULES: ReadonlySet<AddableKind> = new Set(['page', 'times', 'form', 'signup', 'menu', 'reserve']);
+
 /** The blocks, their editors and the phone, once the person has a handle. */
 function Blocks({
   data,
+  isTeam,
   linkPage,
   brand,
   slug,
@@ -404,6 +468,8 @@ function Blocks({
   onEditing,
 }: {
   readonly data: DataLayer;
+  /** Someone else's page (spec 0070): what is the account's own stays off this editor. */
+  readonly isTeam: boolean;
   readonly linkPage: LinkPageStore;
   readonly brand: BrandStore;
   readonly slug: string;
@@ -418,12 +484,31 @@ function Blocks({
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  // Embedded in a partner's frame (spec 0070, AC-7033): only Link pages is shared, so no block of another module
+  // (booking pages, forms, places) is offered, and none opens that module's editor.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const held = linkPage.view(slug);
   const state = useLinkPage(held);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<ProfileItem | undefined>(undefined);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setImporting] = useState(false);
+  // Who last changed the person's own page when it wasn't them (spec 0070, AC-7004), read once as the page opens.
+  const [editedBy, setEditedBy] = useState<{ readonly name: string; readonly at: string } | undefined>(undefined);
+  useEffect(() => {
+    if (isTeam) return undefined;
+    let isCurrent = true;
+    data.teamPages.editedBy(slug).then(
+      (answer) => {
+        if (isCurrent) setEditedBy(answer.last);
+      },
+      // No line is no error: the page simply doesn't say it.
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, isTeam]);
   // Their social links as the card below holds them now, so the phone follows an edit before the profile is read
   // again; undefined until the card has loaded its store, when the profile's own set stands.
   const [socialPreview, setSocialPreview] = useState<readonly PublicSocialLink[] | undefined>(undefined);
@@ -805,7 +890,7 @@ function Blocks({
               </MenuItem>
             )}
             <MenuSeparator />
-            {item.kind === 'page' && item.page !== undefined && (
+            {item.kind === 'page' && item.page !== undefined && !isEmbedded && (
               <MenuItem id="page" icon="calendar-clock" href={pageEditorHref(item.page.workspaceSlug, item.pageId)}>
                 {strings.editPage}
               </MenuItem>
@@ -870,7 +955,7 @@ function Blocks({
       ...(words.badge === undefined ? {} : { badge: words.badge }),
       ...(words.isOff === true ? { isOff: true } : {}),
       ...(isPending ? { isPending: true } : { actions: rowMenu(item, index) }),
-      ...(item.kind === 'page' && item.page !== undefined
+      ...(item.kind === 'page' && item.page !== undefined && !isEmbedded
         ? { href: pageEditorHref(item.page.workspaceSlug, item.pageId) }
         : {}),
     };
@@ -886,6 +971,8 @@ function Blocks({
   // installed in this workspace, read once as the screen opens. Elsewhere the Add modal never mentions them.
   const [placeKinds, setPlaceKinds] = useState<ReadonlySet<AddableKind>>(() => new Set());
   useEffect(() => {
+    // Embedded, no place's block is offered, so there is nothing to ask.
+    if (isEmbedded) return undefined;
     let isCurrent = true;
     linkPage.placeChoices(slug).then(
       (found) => {
@@ -902,8 +989,14 @@ function Blocks({
     return () => {
       isCurrent = false;
     };
-  }, [linkPage, slug]);
-  const addable = ADDABLE.filter((kind) => (kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind));
+  }, [linkPage, slug, isEmbedded]);
+  // Email signup makes a form in the name of whoever adds it, so it is the page owner's own to add (spec 0070).
+  const addable = ADDABLE.filter(
+    (kind) =>
+      ((kind !== 'menu' && kind !== 'reserve') || placeKinds.has(kind)) &&
+      !(isTeam && kind === 'signup') &&
+      !(isEmbedded && OTHER_MODULES.has(kind)),
+  );
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
     (kind === 'socials' && shownSocials.length === 0 ? reachStrings.socialsNone : undefined);
@@ -928,9 +1021,11 @@ function Blocks({
           <MenuItem id="section" icon="list-plus" isDisabled={!roomFor('heading')} onAction={() => openAdd('heading')}>
             {strings.newSection}
           </MenuItem>
-          <MenuItem id="import" icon="download" onAction={() => setImporting(true)}>
-            {strings.bringAcross}
-          </MenuItem>
+          {!isTeam && (
+            <MenuItem id="import" icon="download" onAction={() => setImporting(true)}>
+              {strings.bringAcross}
+            </MenuItem>
+          )}
         </Menu>
       </MenuTrigger>
       <Button
@@ -997,7 +1092,7 @@ function Blocks({
       {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
         <EmptyState layout="block" title={strings.empty} icon="link">
-          {strings.emptyText}
+          {isEmbedded ? strings.emptyTextEmbedded : strings.emptyText}
         </EmptyState>
       }
     />
@@ -1057,7 +1152,7 @@ function Blocks({
           </>
         }
       >
-        {hasArchived ? strings.emptyArchived : strings.emptyText}
+        {hasArchived ? strings.emptyArchived : isEmbedded ? strings.emptyTextEmbedded : strings.emptyText}
       </EmptyState>
     );
   } else {
@@ -1074,7 +1169,7 @@ function Blocks({
           if (item === undefined) return;
           // A booking page block opens the booking page's own editor, in its workspace; its menu's Edit holds the
           // block's own size and window.
-          if (item.kind === 'page' && item.page !== undefined) {
+          if (item.kind === 'page' && item.page !== undefined && !isEmbedded) {
             void navigate({ href: pageEditorHref(item.page.workspaceSlug, item.pageId) });
           } else if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
         }}
@@ -1109,6 +1204,8 @@ function Blocks({
           linkPage={linkPage}
           items={everyItem}
           personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
+          editedBy={editedBy}
+          {...(isTeam ? { title: teamStrings.theirPage } : {})}
         />
       </PreviewLayout>
     );
@@ -1180,7 +1277,7 @@ function Blocks({
       )}
       {/* Their own set of links, changed here rather than only inside a booking page's editor (the owner, 26
           October 2026): a link page always shows them, so this card has no switch. */}
-      <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />
+      {!isTeam && <SocialsCardSlot data={data} slug={slug} onPreviewLinks={setSocialPreview} isTeam={false} isOwner />}
       {/* Only where there is a page to dress: the screen already sends a person with no handle to Profile. */}
       {cropping.cropper}
       <AppearanceCard
@@ -1212,31 +1309,34 @@ function Blocks({
           ...(sending === undefined ? {} : { sending }),
         }}
       />
-      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). */}
-      <Card title={strings.details}>
-        {/* Why the last switch didn't save, until the next try: the card has no footer to say it in. */}
-        {(identityRefusal ?? indexableRefusal?.message) !== undefined && (
-          <Callout tone="danger">{identityRefusal ?? indexableRefusal?.message}</Callout>
-        )}
-        <IdentityFields
-          data={data}
-          slug={slug}
-          jobTitle={profile.jobTitle}
-          identity={identity}
-          onSaved={(saved) => {
-            setIdentity(saved);
-            // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
-            linkPage.publication.changed();
-          }}
-          onSwitchRefused={setIdentityRefusal}
-        />
-        <SharingFields
-          indexable={indexable}
-          {...(shareImage === undefined ? {} : { shareImage })}
-          onShareImage={chooseShareImage}
-          onChange={chooseIndexable}
-        />
-      </Card>
+      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). The
+          account's own, so not on someone else's page (spec 0070). */}
+      {!isTeam && (
+        <Card title={strings.details}>
+          {/* Why the last switch didn't save, until the next try: the card has no footer to say it in. */}
+          {(identityRefusal ?? indexableRefusal?.message) !== undefined && (
+            <Callout tone="danger">{identityRefusal ?? indexableRefusal?.message}</Callout>
+          )}
+          <IdentityFields
+            data={data}
+            slug={slug}
+            jobTitle={profile.jobTitle}
+            identity={identity}
+            onSaved={(saved) => {
+              setIdentity(saved);
+              // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
+              linkPage.publication.changed();
+            }}
+            onSwitchRefused={setIdentityRefusal}
+          />
+          <SharingFields
+            indexable={indexable}
+            {...(shareImage === undefined ? {} : { shareImage })}
+            onShareImage={chooseShareImage}
+            onChange={chooseIndexable}
+          />
+        </Card>
+      )}
       {Editor !== undefined && editing !== undefined && (
         // The draft wears the page's own look (spec 0060, AC-16), as the phone does.
         <DraftLook look={{ theme: worn, photos: lookPhotos, variables: lookVariables }}>

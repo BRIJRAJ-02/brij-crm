@@ -24,7 +24,6 @@ import {
   Badge,
   breakpointToken,
   Button,
-  ButtonLink,
   Callout,
   Card,
   CardTitleLevel,
@@ -53,12 +52,12 @@ import {
 } from '@crm/ui';
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { minuteOfDay } from '../bookings/week.ts';
-import { businessSettingsHref } from '../settings/nav.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarStart } from './day-hours.ts';
 import { DEFAULT_BOOKING_MINUTE, NewBookingDialog, OFF_CALENDAR, sourceOf, VisitSheet } from './NewBooking.tsx';
 import { OnlineBookingDrawer, OnlineBookingNotice } from './OnlineBooking.tsx';
 import type { ReservationsSearch } from './search.ts';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { strings } from './strings.ts';
 import { WalkInDrawer } from './WalkIn.tsx';
 
@@ -161,7 +160,6 @@ export interface ReservationsScreenProps {
 export function ReservationsScreen({ slug, tables, toasts, search, onSearch }: ReservationsScreenProps) {
   const held = tables.places(slug);
   const loaded = useHospitality(held);
-  const canManage = useCan('hospitality.manage');
   const topBar = <TopBar title={strings.reservations} icon="calendar-check" />;
   if (loaded.status !== 'ready') {
     return (
@@ -188,19 +186,13 @@ export function ReservationsScreen({ slug, tables, toasts, search, onSearch }: R
         page={{
           topBar,
           body: (
-            <EmptyState
-              icon="store"
-              title={strings.noPlace}
-              // Only those who set the apps up can open Business; floor staff see the page alone.
-              {...(canManage
-                ? {
-                    actions: (
-                      <ButtonLink href={businessSettingsHref(slug)} variant="primary" icon="store">
-                        {strings.addPlace}
-                      </ButtonLink>
-                    ),
-                  }
-                : {})}
+            <StartBusiness
+              slug={slug}
+              app="table_seating"
+              icon="calendar-check"
+              title={strings.startTitle}
+              text={strings.startText}
+              onDone={held.retry}
             />
           ),
         }}

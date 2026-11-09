@@ -49,7 +49,8 @@ export type LoadedEmail =
    */
   | {
       readonly kind: 'skip';
-      readonly reason: 'recipient_gone' | 'opted_out' | 'unknown_kind' | 'stale' | 'workspace_deleted';
+      readonly reason:
+        'recipient_gone' | 'opted_out' | 'unknown_kind' | 'stale' | 'workspace_deleted' | 'managed_member';
     };
 
 interface EmailRow extends Record<string, unknown> {
@@ -61,6 +62,7 @@ interface EmailRow extends Record<string, unknown> {
   readonly to_address: string | null;
   readonly member_email: string | null;
   readonly member_active: boolean | null;
+  readonly member_managed: boolean;
   readonly reply_email: string | null;
   readonly reply_active: boolean | null;
   readonly workspace_name: string;
@@ -72,6 +74,13 @@ interface EmailRow extends Record<string, unknown> {
 
 /** The kinds that go to someone outside the workspace about it: sent as the workspace, not the product. */
 const GUEST_KINDS: ReadonlySet<QueuedEmailKind> = new Set(['form_confirmation', 'form_resume']);
+
+/**
+ * The only kinds a partner's managed member gets (spec 0070, AC-7023): what their page's visitors trigger. Everything
+ * else Timefix would tell a member (a welcome, scheduling and calendar notices, a page edited for them) is the
+ * partner's to say, so it is skipped.
+ */
+const MANAGED_MEMBER_KINDS: ReadonlySet<QueuedEmailKind> = new Set(['form_submission']);
 
 /**
  * Where a reply goes: the member the email names (a visitor's copy replies to the form's owner); for a new
@@ -96,6 +105,9 @@ export async function loadEmail(scope: EngineScope, emailId: string): Promise<Lo
     const found = await tx.execute<EmailRow>(sql`
       select e.id::text as id, e.kind, e.status, e.params, e.to_member_id::text as to_member_id, e.to_address,
         m.email as member_email, m.status = 'active' as member_active,
+        exists (
+          select 1 from managed_members mm where mm.workspace_id = e.workspace_id and mm.member_id = e.to_member_id
+        ) as member_managed,
         r.email as reply_email, r.status = 'active' as reply_active,
         w.name as workspace_name, w.slug as workspace_slug, w.deleted_at is not null as workspace_deleted,
         e.created_at,
@@ -119,6 +131,7 @@ export async function loadEmail(scope: EngineScope, emailId: string): Promise<Lo
     let to: string | undefined;
     if (row.to_member_id !== null) {
       if (row.member_active !== true || row.member_email === null) return { kind: 'skip', reason: 'recipient_gone' };
+      if (row.member_managed && !MANAGED_MEMBER_KINDS.has(kind.data)) return { kind: 'skip', reason: 'managed_member' };
       to = row.member_email;
       if (topic !== undefined) {
         const choice = await tx.execute<{ subscribed: boolean }>(sql`

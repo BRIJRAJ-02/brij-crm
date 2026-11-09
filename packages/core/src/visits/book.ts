@@ -27,11 +27,11 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import type { BusyReader } from '../booking/calendar.ts';
 import { matchVisitor } from '../booking/visitor.ts';
-import { checkId, newId } from '../engine/ids.ts';
+import { checkId, newId, uuidList } from '../engine/ids.ts';
 import type { ManageLinkKey } from '../booking/tokens.ts';
 import { inputInvalid, isRefusal, postgresError, refuse, type RefusalError } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
-import { auditSetup, installedHospitalityApps } from '../hospitality/gate.ts';
+import { APP_NOT_INSTALLED_MESSAGE, auditSetup, installedHospitalityApps } from '../hospitality/gate.ts';
 import { addDays, placeDateOf, wallToInstant } from '../hospitality/hours.ts';
 import { calendarBusy, loadVisitInputs, withCalendarBusy, type AskedItem, type VisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
@@ -113,12 +113,26 @@ export interface VisitDeps {
   readonly linkKey?: ManageLinkKey;
 }
 
-/** Refuses APP_NOT_INSTALLED unless Appointments or Table seating is installed (the engine's apps). */
-export async function requireVisitApp(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+/**
+ * Refuses APP_NOT_INSTALLED unless the app each asked service belongs to is on: a table (a party with no staff) is Table
+ * seating's, anything else Appointments'. Both are on by default, so each one's switch-off has to hold by itself. Both
+ * on needs no read of the services; a service that isn't there is left to the refusal that names it.
+ */
+export async function requireVisitApp(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  items: readonly AskedItem[],
+): Promise<void> {
   const installed = await installedHospitalityApps(tx, workspaceId);
-  if (!installed.has('appointments') && !installed.has('table_seating')) {
-    throw refuse('APP_NOT_INSTALLED', 'Install Appointments or Table seating first, in Settings, Apps.');
-  }
+  if (installed.has('appointments') && installed.has('table_seating')) return;
+  const refused = () => refuse('APP_NOT_INSTALLED', APP_NOT_INSTALLED_MESSAGE);
+  if (!installed.has('appointments') && !installed.has('table_seating')) throw refused();
+  const asked = await tx.execute<{ is_table: boolean }>(sql`
+    select (capacity_mode = 'party' and staff_rule = 'none') as is_table from services
+    where id = any(${uuidList(items.map((item) => item.serviceId))})
+  `);
+  const needs = (row: { readonly is_table: boolean }) => (row.is_table ? 'table_seating' : 'appointments');
+  if (asked.rows.some((row) => !installed.has(needs(row)))) throw refused();
 }
 
 /** The items asked for, checked: 1 to 5, each with uuids. */
@@ -252,7 +266,7 @@ export async function offerVisitTimes(
   const onlineOnly = query.online;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(query.date)) throw inputInvalid('date', 'Pick a day.');
   // The app is checked before the cache, so an answer cached before a removal is never served after it.
-  await inWorkspace(scope, (tx) => requireVisitApp(tx, scope.workspaceId));
+  await inWorkspace(scope, (tx) => requireVisitApp(tx, scope.workspaceId, items));
   const key = [
     scope.workspaceId,
     placeId,
@@ -265,7 +279,7 @@ export async function offerVisitTimes(
   if (hit !== undefined) return hit.map(offered);
   const now = deps.now?.() ?? new Date();
   const loaded = await inWorkspace(scope, async (tx) => {
-    await requireVisitApp(tx, scope.workspaceId);
+    await requireVisitApp(tx, scope.workspaceId, items);
     const zone = (
       await tx.execute<{ time_zone: string }>(sql`select time_zone from places where id = ${placeId}::uuid`)
     ).rows[0]?.time_zone;
@@ -513,7 +527,7 @@ export async function placeVisit(
   const first = await inWorkspace(
     scope,
     async (tx): Promise<{ readonly again: BookedVisit } | { readonly inputs: VisitInputs }> => {
-      await requireVisitApp(tx, scope.workspaceId);
+      await requireVisitApp(tx, scope.workspaceId, items);
       const again = await replayOf(tx, scope.workspaceId, placeId, key);
       if (again !== undefined) return { again };
       return {

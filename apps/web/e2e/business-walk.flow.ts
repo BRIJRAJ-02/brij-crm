@@ -1,10 +1,9 @@
 // The hospitality release end to end (spec 0065 H1, spec 0066 B4 lite and B7 lite, as they land together): in an
-// empty workspace "Somewhere", install Menu and Table seating, keep the business, its place and the place's
+// empty workspace "Somewhere", fill in the business card, keep the business, its place and the place's
 // restaurant week, publish a menu, the table service and the business page; then a guest opens /<handle>, sees the
 // Menu section, Reserve opens /r/<key>, books a table, and opens the whole menu at /m/<key>. Each step is a
-// screenshot when FLOW_SCREENSHOTS names a folder. Business apps are behind Timefix's early access: the flow opens it
-// with the owner connection (`FLOW_OWNER_URL`, a local database), as the operator console would; without it the
-// flow is skipped.
+// screenshot when FLOW_SCREENSHOTS names a folder. The flow names the workspace with the owner connection
+// (`FLOW_OWNER_URL`, a local database); without it the flow is skipped.
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -22,10 +21,10 @@ async function shot(page: Page, name: string): Promise<void> {
 
 test.describe('the business page with Menu and Table seating', () => {
   test.use({ locale: 'en-GB', timezoneId: 'Europe/London', actionTimeout: 15_000 });
-  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to name the new workspace.');
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Walked at a desktop width.');
 
-  test('install both apps, publish the menu, the tables and the page; a guest reserves and reads the menu', async ({
+  test('set up the business, publish the menu, the tables and the page; a guest reserves and reads the menu', async ({
     page,
     browser,
   }) => {
@@ -36,36 +35,19 @@ test.describe('the business page with Menu and Table seating', () => {
 
     await test.step('a new person makes the Somewhere workspace', async () => {
       await newWorkspace(page, `${slug}@example.com`, slug);
-      execFileSync('psql', [
-        OWNER_URL ?? '',
-        '-c',
-        `update workspaces set early_access = '{business_apps}', name = 'Somewhere' where slug = '${slug}'`,
-      ]);
+      execFileSync('psql', [OWNER_URL ?? '', '-c', `update workspaces set name = 'Somewhere' where slug = '${slug}'`]);
     });
 
-    await test.step('install Menu with the business card: the business and its place', async () => {
-      await page.goto(`/w/${slug}/settings/apps`);
-      await page.getByRole('button', { name: 'Install Menu', exact: true }).click();
+    await test.step('the first screen: the business card makes the business and its place', async () => {
+      await page.goto(`/w/${slug}/menus`);
+      await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
       await card.getByLabel('Business name').fill('Somewhere');
       await card.getByLabel('Address', { exact: true }).fill('1 Example Street');
       await card.getByLabel('City', { exact: true }).fill('London');
       await shot(page, '01-business-card');
-      await card.getByRole('button', { name: 'Install', exact: true }).click();
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
-    });
-
-    await test.step('install Table seating beside it', async () => {
-      await page.getByRole('button', { name: 'Install Table seating', exact: true }).click();
-      const dialog = page.getByRole('dialog');
-      if (await dialog.isVisible().catch(() => false)) {
-        await dialog.getByRole('button', { name: /^Install/ }).click();
-        await expect(dialog).toBeHidden({ timeout: 15_000 });
-      }
-      await expect(page.getByRole('button', { name: 'Install Table seating', exact: true })).toBeHidden({
-        timeout: 15_000,
-      });
-      await shot(page, '02-apps-installed');
     });
 
     let placeId = '';

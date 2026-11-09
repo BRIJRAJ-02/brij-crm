@@ -10,6 +10,8 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Role } from './access.ts';
 import { AUDIT_KIND_NAMES, AUDIT_PAGE } from './audit-kinds.ts';
+import { LINK_PAGE_TEAM_CHANGES } from './team-pages.ts';
+import { PartnerModule } from './partners.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -64,6 +66,8 @@ export const AuditPerson = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('asker'), name: z.string() }),
   z.strictObject({ kind: z.literal('system') }),
   z.strictObject({ kind: z.literal('api_key') }),
+  /** A connected app, acting through the partner API (spec 0070, AC-7025). */
+  z.strictObject({ kind: z.literal('partner') }),
   z.strictObject({ kind: z.literal('unknown') }),
 ]);
 /** A person as the log names them now. */
@@ -241,6 +245,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     }),
   ),
   entry(['member.removed', 'member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
+  /** Someone a connected app added (spec 0070, AC-7020), with the role they joined with. */
+  entry(['member.added'], member, z.strictObject({ role: Role.optional() })),
   /** `fields` holds only known fields; empty, the sentence says the profile changed. */
   entry(
     ['member.profile_updated'],
@@ -272,6 +278,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** An API key made, revoked or brought back (parity #34): its name then. */
   entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
+  /** A partner connected, its modules changed, or disconnected (spec 0070): its name then, and its modules. */
+  entry(
+    ['partner.connected', 'partner.modules_changed', 'partner.disconnected'],
+    workspace,
+    z.strictObject({ name: z.string(), modules: z.array(PartnerModule) }),
+  ),
   /**
    * An Insights share link made or revoked (spec 0067): its name, and on a revoke whether it went with its maker's
    * removal. Never its secret.
@@ -459,6 +471,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     z.strictObject({ version: z.number().int().min(1) }),
   ),
   entry(['link_page.draft_discarded'], member, NoParams),
+  /** Someone else's link page changed by a team page manager (spec 0070, AC-7004): what changed, and a claimed handle. */
+  entry(
+    ['link_page.changed_for'],
+    member,
+    z.strictObject({ change: z.enum(LINK_PAGE_TEAM_CHANGES), handle: z.string().optional() }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

@@ -72,5 +72,15 @@ export type {
   SiteRank,
   SiteVisitInput,
 } from './identity/operator.ts';
+export type {
+  ManagedPerson,
+  NewPartner,
+  PartnerAudit,
+  PartnerChange,
+  PartnerIdentity,
+  PartnerLogo,
+  PartnerRow,
+  PartnerWithSecret,
+} from './identity/partners.ts';
 export * as schema from './schema/index.ts';
 export { type PoolTiming, type PoolTimingSink } from './timing.ts';

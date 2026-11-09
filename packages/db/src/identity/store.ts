@@ -15,6 +15,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
 import { createOperatorIdentity, type OperatorIdentity } from './operator.ts';
+import { createPartnerIdentity, type PartnerIdentity } from './partners.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
@@ -158,7 +159,7 @@ export interface SessionFacts {
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
-export interface IdentityStore extends OperatorIdentity {
+export interface IdentityStore extends OperatorIdentity, PartnerIdentity {
   /**
    * The workspace at this address, or the one that held it before it changed
    * address (its `slug` is then the current one, so the caller can send
@@ -394,6 +395,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
 
   return {
     ...createOperatorIdentity(db),
+    ...createPartnerIdentity(db),
 
     async findWorkspace(slug) {
       const [row] = await db

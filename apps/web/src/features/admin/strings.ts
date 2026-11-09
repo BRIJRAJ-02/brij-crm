@@ -62,12 +62,6 @@ export const strings = {
   moreFailed: 'The next users didn’t load.',
   noUsers: 'No users yet',
   noMatches: 'Nobody matches',
-  hospitalityFor: (workspace: string) => `Business apps in ${workspace}`,
-  hospitalityOffTitle: (workspace: string) => `Turn off business apps for ${workspace}?`,
-  hospitalityOffText: (workspace: string) => `Business apps leave ${workspace}’s sidebar. Nothing is deleted.`,
-  hospitalityOff: 'Turn off',
-  hospitalityOn: (workspace: string) => `Business apps on for ${workspace}`,
-  hospitalityOffDone: (workspace: string) => `Business apps off for ${workspace}`,
   columns: {
     person: 'Person',
     signedUp: 'Signed up',
@@ -81,8 +75,6 @@ export const strings = {
     role: 'Role',
     members: 'Members',
     recordsAll: 'All records',
-    // Early access (spec 0065, AC-6502): the console's one switch.
-    hospitality: 'Business apps',
     notes: 'Notes',
     tasks: 'Tasks',
     page: 'Page',
@@ -104,6 +96,12 @@ export const strings = {
   emailUnverified: 'Not verified',
   signIn: 'Signs in with',
   methods: { email: 'Email code', google: 'Google' },
+  /** A partner's managed member (spec 0070), in place of their address. */
+  managed: 'Managed by a connected app',
+  /** A managed member's way in: only through the app that manages them. */
+  noSignIn: 'Only through their connected app',
+  /** Overview: managed members, counted apart from people who signed up. */
+  managedTotal: 'Managed by apps',
   twoFactor: 'Two factor',
   on: 'On',
   off: 'Off',

@@ -208,6 +208,20 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.restored': [row('api_key.restored', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'partner.connected': [
+    row('partner.connected', 'workspace', newId(), { after: { name: 'Hub', modules: ['link_pages'] } }),
+  ],
+  'partner.modules_changed': [
+    row('partner.modules_changed', 'workspace', newId(), {
+      before: { modules: ['link_pages'] },
+      after: { name: 'Hub', modules: ['link_pages'] },
+    }),
+  ],
+  'partner.disconnected': [
+    row('partner.disconnected', 'workspace', newId(), { after: { name: 'Hub', modules: ['link_pages'] } }),
+  ],
+  // Someone a connected app added (spec 0070, AC-7020): written as the partner, with the role they joined with.
+  'member.added': [{ ...row('member.added', 'member', bea, { after: { role: 'admin' } }), actorType: 'partner' }],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],
@@ -389,6 +403,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'link_page.published': [row('link_page.published', 'member', ada, { after: { version: 4 } })],
   'link_page.draft_discarded': [row('link_page.draft_discarded', 'member', ada, {})],
   'link_page.version_restored': [row('link_page.version_restored', 'member', ada, { after: { version: 1 } })],
+  'link_page.changed_for': [
+    row('link_page.changed_for', 'member', ada, { after: { change: 'blocks' } }),
+    row('link_page.changed_for', 'member', ada, { after: { change: 'handle', handle: 'ada' } }),
+  ],
   'managed_page.propagated': [
     row('managed_page.propagated', 'booking_page', newId(), {
       after: { templateId: newId(), name: 'Intro', locked: ['hours', 'limits'] },
@@ -470,6 +488,14 @@ describe('toEntryView, per action', () => {
     expect(only('join_request.created').actor).toEqual({ kind: 'asker', name: 'Cy Young' });
     const unknown = toEntryView({ ...row('member.removed', 'member', newId()), actorMemberId: newId() }, names);
     expect(unknown).toMatchObject({ actor: { kind: 'unknown' }, target: { person: { kind: 'unknown' } } });
+  });
+
+  it('names a connected app as the partner, and the role someone it added joined with (spec 0070)', () => {
+    expect(only('member.added')).toMatchObject({
+      actor: { kind: 'partner' },
+      target: { type: 'member' },
+      params: { role: 'admin' },
+    });
   });
 
   it('names targets as they are now, and a deleted or purged one as gone', () => {

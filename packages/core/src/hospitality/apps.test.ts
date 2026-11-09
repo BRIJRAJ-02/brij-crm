@@ -1,17 +1,16 @@
-// The Hospitality setup (spec 0065, H0) against the real Postgres as the app role: early access gates the Apps page
-// (AC-6501, AC-6502), only admins install and remove (AC-6503), Menu QR needs Menu (AC-6505), the first install takes
-// the business card and seeds Floor staff (AC-6506, AC-6511), every setup service refuses APP_NOT_INSTALLED once the
-// apps are removed (AC-6504), and a place's floor keeps its limits, labels and joins (AC-6509), never another
-// workspace's.
+// The Hospitality setup (spec 0065, H0) against the real Postgres as the app role: every app but Events is on in every
+// workspace with nothing stored (AC-6501), only admins switch them (AC-6503), a switch-off lasts, Menu QR needs Menu
+// (AC-6505), the business card makes the business and seeds Floor staff (AC-6506, AC-6511), every setup service refuses
+// APP_NOT_INSTALLED once every app is off (AC-6504), and a place's floor keeps its limits, labels and joins (AC-6509),
+// never another workspace's.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS, type FirstBusiness } from '@crm/contracts';
+import { PERMISSIONS, type AppsView, type FirstBusiness } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { readNav } from '../navigation/navigation.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { installApp, listApps, removeApp } from './apps.ts';
 import {
@@ -39,8 +38,8 @@ afterAll(async () => {
 
 let made = 0;
 
-/** A workspace, its owner's scope, and a plain member's, with early access opened unless `closed`. */
-async function workspace(closed = false) {
+/** A workspace, its owner's scope, and a plain member's. */
+async function workspace() {
   made += 1;
   const created = await createWorkspace(db, {
     name: 'Somewhere',
@@ -53,7 +52,6 @@ async function workspace(closed = false) {
       sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${memberId}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
     ),
   );
-  if (!closed) await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   const member = testScope({
     db,
@@ -83,41 +81,41 @@ const CARD: FirstBusiness = {
   currency: 'GBP',
 };
 
-describe('apps behind early access (AC-6501, AC-6502)', () => {
-  it('shows nothing about the apps until Timefix opens early access, and refuses an install', async () => {
-    const w = await workspace(true);
-    expect(await listApps(w.owner)).toEqual({ available: false, canManage: true, hasBusiness: false, apps: [] });
-    expect(await refusalOf(installApp(w.owner, { app: 'menu', business: CARD }))).toBe('NOT_FOUND');
-    const opened = await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'business_apps', on: true });
-    expect(opened).toEqual({ workspaceId: w.workspaceId, before: [], after: ['business_apps'] });
-    const view = await listApps(w.member);
-    expect(view.available).toBe(true);
-    expect(view.canManage).toBe(false);
-    expect(view.apps.map((app) => [app.app, app.installed])).toEqual([
-      ['menu', false],
-      ['menu_qr', false],
-      ['table_seating', false],
-      ['appointments', false],
-      ['events', false],
-    ]);
+const onOf = (view: AppsView) => view.apps.filter((app) => app.installed).map((app) => app.app);
+const OFF_ON_DEFAULT = ['menu', 'menu_qr', 'table_seating', 'appointments'];
+
+describe('on for every workspace (AC-6501)', () => {
+  it('has Menu, Menu QR, Table seating and Appointments on from creation, Events not, and stores nothing', async () => {
+    const w = await workspace();
+    for (const reader of [w.owner, w.member]) expect(onOf(await listApps(reader))).toEqual(OFF_ON_DEFAULT);
+    expect((await listApps(w.owner)).canManage).toBe(true);
+    expect((await listApps(w.member)).canManage).toBe(false);
+    expect((await listApps(w.owner)).hasBusiness).toBe(false);
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ apps: number; profiles: number; places: number; roles: number }>(sql`
+        select (select count(*)::int from workspace_apps) as apps, (select count(*)::int from business_profiles) as profiles,
+          (select count(*)::int from places) as places, (select count(*)::int from workspace_roles) as roles`),
+    );
+    // Nothing is made until someone fills in the card: no place, no key, no role.
+    expect(stored.rows).toEqual([{ apps: 0, profiles: 0, places: 0, roles: 0 }]);
   });
 
-  it('answers NOT_FOUND for a workspace that isn’t there', async () => {
-    expect(await refusalOf(setEarlyAccess({ db }, { workspaceId: newId(), flag: 'business_apps', on: true }))).toBe(
-      'NOT_FOUND',
-    );
+  it('gives a plain member nothing new: no section, no setup, no switch', async () => {
+    const w = await workspace();
+    expect((await readNav(w.member)).hospitality).toEqual([]);
+    expect(await refusalOf(getBusiness(w.member))).toBe('FORBIDDEN');
+    expect(await refusalOf(installApp(w.member, { app: 'menu' }))).toBe('FORBIDDEN');
+    expect(await refusalOf(removeApp(w.member, { app: 'menu' }))).toBe('FORBIDDEN');
   });
 });
 
-describe('install and remove (AC-6503 to AC-6506, AC-6511)', () => {
-  it('lets only an admin install, asks for Menu with Menu QR and the business card first, and seeds Floor staff', async () => {
+describe('the switch (AC-6503 to AC-6506, AC-6511)', () => {
+  it('lets only an admin set up, takes the card once, and seeds Floor staff with it', async () => {
     const w = await workspace();
     expect(await refusalOf(installApp(w.member, { app: 'menu', business: CARD }))).toBe('FORBIDDEN');
-    expect(await refusalOf(installApp(w.owner, { app: 'menu_qr', business: CARD }))).toBe('APP_NEEDED');
-    expect(await refusalOf(installApp(w.owner, { app: 'menu_qr', withNeeded: true }))).toBe('BUSINESS_NEEDED');
-    const view = await installApp(w.owner, { app: 'menu_qr', withNeeded: true, business: CARD });
+    const view = await installApp(w.owner, { app: 'menu', business: CARD });
     expect(view.hasBusiness).toBe(true);
-    expect(view.apps.filter((app) => app.installed).map((app) => app.app)).toEqual(['menu', 'menu_qr']);
+    expect(onOf(view)).toEqual(OFF_ON_DEFAULT);
 
     const business = await getBusiness(w.owner);
     expect(business.profile).toMatchObject({ name: 'Somewhere Nowhere', kind: 'restaurant', currency: 'GBP' });
@@ -136,43 +134,90 @@ describe('install and remove (AC-6503 to AC-6506, AC-6511)', () => {
     );
     expect(roles.rows).toEqual([{ name: 'Floor staff', permissions: ['hospitality.service'], level: 'read' }]);
 
-    // A second install needs no card and seeds nothing more.
-    await installApp(w.owner, { app: 'table_seating' });
+    // A second card changes nothing and seeds nothing more.
+    await installApp(w.owner, { app: 'table_seating', business: { ...CARD, name: 'Another' } });
+    expect((await getBusiness(w.owner)).profile?.name).toBe('Somewhere Nowhere');
     const again = await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute<{ n: number }>(sql`select count(*)::int as n from workspace_roles`),
     );
     expect(again.rows).toEqual([{ n: 1 }]);
   });
 
-  it('asks before removing Menu under Menu QR, keeps every row, and gates the setup until an app is back', async () => {
+  it('keeps an app off once switched off, and turns it back on with everything kept', async () => {
     const w = await workspace();
-    await installApp(w.owner, { app: 'menu_qr', withNeeded: true, business: CARD });
+    expect(onOf(await removeApp(w.owner, { app: 'table_seating' }))).toEqual(['menu', 'menu_qr', 'appointments']);
+    // Read again, as a later release would: the row says off.
+    expect(onOf(await listApps(w.owner))).toEqual(['menu', 'menu_qr', 'appointments']);
+    expect(onOf(await installApp(w.owner, { app: 'table_seating' }))).toEqual(OFF_ON_DEFAULT);
+  });
+
+  it('asks before switching Menu off under Menu QR, and Menu QR needs Menu to come back', async () => {
+    const w = await workspace();
+    await installApp(w.owner, { app: 'menu', business: CARD });
     expect(await refusalOf(removeApp(w.owner, { app: 'menu' }))).toBe('APP_NEEDED');
     expect(await refusalOf(removeApp(w.member, { app: 'menu', withDependents: true }))).toBe('FORBIDDEN');
-    const view = await removeApp(w.owner, { app: 'menu', withDependents: true });
+    expect(onOf(await removeApp(w.owner, { app: 'menu', withDependents: true }))).toEqual([
+      'table_seating',
+      'appointments',
+    ]);
+    expect(await refusalOf(installApp(w.owner, { app: 'menu_qr' }))).toBe('APP_NEEDED');
+    expect(onOf(await installApp(w.owner, { app: 'menu_qr', withNeeded: true }))).toEqual(OFF_ON_DEFAULT);
+  });
+
+  it('turns Menu QR off with Menu when Menu is off and Menu QR has no row of its own', async () => {
+    const w = await workspace();
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into workspace_apps (workspace_id, app, removed_at) values (${w.workspaceId}, 'menu', now())`,
+      ),
+    );
+    expect(onOf(await listApps(w.owner))).toEqual(['table_seating', 'appointments']);
+  });
+
+  it('gates the setup once every app is off, keeps every row, and comes back whole', async () => {
+    const w = await workspace();
+    await installApp(w.owner, { app: 'menu', business: CARD });
+    await removeApp(w.owner, { app: 'menu', withDependents: true });
+    await removeApp(w.owner, { app: 'table_seating' });
+    const view = await removeApp(w.owner, { app: 'appointments' });
     expect(view.apps.every((app) => !app.installed)).toBe(true);
     expect(await refusalOf(getBusiness(w.owner))).toBe('APP_NOT_INSTALLED');
     const kept = await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute<{ n: number }>(sql`select count(*)::int as n from workspace_apps where removed_at is not null`),
     );
-    expect(kept.rows).toEqual([{ n: 2 }]);
+    expect(kept.rows).toEqual([{ n: 4 }]);
     await installApp(w.owner, { app: 'menu' });
     expect((await getBusiness(w.owner)).places).toHaveLength(1);
-    // Closing early access closes the apps too.
-    await setEarlyAccess({ db }, { workspaceId: w.workspaceId, flag: 'business_apps', on: false });
-    expect(await refusalOf(getBusiness(w.owner))).toBe('APP_NOT_INSTALLED');
+  });
+
+  it('keeps Events off: it can’t be turned on while it is being built', async () => {
+    const w = await workspace();
+    expect(await refusalOf(installApp(w.owner, { app: 'events' }))).toBe('NOT_FOUND');
+    expect((await listApps(w.owner)).apps.find((app) => app.app === 'events')?.installed).toBe(false);
+  });
+
+  it('audits the card, and refuses a profile, a place or a handle ahead of it', async () => {
+    const w = await workspace();
+    expect(await refusalOf(saveBusiness(w.owner, { name: 'Early', kind: 'bar' }))).toBe('CONFLICT');
+    expect(
+      await refusalOf(createPlace(w.owner, { id: newId(), place: { name: 'Early', country: 'GB', timeZone: 'UTC' } })),
+    ).toBe('CONFLICT');
+    await installApp(w.owner, { app: 'menu', business: CARD });
+    const audited = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ what: string }>(
+        sql`select after ->> 'hospitality' as what from audit_events where workspace_id = ${w.workspaceId} and after ? 'hospitality' order by at`,
+      ),
+    );
+    expect(audited.rows.map((row) => row.what)).toEqual(['business.saved', 'place.created']);
   });
 });
 
 describe('the sidebar’s Hospitality section (AC-6510)', () => {
-  it('holds the installed apps’ pages, for those who may set up or run service only', async () => {
+  it('holds the on apps’ pages, for those who may set up or run service only', async () => {
     const w = await workspace();
-    expect((await readNav(w.owner)).hospitality).toEqual([]);
-    await installApp(w.owner, { app: 'menu', business: CARD });
-    expect((await readNav(w.owner)).hospitality).toEqual(['menus']);
-    await installApp(w.owner, { app: 'table_seating' });
-    // Reservations is the day and its online booking (5 November 2026): Service has no row of its own.
-    expect((await readNav(w.owner)).hospitality).toEqual(['menus', 'reservations']);
+    expect((await readNav(w.owner)).hospitality).toEqual(['menus', 'qr', 'reservations']);
+    await removeApp(w.owner, { app: 'table_seating' });
+    expect((await readNav(w.owner)).hospitality).toEqual(['menus', 'qr']);
     // A plain member holds neither permission, so sees no section at all.
     expect((await readNav(w.member)).hospitality).toEqual([]);
   });

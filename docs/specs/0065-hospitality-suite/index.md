@@ -12,9 +12,13 @@
 - Analytics is spec 0067 (was 0066 in the text below).
 - Every guest surface is built on `@crm/ui/public-booking` and `@crm/ui/public-form` and the app library: see 0066 "Build on what exists". The guest menu adds MenuList and ItemSheet in a `@crm/ui/public-menu` entry.
 
+**Changed 6 Nov 2026 by the owner**:
+- The business apps are on by default for every workspace, new and existing, with no early access and no install step. Owners and admins can switch an app off in Settings > Apps, and it stays off. This replaces AC-6501's early access rule and all of AC-6502. AC-6503 to AC-6505 still hold, with Install now reading as switching back on. Switching an app on creates no public page, handle or email. Events stays "On its way".
+- A workspace can hold many properties: see [H7](0065-properties.md), which owns AC-6512 to AC-6519 and AC-6590 to AC-6597. It changes the data model below: `business_profiles` becomes `properties`, and "workspace currency" reads "the property's currency" everywhere.
+
 ## Structure
 
-One umbrella, built in six slices. Every slice is a thin thread through every layer (Tracer Bullet), and each lands on its own.
+One umbrella, built in seven slices. Every slice is a thin thread through every layer (Tracer Bullet), and each lands on its own.
 
 | Slice | What | Depends on |
 |---|---|---|
@@ -25,6 +29,7 @@ One umbrella, built in six slices. Every slice is a thin thread through every la
 | H4 | Service screen: today's book, walk ins, seat and finish, live for every device | H3 |
 | H5 | SN look: the Warm preset and the guest theme polish for Somewhere Nowhere | H1 |
 | H6 | Import from checklabs: business, places, hours, menus (with photos), tables and areas | H1 (H2 for QR codes) |
+| [H7](0065-properties.md) | Properties: many brands in one workspace, in four slices of its own | H0 to H5 |
 
 Later, each with its own decision: menu import (paste, CSV, PDF), waitlist, deposits and card holds (after 0062 L5 Stripe), text message reminders (after 0062 L5 Twilio), floor plan canvas, ordering and paying at the table, per app billing (#38 and #42).
 
@@ -199,7 +204,8 @@ Each step is one lane; review (security, design, UX, state) before landing; migr
 ## Consequences
 
 - Timefix gains its first concept of installable apps; billing (#38, #42) plugs into `workspace_apps.plan` and `appInstalled` with no new gate.
-- The operator console gains its first write (early access). It is audited and limited to that one switch.
+- The operator console's early access switch goes away with the gate (6 Nov 2026). The `early_access` column stays until a later clean up.
+- Every workspace sees the Business group in its sidebar, including those that only use the CRM (6 Nov 2026).
 - Reservations sit beside bookings, not inside them: the booking engine's helpers are shared, but reports and the CRM timeline show both kinds through the Person page, not one table.
 - Three new public routes (`/m/`, `/q/`, `/r/`) join `/b/` and `/f/` on timefix.com and later custom domains (0064 slice 1).
 - One new client dependency (a QR drawing library).

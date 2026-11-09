@@ -10,7 +10,6 @@ import { createDatabase, type Database } from '@crm/db';
 import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { installApp, removeApp } from './apps.ts';
 import {
@@ -64,7 +63,6 @@ async function menuWorkspace() {
       sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${memberId}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
     ),
   );
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   const member = testScope({
     db,
@@ -265,7 +263,7 @@ describe('the guest look (AC-6570 as amended)', () => {
       ),
     ).toBe('FORBIDDEN');
     expect((await readMenuDraft(w.owner)).look).toEqual(DEFAULT_MENU_LOOK);
-    await removeApp(w.owner, { app: 'menu' });
+    await removeApp(w.owner, { app: 'menu', withDependents: true });
     expect(await refusalOf(saveMenuLook(w.owner, { look: NOIR }))).toBe('APP_NOT_INSTALLED');
   });
 
@@ -464,7 +462,7 @@ describe('limits and the gate', () => {
     expect(await refusalOf(saveMenu(w.member, { id: newId(), name: 'X', placeIds: [] }))).toBe('FORBIDDEN');
     expect(PERMISSIONS['hospitality.manage'].message).toBeTruthy();
     expect(await guestMenu(w.place.menuKey)).toBeDefined();
-    await removeApp(w.owner, { app: 'menu' });
+    await removeApp(w.owner, { app: 'menu', withDependents: true });
     expect(await refusalOf(readMenuDraft(w.owner))).toBe('APP_NOT_INSTALLED');
     expect(await guestMenu(w.place.menuKey)).toBeUndefined();
   });

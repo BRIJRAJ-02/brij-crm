@@ -10,7 +10,6 @@ import { createDatabase, type Database } from '@crm/db';
 import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { installApp, removeApp } from './apps.ts';
 import { addResources, archiveResource } from './floor.ts';
@@ -51,7 +50,6 @@ async function venue() {
       sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${memberId}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
     ),
   );
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   const member = testScope({
     db,
@@ -95,7 +93,8 @@ describe('table codes (spec 0065, H2)', () => {
     expect(codes.placeName).not.toBe('');
     for (const table of codes.tables) {
       expect(table.code).toMatch(TABLE_CODE_PATTERN);
-      expect(table.code.toLowerCase()).not.toContain(table.label.toLowerCase());
+      // Random, so the label can turn up inside by chance; it just never opens with it.
+      expect(table.code.toLowerCase().startsWith(table.label.toLowerCase())).toBe(false);
       expect(table.scans).toBe(0);
     }
     expect(new Set(codes.tables.map((table) => table.code)).size).toBe(4);

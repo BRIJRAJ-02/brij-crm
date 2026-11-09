@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { removeApp } from '../hospitality/apps.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { listResources } from '../hospitality/floor.ts';
@@ -236,6 +237,7 @@ describe('what the Reservations page reads for those who run the floor', () => {
     expect(await refusal(readServiceFloor(other.w.owner, { placeId: w.placeId }))).toBe('NOT_FOUND');
 
     const salon = await visitWorkspace(db, 'appointments');
+    await removeApp(salon.owner, { app: 'table_seating' });
     expect(await refusal(listServicePlaces(salon.owner))).toBe('APP_NOT_INSTALLED');
     expect(await refusal(readServiceFloor(salon.owner, { placeId: salon.placeId }))).toBe('APP_NOT_INSTALLED');
   });

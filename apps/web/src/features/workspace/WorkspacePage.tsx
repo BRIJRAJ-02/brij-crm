@@ -5,7 +5,7 @@
 // The frame is mounted once, by the /w/$slug layout (WorkspaceLayout), so moving between pages never remounts the
 // sidebar, its menus or a confirm open in it; each page portals its bars into the frame's slots.
 import type { Me, MyAccess, Permission } from '@crm/data';
-import { AppShellSlot } from '@crm/ui';
+import { AppShell, AppShellSlot } from '@crm/ui';
 import { useMatch, useParams, useRouteContext, useRouterState } from '@tanstack/react-router';
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -213,6 +213,32 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
       >
         {children}
       </FrameWithData>
+    </Layout>
+  );
+}
+
+/** An embedded frame names no sidebar entry: there is no sidebar. */
+const NOWHERE = () => undefined;
+
+/**
+ * The frame of a screen embedded in a partner's product (spec 0070, AC-7032): the same shell, bars and view as in
+ * the app, with no sidebar and no workspace menu. Pages fill its bars as they fill the app's (`WorkspacePage`), so a
+ * link page screen draws the same in both.
+ */
+export function EmbeddedLayout({ children }: { readonly children: ReactNode }) {
+  const [topBar, setTopBar] = useState<HTMLElement | null>(null);
+  const [viewBar, setViewBar] = useState<HTMLElement | null>(null);
+  const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
+  const frame = useMemo(() => ({ topBar, viewBar, toolbar, setNav: NOWHERE }), [topBar, viewBar, toolbar]);
+  return (
+    <Layout value={frame}>
+      <AppShell
+        topBar={<AppShellSlot ref={setTopBar} />}
+        viewBar={<AppShellSlot ref={setViewBar} />}
+        toolbar={<AppShellSlot ref={setToolbar} />}
+      >
+        {children}
+      </AppShell>
     </Layout>
   );
 }

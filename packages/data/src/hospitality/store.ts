@@ -358,8 +358,8 @@ export function openHospitality(given: {
   ): Promise<DataError | undefined> => {
     const refused = await appsOf(workspace).change(show, () => call((options) => send(mintId(), options)));
     if (refused === undefined) {
-      // A first install made the business and its first place: Business reads them again when next held.
-      businessHeld.delete(workspace);
+      // The business card made the business and its first place: an open Business reads them again.
+      businessHeld.get(workspace)?.reread();
       given.onAppsChanged?.(workspace);
     }
     return refused;
@@ -379,8 +379,8 @@ export function openHospitality(given: {
     /** Reads the Apps page now (the route's loader); rejects with the refusal. */
     readApps: (workspace: string): Promise<AppsView> => appsOf(workspace).read(),
     /**
-     * Installs an app (AC-6503): shown installed at once. `APP_NEEDED` (Menu QR without Menu) and `BUSINESS_NEEDED`
-     * (the first install without its card) come back as refusals for the screen to ask, and the app shows as before.
+     * Turns an app on (AC-6503), and with `business` sets the business up: shown on at once. `APP_NEEDED` (Menu QR
+     * without Menu) comes back as a refusal for the screen to ask, and the app shows as before.
      */
     install: (
       workspace: string,
@@ -402,7 +402,7 @@ export function openHospitality(given: {
             callOptions,
           ),
       ),
-    /** Removes an app (the screen asks first, AC-6503); `withDependents` removes Menu QR with Menu (AC-6505). */
+    /** Switches an app off (the screen asks first, AC-6503); `withDependents` takes Menu QR with Menu (AC-6505). */
     remove: (workspace: string, app: HospitalityApp, withDependents = false): Promise<DataError | undefined> =>
       onApps(workspace, markInstalled(withDependents ? [app, 'menu_qr'] : [app], false), (mutationId, callOptions) =>
         api.remove({ workspace, app, withDependents, mutationId }, callOptions),

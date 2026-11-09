@@ -4,6 +4,7 @@
 // its row level security, and only from what was published: a draft is never read here. A page that was never
 // published, a deleted workspace, and a business whose apps are all off answer the same NOT_FOUND as no page at all.
 import {
+  APPOINTMENT_KINDS,
   BUSINESS_SECOND_SEGMENTS,
   businessContentOf,
   HANDLE_PATTERN,
@@ -60,8 +61,7 @@ async function workspaceOfHandle(db: Database, handle: string): Promise<string |
 }
 
 /**
- * Whether the business's page may be served at all: its workspace not deleted and some business app installed (its
- * early access open). Every public read asks it first, so a page, its photos, its brand and the lockup that links it
+ * Whether the business's page may be served at all: its workspace not deleted and some business app on. Every public read asks it first, so a page, its photos, its brand and the lockup that links it
  * all go together.
  */
 async function isLive(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
@@ -174,11 +174,13 @@ export async function enterBusinessPage(
       })),
       placeId,
       ...(menu === undefined || menu.sections.length === 0 ? {} : { menu }),
-      ...(apps.has('table_seating')
-        ? reservePath === undefined
+      // Table seating is on by default, so "soon" is only for a business that seats people: a salon's page shows
+      // Reserve only once it really opens reservations.
+      ...(reservePath !== undefined
+        ? { reserve: 'open' as const, reservePath }
+        : apps.has('table_seating') && !APPOINTMENT_KINDS.includes(row.kind as BusinessKind)
           ? { reserve: 'soon' as const }
-          : { reserve: 'open' as const, reservePath }
-        : {}),
+          : {}),
       ...(brand.answer === undefined ? {} : { brand: brand.answer }),
       indexable: !content.hiddenPlaces.includes(placeId),
       publishedAt: new Date(row.publishedAt).toISOString(),

@@ -47,6 +47,10 @@ export function OverviewBody({
               : [
                   plainStat('users', strings.usersTotal, format.count(overview.people.total)),
                   figureStat('new', strings.newUsers, overview.people.new, period, format),
+                  // A partner's managed members (spec 0070), counted apart from people who signed up.
+                  ...(overview.people.managed === undefined
+                    ? []
+                    : [plainStat('managed', strings.managedTotal, format.count(overview.people.managed))]),
                   figureStat('active', strings.activePeriod, overview.active.period, period, format),
                   plainStat('workspaces', strings.workspacesTotal, format.count(overview.workspaces.total)),
                   figureStat('newWorkspaces', strings.newWorkspaces, overview.workspaces.new, period, format),

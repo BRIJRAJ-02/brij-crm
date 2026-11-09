@@ -107,7 +107,8 @@ export function UsersScreen({
       case 'name':
         return user.name === '' ? strings.unnamed : user.name;
       case 'email':
-        return user.email;
+        // A partner's managed member (spec 0070) has no address of their own here: say who manages them instead.
+        return user.managed === true ? strings.managed : user.email;
       case 'signedUp':
         return format.date(user.createdAt);
       case 'lastActive':

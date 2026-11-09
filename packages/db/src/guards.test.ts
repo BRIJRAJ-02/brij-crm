@@ -13,6 +13,12 @@ import * as tenantSchema from './schema/index.ts';
 
 const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 
+/** Whether a door's body still asks the old per workspace flag (spec 0065, migration 0195: it never may again). */
+async function doorMentions(door: string): Promise<boolean> {
+  const { rows } = await owner.query<{ body: string }>(`select pg_get_functiondef($1::regprocedure) as body`, [door]);
+  return /early_access|business_apps/.test(rows[0]?.body ?? '');
+}
+
 /** Tables that are not tenant data: drizzle's own bookkeeping lives in its own schema. */
 const NOT_TENANT = new Set<string>();
 
@@ -222,6 +228,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_members', owner: 'crm_operator' },
       { name: 'crm_operator_page_days', owner: 'crm_operator' },
       { name: 'crm_operator_pages', owner: 'crm_operator' },
+      // A sandbox partner's live test connections, ids only, for the console's wipe (spec 0070, AC-7035, migration 0194).
+      { name: 'crm_operator_partner_connections', owner: 'crm_operator' },
       { name: 'crm_operator_totals', owner: 'crm_operator' },
       { name: 'crm_operator_workspaces', owner: 'crm_operator' },
       { name: 'crm_order_profile_items', owner: 'crm_handle' },
@@ -288,6 +296,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       // The workspace and place a reservation page's key names (spec 0066 B7 lite, migration 0177).
       { name: 'crm_table_place_by_key', owner: 'crm_table_lookup' },
       { name: 'crm_take_guest_handoff', owner: 'crm_guest_handoff' },
+      // Each member's link page views in one workspace, for Team pages (spec 0070, migration 0191).
+      { name: 'crm_team_profile_views', owner: 'crm_handle' },
       // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
       { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -364,6 +374,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_page_days', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_operator_partner_connections', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_totals', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises PROFILE_ORDER_STALE for an order that isn't exactly the live blocks.
@@ -433,6 +444,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_table_place_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_take_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_team_profile_views', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -595,6 +607,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_pages',
         'crm_operator_page_days',
         'crm_set_early_access',
+        'crm_operator_partner_connections',
       ],
       [
         'crm_operator_workspaces(uuid[])',
@@ -604,8 +617,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_operator_pages(date, date, uuid, uuid)',
         'crm_operator_page_days(date, date, uuid, uuid)',
         'crm_set_early_access(uuid, text, boolean)',
+        'crm_operator_partner_connections(uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_handle',
@@ -634,6 +648,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press',
         'crm_profile_counts',
         'crm_sweep_profile_counts',
+        // Each member's views for Team pages (spec 0070, migration 0191).
+        'crm_team_profile_views',
         // The look of the page (spec 0054, migration 0105), and whether search engines may show it
         // (spec 0055, migration 0108).
         'crm_save_profile_theme',
@@ -717,6 +733,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_count_item_press(uuid, uuid, uuid, text)',
         'crm_profile_counts(uuid, uuid, date, date)',
         'crm_sweep_profile_counts(integer)',
+        'crm_team_profile_views(uuid[], uuid, date, date)',
         'crm_save_profile_theme(uuid, uuid, jsonb)',
         'crm_save_profile_indexable(uuid, uuid, boolean)',
         'crm_import_profile_links(uuid, uuid, uuid, text, jsonb, jsonb)',
@@ -763,9 +780,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_text_ok(jsonb, integer, integer)',
         'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: the first 56 crm_app's to call and nobody else's, the last seven crm_handle's alone.
+      // One per signature: the first 57 crm_app's to call and nobody else's, the last seven crm_handle's alone.
       // Counted rather than written out, since a signature added without the count moved read as unreachable.
-      [...Array.from({ length: 56 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
+      [...Array.from({ length: 57 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -879,6 +896,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       form_submissions: ['form_id', 'received_at', 'workspace_id'],
       forms: ['id', 'workspace_id'],
       members: ['id', 'role', 'status', 'user_id', 'workspace_id'],
+      // A sandbox partner's live test connections (spec 0070, AC-7035): ids and the two marks, never a token's hash.
+      partner_connections: ['disconnected_at', 'id', 'is_test', 'partner_id', 'workspace_id'],
       records: ['created_at', 'created_by_member_id', 'deleted_at', 'object_id', 'workspace_id'],
       workspaces: ['created_at', 'deleted_at', 'early_access', 'id', 'name', 'slug'],
     };
@@ -1542,10 +1561,9 @@ describe('isolation', () => {
       db.withWorkspace(randomUUID(), (tx) =>
         tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from crm_menu_by_key(${key})`),
       );
-    // No early access yet: the key names nothing.
-    expect((await lookup(keys[0] ?? '')).rows).toEqual([]);
-    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
+    // On for every workspace, whatever the old early access column says (migration 0195).
     expect((await lookup(keys[0] ?? '')).rows).toEqual([{ workspace_id: a.workspaceId }]);
+    expect(await doorMentions('crm_menu_by_key(text)')).toBe(false);
     // Removing Menu hides its guest page at once (AC-6504).
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(sql`update workspace_apps set removed_at = now() where app = 'menu'`),
@@ -1577,17 +1595,14 @@ describe('isolation', () => {
           sql`select workspace_id::text, place_id::text, installed from crm_table_place_by_key(${each})`,
         ),
       );
-    // No early access yet: the key names nothing.
-    expect((await lookup(key)).rows).toEqual([]);
-    await owner.query(`update workspaces set early_access = '{business_apps}' where id = $1`, [a.workspaceId]);
-    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: false }]);
+    // On for every workspace with no row at all, whatever the old early access column says (migration 0195).
+    expect((await lookup(key)).rows).toEqual([{ workspace_id: a.workspaceId, place_id: place, installed: true }]);
+    expect(await doorMentions('crm_table_place_by_key(text)')).toBe(false);
+    // Switching the app off keeps the place found (a guest's manage link), but not installed.
     await db.withWorkspace(a.workspaceId, (tx) =>
-      tx.execute(sql`insert into workspace_apps (workspace_id, app) values (${a.workspaceId}, 'table_seating')`),
-    );
-    expect((await lookup(key)).rows[0]?.installed).toBe(true);
-    // Removing the app keeps the place found (a guest's manage link), but not installed.
-    await db.withWorkspace(a.workspaceId, (tx) =>
-      tx.execute(sql`update workspace_apps set removed_at = now() where app = 'table_seating'`),
+      tx.execute(
+        sql`insert into workspace_apps (workspace_id, app, removed_at) values (${a.workspaceId}, 'table_seating', now())`,
+      ),
     );
     expect((await lookup(key)).rows[0]?.installed).toBe(false);
     await owner.query(`update workspaces set deleted_at = now() where id = $1`, [a.workspaceId]);
@@ -2613,7 +2628,11 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'guest_connect_handoffs',
     'known_device',
     'link_imports',
+    // The identities partners made for managed members (spec 0070, migration 0193).
+    'managed_users',
     'operator_event',
+    // The partner registry (spec 0070, migration 0192): global, nobody's workspace.
+    'partners',
     'passkey',
     'profile_booking_days',
     'profile_images',
@@ -2657,6 +2676,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
       // A business listed for search engines names its workspace (spec 0066, migration 0179).
       'business_listings',
+      // A managed member's identity names the workspace it was made for (spec 0070, migration 0193): never access.
+      'managed_users',
       // A link page's bookings, pictures and views by fact (spec 0061, migration 0147).
       'profile_booking_days',
       'profile_images',

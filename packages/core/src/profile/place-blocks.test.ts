@@ -19,7 +19,6 @@ import { publishMenus, saveItem, saveMenu, saveSection, setMenuHidden } from '..
 import { enterMenuPage, readPublicMenu } from '../hospitality/public-menu.ts';
 import { getBusiness } from '../hospitality/places.ts';
 import { updateMyMemberProfile } from '../members/profile.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { getTableSetup, saveTableSetup } from '../visits/table-service.ts';
 import { readProfileItems, saveProfileItem } from './items.ts';
@@ -66,7 +65,6 @@ async function somewhere(options: { readonly withMenu?: boolean } = {}) {
   });
   const handle = `somewhere-${randomUUID().slice(0, 8)}`;
   await updateMyMemberProfile(scope, { handle });
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   await installApp(scope, { app: 'menu', business: CARD });
   const placeId = (await getBusiness(scope)).places[0]?.id ?? '';
   if (options.withMenu !== false) {
@@ -208,9 +206,11 @@ describe('the places a block may name', () => {
       {
         placeId: w.placeId,
         menu: { name: expect.any(String) as string, status: 'live', path: expect.stringMatching(/^\/m\//) as string },
+        reserve: { name: expect.any(String) as string, status: 'paused', reason: 'offline' },
       },
     ]);
     await removeApp(w.scope, { app: 'menu', withDependents: true });
+    await removeApp(w.scope, { app: 'table_seating' });
     expect(await listPlaceChoices(w.scope)).toEqual([]);
   });
 

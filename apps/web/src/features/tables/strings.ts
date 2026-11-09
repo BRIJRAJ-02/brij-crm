@@ -5,8 +5,8 @@ import type { VisitStatus } from '@crm/data';
 export const strings = {
   reservations: 'Reservations',
   place: 'Place',
-  noPlace: 'Add your restaurant’s place first',
-  addPlace: 'Open Business',
+  startTitle: 'Take reservations online',
+  startText: 'Add tables and open your booking page when you’re ready. Guests see nothing until you do.',
   copyLink: 'Copy link',
   openPage: 'Open page',
   unpublish: 'Stop taking reservations',

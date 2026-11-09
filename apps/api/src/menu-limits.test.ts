@@ -4,8 +4,7 @@
 // keys never spends a real menu's renders. Real sessions, real Postgres, the real limits (60 a minute per address).
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
-import { testQuery } from '@crm/db/testing';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newIp, signInApp, testConnections } from '../test/sign-in.ts';
 import { memberWithWorkspace } from '../test/workspace.ts';
 import { GUEST_IP_HEADER, RENDER_HEADER } from '@crm/contracts';
@@ -13,7 +12,6 @@ import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { MENU_LIMITS } from './public/limits.ts';
 import { APP_URL, TEST_EDGE_SECRET } from './testing.ts';
 
-const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -52,7 +50,6 @@ const madeUpKey = () =>
 /** A workspace with Menu installed and one dish published; its place's key. */
 async function publishedMenuKey(): Promise<string> {
   const m = await memberWithWorkspace(app);
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'menu',

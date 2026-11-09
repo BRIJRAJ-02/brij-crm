@@ -4,12 +4,10 @@
 // booking page's view is counted in public/booking.test.ts.
 import { randomUUID } from 'node:crypto';
 import { ORPCError } from '@orpc/client';
-import { businessCacheTags, menuWorkspaceCacheTags } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newEmail, rpcClient, signIn, signInApp, testConnections, turnOnTwoFactor } from '../../test/sign-in.ts';
-import { memberWithWorkspace } from '../../test/workspace.ts';
 import { totpCode } from '../auth/two-factor.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
 import { EDGE_HEADER } from '../edge.ts';
@@ -24,26 +22,10 @@ const CHROME =
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
-/** Every tag list the edge cache was asked to forget. */
-const forgotten: string[][] = [];
-/** While set, every purge rejects after it is recorded, as a platform outage would. */
-let purgesFail = false;
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp(
-    { db, identity },
-    { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] },
-    {
-      edgeCache: {
-        tag: () => undefined,
-        forget: (tags) => {
-          forgotten.push([...tags]);
-          return purgesFail ? Promise.reject(new Error('purge failed')) : Promise.resolve();
-        },
-      },
-    },
-  ));
+  ({ app } = signInApp({ db, identity }, { OPERATOR_EMAILS: [OPERATOR, UNVERIFIED], SITE_ORIGINS: [SITE] }));
 });
 afterAll(async () => {
   await identity.close();
@@ -84,7 +66,6 @@ describe('the operator gate (AC-1617 to AC-1620)', () => {
       () => client.operator.pages({ period: '30d' }),
       () => client.operator.page({ workspaceId: id, pageId: id, period: '30d' }),
       () => client.operator.site({ period: '30d' }),
-      () => client.operator.setEarlyAccess({ workspaceId: id, flag: 'business_apps', on: true }),
     ]) {
       expect((await failure(call)).code).toBe('NOT_FOUND');
     }
@@ -183,75 +164,6 @@ describe('the reads (AC-1629 to AC-1632)', () => {
     ).toBe('NOT_FOUND');
     const site = await client.operator.site({ period: '90d' });
     expect(site.days).toHaveLength(90);
-  });
-});
-
-describe('the one write: early access (spec 0065, AC-6502)', () => {
-  it('opens the Hospitality apps for a workspace, logs the before and after, and its members then see them', async () => {
-    const m = await memberWithWorkspace(app);
-    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(false);
-    const client = rpcClient(app, await asOperator());
-    expect(
-      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true }),
-    ).toEqual({ workspaceId: m.workspace.id, before: [], after: ['business_apps'] });
-    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(true);
-    const logged = await testQuery<{ action: string; target: string; before: unknown; after: unknown }>(
-      identityUrl,
-      `select action, target, before, after from auth.operator_event where target = $1 order by at, id`,
-      [m.workspace.id],
-    );
-    expect(logged).toEqual([
-      { action: 'operator.setEarlyAccess', target: m.workspace.id, before: null, after: null },
-      {
-        action: 'operator.earlyAccessChanged',
-        target: m.workspace.id,
-        before: { earlyAccess: [] },
-        after: { earlyAccess: ['business_apps'] },
-      },
-    ]);
-    expect(
-      (
-        await failure(() =>
-          client.operator.setEarlyAccess({ workspaceId: randomUUID(), flag: 'business_apps', on: true }),
-        )
-      ).code,
-    ).toBe('NOT_FOUND');
-  });
-
-  it('forgets the workspace’s guest menus and business page at the edge when its business apps close, and only then', async () => {
-    const m = await memberWithWorkspace(app);
-    const client = rpcClient(app, await asOperator());
-    const menuTags = [...menuWorkspaceCacheTags(m.workspace.id)];
-    const businessTags = [...businessCacheTags(m.workspace.id)];
-    // Neither tag ever carries the workspace's own id.
-    expect([...menuTags, ...businessTags].join(' ')).not.toContain(m.workspace.id);
-    forgotten.length = 0;
-    await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true });
-    expect(forgotten.flat()).not.toContain(menuTags[0]);
-    expect(forgotten.flat()).not.toContain(businessTags[0]);
-    expect(
-      await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: false }),
-    ).toEqual({ workspaceId: m.workspace.id, before: ['business_apps'], after: [] });
-    expect(forgotten).toContainEqual(menuTags);
-    expect(forgotten).toContainEqual(businessTags);
-    expect((await m.client.hospitality.apps({ workspace: m.slug })).available).toBe(false);
-  });
-
-  it('keeps a committed close when the edge purge fails, and still tries every purge', async () => {
-    const m = await memberWithWorkspace(app);
-    const client = rpcClient(app, await asOperator());
-    await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: true });
-    forgotten.length = 0;
-    purgesFail = true;
-    try {
-      expect(
-        await client.operator.setEarlyAccess({ workspaceId: m.workspace.id, flag: 'business_apps', on: false }),
-      ).toEqual({ workspaceId: m.workspace.id, before: ['business_apps'], after: [] });
-    } finally {
-      purgesFail = false;
-    }
-    expect(forgotten).toContainEqual([...menuWorkspaceCacheTags(m.workspace.id)]);
-    expect(forgotten).toContainEqual([...businessCacheTags(m.workspace.id)]);
   });
 });
 

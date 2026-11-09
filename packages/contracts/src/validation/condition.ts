@@ -18,7 +18,7 @@ export interface ConditionAttributeShape {
 
 /** Who is writing, for "is me": a member's id. */
 export interface ConditionActor {
-  readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+  readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
   readonly id: string | null;
 }
 
