@@ -57,7 +57,7 @@ function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) 
       <TopBar
         title="Companies"
         icon="building"
-        hue="orange"
+        hue="blue"
         meta={<Button variant="ghost" icon="info" label="About Companies" />}
       >
         <AvatarStack
@@ -101,7 +101,7 @@ function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) 
           : {})}
       >
         <SortChip attribute="Funding raised" direction="descending" more={1} />
-        <FilterChip attribute={['Segment']} icon="tag" operator="is" value={<Tag hue="orange">SaaS</Tag>} />
+        <FilterChip attribute={['Segment']} icon="tag" operator="is" value={<Tag hue="blue">SaaS</Tag>} />
         <Button variant="dashed" icon="list-filter">
           Filter
         </Button>
@@ -221,9 +221,14 @@ export const TopBarModuleTabs: Story = {
     await expect(Math.round(meetings.getBoundingClientRect().bottom)).toBe(
       Math.round(banner.getBoundingClientRect().bottom - hairline),
     );
+    // Each tab is a page: the arrows move focus without opening the next one, Enter opens it.
     await userEvent.click(meetings);
     await userEvent.keyboard('{ArrowRight}');
-    await expect(canvas.getByRole('tab', { name: 'Pages' })).toHaveAttribute('aria-selected', 'true');
+    const pages = canvas.getByRole('tab', { name: 'Pages' });
+    await expect(pages).toHaveFocus();
+    await expect(pages).toHaveAttribute('aria-selected', 'false');
+    await userEvent.keyboard('{Enter}');
+    await expect(pages).toHaveAttribute('aria-selected', 'true');
   },
 };
 

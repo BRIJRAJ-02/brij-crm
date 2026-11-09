@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Children, useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import {
   SelectionIndicator,
@@ -145,7 +145,7 @@ export function Tabs({
   // With no panels (each tab its own address, the page under it the chosen one's), the chosen tab's aria-controls
   // would name a panel that isn't there (axe), so the tabs drop it.
   const barRef = useRef<HTMLDivElement>(null);
-  const hasPanels = children !== undefined && children !== null;
+  const hasPanels = Children.toArray(children).length > 0;
   useLayoutEffect(() => {
     const bar = barRef.current;
     if (hasPanels || bar === null) return undefined;
@@ -163,6 +163,9 @@ export function Tabs({
     <AriaTabs
       className={styles.root}
       data-placement={placement === 'bottom' ? 'bottom' : undefined}
+      // A module's tabs are pages: arrowing across them moves focus, and Enter or Space opens one, so passing over a
+      // tab never loads its page on the way.
+      {...(variant === 'topbar' ? { keyboardActivation: 'manual' as const } : {})}
       {...(selectedKey === undefined ? {} : { selectedKey })}
       {...(defaultSelectedKey === undefined ? {} : { defaultSelectedKey })}
       {...(onSelectionChange === undefined

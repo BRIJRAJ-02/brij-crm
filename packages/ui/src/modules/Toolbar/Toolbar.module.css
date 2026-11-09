@@ -105,7 +105,12 @@
     flex: 0 1 auto;
     align-self: stretch;
     min-inline-size: 0;
-    margin-inline-start: var(--space-8);
+    margin-inline-start: var(--space-16);
+  }
+
+  /* Beside tabs, the title keeps its whole name: the tabs scroll inside themselves before it is cut. */
+  .top[data-has-tabs] .title {
+    flex: none;
   }
 
   .end {
