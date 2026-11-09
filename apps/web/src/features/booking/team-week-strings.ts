@@ -113,6 +113,8 @@ export const teamWeekStrings = {
   legendChanged: 'This date only',
   seesOnlyYou: 'Teammates show here once they share their hours with you.',
   failed: 'Couldn’t load the roster.',
+  /** Said when a roster link opens someone's own hours instead: they see no colleague's scheduling. */
+  ownHoursOnly: 'The roster shows teammates’ hours. You can see only your own, so here they are.',
   noMatch: 'No one matches',
   noMatchBody: 'Try another name.',
   clearSearch: 'Clear search',

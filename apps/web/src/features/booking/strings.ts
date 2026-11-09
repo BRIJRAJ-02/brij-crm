@@ -306,6 +306,8 @@ export const strings = {
   calendarSyncOff: 'Calendar sync isn’t available here',
   noneChecked: 'None, so this page can double book.',
   reservedTime: 'Reserved time',
+  /** Reserved time's Manage link, named in full: "Manage" alone says nothing out of its card. */
+  manageReservedTime: 'Manage reserved time',
   /** The Hours and Meeting tabs' sections (22 Oct 2026). */
   calendarSection: 'Calendar',
   reservedTimeLine: 'This page can also book your reserved time: time only your link only pages can book.',

@@ -1807,7 +1807,13 @@ export function PageEditor({
                           calendars={data.calendar.calendars(slug)}
                           isReadOnly={isLocked}
                           {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
-                          onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
+                          onChange={(calendarId) => {
+                            // Saves at once: a refusal is put back and said by the store's own toast, as the other
+                            // calendar switches are; anything else that fails says so here rather than vanishing.
+                            data.calendar
+                              .setPageDestination(slug, page.id, calendarId)
+                              .catch(() => toasts.toast({ tone: 'danger', message: strings.somethingWrong }));
+                          }}
                           settingsHref={calendarsHref(slug)}
                           canConnect={calendar.status === 'ready' && calendar.enabled}
                         />
@@ -2152,6 +2158,7 @@ export function PageEditor({
                               variant="ghost"
                               size="sm"
                               icon="settings"
+                              label={strings.manageReservedTime}
                             >
                               {strings.manage}
                             </ButtonLink>
