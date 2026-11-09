@@ -112,6 +112,8 @@ import {
   type PersonPicture,
   type AccountPictureReader,
   type BookingEntry,
+  icsFilename,
+  icsMethodOf,
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,
@@ -896,7 +898,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return new Response(body, {
         headers: {
           'content-type': 'text/calendar; charset=utf-8',
-          'content-disposition': 'attachment; filename="booking.ics"',
+          'content-disposition': `attachment; filename="${icsFilename(icsMethodOf(body))}"`,
           'cache-control': 'no-store',
         },
       });

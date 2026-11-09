@@ -54,6 +54,8 @@ export {
   type PublicBookingDeps,
   type PublicPictureDeps,
 } from './booking/public.ts';
+// The booking file's one name, on the guest page and in email (bookings redesign step 1).
+export { icsFilename, icsMethodOf } from './booking/ics.ts';
 // The link page's contact card as a vCard (spec 0051, AC-5114).
 export { writeVcard, type VcardPhoto } from './profile/vcard.ts';
 // A host's account picture (23 Oct 2026): only Google's picture hosts, so the api's fetch goes nowhere else.

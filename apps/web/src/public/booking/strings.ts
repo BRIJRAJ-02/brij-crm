@@ -1,11 +1,9 @@
 // The public booking pages' copy (spec 0025, 0025-experience.md).
 export const strings = {
   // The visitor page.
-  what: 'What',
-  timeZone: 'Time zone',
-  poweredBy: 'Powered by',
-  madeWith: 'Made with Timefix',
+  /** The product, after a page's heading in its tab's title (`tabTitle`). */
   product: 'Timefix',
+  timeZone: 'Time zone',
   /** A team page's avatar stack, as screen readers name it (spec 0029, AC-759). */
   teamOf: (count: number) => `Team of ${String(count)}`,
   /** A team page's host, in a sentence. */
@@ -13,21 +11,15 @@ export const strings = {
   minutesShort: (count: number) => `${String(count)} min`,
   meeting: (minutes: number, where: string) => `${String(minutes)} min · ${where}`,
   locations: { video: 'Video call', phone: 'Phone call' },
-  minutes: (count: number) => `${String(count)} minutes`,
   length: 'Meeting length',
   chooseTime: 'Choose a time',
   view: 'Choose how to view times',
   month: 'Month',
   chat: 'Book by chat',
   list: 'List',
-  previousMonth: 'Previous month',
-  nextMonth: 'Next month',
-  today: 'today',
-  noTimes: 'no times',
   clock: 'Clock',
   hours12: '12h',
   hours24: '24h',
-  timesOn: (count: number, day: string) => (count === 1 ? `1 time on ${day}` : `${String(count)} times on ${day}`),
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   book: 'Book',
   bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
@@ -60,30 +52,6 @@ export const strings = {
   zoneSearch: 'Search city or GMT offset',
   /** The time zone picker with no zone chosen, which a page always has: only a stand in's empty state. */
   zoneChoose: 'Choose a time zone',
-  zoneNone: (query: string) => `No time zone matches "${query}".`,
-  changeZone: (zone: string) => `Show times in another time zone. Now ${zone}`,
-  // Details.
-  changeTime: 'Change time',
-  yourName: 'Your name',
-  email: 'Email',
-  emailPlaceholder: 'you@example.com',
-  addGuest: '+ Add guest',
-  guest: (index: number) => `Guest ${String(index)} email`,
-  guestPlaceholder: 'Guest email',
-  removeGuest: (index: number) => `Remove guest ${String(index)}`,
-  addAnotherGuest: 'Add another guest',
-  phone: 'Number to call',
-  note: 'Anything else the host should know?',
-  optional: 'optional',
-  bookingAs: (name: string) => `Booking as ${name}.`,
-  notYou: 'Not you?',
-  confirm: 'Confirm booking',
-  booking: 'Booking',
-  nameRequired: 'Give your name.',
-  emailRequired: 'Give an email address such as name@example.com.',
-  guestInvalid: 'Give each guest’s email address.',
-  phoneRequired: 'Give a number to call you on.',
-  trap: 'Leave this empty',
   // Book by chat (spec 0042).
   /** The chat's confirm card names the meeting as the confirmation does. */
   chatCardTitle: (title: string, host: string) => `${title} with ${host}`,
@@ -204,7 +172,7 @@ export const strings = {
   failedText: 'Check your connection, then try again.',
   /** Refused 429 (B-18): too many reads from this address for a moment, not a broken page. */
   busyTitle: 'Busy, try again in a moment',
-  busyText: 'Lots of people are opening this page right now.',
+  busyText: 'Too many tries. Wait a moment, then try again.',
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',
@@ -252,25 +220,14 @@ export const strings = {
     /** A long ended booking's link (B-13): its details are no longer kept. */
     ended: 'This booking ended',
   },
-  marks: { confirmed: 'Confirmed', cancelled: 'Cancelled', past: 'Finished' },
   who: 'Who',
   /** The guest page's summary, after the meeting's name: "Intro call  with Ada Lovelace" (spec 0058, AC-19). */
   withHost: (host: string) => `with ${host}`,
   where: 'Where',
   yourNote: 'Your note',
-  alsoInvited: (names: string) => `Also invited: ${names}`,
-  joinCall: 'Join the call',
-  addToCalendar: 'Add to calendar',
-  addTo: (calendar: string) => `Add to ${calendar}`,
-  google: 'Google',
-  outlook: 'Outlook',
-  apple: 'Apple / .ics',
-  icsFile: 'Apple or any calendar, as an .ics file',
   /** A video call with no link made (no calendar that makes one): its host sends it, never a promise (QA Q77). */
   video: (host: string) => `Video call. ${host} will send you the link.`,
   phoneCall: 'Phone call to the number you gave.',
-  cancelledNext: 'Nothing more to do here.',
-  pastNext: 'This one has already happened.',
   bookAnother: (host: string) => `Book another time with ${host}`,
   bookAgain: 'Book again',
   // A title, so no full stop, and a way on (QA Q80).

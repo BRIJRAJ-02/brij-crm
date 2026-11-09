@@ -3,7 +3,7 @@
 // what needs a host and what clashes, for everyone the reader may see.
 // Main task: spot what needs doing (Needs a host, a clash, a meeting outside someone's hours) and act on a teammate's
 // column (book someone in, block time, time off, reassign) where the reader Manages them.
-// Leaves out: changing working hours (Availability › Team), dragging a booking to another column (Reassign from its
+// Leaves out: changing working hours (Availability › Roster), dragging a booking to another column (Reassign from its
 // card instead, AC-777), and colleagues' calendar details (Busy only, AC-770).
 import type {
   BookingAssignment,
@@ -53,10 +53,8 @@ import {
   useSchedulingStore,
 } from '../booking/CalendarHealth.tsx';
 import { newLinkOnlyPageHref } from '../booking/links.ts';
-import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
-import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import {
   BlockCard,
@@ -69,8 +67,8 @@ import {
   type BlockPreview,
 } from './BookingsScreen.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
-import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
-import { ReassignDialog } from './ReassignDialog.tsx';
+import type { NewMeeting, NewMeetingDialogProps } from './NewMeetingDialog.tsx';
+import { AwayReassignDialog, NewMeetingDialog, ReassignDialog, TimeOffDialog } from './lazy-parts.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 import { openingMinute, type MinuteSpan } from './team-grid.ts';

@@ -178,4 +178,17 @@ describe('calendars store', () => {
     await store.setPageDestination(WS, PAGE, null);
     expect(held.getSnapshot()).toEqual({ status: 'ready', destination: { status: 'default', isOwner: true } });
   });
+
+  it("puts a refused page destination back, says why, and answers false for the editor's toast", async () => {
+    const { store, notices, gate } = setup();
+    const held = store.pageDestination(WS, PAGE);
+    held.retain();
+    await flush();
+    gate.refuse = true;
+    const landing = store.setPageDestination(WS, PAGE, TEAM);
+    expect(held.getSnapshot()).toMatchObject({ status: 'ready', destination: { status: 'page', calendarId: TEAM } });
+    await expect(landing).resolves.toBe(false);
+    expect(held.getSnapshot()).toEqual({ status: 'ready', destination: { status: 'default', isOwner: true } });
+    expect(notices.map((notice) => notice.tone)).toEqual(['danger']);
+  });
 });

@@ -2,7 +2,7 @@
 export const strings = {
   previousMonth: 'Previous month',
   nextMonth: 'Next month',
-  today: 'today',
+  today: 'Today',
   noTimes: 'no times',
   best: 'a best time for you both',
 } as const;

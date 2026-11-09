@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Cancelled) with sort and pages.
 // Main task: see the week (or one day) at a glance, open a booking or an event for its details, or page through the list.
-// Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views beyond an admin's Mine · Everyone (spec 0037), filing, and live arrival (it reads again when the page is shown again).
+// Leaves out: the changes themselves (BookingActions and the dialogs, which this screen only opens), the team's hours (Availability › Roster), and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
   type BookingAssignment,
@@ -13,6 +13,7 @@ import {
   type MeetingSource,
   type MeetingsHeld,
   type MeetingsQuery,
+  type CalendarAccountView,
   type CalendarConnectionView,
   type CalendarListState,
   type CalendarsHeld,
@@ -41,7 +42,6 @@ import {
   MenuSection,
   MenuTrigger,
   Modal,
-  MonthCalendar,
   Popover,
   PageColumn,
   RecordChip,
@@ -64,12 +64,11 @@ import {
   type WeekCalendarBlock,
   type MeetingCardRow,
 } from '@crm/ui';
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { offsetLabel, zoneDisplay, zoneName } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
-import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
 import {
@@ -82,13 +81,12 @@ import {
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
 import { TeamDayView, type TeamDayViewProps } from './TeamDayView.tsx';
-import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
+import type { NewMeeting, NewMeetingDialogProps } from './NewMeetingDialog.tsx';
+import { AwayReassignDialog, MonthCalendar, NewMeetingDialog, ReassignDialog, TimeOffDialog } from './lazy-parts.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
-import { AwayReassignDialog } from './AwayReassignDialog.tsx';
-import { ReassignDialog } from './ReassignDialog.tsx';
 import {
   BookingDialog,
   MeetingLinkDialog,
@@ -1306,6 +1304,8 @@ export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
 /** Nobody to act for: one empty list, so the cards' props stay the same between draws. */
 const NO_PEOPLE: readonly ForPerson[] = [];
+/** No calendar accounts yet, one list for every draw, so what is built from them keeps its identity. */
+const NO_ACCOUNTS: readonly CalendarAccountView[] = [];
 /** The bookings of a week that has not arrived: nothing to move yet. */
 const NO_BOOKINGS: readonly BookingListItem[] = [];
 
@@ -1482,7 +1482,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
   const me = useMyAccess()?.memberId;
   const calendarList = useCalendarList(props.calendars);
-  const accounts = calendarList.status === 'ready' ? calendarList.accounts : [];
+  const accounts = calendarList.status === 'ready' ? calendarList.accounts : NO_ACCOUNTS;
   // Book someone in: the span the New meeting dialog books.
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
   const bookable = pages.filter((page) => page.status === 'live');
@@ -1551,6 +1551,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const bounds = useMemo(() => weekBounds(weekDays(search.week), timeZone), [search.week, timeZone]);
   const today = dayKeyOf(now, timeZone);
   const nowMinute = minuteOfDay(now, timeZone);
+  // The grid's day heads, once per week, day and locale: a fresh list each draw made WeekCalendar lay out again.
+  const dayItems = useMemo(() => weekDayItems(weekDays(search.week), today, locale), [search.week, today, locale]);
   // The zone the hours are in, over the hour axis: the member's may not be the device's clock. Its offset as it is in
   // the week on screen (the picked day's noon), so a week past a daylight saving change names the offset it is in.
   const shownAt = instantOf(days.includes(search.day) ? search.day : search.week, 12 * 60, timeZone).getTime();
@@ -1638,19 +1640,28 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return () => document.removeEventListener('keydown', listener);
   }, []);
   // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
-  const connectionHue = new Map(
-    connections.map((connection, index) => [connection.id, CALENDAR_HUES[index % CALENDAR_HUES.length] ?? 'blue']),
+  // Each built once per change of what it reads, so the week's blocks below keep their identity (load time).
+  const connectionHue = useMemo(
+    () =>
+      new Map(
+        connections.map((connection, index) => [connection.id, CALENDAR_HUES[index % CALENDAR_HUES.length] ?? 'blue']),
+      ),
+    [connections],
   );
-  const calendarById = new Map(
-    accounts.flatMap((account) => account.calendars.map((calendar) => [calendar.id, calendar] as const)),
+  const calendarById = useMemo(
+    () => new Map(accounts.flatMap((account) => account.calendars.map((calendar) => [calendar.id, calendar] as const))),
+    [accounts],
   );
   // The week shows one calendar at a time, or all (the switch in its bar, kept per workspace in this browser), of
   // those on the member's week; the List tab's panel picks several.
   const switchable = calendarList.status === 'ready' ? switchCalendars(accountsOnWeek(calendarList)) : undefined;
   const { choice, choose } = useCalendarChoice(slug, switchable);
-  const shows = showsOf(choice);
-  const isShownEvent = (item: { readonly calendarId: string }) =>
-    calendarById.get(item.calendarId)?.showInWeek !== false && shows.calendar(item.calendarId);
+  const shows = useMemo(() => showsOf(choice), [choice]);
+  const isShownEvent = useCallback(
+    (item: { readonly calendarId: string }) =>
+      calendarById.get(item.calendarId)?.showInWeek !== false && shows.calendar(item.calendarId),
+    [calendarById, shows],
+  );
   const panel = useCalendarsPanel(calendarList.status === 'ready' ? accounts.length > 0 : undefined);
   const hasNoCalendar = calendarList.status === 'ready' && accounts.length === 0;
   // The week's own bar sits over its days, under the Bookings tabs, and the calendars panel stays folded: the
@@ -1671,11 +1682,157 @@ function WeekView(props: BookingsCalendarScreenProps) {
       {content}
     </CalendarsFrame>
   );
-  const providerOf = new Map(
-    connections.map(
-      (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
-    ),
+  const providerOf = useMemo(
+    () =>
+      new Map(
+        connections.map(
+          (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
+        ),
+      ),
+    [connections],
   );
+  // The host away bookings already over: the one thing on a block that the clock changes, so the minute's tick
+  // rebuilds the week's blocks only when one of them ends, not every minute.
+  const awayOver =
+    state.status === 'ready'
+      ? state.bookings
+          .filter((booking) => booking.hostAway === true && Date.parse(booking.endsAt) <= now.getTime())
+          .map((booking) => booking.id)
+          .join(',')
+      : '';
+  // The week's blocks, and what each one stands for, built once per change of what they show: a fresh list on every
+  // draw (a popover opening, the minute's tick) made WeekCalendar lay all seven days out again each time.
+  const drawn = useMemo(() => {
+    if (state.status !== 'ready') return undefined;
+    const over = new Set(awayOver === '' ? [] : awayOver.split(','));
+    const bookings = state.bookings.filter(
+      (booking) => shows.bookings && (search.link === undefined || booking.pageId === search.link),
+    );
+    const events = state.events.filter(isShownEvent);
+    const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
+    const byEvent = new Map(events.map((event) => [event.id, event]));
+    const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
+    // Busy time (spec 0024): the member's own calendar time with nobody else invited, by its time alone.
+    const busyTimes = state.busy.filter(isShownEvent);
+    const byBusy = new Map(
+      busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]),
+    );
+    const pieces = [
+      ...bookingPieces(bookings, bounds).map((piece) => ({ piece, kind: 'booking' as const })),
+      ...eventPieces(events, bounds).map((piece) => ({ piece, kind: 'event' as const })),
+      ...state.blocks
+        .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, bounds))
+        .map((piece) => ({ piece, kind: 'closed' as const })),
+      ...[...byBusy]
+        .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, bounds))
+        .map((piece) => ({ piece, kind: 'busy' as const })),
+    ];
+    const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
+      if (kind === 'booking') {
+        const booking = byBooking.get(piece.sourceId);
+        if (booking === undefined) return [];
+        return [
+          {
+            id: piece.id,
+            dayKey: piece.dayKey,
+            startMinute: piece.startMinute,
+            endMinute: piece.endMinute,
+            title: booking.pageTitle,
+            time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
+            // A colleague's booking (an admin's Everyone) names its host, so it is never taken for the reader's own.
+            detail:
+              me !== undefined && booking.hostMemberId !== me && booking.hostName !== ''
+                ? strings.withHost(booking.visitorName, booking.hostName)
+                : booking.visitorName,
+            kind: 'booking',
+            // Its booking link's colour, as on Links, and Timefix's mark (the owner, 31 October 2026: what came through
+            // Timefix shows at a glance beside synced events); no status while confirmed, so a block says only what is
+            // news: a no show, a booking with no host, or struck through when cancelled.
+            hue: linkHue(booking.pageId),
+            provider: 'timefix',
+            isCancelled: booking.status === 'cancelled',
+            ...(booking.status !== 'confirmed'
+              ? {}
+              : booking.noShow === true
+                ? { status: strings.noShow }
+                : booking.needsHost
+                  ? { status: strings.needsHost }
+                  : booking.hostAway === true && !over.has(booking.id)
+                    ? { status: strings.hostAway }
+                    : {}),
+          },
+        ];
+      }
+      if (kind === 'busy') {
+        const busy = byBusy.get(piece.sourceId);
+        if (busy === undefined) return [];
+        const provider = providerOf.get(busy.connectionId);
+        return [
+          {
+            id: piece.id,
+            dayKey: piece.dayKey,
+            startMinute: piece.startMinute,
+            endMinute: piece.endMinute,
+            title: strings.busy,
+            time: timeRange(busy.startsAt, busy.endsAt, locale, timeZone),
+            kind: 'busy',
+            ...(provider === undefined ? {} : { provider }),
+          },
+        ];
+      }
+      if (kind === 'closed') {
+        const turn = byTurn.get(piece.sourceId);
+        if (turn === undefined) return [];
+        return [
+          {
+            id: piece.id,
+            dayKey: piece.dayKey,
+            startMinute: piece.startMinute,
+            endMinute: piece.endMinute,
+            title: turn.kind === 'hold' ? strings.held : turn.kind === 'away' ? strings.away : strings.blocked,
+            // Time off is whole days: a day it covers reads All day (spec 0037, AC-1287).
+            time:
+              turn.kind === 'away' && piece.startMinute === 0 && piece.endMinute === 1440
+                ? strings.allDay
+                : timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
+            ...(turn.label === undefined ? {} : { detail: turn.label }),
+            kind: turn.kind === 'hold' ? 'held' : 'blocked',
+          },
+        ];
+      }
+      const event = byEvent.get(piece.sourceId);
+      if (event === undefined) return [];
+      const hue = calendarById.get(event.calendarId)?.hue ?? connectionHue.get(event.connectionId);
+      const provider = providerOf.get(event.connectionId);
+      return [
+        {
+          id: piece.id,
+          dayKey: piece.dayKey,
+          startMinute: piece.startMinute,
+          endMinute: piece.endMinute,
+          title: event.title,
+          time: timeRange(event.startsAt, event.endsAt, locale, timeZone),
+          kind: 'event',
+          ...(hue === undefined ? {} : { hue }),
+          ...(provider === undefined ? {} : { provider }),
+        },
+      ];
+    });
+    return { bookings, byBooking, byEvent, byTurn, byBusy, pieces, blocks };
+  }, [
+    state,
+    shows,
+    isShownEvent,
+    search.link,
+    bounds,
+    locale,
+    timeZone,
+    me,
+    awayOver,
+    providerOf,
+    calendarById,
+    connectionHue,
+  ]);
   // Today and the arrows lead, then the week's dates (or the day's) as the bar's title, then the calendar switch;
   // Day and Week, then Filter, at the end. Each button's tooltip teaches its key (T, K, J; D and W on the switch).
   const toolbar = (
@@ -1823,7 +1980,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         {framed(
           <WeekCalendar
             label={strings.weekLabel(range)}
-            days={weekDayItems(days, today, locale)}
+            days={dayItems}
             blocks={[]}
             isLoading
             isFill
@@ -1858,117 +2015,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
       </>
     );
   }
-  const bookings = state.bookings.filter(
-    (booking) => shows.bookings && (search.link === undefined || booking.pageId === search.link),
-  );
-  const events = state.events.filter(isShownEvent);
-  const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
-  const byEvent = new Map(events.map((event) => [event.id, event]));
-  const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
-  // Busy time (spec 0024): the member's own calendar time with nobody else invited, by its time alone.
-  const busyTimes = state.busy.filter(isShownEvent);
-  const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
-  const pieces = [
-    ...bookingPieces(bookings, bounds).map((piece) => ({ piece, kind: 'booking' as const })),
-    ...eventPieces(events, bounds).map((piece) => ({ piece, kind: 'event' as const })),
-    ...state.blocks
-      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, bounds))
-      .map((piece) => ({ piece, kind: 'closed' as const })),
-    ...[...byBusy]
-      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, bounds))
-      .map((piece) => ({ piece, kind: 'busy' as const })),
-  ];
-  const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
-    if (kind === 'booking') {
-      const booking = byBooking.get(piece.sourceId);
-      if (booking === undefined) return [];
-      return [
-        {
-          id: piece.id,
-          dayKey: piece.dayKey,
-          startMinute: piece.startMinute,
-          endMinute: piece.endMinute,
-          title: booking.pageTitle,
-          time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
-          // A colleague's booking (an admin's Everyone) names its host, so it is never taken for the reader's own.
-          detail:
-            me !== undefined && booking.hostMemberId !== me && booking.hostName !== ''
-              ? strings.withHost(booking.visitorName, booking.hostName)
-              : booking.visitorName,
-          kind: 'booking',
-          // Its booking link's colour, as on Links, and Timefix's mark (the owner, 31 October 2026: what came through
-          // Timefix shows at a glance beside synced events); no status while confirmed, so a block says only what is
-          // news: a no show, a booking with no host, or struck through when cancelled.
-          hue: linkHue(booking.pageId),
-          provider: 'timefix',
-          isCancelled: booking.status === 'cancelled',
-          ...(booking.status !== 'confirmed'
-            ? {}
-            : booking.noShow === true
-              ? { status: strings.noShow }
-              : booking.needsHost
-                ? { status: strings.needsHost }
-                : booking.hostAway === true && Date.parse(booking.endsAt) > now.getTime()
-                  ? { status: strings.hostAway }
-                  : {}),
-        },
-      ];
-    }
-    if (kind === 'busy') {
-      const busy = byBusy.get(piece.sourceId);
-      if (busy === undefined) return [];
-      const provider = providerOf.get(busy.connectionId);
-      return [
-        {
-          id: piece.id,
-          dayKey: piece.dayKey,
-          startMinute: piece.startMinute,
-          endMinute: piece.endMinute,
-          title: strings.busy,
-          time: timeRange(busy.startsAt, busy.endsAt, locale, timeZone),
-          kind: 'busy',
-          ...(provider === undefined ? {} : { provider }),
-        },
-      ];
-    }
-    if (kind === 'closed') {
-      const turn = byTurn.get(piece.sourceId);
-      if (turn === undefined) return [];
-      return [
-        {
-          id: piece.id,
-          dayKey: piece.dayKey,
-          startMinute: piece.startMinute,
-          endMinute: piece.endMinute,
-          title: turn.kind === 'hold' ? strings.held : turn.kind === 'away' ? strings.away : strings.blocked,
-          // Time off is whole days: a day it covers reads All day (spec 0037, AC-1287).
-          time:
-            turn.kind === 'away' && piece.startMinute === 0 && piece.endMinute === 1440
-              ? strings.allDay
-              : timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
-          ...(turn.label === undefined ? {} : { detail: turn.label }),
-          kind: turn.kind === 'hold' ? 'held' : 'blocked',
-        },
-      ];
-    }
-    const event = byEvent.get(piece.sourceId);
-    if (event === undefined) return [];
-    const hue = calendarById.get(event.calendarId)?.hue ?? connectionHue.get(event.connectionId);
-    const provider = providerOf.get(event.connectionId);
-    return [
-      {
-        id: piece.id,
-        dayKey: piece.dayKey,
-        startMinute: piece.startMinute,
-        endMinute: piece.endMinute,
-        title: event.title,
-        time: timeRange(event.startsAt, event.endsAt, locale, timeZone),
-        kind: 'event',
-        ...(hue === undefined ? {} : { hue }),
-        ...(provider === undefined ? {} : { provider }),
-      },
-    ];
-  });
+  // Ready by now (the loading and failed weeks returned above), so the week's blocks are built.
+  if (drawn === undefined) return null;
+  const { bookings, byBooking, byEvent, byTurn, byBusy, pieces, blocks } = drawn;
   const open = pieces.find(({ piece }) => piece.id === openId);
   /** A card's question: the card closes and its dialog opens here. */
   const ask = (question: CardQuestion) => {
@@ -2050,7 +2099,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         <>
           <WeekCalendar
             label={strings.weekLabel(range)}
-            days={weekDayItems(days, today, locale)}
+            days={dayItems}
             blocks={blocks}
             view={view}
             move={move}

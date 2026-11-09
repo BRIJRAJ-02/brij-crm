@@ -58,7 +58,7 @@ See `src/public/booking/README.md`: its own small bundle with plain inputs and t
 
 ## Round robin (`/w/$slug/settings/scheduling/round-robin`, RotationsScreen; `/settings/scheduling/rotations` and `/bookings/round-robin` redirect here)
 
-One screen in two places (5 November 2026): Settings › Scheduling › Round robin, a settings page with New group in its TopBar, and Bookings' Round robin tab (`inFrame`), which stays as a shortcut.
+Settings › Scheduling › Round robin: a settings page with New group in its TopBar (Bookings' old Round robin address redirects here).
 
 - Purpose: the groups of teammates round robin pages share meetings across (spec 0029; rotations in code), and each one's fair share.
 - Main task: an admin (`booking.admin`) makes a group and changes or deletes one; anyone who makes booking pages (`booking.manage`) sees the groups they are in and their own share. Without `booking.manage` the page isn't there: the route reads the reader's access first (cached) and shows Page not found, reading nothing else (SS-R10).

@@ -203,7 +203,7 @@ export function BookingReceipt({
                       {strings.outlook}
                     </ButtonLink>
                     {typeof calendars.ics === 'string' ? (
-                      <ButtonLink provider="apple-calendar" href={calendars.ics} download="booking.ics">
+                      <ButtonLink provider="apple-calendar" href={calendars.ics} download="invite.ics">
                         {strings.apple}
                       </ButtonLink>
                     ) : (

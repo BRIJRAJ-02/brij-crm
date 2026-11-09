@@ -113,3 +113,13 @@ export function buildBookingIcs(input: IcsInput): string {
   ];
   return `${lines.map(fold).join('\r\n')}\r\n`;
 }
+
+/** The one name a booking's file goes by, on the guest page and in every email: `invite.ics`, or `cancelled.ics`. */
+export function icsFilename(method: 'REQUEST' | 'CANCEL'): 'invite.ics' | 'cancelled.ics' {
+  return method === 'CANCEL' ? 'cancelled.ics' : 'invite.ics';
+}
+
+/** The method a built file carries (its `METHOD` line), so a file served whole is named as it was written. */
+export function icsMethodOf(content: string): 'REQUEST' | 'CANCEL' {
+  return content.includes('\r\nMETHOD:CANCEL\r\n') ? 'CANCEL' : 'REQUEST';
+}

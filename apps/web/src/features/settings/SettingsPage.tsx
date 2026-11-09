@@ -55,13 +55,6 @@ interface SettingsPageBase {
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
   readonly titleRef?: Ref<HTMLHeadingElement>;
   /**
-   * The page is drawn inside a frame somebody else owns: a tab of Bookings rather than a page of Settings (25
-   * October 2026). Then it is the body alone, with no second WorkspacePage and no TopBar of its own, since the
-   * frame around it has both already. A screen that is both a setting and a tab passes this through rather than
-   * being written twice, so Round robin and Calendars look and behave the same wherever they are opened.
-   */
-  readonly inFrame?: boolean;
-  /**
    * On a page that is one tab of a settings entry (Members' Teams), what the page adds to the entry's tab bar,
    * which SettingsPage draws itself: a count on its own tab, and its tools at the bar's end.
    */
@@ -135,7 +128,6 @@ export function SettingsPage({
   hasTabs = false,
   footer,
   fillsView = false,
-  inFrame = false,
   tabBar,
   tabBody = 'sections',
   keepsTitle = false,
@@ -156,10 +148,10 @@ export function SettingsPage({
   );
   // The entry this page is a tab of, as this member sees it, and only on the tab's own address (a role's page, under
   // Roles and access, has its trail instead).
-  const entry = inFrame ? undefined : tabbedEntry(settingsEntryOf(visible, page), pathname);
+  const entry = tabbedEntry(settingsEntryOf(visible, page), pathname);
   // On an entry's own address the page is called what the sidebar calls it (5 November 2026: Settings › Business ›
   // Places read "Business › Business", its page titling itself after the group).
-  const home = inFrame || keepsTitle ? undefined : settingsEntryAt(visible, pathname);
+  const home = keepsTitle ? undefined : settingsEntryAt(visible, pathname);
   const children =
     entry === undefined ? (
       // With no tab bar to hold them, the page's tools open its body (Members' search, for a guest).
@@ -186,25 +178,6 @@ export function SettingsPage({
     }),
   ];
   const slot = useSettingsTopBarSlot();
-  // Inside somebody else's frame the body is the whole of it. `header="bar"` is already the layout with no header
-  // of its own, which is exactly what a tab under a TopBar and a tab strip wants.
-  if (inFrame) {
-    if (fillsView) return children;
-    return (
-      <SettingsLayout
-        header="bar"
-        hasTabs={shownHasTabs}
-        title={shownTitle}
-        isLoading={isLoading}
-        hasTile={hasTile}
-        footer={footer}
-        // The frame owns the bar, so the tag heads the body instead.
-        {...(viewOnly === undefined ? {} : { viewOnly })}
-      >
-        {children}
-      </SettingsLayout>
-    );
-  }
   const barMeta =
     viewOnly === undefined ? (
       meta

@@ -417,6 +417,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(await managed.json()).toMatchObject({ state: 'confirmed', start: MONDAY_9, visitorName: 'Grace Hopper' });
     const ics = await visit(`manage/${answer.manageToken}/ics`);
     expect(ics.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+    expect(ics.headers.get('content-disposition')).toBe('attachment; filename="invite.ics"');
     expect(await ics.text()).toContain('METHOD:REQUEST');
     expect((await visit('manage/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).status).toBe(404);
     // The host they booked is on the event, first, then the visitor: a guest's own copy never shows the organiser,
