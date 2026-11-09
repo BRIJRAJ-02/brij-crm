@@ -249,15 +249,14 @@ export const ReserveChoosesPlace: Story = {
     const canvas = within(canvasElement);
     // A button, not a link: it opens the places rather than going anywhere.
     await expect(canvas.queryByRole('link', { name: 'Reserve a table' })).toBeNull();
-    const [reserve] = canvas.getAllByRole('button', { name: 'Reserve a table' });
-    if (reserve === undefined) throw new Error('No Reserve button.');
-    await userEvent.click(reserve);
-    const menu = await within(document.body).findByRole('menu', { name: 'Which place?' });
+    // The wide page's panel carries it (the phone's bar is the same button).
+    const panel = canvas.getByRole('complementary');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Reserve a table' }));
+    const pier = await within(document.body).findByRole('menuitem', { name: 'Koramangala' });
     await settleAnimations();
-    await expect(within(menu).getByRole('menuitem', { name: 'Koramangala' })).toHaveAttribute(
-      'href',
-      '/r/QrStUvWxYzAbCdEf',
-    );
+    await expect(pier).toHaveAttribute('href', '/r/QrStUvWxYzAbCdEf');
+    // The menu is named by the button that opened it.
+    await expect(within(document.body).getByRole('menu')).toHaveAccessibleName('Reserve a table');
     await userEvent.keyboard('{Escape}');
   },
 };
