@@ -394,7 +394,7 @@ describe('rescheduling a booking', () => {
     await userEvent.click(page.getByRole('button', { name: /^Reschedule/ }));
     await expect.poll(() => openDialog('dialog')?.textContent ?? '').toContain('Reschedule with Ada');
     await userEvent.click(page.getByRole('dialog').getByText('2:00 pm', { exact: true }));
-    await userEvent.click(page.getByRole('button', { name: /^Move to/ }));
+    await userEvent.click(page.getByRole('button', { name: /^Reschedule to/ }));
     expect(week.actions.move).toHaveBeenCalledTimes(1);
     await expect.poll(() => openDialog('dialog')).toBeNull();
     // The booking is Thursday's now: focus is on its block there, not on Wednesday, the day it left.

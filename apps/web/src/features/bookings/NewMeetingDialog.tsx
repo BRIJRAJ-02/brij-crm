@@ -21,6 +21,7 @@ import {
   DatePicker,
   Disclosure,
   Field,
+  focusLater,
   Form,
   InfoTip,
   Modal,
@@ -257,9 +258,14 @@ export function NewMeetingDialog({
       : pages.filter((page) => page.ownerMemberId === forId && page.scope === 'member');
   const [picked, setPageId] = useState(pages[0]?.id ?? '');
   const pageId = choices.some((page) => page.id === picked) ? picked : (choices[0]?.id ?? '');
-  const [guests, setGuests] = useState<readonly string[]>([]);
+  // Each row keyed by its own id, so removing one never shifts the rows after it into its field.
+  const [guestRows, setGuestRows] = useState<readonly { readonly id: number; readonly value: string }[]>([]);
+  const nextGuest = useRef(0);
+  const guests = guestRows.map((row) => row.value);
+  const addGuestRef = useRef<HTMLButtonElement>(null);
   // A row added by Add guests takes focus (not the rows there as the dialog opens).
   const [addedGuest, setAddedGuest] = useState(false);
+  const guestFields = useRef(new Map<number, HTMLInputElement>());
   const [guestsError, setGuestsError] = useState<string | undefined>(undefined);
   // The refusal goes on the first address that isn't one, else the last row.
   const badGuest = guests.findIndex((guest) => guest.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(guest.trim()));
@@ -499,10 +505,13 @@ export function NewMeetingDialog({
           {...(!hasCalendar && forId === ME ? { hint: strings.noCalendar } : {})}
         />
         {/* Guests right under Email, one address a row with its ×, up to ten (the owner, 9 November 2026). */}
-        {guests.map((guest, index) => (
+        {guestRows.map(({ id, value: guest }, index) => (
           <Field
-            // Rows are added and removed in place; each keeps its own field while it is there.
-            key={index}
+            key={id}
+            ref={(element: HTMLInputElement | null) => {
+              if (element === null) guestFields.current.delete(id);
+              else guestFields.current.set(id, element);
+            }}
             label={index === 0 ? strings.guestsLabel : strings.guestRow(index + 1)}
             {...(index === 0 ? { labelAside: strings.upToGuests(MAX_GUESTS) } : { isLabelHidden: true })}
             type="email"
@@ -515,7 +524,7 @@ export function NewMeetingDialog({
             isDisabled={busy}
             onChange={(next) => {
               setGuestsError(undefined);
-              setGuests(guests.map((each, at) => (at === index ? next : each)));
+              setGuestRows(guestRows.map((row) => (row.id === id ? { id, value: next } : row)));
             }}
             {...(guestsError !== undefined && index === guestErrorAt ? { error: guestsError } : {})}
             after={
@@ -526,7 +535,10 @@ export function NewMeetingDialog({
                 isDisabled={busy}
                 onPress={() => {
                   setGuestsError(undefined);
-                  setGuests(guests.filter((_, at) => at !== index));
+                  const before = guestRows[index - 1] ?? guestRows[index + 1];
+                  setGuestRows(guestRows.filter((row) => row.id !== id));
+                  // Its × goes with the row: focus goes to the row before (else after), else Add guests.
+                  focusLater(() => (before === undefined ? addGuestRef.current : guestFields.current.get(before.id)));
                 }}
               />
             }
@@ -535,12 +547,14 @@ export function NewMeetingDialog({
         {guests.length < MAX_GUESTS && (
           <div>
             <Button
+              ref={addGuestRef}
               variant="ghost"
               icon="user-plus"
               isDisabled={busy}
               onPress={() => {
                 setAddedGuest(true);
-                setGuests([...guests, '']);
+                nextGuest.current += 1;
+                setGuestRows([...guestRows, { id: nextGuest.current, value: '' }]);
               }}
             >
               {guests.length === 0 ? strings.addGuests : strings.addAnotherGuest}
