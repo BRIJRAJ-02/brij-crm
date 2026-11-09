@@ -11,10 +11,14 @@ import {
   Callout,
   CalendarList,
   Link,
+  Popover,
+  SectionBar,
+  SettingsStack,
   Skeleton,
+  Tooltip,
   type CalendarListAccount,
 } from '@crm/ui';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
 import { calendarsHref } from '../booking/links.ts';
@@ -249,5 +253,161 @@ export function CalendarsFrame({
     >
       {children}
     </AsideLayout>
+  );
+}
+
+/** Props for CalendarsButton. */
+export interface CalendarsButtonProps {
+  readonly slug: string;
+  readonly search: BookingsSearch;
+  readonly calendars: CalendarsHeld<CalendarListState>;
+  readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** Puts away the notice that new bookings moved to another calendar. */
+  readonly onDismissNotice: () => void;
+  /** The icon alone, named Calendars in a Tooltip (the week's crowded bar, a phone). */
+  readonly isIconOnly?: boolean;
+  /** Go to date's month at the popover's foot (the list: a day opens it in Day), or none. */
+  readonly jumpTo?: { readonly value: string; readonly onChange: (day: string) => void };
+}
+
+/**
+ * Calendars (the Bookings redesign of 9 November 2026: popovers for pickers, no side panels): a quiet button whose
+ * popover lists the member's calendars with the library's CalendarList (the boxes pick which show here, `cal` in the
+ * address), the notice when new bookings moved calendar, then Connect calendar and Calendar settings →, both to
+ * Bookings settings › Calendars, which holds the connections. With none connected it says so, with Connect calendar.
+ */
+export function CalendarsButton({
+  slug,
+  search,
+  calendars,
+  onSearch,
+  onDismissNotice,
+  isIconOnly = false,
+  jumpTo,
+}: CalendarsButtonProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [isOpen, setOpen] = useState(false);
+  const state = useCalendarList(calendars);
+  const canConnect = useCanConnectCalendar();
+  const accounts = accountsOnWeek(state);
+  const all = accounts.flatMap((account) => account.calendars);
+  const picked = search.cal === undefined ? undefined : new Set(search.cal);
+  const listed: CalendarListAccount[] = accounts.map((account) => ({
+    id: account.id,
+    provider: account.provider === 'google' ? 'google-calendar' : 'outlook',
+    email: account.accountEmail,
+    calendars: account.calendars.map((calendar) => ({
+      id: calendar.id,
+      name: calendar.name,
+      hue: calendar.hue,
+      isShown: picked === undefined || picked.has(calendar.id),
+    })),
+  }));
+  const destination =
+    state.status === 'ready'
+      ? state.accounts.flatMap((account) => account.calendars).find((calendar) => calendar.isDestination)
+      : undefined;
+  const fellBack = state.status === 'ready' ? state.fellBack : undefined;
+  // Calendar sync off for the deployment and none connected: nothing to list or connect.
+  if (!canConnect && state.status === 'ready' && state.accounts.length === 0) return null;
+  // The two doors to the one home of the connections (Connect calendar opens there; the flow itself is its own).
+  const doors = (
+    <SectionBar
+      start={
+        canConnect ? (
+          <ButtonLink variant="ghost" icon="plus" href={calendarsHref(slug)}>
+            {strings.connectCalendarShort}
+          </ButtonLink>
+        ) : undefined
+      }
+      end={
+        <ButtonLink variant="ghost" iconRight="arrow-right" href={calendarsHref(slug)}>
+          {strings.calendarSettings}
+        </ButtonLink>
+      }
+    />
+  );
+  const button = isIconOnly ? (
+    <Button
+      ref={ref}
+      variant="ghost"
+      icon="calendar-check"
+      label={strings.calendars}
+      isExpanded={isOpen}
+      onPress={() => setOpen((open) => !open)}
+    />
+  ) : (
+    <Button
+      ref={ref}
+      variant="ghost"
+      icon="calendar-check"
+      isExpanded={isOpen}
+      onPress={() => setOpen((open) => !open)}
+    >
+      {strings.calendars}
+    </Button>
+  );
+  return (
+    <>
+      {isIconOnly ? <Tooltip content={strings.calendars}>{button}</Tooltip> : button}
+      <Popover triggerRef={ref} isOpen={isOpen} onOpenChange={setOpen} label={strings.calendars} placement="bottom end">
+        <SettingsStack>
+          {state.status === 'loading' ? (
+            <Skeleton lines={4} />
+          ) : state.status === 'error' ? (
+            <Callout
+              tone="danger"
+              actions={
+                <Button size="sm" onPress={() => calendars.reload()}>
+                  {strings.tryAgain}
+                </Button>
+              }
+            >
+              {state.message === '' ? strings.calendarsFailed : state.message}
+            </Callout>
+          ) : state.accounts.length === 0 ? (
+            <Callout tone="info">{strings.noCalendarConnected}</Callout>
+          ) : (
+            <>
+              {fellBack !== undefined && destination !== undefined && (
+                <Callout
+                  tone="info"
+                  actions={
+                    <Button variant="ghost" size="sm" onPress={onDismissNotice}>
+                      {strings.dismiss}
+                    </Button>
+                  }
+                >
+                  {strings.movedTo(destination.name, fellBack.removedName)}
+                </Callout>
+              )}
+              <CalendarList
+                label={strings.yourCalendars}
+                accounts={listed}
+                onShownChange={(calendarId, isShown) => {
+                  const next = new Set(picked ?? all.map((calendar) => calendar.id));
+                  if (isShown) next.add(calendarId);
+                  else next.delete(calendarId);
+                  onSearch({ cal: next.size === all.length ? undefined : [...next] });
+                }}
+                onShowOnly={(calendarId) => onSearch({ cal: [calendarId] })}
+                onShowAll={() => onSearch({ cal: undefined })}
+              />
+            </>
+          )}
+          {doors}
+          {jumpTo !== undefined && (
+            <MonthCalendar
+              label={strings.goToDate}
+              value={jumpTo.value}
+              onChange={(day) => {
+                setOpen(false);
+                jumpTo.onChange(day);
+              }}
+            />
+          )}
+        </SettingsStack>
+      </Popover>
+    </>
   );
 }

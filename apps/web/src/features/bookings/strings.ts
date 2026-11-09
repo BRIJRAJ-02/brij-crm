@@ -17,8 +17,13 @@ export const strings = {
   /** The gear at the TopBar's end, and the name of the page it opens. */
   settingsLabel: 'Bookings settings',
   tabsLabel: 'Which bookings',
-  tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' },
-  listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Cancelled meetings' },
+  tabs: { upcoming: 'Upcoming', requests: 'Requests', past: 'Past', cancelled: 'Cancelled' },
+  listLabel: {
+    upcoming: 'Upcoming meetings',
+    requests: 'Requests waiting for you',
+    past: 'Past meetings',
+    cancelled: 'Cancelled meetings',
+  },
   sourceLabel: 'Show',
   sources: { all: 'Everything', bookings: 'Bookings only', calendar: 'Calendar events only' },
   noMatch: 'Nothing matches these filters',
@@ -29,7 +34,28 @@ export const strings = {
     upcoming: { title: 'Nothing coming up', text: 'Bookings from your booking pages show up here.' },
     past: { title: 'Nothing behind you yet', text: 'Meetings that have happened show up here.' },
     cancelled: { title: 'Nothing has been called off', text: 'Cancelled bookings show up here.' },
+    requests: { title: 'No requests waiting', text: 'Bookings on pages that confirm first wait here for you.' },
   },
+  /** Meetings' list (the redesign): a day's quiet count, an event's line, a row's ⋯. */
+  meetingCount: (count: number) => `${String(count)} meeting${count === 1 ? '' : 's'}`,
+  fromYourCalendar: (calendar: string | undefined) =>
+    calendar === undefined ? 'From your calendar' : `From your calendar · ${calendar}`,
+  seeUpcoming: 'See upcoming',
+  requestsFailed: 'Requests didn’t load',
+  /** A request's Accept, done: the guest is told. */
+  acceptedToast: (name: string) => `Request accepted. ${name} has been told.`,
+  declinedToast: (name: string) => `Request declined. ${name} has been told.`,
+  /** Already answered elsewhere (another tab, its own wait running out). */
+  alreadyAnswered: 'That request was already answered.',
+  /** The one cancel confirm (the owner's ruling): it emails the guest, so it asks once and has no Undo. */
+  cancelMeetingWith: (first: string) => `Cancel meeting with ${first}?`,
+  declineRequestOf: (first: string) => `Decline ${first}’s request?`,
+  noteTo: (first: string) => `Note to ${first}`,
+  optional: '(optional)',
+  keep: 'Keep',
+  declining: 'Declining…',
+  cancelledTold: (first: string) => `Meeting cancelled. ${first} has been told.`,
+  rescheduleWith: (first: string) => `Reschedule with ${first}`,
   /** The list's way to share a booking page when nothing is coming up. */
   shareBookingPage: 'Share a booking page',
   failedTitle: 'Bookings didn’t load',
@@ -99,6 +125,9 @@ export const strings = {
   calendarsFailed: 'Couldn’t load your calendars.',
   connectCalendar: 'Connect a calendar',
   connectCalendarShort: 'Connect calendar',
+  /** The Calendars popover's way to their settings (Bookings settings › Calendars). */
+  calendarSettings: 'Calendar settings',
+  yourCalendars: 'Your calendars',
   noCalendarConnected: 'No calendar connected.',
   dismiss: 'Dismiss',
   movedTo: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
@@ -270,6 +299,16 @@ export const strings = {
   aboutExample: 'Pick Demo to book Ana in, and the meeting is called Demo with Ana.',
   length: 'Length',
   alsoInvite: 'Also invite',
+  /** New meeting's guests, one email a row right under Email (the owner, 9 November 2026: "where can I add guest"). */
+  guestsLabel: 'Guests',
+  upToGuests: (max: number) => `(up to ${String(max)})`,
+  guestRow: (index: number) => `Guest ${String(index)} email`,
+  removeGuest: (index: number) => `Remove guest ${String(index)}`,
+  addGuests: 'Add guests',
+  addAnotherGuest: 'Add another guest',
+  notAnEmail: 'Enter an email like name@company.com',
+  /** New meeting's quieter choices, folded: their time zone, the calendar, the message. */
+  moreOptions: 'More options',
   guestsFull: (max: number) => `Up to ${String(max)} guests.`,
   /** New meeting's Calendar, with two or more calendars that take events: where its event goes. */
   calendarChoice: 'Calendar',
@@ -323,6 +362,25 @@ export const strings = {
   /** The guest's own page for the booking: copied in place, never shown (it carries their key). */
   guestLinkRow: 'Guest link',
   guestLinkDetail: 'Where they move or cancel.',
+  // The meeting popup (the Bookings redesign, 9 November 2026): the guest as its title, one primary, the rest in ⋯.
+  /** The popup's ⋯, named after the guest. */
+  moreFor: (name: string) => `More for ${name}`,
+  peopleSection: 'People',
+  guestLinkWhere: 'Where they move or cancel',
+  /** A host in the popup's People, under their name. */
+  hostPart: 'Host',
+  /** Another invitee in the popup's People. */
+  alsoInvited: 'Also invited',
+  cancelMeeting: 'Cancel meeting',
+  changeMeetingLinkLong: 'Change meeting link',
+  /** Reschedule, off after five moves. */
+  movedFiveTimes: 'Moved 5 times already',
+  /** A request's status word. */
+  requestStatus: 'Request',
+  accept: 'Accept',
+  decline: 'Decline',
+  /** The popup's facts for a booked-by-chat booking. */
+  bookedByChatFold: 'Booked by chat',
   // Add meeting link (B-07): a video call no calendar made a link for.
   addMeetingLink: 'Add meeting link',
   changeMeetingLink: 'Change link',

@@ -342,14 +342,15 @@ describe('removing closed time', () => {
 describe('cancelling a booking', () => {
   it('asks first, naming the booking; Esc and Keep booking change nothing', async () => {
     const week = await renderWeek([], [bookingOf()]);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     // Cancel sits beside Reschedule (B-06), not in More.
     await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await confirmAlone();
-    expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
+    // The one compact confirm (the redesign's ruling): the question, an optional note, Keep / Cancel meeting.
+    expect(alert()?.textContent).toContain('Cancel meeting with Ada?');
     const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
-    expect(labels[0]).toMatch(/^Keep booking/);
-    expect(labels.at(-1)).toBe('Cancel booking');
+    expect(labels[0]).toMatch(/^Keep/);
+    expect(labels.at(-1)).toBe('Cancel meeting');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
     // The card is back, and focus with it on Cancel, the button that asked.
@@ -358,7 +359,7 @@ describe('cancelling a booking', () => {
     // Enter asks again, from the keyboard.
     await userEvent.keyboard('{Enter}');
     await confirmAlone();
-    await userEvent.click(page.getByRole('button', { name: /^Keep booking/ }));
+    await userEvent.click(page.getByRole('button', { name: /^Keep/ }));
     await expect.poll(alert).toBeNull();
     await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
     expect(week.actions.cancel).not.toHaveBeenCalled();
@@ -366,33 +367,33 @@ describe('cancelling a booking', () => {
 
   it('stays busy while the booking already shows cancelled, cancels once, and keeps a refusal inside', async () => {
     const week = await renderWeek([], [bookingOf()]);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
-    await userEvent.fill(page.getByRole('textbox', { name: 'Reason' }), 'Ill today');
-    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.fill(page.getByRole('textbox', { name: /^Note to Ada/ }), 'Ill today');
+    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel meeting' }));
     await expect.poll(() => alert()?.textContent).toContain('Cancelling');
     expect(week.actions.cancel).toHaveBeenCalledTimes(1);
     expect(week.actions.cancel).toHaveBeenCalledWith(bookingOf().id, 'Ill today');
     week.cancels[0]?.reject(dataError('INTERNAL', 'Can’t reach Timefix. Check your connection, then try again.'));
     await expect.poll(() => alert()?.textContent).toContain('Can’t reach Timefix.');
     // Tried again from the same confirm, it goes through.
-    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel meeting' }));
     expect(week.actions.cancel).toHaveBeenCalledTimes(2);
     week.cancels[1]?.resolve(undefined);
     await expect.poll(alert).toBeNull();
-    expect(week.notify).toHaveBeenCalledWith('success', 'Cancelled. Ada Lovelace is emailed.');
+    expect(week.notify).toHaveBeenCalledWith('success', 'Meeting cancelled. Ada has been told.');
     // Its Cancel booking went with the cancel: focus goes to the booking, still on the week, drawn cancelled.
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Quick chat,/);
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Ada Lovelace,/);
   });
 });
 
 describe('rescheduling a booking', () => {
   it('moves it to another day, and focus follows the booking to its new day (Q56)', async () => {
     const week = await renderWeek([], [bookingOf()]);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await userEvent.click(page.getByRole('button', { name: /^Reschedule/ }));
-    await expect.poll(() => openDialog('dialog')?.textContent ?? '').toContain('Reschedule Quick chat');
-    await userEvent.click(page.getByRole('dialog').getByText('14:00', { exact: true }));
+    await expect.poll(() => openDialog('dialog')?.textContent ?? '').toContain('Reschedule with Ada');
+    await userEvent.click(page.getByRole('dialog').getByText('2:00 pm', { exact: true }));
     await userEvent.click(page.getByRole('button', { name: /^Move to/ }));
     expect(week.actions.move).toHaveBeenCalledTimes(1);
     await expect.poll(() => openDialog('dialog')).toBeNull();
@@ -400,7 +401,7 @@ describe('rescheduling a booking', () => {
     await expect
       .poll(() => document.activeElement?.closest('[role="group"]')?.getAttribute('aria-label') ?? '')
       .toMatch(/^Thursday/);
-    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^Quick chat,/);
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^Ada Lovelace,/);
   });
 });
 
@@ -424,7 +425,7 @@ const heading = (dialog: Element) =>
 describe('reassigning a booking', () => {
   it('closes the card first, so the dialog is on top and alone; Esc opens the card again, focus on More', async () => {
     await renderWeek([], [bookingOf()], undefined, ['booking.admin']);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Reassign' }));
     // One dialog open, the Reassign one: the card's popover is gone, not drawn over it.
@@ -463,7 +464,7 @@ describe('reassigning from Host away', () => {
       },
     ] as never);
     vi.mocked(actions.reassign).mockResolvedValue({ hostMemberId: BO, changed: true });
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await userEvent.click(page.getByRole('button', { name: 'Reassign', exact: true }));
     // The card closed first: the confirm stands alone.
     await expect
@@ -485,7 +486,7 @@ describe('reassigning from Host away', () => {
   it('keeps the host on Esc, and the card opens again with focus back on its Reassign', async () => {
     const away = { ...bookingOf(), hostAway: true } as BookingListItem;
     const { actions } = await renderWeek([], [away], undefined, ['booking.admin']);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await userEvent.click(page.getByRole('button', { name: 'Reassign', exact: true }));
     await expect
       .poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading))
@@ -500,14 +501,14 @@ describe('reassigning from Host away', () => {
 
   it('offers nothing to someone who may not reassign', async () => {
     await renderWeek([], [{ ...bookingOf(), hostAway: true }]);
-    await openCard(/^Quick chat,/);
+    await openCard(/^Ada Lovelace,/);
     await expect.element(page.getByRole('note').getByText('Host away')).toBeVisible();
     expect(page.getByRole('button', { name: 'Reassign', exact: true }).elements()).toHaveLength(0);
   });
 });
 
 describe('cancelling from the list', () => {
-  it('asks inside the booking’s panel, stays busy, then the panel closes and focus goes back to its row', async () => {
+  it('asks from the popup’s ⋯ in one compact confirm, stays busy, then focus goes back to its row', async () => {
     let state: MeetingsState = { ...ready, items: [{ kind: 'booking', booking: bookingOf() }] };
     const listeners = new Set<() => void>();
     const tell = () => {
@@ -559,20 +560,28 @@ describe('cancelling from the list', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    // A booking's row is titled by its guest (A18), its page in a column of its own.
-    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
-    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'Cancel booking' }));
-    await expect.poll(alert).not.toBeNull();
-    expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
+    // A booking's row is titled by its guest; it opens the meeting popup, whose ⋯ holds Cancel meeting.
+    const askCancel = async () => {
+      await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
+      await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' }));
+      await userEvent.click(page.getByRole('menuitem', { name: 'Cancel meeting' }));
+      await expect.poll(alert).not.toBeNull();
+    };
+    await askCancel();
+    // The popup closed first: the confirm stands alone.
+    expect(card()).toBeNull();
+    expect(alert()?.textContent).toContain('Cancel meeting with Ada?');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
+    // Kept: the popup it came from opens again.
+    await expect.poll(card).not.toBeNull();
     expect(cancel).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(card).toBeNull();
 
-    await userEvent.keyboard('{Enter}');
-    await expect.poll(alert).not.toBeNull();
-    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel booking' }));
-    // The booking already shows cancelled in the panel; the confirm stays, busy, until the server answers.
+    await askCancel();
+    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel meeting' }));
+    // The booking already shows cancelled in the list; the confirm stays, busy, until the server answers.
     await expect.poll(() => alert()?.textContent).toContain('Cancelling');
     expect(cancel).toHaveBeenCalledTimes(1);
     answer.resolve(undefined);
@@ -582,7 +591,7 @@ describe('cancelling from the list', () => {
 });
 
 describe('the list rows', () => {
-  it('title a booking by its guest, its page beside, and link the guest to their person from the panel', async () => {
+  it('title a booking by its guest, its page under it, and link the guest to their person from the popup', async () => {
     const people = {
       id: '0199f0a0-0000-7000-8000-0000000000f1',
       apiSlug: 'people',
@@ -634,8 +643,8 @@ describe('the list rows', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    // The row is the guest, its page in a column of its own (A18); their person opens from the panel.
-    await expect.element(page.getByText('Quick chat', { exact: true })).toBeVisible();
+    // The row is the guest, its page and where under the name; their person opens from the popup.
+    await expect.element(page.getByText(/^Quick chat · /)).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
     await expect
       .element(page.getByRole('dialog').getByRole('link', { name: 'Ada Lovelace' }))
@@ -691,17 +700,19 @@ describe('the list rows', () => {
     shown = await render(bookingOf());
     await open();
     await expect.element(page.getByText('No link yet.')).toBeVisible();
-    // Its fix is beside it (B-07): Add meeting link.
-    await expect.element(page.getByRole('button', { name: 'Add meeting link' })).toBeVisible();
+    // Its fix is in the popup's ⋯ (B-07): Add meeting link.
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Add meeting link' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
     shown.unmount();
     // With a link made, the panel names its provider and says nothing is owed.
     shown = await render({ ...bookingOf(), videoUrl: 'https://meet.google.com/abc-defg-hij' });
     await open();
-    await expect.element(page.getByText('Google Meet').first()).toBeVisible();
+    await expect.element(page.getByRole('dialog').getByText('Google Meet').first()).toBeVisible();
     await expect.element(page.getByText('No link yet.')).not.toBeInTheDocument();
   });
 
-  it('with no calendar connected, starts without the calendars panel and offers Connect a calendar in the bar', async () => {
+  it('with no calendar connected, has no calendars panel and offers Connect a calendar', async () => {
     const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
     const noneConnected: CalendarsHeld<CalendarListState> = {
       subscribe: () => () => undefined,
@@ -804,18 +815,18 @@ describe('the member zone', () => {
 
   it('draws a block on the member’s day and hour, from their Preferences zone', async () => {
     await renderWeek([late], [], 'Asia/Kolkata');
-    await expect.poll(() => columnsOf(/^Blocked, 05:00/)).toEqual(['Wednesday']);
+    await expect.poll(() => columnsOf(/^Blocked, 5:00 – 6:00 am/)).toEqual(['Wednesday']);
     // The hour axis says which zone its hours are in, in full for screen readers and on hover.
-    const corner = document.querySelector('[title="Times in Kolkata time (GMT+5:30)"]');
+    const corner = document.querySelector('[title="Times in India time (GMT+5:30)"]');
     expect(corner?.textContent).toContain('GMT+5:30');
-    await openCard(/^Blocked, 05:00/);
-    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 05:00\s*–\s*06:00/);
+    await openCard(/^Blocked, 5:00 – 6:00 am/);
+    expect(card()?.textContent).toMatch(/Wednesday \d+ \w+ · 5:00 – 6:00 am/);
   });
 
   it('draws the same block from Tuesday night when the member’s zone is UTC', async () => {
     await renderWeek([late]);
     // Half an hour on Tuesday night, then half an hour on Wednesday from midnight.
-    await expect.poll(() => columnsOf(/^Blocked, 23:30/)).toEqual(['Tuesday', 'Wednesday']);
+    await expect.poll(() => columnsOf(/^Blocked, 11:30 pm – 12:30 am/)).toEqual(['Tuesday', 'Wednesday']);
   });
 });
 
@@ -949,8 +960,8 @@ describe('linking a booking to a record by hand (polish F2)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Unlink Navy rollout' }));
     expect(link).toHaveBeenCalledWith(bookingOf().id, null);
     await expect.element(page.getByRole('link', { name: 'Navy rollout' })).not.toBeInTheDocument();
-    // The row went under focus: it lands on More, which holds Link to a record.
-    await expect.element(page.getByRole('button', { name: 'More for this booking' })).toHaveFocus();
+    // The row went under focus: it lands on the popup's ⋯, which holds Link to a record.
+    await expect.element(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' })).toHaveFocus();
     expect(notify).toHaveBeenCalledWith(
       'success',
       'Unlinked from Navy rollout.',
@@ -964,7 +975,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
 
   it('unlinks from More too, with the same word and Undo', async () => {
     const { link, notify } = await openWith(navy);
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' }));
     await expect.element(page.getByRole('menuitem', { name: 'Change linked record' })).toBeVisible();
     await userEvent.click(page.getByRole('menuitem', { name: 'Unlink record' }));
     expect(link).toHaveBeenCalledWith(bookingOf().id, null);
@@ -985,7 +996,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
 
   it('links one from More: the picker over Deals, then Link', async () => {
     const { link, notify } = await openWith(undefined);
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
     const dialog = page.getByRole('dialog', { name: 'Link Quick chat with Ada Lovelace to a record' });
     await expect.element(dialog).toBeVisible();
@@ -1006,7 +1017,7 @@ describe('linking a booking to a record by hand (polish F2)', () => {
       undefined,
       dataError('FORBIDDEN', 'You can’t link a booking to a record you can’t change.'),
     );
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'More for Ada Lovelace' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Link to a record' }));
     const dialog = page.getByRole('dialog', { name: 'Link Quick chat with Ada Lovelace to a record' });
     // The picker's rows sit in a list the test page doesn't size, so the keys pick one, as a keyboard user does.

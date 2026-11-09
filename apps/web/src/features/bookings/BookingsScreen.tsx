@@ -46,10 +46,9 @@ import {
   PageColumn,
   RecordChip,
   VisuallyHidden,
-  Panel,
   SectionBar,
   SegmentedControl,
-  linkHue,
+  MenuSeparator,
   useFormatSettings,
   useKeyboardPlatform,
   focusLater,
@@ -59,36 +58,47 @@ import {
   ViewOnlyTag,
   WeekCalendar,
   type BookingListGroup,
+  type BookingListRow,
   type Hue,
+  type IconName,
   type Toasts,
   type WeekCalendarBlock,
   type MeetingCardRow,
 } from '@crm/ui';
+// eslint-disable-next-line no-restricted-imports -- a meeting's state beside the popup's title, not an attribute value
+import { StatusDot } from '@crm/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { offsetLabel, zoneDisplay, zoneName } from '../../public/booking/time.ts';
+import { offsetLabel, zoneName } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
+import {
+  clockOfMinute,
+  clockRange,
+  clockTime,
+  dayKeyIn,
+  longDay,
+  minutesLabel,
+  shortDay,
+  zoneLabel,
+} from './meeting-format.ts';
+import { useMeetingRequests, type HeldRequest, type MeetingRequestsSource } from './requests.ts';
 import { useNow } from './useNow.ts';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
-import {
-  accountsOnWeek,
-  CalendarsFrame,
-  CalendarsToggle,
-  useCalendarsPanel,
-  type CalendarsPanel,
-} from './CalendarsAside.tsx';
+import { accountsOnWeek, CalendarsButton, CalendarsFrame, useCalendarsPanel } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
 import { TeamDayView, type TeamDayViewProps } from './TeamDayView.tsx';
 import type { NewMeeting, NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { AwayReassignDialog, MonthCalendar, NewMeetingDialog, ReassignDialog, TimeOffDialog } from './lazy-parts.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
-import type { BookingsSearch } from './search.ts';
+import type { BookingsSearch, MeetingsTab } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import {
   BookingDialog,
+  CancelConfirm,
+  firstNameOf,
   MeetingLinkDialog,
   useBookingActions,
   type BookingAsk,
@@ -109,7 +119,6 @@ import {
   rangeLabel,
   scrollMinute,
   shownWeek,
-  timeRange,
   weekBounds,
   weekDays,
   weekOf,
@@ -124,7 +133,7 @@ export type { BookingsTab };
 export type { BookingsSearch };
 
 /** The list's tabs, in order. */
-export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
+export const TABS: readonly MeetingsTab[] = ['upcoming', 'requests', 'past', 'cancelled'];
 
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
@@ -194,15 +203,9 @@ function personHrefOf(booking: BookingListItem, link: RecordLink, people: Object
     : link(people.id, booking.personRecordId);
 }
 
-/** "Monday, 19 October · 9:00 – 9:30 AM". */
-function whenOf(startsAt: string, endsAt: string, locale: string, zone: string): string {
-  const day = new Intl.DateTimeFormat(locale, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: zone,
-  }).format(new Date(startsAt));
-  return `${day} · ${timeRange(startsAt, endsAt, locale, zone)}`;
+/** "Monday 19 October · 9:00 – 9:30 am", on Meetings' one clock (meeting-format.ts). */
+function whenOf(startsAt: string, endsAt: string, _locale: string, zone: string): string {
+  return `${longDay(dayKeyIn(startsAt, zone))} · ${clockRange(startsAt, endsAt, zone)}`;
 }
 
 /** When a booking was made, on the member's clock: "2 Nov, 14:03". */
@@ -527,6 +530,7 @@ export function BookingCard({
   headingLevel = 4,
   managesHost,
   variant = 'popover',
+  onClose,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
@@ -544,8 +548,14 @@ export function BookingCard({
    * on a booking whose host they Manage (spec 0030 AC-777, spec 0037 AC-1337). Absent, only booking.admin sees it.
    */
   readonly managesHost?: ((memberId: string) => boolean) | undefined;
-  /** `panel` in Bookings › List's side panel: the title at its edge, the actions first, each section headed. */
-  readonly variant?: 'popover' | 'panel';
+  /**
+   * `panel` in a side panel: the title at its edge, the actions first, each section headed. `popup` (Meetings, the
+   * redesign of 9 November 2026): a Modal titled by the guest, its status and page beside the title, the changes in its
+   * ⋯ and one primary (Join) or none; `onClose` closes it.
+   */
+  readonly variant?: 'popover' | 'panel' | 'popup';
+  /** `popup` only: the popup was closed (×, Esc or a press outside). */
+  readonly onClose?: () => void;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -585,10 +595,11 @@ export function BookingCard({
   }, []);
   const [isChatOpen, setChatOpen] = useState(false);
   const chatId = useId();
+  // The popup's ⋯: where focus goes when a control in the popup goes with its change (the linked record's ×).
+  const popupMore = useRef<HTMLButtonElement>(null);
   const footer = useBookingActions({
     booking,
     actions: actions ?? NO_ACTIONS,
-    locale,
     ...(onAsk === undefined ? {} : { onAsk: (kind: BookingAsk) => onAsk(kind, seats) }),
     // Host away's Reassign sits in the notice, not the footer: the card focuses it itself (below).
     ...(focusOnMount === undefined || focusOnMount === 'reassignAway' || focusOnMount === 'meetingLink'
@@ -830,6 +841,283 @@ export function BookingCard({
       value: item.description,
     })),
   ];
+  if (variant === 'popup') {
+    const status = statusOf(booking);
+    const startsAhead = Date.parse(booking.startsAt) > now.getTime();
+    const canMove = hasActions && isConfirmed && startsAhead;
+    const ask = (kind: BookingAsk) => {
+      if (onAsk !== undefined) onAsk(kind, seats);
+      else if (kind === 'reassign') setReassigning(true);
+      else if (kind === 'meetingLink') setAddingLink(true);
+      else footer.ask(kind);
+    };
+    // Every change but the one primary, in the title bar's ⋯ (the redesign's ruling): Reschedule, Reassign, the meeting
+    // link, the record, a no show, then Cancel meeting apart, in the danger tone.
+    const menuItems: ReactNode[] = [
+      ...(canMove
+        ? [
+            <MenuItem
+              key="move"
+              id="move"
+              icon="calendar-clock"
+              isDisabled={booking.reschedules >= 5}
+              {...(booking.reschedules >= 5 ? { description: strings.movedFiveTimes } : {})}
+            >
+              {strings.reschedule}
+            </MenuItem>,
+          ]
+        : []),
+      ...(canMove && canReassign && seats.length > 0
+        ? [
+            <MenuItem key="reassign" id="reassign" icon="users-round">
+              {strings.reassignAction}
+            </MenuItem>,
+          ]
+        : []),
+      ...(canAddLink
+        ? [
+            <MenuItem key="meetingLink" id="meetingLink" icon="link">
+              {booking.videoUrl === undefined ? strings.addMeetingLink : strings.changeMeetingLinkLong}
+            </MenuItem>,
+          ]
+        : []),
+      ...(hasActions && footer.canLink
+        ? [
+            <MenuItem key="link" id="link" icon="building">
+              {booking.linkedRecord === undefined ? strings.linkRecord : strings.changeLinkedRecord}
+            </MenuItem>,
+          ]
+        : []),
+      ...(unlink === undefined
+        ? []
+        : [
+            <MenuItem key="unlink" id="unlink" icon="unlink">
+              {strings.unlinkRecord}
+            </MenuItem>,
+          ]),
+      ...(hasActions && isConfirmed && footer.hasStarted
+        ? [
+            <MenuItem key="noShow" id="noShow" icon={booking.noShow === true ? 'user-check' : 'user-x'}>
+              {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+            </MenuItem>,
+          ]
+        : []),
+      ...(canMove
+        ? [
+            <MenuSeparator key="apart" />,
+            <MenuItem key="cancel" id="cancel" icon="circle-x" isDanger>
+              {strings.cancelMeeting}
+            </MenuItem>,
+          ]
+        : []),
+    ];
+    const menu =
+      menuItems.length === 0 ? undefined : (
+        <MenuTrigger>
+          <Button ref={popupMore} variant="ghost" icon="ellipsis" label={strings.moreFor(booking.visitorName)} />
+          <Menu
+            label={strings.moreFor(booking.visitorName)}
+            onAction={(key) => {
+              if (key === 'noShow') footer.markNoShow();
+              else if (key === 'unlink') unlink?.();
+              else if (
+                key === 'move' ||
+                key === 'cancel' ||
+                key === 'reassign' ||
+                key === 'meetingLink' ||
+                key === 'link'
+              )
+                ask(key);
+            }}
+          >
+            {menuItems}
+          </Menu>
+        </MenuTrigger>
+      );
+    // One primary or none (the ruling): Join while the call can be joined.
+    const primary =
+      booking.status === 'confirmed' && booking.videoUrl !== undefined && isAhead ? (
+        <ButtonLink variant="primary" icon="video" href={booking.videoUrl} isExternal>
+          {strings.joinProvider(providerOf(booking.videoUrl))}
+        </ButtonLink>
+      ) : undefined;
+    const hosts = booking.hostName === '' ? [] : [booking.hostName];
+    return (
+      <>
+        <Modal
+          title={booking.visitorName}
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) onClose?.();
+          }}
+          context={<StatusDot hue={status.hue}>{`${status.label} · ${booking.pageTitle}`}</StatusDot>}
+          {...(menu === undefined ? {} : { headerActions: menu })}
+          {...(primary === undefined ? {} : { actions: primary })}
+        >
+          <MeetingCard
+            variant="popup"
+            headingLevel={3}
+            title={strings.cardTitle(booking.visitorName, booking.pageTitle)}
+            when={`${longDay(dayKeyIn(booking.startsAt, timeZone))} · ${clockRange(booking.startsAt, booking.endsAt, timeZone)}`}
+            {...(notices === undefined ? {} : { notices })}
+            rows={[
+              ...(theirTime === undefined
+                ? []
+                : [{ id: 'their-time', icon: 'globe' as const, label: strings.theirTimeLabel, value: theirTime }]),
+              { id: 'where', ...whereRowOf(booking, isAhead) },
+              ...(booking.note === undefined
+                ? []
+                : [
+                    {
+                      id: 'note',
+                      icon: 'message-square' as const,
+                      label: strings.note,
+                      value: strings.quoted(booking.note),
+                    },
+                  ]),
+              ...(booking.status === 'cancelled'
+                ? [
+                    {
+                      id: 'reason',
+                      icon: 'circle-x' as const,
+                      label: strings.cancelReason,
+                      value: strings.cancelledBy(booking.cancelledBy),
+                      ...(booking.cancelReason === undefined ? {} : { detail: strings.quoted(booking.cancelReason) }),
+                    },
+                  ]
+                : []),
+            ]}
+            sections={[
+              {
+                id: 'people',
+                label: strings.peopleSection,
+                people: [
+                  {
+                    id: `${booking.id}-guest`,
+                    name: booking.visitorName,
+                    ...(personHref === undefined ? {} : { href: personHref }),
+                    ...(booking.visitorEmail === '' ? {} : { detail: booking.visitorEmail, isDetailCopyable: true }),
+                  },
+                  ...booking.guests.map((guest) => ({
+                    id: `${booking.id}-${guest}`,
+                    name: guest,
+                    detail: strings.alsoInvited,
+                  })),
+                  ...hosts.map((host) => ({ id: `${booking.id}-host-${host}`, name: host, detail: strings.hostPart })),
+                ],
+              },
+              ...(hasActions && isConfirmed && isAhead
+                ? [
+                    {
+                      id: 'guest-link',
+                      label: strings.guestLinkRow,
+                      display: 'plain' as const,
+                      rows: [
+                        {
+                          id: 'guest-link',
+                          icon: 'link' as const,
+                          label: strings.guestLinkRow,
+                          value: strings.guestLinkWhere,
+                          action: (
+                            <CopyButton
+                              value={footer.guestLink}
+                              label={strings.copyGuestLink}
+                              announcement={strings.guestLinkCopied}
+                            />
+                          ),
+                        },
+                      ],
+                    },
+                  ]
+                : []),
+              ...(linked === undefined || record === undefined
+                ? []
+                : [
+                    {
+                      id: 'linked',
+                      label: strings.linkedTo,
+                      display: 'plain' as const,
+                      rows: [
+                        {
+                          ...linked,
+                          // Its × goes with the link: focus goes on to the ⋯, which holds Link to a record.
+                          ...(unlink === undefined
+                            ? {}
+                            : {
+                                action: (
+                                  <Button
+                                    variant="ghost"
+                                    icon="x"
+                                    label={strings.unlink(record.name)}
+                                    onPress={() => {
+                                      unlink();
+                                      focusLater(() => popupMore.current);
+                                    }}
+                                  />
+                                ),
+                              }),
+                        },
+                      ],
+                    },
+                  ]),
+              ...(answersRows.every((row) => row.id === 'note')
+                ? []
+                : [
+                    {
+                      id: 'answers',
+                      label: strings.answersSection,
+                      display: 'folded' as const,
+                      ...(booking.answers === undefined || booking.answers.length === 0
+                        ? {}
+                        : { count: booking.answers.length }),
+                      rows: answersRows.filter((row) => row.id !== 'note'),
+                    },
+                  ]),
+              {
+                id: 'history',
+                label: strings.historySection,
+                display: 'folded' as const,
+                rows: historyRows.filter((row) => row.id !== 'reason'),
+              },
+            ]}
+          />
+        </Modal>
+        {addingLink && actions?.setMeetingLink !== undefined && (
+          <MeetingLinkDialog
+            booking={booking}
+            setMeetingLink={actions.setMeetingLink}
+            notify={actions.notify}
+            onClose={() => setAddingLink(false)}
+          />
+        )}
+        {hasActions && footer.dialogs}
+        {reassigning && actions !== undefined && (
+          <ReassignDialog
+            booking={booking}
+            seats={seats}
+            actions={actions}
+            onClose={() => setReassigning(false)}
+            onReassigned={() => {
+              setReassigning(false);
+              setReads((count) => count + 1);
+            }}
+          />
+        )}
+        {awayReassigning && actions !== undefined && (
+          <AwayReassignDialog
+            booking={booking}
+            seats={seats}
+            actions={actions}
+            onClose={() => setAwayReassigning(false)}
+            onReassigned={() => {
+              setAwayReassigning(false);
+              setReads((count) => count + 1);
+            }}
+          />
+        )}
+      </>
+    );
+  }
   return (
     <>
       <MeetingCard
@@ -1558,19 +1846,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const shownAt = instantOf(days.includes(search.day) ? search.day : search.week, 12 * 60, timeZone).getTime();
   const zone = {
     short: offsetLabel(timeZone, shownAt),
-    name: strings.timesIn(zoneDisplay(timeZone, shownAt)),
+    name: strings.timesIn(zoneLabel(timeZone, shownAt)),
   };
   const isThisWeek = weekOf(today, firstDay) === search.week;
-  // The time now on the hour axis, without its day period so it fits the axis ("10:15").
-  const nowLabel = memoIntl(
-    `bookings-now:${locale}:${timeZone}`,
-    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone }),
-  )
-    .formatToParts(now)
-    .filter((part) => part.type !== 'dayPeriod')
-    .map((part) => part.value)
-    .join('')
-    .trim();
+  // The time now on the hour axis, on Meetings' one clock ("10:20 am", the ruling: the now line too).
+  const nowLabel = clockTime(now, timeZone);
   // Go to date: the small month the calendars panel held, now from the week's bar (the panel stays folded here).
   const [isJumpOpen, setJumpOpen] = useState(false);
   const jumpRef = useRef<HTMLButtonElement>(null);
@@ -1737,18 +2017,19 @@ function WeekView(props: BookingsCalendarScreenProps) {
             dayKey: piece.dayKey,
             startMinute: piece.startMinute,
             endMinute: piece.endMinute,
-            title: booking.pageTitle,
-            time: timeRange(booking.startsAt, booking.endsAt, locale, timeZone),
+            // The guest first, as Meetings names a meeting (the redesign of 9 November 2026), then the page.
+            title: booking.visitorName,
+            time: clockRange(booking.startsAt, booking.endsAt, timeZone),
             // A colleague's booking (an admin's Everyone) names its host, so it is never taken for the reader's own.
             detail:
               me !== undefined && booking.hostMemberId !== me && booking.hostName !== ''
-                ? strings.withHost(booking.visitorName, booking.hostName)
-                : booking.visitorName,
+                ? strings.withHost(booking.pageTitle, booking.hostName)
+                : booking.pageTitle,
             kind: 'booking',
-            // Its booking link's colour, as on Links, and Timefix's mark (the owner, 31 October 2026: what came through
-            // Timefix shows at a glance beside synced events); no status while confirmed, so a block says only what is
-            // news: a no show, a booking with no host, or struck through when cancelled.
-            hue: linkHue(booking.pageId),
+            // One Timefix colour for every booking (the redesign of 9 November 2026: state by treatment, not hue), and
+            // Timefix's mark before the name, so what came through Timefix shows at a glance beside synced events; no
+            // status while confirmed, so a block says only what is news: a no show, a booking with no host, or struck
+            // through when cancelled.
             provider: 'timefix',
             isCancelled: booking.status === 'cancelled',
             ...(booking.status !== 'confirmed'
@@ -1774,7 +2055,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             startMinute: piece.startMinute,
             endMinute: piece.endMinute,
             title: strings.busy,
-            time: timeRange(busy.startsAt, busy.endsAt, locale, timeZone),
+            time: clockRange(busy.startsAt, busy.endsAt, timeZone),
             kind: 'busy',
             ...(provider === undefined ? {} : { provider }),
           },
@@ -1794,7 +2075,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             time:
               turn.kind === 'away' && piece.startMinute === 0 && piece.endMinute === 1440
                 ? strings.allDay
-                : timeRange(turn.startsAt, turn.endsAt, locale, timeZone),
+                : clockRange(turn.startsAt, turn.endsAt, timeZone),
             ...(turn.label === undefined ? {} : { detail: turn.label }),
             kind: turn.kind === 'hold' ? 'held' : 'blocked',
           },
@@ -1811,7 +2092,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
           title: event.title,
-          time: timeRange(event.startsAt, event.endsAt, locale, timeZone),
+          time: clockRange(event.startsAt, event.endsAt, timeZone),
           kind: 'event',
           ...(hue === undefined ? {} : { hue }),
           ...(provider === undefined ? {} : { provider }),
@@ -1825,7 +2106,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
     isShownEvent,
     search.link,
     bounds,
-    locale,
     timeZone,
     me,
     awayOver,
@@ -1897,9 +2177,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         view === 'team' ? (
           // The Team day's issue counts portal here; the calendar switch is the reader's own week's.
           <span ref={setIssuesSlot} />
-        ) : hasNoCalendar ? (
-          <CalendarsToggle panel={panel} slug={slug} hasNoCalendar />
-        ) : calendarList.status === 'error' ? (
+        ) : hasNoCalendar ? undefined : calendarList.status === 'error' ? (
           // The switch can't draw without the calendars: say so, with a retry, rather than leave a gap.
           <Button variant="ghost" icon="refresh-cw" onPress={() => props.calendars.reload()}>
             {strings.calendarsRetry}
@@ -1918,7 +2196,18 @@ function WeekView(props: BookingsCalendarScreenProps) {
           {view === 'team' && props.team !== undefined ? (
             <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
           ) : (
-            <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+            <>
+              <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+              {/* The calendars as a popover (no side panels), ending in Connect calendar and Calendar settings. */}
+              <CalendarsButton
+                slug={slug}
+                search={search}
+                calendars={props.calendars}
+                onSearch={onSearch}
+                onDismissNotice={props.onDismissNotice}
+                isIconOnly
+              />
+            </>
           )}
         </>
       }
@@ -2054,7 +2343,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
   const openBusy = open?.kind === 'busy' ? byBusy.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
-  const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+  // Meetings' one clock on the axis too: "9 am".
+  const hourFormat = memoIntl(
+    'bookings-hour-12',
+    () => new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: true }),
+  );
   const weekEnd = days.at(-1) ?? search.week;
   const isWeekEmpty = blocks.length === 0;
   const next = isWeekEmpty && nextBooking?.after === weekEnd ? nextBooking.day : undefined;
@@ -2302,15 +2595,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             onDraftClose={() => setDraft(undefined)}
             drawMinutes={pages[0]?.durations[0] ?? 30}
             drawStartMinute={workingStart}
-            minuteLabel={(minute) => {
-              const at = new Date(2000, 0, 1);
-              at.setMinutes(minute);
-              // Built once per locale: half hour blocks ask for their start on every draw.
-              return memoIntl(
-                `bookings-minute:${locale}`,
-                () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
-              ).format(at);
-            }}
+            minuteLabel={clockOfMinute}
           />
           {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
           <VisuallyHidden>{strings.weekSummary(live)}</VisuallyHidden>
@@ -2373,7 +2658,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
             // The booking as the week holds it now (cancelled at once behind its confirm), or as it was asked about.
             booking={byBooking.get(lastAsked.booking.id) ?? lastAsked.booking}
             actions={props.actions}
-            locale={locale}
             ask={asking === lastAsked ? lastAsked.kind : undefined}
             onClose={() => {
               dismiss(lastAsked);
@@ -2465,158 +2749,220 @@ function heldBooking(items: readonly MeetingListItem[], booking: BookingListItem
 /** A meeting's row id: its kind and its id, so a booking and an event never share one. */
 const rowIdOf = (item: MeetingListItem) => (item.kind === 'booking' ? `b:${item.booking.id}` : `e:${item.event.id}`);
 
+/** A meeting's row: a booking's guest, or the member's own calendar event; how it opens and what its ⋯ holds. */
+interface RowContext {
+  readonly calendarOf: (
+    calendarId: string,
+  ) => { readonly name: string; readonly hue: Hue; readonly provider: 'google-calendar' | 'outlook' } | undefined;
+  readonly me: string | undefined;
+  readonly zone: string;
+  readonly now: Date;
+  /** The People object, for a guest's face; absent, the face still shows their name's initials. */
+  readonly peopleObjectId: string | undefined;
+  /** A booking's ⋯ on its row (Reschedule, Cancel meeting; a no show once it has started), when it has any. */
+  readonly menuOf: (booking: BookingListItem) => ReactNode;
+  readonly tab: MeetingsTab;
+}
+
+/** "Product demo · Zoom": the page, then where (a call by its provider, a phone call, the place), or whose. */
+function sublineOf(booking: BookingListItem, me: string | undefined): BookingListRow['subline'] {
+  const icon: IconName =
+    booking.location.type === 'video' ? 'video' : booking.location.type === 'phone' ? 'phone' : 'map-pin';
+  // A colleague's booking (an admin's Everyone, a team page) names its host in where's place.
+  if (me !== undefined && booking.hostMemberId !== me && booking.hostName !== '') {
+    return { icon, text: `${booking.pageTitle} · ${booking.hostName}` };
+  }
+  const where =
+    booking.location.type === 'video'
+      ? booking.videoUrl === undefined
+        ? strings.video
+        : providerOf(booking.videoUrl)
+      : booking.location.type === 'phone'
+        ? strings.phone
+        : booking.location.value;
+  return { icon, text: `${booking.pageTitle} · ${where}` };
+}
+
+/** What a booking's row says beside its guest: only what is news (Needs a host, Host away, No-show). */
+function rowStatusOf(booking: BookingListItem, now: Date): BookingListRow['status'] {
+  if (booking.status !== 'confirmed') return undefined;
+  if (booking.needsHost) return { label: strings.needsHost, hue: 'red' };
+  if (booking.hostAway === true && Date.parse(booking.endsAt) > now.getTime()) {
+    return { label: strings.hostAway, hue: 'red' };
+  }
+  if (booking.noShow === true) return { label: strings.noShow, hue: 'gray' };
+  return undefined;
+}
+
+/** A row's minutes, "45 min". */
+const lengthOf = (startsAt: string, endsAt: string) =>
+  minutesLabel(Math.round((Date.parse(endsAt) - Date.parse(startsAt)) / 60_000));
+
+/** Today, Tomorrow, else the day itself; a relative label keeps its date beside it, quieter. */
+function bandOf(key: string, today: string): Pick<BookingListGroup, 'label' | 'sublabel'> {
+  const day = shortDay(key, today);
+  if (key === today) return { label: strings.today, sublabel: day };
+  if (key === addDays(today, 1)) return { label: strings.tomorrow, sublabel: day };
+  return { label: day };
+}
+
 /**
- * Meetings under their day bands (Today, Tomorrow, then the date), in the order given: a booking titled by its
- * page with "You and <guest>", the guest linked to their person; an event by its title with its calendar's colour
- * and name and its attendees.
+ * Meetings under their days (the redesign of 9 November 2026), in the order given: each day a card headed by its name,
+ * its date and a quiet count; a booking by its guest (their face and name, the page and where under it), an event by
+ * its title and calendar. On Upcoming, today's meetings already over step back, the time now runs between them and
+ * what's next, and the next call to join has Join.
  */
-function groupsOf(
-  items: readonly MeetingListItem[],
-  calendarOf: (calendarId: string) => { readonly name: string; readonly hue: Hue } | undefined,
-  personHref: (booking: BookingListItem) => string | undefined,
-  locale: string,
-  me: string | undefined,
-  zone: string,
-  /** The People object, for a guest's chip; absent, the chip still shows their name and face. */
-  peopleObjectId: string | undefined,
-  /** A booking's quick changes on its row (Reschedule, Cancel), when it has any. */
-  quickActionsOf: (booking: BookingListItem) => ReactNode,
-): readonly BookingListGroup[] {
-  const now = new Date();
-  // Days and times in the member's zone, the one the week is drawn in.
-  const today = dayKeyOf(now, zone);
-  const tomorrow = addDays(today, 1);
-  // A band's date, named from its day key alone (noon UTC read in UTC), so no zone moves it.
-  const shortDate = (key: string) =>
-    new Intl.DateTimeFormat(locale, {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      timeZone: 'UTC',
-      ...(key.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
-    }).format(new Date(`${key}T12:00:00Z`));
-  const groups: { id: string; label: string; rows: BookingListGroup['rows'][number][] }[] = [];
+function meetingGroupsOf(items: readonly MeetingListItem[], context: RowContext): readonly BookingListGroup[] {
+  const { zone, now, tab } = context;
+  const today = dayKeyIn(now, zone);
+  const isUpcoming = tab === 'upcoming';
+  // Join on the next call only (the soonest not yet over), so a day of calls reads calm.
+  const joinable = isUpcoming
+    ? items.find(
+        (item) =>
+          item.kind === 'booking' &&
+          item.booking.status === 'confirmed' &&
+          item.booking.videoUrl !== undefined &&
+          Date.parse(item.booking.endsAt) > now.getTime(),
+      )
+    : undefined;
+  const groups: { id: string; band: Pick<BookingListGroup, 'label' | 'sublabel'>; rows: BookingListRow[] }[] = [];
+  let nowShown = false;
   for (const item of items) {
     const { startsAt, endsAt } = spanOf(item);
-    // An all day event's dates are calendar dates (midnight UTC): read by date, never moved into the local zone.
     const isAllDay = item.kind === 'event' && item.event.allDay;
-    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOf(new Date(startsAt), zone);
-    const videoUrl = item.kind === 'booking' ? item.booking.videoUrl : item.event.videoUrl;
-    const isCancelled =
-      item.kind === 'booking' ? item.booking.status === 'cancelled' : item.event.status === 'cancelled';
+    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyIn(startsAt, zone);
+    const isDone = isUpcoming && Date.parse(endsAt) <= now.getTime();
     const shared = {
       id: rowIdOf(item),
-      // Under its day's band, a row says its time alone (the band says the day): the time on the date's line, bold,
-      // and nothing under it; an all day event says All day.
-      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale, zone),
-      time: '',
-      // Join only while it can still be joined: not once cancelled, nor once it has ended.
-      ...(videoUrl === undefined || isCancelled || Date.parse(endsAt) <= now.getTime()
-        ? {}
-        : { join: { href: videoUrl, provider: providerOf(videoUrl) } }),
-      ...(isCancelled ? { badge: strings.cancelled } : {}),
+      date: isAllDay ? strings.allDay : clockTime(startsAt, zone),
+      time: isAllDay ? '' : lengthOf(startsAt, endsAt),
+      ...(isDone ? { isDone: true } : {}),
     };
-    const row =
+    const row: BookingListRow =
       item.kind === 'booking'
-        ? (() => {
-            // As in round 6: the page's title, then the guest, a link to their person.
-            const href = personHref(item.booking);
-            return {
-              ...shared,
-              title: item.booking.pageTitle,
-              guestName: item.booking.visitorName,
-              ...(href === undefined ? {} : { guestHref: href }),
-              // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
-              ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
-                ? {}
-                : { hostName: item.booking.hostName }),
-              // The columns (A18): who as their chip, the page by its colour, where it stands as a Tag, and the quick
-              // changes on hover or focus.
-              chip: {
-                objectId: peopleObjectId ?? 'people',
-                recordId: item.booking.personRecordId ?? item.booking.id,
-                name: item.booking.visitorName,
-                kind: 'person' as const,
-              },
-              // A colleague's booking (an admin's Everyone, a team page) names its host beside the page.
-              source: {
-                name:
-                  me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
-                    ? item.booking.pageTitle
-                    : strings.pageAndHost(item.booking.pageTitle, item.booking.hostName),
-                hue: linkHue(item.booking.pageId),
-              },
-              ...(item.booking.status === 'confirmed' && Date.parse(item.booking.endsAt) <= now.getTime()
-                ? item.booking.noShow === true
-                  ? { status: { label: strings.noShow, hue: 'red' as const } }
-                  : {}
-                : { status: statusOf(item.booking) }),
-              quickActions: quickActionsOf(item.booking),
-              // Every booking says where it stands (the owner, 22 October 2026): Cancelled (above), Needs a host
-              // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed while it is ahead (a past one
-              // needs no tag). Calendar events have their calendar's dot instead.
-              ...(item.booking.status === 'cancelled'
-                ? {}
-                : item.booking.needsHost
-                  ? { badge: strings.needsHost, badgeTone: 'accent' as const }
-                  : item.booking.hostAway === true && Date.parse(item.booking.endsAt) > now.getTime()
-                    ? { badge: strings.hostAway, badgeTone: 'accent' as const }
-                    : item.booking.noShow === true
-                      ? { badge: strings.noShow }
-                      : Date.parse(item.booking.endsAt) > now.getTime()
-                        ? { badge: strings.status.confirmed }
-                        : {}),
-              ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
-              ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
-            };
-          })()
+        ? {
+            ...shared,
+            title: item.booking.pageTitle,
+            chip: {
+              objectId: context.peopleObjectId ?? 'people',
+              recordId: item.booking.personRecordId ?? item.booking.id,
+              name: item.booking.visitorName,
+              kind: 'person',
+            },
+            subline: sublineOf(item.booking, context.me),
+            ...(() => {
+              const status = rowStatusOf(item.booking, now);
+              return status === undefined ? {} : { status };
+            })(),
+            ...(joinable === item && item.booking.videoUrl !== undefined
+              ? { join: { href: item.booking.videoUrl, provider: providerOf(item.booking.videoUrl) } }
+              : {}),
+            quickActions: context.menuOf(item.booking),
+          }
         : (() => {
-            const calendar = calendarOf(item.event.calendarId);
+            const calendar = context.calendarOf(item.event.calendarId);
             return {
               ...shared,
               title: item.event.title,
-              ...(calendar === undefined ? {} : { calendar, source: calendar }),
-              ...(isCancelled ? { status: { label: strings.cancelled, hue: 'gray' as const } } : {}),
-              attendees: item.attendees,
-              moreAttendees: item.attendeeCount - item.attendees.length,
+              ...(calendar === undefined ? {} : { provider: calendar.provider }),
+              subline: { text: strings.fromYourCalendar(calendar?.name) },
+              ...(item.event.status === 'cancelled'
+                ? { status: { label: strings.cancelled, hue: 'gray' as const } }
+                : {}),
             };
           })();
+    // The time now, once, above the first of today's rows still to come, after one already over.
     const last = groups.at(-1);
-    if (last?.id === id) last.rows.push(row);
-    else
-      groups.push({
-        id,
-        label: id === today ? strings.today : id === tomorrow ? strings.tomorrow : shortDate(id),
-        rows: [row],
-      });
+    const withNow =
+      isUpcoming && !nowShown && id === today && !isDone && last?.id === id && last.rows.some((each) => each.isDone)
+        ? { ...row, nowBefore: clockTime(now, zone) }
+        : row;
+    if (withNow !== row) nowShown = true;
+    if (last?.id === id) last.rows.push(withNow);
+    else groups.push({ id, band: bandOf(id, today), rows: [withNow] });
   }
-  return groups;
+  return groups.map((group) => ({
+    id: group.id,
+    ...group.band,
+    count: strings.meetingCount(group.rows.filter((row) => row.chip !== undefined).length),
+    rows: group.rows,
+  }));
 }
 
-/** The list's bar: Upcoming · Past · Cancelled, then the calendars and Filter (which meetings, which link). */
+/** Requests under their days, each with Decline and Accept at its end. */
+function requestGroupsOf(
+  items: readonly HeldRequest[],
+  context: Pick<RowContext, 'zone' | 'now'> & {
+    readonly actionsOf: (item: HeldRequest) => ReactNode;
+  },
+): readonly BookingListGroup[] {
+  const today = dayKeyIn(context.now, context.zone);
+  const groups: { id: string; band: Pick<BookingListGroup, 'label' | 'sublabel'>; rows: BookingListRow[] }[] = [];
+  for (const item of items) {
+    const { request, page } = item;
+    const id = dayKeyIn(request.start, context.zone);
+    const icon: IconName =
+      page.location.type === 'video' ? 'video' : page.location.type === 'phone' ? 'phone' : 'map-pin';
+    const where =
+      page.location.type === 'video'
+        ? strings.video
+        : page.location.type === 'phone'
+          ? strings.phone
+          : page.location.value;
+    const row: BookingListRow = {
+      id: `r:${request.bookingId}`,
+      date: clockTime(request.start, context.zone),
+      time: lengthOf(request.start, request.end),
+      title: page.title,
+      chip: { objectId: 'people', recordId: request.bookingId, name: request.visitorName, kind: 'person' },
+      subline: { icon, text: `${page.title} · ${where}` },
+      actions: context.actionsOf(item),
+    };
+    const last = groups.at(-1);
+    if (last?.id === id) last.rows.push(row);
+    else groups.push({ id, band: bandOf(id, today), rows: [row] });
+  }
+  return groups.map((group) => ({
+    id: group.id,
+    ...group.band,
+    count: strings.meetingCount(group.rows.length),
+    rows: group.rows,
+  }));
+}
+
+/** The list's bar: Upcoming · Requests · Past · Cancelled, then Filter, Calendars and the views. */
 function ListBar({
   slug,
   search,
   pages,
-  panel,
   hasNoCalendar,
   onSearch,
+  calendars,
+  onDismissNotice,
   calendarViews,
   onCalendarView,
   hosts,
+  requestCount,
+  onGoToDate,
 }: {
   readonly slug: string;
   /** Mine or Everyone, which the View menu holds on a phone (the strip's switch steps aside there). */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
-  readonly panel: CalendarsPanel;
-  /** The calendars read and none is connected: Connect calendar in the toggle's place. */
+  /** The calendars read and none is connected: Calendars says so, and Show is off. */
   readonly hasNoCalendar: boolean;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  readonly calendars: CalendarsHeld<CalendarListState>;
+  readonly onDismissNotice: () => void;
   /** Meetings' views to offer beside List, and how one opens; absent leaves the switch off. */
   readonly calendarViews?: readonly CalendarViewName[];
   readonly onCalendarView?: ((view: CalendarViewName) => void) | undefined;
+  /** The requests waiting, on the Requests segment; absent while they read. */
+  readonly requestCount: number | undefined;
+  /** Go to date in the Calendars popover: the day opens in Day. */
+  readonly onGoToDate?: (day: string) => void;
 }) {
   const isPhone = usePhoneWidth();
   const onView = (next: MeetingsViewName) => {
@@ -2628,30 +2974,40 @@ function ListBar({
       start={
         <SegmentedControl
           label={strings.tabsLabel}
-          // Compact, as the strip's other switches are: with Routing (and the Roster) the strip holds seven tabs.
           size="compact"
+          isFitted
           value={search.tab}
           onChange={(value) => {
             const tab = TABS.find((each) => each === value);
             if (tab !== undefined && tab !== search.tab) onSearch({ tab });
           }}
-          segments={TABS.map((id) => ({ value: id, label: strings.tabs[id] }))}
+          segments={TABS.map((id) => ({
+            value: id,
+            label: strings.tabs[id],
+            ...(id === 'requests' && requestCount !== undefined && requestCount > 0 ? { count: requestCount } : {}),
+          }))}
         />
       }
       end={
         <>
-          {search.source !== 'bookings' && search.link === undefined && (
-            <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
+          {search.source !== 'bookings' && search.link === undefined && search.tab !== 'requests' && (
+            <CalendarsButton
+              slug={slug}
+              search={search}
+              calendars={calendars}
+              onSearch={onSearch}
+              onDismissNotice={onDismissNotice}
+              isIconOnly={isPhone}
+              {...(onGoToDate === undefined ? {} : { jumpTo: { value: search.day, onChange: onGoToDate } })}
+            />
           )}
-          {/* Which meetings show is a choice only with a calendar connected: without one there are only bookings, and
-              "Calendar events only" could only show an empty list (Q71). */}
           {onCalendarView !== undefined &&
             (isPhone ? (
               <ViewMenu view="list" views={views} onView={onView} hosts={hosts} />
             ) : (
               <MeetingsViewSwitch view="list" views={views} onView={onView} />
             ))}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources={!hasNoCalendar} />
         </>
       }
     />
@@ -2669,23 +3025,25 @@ export interface BookingsListScreenProps {
   readonly search: BookingsSearch;
   /** The data layer's held list for a question (tab, source, the calendars picked): the same one every time. */
   readonly meetings: (query: MeetingsQuery) => MeetingsHeld;
-  /** The member's accounts and calendars: each event's colour and name, and the calendars panel. */
+  /** The member's accounts and calendars: each event's colour and name, and the Calendars popover. */
   readonly calendars: CalendarsHeld<CalendarListState>;
   readonly onDismissNotice: () => void;
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
   readonly locale: string;
-  /** The host's changes to a booking from its card (AC-640). */
+  /** The host's changes to a booking from its popup and its row's ⋯ (AC-640). */
   readonly actions?: HostBookingActions;
+  /** Requests (spec 0062): read and answered through the data layer; absent, the tab lists none. */
+  readonly requests?: MeetingRequestsSource;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
-  /** The booking whose card opens first (an email's or the Inbox's link to one booking, `open` in the address). */
+  /** The booking whose popup opens first (an email's or the Inbox's link to one booking, `open` in the address). */
   readonly openFirst?: string | undefined;
   /** Whether Connect a calendar may be offered: false when calendar sync is off for the deployment. */
   readonly canConnectCalendar?: boolean;
   /** Meetings' calendar views beside List on its switch (Day, Week, and Team where there is a team). */
   readonly calendarViews?: readonly ('day' | 'week' | 'team')[];
-  /** Opens one of them (its address is the route's); absent leaves the switch off. */
-  readonly onCalendarView?: (view: 'day' | 'week' | 'team') => void;
+  /** Opens one of them (its address is the route's); absent leaves the switch off. With `day`, at that day. */
+  readonly onCalendarView?: (view: 'day' | 'week' | 'team', day?: string) => void;
 }
 
 /**
@@ -2718,9 +3076,88 @@ function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, co
 }
 
 /**
- * Bookings › List: every meeting on Upcoming, Past or Cancelled (bookings and the member's own calendar events),
- * narrowed to All, Bookings or Calendar and to the calendars the panel picks, under day bands, a page at a time
- * (More); a row opens its card in a Panel.
+ * A request's popup: the guest as its title, Request and the page beside it, when and where, the guest; Decline in its
+ * ⋯ and Accept, the one primary.
+ */
+function RequestPopup({
+  item,
+  zone,
+  onAccept,
+  onDecline,
+  onClose,
+}: {
+  readonly item: HeldRequest;
+  readonly zone: string;
+  readonly onAccept: () => void;
+  readonly onDecline: () => void;
+  readonly onClose: () => void;
+}) {
+  const { request, page } = item;
+  return (
+    <Modal
+      title={request.visitorName}
+      isOpen
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+      context={<StatusDot hue="orange">{`${strings.requestStatus} · ${page.title}`}</StatusDot>}
+      headerActions={
+        <MenuTrigger>
+          <Button variant="ghost" icon="ellipsis" label={strings.moreFor(request.visitorName)} />
+          <Menu label={strings.moreFor(request.visitorName)} onAction={() => onDecline()}>
+            <MenuItem id="decline" icon="circle-x" isDanger>
+              {strings.decline}
+            </MenuItem>
+          </Menu>
+        </MenuTrigger>
+      }
+      actions={
+        <Button variant="primary" onPress={onAccept}>
+          {strings.accept}
+        </Button>
+      }
+    >
+      <MeetingCard
+        variant="popup"
+        headingLevel={3}
+        title={strings.cardTitle(request.visitorName, page.title)}
+        when={`${longDay(dayKeyIn(request.start, zone))} · ${clockRange(request.start, request.end, zone)}`}
+        rows={[
+          {
+            id: 'where',
+            icon: page.location.type === 'video' ? 'video' : page.location.type === 'phone' ? 'phone' : 'map-pin',
+            label: strings.where,
+            value:
+              page.location.type === 'video'
+                ? strings.video
+                : page.location.type === 'phone'
+                  ? strings.phone
+                  : page.location.value,
+          },
+        ]}
+        sections={[
+          {
+            id: 'people',
+            label: strings.peopleSection,
+            people: [
+              {
+                id: `${request.bookingId}-guest`,
+                name: request.visitorName,
+                detail: request.visitorEmail,
+                isDetailCopyable: true,
+              },
+            ],
+          },
+        ]}
+      />
+    </Modal>
+  );
+}
+
+/**
+ * Bookings › Meetings (the redesign of 9 November 2026): Upcoming, Requests, Past or Cancelled (bookings and the
+ * member's own calendar events), narrowed by Filter and the Calendars popover, under day cards, a page at a time
+ * (More); a row opens its popup, and its ⋯ holds the changes.
  */
 export function BookingsListScreen({
   slug,
@@ -2733,6 +3170,7 @@ export function BookingsListScreen({
   locale,
   onSearch,
   actions,
+  requests: requestsSource,
   hosts,
   openFirst,
   canConnectCalendar: canConnectProp = true,
@@ -2742,15 +3180,24 @@ export function BookingsListScreen({
   // Off with calendar sync off for the deployment, as the layout knows (the bookings critique, A2).
   const canConnectCalendar = useCanConnectCalendar() && canConnectProp;
   const personHref = usePersonHref(slug, objects);
-  // The member's zone (their Preferences, else the browser's): each row's day band and time.
-  // One clock for every time on the screen (C13): the member's language and zone, as the week and the card read them.
+  // One clock for every time on the screen (C13): the member's zone, as the week and the popup read it.
   const format = useFormatSettings();
   const { timeZone } = format;
   const listNow = useNow();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
     (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
-      account.calendars.map((calendar) => [calendar.id, { name: calendar.name, hue: calendar.hue }] as const),
+      account.calendars.map(
+        (calendar) =>
+          [
+            calendar.id,
+            {
+              name: calendar.name,
+              hue: calendar.hue,
+              provider: account.provider === 'google' ? ('google-calendar' as const) : ('outlook' as const),
+            },
+          ] as const,
+      ),
     ),
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
@@ -2758,63 +3205,110 @@ export function BookingsListScreen({
   // With no calendar there are only bookings, and Show is hidden: a source left in the address (an old link, or one
   // from before a disconnect) reads as All, so it can't empty the list with nothing on screen to undo it.
   const search = hasNoCalendar && asked.source !== 'all' ? { ...asked, source: 'all' as const } : asked;
-  const panel = useCalendarsPanel(calendarList.status === 'ready' ? hasCalendar : undefined);
-  // The open meeting by row id, read from the list as it is now: a change shows in the panel.
-  // A colleague's booking (an admin's view, a team page) names its host rather than "You".
   const me = useMyAccess()?.memberId;
   const [openId, setOpenId] = useState<string | undefined>(openFirst === undefined ? undefined : `b:${openFirst}`);
-  // A later link to one booking while the List is already open (the arrival toast's Open, a second Inbox link) opens
+  // A later link to one booking while the list is already open (the arrival toast's Open, a second Inbox link) opens
   // it too: the address changes without the screen mounting again.
   const [askedOpen, setAskedOpen] = useState(openFirst);
   if (openFirst !== askedOpen) {
     setAskedOpen(openFirst);
     if (openFirst !== undefined) setOpenId(`b:${openFirst}`);
   }
-  // A row's Reschedule or Cancel (B-06): its dialog, drawn here, with focus back on the row's title once it closes.
+  // A change asked from a row's ⋯ or the popup's (Reschedule, Cancel meeting, Reassign, …): its dialog, drawn here
+  // with the popup closed; dismissed, the popup opens again when it was asked from there.
   const [rowAsk, setRowAsk] = useState<
-    { readonly booking: BookingListItem; readonly kind: 'move' | 'cancel'; readonly opening: number } | undefined
+    | {
+        readonly booking: BookingListItem;
+        readonly kind: BookingAsk;
+        readonly seats: readonly BookingAssignment[];
+        readonly opening: number;
+        readonly fromPopup: boolean;
+      }
+    | undefined
   >(undefined);
   const openings = useRef(0);
+  const askFor = (
+    booking: BookingListItem,
+    kind: BookingAsk,
+    seats: readonly BookingAssignment[],
+    fromPopup: boolean,
+  ) => {
+    openings.current += 1;
+    setOpenId(undefined);
+    setRowAsk({ booking, kind, seats, opening: openings.current, fromPopup });
+  };
   const people = objects.find((object) => object.standardKey === 'people');
-  const quickActionsOf = (booking: BookingListItem): ReactNode =>
-    actions === undefined ||
-    booking.seeOnly === true ||
-    booking.status !== 'confirmed' ||
-    Date.parse(booking.startsAt) <= listNow.getTime() ? undefined : (
-      <>
-        {booking.reschedules < 5 && (
-          <Button
-            variant="ghost"
-            icon="calendar-clock"
-            label={strings.rescheduleRow(booking.pageTitle, booking.visitorName)}
-            onPress={() => {
-              openings.current += 1;
-              setRowAsk({ booking, kind: 'move', opening: openings.current });
-            }}
-          />
-        )}
-        <Button
-          variant="ghost-danger"
-          icon="circle-x"
-          label={strings.cancelRow(booking.pageTitle, booking.visitorName)}
-          onPress={() => {
-            openings.current += 1;
-            setRowAsk({ booking, kind: 'cancel', opening: openings.current });
+  const menuOf = (booking: BookingListItem): ReactNode => {
+    if (actions === undefined || booking.seeOnly === true || booking.status !== 'confirmed') return undefined;
+    const hasStarted = Date.parse(booking.startsAt) <= listNow.getTime();
+    return (
+      <MenuTrigger>
+        <Button variant="ghost" icon="ellipsis" label={strings.moreFor(booking.visitorName)} />
+        <Menu
+          label={strings.moreFor(booking.visitorName)}
+          onAction={(key) => {
+            if (key === 'noShow') {
+              const noShow = booking.noShow !== true;
+              actions.markNoShow(booking.id, noShow).then(
+                () => actions.notify('success', noShow ? strings.markedNoShow : strings.unmarkedNoShow),
+                () => actions.notify('danger', strings.changeFailed),
+              );
+            } else if (key === 'move' || key === 'cancel') askFor(booking, key, [], false);
           }}
-        />
-      </>
+        >
+          {hasStarted ? (
+            <MenuItem id="noShow" icon={booking.noShow === true ? 'user-check' : 'user-x'}>
+              {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+            </MenuItem>
+          ) : (
+            <>
+              <MenuItem
+                id="move"
+                icon="calendar-clock"
+                isDisabled={booking.reschedules >= 5}
+                {...(booking.reschedules >= 5 ? { description: strings.movedFiveTimes } : {})}
+              >
+                {strings.reschedule}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem id="cancel" icon="circle-x" isDanger>
+                {strings.cancelMeeting}
+              </MenuItem>
+            </>
+          )}
+        </Menu>
+      </MenuTrigger>
     );
+  };
   const tab = search.tab;
+  const isRequests = tab === 'requests';
   // One booking page's bookings: calendar events have no page, so the server is asked for bookings only, and paging
   // stays whole.
   const source = search.link === undefined ? search.source : 'bookings';
   const list = meetings({
-    when: tab,
+    when: isRequests ? 'upcoming' : tab,
     source,
     ...(hosts === undefined ? {} : { hosts: hosts.value }),
     ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
   });
   const state = useMeetings(list);
+  // Requests: read whatever tab shows, for the count on its segment.
+  const requests = useMeetingRequests(requestsSource, pages);
+  const [openRequest, setOpenRequest] = useState<HeldRequest | undefined>(undefined);
+  const [declining, setDeclining] = useState<HeldRequest | undefined>(undefined);
+  const requestItems = (requests.state.status === 'ready' ? requests.state.items : []).filter(
+    (item) => search.link === undefined || item.page.id === search.link,
+  );
+  const accept = (item: HeldRequest) => {
+    setOpenRequest(undefined);
+    const first = firstNameOf(item.request.visitorName);
+    requests.accept(item.request.bookingId).then(
+      (done) =>
+        actions?.notify(done ? 'success' : 'danger', done ? strings.acceptedToast(first) : strings.alreadyAnswered),
+      (error: unknown) =>
+        actions?.notify('danger', isDataError(error) && error.message !== '' ? error.message : strings.changeFailed),
+    );
+  };
   // One booking page: its bookings only (calendar events have no page).
   const items =
     state.status === 'ready'
@@ -2829,156 +3323,250 @@ export function BookingsListScreen({
     state.status === 'ready' && (state.hasMore || state.moreFailed),
     items.length,
   );
-  // A change closes the panel: the lists are read again, and the booking may move tabs.
-  const panelActions = useMemo(
-    () =>
-      actions === undefined
-        ? undefined
-        : {
-            ...actions,
-            cancel: (id: string, reason: string) => actions.cancel(id, reason).then(() => setOpenId(undefined)),
-            move: (id: string, start: string) => actions.move(id, start).then(() => setOpenId(undefined)),
-          },
-    [actions],
-  );
+  const listLabel = `${strings.listLabel[tab]}, ${strings.timesIn(zoneLabel(timeZone, listNow.getTime()))}`;
   const bar = (
     <ListBar
       slug={slug}
       search={search}
       pages={pages}
-      panel={panel}
       hasNoCalendar={hasNoCalendar}
       onSearch={onSearch}
+      calendars={calendars}
+      onDismissNotice={onDismissNotice}
       calendarViews={calendarViews}
       onCalendarView={onCalendarView}
       hosts={hosts}
+      requestCount={requests.state.status === 'ready' ? requestItems.length : undefined}
+      {...(onCalendarView === undefined ? {} : { onGoToDate: (day: string) => onCalendarView('day', day) })}
     />
   );
-  const body =
-    state.status === 'loading' ? (
+  const filtered = search.link !== undefined || search.cal !== undefined || source !== 'all';
+  const clear = (
+    <Button variant="secondary" onPress={() => onSearch({ link: undefined, cal: undefined, source: 'all' })}>
+      {strings.clearFilters}
+    </Button>
+  );
+  const requestsBody =
+    requests.state.status === 'loading' ? (
       <Skeleton shape="block" />
-    ) : state.status === 'error' ? (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => list.reload()}>
-        {state.message === '' ? strings.failedText : state.message}
+    ) : requests.state.status === 'error' ? (
+      <EmptyState tone="error" title={strings.requestsFailed} onRetry={requests.reload}>
+        {requests.state.message === '' ? strings.failedText : requests.state.message}
       </EmptyState>
     ) : (
-      <>
-        <BookingList
-          // Rows' times are on the member's clock: the list's name says so for screen readers.
-          label={`${strings.listLabel[tab]}, ${strings.timesIn(zoneDisplay(timeZone, listNow.getTime()))}`}
-          groups={groupsOf(
-            items,
-            (calendarId) => byCalendar.get(calendarId),
-            personHref,
-            format.locale,
-            me,
-            timeZone,
-            people?.id,
-            quickActionsOf,
-          )}
-          layout="columns"
-          onOpen={setOpenId}
-          {...(open === undefined ? {} : { openId: rowIdOf(open) })}
-          emptyState={
-            search.link !== undefined || search.cal !== undefined || source !== 'all' ? (
-              <EmptyState
-                layout="fill"
-                icon="calendar-days"
-                title={strings.noMatch}
-                actions={
-                  <Button
-                    variant="secondary"
-                    onPress={() => onSearch({ link: undefined, cal: undefined, source: 'all' })}
-                  >
-                    {strings.clearFilters}
-                  </Button>
-                }
-              />
-            ) : (
-              <EmptyState
-                layout="fill"
-                icon="calendar-days"
-                title={strings.empty[tab].title}
-                actions={
-                  tab === 'upcoming' ? (
-                    <>
-                      <ButtonLink variant="primary" icon="link" href={bookingsTabHref(slug, 'pages')}>
-                        {strings.shareBookingPage}
+      <BookingList
+        label={listLabel}
+        layout="columns"
+        groups={requestGroupsOf(requestItems, {
+          zone: timeZone,
+          now: listNow,
+          actionsOf: (item) => (
+            <>
+              <Button onPress={() => setDeclining(item)}>{strings.decline}</Button>
+              <Button onPress={() => accept(item)}>{strings.accept}</Button>
+            </>
+          ),
+        })}
+        onOpen={(id) => setOpenRequest(requestItems.find((item) => `r:${item.request.bookingId}` === id))}
+        {...(openRequest === undefined ? {} : { openId: `r:${openRequest.request.bookingId}` })}
+        emptyState={
+          <EmptyState
+            layout="fill"
+            icon="calendar-days"
+            title={filtered ? strings.noMatch : strings.empty.requests.title}
+            actions={
+              filtered ? (
+                clear
+              ) : (
+                <Button variant="secondary" onPress={() => onSearch({ tab: 'upcoming' })}>
+                  {strings.seeUpcoming}
+                </Button>
+              )
+            }
+          >
+            {filtered ? undefined : strings.empty.requests.text}
+          </EmptyState>
+        }
+      />
+    );
+  const body = isRequests ? (
+    requestsBody
+  ) : state.status === 'loading' ? (
+    <Skeleton shape="block" />
+  ) : state.status === 'error' ? (
+    <EmptyState tone="error" title={strings.failedTitle} onRetry={() => list.reload()}>
+      {state.message === '' ? strings.failedText : state.message}
+    </EmptyState>
+  ) : (
+    <>
+      <BookingList
+        // Rows' times are on the member's clock: the list's name says so for screen readers.
+        label={listLabel}
+        groups={meetingGroupsOf(items, {
+          calendarOf: (calendarId) => byCalendar.get(calendarId),
+          me,
+          zone: timeZone,
+          now: listNow,
+          peopleObjectId: people?.id,
+          menuOf,
+          tab,
+        })}
+        layout="columns"
+        onOpen={setOpenId}
+        {...(open === undefined ? {} : { openId: rowIdOf(open) })}
+        emptyState={
+          filtered ? (
+            <EmptyState layout="fill" icon="calendar-days" title={strings.noMatch} actions={clear} />
+          ) : (
+            <EmptyState
+              layout="fill"
+              icon="calendar-days"
+              title={strings.empty[tab].title}
+              actions={
+                tab === 'upcoming' ? (
+                  <>
+                    <ButtonLink variant="primary" icon="link" href={bookingsTabHref(slug, 'pages')}>
+                      {strings.shareBookingPage}
+                    </ButtonLink>
+                    {canConnectCalendar && calendarList.status === 'ready' && !hasCalendar && (
+                      <ButtonLink variant="secondary" icon="calendar-plus" href={calendarsHref(slug)}>
+                        {strings.connectCalendar}
                       </ButtonLink>
-                      {canConnectCalendar && calendarList.status === 'ready' && !hasCalendar && (
-                        <ButtonLink variant="secondary" icon="calendar-plus" href={calendarsHref(slug)}>
-                          {strings.connectCalendar}
-                        </ButtonLink>
-                      )}
-                    </>
-                  ) : undefined
-                }
-              >
-                {strings.empty[tab].text}
-              </EmptyState>
-            )
-          }
-        />
-        {(state.hasMore || state.moreFailed) && (
-          <Button
-            variant="secondary"
-            isPending={state.isLoadingMore}
-            onPress={() => {
-              more.press();
-              list.loadMore();
+                    )}
+                  </>
+                ) : (
+                  <Button variant="secondary" onPress={() => onSearch({ tab: 'upcoming' })}>
+                    {strings.seeUpcoming}
+                  </Button>
+                )
+              }
+            >
+              {strings.empty[tab].text}
+            </EmptyState>
+          )
+        }
+      />
+      {(state.hasMore || state.moreFailed) && (
+        <Button
+          variant={state.moreFailed ? 'secondary' : 'ghost'}
+          isPending={state.isLoadingMore}
+          onPress={() => {
+            more.press();
+            list.loadMore();
+          }}
+        >
+          {state.moreFailed ? strings.moreFailed : strings.more}
+        </Button>
+      )}
+    </>
+  );
+  const asking = rowAsk === undefined ? undefined : { ...rowAsk, booking: heldBooking(items, rowAsk.booking) };
+  /** Dismissed: back to the popup when it was asked from there. */
+  const dismiss = () => {
+    if (asking?.fromPopup === true) setOpenId(`b:${asking.booking.id}`);
+    setRowAsk(undefined);
+  };
+  return (
+    // The list fills the view and scrolls inside it, so its day heads stick and an empty list says so in its middle.
+    <PageColumn align="fill">
+      {bar}
+      {body}
+      {open !== undefined &&
+        (open.kind === 'booking' ? (
+          <BookingCard
+            key={open.booking.id}
+            variant="popup"
+            booking={open.booking}
+            personHref={personHref(open.booking)}
+            locale={locale}
+            actions={actions}
+            onAsk={(kind, seats) => askFor(open.booking, kind, seats, true)}
+            onClose={() => setOpenId(undefined)}
+          />
+        ) : (
+          <Modal
+            title={open.event.title}
+            isOpen
+            onOpenChange={(isOpen) => {
+              if (!isOpen) setOpenId(undefined);
             }}
           >
-            {state.moreFailed ? strings.moreFailed : strings.more}
-          </Button>
-        )}
-      </>
-    );
-  return (
-    // The list fills the view and scrolls inside it, so its day bands stick and an empty list says so in its middle.
-    <PageColumn align="fill">
-      {/* Its own row above the list, not the strip's end: with Routing (and the Roster) beside them, the strip's seven
-          tabs and List's tools no longer fit one row at 1280 (spec 0037, AC-1447). */}
-      {bar}
-      <CalendarsFrame
-        isFill
-        slug={slug}
-        search={search}
-        calendars={calendars}
-        panel={panel}
-        onSearch={onSearch}
-        onDismissNotice={onDismissNotice}
-        isHidden={source === 'bookings'}
-      >
-        {body}
-      </CalendarsFrame>
-      {open !== undefined && (
-        <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
-          {open.kind === 'booking' ? (
-            <BookingCard
-              headingLevel={4}
-              variant="panel"
-              booking={open.booking}
-              personHref={personHref(open.booking)}
-              locale={locale}
-              actions={panelActions}
-            />
-          ) : (
             <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={4} />
-          )}
-        </Panel>
-      )}
-      {rowAsk !== undefined && actions !== undefined && (
-        <BookingDialog
-          key={rowAsk.opening}
-          // The booking as the list holds it now (cancelled at once behind its confirm), or as it was asked about.
-          booking={heldBooking(items, rowAsk.booking)}
-          actions={actions}
-          locale={format.locale}
-          ask={rowAsk.kind}
-          onClose={() => setRowAsk(undefined)}
-          onDone={() => setRowAsk(undefined)}
+          </Modal>
+        ))}
+      {openRequest !== undefined && (
+        <RequestPopup
+          item={openRequest}
+          zone={timeZone}
+          onAccept={() => accept(openRequest)}
+          onDecline={() => {
+            setOpenRequest(undefined);
+            setDeclining(openRequest);
+          }}
+          onClose={() => setOpenRequest(undefined)}
         />
       )}
+      {declining !== undefined && (
+        <CancelConfirm
+          guestName={declining.request.visitorName}
+          isRequest
+          onClose={() => setDeclining(undefined)}
+          onCancel={(note) =>
+            requests.decline(declining.request.bookingId, note === '' ? undefined : note).then((done) => {
+              setDeclining(undefined);
+              actions?.notify(
+                done ? 'success' : 'danger',
+                done ? strings.declinedToast(firstNameOf(declining.request.visitorName)) : strings.alreadyAnswered,
+              );
+            })
+          }
+        />
+      )}
+      {asking !== undefined && actions !== undefined && asking.kind === 'reassign' && (
+        <ReassignDialog
+          key={asking.opening}
+          booking={asking.booking}
+          seats={asking.seats}
+          actions={actions}
+          onClose={dismiss}
+          onReassigned={() => setRowAsk(undefined)}
+        />
+      )}
+      {asking !== undefined && actions !== undefined && asking.kind === 'reassignAway' && (
+        <AwayReassignDialog
+          key={asking.opening}
+          booking={asking.booking}
+          seats={asking.seats}
+          actions={actions}
+          onClose={dismiss}
+          onReassigned={() => setRowAsk(undefined)}
+        />
+      )}
+      {asking !== undefined &&
+        actions !== undefined &&
+        (asking.kind === 'move' ||
+          asking.kind === 'cancel' ||
+          asking.kind === 'link' ||
+          asking.kind === 'meetingLink') && (
+          <BookingDialog
+            key={asking.opening}
+            booking={asking.booking}
+            actions={actions}
+            ask={asking.kind}
+            onClose={dismiss}
+            onDone={() => {
+              const name = asking.booking.visitorName;
+              setRowAsk(undefined);
+              // The control that asked (the popup's ⋯, or the row's) may be gone with the change: focus goes to the
+              // booking's row while it is still in the list, else stays on the page.
+              focusLater(() =>
+                [...document.querySelectorAll<HTMLButtonElement>('li[data-pressable] button')].find(
+                  (button) => button.textContent === name,
+                ),
+              );
+            }}
+          />
+        )}
     </PageColumn>
   );
 }
