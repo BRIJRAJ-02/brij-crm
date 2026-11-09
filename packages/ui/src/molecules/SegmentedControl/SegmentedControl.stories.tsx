@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { fakeThemeController } from '../../workbench/theme.ts';
@@ -264,5 +265,36 @@ export const ShortLabels: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('radio', { name: 'Last 30 days' })).toBeChecked();
     await expect(canvas.getByText('12M')).toBeVisible();
+  },
+};
+
+/** A quiet count after a label (Meetings' Requests): read after it, and a new number rolls in. */
+function CountDemo(args: Story['args']) {
+  const [count, setCount] = useState(2);
+  return (
+    <Stage>
+      <SegmentedControl
+        {...args}
+        label="Which meetings"
+        size="compact"
+        isFitted
+        defaultValue="upcoming"
+        segments={[
+          { value: 'upcoming', label: 'Upcoming' },
+          { value: 'requests', label: 'Requests', count },
+          { value: 'past', label: 'Past' },
+        ]}
+      />
+      <Button onPress={() => setCount((n) => n + 1)}>More</Button>
+    </Stage>
+  );
+}
+
+export const WithCount: Story = {
+  render: (args) => <CountDemo {...args} />,
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('radio', { name: 'Requests, 2' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+    await expect(canvas.getByRole('radio', { name: 'Requests, 3' })).toBeInTheDocument();
   },
 };

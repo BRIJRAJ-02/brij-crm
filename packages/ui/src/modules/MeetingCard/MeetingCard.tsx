@@ -6,6 +6,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Link } from '../../atoms/Link/Link.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './MeetingCard.module.css';
@@ -46,6 +47,13 @@ export interface MeetingCardSection {
   readonly label: string;
   readonly people?: readonly MeetingCardPerson[];
   readonly rows?: readonly MeetingCardRow[];
+  /**
+   * `popup` only: `folded` puts the group in a Disclosure under its label, closed (Answers, History), with `count`
+   * after the label; `plain` runs it on unlabelled (the facts at the top). Absent, it opens on its label.
+   */
+  readonly display?: 'plain' | 'folded';
+  /** `popup` only: a folded group's count after its label (Answers 2). */
+  readonly count?: number;
 }
 
 /** Props for MeetingCard. */
@@ -82,10 +90,13 @@ export interface MeetingCardProps {
   readonly sections?: readonly MeetingCardSection[];
   /**
    * `popover` (the default): the week's card, its title on the text column beside the gutter and the actions in a
-   * footer. `panel` (Bookings › List's side panel, after Calendly's): the title and each section's heading start at
-   * the panel's own edge, under its heading, and the actions sit right under the title, where they are seen first.
+   * footer. `panel` (a side panel, after Calendly's): the title and each section's heading start at the panel's own
+   * edge, under its heading, and the actions sit right under the title, where they are seen first.
+   * `popup` (the meeting popup, the Bookings redesign of 9 November 2026) sits in a Modal whose title bar names the
+   * meeting and holds its status and ⋯: no heading or actions of its own, `when` as the first fact beside a clock, and
+   * the sections as the popup's groups, labelled, plain or folded (`display`).
    */
-  readonly variant?: 'popover' | 'panel';
+  readonly variant?: 'popover' | 'panel' | 'popup';
 }
 
 /** One person a row: their avatar in the gutter, their name (a link with `href`) and a quieter detail. */
@@ -176,6 +187,47 @@ export function MeetingCard({
   const Heading = headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : 'h4';
   const SectionHeading = headingLevel === 2 ? 'h3' : headingLevel === 3 ? 'h4' : 'h5';
   const isPanel = variant === 'panel';
+  if (variant === 'popup') {
+    return (
+      <article className={styles.root} aria-label={title} data-variant={variant}>
+        {notices !== undefined && <div className={styles.notices}>{notices}</div>}
+        <RowList rows={[{ id: 'when', icon: 'clock', label: strings.when, value: when }, ...rows]} />
+        {people.length > 0 && <PeopleList people={people} label={peopleLabel} />}
+        {sections.map((section) => {
+          const lists = (
+            <>
+              {section.people !== undefined && section.people.length > 0 && (
+                <PeopleList people={section.people} label={section.label} />
+              )}
+              {section.rows !== undefined && section.rows.length > 0 && <RowList rows={section.rows} />}
+            </>
+          );
+          if (section.display === 'plain') return <Fragment key={section.id}>{lists}</Fragment>;
+          if (section.display === 'folded') {
+            return (
+              <div key={section.id} className={styles.fold}>
+                <Disclosure
+                  title={section.label}
+                  {...(section.count === undefined ? {} : { count: section.count })}
+                  headingLevel={headingLevel === 4 ? 5 : headingLevel === 3 ? 4 : 3}
+                >
+                  <div className={styles.folded}>{lists}</div>
+                </Disclosure>
+              </div>
+            );
+          }
+          return (
+            <section key={section.id} className={styles.group} aria-labelledby={`${id}-${section.id}`}>
+              <SectionHeading id={`${id}-${section.id}`} className={styles.sectionLabel}>
+                {section.label}
+              </SectionHeading>
+              {lists}
+            </section>
+          );
+        })}
+      </article>
+    );
+  }
   const hasActions = actions !== undefined || endAction !== undefined;
   const actionBar = hasActions ? (
     <footer className={styles.foot}>

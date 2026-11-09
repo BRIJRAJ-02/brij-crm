@@ -1,11 +1,12 @@
 import type { RecordRefDisplay } from '@crm/contracts/values';
-import { useId, type MouseEvent, type ReactNode } from 'react';
+import { Fragment, useId, type MouseEvent, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
-import { Button } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
+import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
-import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './BookingList.module.css';
@@ -45,18 +46,23 @@ export interface BookingListRow {
   /** The row's actions at its end (Cancel, an Edit menu). */
   readonly actions?: ReactNode;
   /**
-   * `columns` only: who it is with, drawn as a record chip draws a person (their face, then their name) in place of the
-   * title's words; the name is the row's title button, so the row keeps one way in and the person's page is the card's
-   * link, not the row's.
+   * `columns` only: who it is with, their face before their name; the name is the row's title button, so the row keeps
+   * one way in and the person's page is the meeting popup's link, not the row's.
    */
   readonly chip?: RecordRefDisplay;
-  /** `columns` only: the page it came through ("Intro call") by its colour, or a calendar event's calendar. */
-  readonly source?: { readonly name: string; readonly hue: Hue };
-  /** `columns` only: where it stands, as a Tag in its own column ("Confirmed", "Needs a host" in orange). */
+  /** `columns` only: a calendar event's provider, its mark in the face's place ("google-calendar"). */
+  readonly provider?: ProviderName;
+  /** `columns` only: the quiet line under the name, an icon then words ("Product demo · Zoom"). */
+  readonly subline?: { readonly icon?: IconName; readonly text: string };
+  /** `columns` only: a state worth saying beside the name, a quiet dot and its word ("Needs a host", "No-show"). */
   readonly status?: { readonly label: string; readonly hue: Hue };
+  /** `columns` only: it has ended (earlier today): its words step back. */
+  readonly isDone?: boolean;
+  /** `columns` only: the time now ("10:20 am"), drawn as a line above this row, between what's done and what's next. */
+  readonly nowBefore?: string;
   /**
-   * `columns` only: the row's quick changes (Reschedule, Cancel), shown while the row is hovered or holds focus, and
-   * always on a touch screen; their room is kept, so nothing shifts as they show.
+   * `columns` only: the row's quick changes (a ⋯ menu), shown while the row is hovered or holds focus, and always on a
+   * touch screen; their room is kept, so nothing shifts as they show.
    */
   readonly quickActions?: ReactNode;
 }
@@ -66,6 +72,10 @@ export interface BookingListGroup {
   readonly id: string;
   /** The band's label ("Today", "Wed, 21 Oct"), shown in small capitals. */
   readonly label: string;
+  /** `columns` only: the date after a relative label, quieter ("Mon 9 Nov" after "Today"). */
+  readonly sublabel?: string;
+  /** `columns` only: a quiet count at the head's end, as plain grey text ("5 meetings"). */
+  readonly count?: string;
   readonly rows: readonly BookingListRow[];
 }
 
@@ -89,9 +99,9 @@ export interface BookingListProps {
    */
   readonly placement?: 'page' | 'card';
   /**
-   * `stacked` (the default) is two lines a row. `columns` (Bookings › List) is the records table's rhythm, one line a
-   * row: the time, who it is with (`chip`, else the title), where it came from (`source`), its `status` Tag, then the
-   * actions, `quickActions` first. Under 480px of container the source column goes and the status follows the title.
+   * `stacked` (the default) is two lines a row. `columns` (Bookings › Meetings) draws each day as a card of its own
+   * under a head (the day, its date, a quiet count): a row is the time over its length, who it is with (their face,
+   * their name, a quiet `subline`), then Join, the `quickActions` on hover and the row's `actions`.
    */
   readonly layout?: 'stacked' | 'columns';
 }
@@ -146,75 +156,112 @@ export function BookingList({
     >
       {groups.map((group, groupIndex) => (
         <div key={group.id} className={styles.group}>
-          <h3 className={styles.band}>{group.label}</h3>
+          {layout === 'columns' ? (
+            <div className={styles.head}>
+              <h3 className={styles.band}>
+                {group.label}
+                {group.sublabel !== undefined && <span className={styles.sublabel}> {group.sublabel}</span>}
+              </h3>
+              {group.count !== undefined && <span className={styles.count}>{group.count}</span>}
+            </div>
+          ) : (
+            <h3 className={styles.band}>{group.label}</h3>
+          )}
           <ul className={styles.rows} aria-label={group.label}>
             {group.rows.map((row, rowIndex) => {
               const rowId = `${id}-${String(groupIndex)}-${String(rowIndex)}`;
               const isOpen = row.id === openId;
               if (layout === 'columns') {
                 return (
-                  // As the stacked row: the title button is the keyboard's way in, a press anywhere else opens it too.
-                  // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions
-                  <li
-                    key={row.id}
-                    className={styles.row}
-                    data-pressable=""
-                    data-open={isOpen || undefined}
-                    aria-current={isOpen || undefined}
-                    onClick={(event) => {
-                      const element = event.currentTarget;
-                      openOnPress(event, () => onOpen(row.id, element));
-                    }}
-                  >
-                    <span className={styles.date} id={`${rowId}-when`}>
-                      {row.date}
-                    </span>
-                    <span className={styles.main}>
-                      <span className={styles.titleLine}>
-                        {row.chip !== undefined && (
+                  <Fragment key={row.id}>
+                    {row.nowBefore !== undefined && (
+                      <li className={styles.now} aria-hidden="true">
+                        <span className={styles.nowLabel}>{row.nowBefore}</span>
+                      </li>
+                    )}
+                    {/* As the stacked row: the title button is the keyboard's way in, a press anywhere else opens it. */}
+                    {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions */}
+                    <li
+                      className={styles.row}
+                      data-pressable=""
+                      data-open={isOpen || undefined}
+                      data-done={row.isDone === true || undefined}
+                      aria-current={isOpen || undefined}
+                      onClick={(event) => {
+                        const element = event.currentTarget;
+                        openOnPress(event, () => onOpen(row.id, element));
+                      }}
+                    >
+                      <span className={styles.when} id={`${rowId}-when`}>
+                        <span className={styles.date}>{row.date}</span>
+                        {row.time !== '' && <span className={styles.time}>{row.time}</span>}
+                      </span>
+                      <span className={styles.person}>
+                        {row.chip !== undefined ? (
                           <span className={styles.face}>
                             <Avatar
                               name={row.chip.name}
                               id={row.chip.recordId}
-                              size="xs"
+                              size="lg"
                               isDecorative
                               {...(row.chip.imageSrc === undefined ? {} : { src: row.chip.imageSrc })}
                             />
                           </span>
+                        ) : (
+                          row.provider !== undefined && (
+                            <span className={styles.face}>
+                              <ProviderMark provider={row.provider} size="md" />
+                            </span>
+                          )
                         )}
-                        <span className={styles.name}>
-                          <Button
-                            variant="ghost"
-                            isFullWidth
-                            aria-describedby={`${rowId}-when ${rowId}-source`}
-                            {...(openId === undefined ? {} : { isExpanded: isOpen })}
-                            onPress={(event) => {
-                              const element = event.target instanceof HTMLElement ? event.target.closest('li') : null;
-                              if (element !== null) onOpen(row.id, element);
-                            }}
-                          >
-                            {row.chip === undefined ? row.title : row.chip.name}
-                          </Button>
+                        <span className={styles.main}>
+                          <span className={styles.titleLine}>
+                            <span className={styles.name}>
+                              <Button
+                                variant="ghost"
+                                isFullWidth
+                                aria-describedby={`${rowId}-when${row.subline === undefined ? '' : ` ${rowId}-sub`}`}
+                                onPress={(event) => {
+                                  const element =
+                                    event.target instanceof HTMLElement ? event.target.closest('li') : null;
+                                  if (element !== null) onOpen(row.id, element);
+                                }}
+                              >
+                                {row.chip === undefined ? row.title : row.chip.name}
+                              </Button>
+                            </span>
+                            {row.status !== undefined && (
+                              <span className={styles.status}>
+                                <StatusDot hue={row.status.hue}>{row.status.label}</StatusDot>
+                              </span>
+                            )}
+                          </span>
+                          {row.subline !== undefined && (
+                            <span className={styles.subline} id={`${rowId}-sub`}>
+                              {row.subline.icon !== undefined && <Icon name={row.subline.icon} size="xs" />}
+                              <span className={styles.sublineText}>{row.subline.text}</span>
+                            </span>
+                          )}
                         </span>
+                      </span>
+                      <span className={styles.actions} data-quiet={row.actions === undefined || undefined}>
                         {row.join !== undefined && (
-                          <span className={styles.join}>
-                            <Icon name="video" size="sm" />
-                            <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
+                          <span className={styles.joinAt}>
+                            <ButtonLink
+                              href={row.join.href}
+                              isExternal
+                              icon="video"
+                              label={strings.join(row.join.provider)}
+                            >
+                              {strings.joinShort}
+                            </ButtonLink>
                           </span>
                         )}
+                        {row.quickActions !== undefined && <span className={styles.quick}>{row.quickActions}</span>}
+                        {row.actions}
                       </span>
-                    </span>
-                    <span className={styles.source} id={`${rowId}-source`}>
-                      {row.source !== undefined && <StatusDot hue={row.source.hue}>{row.source.name}</StatusDot>}
-                    </span>
-                    <span className={styles.status}>
-                      {row.status !== undefined && <Tag hue={row.status.hue}>{row.status.label}</Tag>}
-                    </span>
-                    <span className={styles.actions}>
-                      {row.quickActions !== undefined && <span className={styles.quick}>{row.quickActions}</span>}
-                      {row.actions}
-                    </span>
-                  </li>
+                    </li>
+                  </Fragment>
                 );
               }
               return (

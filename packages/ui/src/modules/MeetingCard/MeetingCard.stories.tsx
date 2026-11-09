@@ -402,3 +402,57 @@ export const Panel: Story = {
     await expect(reschedule.compareDocumentPosition(guest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   },
 };
+
+/**
+ * The meeting popup's card (in a Modal whose title bar names it): when first beside a clock, the facts, People under
+ * its label, the guest link plain, and Answers and History folded.
+ */
+export const Popup: Story = {
+  render: (args) => (
+    <Stage>
+      <MeetingCard
+        {...args}
+        variant="popup"
+        headingLevel={3}
+        rows={[where, { id: 'note', icon: 'message-square', label: 'Note', value: '“We run 14 sales reps.”' }]}
+        sections={[
+          {
+            id: 'people',
+            label: 'People',
+            people: [
+              { id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true },
+              { id: 'brij', name: 'Brij Raj', detail: 'Host' },
+            ],
+          },
+          {
+            id: 'link',
+            label: 'Guest link',
+            display: 'plain',
+            rows: [{ id: 'link', icon: 'link', label: 'Guest link', value: 'Where they move or cancel' }],
+          },
+          {
+            id: 'answers',
+            label: 'Answers',
+            display: 'folded',
+            count: 2,
+            rows: [{ id: 'size', icon: 'file-text', label: 'Team size', value: '14' }],
+          },
+          {
+            id: 'history',
+            label: 'History',
+            display: 'folded',
+            rows: [{ id: 'booked', icon: 'calendar-check', label: 'Booked', value: 'Booked 6 Nov, 2:30 pm' }],
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Friday, October 23 · 9:00 – 9:30 AM')).toBeInTheDocument();
+    await expect(canvas.queryByRole('heading', { name: 'Grace Hopper · Intro call' })).not.toBeInTheDocument();
+    const answers = canvas.getByRole('button', { name: /Answers/ });
+    await expect(answers).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(answers);
+    await expect(canvas.getByText('14')).toBeVisible();
+  },
+};

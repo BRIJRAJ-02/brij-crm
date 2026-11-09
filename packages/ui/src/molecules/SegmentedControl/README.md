@@ -31,6 +31,8 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 - Since spec 0026 the app sets the theme in Settings › Preferences, as a row with a Select, not in the sidebar footer; `ThemeSwitch` stays for pages outside the app shell (the status page).
 - `ThemeSwitch` takes the app's theme controller (`context.theme`), reads it, and sets it; System removes the saved choice and follows the OS.
 
+- A segment's `count` is a quiet number after its label in the secondary colour (Meetings' Requests 2), read after the label; each new number rolls up into place over `duration-popover` (the rolling count), and only fades under reduced motion. Why a prop: the count belongs to the choice, and a Badge read as an alert on a view switch. Story: WithCount.
+
 ## States
 
 Chosen (raised thumb), with colour dots (`hue`, a cut name whole in a tooltip), fitted, read only (the chosen segment at full contrast, nothing changes), compact, collapsed to icons on a phone, hover (pointer only), focus (the 1px `accent-line` ring inside the segment, or the thumb's edge turning `accent-line` on the chosen one), disabled; horizontal or vertical. The thumb slides with `ease-in-out` over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
