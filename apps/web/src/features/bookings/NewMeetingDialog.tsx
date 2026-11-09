@@ -15,11 +15,11 @@ import {
 } from '@crm/data';
 import { usePageDestination } from '@crm/data/react';
 import {
-  AttributeEditor,
   Avatar,
   Button,
   Callout,
   DatePicker,
+  Disclosure,
   Field,
   Form,
   InfoTip,
@@ -28,7 +28,6 @@ import {
   SuggestionList,
   suggestionOptionId,
   useFormatSettings,
-  type FieldAttribute,
   type FormRefusal,
   type SuggestionRow,
 } from '@crm/ui';
@@ -44,7 +43,7 @@ import {
 import { calendarOptions } from '../calendars/calendar-options.ts';
 import { isCalendarInUse } from '../calendars/in-use.ts';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
-import { zoneDisplay } from '../../public/booking/time.ts';
+import { zoneLabel } from './meeting-format.ts';
 import { instantOf, type DrawnSpan } from './span.ts';
 import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
@@ -60,21 +59,6 @@ const MAX_GUESTS = 10;
 
 /** How many people from People show under With at once. */
 const SHOWN_PEOPLE = 6;
-
-/**
- * Also invite, drawn by the field set's Email editor with several values: each address a removable chip, and an 11th
- * refused in the add field with what was typed kept.
- */
-const GUESTS: FieldAttribute = {
-  id: 'guests',
-  name: strings.alsoInvite,
-  type: 'email',
-  allowMultiple: true,
-  isRequired: false,
-  isUnique: false,
-  isReadOnly: false,
-  limit: { count: MAX_GUESTS, message: strings.guestsFull(MAX_GUESTS) },
-};
 
 /** What Book it sends. */
 export interface NewMeeting {
@@ -274,7 +258,12 @@ export function NewMeetingDialog({
   const [picked, setPageId] = useState(pages[0]?.id ?? '');
   const pageId = choices.some((page) => page.id === picked) ? picked : (choices[0]?.id ?? '');
   const [guests, setGuests] = useState<readonly string[]>([]);
+  // A row added by Add guests takes focus (not the rows there as the dialog opens).
+  const [addedGuest, setAddedGuest] = useState(false);
   const [guestsError, setGuestsError] = useState<string | undefined>(undefined);
+  // The refusal goes on the first address that isn't one, else the last row.
+  const badGuest = guests.findIndex((guest) => guest.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(guest.trim()));
+  const guestErrorAt = badGuest === -1 ? guests.length - 1 : badGuest;
   const [message, setMessage] = useState('');
   // A calendar the member picked; undefined follows the page's own, else their default (the server's own rule).
   const [calendarId, setCalendarId] = useState<string | undefined>(undefined);
@@ -285,7 +274,7 @@ export function NewMeetingDialog({
   // At or past the host's meeting limit that day or week: said before Book it, which still books (job J7).
   const overLimit = useOverLimit(limitsAt, forId === ME ? undefined : forId, forName, start.toISOString(), span.dayKey);
   // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
-  const isDirty = [name, email, message].some((value) => value.trim() !== '') || guests.length > 0;
+  const isDirty = [name, email, message, ...guests].some((value) => value.trim() !== '');
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
   // People as you type in With: shown under it until one is picked, Esc puts them away, or focus leaves.
   const typed = name.trim();
@@ -368,7 +357,7 @@ export function NewMeetingDialog({
       name: name.trim(),
       email: email.trim(),
       timeZone,
-      guests,
+      guests: guests.map((guest) => guest.trim()).filter((guest) => guest !== ''),
       ...(message.trim() === '' ? {} : { message: message.trim() }),
       // Sent only when picked, and only while Calendar is offered: never for a colleague (their calendars stay theirs).
       ...(calendarId === undefined || writable.length < 2 || forId !== ME ? {} : { calendarId }),
@@ -381,7 +370,7 @@ export function NewMeetingDialog({
       (error: unknown) => {
         setBusy(false);
         const all = refusalsOf(error);
-        // A guest's address is refused under Also invite, which the field set draws (no Form field holds it).
+        // A guest's address is refused under Guests (no Form field holds it by the server's name).
         setGuestsError(all.find((refusal) => refusal.attributeId === 'guests')?.message);
         setRefusals(all.filter((refusal) => refusal.attributeId !== 'guests'));
       },
@@ -509,18 +498,55 @@ export function NewMeetingDialog({
           // Without a calendar the guest still gets an email, and nothing else: one quiet line where it applies.
           {...(!hasCalendar && forId === ME ? { hint: strings.noCalendar } : {})}
         />
-        {/* Who it is with, then their zone, together: the zone only sets how their invitation reads the time. */}
-        <Select
-          label={strings.theirTimeZone}
-          items={zones}
-          filter={zoneMatches}
-          isSearchable
-          value={timeZone}
-          isDisabled={busy}
-          onChange={(zone) => {
-            if (zone !== null) setTimeZone(zone);
-          }}
-        />
+        {/* Guests right under Email, one address a row with its ×, up to ten (the owner, 9 November 2026). */}
+        {guests.map((guest, index) => (
+          <Field
+            // Rows are added and removed in place; each keeps its own field while it is there.
+            key={index}
+            label={index === 0 ? strings.guestsLabel : strings.guestRow(index + 1)}
+            {...(index === 0 ? { labelAside: strings.upToGuests(MAX_GUESTS) } : { isLabelHidden: true })}
+            type="email"
+            placeholder={strings.emailPlaceholder}
+            autoComplete="off"
+            maxLength={254}
+            value={guest}
+            // A row just added takes focus, so typing goes straight in.
+            autoFocus={guest === '' && index === guests.length - 1 && addedGuest}
+            isDisabled={busy}
+            onChange={(next) => {
+              setGuestsError(undefined);
+              setGuests(guests.map((each, at) => (at === index ? next : each)));
+            }}
+            {...(guestsError !== undefined && index === guestErrorAt ? { error: guestsError } : {})}
+            after={
+              <Button
+                variant="ghost"
+                icon="x"
+                label={strings.removeGuest(index + 1)}
+                isDisabled={busy}
+                onPress={() => {
+                  setGuestsError(undefined);
+                  setGuests(guests.filter((_, at) => at !== index));
+                }}
+              />
+            }
+          />
+        ))}
+        {guests.length < MAX_GUESTS && (
+          <div>
+            <Button
+              variant="ghost"
+              icon="user-plus"
+              isDisabled={busy}
+              onPress={() => {
+                setAddedGuest(true);
+                setGuests([...guests, '']);
+              }}
+            >
+              {guests.length === 0 ? strings.addGuests : strings.addAnotherGuest}
+            </Button>
+          </div>
+        )}
         {/* The day moves in place (Calendly's and Basecamp's new event): closing to pick another was a dead end. */}
         <DatePicker
           label={strings.day}
@@ -537,11 +563,9 @@ export function NewMeetingDialog({
           onChange={onSpanChange}
           maxMinutes={MAX_MINUTES}
           showsLength
-          // From and To are on the member's clock; Their time zone above only sets the guest's invite. Said only when
-          // the two differ: with the same zone, Their time zone already names it.
-          {...(timeZone === memberTimeZone
-            ? {}
-            : { hint: strings.timesIn(zoneDisplay(memberTimeZone, start.getTime())) })}
+          // From and To are on the member's clock, said beside the length; Their time zone (More options) only sets the
+          // guest's invite.
+          hint={strings.timesIn(zoneLabel(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
         {forName !== undefined && choices.length === 0 && (
@@ -569,43 +593,42 @@ export function NewMeetingDialog({
             }}
           />
         )}
-        {/* Where the event goes, only with two or more calendars that take events (spec 0024 milestone 5). */}
-        {calendars?.status === 'ready' && writable.length > 1 && pageDestination !== undefined && forId === ME && (
-          <CalendarChoice
-            calendars={calendars}
-            destination={pageDestination(pageId)}
-            calendarId={calendarId}
-            onChange={setCalendarId}
+        {/* The quieter choices, folded: their zone (it only sets how their invitation reads the time), which
+            calendar takes the event, and a message. */}
+        <Disclosure title={strings.moreOptions} variant="fields">
+          <Select
+            label={strings.theirTimeZone}
+            items={zones}
+            filter={zoneMatches}
+            isSearchable
+            value={timeZone}
             isDisabled={busy}
+            onChange={(zone) => {
+              if (zone !== null) setTimeZone(zone);
+            }}
           />
-        )}
-        <AttributeEditor
-          attribute={GUESTS}
-          value={guests.length === 0 ? null : guests}
-          surface="form"
-          // Held while Book it is out, as Day, the times and Calendar are: the guests sent are the ones shown.
-          isDisabled={busy}
-          onCommit={(value) => {
-            // The Email editor commits the whole list of addresses, checked by the email type.
-            const next: readonly string[] = Array.isArray(value)
-              ? value.filter((item): item is string => typeof item === 'string')
-              : typeof value === 'string'
-                ? [value]
-                : [];
-            setGuestsError(undefined);
-            setGuests(next);
-          }}
-          {...(guestsError === undefined ? {} : { error: guestsError })}
-        />
-        <Field
-          label={strings.message}
-          name="message"
-          placeholder={strings.messagePlaceholder}
-          isMultiline
-          maxLength={1000}
-          value={message}
-          onChange={setMessage}
-        />
+          {/* Where the event goes, only with two or more calendars that take events (spec 0024 milestone 5). */}
+          {calendars?.status === 'ready' && writable.length > 1 && pageDestination !== undefined && forId === ME && (
+            <CalendarChoice
+              calendars={calendars}
+              destination={pageDestination(pageId)}
+              calendarId={calendarId}
+              onChange={setCalendarId}
+              isDisabled={busy}
+            />
+          )}
+          <Field
+            label={strings.message}
+            labelAside={strings.optional}
+            name="message"
+            placeholder={strings.messagePlaceholder}
+            isMultiline
+            maxLength={1000}
+            showCounter
+            value={message}
+            onChange={setMessage}
+          />
+        </Disclosure>
       </Form>
     </Modal>
   );

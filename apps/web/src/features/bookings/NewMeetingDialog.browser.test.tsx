@@ -166,29 +166,33 @@ describe('New meeting', () => {
     expect(onSpanChange).toHaveBeenLastCalledWith({ dayKey: '2026-10-24', startMinute: 570, endMinute: 615 });
   });
 
-  it('says nobody is invited yet as Email’s hint, and keeps their zone with who it is with', async () => {
+  it('says nobody is invited yet as Email’s hint, puts Guests under Email, and folds their zone into More options', async () => {
     await open();
     const name = page.getByRole('textbox', { name: 'With' }).element();
     const email = page.getByRole('textbox', { name: 'Email' });
-    const zone = page.getByRole('button', { name: /Their time zone/ }).element();
+    const guests = page.getByRole('button', { name: 'Add guests' }).element();
     const day = page.getByRole('group', { name: 'Day' }).element();
     // One quiet line under Email, not a box above the fields.
     await expect.element(email).toHaveAccessibleDescription('Emailed only, no calendar event or video link.');
     expect(before(name, email.element())).toBe(true);
-    expect(before(email.element(), zone)).toBe(true);
-    expect(before(zone, day)).toBe(true);
+    expect(before(email.element(), guests)).toBe(true);
+    expect(before(guests, day)).toBe(true);
+    // Their time zone waits in More options, closed.
+    expect(page.getByRole('button', { name: /Their time zone/ }).elements()).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: 'More options' }));
+    await expect.element(page.getByRole('button', { name: /Their time zone/ })).toBeVisible();
     // The name is still where typing starts.
+    await userEvent.click(page.getByRole('textbox', { name: 'With' }));
     await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveFocus();
   });
 
-  it('keeps it short with a calendar: no note under Email, From and To on one row, no zone line for one zone', async () => {
+  it('keeps it short with a calendar: no note under Email, From and To on one row, the zone said once', async () => {
     await open({ calendars: calendarsOf(['Work']) });
     await expect.element(page.getByRole('textbox', { name: 'Email' })).not.toHaveAccessibleDescription();
     const from = page.getByRole('button', { name: /From$/ }).element().getBoundingClientRect();
     const to = page.getByRole('button', { name: / To$/ }).element().getBoundingClientRect();
     expect(to.top).toBe(from.top);
-    // Their time zone starts on the member's own, which already names it.
-    expect(document.body.textContent).not.toContain('Times in');
+    expect(document.body.textContent.match(/Times in /g)).toHaveLength(1);
   });
 
   it('offers People as With is typed, and a pick fills the name and email without booking', async () => {
@@ -259,47 +263,36 @@ describe('New meeting', () => {
     await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveValue('gr');
   });
 
-  it('adds each guest as a chip with Enter, and books them all', async () => {
+  it('adds guests one email a row, removes one with its ×, and books the rest', async () => {
     const { onBook } = await open();
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Grace Hopper');
     await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'grace@navy.example');
-    const add = page.getByRole('textbox', { name: 'Also invite' });
-    await userEvent.click(add);
-    await userEvent.keyboard('alan@bletchley.example{Enter}');
-    await userEvent.keyboard('kat@nasa.example{Enter}');
-    // Enter adds the address, and never books on its way.
-    expect(onBook).not.toHaveBeenCalled();
-    const chips = page.getByRole('list', { name: 'Also invite' });
-    await expect.element(chips).toBeVisible();
-    expect(
-      chips
-        .getByRole('listitem')
-        .elements()
-        .map((chip) => chip.textContent),
-    ).toEqual(['alan@bletchley.example', 'kat@nasa.example']);
-    await userEvent.click(page.getByRole('button', { name: 'Remove alan@bletchley.example' }));
+    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
+    // The new row takes focus, so typing goes straight in.
+    await expect.element(page.getByRole('textbox', { name: /^Guests/ })).toHaveFocus();
+    await userEvent.keyboard('alan@bletchley.example');
+    await userEvent.click(page.getByRole('button', { name: 'Add another guest' }));
+    await expect.element(page.getByRole('textbox', { name: 'Guest 2 email' })).toHaveFocus();
+    await userEvent.keyboard('kat@nasa.example');
+    // A third row left empty is not sent.
+    await userEvent.click(page.getByRole('button', { name: 'Add another guest' }));
+    await userEvent.click(page.getByRole('button', { name: 'Remove guest 1' }));
     await userEvent.click(page.getByRole('button', { name: /Book it/ }));
     expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ guests: ['kat@nasa.example'] }));
     expect(onBook.mock.calls[0]?.[0]).not.toHaveProperty('calendarId');
   });
 
-  it('refuses an 11th guest in the field, keeping what was typed', async () => {
+  it('stops offering another guest at ten', async () => {
     await open();
-    const field = page.getByRole('textbox', { name: 'Also invite' });
-    // Each address filled at once, then Enter: typing 11 addresses key by key outran the test's time on a busy CI.
-    for (let index = 0; index < 10; index += 1) {
-      await userEvent.fill(field, `g${String(index)}@navy.example`);
-      await userEvent.keyboard('{Enter}');
+    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
+    for (let index = 1; index < 10; index += 1) {
+      await userEvent.click(page.getByRole('button', { name: 'Add another guest' }));
     }
-    expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
-    await userEvent.fill(field, 'one.more@navy.example');
-    await userEvent.keyboard('{Enter}');
-    await expect.element(page.getByText('Up to 10 guests.')).toBeVisible();
-    await expect.element(page.getByRole('textbox', { name: 'Also invite' })).toHaveValue('one.more@navy.example');
-    expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
+    expect(page.getByRole('textbox', { name: /^Guest/ }).elements()).toHaveLength(10);
+    expect(page.getByRole('button', { name: 'Add another guest' }).elements()).toEqual([]);
   });
 
-  it('holds Also invite still while Book it is out, as the other fields are', async () => {
+  it('holds the guests still while Book it is out, as the other fields are', async () => {
     let answer: () => void = () => undefined;
     const onBook = vi.fn(
       () =>
@@ -310,11 +303,11 @@ describe('New meeting', () => {
     await open({ onBook });
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Grace Hopper');
     await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'grace@navy.example');
-    await userEvent.click(page.getByRole('textbox', { name: 'Also invite' }));
-    await userEvent.keyboard('alan@bletchley.example{Enter}');
+    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
+    await userEvent.keyboard('alan@bletchley.example');
     await userEvent.click(page.getByRole('button', { name: /Book it/ }));
-    await expect.element(page.getByRole('textbox', { name: 'Also invite' })).toBeDisabled();
-    await expect.element(page.getByRole('button', { name: 'Remove alan@bletchley.example' })).toBeDisabled();
+    await expect.element(page.getByRole('textbox', { name: /^Guests/ })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: 'Remove guest 1' })).toBeDisabled();
     expect(onBook).toHaveBeenCalledTimes(1);
     await act(async () => {
       answer();
@@ -328,6 +321,7 @@ describe('New meeting', () => {
       calendars: calendarsOf(['Work', 'Team', 'Holidays', 'Shared']),
       pageDestination: () => teamPage,
     });
+    await userEvent.click(page.getByRole('button', { name: 'More options' }));
     const calendar = page.getByRole('button', { name: /Calendar$/ });
     await expect.element(calendar).toHaveTextContent('Team');
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Grace Hopper');
@@ -345,6 +339,7 @@ describe('New meeting', () => {
     const sharedPage = pageCalendar(SHARED);
     // One calendar in use, and the page's own that isn't: two to choose between.
     await open({ calendars: calendarsOf(['Work', 'Shared']), pageDestination: () => sharedPage });
+    await userEvent.click(page.getByRole('button', { name: 'More options' }));
     const calendar = page.getByRole('button', { name: /Calendar$/ });
     await expect.element(calendar).toHaveTextContent('Shared');
     await userEvent.click(calendar);
