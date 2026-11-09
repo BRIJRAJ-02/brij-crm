@@ -407,18 +407,32 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
           ...change('actorRole', role(before.fromRole), role(after.fromRole)),
         ],
       };
+    // A page only person removed from Team pages (9 Nov 2026) says so.
     case 'member.removed':
-    case 'member.left':
-    case 'account.deleted':
-      return { ...base, action, target: memberTarget(), params: {}, changes: [] };
-    // Someone a connected app added (spec 0070, AC-7020), with the role they joined with.
-    case 'member.added': {
-      const joined = roleOf(after.role);
       return {
         ...base,
         action,
         target: memberTarget(),
-        params: joined === undefined ? {} : { role: joined },
+        params: after.pageOnly === true ? { pageOnly: true } : {},
+        changes: [],
+      };
+    case 'member.left':
+    case 'account.deleted':
+      return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    // Someone a connected app added (spec 0070, AC-7020), with the role they joined with; or a page only person added
+    // from Team pages (9 Nov 2026), with the handle their page started at.
+    case 'member.added': {
+      const joined = roleOf(after.role);
+      const pageOnly = after.pageOnly === true;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: {
+          ...(joined === undefined || pageOnly ? {} : { role: joined }),
+          ...(pageOnly ? { pageOnly: true } : {}),
+          ...(pageOnly && typeof after.handle === 'string' ? { handle: after.handle } : {}),
+        },
         changes: [],
       };
     }

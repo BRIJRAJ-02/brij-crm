@@ -2,7 +2,7 @@
 // operator console registers and changes partners, the connect page reads one's name and logo, and the token exchange
 // reads its secret's hash. Only `secretHash` ever leaves here as a hash; the secret itself never reaches this file.
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { managedUsers, operatorEvent, partners, session, user } from '../schema/auth.ts';
 
@@ -97,6 +97,13 @@ export interface PartnerIdentity {
    * same id. Answers the user id.
    */
   ensureManagedUser(person: ManagedPerson): Promise<string>;
+  /**
+   * The identity of a page only person (9 Nov 2026): someone a Team pages manager added, whom no partner owns. Made
+   * exactly as a partner's managed identity is (a made up `.invalid` address, no password, no linked account, so it
+   * never signs in and is never merged with anyone's account), keyed by the workspace and their managed row's id with
+   * no partner. Idempotent, as `ensureManagedUser` is. Answers the user id.
+   */
+  ensurePageOnlyUser(person: PageOnlyPerson): Promise<string>;
   /** Ends every session of a managed identity (AC-7022); any other identity's are never touched. Answers how many. */
   endManagedUserSessions(userId: string): Promise<number>;
   /** Whether this identity is a partner's managed member's (AC-7023): such an identity never starts a session itself. */
@@ -116,10 +123,22 @@ export interface ManagedPerson {
   readonly name: string;
 }
 
+/** Who a page only identity is made for: their managed row's id (made by the caller), and their page's name. */
+export interface PageOnlyPerson {
+  readonly workspaceId: string;
+  readonly personId: string;
+  readonly name: string;
+}
+
 /** A partner's own id for a person, as the database checks it. */
 const EXTERNAL_ID = /^[A-Za-z0-9._~:@+=|-]{1,128}$/;
 /** Where every managed identity's made up address lives: `.invalid` never resolves (RFC 2606), so no mail goes there. */
-const MANAGED_DOMAIN = 'managed.timefix.invalid';
+export const MANAGED_DOMAIN = 'managed.timefix.invalid';
+
+/** Whether an address is a managed identity's made up one (never a person's), which no screen shows. */
+export function isManagedAddress(email: string): boolean {
+  return email.toLowerCase().endsWith(`@${MANAGED_DOMAIN}`);
+}
 
 const ROW = {
   id: partners.id,
@@ -291,41 +310,19 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
       if (!UUID.test(workspaceId) || !UUID.test(partnerId) || !EXTERNAL_ID.test(externalId)) {
         throw new TypeError('A managed identity needs a workspace, a partner and an external id.');
       }
-      const name = person.name.trim().slice(0, 80);
-      const keyed = and(
-        eq(managedUsers.workspaceId, workspaceId),
-        eq(managedUsers.partnerId, partnerId),
-        eq(managedUsers.externalId, externalId),
-      );
-      const existing = async (tx: Tx) => {
-        const [row] = await tx
-          .select({ userId: managedUsers.userId, name: user.name })
-          .from(managedUsers)
-          .innerJoin(user, eq(user.id, managedUsers.userId))
-          .where(keyed)
-          .limit(1);
-        if (row === undefined) return undefined;
-        if (row.name !== name) {
-          await tx
-            .update(user)
-            .set({ name, updatedAt: sql`now()` })
-            .where(eq(user.id, row.userId));
-        }
-        return row.userId;
-      };
-      return db.transaction(async (tx) => {
-        const found = await existing(tx);
-        if (found !== undefined) return found;
-        // Two calls at once: the second waits on the first's key here, then finds what it made.
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${`managed:${workspaceId}:${partnerId}:${externalId}`}, 0))`,
-        );
-        const after = await existing(tx);
-        if (after !== undefined) return after;
-        const id = randomUUID();
-        await tx.insert(user).values({ id, name, email: `${id}@${MANAGED_DOMAIN}`, emailVerified: false });
-        await tx.insert(managedUsers).values({ userId: id, workspaceId, partnerId, externalId });
-        return id;
+      return ensureManaged(db, { workspaceId, partnerId, externalId, name: person.name });
+    },
+
+    async ensurePageOnlyUser(person) {
+      const { workspaceId, personId } = person;
+      if (!UUID.test(workspaceId) || !UUID.test(personId)) {
+        throw new TypeError('A page only identity needs a workspace and a person id.');
+      }
+      return ensureManaged(db, {
+        workspaceId,
+        partnerId: undefined,
+        externalId: personId.toLowerCase(),
+        name: person.name,
       });
     },
 
@@ -363,4 +360,56 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
       return ended.length;
     },
   };
+}
+
+/**
+ * The managed identity for this workspace, partner (none for a page only person) and external id, its name brought up
+ * to date, or a new one under `.invalid`. Two calls at once answer the same id.
+ */
+async function ensureManaged(
+  db: NodePgDatabase<Record<string, unknown>>,
+  key: {
+    readonly workspaceId: string;
+    readonly partnerId: string | undefined;
+    readonly externalId: string;
+    readonly name: string;
+  },
+): Promise<string> {
+  const { workspaceId, partnerId, externalId } = key;
+  const name = key.name.trim().slice(0, 80);
+  const keyed = and(
+    eq(managedUsers.workspaceId, workspaceId),
+    partnerId === undefined ? isNull(managedUsers.partnerId) : eq(managedUsers.partnerId, partnerId),
+    eq(managedUsers.externalId, externalId),
+  );
+  const existing = async (tx: Tx) => {
+    const [row] = await tx
+      .select({ userId: managedUsers.userId, name: user.name })
+      .from(managedUsers)
+      .innerJoin(user, eq(user.id, managedUsers.userId))
+      .where(keyed)
+      .limit(1);
+    if (row === undefined) return undefined;
+    if (row.name !== name) {
+      await tx
+        .update(user)
+        .set({ name, updatedAt: sql`now()` })
+        .where(eq(user.id, row.userId));
+    }
+    return row.userId;
+  };
+  return db.transaction(async (tx) => {
+    const found = await existing(tx);
+    if (found !== undefined) return found;
+    // Two calls at once: the second waits on the first's key here, then finds what it made.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`managed:${workspaceId}:${partnerId ?? 'page'}:${externalId}`}, 0))`,
+    );
+    const after = await existing(tx);
+    if (after !== undefined) return after;
+    const id = randomUUID();
+    await tx.insert(user).values({ id, name, email: `${id}@${MANAGED_DOMAIN}`, emailVerified: false });
+    await tx.insert(managedUsers).values({ userId: id, workspaceId, partnerId: partnerId ?? null, externalId });
+    return id;
+  });
 }

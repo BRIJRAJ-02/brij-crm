@@ -1,13 +1,15 @@
 // Brief
 // Purpose: everyone's link page in one place (spec 0070, AC-7001), for owners, admins and holders of
 // `link_pages.manage_team`: who has a page, whether it is Live, and how many looked this month.
-// Main task: open someone's page to edit it, claim a handle for someone with none, or hand out QR codes (one, or all).
-// Leaves out: adding people (Members), what a page holds (its own editor) and Insights beyond this month's views.
+// Main task: open someone's page to edit it, add a page for someone who never signs up, claim a handle for someone
+// with none, or hand out QR codes (one, or all).
+// Leaves out: inviting people (Members), what a page holds (its own editor) and Insights beyond this month's views.
 import { isDataError, type DataLayer, type TeamLinkPage } from '@crm/data';
 import {
   Badge,
   Button,
   ButtonLink,
+  Callout,
   EmptyState,
   Field,
   Menu,
@@ -18,6 +20,7 @@ import {
   PageColumn,
   PersonLine,
   QrCode,
+  sharedStrings,
   Table,
   TopBar,
   usePhoneWidth,
@@ -30,6 +33,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { addressAsTyped } from '../address/address.ts';
 import { publicBookingHost, publicProfileUrl } from '../booking/links.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { AddPageDialog } from './AddPageDialog.tsx';
 import { useLinkPagePlace } from './place.tsx';
 import { saveFile } from './qr-png.ts';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
@@ -71,6 +75,9 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   const [state, setState] = useState<TeamState>({ status: 'loading' });
   const [claiming, setClaiming] = useState<TeamLinkPage | undefined>(undefined);
   const [drawing, setDrawing] = useState<Drawing | undefined>(undefined);
+  // Add a page, open (a new key for each opening, so it starts empty), and the page only person being removed.
+  const [adding, setAdding] = useState<number | undefined>(undefined);
+  const [removing, setRemoving] = useState<TeamLinkPage | undefined>(undefined);
   // On a phone a row's figures sit on one line with no column heading over them, so the count says what it counts.
   const isPhone = usePhoneWidth();
   const read = useCallback(() => {
@@ -121,6 +128,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         label={strings.rowActions(page.name)}
         onAction={(key) => {
           if (key === 'edit' || key === 'claim') openPage(page);
+          if (key === 'remove') setRemoving(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
           // One download at a time: a second press while one is drawn waits for it rather than being lost.
@@ -153,6 +161,14 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
             </MenuItem>
           </>
         )}
+        {page.isPageOnly === true && (
+          <>
+            <MenuSeparator />
+            <MenuItem id="remove" icon="user-x" isDanger>
+              {strings.removePerson}
+            </MenuItem>
+          </>
+        )}
       </Menu>
     </MenuTrigger>
   );
@@ -164,7 +180,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           <PersonLine
             id={page.memberId}
             name={page.name}
-            meta={page.isSelf ? [strings.you] : []}
+            meta={[...(page.isSelf ? [strings.you] : []), ...(page.isPageOnly === true ? [strings.pageOnly] : [])]}
             {...(page.image === undefined ? {} : { src: page.image })}
           />
         );
@@ -260,6 +276,20 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 {strings.downloadAll}
               </Button>
             )}
+            {state.status !== 'forbidden' && (
+              // A page for someone who never signs up (9 Nov 2026): only people who may manage the team's pages get
+              // this far, and the server checks again.
+              <Button
+                variant="primary"
+                icon="user-plus"
+                isLabelCollapsible
+                label={strings.addPage}
+                isDisabled={state.status !== 'ready'}
+                onPress={() => setAdding((was) => (was ?? 0) + 1)}
+              >
+                {strings.addPage}
+              </Button>
+            )}
           </TopBar>
         ),
         body: (
@@ -287,6 +317,51 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 }}
               />
             )}
+            {adding !== undefined && (
+              <AddPageDialog
+                key={adding}
+                data={data}
+                slug={slug}
+                isOpen
+                onClose={() => setAdding(undefined)}
+                onAdded={(added) => {
+                  setAdding(undefined);
+                  setState((was) =>
+                    was.status === 'ready'
+                      ? {
+                          status: 'ready',
+                          pages: [...was.pages.filter((each) => each.memberId !== added.memberId), added].sort(
+                            (a, b) => a.name.localeCompare(b.name) || a.memberId.localeCompare(b.memberId),
+                          ),
+                        }
+                      : was,
+                  );
+                  toasts.toast({
+                    tone: 'success',
+                    message: strings.added(added.handle ?? '', added.name),
+                    action: {
+                      label: strings.edit,
+                      onAction: () => void navigate({ href: place.href({ member: added.memberId }) }),
+                    },
+                  });
+                }}
+              />
+            )}
+            <RemovePerson
+              data={data}
+              slug={slug}
+              page={removing}
+              onClose={() => setRemoving(undefined)}
+              onRemoved={(gone) => {
+                setRemoving(undefined);
+                setState((was) =>
+                  was.status === 'ready'
+                    ? { status: 'ready', pages: was.pages.filter((each) => each.memberId !== gone.memberId) }
+                    : was,
+                );
+                toasts.toast({ tone: 'success', message: strings.removed(gone.name) });
+              }}
+            />
             {drawing !== undefined && (
               <DrawCodes
                 drawing={drawing}
@@ -438,6 +513,75 @@ function ClaimForMember({
         onSubmit={claim}
         {...(problem === undefined ? {} : { error: problem })}
       />
+    </Modal>
+  );
+}
+
+/**
+ * Asks before a page only person is removed (the owner: anything that ends something asks first): a danger Modal that
+ * says the link stops and the content stays 30 days, busy while the server works, its refusal inside. The last person
+ * asked about stays while the Modal plays its exit.
+ */
+function RemovePerson({
+  data,
+  slug,
+  page,
+  onClose,
+  onRemoved,
+}: {
+  readonly data: DataLayer;
+  readonly slug: string;
+  readonly page: TeamLinkPage | undefined;
+  readonly onClose: () => void;
+  readonly onRemoved: (gone: TeamLinkPage) => void;
+}) {
+  const [last, setLast] = useState(page);
+  if (page !== undefined && page !== last) setLast(page);
+  const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  const shown = page ?? last;
+  if (shown === undefined) return null;
+  const remove = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setFailure(undefined);
+    data.teamPages.removePerson(slug, shown.memberId).then(
+      () => {
+        setBusy(false);
+        onRemoved(shown);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
+      },
+    );
+  };
+  return (
+    <Modal
+      title={strings.removeTitle(shown.name)}
+      variant="confirm"
+      tone="danger"
+      isOpen={page !== undefined}
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) {
+          setFailure(undefined);
+          onClose();
+        }
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.cancel}
+          </Button>
+          <Button variant="danger-solid" isPending={isBusy} onPress={remove}>
+            {strings.removeAction}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      {strings.removeText(shown.handle)}
     </Modal>
   );
 }

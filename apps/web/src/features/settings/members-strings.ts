@@ -64,6 +64,10 @@ export const strings = {
   twoFactorOn: 'On',
   twoFactorOff: 'Off',
   you: 'You',
+  /** No Timefix login of their own (spec 0070): a page only person, or a connected app's. */
+  pageOnly: 'Page only',
+  viaAnApp: 'Via a connected app',
+  viaApp: (app: string) => `Via ${app}`,
   search: 'Search members',
   searchPlaceholder: 'Name or email',
   /** A guest searches by name alone (spec 0031, AC-829). */

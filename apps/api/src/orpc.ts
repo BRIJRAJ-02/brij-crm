@@ -207,6 +207,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   embedSessions: { readonly end: (connectionIds: readonly string[]) => Promise<number> };
   /**
+   * Page only people's identities (9 Nov 2026): made by the identity login, never the app's, and their sessions ended
+   * when one is removed from Team pages, and the directory forgetting them. Only these three calls, by ids.
+   */
+  pageOnlyUsers: Pick<IdentityStore, 'ensurePageOnlyUser' | 'endManagedUserSessions' | 'dropMembership'>;
+  /**
    * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials
    * for. The pass holds only what the caller's own page already shows; the handler reads that and hands it over.
    */

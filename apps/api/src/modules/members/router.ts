@@ -40,8 +40,8 @@ async function forget(
 
 export const membersRouter = member.members.router({
   // Owners and admins also see who has a second factor (spec 0033, AC-895): ids only to the identity store.
-  list: member.members.list.handler(({ context, input }) =>
-    listMembers(
+  list: member.members.list.handler(async ({ context, input }) => {
+    const page = await listMembers(
       context.scope,
       {
         ...(input.search === undefined ? {} : { search: input.search }),
@@ -49,8 +49,29 @@ export const membersRouter = member.members.router({
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       },
       { secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds) },
-    ),
-  ),
+    );
+    // A connected app's people say which app (spec 0070): its name from the registry, by id only.
+    const partnerIds = [
+      ...new Set(
+        page.members.flatMap((each) => (each.managed?.partnerId === undefined ? [] : [each.managed.partnerId])),
+      ),
+    ];
+    if (partnerIds.length === 0) return page;
+    const names = new Map(
+      await Promise.all(
+        partnerIds.map(
+          async (id) => [id, (await context.partners.partnerById(id).catch(() => undefined))?.name] as const,
+        ),
+      ),
+    );
+    return {
+      ...page,
+      members: page.members.map((each) => {
+        const app = each.managed?.partnerId === undefined ? undefined : names.get(each.managed.partnerId);
+        return app === undefined || each.managed === undefined ? each : { ...each, managed: { ...each.managed, app } };
+      }),
+    };
+  }),
   setRole: member.members.setRole.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setMemberRole(

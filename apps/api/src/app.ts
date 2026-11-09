@@ -583,6 +583,12 @@ export function createApp({
         },
         // Only ending a connection's embedded sessions, by connection id (spec 0070, slice 4): Disconnect's last step.
         embedSessions: { end: (connectionIds) => identity.endEmbedSessions(connectionIds) },
+        // Page only people from Team pages (9 Nov 2026): their identity made, and its sessions ended on removal.
+        pageOnlyUsers: {
+          ensurePageOnlyUser: (person) => identity.ensurePageOnlyUser(person),
+          endManagedUserSessions: (userId) => identity.endManagedUserSessions(userId),
+          dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+        },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
       },

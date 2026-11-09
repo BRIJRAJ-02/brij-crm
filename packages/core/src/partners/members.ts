@@ -120,7 +120,12 @@ async function lockManaged(tx: WorkspaceTx, workspaceId: string, partnerId: stri
  * Whether an active member here other than `except` already uses this address, in any case, or an open email
  * invitation names it: a partner never takes an address a real person was invited with, so it can't lock them out.
  */
-async function emailTaken(tx: WorkspaceTx, workspaceId: string, email: string, except?: string): Promise<boolean> {
+export async function emailTaken(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  email: string,
+  except?: string,
+): Promise<boolean> {
   const [row] = await tx
     .select({ id: members.id })
     .from(members)
@@ -157,7 +162,7 @@ async function lockExternalId(tx: WorkspaceTx, workspaceId: string, partnerId: s
 }
 
 /** A unique clash on the address (two writes at once) as the same refusal the read gives. */
-function emailClash(error: unknown): unknown {
+export function emailClash(error: unknown): unknown {
   const pg = postgresError(error);
   return pg?.code === '23505' && pg.constraint === 'members_email' ? refuse('UNIQUE_CONFLICT', EMAIL_TAKEN) : error;
 }

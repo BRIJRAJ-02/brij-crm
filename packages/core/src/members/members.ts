@@ -22,7 +22,7 @@ import {
   type SetRoleResult,
   type SetRolesResult,
 } from '@crm/contracts';
-import { schema, type WorkspaceTx } from '@crm/db';
+import { isManagedAddress, schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -44,7 +44,7 @@ import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
 import { readCustomRole } from '../roles/roles.ts';
 import { workspaceLogoVersion } from '../brand/brand.ts';
 
-const { members, workspaceRoles, workspaces } = schema;
+const { managedMembers, members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
 const isGuest = (scope: EngineScope): boolean =>
@@ -79,7 +79,8 @@ function toView(
   return {
     id: row.id,
     name: row.name,
-    ...(withEmail ? { email: row.email } : {}),
+    // A page only person given no address holds their identity's made up one, which no screen shows.
+    ...(withEmail && !isManagedAddress(row.email) ? { email: row.email } : {}),
     role: storedRole(row.role),
     ...(row.customRoleId === null ? {} : { customRoleId: row.customRoleId }),
     joinedAt: new Date(row.joinedAt).toISOString(),
@@ -141,7 +142,7 @@ export async function listMembers(
         ? [or(ilike(members.name, `%${likeLiteral(search)}%`), ilike(members.email, `%${likeLiteral(search)}%`))]
         : [ilike(members.name, `%${likeLiteral(search)}%`)]),
   );
-  const { rows, total } = await inWorkspace(scope, async (tx) => {
+  const { rows, total, managed } = await inWorkspace(scope, async (tx) => {
     const read = await tx
       .select({ ...VIEW_COLUMNS, userId: members.userId, sortName })
       .from(members)
@@ -156,7 +157,22 @@ export async function listMembers(
       .orderBy(asc(sortName), asc(members.id))
       .limit(limit + 1);
     const [counted] = await tx.select({ n: count() }).from(members).where(matching);
-    return { rows: read, total: counted?.n ?? 0 };
+    // Who among them has no login of their own (spec 0070): a connected app's person, or a page only one.
+    const ids = read.slice(0, limit).map((row) => row.id);
+    const managed =
+      ids.length === 0
+        ? []
+        : await tx
+            .select({ memberId: managedMembers.memberId, partnerId: managedMembers.partnerId })
+            .from(managedMembers)
+            .where(
+              and(
+                eq(managedMembers.workspaceId, scope.workspaceId),
+                inArray(managedMembers.memberId, ids),
+                sql`${managedMembers.removedAt} is null`,
+              ),
+            );
+    return { rows: read, total: counted?.n ?? 0, managed };
   });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
@@ -165,9 +181,20 @@ export async function listMembers(
     options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
       ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
       : undefined;
+  const managedBy = new Map(managed.map((row) => [row.memberId, row.partnerId]));
   return {
     members: page.map((row) => ({
       ...toView(row, seesEmails),
+      ...(managedBy.has(row.id)
+        ? {
+            managed: (() => {
+              const partnerId = managedBy.get(row.id);
+              return partnerId === null || partnerId === undefined
+                ? { kind: 'page_only' as const }
+                : { kind: 'app' as const, partnerId };
+            })(),
+          }
+        : {}),
       ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
     })),
     total,

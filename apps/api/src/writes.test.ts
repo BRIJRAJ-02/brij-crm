@@ -151,6 +151,9 @@ const READS: ReadonlySet<string> = new Set([
   // Team link pages (spec 0070): the list, and who last changed the caller's own page.
   'teamPages.list',
   'teamPages.editedBy',
+  // Add a page's handle check and suggestion as it is typed (9 Nov 2026).
+  'teamPages.checkHandle',
+  'teamPages.suggestHandle',
   // The Menu app's draft (spec 0065, H1).
   'menu.draft',
   // Table seating's reads (spec 0066 B7 lite).
@@ -804,6 +807,37 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     expect(claimed).toMatchObject({ memberId: mate.memberId, isLive: false, views: 0, isSelf: false });
     // The one row is the teammate joining; the claim adds none.
     return [{ kind: 'members' }];
+  },
+  // A page only person added from Team pages (9 Nov 2026): a member like any, so `members` and `access` rows.
+  'teamPages.addPerson': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Nick Page',
+      handle: freeHandle(),
+      mutationId,
+    });
+    expect(added).toMatchObject({ isLive: false, views: 0, isSelf: false, isPageOnly: true });
+    return [
+      { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [added.memberId], mutation_id: mutationId },
+    ];
+  },
+  // Added first, then removed: a removal names whose access changed, as Members' does.
+  'teamPages.removePerson': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Kate Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    const removed = await m.client.teamPages.removePerson({ workspace: m.slug, member: added.memberId, mutationId });
+    expect(removed).toEqual({ removed: true });
+    return [
+      { kind: 'members' },
+      { kind: 'access' },
+      { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [added.memberId], mutation_id: mutationId },
+    ];
   },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
@@ -3515,6 +3549,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'members.setRoles': 3,
   // A teammate invited and accepted first, then the claim (spec 0070).
   'teamPages.claim': 3,
+  // A page only person added first, then removed (9 Nov 2026).
+  'teamPages.removePerson': 2,
   // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
   'roles.update': 2,
   'roles.duplicate': 2,

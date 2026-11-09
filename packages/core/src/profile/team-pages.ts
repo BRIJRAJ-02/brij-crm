@@ -5,7 +5,7 @@
 // page, and the one line a member reads about who last changed theirs.
 import { type LinkPageEditedBy, type TeamLinkPage, type TeamLinkPages } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { enterTeamLinkPage, isTeamPageEdit } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -15,7 +15,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 
-const { auditEvents, members } = schema;
+const { auditEvents, managedMembers, members } = schema;
 
 /** The audit actions that are a change to a member's link page, whoever made them. */
 const PAGE_ACTIONS = [
@@ -49,7 +49,8 @@ export function monthOf(now: Date): { readonly from: string; readonly to: string
   return { from: day(new Date(Date.UTC(year, month, 1))), to: day(new Date(Date.UTC(year, month + 1, 0))) };
 }
 
-interface MemberRow {
+/** A member row as Team pages reads it. */
+export interface MemberRow {
   readonly id: string;
   readonly userId: string | null;
   readonly name: string;
@@ -61,8 +62,11 @@ interface ViewsRow extends Record<string, unknown> {
   readonly views: string | number;
 }
 
-/** The rows of `people`, each with their handle, Live or not, and this month's views, read in two statements. */
-async function pagesOf(
+/**
+ * The rows of `people`, each with their handle, Live or not, this month's views, and whether they are a page only
+ * person (9 Nov 2026), read in three statements.
+ */
+export async function pagesOf(
   tx: WorkspaceTx,
   workspaceId: string,
   self: string | undefined,
@@ -78,6 +82,24 @@ async function pagesOf(
     );
     for (const row of counted.rows) views.set(row.user_id, Number(row.views));
   }
+  const memberIds = people.map((person) => person.id);
+  const pageOnly = new Set(
+    memberIds.length === 0
+      ? []
+      : (
+          await tx
+            .select({ memberId: managedMembers.memberId })
+            .from(managedMembers)
+            .where(
+              and(
+                eq(managedMembers.workspaceId, workspaceId),
+                inArray(managedMembers.memberId, memberIds),
+                isNull(managedMembers.partnerId),
+                isNull(managedMembers.removedAt),
+              ),
+            )
+        ).map((row) => row.memberId),
+  );
   return people.map((person) => {
     const page = person.userId === null ? undefined : held.get(person.userId);
     const image = safeImage(person.avatarUrl);
@@ -89,12 +111,13 @@ async function pagesOf(
       isLive: page?.isShown === true,
       views: person.userId === null ? 0 : (views.get(person.userId) ?? 0),
       isSelf: person.id === self,
+      ...(pageOnly.has(person.id) ? { isPageOnly: true } : {}),
     };
   });
 }
 
 /** The caller's member id, when the caller is a member. */
-function selfOf(scope: EngineScope): string | undefined {
+export function selfOf(scope: EngineScope): string | undefined {
   const { principal } = scope.access;
   return principal.kind === 'member' ? principal.memberId : undefined;
 }
@@ -102,7 +125,7 @@ function selfOf(scope: EngineScope): string | undefined {
 /**
  * Every active member's link page in the workspace (AC-7001), by name: their handle, whether it is Live, and its views
  * this calendar month (UTC). `link_pages.manage_team` first. Guests have no link page and aren't listed; a member made
- * without an identity of their own is listed with no page, since nobody can claim one for them. Three statements.
+ * without an identity of their own is listed with no page, since nobody can claim one for them. Four statements.
  */
 export async function listTeamLinkPages(scope: EngineScope, now: Date = new Date()): Promise<TeamLinkPages> {
   requirePermission(scope, 'link_pages.manage_team');

@@ -732,6 +732,16 @@ export function MembersScreen({
               meta={[
                 ...(member.id === access.memberId ? [strings.you] : []),
                 ...(member.email === undefined ? [] : [member.email]),
+                // No login of their own (spec 0070): a page only person, or a connected app's.
+                ...(member.managed === undefined
+                  ? []
+                  : [
+                      member.managed.kind === 'page_only'
+                        ? strings.pageOnly
+                        : member.managed.app === undefined
+                          ? strings.viaAnApp
+                          : strings.viaApp(member.managed.app),
+                    ]),
               ]}
               {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
             />
