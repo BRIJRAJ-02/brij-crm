@@ -187,3 +187,17 @@ export function RadioGroup({
     </AriaRadioGroup>
   );
 }
+
+/**
+ * A Radio's look with no control of its own, for a row that is the control and says its own state: an option in a
+ * Select where one can be picked (`showsMarks`).
+ */
+export function RadioMark({ isSelected }: { readonly isSelected: boolean }) {
+  return (
+    <span className={styles.radio} data-selected={isSelected || undefined} aria-hidden="true">
+      <span className={styles.circle}>
+        <span className={styles.dot} />
+      </span>
+    </span>
+  );
+}

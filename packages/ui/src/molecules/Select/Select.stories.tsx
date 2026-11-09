@@ -654,3 +654,125 @@ export const MultipleReadOnly: Story = {
     await expect(canvas.getByRole('group', { name: 'Country' })).toHaveTextContent('Germany, Spain');
   },
 };
+
+const ALLERGENS: readonly SelectItem[] = [
+  { id: 'celery', label: 'Celery' },
+  { id: 'gluten', label: 'Gluten' },
+  { id: 'crustaceans', label: 'Crustaceans' },
+  { id: 'eggs', label: 'Eggs', isDisabled: true, description: 'In Contains' },
+  { id: 'fish', label: 'Fish' },
+  { id: 'milk', label: 'Milk' },
+  { id: 'molluscs', label: 'Molluscs' },
+  { id: 'mustard', label: 'Mustard' },
+  { id: 'peanuts', label: 'Peanuts' },
+  { id: 'sesame', label: 'Sesame' },
+];
+
+/** `showsMarks`, several: a checkbox on every option, and a closed field that names every choice in full. */
+export const MarksSeveral: Story = {
+  args: {
+    label: 'May contain allergens',
+    items: ALLERGENS,
+    optionStyle: 'plain',
+    selectionMode: 'multiple',
+    showsMarks: true,
+    isSearchable: true,
+    placeholder: 'None',
+    values: ['celery', 'gluten', 'crustaceans', 'fish', 'mustard', 'peanuts', 'sesame'],
+    onValuesChange: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <ChooseSeveral {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: /May contain allergens/ });
+    await expect(trigger).toHaveTextContent('Celery, Gluten, Crustaceans, Fish, Mustard, Peanuts, Sesame');
+    // Nothing cut: the words fit the trigger however many are chosen.
+    const words = trigger.querySelector('span span');
+    await expect(words?.scrollWidth).toBeLessThanOrEqual(words?.clientWidth ?? 0);
+    await userEvent.click(trigger);
+    const list = await listbox();
+    await expect(list.querySelectorAll('[role="option"]')).toHaveLength(ALLERGENS.length);
+    await userEvent.keyboard('mil');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onValuesChange).toHaveBeenCalled();
+    await expect(trigger).toHaveTextContent('Milk');
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** `showsMarks`, nothing chosen: a quiet None. */
+export const MarksNone: Story = {
+  args: {
+    label: 'Contains allergens',
+    items: ALLERGENS,
+    optionStyle: 'plain',
+    selectionMode: 'multiple',
+    showsMarks: true,
+    placeholder: 'None',
+    values: [],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+};
+
+/** `showsMarks`, one: a radio on every option, with a real None to choose (`isNothing`). */
+export const MarksOne: Story = {
+  args: {
+    label: 'Spice level',
+    optionStyle: 'plain',
+    showsMarks: true,
+    defaultOpen: true,
+    value: 'none',
+    items: [
+      { id: 'none', label: 'None', isNothing: true },
+      { id: 'mild', label: 'Mild' },
+      { id: 'spicy', label: 'Spicy' },
+      { id: 'very', label: 'Very spicy' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async () => {
+    const list = await listbox();
+    await expect(list.querySelector('[role="option"][aria-selected="true"]')).toHaveTextContent('None');
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** `onNew`: a line at the list's foot that closes it and makes a new option elsewhere; it opens with no options too. */
+export const WithNewLine: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Add-ons',
+    optionStyle: 'plain',
+    selectionMode: 'multiple',
+    showsMarks: true,
+    placeholder: 'None',
+    items: [],
+    values: [],
+    onNew: { label: 'New add-on', onPress: fn() },
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Add-ons/ }));
+    const list = await listbox();
+    const line = list.querySelector('[role="option"]');
+    await expect(line).toHaveTextContent('New add-on');
+    if (line !== null) await userEvent.click(line);
+    await expect(args.onNew?.onPress).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+  },
+};

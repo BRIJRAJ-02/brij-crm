@@ -2,7 +2,7 @@
 // Purpose: every item in one table (after checklabs' Items tab): its photo and name, the section it sits in, its
 // price and whether it is available, in the order the menus read, narrowed by the tab bar's search.
 // Main task: find an item and change it, or switch it off for tonight.
-// Leaves out: where an item sits and in what order (Structure), and option groups (Options).
+// Leaves out: where an item sits and in what order (Structure), and add-ons (their own tab).
 import type { MenuDraft, MenuItem as Dish, MenuSection, MenuStore } from '@crm/data';
 import {
   Badge,

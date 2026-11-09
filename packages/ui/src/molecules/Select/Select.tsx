@@ -20,7 +20,9 @@ import {
   SelectValue,
   Text,
 } from 'react-aria-components';
+import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { FieldError } from '../../atoms/FieldError/FieldError.tsx';
+import { RadioMark } from '../../atoms/Radio/Radio.tsx';
 import { FocusScope, useFilter } from 'react-aria';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -65,6 +67,8 @@ export interface SelectItem {
    * (a booking page's calendars, by account). Options without one come first, under no heading.
    */
   readonly group?: string;
+  /** The choice that means nothing (a spice level's None): reads as quietly as the placeholder does. */
+  readonly isNothing?: boolean;
 }
 
 /** Props for Select. */
@@ -104,6 +108,17 @@ export interface SelectProps {
   readonly values?: readonly string[];
   /** With `selectionMode="multiple"`: every chosen id after each change, in the list's order. */
   readonly onValuesChange?: (ids: readonly string[]) => void;
+  /**
+   * Every option shows its mark, a checkbox when several can be picked and a radio when one can, so the kind of
+   * choice reads before the first pick, and the closed field wraps, naming every choice in full: what is chosen is
+   * never cut off (a dish's allergens). For a plain worded choice in a form, not a table cell.
+   */
+  readonly showsMarks?: boolean;
+  /**
+   * One more line set apart at the list's foot that makes a new option in place: it closes the list and calls
+   * `onPress` (New add-on, which opens its own form). The list opens with no options too, showing this alone.
+   */
+  readonly onNew?: { readonly label: string; readonly onPress: () => void };
   /** Shown when nothing is chosen: "Set Stage…". */
   readonly placeholder?: string;
   readonly hint?: string;
@@ -196,6 +211,7 @@ const FOCUS_FIRST_EVENT = 'react-aria-focus';
 
 const CLEAR = '\u0000clear';
 const CREATE = '\u0000create';
+const NEW = '\u0000new';
 
 /** Untyped on ListBoxItem, so `reachableWhileDisabled` takes it through a spread. */
 const selectionOnly = { disabledBehavior: 'selection' };
@@ -247,7 +263,9 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
   return (
     <>
       {item.leading ?? (item.icon !== undefined && <Icon name={item.icon} size="sm" tone="muted" />)}
-      <span className={styles.plain}>{item.label}</span>
+      <span className={styles.plain} data-nothing={item.isNothing === true || undefined}>
+        {item.label}
+      </span>
       {item.badge !== undefined && faces?.badge(item.badge)}
     </>
   );
@@ -328,6 +346,8 @@ export function SelectBase({
   onCreate,
   defaultSearch,
   popoverFoot,
+  showsMarks = false,
+  onNew,
 }: SelectProps) {
   const { contains, startsWith } = useFilter({ sensitivity: 'base' });
   // In a popover the popover's edge frames the trigger, so its focus is the accent edge alone.
@@ -371,7 +391,7 @@ export function SelectBase({
   const hasOwnReason = isLabelHidden && readOnlyReason !== undefined;
   if (isReadOnly) {
     return (
-      <span className={styles.root} data-size={size} data-readonly="">
+      <span className={styles.root} data-size={size} data-readonly="" data-marks={showsMarks || undefined}>
         {!isLabelHidden && <FieldLabel label={label} info={info} as="text" />}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
@@ -410,7 +430,7 @@ export function SelectBase({
     ...items
       .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
       .map((item) => item.id),
-    ...(isOpen ? [] : [CLEAR, CREATE]),
+    ...(isOpen ? [] : [CLEAR, CREATE, NEW]),
   ];
   // Several chosen take Create too (a multi select's new tag): it hands the label over, as one choice does.
   const canCreate =
@@ -424,12 +444,33 @@ export function SelectBase({
       : []),
     // Its words hold what was typed, so the search's own filter always keeps it.
     ...(canCreate ? [{ id: CREATE, label: strings.create(typed), icon: 'plus' as const }] : []),
+    ...(onNew === undefined ? [] : [{ id: NEW, label: onNew.label, icon: 'plus' as const, isApart: true }]),
   ];
   // A caller's filter sees the option itself; Create and Clear always stay, since their words hold the search.
   const keeps = (textValue: string, input: string, node: { readonly key: unknown; readonly value: unknown }) => {
+    if (node.key === NEW) return true;
     if (filter === undefined || node.key === CREATE || node.key === CLEAR) return contains(textValue, input);
     const item = options.find((option) => option.id === node.key);
     return item === undefined ? contains(textValue, input) : filter(item, input);
+  };
+
+  // An option's insides. Clear, Create and New do something rather than choose, so they carry no mark.
+  const optionBody = (item: SelectItem, isSelected: boolean) => {
+    const isAction = item.id === CLEAR || item.id === CREATE || item.id === NEW;
+    return (
+      <>
+        {showsMarks &&
+          !isAction &&
+          (isMultiple ? <CheckboxMark isSelected={isSelected} /> : <RadioMark isSelected={isSelected} />)}
+        <Face item={item} optionStyle={isAction ? 'plain' : optionStyle} />
+        {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
+        {isSelected && !showsMarks && (
+          <span className={styles.check}>
+            <Icon name="check" size="sm" />
+          </span>
+        )}
+      </>
+    );
   };
 
   const option = (item: SelectItem) => (
@@ -446,17 +487,7 @@ export function SelectBase({
       data-description={item.description === undefined ? undefined : optionDescription}
       {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
     >
-      {({ isSelected }) => (
-        <>
-          <Face item={item} optionStyle={item.id === CLEAR || item.id === CREATE ? 'plain' : optionStyle} />
-          {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
-          {isSelected && (
-            <span className={styles.check}>
-              <Icon name="check" size="sm" />
-            </span>
-          )}
-        </>
-      )}
+      {({ isSelected }) => optionBody(item, isSelected)}
     </ListBoxItem>
   );
   // Grouped options: those with no group first, then a headed section per group, in the order they come.
@@ -504,17 +535,7 @@ export function SelectBase({
           data-description={item.description === undefined ? undefined : optionDescription}
           {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
         >
-          {({ isSelected }) => (
-            <>
-              <Face item={item} optionStyle={item.id === CLEAR || item.id === CREATE ? 'plain' : optionStyle} />
-              {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
-              {isSelected && (
-                <span className={styles.check}>
-                  <Icon name="check" size="sm" />
-                </span>
-              )}
-            </>
-          )}
+          {({ isSelected }) => optionBody(item, isSelected)}
         </ListBoxItem>
       )}
     </ListBox>
@@ -526,6 +547,7 @@ export function SelectBase({
       data-size={size}
       data-variant={variant}
       data-in-popover={isInPopover || undefined}
+      data-marks={showsMarks || undefined}
       isDisabled={isDisabled}
       isRequired={isRequired}
       isInvalid={error !== undefined}
@@ -535,6 +557,8 @@ export function SelectBase({
       selectionMode={selectionMode}
       // React Aria opens no list with nothing in it; a list that creates opens anyway, to take the first one typed.
       {...(onCreate === undefined ? {} : { allowsEmptyCollection: true })}
+      // Its New line closes the list itself; a pick in a several-choice list leaves it open otherwise.
+      {...(onNew === undefined ? {} : { isOpen })}
       {...(isMultiple ? { value: [...chosenIds] } : {})}
       {...(isMultiple ? {} : { value: current })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
@@ -548,11 +572,18 @@ export function SelectBase({
       onChange={(next) => {
         if (Array.isArray(next)) {
           const picked = new Set(next.map(String));
+          if (picked.has(NEW)) {
+            setIsOpen(false);
+            onNew?.onPress();
+            return;
+          }
           if (picked.has(CREATE)) {
             if (canCreate) onCreate(typed);
             return;
           }
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
+          // Marks: ready for the next one, so "mil", Enter, "egg" never searches "milegg".
+          if (showsMarks) setQuery('');
           return;
         }
         // The closed trigger's typeahead tests the key the open list last rested on without asking whether it is
@@ -561,6 +592,11 @@ export function SelectBase({
         if ((next !== null && disabledKeys.includes(String(next))) || (savesOnPick && !isOpen)) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
+          return;
+        }
+        if (next === NEW) {
+          setIsOpen(false);
+          onNew?.onPress();
           return;
         }
         const id = next === CLEAR || next === null ? null : String(next);
@@ -630,11 +666,19 @@ export function SelectBase({
                 inputValue={query}
                 onInputChange={setQuery}
                 // Create alone in the list waits for an arrow: one Enter on a typo never makes an option.
-                disableAutoFocusFirst={canCreate && !items.some((item) => contains(item.label, typed))}
+                disableAutoFocusFirst={
+                  (canCreate || onNew !== undefined) && !items.some((item) => contains(item.label, typed))
+                }
               >
                 <div className={styles.search}>
                   {/* A search over a list opens with its field focused (the scope's first stop), as React Aria expects. */}
-                  <Field label={searchLabel} isLabelHidden variant="search" size="sm" />
+                  <Field
+                    label={searchLabel}
+                    isLabelHidden
+                    variant="search"
+                    size="sm"
+                    {...(showsMarks ? { placeholder: searchLabel } : {})}
+                  />
                 </div>
                 {list}
               </Autocomplete>

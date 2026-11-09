@@ -1,19 +1,21 @@
 // Brief
-// Purpose: one item of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527) in a drawer, in checklabs' item sheet's
-// order: name, photo, price with Available beside it, calories, description, sizes, option groups (with New option
-// group, which opens its own drawer and comes back here), allergens, dietary marks, Popular.
-// Main task: get an item right in one go and save it, the way guests will read it.
+// Purpose: one item of the Menu app (spec 0065, AC-6522, AC-6523, AC-6527) in a drawer, in the order a person fills it:
+// name, description, price (one price, sizes or a price text, one clear choice), photo; then what is in it (allergens,
+// diet and spice, each a closed dropdown that says what is chosen); then add-ons, calories, Available and Popular.
+// Main task: get an item right in one go and save it, the way guests will read it, then the next (Add another).
 // Leaves out: where the item sits (the section's own Add item and Take out), and a serving size (the model has none).
-import type { ItemAllergen, ItemFields, MenuDraft, MenuItem, MenuStore } from '@crm/data';
-import { DIET_MARKS, EU_ALLERGENS, MENU_LIMITS, minorToDecimal, parsePrice } from '@crm/data/menu';
+import type { MenuDraft, MenuItem, MenuStore } from '@crm/data';
+import { EU_ALLERGENS, MENU_LIMITS } from '@crm/data/menu';
 import {
   Button,
   Callout,
-  ChoiceChips,
   Field,
   FileDrop,
   Form,
   FormRow,
+  SegmentedControl,
+  Select,
+  Separator,
   Switch,
   usePhotoCrop,
   type Toasts,
@@ -21,16 +23,31 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 import { DrawerForm } from './drawer.tsx';
 import { GroupDrawer } from './GroupDrawer.tsx';
+import {
+  dietNotes,
+  findsAllergen,
+  hasChanged,
+  itemFields,
+  itemForm,
+  itemProblems,
+  NO_SPICE,
+  placeChoices,
+  PLAIN_DIET_MARKS,
+  SPICE_MARKS,
+  withContains,
+  withPriceKind,
+  type ItemForm,
+  type PriceKind,
+} from './item-form.ts';
 import { draftPhotoHref, prepareMenuPhoto } from './photo.ts';
 import { flipSoldOut } from './StructureTab.tsx';
 import { strings } from './strings.ts';
 
-interface SizeRow {
-  readonly key: string;
-  readonly id?: string;
-  readonly name: string;
-  readonly price: string;
-}
+/** A new item left out of every section. */
+const NOWHERE = 'nowhere';
+
+const dietLabel = (mark: string): string => strings.diets[mark as keyof typeof strings.diets];
+const allergenLabel = (code: string): string => strings.allergens[code as keyof typeof strings.allergens];
 
 /** The dish's form: a new one (placed at the end of `sectionId`) or one already made. */
 export function ItemDialog({
@@ -41,6 +58,8 @@ export function ItemDialog({
   sectionId,
   newName,
   toasts,
+  isAddingMore,
+  onAddingMoreChange,
   onClose,
 }: {
   readonly store: MenuStore;
@@ -50,140 +69,113 @@ export function ItemDialog({
   readonly sectionId?: string;
   readonly newName?: string;
   readonly toasts: Toasts;
+  /** Add another: each save starts the next new item with the sheet still open (New record's Create more). */
+  readonly isAddingMore: boolean;
+  readonly onAddingMoreChange: (next: boolean) => void;
   readonly onClose: () => void;
 }) {
   const formId = useId();
   const { currency } = draft;
-  const [id] = useState(() => item?.id ?? store.newId());
-  const [name, setName] = useState(item?.name ?? newName ?? '');
-  const [price, setPrice] = useState(item?.priceMinor === undefined ? '' : minorToDecimal(item.priceMinor, currency));
-  const [priceNote, setPriceNote] = useState(item?.priceNote ?? '');
-  const [description, setDescription] = useState(item?.description ?? '');
-  const [diet, setDiet] = useState<readonly string[]>(item?.diet ?? []);
-  const [contains, setContains] = useState<readonly string[]>(
-    item?.allergens.filter((each) => each.level === 'contains').map((each) => each.code) ?? [],
-  );
-  const [may, setMay] = useState<readonly string[]>(
-    item?.allergens.filter((each) => each.level === 'may').map((each) => each.code) ?? [],
-  );
-  const [kcal, setKcal] = useState(item?.kcal === undefined ? '' : String(item.kcal));
-  const [featured, setFeatured] = useState(item?.featured ?? false);
-  // Available beside the price (checklabs' Active): Sold out, which goes live at once, sent as the item saves.
-  const [isAvailable, setAvailable] = useState(!(item?.soldOut ?? false));
-  const [groupIds, setGroupIds] = useState<readonly string[]>(item?.groupIds ?? []);
-  // New option group opens its drawer over this one, then comes back here with the group picked.
+  const [id, setId] = useState(() => item?.id ?? store.newId());
+  // What the form opened with: what a change is measured from, and what Add another starts over from.
+  const [opened, setOpened] = useState<ItemForm>(() => itemForm(item, newName, currency));
+  const [form, setForm] = useState<ItemForm>(opened);
+  const change = (patch: Partial<ItemForm>) => setForm((was) => ({ ...was, ...patch }));
+  // A new item made outside any section (the Items tab) says where it goes; a run of them keeps the choice.
+  const [placedIn, setPlacedIn] = useState(NOWHERE);
+  // Counts the items added, so the form starts afresh, its first field focused.
+  const [round, setRound] = useState(0);
+  // New add-on opens its drawer over this one, then comes back here with it picked.
   const [isMakingGroup, setMakingGroup] = useState(false);
-  const [sizes, setSizes] = useState<readonly SizeRow[]>(
-    item?.sizes.map((size) => ({
-      key: size.id,
-      id: size.id,
-      name: size.name,
-      price: minorToDecimal(size.priceMinor, currency),
-    })) ?? [],
-  );
-  const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
+  // Problems show from the first Save tried, and each one goes the moment it is fixed. Each try that finds one goes to
+  // it, so a Save never seems to do nothing when the problem is out of sight.
+  const [refusedSaves, setRefusedSaves] = useState(0);
+  const [hasTriedSaving, setTriedSaving] = useState(false);
   const [isSaving, setSaving] = useState(false);
   // A chosen photo waits for Save (a new dish's for the dish itself), so Cancel or Discard leaves the dish as it was.
   // It is cropped when chosen (spec 0068, AC-6809) and held drawn at both widths; the file it came from is kept, so
-  // Adjust crop starts again from the whole photo.
+  // Adjust crop starts again from the whole photo. Remove waits for Save too.
   const [pendingPhoto, setPendingPhoto] = useState<{ readonly large: Blob; readonly small: Blob }>();
   const [pendingOriginal, setPendingOriginal] = useState<File>();
+  const [isPhotoRemoved, setPhotoRemoved] = useState(false);
   const cropping = usePhotoCrop();
   // Its preview is a local object URL, let go when another photo replaces it or the drawer closes.
   const [pendingSrc, setPendingSrc] = useState<string>();
   const pendingSrcRef = useRef<string | undefined>(undefined);
-  useEffect(
-    () => () => {
-      if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
-    },
-    [],
-  );
+  const letGoOfPreview = () => {
+    if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
+    pendingSrcRef.current = undefined;
+  };
+  useEffect(() => letGoOfPreview, []);
+  useEffect(() => {
+    if (refusedSaves > 0) document.getElementById(formId)?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [refusedSaves, formId]);
   const live = draft.items.find((each) => each.id === id);
   // Run service alone reads a dish here and changes nothing (UX review should-fix 14).
   const isReadOnly = !draft.canEdit;
-  const isDirty =
-    pendingPhoto !== undefined ||
-    isAvailable === (item?.soldOut ?? false) ||
-    name !== (item?.name ?? newName ?? '') ||
-    price !== (item?.priceMinor === undefined ? '' : minorToDecimal(item.priceMinor, currency)) ||
-    priceNote !== (item?.priceNote ?? '') ||
-    description !== (item?.description ?? '') ||
-    JSON.stringify([diet, contains, may, groupIds, featured, kcal]) !==
-      JSON.stringify([
-        item?.diet ?? [],
-        item?.allergens.filter((each) => each.level === 'contains').map((each) => each.code) ?? [],
-        item?.allergens.filter((each) => each.level === 'may').map((each) => each.code) ?? [],
-        item?.groupIds ?? [],
-        item?.featured ?? false,
-        item?.kcal === undefined ? '' : String(item.kcal),
-      ]) ||
-    sizes.length !== (item?.sizes.length ?? 0) ||
-    sizes.some((size, index) => {
-      const was = item?.sizes[index];
-      return was === undefined || size.name !== was.name || size.price !== minorToDecimal(was.priceMinor, currency);
-    });
-
-  const save = async () => {
-    const found: Record<string, string> = {};
-    if (name.trim() === '') found.name = strings.nameMissing;
-    const priceMinor = price.trim() === '' ? null : (parsePrice(price, currency) ?? undefined);
-    if (priceMinor === undefined) found.price = strings.priceInvalid;
-    const sizeValues = sizes.map((size) => ({ ...size, minor: parsePrice(size.price, currency) }));
-    for (const size of sizeValues)
-      if (size.minor === undefined || size.name.trim() === '') found[`size-${size.key}`] = strings.sizeInvalid;
-    const kcalValue = kcal.trim() === '' ? null : Number(kcal);
-    if (kcalValue !== null && (!Number.isInteger(kcalValue) || kcalValue < 0 || kcalValue > MENU_LIMITS.kcalMax)) {
-      found.kcal = strings.kcalInvalid;
-    }
-    setProblems(found);
-    if (Object.keys(found).length > 0 || priceMinor === undefined) return;
-    const allergens: ItemAllergen[] = [
-      ...contains.map((code) => ({ code, level: 'contains' }) as ItemAllergen),
-      ...may.filter((code) => !contains.includes(code)).map((code) => ({ code, level: 'may' }) as ItemAllergen),
-    ];
-    const fields: ItemFields = {
-      name: name.trim(),
-      ...(description.trim() === '' ? {} : { description: description.trim() }),
-      priceMinor: sizeValues.length > 0 ? null : priceMinor,
-      ...(priceNote.trim() === '' ? {} : { priceNote: priceNote.trim() }),
-      diet: diet as ItemFields['diet'],
-      allergens,
-      kcal: kcalValue,
-      featured,
-      sizes: sizeValues.map((size) => ({
-        ...(size.id === undefined ? {} : { id: size.id }),
-        name: size.name.trim(),
-        priceMinor: size.minor ?? 0,
-      })),
-      groupIds: [...groupIds],
-    };
-    // Busy until every part has gone (the item, its photo, Available), so a second Save sends nothing twice.
-    setSaving(true);
-    const refused = await store.saveItem(slug, id, fields, item === undefined ? sectionId : undefined);
-    if (refused !== undefined) {
-      setSaving(false);
-      toasts.toast({ tone: 'danger', message: refused.message });
-      return;
-    }
-    if (pendingPhoto !== undefined) await upload(pendingPhoto);
-    // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists, said
-    // with Undo as the Items switch says it.
-    if (isAvailable === (item?.soldOut ?? false)) {
-      flipSoldOut(store, slug, { id, name: name.trim() }, !isAvailable, toasts, said);
-    }
-    setSaving(false);
-    onClose();
-  };
+  const isNew = item === undefined;
+  const hasPhotoChange = pendingPhoto !== undefined || isPhotoRemoved;
+  const isDirty = hasPhotoChange || hasChanged(form, opened);
+  const problems = hasTriedSaving ? itemProblems(form, currency) : {};
+  const notes = dietNotes(form);
+  const places = isNew && !isReadOnly && sectionId === undefined ? placeChoices(draft) : [];
 
   /** A refusal said as a toast (the item's own Undo and Available speak through the same). */
   const said = (refusedNow: { readonly message: string } | undefined) => {
     if (refusedNow !== undefined) toasts.toast({ tone: 'danger', message: refusedNow.message });
   };
 
-  /** Sends the cropped photo, already at both widths, for the dish `id`, which must exist by now. */
-  const upload = async (photo: { readonly large: Blob; readonly small: Blob }) => {
-    const refused = await store.uploadPhoto(slug, id, photo);
-    if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
+  const save = async () => {
+    const found = itemProblems(form, currency);
+    setTriedSaving(true);
+    if (Object.keys(found).length > 0) {
+      setRefusedSaves((was) => was + 1);
+      return;
+    }
+    const fields = itemFields(form, currency);
+    // Busy until every part has gone (the item, its photo, Available), so a second Save sends nothing twice.
+    setSaving(true);
+    // Placed once: a Save tried again after a refused photo finds the item made.
+    const place = sectionId ?? (placedIn === NOWHERE ? undefined : placedIn);
+    const refused = await store.saveItem(slug, id, fields, isNew && live === undefined ? place : undefined);
+    if (refused !== undefined) {
+      setSaving(false);
+      toasts.toast({ tone: 'danger', message: refused.message });
+      return;
+    }
+    // The photo refused: the sheet stays, holding it, so Save can try it again.
+    const photoRefused =
+      pendingPhoto !== undefined
+        ? await store.uploadPhoto(slug, id, pendingPhoto)
+        : isPhotoRemoved
+          ? await store.removePhoto(slug, id)
+          : undefined;
+    if (photoRefused !== undefined) {
+      setSaving(false);
+      said(photoRefused);
+      return;
+    }
+    // Available changed (or a new item made unavailable): Sold out goes live at once, once the item exists, said
+    // with Undo as the Items switch says it.
+    if (form.isAvailable !== opened.isAvailable) {
+      flipSoldOut(store, slug, { id, name: fields.name }, !form.isAvailable, toasts, said);
+    }
+    setSaving(false);
+    if (!isNew || !isAddingMore) {
+      onClose();
+      return;
+    }
+    toasts.toast({ tone: 'success', message: strings.itemAdded(fields.name) });
+    const next = itemForm(undefined, undefined, currency);
+    letGoOfPreview();
+    setId(store.newId());
+    setOpened(next);
+    setForm(next);
+    setTriedSaving(false);
+    setPendingPhoto(undefined);
+    setPendingOriginal(undefined);
+    setPendingSrc(undefined);
+    setRound((was) => was + 1);
   };
 
   /** Opens the cropper on `source` in the dish's shape, then holds the part kept, drawn at both widths, for Save. */
@@ -195,11 +187,12 @@ export function ItemDialog({
       toasts.toast({ tone: 'danger', message: strings.photoFailed });
       return;
     }
-    if (pendingSrcRef.current !== undefined) URL.revokeObjectURL(pendingSrcRef.current);
+    letGoOfPreview();
     const src = URL.createObjectURL(photo.small);
     pendingSrcRef.current = src;
     setPendingSrc(src);
     setPendingPhoto(photo);
+    setPhotoRemoved(false);
     if (typeof source !== 'string') setPendingOriginal(source);
   };
 
@@ -210,42 +203,24 @@ export function ItemDialog({
     void cropPhoto(file);
   };
 
+  // What the sheet shows: the photo chosen, else the saved one unless it is being taken off.
+  const savedPhoto = isPhotoRemoved ? undefined : live?.photo;
   // Adjust crop: the chosen file again, else the dish's saved photo at its large width (our own origin).
   const adjustSource =
     pendingOriginal ??
-    (live?.photo === undefined ? undefined : draftPhotoHref(slug, live.photo.id, 'large', live.photo.version));
+    (savedPhoto === undefined ? undefined : draftPhotoHref(slug, savedPhoto.id, 'large', savedPhoto.version));
 
-  const photoField = (
-    <FileDrop
-      label={strings.photo}
-      variant="row"
-      thumb="square"
-      acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
-      typesText={pendingPhoto === undefined ? strings.photoTypes : strings.photoAfterSave}
-      maxSize={MENU_LIMITS.photoMaxBytes}
-      onFiles={choosePhoto}
-      isReadOnly={isReadOnly}
-      {...(isReadOnly || adjustSource === undefined
-        ? {}
-        : {
-            onAdjust: () => {
-              void cropPhoto(adjustSource);
-            },
-          })}
-      {...(pendingSrc !== undefined
-        ? { preview: { src: pendingSrc, alt: '' } }
-        : live?.photo === undefined
-          ? {}
-          : { preview: { src: draftPhotoHref(slug, live.photo.id, 'small', live.photo.version), alt: '' } })}
-    />
-  );
+  const canChooseMoreGroups = form.groupIds.length < MENU_LIMITS.groupsPerItem;
 
   return (
     <DrawerForm
-      title={item?.name ?? (name === '' ? strings.dish : name)}
+      title={form.name.trim() === '' ? (item?.name ?? strings.newDish) : form.name}
       isDirty={!isReadOnly && isDirty}
       isBusy={isSaving}
       onClose={onClose}
+      {...(isNew && !isReadOnly
+        ? { footerStart: <Switch label={strings.addAnother} isSelected={isAddingMore} onChange={onAddingMoreChange} /> }
+        : {})}
       actions={
         isReadOnly ? (
           <Button variant="primary" slot="close">
@@ -253,8 +228,9 @@ export function ItemDialog({
           </Button>
         ) : (
           <>
+            {/* After a run of items, nothing is left to cancel: what was saved stays saved. */}
             <Button slot="close" isDisabled={isSaving}>
-              {strings.cancel}
+              {round > 0 && !isDirty ? strings.close : strings.cancel}
             </Button>
             <Button variant="primary" type="submit" form={formId} isPending={isSaving}>
               {strings.save}
@@ -263,171 +239,199 @@ export function ItemDialog({
         )
       }
     >
-      <Form id={formId} onSubmit={() => (isReadOnly ? undefined : void save())}>
+      <Form
+        key={round}
+        id={formId}
+        // Not when opened with a name: that was Enter in a section's Add item field, and the same key press landing in
+        // Name would send the form at once.
+        focusesFirstField={isNew && !isReadOnly && opened.name === ''}
+        isBusy={isSaving}
+        onSubmit={() => (isReadOnly ? undefined : void save())}
+      >
         {isReadOnly ? <Callout tone="info">{strings.readOnlyDish}</Callout> : null}
         <Field
           isReadOnly={isReadOnly}
           label={strings.dishName}
           placeholder={strings.namePlaceholder}
-          value={name}
-          onChange={setName}
+          value={form.name}
+          onChange={(name) => change({ name })}
           isRequired
           maxLength={MENU_LIMITS.itemNameMax}
           error={problems.name}
         />
-        {photoField}
+        <Field
+          isReadOnly={isReadOnly}
+          label={strings.description}
+          value={form.description}
+          onChange={(description) => change({ description })}
+          isMultiline
+          maxLength={400}
+          showCounter
+        />
+        <PriceFields
+          form={form}
+          currency={currency}
+          problems={problems}
+          isReadOnly={isReadOnly}
+          newKey={store.newId}
+          onChange={setForm}
+        />
+        <FileDrop
+          label={strings.photo}
+          variant="photo"
+          acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
+          typesText={strings.photoTypes}
+          maxSize={MENU_LIMITS.photoMaxBytes}
+          onFiles={choosePhoto}
+          isReadOnly={isReadOnly}
+          {...(isReadOnly || adjustSource === undefined
+            ? {}
+            : {
+                onAdjust: () => {
+                  void cropPhoto(adjustSource);
+                },
+              })}
+          {...(pendingSrc !== undefined || savedPhoto !== undefined
+            ? {
+                // Taking a photo off waits for Save, like choosing one, so Cancel still undoes it.
+                onRemove: () => {
+                  letGoOfPreview();
+                  setPendingSrc(undefined);
+                  setPendingPhoto(undefined);
+                  setPendingOriginal(undefined);
+                  setPhotoRemoved(live?.photo !== undefined);
+                },
+              }
+            : {})}
+          {...(pendingSrc !== undefined
+            ? { preview: { src: pendingSrc, alt: '' } }
+            : savedPhoto === undefined
+              ? {}
+              : { preview: { src: draftPhotoHref(slug, savedPhoto.id, 'small', savedPhoto.version), alt: '' } })}
+        />
+        <Separator />
         <FormRow>
+          <Select
+            label={strings.contains}
+            selectionMode="multiple"
+            showsMarks
+            isSearchable
+            searchLabel={strings.findAllergen}
+            placeholder={strings.none}
+            isReadOnly={isReadOnly}
+            filter={findsAllergen}
+            items={EU_ALLERGENS.map((code) => ({ id: code, label: allergenLabel(code), group: strings.contains }))}
+            values={form.contains}
+            onValuesChange={(contains) => setForm((was) => withContains(was, contains))}
+          />
+          {/* Contained can't also be may contain: said on the row, so an allergen never seems to be missing. */}
+          <Select
+            label={strings.mayContain}
+            selectionMode="multiple"
+            showsMarks
+            isSearchable
+            searchLabel={strings.findAllergen}
+            placeholder={strings.none}
+            isReadOnly={isReadOnly}
+            filter={findsAllergen}
+            items={EU_ALLERGENS.map((code) => ({
+              id: code,
+              label: allergenLabel(code),
+              group: strings.mayContain,
+              ...(form.contains.includes(code) ? { isDisabled: true, description: strings.inContains } : {}),
+            }))}
+            values={form.may}
+            onValuesChange={(may) => change({ may })}
+          />
+        </FormRow>
+        <FormRow>
+          <Select
+            label={strings.diet}
+            selectionMode="multiple"
+            showsMarks
+            placeholder={strings.none}
+            isReadOnly={isReadOnly}
+            items={PLAIN_DIET_MARKS.map((mark) => ({ id: mark, label: dietLabel(mark) }))}
+            values={form.diet}
+            onValuesChange={(diet) => change({ diet })}
+            {...(notes.length === 0 ? {} : { hint: notes.join(' ') })}
+          />
+          <Select
+            label={strings.spice}
+            showsMarks
+            isReadOnly={isReadOnly}
+            items={[
+              { id: NO_SPICE, label: strings.none, isNothing: true },
+              ...SPICE_MARKS.map((mark) => ({ id: mark, label: dietLabel(mark) })),
+            ]}
+            value={form.spice}
+            onChange={(spice) => change({ spice: spice ?? NO_SPICE })}
+          />
+        </FormRow>
+        <Separator />
+        {places.length === 0 ? null : (
+          <Select
+            label={strings.placedIn}
+            showsMarks
+            isSearchable={places.length > 7}
+            searchLabel={strings.placedIn}
+            items={[{ id: NOWHERE, label: strings.notOnMenu, isNothing: true }, ...places]}
+            value={placedIn}
+            onChange={(next) => setPlacedIn(next ?? NOWHERE)}
+          />
+        )}
+        <FormRow>
+          {isReadOnly && draft.groups.length === 0 ? null : (
+            // New add-on opens its drawer over this one and comes back with it picked, so nothing typed here is lost.
+            <Select
+              label={strings.groups}
+              selectionMode="multiple"
+              showsMarks
+              placeholder={strings.none}
+              isReadOnly={isReadOnly}
+              isSearchable={draft.groups.length > 7}
+              searchLabel={strings.findAddOn}
+              items={draft.groups.map((group) => ({
+                id: group.id,
+                label: group.name,
+                ...(canChooseMoreGroups || form.groupIds.includes(group.id)
+                  ? {}
+                  : { isDisabled: true, description: strings.groupsFull }),
+              }))}
+              values={form.groupIds}
+              onValuesChange={(groupIds) => change({ groupIds })}
+              onNew={{ label: strings.newOptionGroup, onPress: () => setMakingGroup(true) }}
+            />
+          )}
           <Field
             isReadOnly={isReadOnly}
-            label={strings.price}
-            value={price}
-            onChange={setPrice}
-            hint={sizes.length > 0 ? strings.priceBySize : strings.priceHint(currency)}
-            error={problems.price}
-            isDisabled={sizes.length > 0}
-            inputMode="decimal"
+            label={strings.kcal}
+            placeholder={strings.kcalPlaceholder}
+            value={form.kcal}
+            onChange={(kcal) => change({ kcal })}
+            inputMode="numeric"
+            error={problems.kcal}
           />
+        </FormRow>
+        <FormRow>
           <Switch
             label={strings.availableSwitch}
-            description={isReadOnly ? strings.availableNow : strings.availableHint}
-            isSelected={isAvailable}
+            // Unlike the rest, Available needs no Publish: said once it is changed, and always to Run service.
+            {...(isReadOnly || form.isAvailable !== opened.isAvailable ? { description: strings.availableNow } : {})}
+            isSelected={form.isAvailable}
             onChange={(next) => {
-              setAvailable(next);
+              change({ isAvailable: next });
               // Run service changes nothing else here, so Available goes live at once for them, with Undo.
               if (isReadOnly && live !== undefined) flipSoldOut(store, slug, live, !next, toasts, said);
             }}
           />
+          <Switch
+            label={strings.featured}
+            isSelected={form.featured}
+            onChange={(featured) => change({ featured })}
+            isReadOnly={isReadOnly}
+          />
         </FormRow>
-        {/* Sizes sit straight under the price they take over from, not after the description. */}
-        {sizes.map((size, index) => (
-          <Field
-            isReadOnly={isReadOnly}
-            key={size.key}
-            label={`${strings.sizeName} ${String(index + 1)}`}
-            labelAside={strings.andPrice}
-            value={size.name}
-            onChange={(value) =>
-              setSizes((was) => was.map((each) => (each.key === size.key ? { ...each, name: value } : each)))
-            }
-            error={problems[`size-${size.key}`]}
-            after={
-              <Field
-                isReadOnly={isReadOnly}
-                label={strings.sizePriceIn(currency)}
-                isLabelHidden
-                prefix={currency}
-                value={size.price}
-                inputMode="decimal"
-                onChange={(value) =>
-                  setSizes((was) => was.map((each) => (each.key === size.key ? { ...each, price: value } : each)))
-                }
-              />
-            }
-            suffix={
-              isReadOnly ? undefined : (
-                <Button
-                  variant="ghost"
-                  icon="x"
-                  label={strings.removeSize}
-                  onPress={() => setSizes((was) => was.filter((each) => each.key !== size.key))}
-                />
-              )
-            }
-          />
-        ))}
-        {isReadOnly || sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
-          <Button
-            variant="dashed"
-            icon="plus"
-            onPress={() => {
-              // The first size takes the dish's price, so nothing typed is lost when sizes take over.
-              setSizes((was) => [...was, { key: store.newId(), name: '', price: was.length === 0 ? price : '' }]);
-              if (sizes.length === 0) setPrice('');
-            }}
-          >
-            {strings.addSize}
-          </Button>
-        )}
-        {price.trim() === '' && sizes.length === 0 ? (
-          <Field
-            isReadOnly={isReadOnly}
-            label={strings.priceNote}
-            value={priceNote}
-            onChange={setPriceNote}
-            hint={strings.priceNoteHint}
-            maxLength={MENU_LIMITS.priceNoteMax}
-          />
-        ) : null}
-        <Field
-          isReadOnly={isReadOnly}
-          label={strings.kcal}
-          value={kcal}
-          onChange={setKcal}
-          inputMode="numeric"
-          error={problems.kcal}
-        />
-        <Field
-          isReadOnly={isReadOnly}
-          label={strings.description}
-          value={description}
-          onChange={setDescription}
-          isMultiline
-          maxLength={400}
-        />
-        {isReadOnly && draft.groups.length === 0 ? null : (
-          // New option group opens its drawer over this one and comes back with the group picked, so nothing typed
-          // here is lost (checklabs' modifier groups, which it left unlinked).
-          <ChoiceChips
-            label={strings.groups}
-            choices={draft.groups.map((group) => ({ id: group.id, label: group.name }))}
-            selected={groupIds}
-            isDisabled={isReadOnly}
-            onChange={(next) => setGroupIds(next.slice(0, MENU_LIMITS.groupsPerItem))}
-            {...(isReadOnly
-              ? {}
-              : {
-                  end: (
-                    <Button variant="dashed" icon="plus" onPress={() => setMakingGroup(true)}>
-                      {strings.newOptionGroup}
-                    </Button>
-                  ),
-                })}
-          />
-        )}
-        <ChoiceChips
-          label={strings.contains}
-          choices={EU_ALLERGENS.map((code) => ({ id: code, label: strings.allergens[code] }))}
-          selected={contains}
-          isDisabled={isReadOnly}
-          onChange={setContains}
-        />
-        <ChoiceChips
-          label={strings.mayContain}
-          choices={EU_ALLERGENS.filter((code) => !contains.includes(code)).map((code) => ({
-            id: code,
-            label: strings.allergens[code],
-          }))}
-          selected={may}
-          isDisabled={isReadOnly}
-          onChange={setMay}
-        />
-        <ChoiceChips
-          label={strings.diet}
-          choices={DIET_MARKS.map((mark) => ({ id: mark, label: strings.diets[mark] }))}
-          selected={diet}
-          isDisabled={isReadOnly}
-          onChange={(next) => {
-            // One spice level at most, as the server refuses two: the newest wins.
-            const spicy = next.filter((mark) => mark.startsWith('spicy_'));
-            const newest = spicy.find((mark) => !diet.includes(mark));
-            setDiet(
-              spicy.length > 1 && newest !== undefined
-                ? next.filter((mark) => !mark.startsWith('spicy_') || mark === newest)
-                : next,
-            );
-          }}
-        />
-        <Switch label={strings.featured} isSelected={featured} onChange={setFeatured} isReadOnly={isReadOnly} />
       </Form>
       {cropping.cropper}
       {isMakingGroup ? (
@@ -436,10 +440,154 @@ export function ItemDialog({
           slug={slug}
           draft={draft}
           toasts={toasts}
-          onSaved={(groupId) => setGroupIds((was) => [...was, groupId].slice(0, MENU_LIMITS.groupsPerItem))}
+          onSaved={(groupId) =>
+            setForm((was) => ({
+              ...was,
+              groupIds: [...was.groupIds, groupId].slice(0, MENU_LIMITS.groupsPerItem),
+            }))
+          }
           onClose={() => setMakingGroup(false)}
         />
       ) : null}
     </DrawerForm>
+  );
+}
+
+/**
+ * The item's one way of being priced: first how (One price, Sizes or Other, under Pricing), then the box or
+ * rows for that kind alone, so nothing reads as locked. Only the kind chosen is saved. Read only, the kind's own value
+ * under its own label.
+ */
+function PriceFields({
+  form,
+  currency,
+  problems,
+  isReadOnly,
+  newKey,
+  onChange,
+}: {
+  readonly form: ItemForm;
+  readonly currency: string;
+  readonly problems: Readonly<Record<string, string>>;
+  readonly isReadOnly: boolean;
+  readonly newKey: () => string;
+  readonly onChange: (next: ItemForm) => void;
+}) {
+  const setSize = (key: string, patch: { readonly name?: string; readonly price?: string }) =>
+    onChange({ ...form, sizes: form.sizes.map((each) => (each.key === key ? { ...each, ...patch } : each)) });
+  if (isReadOnly && form.priceKind === 'sizes') {
+    return (
+      <>
+        <Field label={strings.price} value={strings.priceBySize} isReadOnly />
+        {form.sizes.map((size, index) => (
+          <Field
+            isReadOnly
+            key={size.key}
+            label={`${strings.sizeName} ${String(index + 1)}`}
+            isLabelHidden
+            value={size.name}
+            after={
+              <Field
+                isReadOnly
+                label={strings.sizePriceOf(index + 1, currency)}
+                isLabelHidden
+                prefix={currency}
+                value={size.price}
+              />
+            }
+          />
+        ))}
+      </>
+    );
+  }
+  if (isReadOnly) {
+    return form.priceKind === 'text' ? (
+      <Field isReadOnly label={strings.priceText} value={form.priceText} />
+    ) : (
+      <Field isReadOnly label={strings.price} prefix={currency} value={form.price} />
+    );
+  }
+  return (
+    <>
+      <SegmentedControl
+        // Pricing, not Price: the box under it is the Price, and two controls of one name read as one.
+        label={strings.pricing}
+        isLabelVisible
+        segments={[
+          { value: 'price', label: strings.priceOne },
+          { value: 'sizes', label: strings.priceSizes },
+          { value: 'text', label: strings.priceTextKind },
+        ]}
+        value={form.priceKind}
+        onChange={(kind) => onChange(withPriceKind(form, kind as PriceKind, newKey))}
+      />
+      {form.priceKind === 'text' ? (
+        <Field
+          key="text"
+          label={strings.priceText}
+          isLabelHidden
+          placeholder={strings.priceTextPlaceholder}
+          value={form.priceText}
+          onChange={(priceText) => onChange({ ...form, priceText })}
+          maxLength={MENU_LIMITS.priceNoteMax}
+        />
+      ) : form.priceKind === 'price' ? (
+        <Field
+          key="price"
+          label={strings.price}
+          isLabelHidden
+          prefix={currency}
+          placeholder={strings.pricePlaceholder}
+          value={form.price}
+          onChange={(price) => onChange({ ...form, price })}
+          error={problems.price}
+          inputMode="decimal"
+        />
+      ) : (
+        <>
+          {form.sizes.map((size, index) => (
+            <Field
+              key={size.key}
+              label={`${strings.sizeName} ${String(index + 1)}`}
+              isLabelHidden
+              {...(index < strings.sizeNamePlaceholders.length
+                ? { placeholder: strings.sizeNamePlaceholders[index] }
+                : {})}
+              value={size.name}
+              onChange={(name) => setSize(size.key, { name })}
+              error={problems[`size-${size.key}-name`]}
+              after={
+                <>
+                  <Field
+                    label={strings.sizePriceOf(index + 1, currency)}
+                    error={problems[`size-${size.key}-price`]}
+                    isLabelHidden
+                    prefix={currency}
+                    placeholder={strings.pricePlaceholder}
+                    value={size.price}
+                    inputMode="decimal"
+                    onChange={(price) => setSize(size.key, { price })}
+                  />
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    label={strings.removeSize}
+                    onPress={() => onChange({ ...form, sizes: form.sizes.filter((each) => each.key !== size.key) })}
+                  />
+                </>
+              }
+            />
+          ))}
+          {form.sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
+            <Button
+              icon="plus"
+              onPress={() => onChange({ ...form, sizes: [...form.sizes, { key: newKey(), name: '', price: '' }] })}
+            >
+              {strings.addSize}
+            </Button>
+          )}
+        </>
+      )}
+    </>
   );
 }

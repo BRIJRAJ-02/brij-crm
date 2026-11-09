@@ -3,7 +3,15 @@
 // draft), and the guest menu (MenuList in the Warm look) with a dish's sheet open, a proper dialog closed by Escape.
 // axe is clean in light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each is photographed.
 import '@crm/ui/styles.css';
-import type { HospitalityHeld, HospitalityHeldState, MenuDraft, MenuStore, PublicMenu } from '@crm/data';
+import type {
+  DataError,
+  HospitalityHeld,
+  HospitalityHeldState,
+  ItemFields,
+  MenuDraft,
+  MenuStore,
+  PublicMenu,
+} from '@crm/data';
 import { MENU_LOOK_PROPERTIES, WARM_PRESET } from '@crm/data/menu';
 import { BookingFoot, MenuList } from '@crm/ui/public-menu';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -141,8 +149,10 @@ function storeOf(draft: MenuDraft) {
     calls.push(name);
     return Promise.resolve(undefined);
   };
+  const saved: ItemFields[] = [];
+  let lastId = 99;
   const store = {
-    newId: () => id(99),
+    newId: () => id((lastId += 1)),
     draft: () => heldOf(draft),
     setSoldOut: done('soldOut'),
     publish: done('publish'),
@@ -151,10 +161,29 @@ function storeOf(draft: MenuDraft) {
     saveSection: done('saveSection'),
     placeItem: done('placeItem'),
     saveGroup: done('saveGroup'),
-    saveItem: done('saveItem'),
+    saveItem: (_workspace: string, _id: string, fields: ItemFields, sectionId?: string) => {
+      calls.push(sectionId === undefined ? 'saveItem' : `saveItem in ${sectionId}`);
+      saved.push(fields);
+      return Promise.resolve(undefined);
+    },
   } as unknown as MenuStore;
-  return { store, calls };
+  return { store, calls, saved };
 }
+
+/** Waits for what is sliding in: axe reads no background behind a drawer mid slide. */
+const settled = () =>
+  Promise.allSettled(
+    document
+      .getAnimations()
+      .filter((each) => each.effect?.getTiming().iterations !== Number.POSITIVE_INFINITY)
+      .map((each) => each.finished),
+  );
+
+/** A field's name as its label gives it. */
+const labelOf = (element: Element | null): string =>
+  element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+    ? (element.labels?.[0]?.textContent ?? '')
+    : '';
 
 const toasts = { toast: () => undefined } as never;
 const BUSINESS = {
@@ -227,7 +256,7 @@ describe('the Menus editor', () => {
     // The first publish is checklabs' "Publish & go live", through the review.
     await userEvent.click(page.getByRole('button', { name: 'Publish & go live' }));
     const review = page.getByRole('dialog', { name: 'Review and publish' });
-    await expect.element(review.getByText(/Give Oysters a price or a price note/)).toBeVisible();
+    await expect.element(review.getByText(/Give Oysters a price, then publish/)).toBeVisible();
     await expect.element(review.getByRole('button', { name: 'Publish & go live' })).toBeDisabled();
   });
 
@@ -351,7 +380,7 @@ describe('the Menus editor', () => {
     await userEvent.keyboard('{Escape}');
   });
 
-  it('makes a new option group from an item’s drawer and comes back with it picked', async () => {
+  it('makes a new add-on from an item’s drawer and comes back with it picked', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf(DRAFT);
     shown?.unmount();
@@ -360,17 +389,234 @@ describe('the Menus editor', () => {
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
     );
     await userEvent.click(page.getByRole('button', { name: 'New item' }).first());
-    const sheet = page.getByRole('dialog', { name: 'Item' });
+    const sheet = page.getByRole('dialog', { name: 'New item' });
     await expect.element(sheet.getByPlaceholder('e.g. Grilled Salmon')).toBeVisible();
     await expect.element(sheet.getByRole('switch', { name: /Available/ })).toBeChecked();
-    await userEvent.click(sheet.getByRole('button', { name: 'New option group' }));
-    const group = page.getByRole('dialog', { name: 'New option group' });
+    await userEvent.click(sheet.getByRole('button', { name: /Add-ons/ }));
+    await userEvent.click(page.getByRole('option', { name: 'New add-on' }));
+    const group = page.getByRole('dialog', { name: 'New add-on' });
     await userEvent.fill(group.getByLabelText('Name', { exact: true }), 'Milk');
     await userEvent.fill(group.getByRole('textbox', { name: /^Option 1/ }), 'Oat');
-    await userEvent.click(group.getByRole('button', { name: 'Save group' }));
+    await userEvent.click(group.getByRole('button', { name: 'Save add-on' }));
     await expect.poll(() => calls.includes('saveGroup')).toBe(true);
     await expect.element(group).not.toBeInTheDocument();
     await expect.element(sheet).toBeVisible();
+    await expect.poll(() => document.activeElement?.closest('[role="dialog"]')).toBeTruthy();
+  });
+
+  /** Opens the sheet of a new item on the Items tab. */
+  async function openNewItem() {
+    const { store, calls, saved } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{ tab: 'dishes' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'New item' }).first());
+    // Named for what is typed, so found by what it holds.
+    return { sheet: page.getByRole('dialog').filter({ hasText: 'Add another' }), calls, saved };
+  }
+
+  it('goes through the fields a person fills for every item by Tab alone, starting in Name', async () => {
+    await page.viewport(1280, 900);
+    await openNewItem();
+    const focusedName = () => labelOf(document.activeElement);
+    await expect.poll(focusedName).toBe('Name');
+    await userEvent.tab();
+    expect(focusedName()).toBe('Description');
+    // How it is priced first, one stop, then the price, one stop for the photo, and into the allergens.
+    await userEvent.tab();
+    expect(document.activeElement?.closest('[role="radiogroup"]')?.textContent).toContain('One price');
+    await userEvent.tab();
+    // Named for screen readers alone: Pricing above it already says what it is.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Price');
+    await userEvent.tab();
+    expect(document.activeElement?.textContent).toContain('Add photo');
+    await userEvent.tab();
+    expect(document.activeElement?.textContent).toBe('None');
+  });
+
+  it('holds one way of pricing: only the kind chosen is saved', async () => {
+    await page.viewport(1280, 900);
+    const { sheet, saved } = await openNewItem();
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Oysters');
+    await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), '9.50');
+    // The first size takes the price typed; sizes take over the box.
+    await userEvent.click(sheet.getByText('Sizes', { exact: true }));
+    await expect.element(sheet.getByLabelText('Size 1 price (GBP)')).toHaveValue('9.50');
+    await userEvent.click(sheet.getByText('Other', { exact: true }));
+    await userEvent.fill(sheet.getByLabelText('Instead of a price', { exact: true }), 'Market price');
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect.poll(() => saved.at(-1)).toMatchObject({ priceMinor: null, priceNote: 'Market price', sizes: [] });
+  });
+
+  it('keeps allergens at one level, says what is chosen, and warns of a mark they rule out', async () => {
+    await page.viewport(1280, 900);
+    const { sheet, saved } = await openNewItem();
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Burrata');
+    const contains = sheet.getByRole('button', { name: /Contains allergens/ });
+    const may = sheet.getByRole('button', { name: /May contain allergens/ });
+    await expect.element(contains).toHaveTextContent('None');
+    // Milk may be in it, then is known to be: it moves.
+    await userEvent.click(may);
+    await userEvent.click(page.getByRole('option', { name: 'Milk' }));
+    await userEvent.keyboard('{Escape}');
+    await expect.element(may).toHaveTextContent('Milk');
+    await userEvent.click(contains);
+    await userEvent.click(page.getByRole('option', { name: 'Milk' }));
+    await userEvent.click(page.getByRole('option', { name: 'Soya' }));
+    await userEvent.keyboard('{Escape}');
+    await expect.element(contains).toHaveTextContent('Milk, Soya');
+    // The list says which one it is, and one search takes the next and the next, by everyday words too.
+    await userEvent.click(contains);
+    await expect.element(page.getByRole('listbox').getByText('Contains allergens')).toBeVisible();
+    await userEvent.keyboard('egg');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('dairy');
+    await expect.element(page.getByRole('option', { name: 'Milk' })).toBeVisible();
+    expect(page.getByRole('option', { name: 'Soya' }).elements()).toHaveLength(0);
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(contains).toHaveTextContent('Eggs, Milk, Soya');
+    // A letter on the closed field changes nothing.
+    contains.element().focus();
+    await userEvent.keyboard('c');
+    await expect.element(contains).toHaveTextContent('Eggs, Milk, Soya');
+    await userEvent.click(contains);
+    await userEvent.click(page.getByRole('option', { name: 'Eggs' }));
+    await userEvent.keyboard('{Escape}');
+    await expect.element(may).toHaveTextContent('None');
+    // In the other list it says where it is, and can't be picked.
+    await userEvent.click(may);
+    const milk = page.getByRole('option', { name: /Milk/ });
+    await expect.poll(() => milk.element().textContent).toContain('Already in Contains');
+    await expect.element(milk).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(sheet.getByRole('button', { name: /Dietary/ }));
+    await userEvent.click(page.getByRole('option', { name: 'Vegan' }));
+    await userEvent.keyboard('{Escape}');
+    await expect.element(sheet.getByText('Marked Vegan, but contains milk.')).toBeVisible();
+    await userEvent.click(sheet.getByRole('button', { name: /Spice level/ }));
+    await userEvent.click(page.getByRole('option', { name: 'Spicy', exact: true }));
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect
+      .poll(() => saved.at(-1))
+      .toMatchObject({
+        diet: ['vegan', 'spicy_2'],
+        allergens: [
+          { code: 'milk', level: 'contains' },
+          { code: 'soya', level: 'contains' },
+        ],
+      });
+  });
+
+  it('saves and starts the next with Add another, focus back in Name', async () => {
+    await page.viewport(1280, 900);
+    const { sheet, saved } = await openNewItem();
+    await userEvent.click(sheet.getByText('Add another'));
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Soup');
+    await expect.element(sheet.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), '6');
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect.poll(() => saved.length).toBe(1);
+    const next = page.getByRole('dialog', { name: 'New item' });
+    await expect.element(next.getByLabelText('Name', { exact: true })).toHaveValue('');
+    await expect.element(next.getByLabelText('Price', { exact: true })).toHaveValue('');
+    await expect.poll(() => labelOf(document.activeElement)).toBe('Name');
+    // Nothing typed yet and nothing to cancel, so it closes without asking.
+    await userEvent.click(next.getByRole('button', { name: 'Close' }).last());
+    await expect.element(next).not.toBeInTheDocument();
+  });
+
+  it('says where a new item goes when it was made outside a section', async () => {
+    await page.viewport(1280, 900);
+    const { sheet, calls } = await openNewItem();
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Soup');
+    await userEvent.click(sheet.getByRole('button', { name: /Section/ }));
+    await userEvent.click(page.getByRole('option', { name: 'Mains' }));
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect.poll(() => calls.at(-1)).toBe(`saveItem in ${MAINS}`);
+  });
+
+  it('goes to the first problem on Save, and a refused save keeps the form as typed', async () => {
+    await page.viewport(1280, 900);
+    const { store, saved } = storeOf(DRAFT);
+    shown?.unmount();
+    shown = await renderInApp(
+      () => (
+        <MenusScreen
+          view={{ tab: 'dishes' }}
+          store={{
+            ...store,
+            saveItem: () => Promise.resolve({ code: 'REFUSED', message: 'Refused.' } as unknown as DataError),
+          }}
+          slug="acme"
+          toasts={toasts}
+          business={BUSINESS}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+    );
+    await userEvent.click(page.getByRole('button', { name: 'New item' }).first());
+    const sheet = page.getByRole('dialog').filter({ hasText: 'Add another' });
+    await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), 'abc');
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    await expect.element(sheet.getByText('Use a price such as 9.50.')).toBeVisible();
+    await expect.poll(() => labelOf(document.activeElement)).toBe('Name');
+    await userEvent.fill(sheet.getByLabelText('Price', { exact: true }), '9');
+    await expect.element(sheet.getByText('Use a price such as 9.50.')).not.toBeInTheDocument();
+    await userEvent.fill(sheet.getByLabelText('Name', { exact: true }), 'Soup');
+    await userEvent.click(sheet.getByRole('button', { name: 'Save item' }));
+    const titled = page.getByRole('dialog', { name: 'Soup' });
+    await expect.element(titled.getByLabelText('Price', { exact: true })).toHaveValue('9');
+    expect(saved).toHaveLength(0);
+  });
+
+  it('is clean in both themes with an item filled and a list open, on a desktop and a phone', async () => {
+    for (const width of [1280, 390]) {
+      await page.viewport(width, 844);
+      for (const theme of THEMES) {
+        applyTheme(theme);
+        const { store } = storeOf(DRAFT);
+        shown?.unmount();
+        shown = await renderInApp(
+          () => <MenusScreen view={{ tab: 'dishes' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+          { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+        );
+        await userEvent.click(page.getByText('Wood fired bream').first());
+        const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
+        await expect.element(sheet.getByLabelText('Size 1', { exact: true })).toHaveValue('Half');
+        await settled();
+        expect(await axeViolations()).toEqual([]);
+        await userEvent.click(sheet.getByRole('button', { name: /May contain allergens/ }));
+        await expect.element(page.getByRole('option', { name: /Fish/ })).toBeVisible();
+        await settled();
+        await shoot('item-sheet-list', theme, width);
+        expect(await axeViolations()).toEqual([]);
+        await userEvent.keyboard('{Escape}');
+      }
+    }
+    resetTheme();
+  }, 90_000);
+
+  it('reads an item for someone who can’t edit: values shown, nothing to choose but Available', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf({ ...DRAFT, canEdit: false });
+    shown?.unmount();
+    shown = await renderInApp(
+      () => <MenusScreen view={{ tab: 'dishes' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
+      { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=dishes' },
+    );
+    await userEvent.click(page.getByText('Wood fired bream').first());
+    const sheet = page.getByRole('dialog', { name: 'Wood fired bream' });
+    await expect.element(sheet.getByLabelText('Size 1', { exact: true })).toHaveValue('Half');
+    await expect.element(sheet.getByRole('group', { name: 'Contains allergens' })).toHaveTextContent('Fish');
+    expect(sheet.getByRole('radio').elements()).toHaveLength(0);
+    expect(sheet.getByRole('button', { name: 'Save item' }).elements()).toHaveLength(0);
+    await expect.element(sheet.getByRole('switch', { name: /Available/ })).toBeEnabled();
+    await settled();
+    expect(await axeViolations()).toEqual([]);
   });
 
   it('asks before a drawer with changes closes, and keeps what was typed on Keep editing', async () => {
@@ -381,13 +627,13 @@ describe('the Menus editor', () => {
       () => <MenusScreen view={{ tab: 'options' }} store={store} slug="acme" toasts={toasts} business={BUSINESS} />,
       { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus?tab=options' },
     );
-    await expect.element(page.getByText('Choices guests can pick. Required groups need a pick.')).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: 'New group' }).first());
-    const drawer = page.getByRole('dialog', { name: 'New option group' });
+    await expect.element(page.getByText('Choices guests can pick. Required ones need a pick.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'New add-on' }).first());
+    const drawer = page.getByRole('dialog', { name: 'New add-on' });
     await expect.element(drawer).toBeVisible();
     // Save with nothing named: the problems show inline, nothing is sent.
-    await userEvent.click(drawer.getByRole('button', { name: 'Save group' }));
-    await expect.element(drawer.getByText('Name the group, such as Milk.')).toBeVisible();
+    await userEvent.click(drawer.getByRole('button', { name: 'Save add-on' }));
+    await expect.element(drawer.getByText('Name the add-on, such as Milk.')).toBeVisible();
     await userEvent.fill(drawer.getByLabelText('Name', { exact: true }), 'Milk');
     await userEvent.click(drawer.getByRole('button', { name: 'Cancel' }));
     await expect.element(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();

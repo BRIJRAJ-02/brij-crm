@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton, DropZone, FileTrigger, Text } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -46,7 +46,13 @@ export interface FileDropProps {
    * said only in its refusal. For an optional picture in a settings card (a link page's cover, its share picture),
    * where the zone's dashed box outweighed the page.
    */
-  readonly variant?: 'zone' | 'button' | 'row';
+  /**
+   * `photo` (6 November 2026) is one picture a screen has to show well (a menu item's): with nothing there, a whole
+   * box to press, drop on or paste into, and a picture pasted anywhere in the dialog around it lands here too; with a
+   * picture there, the picture at a size you can check it by (`size-column` wide, 4:3), Change, Adjust crop and Remove
+   * beside it. `label` names the picture ("Photo").
+   */
+  readonly variant?: 'zone' | 'button' | 'row' | 'photo';
   /**
    * With `variant="row"`, the picture's tile: `wide` (the default) for a logo or a banner, `square` for a picture you
    * have to recognise, which a wide strip would cut to its middle (a menu item's photo).
@@ -75,8 +81,8 @@ export interface FileDropProps {
    */
   readonly onAdjust?: () => void;
   /**
-   * Takes the picture there away (`variant="row"` only): a quiet remove button at the row's end while `preview`
-   * shows. The screen asks first, as every ending action does.
+   * Takes the picture there away (`variant="row"` and `"photo"`): a quiet remove button while `preview` shows. The
+   * screen asks first, as every ending action does, unless the removal itself waits for a Save.
    */
   readonly onRemove?: () => void;
 }
@@ -130,6 +136,39 @@ export function FileDrop({
     setError(undefined);
     onFiles(allowsMultiple ? files : files.slice(0, 1));
   };
+  // `photo` takes a picture pasted anywhere in its own dialog: nothing to focus first. Text pasted into a field stays
+  // that field's, and a dialog opened over this one (the cropper) keeps its own paste.
+  const ownRef = useRef<HTMLDivElement>(null);
+  const takesPaste = variant === 'photo' && !isDisabled && !isReadOnly && !isPending;
+  // The listener goes on once per opening, reading the latest checks through a ref, not again after every render.
+  const takeRef = useRef(take);
+  useEffect(() => {
+    takeRef.current = take;
+  });
+  useEffect(() => {
+    // React Aria's drop target keeps a hidden button of its own for the keyboard (the first button in the box,
+    // react-aria-components 1.21); here the box itself and the paste do that job, so Tab doesn't stop twice on one
+    // photo. Again after each render, since the box remounts as a picture comes and goes.
+    if (variant === 'photo') ownRef.current?.querySelector('button')?.setAttribute('tabindex', '-1');
+  });
+  useEffect(() => {
+    const own = ownRef.current;
+    if (!takesPaste || own === null) return;
+    const doc = own.ownerDocument;
+    const onPaste = (event: ClipboardEvent) => {
+      const files = [...(event.clipboardData?.files ?? [])];
+      if (files.length === 0 || (event.clipboardData?.getData('text/plain') ?? '') !== '') return;
+      const dialog = '[role="dialog"], [role="alertdialog"]';
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(dialog) !== own.closest(dialog)) return;
+      event.preventDefault();
+      takeRef.current(files);
+    };
+    doc.addEventListener('paste', onPaste);
+    return () => {
+      doc.removeEventListener('paste', onPaste);
+    };
+  }, [takesPaste]);
   const limits = [types, maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale))].filter(
     (part) => part !== undefined,
   );
@@ -141,6 +180,18 @@ export function FileDrop({
         {said}
       </span>
     );
+  if (isReadOnly && variant === 'photo') {
+    return shown !== undefined && failed !== shown ? (
+      <img
+        className={styles.photoImage}
+        src={shown}
+        alt={preview?.alt ?? ''}
+        onError={() => {
+          setFailed(shown);
+        }}
+      />
+    ) : null;
+  }
   if (isReadOnly) {
     return shown !== undefined && failed !== shown ? (
       <img
@@ -173,6 +224,84 @@ export function FileDrop({
             {strings.adjust}
           </Button>
         )}
+        {refusal}
+      </div>
+    );
+  }
+  if (variant === 'photo') {
+    const hasPicture = shown !== undefined && failed !== shown;
+    const pick = {
+      ...(acceptedTypes === undefined ? {} : { acceptedFileTypes: [...acceptedTypes] }),
+      onSelect: (list: FileList | null) => {
+        if (list !== null) take([...list]);
+      },
+    };
+    return (
+      <div className={styles.field} ref={ownRef}>
+        <DropZone
+          className={styles.photo}
+          isDisabled={isDisabled || isPending}
+          aria-label={label}
+          aria-busy={isPending || undefined}
+          onDrop={(event) => {
+            void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
+          }}
+        >
+          {hasPicture ? (
+            <>
+              <img
+                className={styles.photoImage}
+                src={shown}
+                alt={preview?.alt ?? ''}
+                onError={() => {
+                  setFailed(shown);
+                }}
+              />
+              <span className={styles.photoActions}>
+                <FileTrigger {...pick}>
+                  <Button isPending={isPending} isDisabled={isDisabled} label={strings.changeNamed(label)}>
+                    {strings.change}
+                  </Button>
+                </FileTrigger>
+                {onAdjust !== undefined && (
+                  <Button variant="ghost" isDisabled={isDisabled || isPending} onPress={onAdjust}>
+                    {strings.adjust}
+                  </Button>
+                )}
+                {onRemove !== undefined && (
+                  <Button
+                    variant="ghost"
+                    label={strings.remove(label)}
+                    isDisabled={isDisabled || isPending}
+                    onPress={onRemove}
+                  >
+                    {strings.removeShort}
+                  </Button>
+                )}
+              </span>
+            </>
+          ) : (
+            <FileTrigger {...pick}>
+              <AriaButton className={styles.photoAdd} isDisabled={isDisabled} isPending={isPending}>
+                <span className={styles.photoMark}>
+                  <Icon name="image" size="sm" tone="muted" />
+                </span>
+                <span className={styles.photoWords}>
+                  <Text slot="label" className={styles.label}>
+                    {strings.addNamed(label)}
+                  </Text>
+                  {isPending ? (
+                    <span className={styles.limits}>{strings.sending}</span>
+                  ) : (
+                    <span className={`${styles.limits ?? ''} ${styles.photoHow ?? ''}`}>
+                      {strings.dropPasteOrPress}
+                    </span>
+                  )}
+                </span>
+              </AriaButton>
+            </FileTrigger>
+          )}
+        </DropZone>
         {refusal}
       </div>
     );

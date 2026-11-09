@@ -115,8 +115,11 @@ export function Checkbox({
 
 /** Props for CheckboxMark. */
 export interface CheckboxMarkProps {
-  /** What the mark stands for; screen readers hear it with the state ("Is customer, checked"). */
-  readonly label: string;
+  /**
+   * What the mark stands for; screen readers hear it with the state ("Is customer, checked"). Left out, the mark says
+   * nothing: the row it sits in already names itself and its state (an option in a Select).
+   */
+  readonly label?: string;
   readonly isSelected: boolean;
   readonly isIndeterminate?: boolean;
   readonly isReadOnly?: boolean;
@@ -139,10 +142,12 @@ export function CheckboxMark({ label, isSelected, isIndeterminate = false, isRea
       <span className={styles.box} aria-hidden="true">
         {isIndeterminate ? <Icon name="minus" size="xs" /> : isSelected && <Icon name="check" size="xs" />}
       </span>
-      <VisuallyHidden>
-        {label}
-        {state}
-      </VisuallyHidden>
+      {label !== undefined && (
+        <VisuallyHidden>
+          {label}
+          {state}
+        </VisuallyHidden>
+      )}
     </span>
   );
 }
