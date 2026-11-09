@@ -93,7 +93,11 @@ export async function insertPlace(
     .select({ id: places.id })
     .from(places)
     .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, id)));
-  if (again !== undefined) return;
+  // A retry answers the place it made; an id of a place outside the member's reach is no such place (AC-6595).
+  if (again !== undefined) {
+    await requirePlaceInReach(tx, scope, id);
+    return;
+  }
   // The properties lock first, so a business can't be removed while a place is being added to it.
   await lockKey(tx, `properties:${scope.workspaceId}`);
   // A place joins a whole business: someone who works in only some of its places can't add one (AC-6594).

@@ -18,6 +18,7 @@ import { inWorkspace } from '../access/run.ts';
 import type { BookingMail } from '../booking/mail.ts';
 import { buildBookingIcs } from '../booking/ics.ts';
 import type { ManageLinkKey } from '../booking/tokens.ts';
+import { memberReachesPlaceSql } from '../hospitality/reach.ts';
 
 /** The kinds of reservation email. */
 export const VISIT_MAIL_KINDS = ['confirmed', 'changed', 'cancelled', 'reminder_24h', 'reminder_2h'] as const;
@@ -281,7 +282,7 @@ async function alertRecipients(tx: WorkspaceTx, placeId: string): Promise<readon
       left join workspace_roles cr on cr.workspace_id = m.workspace_id and cr.id = m.custom_role_id
       left join reservation_alerts ra on ra.workspace_id = m.workspace_id and ra.place_id = ${placeId}::uuid
         and ra.member_id = m.id
-      where m.status = 'active' and coalesce(ra.enabled, m.role = 'owner')
+      where m.status = 'active' and coalesce(ra.enabled, m.role = 'owner') and ${memberReachesPlaceSql(placeId)}
       order by m.id
     `)
   ).rows;

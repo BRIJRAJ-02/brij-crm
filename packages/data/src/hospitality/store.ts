@@ -612,6 +612,13 @@ export function openHospitality(given: {
         return toDataError(error);
       }
     },
+    /**
+     * A `nav` change event came (a business added or removed, an app switched, someone's reach changed, spec 0065 H7):
+     * a held list of businesses reads again, so the switcher and ⌘K never offer one the member no longer reaches.
+     */
+    propertiesChanged: (workspace: string): void => {
+      propertiesHeld.get(workspace)?.reread();
+    },
     /** Settings › Business (AC-6507, AC-6508): the chosen business's profile and places, read when first held. */
     business: (workspace: string): HospitalityHeld<BusinessView> => businessOf(workspace).held,
     /** Reads Business now (the route's loader); rejects with the refusal. */

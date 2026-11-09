@@ -16,12 +16,14 @@ export function useWorksIn(
   slug: string,
   member: MemberView | undefined,
   isOn: boolean,
+  /** Whether the panel is open: each opening reads the reach again, another admin may have changed it. */
+  isOpen: boolean,
 ): readonly [MemberReachView | undefined, (next: MemberReachView) => void] {
   const [view, setView] = useState<MemberReachView>();
   const memberId = member?.id;
   useEffect(() => {
     // A guest works nowhere in the business apps, so there is nothing to choose for them.
-    if (!isOn || memberId === undefined || member?.role === 'guest') return;
+    if (!isOn || !isOpen || memberId === undefined || member?.role === 'guest') return;
     let isCurrent = true;
     Promise.resolve()
       .then(() => data.hospitality.load())
@@ -36,9 +38,12 @@ export function useWorksIn(
     return () => {
       isCurrent = false;
     };
-  }, [data, slug, memberId, member?.role, isOn]);
-  // Another member's read, kept from the panel's last opening, never shows here.
-  const shown = isOn && view !== undefined && view.memberId === memberId && worksInMatters(view) ? view : undefined;
+  }, [data, slug, memberId, member?.role, isOn, isOpen]);
+  // Another member's read, kept from the panel's last opening, never shows here; nor for someone made a guest since.
+  const shown =
+    isOn && member?.role !== 'guest' && view !== undefined && view.memberId === memberId && worksInMatters(view)
+      ? view
+      : undefined;
   return [shown, setView];
 }
 
@@ -59,7 +64,10 @@ export interface WorksInProps {
 export function WorksIn({ data, slug, toasts, member, view, onChange }: WorksInProps) {
   // Each pick saves the whole choice; only the latest pick's answer lands, so quick picks never undo each other.
   const latest = useRef(0);
-  if (view.fixed) return strings.worksIn.everyByRole;
+  const pending = useRef(0);
+  // What the server last confirmed: a refusal puts this back, never another pick still on its way.
+  const confirmed = useRef(view);
+  if (view.fixed) return strings.worksIn.every;
   const values = worksInValues(view.reach);
   return (
     <Select
@@ -68,29 +76,36 @@ export function WorksIn({ data, slug, toasts, member, view, onChange }: WorksInP
       variant="inline"
       selectionMode="multiple"
       items={worksInItems(view, { every: strings.worksIn.every, allOf: strings.worksIn.allOf })}
+      // A long choice ends in "+N" rather than a cut word, as the field set's multiple choices do.
+      maxVisible={3}
       values={values}
       onValuesChange={(chosen) => {
         const reach = reachFromValues(view, [...chosen], values);
-        const before = view;
+        // With nothing on its way, what shows is what the server holds.
+        if (pending.current === 0) confirmed.current = view;
         onChange({ ...view, reach });
         latest.current += 1;
+        pending.current += 1;
         const pick = latest.current;
         void data.hospitality
           .load()
           .then((store) => store.setMemberReach(slug, member.id, reach))
           .then(
             (answer) => {
+              pending.current -= 1;
+              if (!isDataError(answer)) confirmed.current = answer;
               if (pick !== latest.current) return;
               if (isDataError(answer)) {
-                onChange(before);
+                onChange(confirmed.current);
                 toasts.toast({ tone: 'danger', message: answer.message });
                 return;
               }
               onChange(answer);
             },
             () => {
+              pending.current -= 1;
               if (pick !== latest.current) return;
-              onChange(before);
+              onChange(confirmed.current);
               toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
             },
           );

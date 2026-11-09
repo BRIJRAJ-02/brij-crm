@@ -528,13 +528,20 @@ const WALK: Readonly<Record<string, (bea: Client) => Promise<void>>> = {
       NO_PLACE,
     ),
   'services.removeTimeOff': (bea) =>
-    refused(() => bea.services.removeTimeOff({ ...mutation(), id: s.timeOff }), NO_PLACE),
+    refused(() => bea.services.removeTimeOff({ ...mutation(), id: s.timeOff }), {
+      code: 'NOT_FOUND',
+      message: 'That time off doesn’t exist.',
+    }),
   'services.addBlock': (bea) =>
     refused(
       () => bea.services.addBlock({ ...mutation(), id: newId(), staffId: s.staff, placeId: s.pB, ...SPAN }),
       NO_PLACE,
     ),
-  'services.removeBlock': (bea) => refused(() => bea.services.removeBlock({ ...mutation(), id: s.block }), NO_PLACE),
+  'services.removeBlock': (bea) =>
+    refused(() => bea.services.removeBlock({ ...mutation(), id: s.block }), {
+      code: 'NOT_FOUND',
+      message: 'That block doesn’t exist.',
+    }),
   'services.times': (bea) =>
     refused(
       () =>

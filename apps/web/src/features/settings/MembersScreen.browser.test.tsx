@@ -947,7 +947,7 @@ describe('where a member works in the business apps (spec 0065 H7, AC-6594)', ()
     const layer = { ...counted.layer, hospitality: { load: () => Promise.resolve(store) } } as unknown as DataLayer;
     return { layer, sent, view };
   }
-  const ADMIN = { ...ACCESS, permissions: [...ACCESS.permissions, 'workspace.manage'] };
+  const ADMIN: MyAccess = { ...ACCESS, permissions: [...ACCESS.permissions, 'workspace.manage'] };
 
   it('reads Every business, and a place picked saves at once as that place alone', async () => {
     const world = withBusinesses((reach) => world.view(reach));

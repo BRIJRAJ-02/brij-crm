@@ -19,7 +19,8 @@ export interface WorksInItem {
 /** The words the picker uses, passed in so this file holds no copy. */
 export interface WorksInWords {
   readonly every: string;
-  readonly allOf: string;
+  /** The whole of a business with two places or more: named, since the closed field shows no heading. */
+  readonly allOf: (business: string) => string;
 }
 
 /**
@@ -34,12 +35,16 @@ export const worksInMatters = (view: MemberReachView): boolean =>
 export function worksInItems(view: MemberReachView, words: WorksInWords): WorksInItem[] {
   return [
     { id: EVERY, label: words.every },
-    ...view.businesses.flatMap((each) => [
-      { id: business(each.id), label: each.places.length > 1 ? words.allOf : each.name, group: each.name },
-      ...(each.places.length > 1
-        ? each.places.map((at) => ({ id: place(at.id), label: at.name, group: each.name }))
-        : []),
-    ]),
+    // A business with one place is one choice, beside Every business; one with more gets a heading over its whole and
+    // its places.
+    ...view.businesses.flatMap((each) =>
+      each.places.length > 1
+        ? [
+            { id: business(each.id), label: words.allOf(each.name), group: each.name },
+            ...each.places.map((at) => ({ id: place(at.id), label: at.name, group: each.name })),
+          ]
+        : [{ id: business(each.id), label: each.name }],
+    ),
   ];
 }
 

@@ -281,6 +281,7 @@ export function MembersScreen({
     slug,
     shown?.kind === 'member' ? shown.member : undefined,
     access.permissions.includes('workspace.manage'),
+    opened !== undefined,
   );
   const isSelecting = ticked.size > 0;
   // The bar stays mounted while it sinks out, until its onLeft.

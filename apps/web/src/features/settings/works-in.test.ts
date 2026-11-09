@@ -25,7 +25,7 @@ const view: MemberReachView = {
     },
   ],
 };
-const words = { every: 'Every business', allOf: 'All places' };
+const words = { every: 'Every business', allOf: (name: string) => `All of ${name}` };
 
 describe('the Works in picker', () => {
   it('shows only once there is a choice: two businesses, or one business with two places', () => {
@@ -36,8 +36,8 @@ describe('the Works in picker', () => {
   it('offers Every business, then each business whole and, from two places, each place under its heading', () => {
     expect(worksInItems(view, words).map((item) => [item.group ?? '', item.label])).toEqual([
       ['', 'Every business'],
-      ['Somewhere', 'Somewhere'],
-      ['Bar', 'All places'],
+      ['', 'Somewhere'],
+      ['Bar', 'All of Bar'],
       ['Bar', 'Quay'],
       ['Bar', 'Pier'],
     ]);

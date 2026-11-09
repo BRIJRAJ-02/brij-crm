@@ -64,9 +64,8 @@ export const strings = {
   worksIn: {
     term: 'Works in',
     every: 'Every business',
-    allOf: 'All places',
-    /** An owner or admin: always every business, said as text. */
-    everyByRole: 'Every business',
+    /** A business chosen whole, named, since the closed field lists choices without their headings. */
+    allOf: (business: string) => `All of ${business}`,
     label: (name: string) => `Where ${name} works`,
   },
   /** A row's details on a phone, where they fill the screen: their way back to the list. */

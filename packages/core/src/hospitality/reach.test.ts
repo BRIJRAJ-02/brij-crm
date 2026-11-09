@@ -16,6 +16,7 @@ import { duplicateMenu, readMenuDraft, saveMenu } from './menu.ts';
 import { createPlace, getBusiness, saveBusiness, updatePlace } from './places.ts';
 import { createProperty, listProperties, removeProperty } from './property.ts';
 import { listQrCodes } from './qr.ts';
+import { memberReachesPlaceSql } from './reach.ts';
 import { getCatalogue } from '../visits/catalogue.ts';
 import { getTableSetup, listServiceDay, listServicePlaces, readServiceFloor } from '../visits/table-service.ts';
 import { freeTables } from '../visits/walk-in.ts';
@@ -232,5 +233,31 @@ describe('setting reach (AC-6594, AC-6597)', () => {
     );
     await setMemberReach(w.owner, { memberId: w.beaId, reach: { all: true, properties: [], places: [] } });
     expect((await removeProperty(w.owner, { propertyId: empty })).properties).toHaveLength(2);
+  });
+});
+
+describe('what reaches a member without a call of theirs, and retries (security review)', () => {
+  it('sends a place’s new reservation emails only to members who reach it', async () => {
+    const w = await twoBusinesses();
+    const who = async (placeId: string) =>
+      (
+        await w.sql<{ id: string }>(
+          sql`select m.id::text as id from members m where ${memberReachesPlaceSql(placeId)} order by m.name`,
+        )
+      ).rows.map((row) => row.id);
+    expect(await who(w.b1)).toContain(w.beaId);
+    await setMemberReach(w.owner, { memberId: w.beaId, reach: { all: false, properties: [w.a], places: [] } });
+    expect(await who(w.b1)).not.toContain(w.beaId);
+    expect(await who(w.b1)).toContain(w.memberId);
+    expect(await who(w.placeId)).toContain(w.beaId);
+    await setMemberReach(w.owner, { memberId: w.beaId, reach: { all: false, properties: [], places: [w.b2] } });
+    expect(await who(w.b1)).not.toContain(w.beaId);
+    expect(await who(w.b2)).toContain(w.beaId);
+  });
+
+  it('answers a retried place made with another business’s place id as no such place', async () => {
+    const w = await twoBusinesses();
+    await setMemberReach(w.owner, { memberId: w.beaId, reach: { all: false, properties: [w.a], places: [] } });
+    expect(await refusalOf(createPlace(w.bea, { id: w.b1, place: { name: 'Mine', ...PLACE } }))).toBe(NO_PLACE);
   });
 });

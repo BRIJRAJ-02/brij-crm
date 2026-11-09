@@ -45,6 +45,14 @@ export type Reach =
 /** Reach that limits nothing. */
 export const ALL_REACH: Reach = Object.freeze({ all: true });
 
+/** Reach that takes in nothing: for a principal that has no reach of its own. */
+const NO_REACH: Reach = Object.freeze({
+  all: false,
+  whole: new Set<string>(),
+  seen: new Set<string>(),
+  places: new Set<string>(),
+});
+
 /**
  * Reads the acting member's reach in the call's transaction (AC-6595), in one statement: their stored rows, each
  * business row with its places and each place row with its business. Owners, admins, the system and the public
@@ -52,7 +60,25 @@ export const ALL_REACH: Reach = Object.freeze({ all: true });
  */
 export async function reachOf(tx: WorkspaceTx, scope: EngineScope): Promise<Reach> {
   const { principal } = scope.access;
-  if (principal.kind !== 'member') return ALL_REACH;
+  switch (principal.kind) {
+    // The system and the public doors (a form, a booking or reservation page) name their one place or page already.
+    case 'system':
+    case 'form':
+    case 'booking':
+      return ALL_REACH;
+    // No business permission reaches these today (an API key can't hold one, a partner and an email link hold
+    // none); should one ever, it reaches nothing until it is given a reach of its own: fail closed.
+    case 'api_key':
+    case 'partner':
+    case 'email_link':
+      return NO_REACH;
+    case 'member':
+      break;
+    default: {
+      const unknown: never = principal;
+      return unknown;
+    }
+  }
   if (principal.role === 'owner' || principal.role === 'admin') return ALL_REACH;
   const result = await tx.execute<{
     property_id: string | null;
@@ -79,6 +105,24 @@ export async function reachOf(tx: WorkspaceTx, scope: EngineScope): Promise<Reac
     if (row.place_property !== null) seen.add(row.place_property);
   }
   return { all: false, whole, seen, places };
+}
+
+/**
+ * A statement's condition that the member row aliased `m` reaches `placeId` (AC-6596): an owner or admin, a member
+ * with no stored reach, or one whose reach names the place or its business. For what goes to members by place without
+ * a call of theirs (a new reservation's email), so a member narrowed away hears nothing of that place's guests.
+ */
+export function memberReachesPlaceSql(placeId: string): SQL {
+  return sql`(
+    m.role in ('owner', 'admin')
+    or not exists (select 1 from member_reach r where r.workspace_id = m.workspace_id and r.member_id = m.id)
+    or exists (
+      select 1 from member_reach r
+      join places p on p.workspace_id = r.workspace_id and p.id = ${placeId}::uuid
+      where r.workspace_id = m.workspace_id and r.member_id = m.id
+        and (r.place_id = p.id or r.property_id = p.property_id)
+    )
+  )`;
 }
 
 /** Whether `reach` takes in a place. */

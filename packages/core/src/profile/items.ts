@@ -56,6 +56,7 @@ import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { mediaShareUrl, parseMediaLink } from './embeds.ts';
+import { reachesPlace, reachOf } from '../hospitality/reach.ts';
 import { touchLinkPage } from './page-touch.ts';
 import { isPlaceBlock, PLACE_BLOCK_TITLES, placeFactsOf, type PlaceFacts } from './place-blocks.ts';
 
@@ -779,7 +780,10 @@ export async function saveProfileItem(
         .select({ id: places.id })
         .from(places)
         .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, block.placeId)));
-      if (place === undefined) throw refuseOn('NOT_FOUND', 'That place isn’t in this workspace.', 'placeId');
+      // A place outside the page owner's reach (spec 0065 H7, AC-6595) reads the same as one that isn't here.
+      if (place === undefined || !reachesPlace(await reachOf(tx, scope), place.id)) {
+        throw refuseOn('NOT_FOUND', 'That place isn’t in this workspace.', 'placeId');
+      }
     }
     // The live blocks only when they are needed: an edit's existence, or a new link's colour.
     const needsRows = input.isEdit === true || (block.kind === 'link' && block.hue === undefined);

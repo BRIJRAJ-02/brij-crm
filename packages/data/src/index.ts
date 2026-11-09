@@ -3564,6 +3564,10 @@ export function createDataLayer({
   // Live events reach the sidebar only once a screen loaded it: before that there is nothing held to change.
   router.on('nav', (workspace, event) => {
     navStore?.navChanged(workspace, event);
+    // The businesses the switcher and ⌘K offer follow too: a reach change names the member (spec 0065 H7, AC-6597).
+    void hospitality?.then((held) => {
+      held.propertiesChanged(workspace);
+    });
   });
   // What other people change reaches the sidebar spread over a moment, as members do, so a whole team doesn't read
   // in step; the member's own changes (above) read at once.

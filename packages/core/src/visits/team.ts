@@ -162,7 +162,8 @@ export async function readTeam(tx: WorkspaceTx, canManage: boolean, reach: Reach
       places: works
         .filter((each) => each.staff_id === row.id && inReach(each.place_id))
         .map((each) => ({ placeId: each.place_id, shifts: each.shifts, outsideHours: each.outside_hours })),
-      serviceIds: row.service_ids ?? [],
+      // Only services of businesses the reader sees (AC-6596).
+      serviceIds: (row.service_ids ?? []).filter((id) => reach.all || services.some((each) => each.id === id)),
       timeOff: timeOff
         .filter((each) => each.staff_id === row.id && inReach(each.place_id))
         .map((each) => ({
@@ -220,6 +221,35 @@ export async function getShifts(scope: EngineScope): Promise<StaffTeamView> {
     await requireApp(tx, scope.workspaceId, 'appointments');
     return readTeam(tx, can(scope.access, 'services.manage'), await reachOf(tx, scope));
   });
+}
+
+/**
+ * Whether every staff member named works in a place the member reaches (spec 0065 H7, AC-6595): someone limited to
+ * some places never reads, nor learns the name of, staff who work only elsewhere.
+ */
+async function staffInReach(tx: WorkspaceTx, reach: Reach, staffIds: readonly string[]): Promise<boolean> {
+  if (reach.all || staffIds.length === 0) return true;
+  const rows = (
+    await tx.execute<{ staff_id: string; place_id: string }>(sql`
+      select staff_id::text, place_id::text from staff_places where staff_id = any(${`{${staffIds.join(',')}}`}::uuid[])
+    `)
+  ).rows;
+  return staffIds.every((id) => rows.some((row) => row.staff_id === id && reachesPlace(reach, row.place_id)));
+}
+
+/**
+ * Refuses, before anything names a staff member, a calendar write about staff or a place outside the member's reach:
+ * a place as no such place, a staff member as no such staff member (AC-6595).
+ */
+async function requireCalendarReach(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  staffIds: readonly string[],
+  placeId?: string,
+): Promise<void> {
+  const reach = await reachOf(tx, scope);
+  if (placeId !== undefined && !reachesPlace(reach, placeId)) throw refuse('NOT_FOUND', PLACE_OUT_OF_REACH);
+  if (!(await staffInReach(tx, reach, staffIds))) throw refuse('NOT_FOUND', STAFF_MISSING);
 }
 
 /** The places a staff member works at now. */
@@ -588,6 +618,8 @@ export async function readStaffPhoto(
   const id = checkId(input.staffId, STAFF_MISSING);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'appointments');
+    // A staff member who works only outside the reader's reach has no photo to them (AC-6595).
+    if (!(await staffInReach(tx, await reachOf(tx, scope), [id]))) return undefined;
     const [row] = (
       await tx.execute<{ photo_path: string | null }>(sql`select photo_path from staff where id = ${id}::uuid`)
     ).rows;
@@ -636,6 +668,7 @@ export async function setShifts(
     throw inputInvalid('shifts', `Use up to ${String(HOSPITALITY_LIMITS.exceptions)} date changes.`);
   }
   return teamWrite(scope, 'services.calendar', deps, hooks, 'staff.shifts', async ({ tx }) => {
+    await requireCalendarReach(tx, scope, [id], placeId);
     const row = await lockedStaff(tx, id);
     await requireWorks(tx, id, placeId, row.name);
     await tx.execute(sql`
@@ -661,6 +694,7 @@ export async function copyShifts(
     (each) => each !== id,
   );
   return teamWrite(scope, 'services.calendar', deps, hooks, 'staff.shifts_copied', async ({ tx }) => {
+    await requireCalendarReach(tx, scope, [id, ...targets], placeId);
     const row = await lockedStaff(tx, id);
     const [from] = (
       await tx.execute<{ shifts: PlaceHours; outside_hours: boolean }>(sql`
@@ -740,6 +774,7 @@ export async function addStaffTimeOff(
   const placeId = input.placeId === undefined ? undefined : checkId(input.placeId, 'That place doesn’t exist.');
   checkSpan(input.start, input.end, L.timeOffDays);
   return teamWrite(scope, 'services.calendar', deps, hooks, 'staff.time_off_added', async ({ tx }, by) => {
+    await requireCalendarReach(tx, scope, [staffId], placeId);
     const { name, places } = await unlinkedPlaces(tx, staffId);
     if (placeId !== undefined) await requireWorks(tx, staffId, placeId, name);
     await tx.execute(sql`
@@ -768,9 +803,14 @@ export async function removeStaffTimeOff(
         delete from staff_time_off where id = ${id}::uuid returning staff_id::text, place_id::text
       `)
     ).rows;
-    if (row === undefined) throw refuse('NOT_FOUND', 'That time off doesn’t exist.');
+    const touched = row === undefined ? [] : row.place_id === null ? await placesOf(tx, row.staff_id) : [row.place_id];
+    // Outside reach it is no such time off, the same sentence (AC-6595); the delete rolls back with the refusal.
+    const reach = await reachOf(tx, scope);
+    if (row === undefined || touched.some((placeId) => !reachesPlace(reach, placeId))) {
+      throw refuse('NOT_FOUND', 'That time off doesn’t exist.');
+    }
     return {
-      places: row.place_id === null ? await placesOf(tx, row.staff_id) : [row.place_id],
+      places: touched,
       ids: { staffId: row.staff_id, timeOffId: id },
     };
   });
@@ -797,6 +837,7 @@ export async function addStaffBlock(
   checkSpan(input.start, input.end, L.blockDays);
   const reason = input.reason === undefined || input.reason.trim() === '' ? null : input.reason.trim();
   return teamWrite(scope, 'services.calendar', deps, hooks, 'staff.block_added', async ({ tx }, by) => {
+    await requireCalendarReach(tx, scope, [staffId], placeId);
     const { name } = await unlinkedPlaces(tx, staffId);
     await requireWorks(tx, staffId, placeId, name);
     await tx.execute(sql`
@@ -825,7 +866,9 @@ export async function removeStaffBlock(
         delete from staff_blocks where id = ${id}::uuid returning staff_id::text, place_id::text
       `)
     ).rows;
-    if (row === undefined) throw refuse('NOT_FOUND', 'That block doesn’t exist.');
+    if (row === undefined || !reachesPlace(await reachOf(tx, scope), row.place_id)) {
+      throw refuse('NOT_FOUND', 'That block doesn’t exist.');
+    }
     return { places: [row.place_id], ids: { staffId: row.staff_id, blockId: id } };
   });
 }
