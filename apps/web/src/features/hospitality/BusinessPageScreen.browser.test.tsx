@@ -9,11 +9,14 @@ import { openBusinessPage, type BusinessPageProcedures } from '@crm/data/busines
 import { createToasts, type ToastContent, type Toasts } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
+import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { SettingsTopBarSlot } from '../settings/topBarSlot.ts';
 import { BusinessPageScreen } from './BusinessPageScreen.tsx';
 
 let shown: InApp | undefined;
+
+const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
 
 afterEach(() => {
   shown?.unmount();
@@ -263,5 +266,42 @@ describe('Settings › Business › Page', () => {
     await expect
       .element(page.getByRole('link', { name: 'Open Brand' }))
       .toHaveAttribute('href', '/w/acme/settings/brand');
+  });
+
+  it('reads cleanly for another business before its first Publish, in both themes (spec 0065 H7)', async () => {
+    const second = {
+      ...BASE,
+      handle: 'harbour-bar',
+      handleOnPublish: true as const,
+      hasChanges: true,
+      places: [
+        {
+          id: '01900000-0000-7000-8000-0000000000a1',
+          name: 'Harbour',
+          slug: 'harbour',
+          hasAddress: true,
+          hasHours: true,
+        },
+        { id: '01900000-0000-7000-8000-0000000000a2', name: 'Pier', slug: 'pier', hasAddress: true, hasHours: true },
+      ],
+    };
+    for (const width of [1280, 390]) {
+      for (const theme of THEMES) {
+        const { store } = await editorOf(second);
+        await show(store, createToasts(), width);
+        applyTheme(theme);
+        await expect.element(page.getByText('Until then, someone else could take this address.')).toBeVisible();
+        expect(await axeViolations()).toEqual([]);
+        if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
+          await page.screenshot({
+            path: `${SHOT_DIR}/settings-page-${theme}-${String(width)}.png`,
+            fullPage: true,
+          } as never);
+        }
+        shown?.unmount();
+        shown = undefined;
+        resetTheme();
+      }
+    }
   });
 });

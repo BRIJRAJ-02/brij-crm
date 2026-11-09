@@ -23,7 +23,7 @@ export const pageStrings = {
   viewNewTab: 'View page (opens in a new tab)',
   /** Address. */
   address: 'Address',
-  addressText: 'Where guests find the page. Claimed at once; an old address keeps working.',
+  addressText: 'Where guests find the page. An old address keeps working.',
   handle: 'Page address',
   claim: 'Claim',
   claiming: 'Claiming…',
