@@ -28,6 +28,7 @@ import { strings as listStrings } from '../lists/strings.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { useAppsNav } from '../settings/useHasBusiness.ts';
 import { useHeldBusinesses } from '../hospitality/held-businesses.ts';
+import { switchStrings } from '../hospitality/switch-strings.ts';
 import {
   actionCommands,
   businessCommands,
@@ -108,12 +109,11 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   const viewId = params.viewId;
   const pathname = useLocation({ select: (location) => location.pathname });
   // From two businesses, Switch to … for each other one (spec 0065 H7).
-  const businesses = useHeldBusinesses(data, slug);
+  const businesses = useHeldBusinesses(data, slug, hasBusiness);
   const actions = useMemo(
     () =>
       mode === 'commands'
         ? [
-            ...(businesses === undefined ? [] : businessCommands(businesses.properties, businesses.current)),
             ...recordCommands(record),
             ...addToListCommands(record, here === undefined ? [] : listsToAddTo(lists, here.id)),
             // A record page's own New task links the record; elsewhere one Create a task.
@@ -125,6 +125,8 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
               canMakeLists,
               canMakeForms,
             }),
+            // After the page's own actions: found by the business's name or "business".
+            ...(businesses === undefined ? [] : businessCommands(businesses.properties, businesses.current)),
           ]
         : [],
     [mode, slug, objects, here, viewId, canInvite, canMakeLists, canMakeForms, record, pathname, lists, businesses],
@@ -226,7 +228,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
         const name = businesses?.properties.find((each) => each.id === propertyId)?.name;
         // The screen in front may hold unsaved changes: its guard asks first, as the sidebar's switcher does.
         void businesses?.store.requestChoice(slug, propertyId).then((went) => {
-          if (went && name !== undefined) toasts.toast({ tone: 'info', message: strings.showingBusiness(name) });
+          if (went && name !== undefined) toasts.toast({ tone: 'info', message: switchStrings.showingNow(name) });
         });
         return;
       }

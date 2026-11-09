@@ -4,8 +4,6 @@
 // Leaves out: adding or removing a business (Settings › Business), and anything at all while there is only one.
 import type { DataLayer } from '@crm/data';
 import { Menu, MenuItem, MenuTrigger, NavItem, useToasts } from '@crm/ui';
-import { useRouter } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
 import { useHeldBusinesses } from './held-businesses.ts';
 import { switchStrings as strings } from './switch-strings.ts';
 
@@ -23,17 +21,7 @@ export interface BusinessSwitchProps {
 export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
   const held = useHeldBusinesses(data, slug);
   const toasts = useToasts();
-  // A new choice, from here, ⌘K or Settings › Business, reads the open page's loader again for what it shows beside
-  // the business's own copy (its name, its places' hours); the screen itself has already moved (AC-6517).
-  const router = useRouter();
-  const chosen = held === undefined ? undefined : (held.chosen ?? '');
-  const last = useRef(chosen);
-  useEffect(() => {
-    if (chosen === undefined) return;
-    const was = last.current;
-    last.current = chosen;
-    if (was !== undefined && was !== chosen) void router.invalidate();
-  }, [chosen, router]);
+  // The open page follows the choice itself (`useShownBusiness`), whichever switch moved it.
   if (held === undefined) return null;
   const { store, properties, current } = held;
   const name = properties.find((each) => each.id === current)?.name ?? strings.business;

@@ -468,3 +468,43 @@ describe('Duplicate to another business (spec 0065 H7, AC-6591)', () => {
     expect((await getCatalogue(w.owner)).services.map((each) => each.id)).toEqual([serviceId]);
   });
 });
+
+describe('Duplicate refuses what it can’t copy (AC-6591)', () => {
+  it('answers a copy id held elsewhere, and another workspace’s business, as not found', async () => {
+    const w = await twoBusinesses();
+    const menuId = randomUUID();
+    await saveMenu(w.owner, { id: menuId, name: 'Dinner', placeIds: [w.placeId] });
+    expect(await refusalOf(duplicateMenu(w.owner, { menuId, toPropertyId: w.second, id: menuId }))).toBe('NOT_FOUND');
+    const elsewhere = await business();
+    const theirs = (await listProperties(elsewhere.owner)).properties[0]?.id ?? '';
+    expect(await refusalOf(duplicateMenu(w.owner, { menuId, toPropertyId: theirs, id: randomUUID() }))).toBe(
+      'NOT_FOUND',
+    );
+    const counted = await w.sql<{ n: number }>(sql`select count(*)::int as n from menus`);
+    expect(counted.rows[0]?.n).toBe(1);
+  });
+
+  it('copies no service onto an id another service holds', async () => {
+    const w = await visitWorkspace(db, 'appointments');
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Spa', kind: 'spa', currency: 'EUR' });
+    const serviceId = randomUUID();
+    await saveService(w.owner, {
+      id: serviceId,
+      service: {
+        name: 'Cut',
+        categoryId: null,
+        bufferAfterMin: 0,
+        online: true,
+        staffRule: 'all',
+        staffIds: [],
+        placeIds: [w.placeId],
+        needs: [],
+        variants: [{ name: 'Short', minutes: 30, priceMinor: 2000, priceType: 'fixed', bufferBeforeMin: 0 }],
+      },
+    });
+    expect(await refusalOf(duplicateService(w.owner, { serviceId, toPropertyId: second, id: serviceId }))).toBe(
+      'NOT_FOUND',
+    );
+  });
+});

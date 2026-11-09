@@ -1249,8 +1249,15 @@ export async function duplicateMenu(
     const to = await currentProperty(tx, ws, input.toPropertyId);
     if (from.id === to.id) throw inputInvalid('toPropertyId', 'Pick another business.');
     await lockKey(tx, `menu:${ws}`);
-    // A retry: the copy is already there.
-    if ((await menuOf(tx, ws, to.id, id)) !== undefined) return readDraft(tx, scope, to);
+    // A retry: the copy is already there. An id another menu holds anywhere else answers as a menu that isn't there.
+    const [holder] = await tx
+      .select({ propertyId: menus.propertyId })
+      .from(menus)
+      .where(and(eq(menus.workspaceId, ws), eq(menus.id, id)));
+    if (holder !== undefined) {
+      if (holder.propertyId === to.id) return readDraft(tx, scope, to);
+      throw refuse('NOT_FOUND', MENU_NOT_FOUND);
+    }
     const rows = await readMenuRows(tx, ws, from.id);
     const menu = rows.menus.find((row) => row.id === menuId);
     if (menu === undefined) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
@@ -1399,7 +1406,8 @@ export async function duplicateMenu(
       }
     }
     await noteChange(tx, ws, to.id);
-    await auditSetup(tx, scope, 'menu.duplicated', { menuId, copyId: id, propertyId: from.id, toPropertyId: to.id });
+    // Filed under the business that changed, as every draft edit is; the source beside it.
+    await auditSetup(tx, scope, 'menu.duplicated', { menuId, copyId: id, propertyId: to.id, fromPropertyId: from.id });
     return readDraft(tx, scope, to);
   });
 }

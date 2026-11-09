@@ -768,10 +768,17 @@ export async function duplicateService(
   return catalogueWrite(scope, where, deps, hooks, 'service.duplicated', async ({ tx }, by, toPropertyId) => {
     const from = await currentProperty(tx, scope.workspaceId, input.propertyId);
     if (from.id === toPropertyId) throw inputInvalid('toPropertyId', 'Pick another business.');
-    const [taken] = (await tx.execute<{ id: string }>(sql`select id::text from services where id = ${id}::uuid`)).rows;
-    const ids: Record<string, string> = { serviceId, copyId: id, propertyId: from.id, toPropertyId };
-    if (taken !== undefined) return { places: [], ids };
     await requireServices(tx, from.id, [serviceId]);
+    // Filed under the business that changed; the source beside it.
+    const ids: Record<string, string> = { serviceId, copyId: id, propertyId: toPropertyId, fromPropertyId: from.id };
+    // A retry: the copy is already there. An id another service holds anywhere else answers as one that isn't there.
+    const [taken] = (
+      await tx.execute<{ property_id: string }>(sql`select property_id::text from services where id = ${id}::uuid`)
+    ).rows;
+    if (taken !== undefined) {
+      if (taken.property_id === toPropertyId) return { places: [], ids };
+      throw refuse('NOT_FOUND', SERVICE_MISSING);
+    }
     const [counted] = (
       await tx.execute<{ n: number }>(sql`select count(*)::int as n from services where archived_at is null`)
     ).rows;

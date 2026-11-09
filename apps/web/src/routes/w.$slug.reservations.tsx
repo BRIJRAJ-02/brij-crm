@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useCallback, useState } from 'react';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
 import { useShownBusiness } from '../features/hospitality/shown-business.ts';
 import { pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 import { AppOffScreen, useReachesBusinessPages } from '../features/hospitality/AppOffScreen.tsx';
-import { reservationsSearch } from '../features/tables/search.ts';
+import { reservationsSearch, type ReservationsSearch } from '../features/tables/search.ts';
 import { ReservationsScreen } from '../features/tables/ReservationsScreen.tsx';
 
 // Reservations, Table seating's one page (spec 0066 B7 lite, after checklabs' Reservations page): the day, live, with
@@ -37,6 +38,18 @@ function PageRoute() {
   const { toasts } = Route.useRouteContext();
   const navigate = useNavigate({ from: Route.fullPath });
   const reaches = useReachesBusinessPages();
+  // A link's `?place=` of another business opens that business, only as the page opens: once the person switches, a
+  // place left in the address from before goes rather than switching them back.
+  const [arrivedOn] = useState(fromLoader);
+  const isAsArrived = property === arrivedOn;
+  const onSearch = useCallback(
+    (next: ReservationsSearch) => void navigate({ search: next, replace: true }),
+    [navigate],
+  );
+  const onOtherBusiness = useCallback(
+    (other: string) => void hospitality.requestChoice(slug, other),
+    [hospitality, slug],
+  );
   if (!reaches || !isInstalled) return <AppOffScreen slug={slug} page="reservations" />;
   return (
     <ReservationsScreen
@@ -47,8 +60,8 @@ function PageRoute() {
       toasts={toasts}
       search={search}
       // A day picked replaces the address rather than adding to history: Back leaves the page, not the days.
-      onSearch={(next) => void navigate({ search: next, replace: true })}
-      onOtherBusiness={(other) => void hospitality.requestChoice(slug, other)}
+      onSearch={onSearch}
+      {...(isAsArrived ? { onOtherBusiness } : {})}
     />
   );
 }

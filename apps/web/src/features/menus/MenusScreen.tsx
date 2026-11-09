@@ -24,6 +24,7 @@ import {
   Field,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   MenuList,
   MenuSection,
@@ -468,9 +469,10 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
               ) : null}
               {moreItems.includes('duplicate') ? (
                 <MenuItem id="duplicate" icon="copy">
-                  {hospitalityStrings.duplicateMenu}
+                  {hospitalityStrings.copyToBusiness}
                 </MenuItem>
               ) : null}
+              {moreItems.includes('delete') ? <MenuSeparator /> : null}
               {moreItems.includes('delete') ? (
                 <MenuItem id="delete" icon="trash" isDanger>
                   {strings.deleteMenu}
@@ -852,10 +854,12 @@ export function MenusScreen({ store, hospitality, slug, toasts, business, view }
                 onOpenChange={(isOpen) => {
                   if (!isOpen) setOpen(undefined);
                 }}
+                kind="menu"
                 name={open.name}
                 others={businesses.others}
                 currency={businesses.currency}
                 onDuplicate={(to) => store.duplicate(slug, open.menuId, to)}
+                onShow={(to) => void hospitality?.requestChoice(slug, to)}
                 toasts={toasts}
               />
             ) : null}

@@ -3,10 +3,14 @@
 // runs again. Undefined is the first business (which no call names).
 import type { HospitalityStore } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
+import { useRouter } from '@tanstack/react-router';
+import { useEffect } from 'react';
 
 /**
  * The business to show: the device's choice once the businesses are read, else what the loader saw. A page keys its
- * screen by it and binds its store to it (`store.at(business)`), so every press lands on the business on screen.
+ * screen by it and binds its store to it (`store.at(business)`), so every press lands on the business on screen. When
+ * it moves away from what the loader read, the page's loader runs again for what it shows beside the business's own
+ * copy (its name, its places' hours), whichever switch moved it: the sidebar, ⌘K, Settings › Business or a link.
  */
 export function useShownBusiness(
   hospitality: HospitalityStore,
@@ -14,5 +18,10 @@ export function useShownBusiness(
   fromLoader: string | undefined,
 ): string | undefined {
   const choice = useHospitality(hospitality.choice(slug));
-  return choice.status === 'ready' ? choice.value : fromLoader;
+  const shown = choice.status === 'ready' ? choice.value : fromLoader;
+  const router = useRouter();
+  useEffect(() => {
+    if (shown !== fromLoader) void router.invalidate();
+  }, [shown, fromLoader, router]);
+  return shown;
 }

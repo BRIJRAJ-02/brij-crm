@@ -17,7 +17,7 @@ import { page } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { DuplicateToBusiness } from './DuplicateToBusiness.tsx';
-import { ShownBusinessLink } from './ShownBusinessLink.tsx';
+import { ShownBusiness } from './ShownBusiness.tsx';
 import { SwitchGuard } from './SwitchGuard.tsx';
 
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
@@ -90,6 +90,7 @@ describe('Duplicate to another business (AC-6591)', () => {
         <DuplicateToBusiness
           isOpen
           onOpenChange={() => undefined}
+          kind="menu"
           name="Dinner"
           others={PROPERTIES.slice(1)}
           currency="GBP"
@@ -97,17 +98,18 @@ describe('Duplicate to another business (AC-6591)', () => {
             sent.push(to);
             return Promise.resolve(undefined);
           }}
+          onShow={() => undefined}
           toasts={toasts}
         />
       ),
       at,
     );
-    await expect.element(page.getByRole('dialog', { name: 'Duplicate Dinner' })).toBeVisible();
+    await expect.element(page.getByRole('dialog', { name: 'Copy Dinner to another business' })).toBeVisible();
     await page.getByText('Dockside').click();
     await expect.element(page.getByText(/keeps the same numbers/)).not.toBeInTheDocument();
     await page.getByText('Late Bar').click();
     await expect.element(page.getByText(/Prices are in GBP here and EUR there/)).toBeVisible();
-    await page.getByRole('button', { name: 'Duplicate' }).click();
+    await page.getByRole('button', { name: 'Copy', exact: true }).click();
     expect(sent).toEqual([SECOND]);
   });
 });
@@ -139,10 +141,12 @@ describe('axe and the pictures', () => {
             <DuplicateToBusiness
               isOpen
               onOpenChange={() => undefined}
+              kind="menu"
               name="Dinner"
               others={PROPERTIES.slice(1)}
               currency="GBP"
               onDuplicate={() => Promise.resolve(undefined)}
+              onShow={() => undefined}
               toasts={toasts}
             />
           ),
@@ -157,13 +161,13 @@ describe('axe and the pictures', () => {
         shown = await renderInApp(
           () => (
             <>
-              <TopBar title="Services" meta={<ShownBusinessLink hospitality={store} slug="acme" />} />
+              <TopBar title="Services" meta={<ShownBusiness hospitality={store} slug="acme" />} />
               <SwitchGuard store={store} slug="acme" isDirty text="Your design changes aren’t saved." />
             </>
           ),
           { data: {}, pattern: '/w/$slug/settings/services', at: '/w/acme/settings/services' },
         );
-        await expect.element(page.getByRole('link', { name: 'For Harbour Café' })).toBeVisible();
+        await expect.element(page.getByText('For Harbour Café')).toBeVisible();
         void ask();
         await expect.element(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
         await settle();

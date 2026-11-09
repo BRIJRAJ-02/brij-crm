@@ -28,9 +28,15 @@ export interface HeldBusinesses {
  * The businesses a switch offers, or undefined while they load, when the reader can't read them (no business app),
  * and while there is only one: a workspace with one business never sees a switch (AC-6516).
  */
-export function useHeldBusinesses(data: DataLayer, slug: string): HeldBusinesses | undefined {
+export function useHeldBusinesses(
+  data: DataLayer,
+  slug: string,
+  /** False holds nothing and loads nothing: a workspace with no business app (⌘K's guess, from the sidebar). */
+  isWanted = true,
+): HeldBusinesses | undefined {
   const [store, setStore] = useState<HospitalityStore | undefined>(undefined);
   useEffect(() => {
+    if (!isWanted) return undefined;
     let isLive = true;
     data.hospitality.load().then(
       (loaded) => {
@@ -42,7 +48,7 @@ export function useHeldBusinesses(data: DataLayer, slug: string): HeldBusinesses
     return () => {
       isLive = false;
     };
-  }, [data]);
+  }, [data, isWanted]);
   const listed = useHospitality(store === undefined ? NOT_HELD : store.properties(slug));
   const choice = useHospitality<string | undefined>(store === undefined ? NOT_HELD : store.choice(slug));
   if (store === undefined || listed.status !== 'ready' || listed.value.properties.length < 2) return undefined;

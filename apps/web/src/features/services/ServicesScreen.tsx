@@ -30,7 +30,7 @@ import {
 } from '@crm/ui';
 import { useId, useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
-import { ShownBusinessLink } from '../hospitality/ShownBusinessLink.tsx';
+import { ShownBusiness } from '../hospitality/ShownBusiness.tsx';
 import { DuplicateToBusiness } from '../hospitality/DuplicateToBusiness.tsx';
 import { useOtherBusinesses } from '../hospitality/held-businesses.ts';
 import { strings as hospitalityStrings } from '../hospitality/strings.ts';
@@ -72,7 +72,7 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
   const newId = store.newId;
   const state = useHospitality(store.catalogue(slug));
   // From two businesses, a service can be copied to another (spec 0065 H7, AC-6591).
-  const businesses = useOtherBusinesses(hospitality, slug, hospitality?.current(slug));
+  const businesses = useOtherBusinesses(hospitality, slug, store.property(slug));
   const [open, setOpen] = useState<Open | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const view = state.status === 'ready' ? state.value : undefined;
@@ -172,7 +172,7 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
   return (
     <SettingsPage
       title={strings.servicesTitle}
-      {...(hospitality === undefined ? {} : { meta: <ShownBusinessLink hospitality={hospitality} slug={slug} /> })}
+      {...(hospitality === undefined ? {} : { meta: <ShownBusiness hospitality={hospitality} slug={slug} /> })}
       isLoading={view === undefined}
       actions={
         <>
@@ -369,7 +369,7 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
                           </MenuItem>
                           {businesses.others.length > 0 ? (
                             <MenuItem id="duplicate" icon="copy">
-                              {hospitalityStrings.duplicateService}
+                              {hospitalityStrings.copyToBusiness}
                             </MenuItem>
                           ) : null}
                           <MenuSeparator />
@@ -469,10 +469,12 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
           onOpenChange={(isOpen) => {
             if (!isOpen) setOpen(undefined);
           }}
+          kind="service"
           name={open.service.name}
           others={businesses.others}
           currency={businesses.currency}
           onDuplicate={(to) => store.duplicate(slug, open.service.id, to)}
+          onShow={(to) => void hospitality?.requestChoice(slug, to)}
           toasts={toasts}
         />
       ) : null}

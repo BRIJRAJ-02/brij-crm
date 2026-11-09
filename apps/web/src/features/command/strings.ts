@@ -76,7 +76,6 @@ export const strings = {
   createTask: 'Create a task',
   switchToBusiness: (name: string) => `Switch to ${name}`,
   businessTerm: 'business',
-  showingBusiness: (name: string) => `Showing ${name}`,
   newWord: 'new',
   /** The record page's own actions, named after it. */
   newNoteOn: (name: string) => `New note on ${name}`,
