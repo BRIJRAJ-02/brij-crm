@@ -37,8 +37,6 @@ export const strings = {
   website: 'Website',
   /** Reserve a table. */
   reserve: 'Reserve a table',
-  /** Reserve's menu of places, when the business has two or more (spec 0065 H7). */
-  reserveWhere: 'Which place?',
   /** Until online reservations open: the place's phone. */
   callToBook: 'Call to book',
   /** The gallery. */

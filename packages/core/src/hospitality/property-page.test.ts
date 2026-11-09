@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FirstBusiness } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newId } from '../engine/ids.ts';
@@ -17,6 +18,7 @@ import { installApp } from './apps.ts';
 import {
   addBusinessPhoto,
   claimBusinessHandle,
+  discardBusinessPage,
   getBusinessPage,
   publishBusinessPage,
   saveBusinessPage,
@@ -27,7 +29,7 @@ import { createPlace, getBusiness } from './places.ts';
 import { createProperty, removeProperty } from './property.ts';
 import { enterBusinessPage, listSitemapBusinesses, publicBusinessBrand, publicBusinessPhoto } from './public-page.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 
 beforeAll(() => {
@@ -127,6 +129,10 @@ describe('a page per business (AC-6592)', () => {
     const firstPage = (await enterBusinessPage({ db }, first)).page;
     expect(firstPage).toMatchObject({ name: 'Somewhere Nowhere', placeId: w.firstPlace });
     expect(firstPage.places.map((place) => place.id)).toEqual([w.firstPlace]);
+    // One business's place is no place of another's page, by its slug either.
+    const firstSlug = firstPage.places[0]?.slug ?? '';
+    expect(await refusalOf(enterBusinessPage({ db }, wish, firstSlug))).toBe('NOT_FOUND');
+    expect((await enterBusinessPage({ db }, first, firstSlug)).page.placeId).toBe(w.firstPlace);
     // Both are listed for search engines, each at its own handle.
     const listed = (await listSitemapBusinesses({ db }, { max: 50_000 })).map((row) => row.handle);
     expect(listed).toEqual(expect.arrayContaining([first, wish]));
@@ -164,7 +170,7 @@ describe('a page per business (AC-6592)', () => {
     expect(await refusalOf(publishBusinessPage(w.owner, { propertyId: w.second }))).toBe('LIMIT_REACHED');
   });
 
-  it('keeps each business’s pictures and another workspace’s business apart, and a removed business’s handle finds nothing', async () => {
+  it('keeps each business’s pictures and another workspace’s business apart, and a handle no business names finds nothing', async () => {
     const w = await twoBusinesses();
     const wish = `pp-${run}-${String(made)}-pics`;
     const first = `pp-${run}-${String(made)}-firstpics`;
@@ -201,8 +207,41 @@ describe('a page per business (AC-6592)', () => {
     expect(await refusalOf(claimBusinessHandle(other.owner, { handle: `pp-${run}-x`, propertyId: w.second }))).toBe(
       'NOT_FOUND',
     );
+    const draft = { gallery: [], amenities: [], hiddenPlaces: [] };
+    expect(await refusalOf(saveBusinessPage(other.owner, { draft, propertyId: w.second }))).toBe('NOT_FOUND');
+    expect(await refusalOf(publishBusinessPage(other.owner, { propertyId: w.second }))).toBe('NOT_FOUND');
+    expect(await refusalOf(discardBusinessPage(other.owner, { propertyId: w.second }))).toBe('NOT_FOUND');
+    expect(
+      await refusalOf(setPlaceSlug(other.owner, { placeId: w.secondPlace, slug: 'pier', propertyId: w.second })),
+    ).toBe('NOT_FOUND');
+    expect(
+      await refusalOf(
+        addBusinessPhoto(other.owner, {
+          id: randomUUID(),
+          type: 'image/jpeg',
+          bytes: 10,
+          width: 4,
+          height: 3,
+          propertyId: w.second,
+        }),
+      ),
+    ).toBe('NOT_FOUND');
+    // Nor can one business hide another's place.
+    expect(
+      await refusalOf(
+        saveBusinessPage(w.owner, { draft: { ...draft, hiddenPlaces: [w.firstPlace] }, propertyId: w.second }),
+      ),
+    ).toBe('NOT_FOUND');
     // A business with places and a page can't be removed.
     expect(await refusalOf(removeProperty(w.owner, { propertyId: w.second }))).toBe('IN_USE');
+    // A handle its workspace holds but no business names (as a removed business's would) finds nothing at all.
+    await testQuery(ownerUrl, `delete from property_handles where workspace_id = $1 and handle = $2`, [
+      w.workspaceId,
+      wish,
+    ]);
+    expect(await refusalOf(enterBusinessPage({ db }, wish))).toBe('NOT_FOUND');
+    expect(await publicBusinessPhoto({ db }, wish, photo)).toBeUndefined();
+    expect(await publicBusinessBrand({ db }, wish)).toBeUndefined();
   });
 });
 

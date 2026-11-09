@@ -98,7 +98,7 @@ export function BusinessReserve({ action }: BusinessReserveProps) {
         <Button variant="primary" size="touch" icon={action.icon} isFullWidth="center">
           {action.label}
         </Button>
-        <Menu label={strings.reserveWhere} width="trigger" placement="top">
+        <Menu label={action.label} width="trigger" placement="top">
           {action.places.map((place) => (
             <MenuItem key={place.href} id={place.href} href={place.href} icon="map-pin">
               {place.name}

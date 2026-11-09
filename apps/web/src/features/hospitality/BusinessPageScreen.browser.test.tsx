@@ -161,9 +161,7 @@ describe('Settings › Business › Page', () => {
     await expect.element(page.getByRole('button', { name: 'Claim' })).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Save' }));
     await expect.poll(() => calls.map((call) => call.handle)).toEqual(['harbour-bar']);
-    await expect
-      .poll(() => said.map((content) => content.message))
-      .toContain('Address saved. It’s yours when you publish.');
+    await expect.poll(() => said.map((content) => content.message)).toContain('Address saved.');
     await expect.element(page.getByText('Until then, someone else could take this address.')).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Copy address' })).not.toBeInTheDocument();
   });

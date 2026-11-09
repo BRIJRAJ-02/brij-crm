@@ -32,6 +32,7 @@ import {
   EmptyState,
   Field,
   FileDrop,
+  focusLater,
   Form,
   Modal,
   SettingsRow,
@@ -42,7 +43,7 @@ import {
   usePhotoCrop,
   type Toasts,
 } from '@crm/ui';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { publicBookingOrigin } from '../booking/links.ts';
 import {
   brandSettingsHref,
@@ -193,6 +194,9 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
   const texts = useDraftTexts();
   const [isPublishing, setPublishing] = useState(false);
   const [isDiscarding, setDiscarding] = useState(false);
+  // A Publish refused on the address (another business's first Publish takes it, spec 0065 H7): said on the field.
+  const [addressRefused, setAddressRefused] = useState<string | undefined>(undefined);
+  const addressRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const crumbs = [{ id: 'business', label: strings.businessTitle, href: businessSettingsHref(slug) }];
   if (state.status === 'error' && state.error.code === 'FORBIDDEN') return <SettingsMissing backTo="home" />;
   if (state.status === 'error') {
@@ -233,8 +237,13 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
     setPublishing(true);
     const refused = await store.publish(slug);
     setPublishing(false);
-    if (refused === undefined) toasts.toast({ tone: 'success', message: words.published });
-    else toasts.toast({ tone: 'danger', message: refused.message });
+    if (refused === undefined) {
+      setAddressRefused(undefined);
+      toasts.toast({ tone: 'success', message: words.published });
+    } else if (refused.data?.refusals?.some((each) => each.field === 'handle') === true) {
+      setAddressRefused(refused.message);
+      focusLater(() => addressRef.current);
+    } else toasts.toast({ tone: 'danger', message: refused.message });
   };
   return (
     <SettingsPage
@@ -310,6 +319,9 @@ export function BusinessPageScreen({ store, slug, toasts }: BusinessPageScreenPr
         key={view.handle ?? `suggested:${view.suggestedHandle ?? ''}`}
         view={view}
         address={address}
+        inputRef={addressRef}
+        refused={addressRefused}
+        onEdit={() => setAddressRefused(undefined)}
         onClaim={async (handle) => {
           const refused = await store.claimHandle(slug, handle);
           if (refused === undefined) {
@@ -404,10 +416,17 @@ function PublishStatus({ view }: { readonly view: BusinessPageView }) {
 function AddressSection({
   view,
   address,
+  inputRef,
+  refused,
+  onEdit,
   onClaim,
 }: {
   readonly view: BusinessPageView;
   readonly address: string | undefined;
+  readonly inputRef: RefObject<(HTMLInputElement & HTMLTextAreaElement) | null>;
+  /** Why Publish couldn't take the address, said on the field until it changes. */
+  readonly refused: string | undefined;
+  readonly onEdit: () => void;
   readonly onClaim: (handle: string) => Promise<DataError | undefined>;
 }) {
   const formId = useId();
@@ -429,7 +448,7 @@ function AddressSection({
   // A business other than the first takes its address at its first Publish (spec 0065 H7, AC-6592): Save, not Claim.
   const onPublish = view.handleOnPublish === true;
   return (
-    <SettingsSection title={words.address} description={onPublish ? words.addressTextOnPublish : words.addressText}>
+    <SettingsSection title={words.address} description={words.addressText}>
       <Card
         // Claim shows only while the field says something new: a claimed address has nothing to press.
         {...(changed || isBusy
@@ -462,13 +481,15 @@ function AddressSection({
             name="handle"
             prefix={`${host}/`}
             value={handle}
+            ref={inputRef}
             onChange={(next) => {
               setHandle(next);
               setError(undefined);
+              onEdit();
             }}
             maxLength={40}
             autoComplete="off"
-            {...(error === undefined ? {} : { error })}
+            {...(error === undefined && refused === undefined ? {} : { error: error ?? refused })}
             {...(address === undefined ? {} : { after: <CopyButton value={address} label={words.copyAddress} /> })}
           />
         </Form>

@@ -29,10 +29,9 @@ export const pageStrings = {
   claiming: 'Claiming…',
   claimed: 'Address claimed.',
   /** A business other than the first: its address is taken at its first Publish (spec 0065 H7). */
-  addressTextOnPublish: 'Where guests find this business’s page. It’s yours from your first Publish.',
   save: 'Save',
   saving: 'Saving…',
-  chosen: 'Address saved. It’s yours when you publish.',
+  chosen: 'Address saved.',
   takenOnPublish: 'Yours when you publish',
   takenOnPublishText: 'Until then, someone else could take this address.',
   suggestedAddressTextOnPublish: 'We started it from your business’s name. Save it, or change it first.',

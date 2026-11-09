@@ -113,7 +113,8 @@ async function guestExtrasOf(entry: TableEntry): Promise<{
  */
 async function placeBrandOf(tx: WorkspaceTx, entry: TableEntry): Promise<PageBrand> {
   const found = await tx.execute<{ property_id: string }>(
-    sql`select property_id::text from places where id = ${entry.placeId}::uuid`,
+    sql`select property_id::text from places
+      where workspace_id = ${entry.scope.workspaceId}::uuid and id = ${entry.placeId}::uuid`,
   );
   return readMenuBrandIn(tx, entry.scope.workspaceId, found.rows[0]?.property_id);
 }

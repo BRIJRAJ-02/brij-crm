@@ -333,7 +333,7 @@ export async function claimBusinessHandle(
     if (property.name === null) throw refuse('CONFLICT', 'Set up your business first.');
     await ensurePageRow(tx, scope.workspaceId, property.id, by);
     const before = await pageRowOf(tx, scope.workspaceId, property.id);
-    const audit = { propertyId: property.id };
+    const audit = { propertyId: property.id, handle: input.handle };
     if ((before?.handle ?? null) === null && !(await isFirst(tx, scope.workspaceId, property))) {
       // Another business's first address waits for its first Publish (AC-6592): checked now, held for nobody.
       const refused = await wishRefusal(tx, scope.workspaceId, property.id, input.handle);
@@ -537,7 +537,11 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
     const before = await viewOf(tx, scope.workspaceId, property);
     if (before.problem !== undefined) throw refuseOn('VALIDATION_FAILED', before.problem.message, before.problem.fix);
     if (before.handleOnPublish === true && before.handle !== undefined) {
-      // The first Publish takes the address it waited for (AC-6592); taken since, it says so on the address.
+      // The first Publish takes the address it waited for (AC-6592); taken since, it says so on the address. A word
+      // kept for Timefix since the wish is refused as a claim would be.
+      if (isReservedHandle(before.handle)) {
+        throw refuseOn('SLUG_TAKEN', 'That address is kept for Timefix. Pick another.', 'handle');
+      }
       await takeHandle(tx, scope.workspaceId, property.id, before.handle);
       await tx
         .update(businessPages)
@@ -570,7 +574,10 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
         ),
       )
       .returning({ path: businessPhotos.path });
-    await auditSetup(tx, scope, 'business_page.published', { propertyId: property.id });
+    await auditSetup(tx, scope, 'business_page.published', {
+      propertyId: property.id,
+      ...(before.handle === undefined ? {} : { handle: before.handle }),
+    });
     return {
       view: await viewOf(tx, scope.workspaceId, property),
       stale: true,

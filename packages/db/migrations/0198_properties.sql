@@ -336,10 +336,10 @@ begin
     select 1 from workspaces w
     where (select count(*) from properties p where p.workspace_id = w.id and p.position = 0) <> 1
   ) then
-    raise exception '0197_properties: every workspace must have exactly one first property';
+    raise exception '0198_properties: every workspace must have exactly one first property';
   end if;
   if (select count(*) from properties) <> (select count(*) from workspaces) then
-    raise exception '0197_properties: one property per workspace in this slice';
+    raise exception '0198_properties: one property per workspace in this slice';
   end if;
   if exists (
     select 1 from pg_class c
@@ -348,7 +348,7 @@ begin
     select 1 from pg_policy p where p.polrelid = 'public.properties'::regclass and p.polname = 'properties_tenant'
   ) or not has_table_privilege('crm_app', 'public.properties', 'SELECT, INSERT, UPDATE, DELETE')
     or has_table_privilege('crm_app', 'public.business_profiles', 'DELETE') then
-    raise exception '0197_properties: properties keeps its row level security and its grants';
+    raise exception '0198_properties: properties keeps its row level security and its grants';
   end if;
 end
 $$;

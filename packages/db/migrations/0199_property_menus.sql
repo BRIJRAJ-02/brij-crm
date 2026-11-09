@@ -166,7 +166,7 @@ begin
     select 1 from menu_drafts d
     where not exists (select 1 from properties p where p.workspace_id = d.workspace_id and p.id = d.property_id)
   ) then
-    raise exception '0198_property_menus: every menu row must be on its workspace''s own business';
+    raise exception '0199_property_menus: every menu row must be on its workspace''s own business';
   end if;
   if exists (
     select 1 from pg_class c
@@ -174,7 +174,7 @@ begin
       'public.menu_option_groups'::regclass, 'public.menu_drafts'::regclass)
       and not (c.relrowsecurity and c.relforcerowsecurity)
   ) then
-    raise exception '0198_property_menus: the menu tables keep their row level security';
+    raise exception '0199_property_menus: the menu tables keep their row level security';
   end if;
 end
 $$;

@@ -345,7 +345,7 @@ export function BusinessPage(props: BusinessPageProps) {
   const others = places.length > 1 ? places.filter((other) => !other.isCurrent) : [];
   const action = businessAction(reserve, place.phone, directions?.[mapsApp], mapsAppName(mapsApp));
   // The panel's second way, when its action is Reserve: the phone, which nothing above the fold shows.
-  const phone = action?.kind === 'reserve' ? place.phone : undefined;
+  const phone = action?.kind === 'reserve' && action.places === undefined ? place.phone : undefined;
   return (
     <GuestLook>
       <div className={styles.root}>
@@ -470,7 +470,7 @@ export function BusinessPage(props: BusinessPageProps) {
               <aside className={styles.panel} aria-label={name}>
                 <div className={styles.panelCard}>
                   {/* Whether it is open, and when it opens or closes (checklabs' rail card): the header leaves it here. */}
-                  <OpenLine place={place} locale={locale} where="panel" />
+                  {action.places === undefined && <OpenLine place={place} locale={locale} where="panel" />}
                   <BusinessReserve action={action} />
                   {phone !== undefined && phone !== '' && (
                     <p className={styles.panelLink}>
@@ -491,7 +491,7 @@ export function BusinessPage(props: BusinessPageProps) {
           <div className={styles.bar}>
             <div className={styles.barText}>
               <span className={styles.barName}>{name}</span>
-              <OpenLine place={place} locale={locale} />
+              {action.places === undefined && <OpenLine place={place} locale={locale} />}
             </div>
             <div className={styles.barAction}>
               <BusinessReserve action={action} />

@@ -211,25 +211,25 @@ begin
       )
       or has_function_privilege('crm_identity', fn, 'EXECUTE')
       or not has_function_privilege('crm_app', fn, 'EXECUTE') then
-      raise exception '0199_property_handles: % must be owned by crm_handle and executable by crm_app alone', fn;
+      raise exception '0200_property_handles: % must be owned by crm_handle and executable by crm_app alone', fn;
     end if;
   end loop;
   if has_table_privilege('crm_app', 'auth.business_listings', 'SELECT')
     or has_table_privilege('crm_app', 'auth.business_listings', 'INSERT') then
-    raise exception '0199_property_handles: crm_app must reach auth.business_listings only through its definers';
+    raise exception '0200_property_handles: crm_app must reach auth.business_listings only through its definers';
   end if;
   if not exists (
     select 1 from pg_class c
     where c.oid = 'public.property_handles'::regclass and c.relrowsecurity and c.relforcerowsecurity
   ) then
-    raise exception '0199_property_handles: property_handles must force row level security';
+    raise exception '0200_property_handles: property_handles must force row level security';
   end if;
   if exists (
     select 1 from auth.public_handles h
     where h.owner_kind = 'business'
       and not exists (select 1 from property_handles t where t.workspace_id = h.workspace_id and t.handle = h.handle)
   ) then
-    raise exception '0199_property_handles: every business handle must name a business';
+    raise exception '0200_property_handles: every business handle must name a business';
   end if;
 end
 $$;
