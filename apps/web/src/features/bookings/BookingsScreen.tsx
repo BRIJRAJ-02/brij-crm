@@ -1288,10 +1288,13 @@ export function EventCard({
   connection,
   locale,
   headingLevel = 4,
+  variant = 'popover',
 }: {
   readonly event: CalendarEventItem;
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
+  /** `popup` in Meetings' Modal, which names the event and holds Join in its footer. */
+  readonly variant?: 'popover' | 'popup';
   /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
 }) {
@@ -1301,6 +1304,7 @@ export function EventCard({
   return (
     <MeetingCard
       headingLevel={headingLevel}
+      variant={variant}
       title={event.title}
       when={
         event.allDay
@@ -2188,11 +2192,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
       end={
         <>
-          {isPhone ? (
-            <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
-          ) : (
-            <MeetingsViewSwitch view={view} views={views} onView={setView} />
-          )}
           {view === 'team' && props.team !== undefined ? (
             <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
           ) : (
@@ -2208,6 +2207,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
                 isIconOnly
               />
             </>
+          )}
+          {/* Filter and Calendars, then the views: one order on every Meetings bar, so the switch never moves. */}
+          {isPhone ? (
+            <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
+          ) : (
+            <MeetingsViewSwitch view={view} views={views} onView={setView} />
           )}
         </>
       }
@@ -2786,11 +2791,12 @@ function sublineOf(booking: BookingListItem, me: string | undefined): BookingLis
 /** What a booking's row says beside its guest: only what is news (Needs a host, Host away, No-show). */
 function rowStatusOf(booking: BookingListItem, now: Date): BookingListRow['status'] {
   if (booking.status !== 'confirmed') return undefined;
-  if (booking.needsHost) return { label: strings.needsHost, hue: 'red' };
+  // The popup's own hues (statusOf), so opening a row never changes the colour of what it said.
+  if (booking.needsHost) return { label: strings.needsHost, hue: 'orange' };
   if (booking.hostAway === true && Date.parse(booking.endsAt) > now.getTime()) {
-    return { label: strings.hostAway, hue: 'red' };
+    return { label: strings.hostAway, hue: 'orange' };
   }
-  if (booking.noShow === true) return { label: strings.noShow, hue: 'gray' };
+  if (booking.noShow === true) return { label: strings.noShow, hue: 'red' };
   return undefined;
 }
 
@@ -2893,7 +2899,7 @@ function meetingGroupsOf(items: readonly MeetingListItem[], context: RowContext)
 /** Requests under their days, each with Decline and Accept at its end. */
 function requestGroupsOf(
   items: readonly HeldRequest[],
-  context: Pick<RowContext, 'zone' | 'now'> & {
+  context: Pick<RowContext, 'zone' | 'now' | 'peopleObjectId'> & {
     readonly actionsOf: (item: HeldRequest) => ReactNode;
   },
 ): readonly BookingListGroup[] {
@@ -2915,7 +2921,13 @@ function requestGroupsOf(
       date: clockTime(request.start, context.zone),
       time: lengthOf(request.start, request.end),
       title: page.title,
-      chip: { objectId: 'people', recordId: request.bookingId, name: request.visitorName, kind: 'person' },
+      // A request has no person record yet: the chip is their face and name only.
+      chip: {
+        objectId: context.peopleObjectId ?? 'people',
+        recordId: request.bookingId,
+        name: request.visitorName,
+        kind: 'person',
+      },
       subline: { icon, text: `${page.title} · ${where}` },
       actions: context.actionsOf(item),
     };
@@ -2926,7 +2938,7 @@ function requestGroupsOf(
   return groups.map((group) => ({
     id: group.id,
     ...group.band,
-    count: strings.meetingCount(group.rows.length),
+    count: strings.requestCount(group.rows.length),
     rows: group.rows,
   }));
 }
@@ -3082,12 +3094,15 @@ function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, co
 function RequestPopup({
   item,
   zone,
+  isAccepting,
   onAccept,
   onDecline,
   onClose,
 }: {
   readonly item: HeldRequest;
   readonly zone: string;
+  /** Its Accept is out. */
+  readonly isAccepting: boolean;
   readonly onAccept: () => void;
   readonly onDecline: () => void;
   readonly onClose: () => void;
@@ -3112,7 +3127,7 @@ function RequestPopup({
         </MenuTrigger>
       }
       actions={
-        <Button variant="primary" onPress={onAccept}>
+        <Button variant="primary" isPending={isAccepting} onPress={onAccept}>
           {strings.accept}
         </Button>
       }
@@ -3133,6 +3148,14 @@ function RequestPopup({
                 : page.location.type === 'phone'
                   ? strings.phone
                   : page.location.value,
+          },
+          {
+            id: 'expires',
+            icon: 'timer',
+            label: strings.expiresLabel,
+            value: strings.expiresOn(
+              `${shortDay(dayKeyIn(request.expiresAt, zone), dayKeyIn(request.start, zone))}, ${clockTime(request.expiresAt, zone)}`,
+            ),
           },
         ]}
         sections={[
@@ -3294,19 +3317,37 @@ export function BookingsListScreen({
   const state = useMeetings(list);
   // Requests: read whatever tab shows, for the count on its segment.
   const requests = useMeetingRequests(requestsSource, pages);
-  const [openRequest, setOpenRequest] = useState<HeldRequest | undefined>(undefined);
+  const [openRequestId, setOpenRequestId] = useState<string | undefined>(undefined);
+  // The request whose Accept is out: its buttons wait, so a second press never sends twice.
+  const [accepting, setAccepting] = useState<string | undefined>(undefined);
   const [declining, setDeclining] = useState<HeldRequest | undefined>(undefined);
+  // Mine shows the reader's own requests, as Mine shows their own meetings; Everyone, every page they may answer.
   const requestItems = (requests.state.status === 'ready' ? requests.state.items : []).filter(
-    (item) => search.link === undefined || item.page.id === search.link,
+    (item) =>
+      (search.link === undefined || item.page.id === search.link) &&
+      (hosts?.value !== 'mine' || me === undefined || item.page.ownerMemberId === me),
   );
+  // Read from the list as it is now: answered elsewhere, it closes.
+  const openRequest = requestItems.find((item) => item.request.bookingId === openRequestId);
+  // The bookings read again (a realtime change, an answer from another tab): the requests with them, so the count and
+  // the list stay live on the data layer's own refresh. Subscribed to the held list, not its snapshot, so a render
+  // never reads them again by itself.
+  const { reload: reloadRequests } = requests;
+  useEffect(() => list.subscribe(reloadRequests), [list, reloadRequests]);
   const accept = (item: HeldRequest) => {
-    setOpenRequest(undefined);
+    if (accepting !== undefined) return;
+    setOpenRequestId(undefined);
+    setAccepting(item.request.bookingId);
     const first = firstNameOf(item.request.visitorName);
     requests.accept(item.request.bookingId).then(
-      (done) =>
-        actions?.notify(done ? 'success' : 'danger', done ? strings.acceptedToast(first) : strings.alreadyAnswered),
-      (error: unknown) =>
-        actions?.notify('danger', isDataError(error) && error.message !== '' ? error.message : strings.changeFailed),
+      (done) => {
+        setAccepting(undefined);
+        actions?.notify(done ? 'success' : 'danger', done ? strings.acceptedToast(first) : strings.alreadyAnswered);
+      },
+      (error: unknown) => {
+        setAccepting(undefined);
+        actions?.notify('danger', isDataError(error) && error.message !== '' ? error.message : strings.changeFailed);
+      },
     );
   };
   // One booking page: its bookings only (calendar events have no page).
@@ -3360,14 +3401,27 @@ export function BookingsListScreen({
         groups={requestGroupsOf(requestItems, {
           zone: timeZone,
           now: listNow,
+          peopleObjectId: people?.id,
           actionsOf: (item) => (
             <>
-              <Button onPress={() => setDeclining(item)}>{strings.decline}</Button>
-              <Button onPress={() => accept(item)}>{strings.accept}</Button>
+              <Button
+                label={strings.declineRequestLabel(item.request.visitorName)}
+                isDisabled={accepting === item.request.bookingId}
+                onPress={() => setDeclining(item)}
+              >
+                {strings.decline}
+              </Button>
+              <Button
+                label={strings.acceptRequestOf(item.request.visitorName)}
+                isPending={accepting === item.request.bookingId}
+                onPress={() => accept(item)}
+              >
+                {strings.accept}
+              </Button>
             </>
           ),
         })}
-        onOpen={(id) => setOpenRequest(requestItems.find((item) => `r:${item.request.bookingId}` === id))}
+        onOpen={(id) => setOpenRequestId(id.slice(2))}
         {...(openRequest === undefined ? {} : { openId: `r:${openRequest.request.bookingId}` })}
         emptyState={
           <EmptyState
@@ -3490,20 +3544,31 @@ export function BookingsListScreen({
             onOpenChange={(isOpen) => {
               if (!isOpen) setOpenId(undefined);
             }}
+            // One primary or none: Join while the call can be joined.
+            {...(open.event.videoUrl === undefined || Date.parse(open.event.endsAt) <= listNow.getTime()
+              ? {}
+              : {
+                  actions: (
+                    <ButtonLink variant="primary" icon="video" href={open.event.videoUrl} isExternal>
+                      {strings.joinProvider(providerOf(open.event.videoUrl))}
+                    </ButtonLink>
+                  ),
+                })}
           >
-            <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={4} />
+            <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={3} variant="popup" />
           </Modal>
         ))}
       {openRequest !== undefined && (
         <RequestPopup
           item={openRequest}
           zone={timeZone}
+          isAccepting={accepting === openRequest.request.bookingId}
           onAccept={() => accept(openRequest)}
           onDecline={() => {
-            setOpenRequest(undefined);
+            setOpenRequestId(undefined);
             setDeclining(openRequest);
           }}
-          onClose={() => setOpenRequest(undefined)}
+          onClose={() => setOpenRequestId(undefined)}
         />
       )}
       {declining !== undefined && (

@@ -56,6 +56,14 @@ export const strings = {
   declining: 'Declining…',
   cancelledTold: (first: string) => `Meeting cancelled. ${first} has been told.`,
   rescheduleWith: (first: string) => `Reschedule with ${first}`,
+  /** Reschedule's name once a time is picked: it starts with its visible word (WCAG 2.5.3). */
+  rescheduleTo: (time: string, day: string) => `Reschedule to ${time} on ${day}`,
+  requestCount: (count: number) => `${String(count)} request${count === 1 ? '' : 's'}`,
+  /** When a request declines itself if nobody answers. */
+  expiresOn: (when: string) => `Declines itself ${when} if not answered`,
+  expiresLabel: 'Answer by',
+  acceptRequestOf: (name: string) => `Accept ${name}’s request`,
+  declineRequestLabel: (name: string) => `Decline ${name}’s request`,
   /** The list's way to share a booking page when nothing is coming up. */
   shareBookingPage: 'Share a booking page',
   failedTitle: 'Bookings didn’t load',
@@ -306,7 +314,6 @@ export const strings = {
   removeGuest: (index: number) => `Remove guest ${String(index)}`,
   addGuests: 'Add guests',
   addAnotherGuest: 'Add another guest',
-  notAnEmail: 'Enter an email like name@company.com',
   /** New meeting's quieter choices, folded: their time zone, the calendar, the message. */
   moreOptions: 'More options',
   guestsFull: (max: number) => `Up to ${String(max)} guests.`,
@@ -379,8 +386,6 @@ export const strings = {
   requestStatus: 'Request',
   accept: 'Accept',
   decline: 'Decline',
-  /** The popup's facts for a booked-by-chat booking. */
-  bookedByChatFold: 'Booked by chat',
   // Add meeting link (B-07): a video call no calendar made a link for.
   addMeetingLink: 'Add meeting link',
   changeMeetingLink: 'Change link',

@@ -499,7 +499,7 @@ function MoveDialog({
             isDisabled={time === undefined}
             isPending={busy}
             onPress={move}
-            {...(time === undefined ? {} : { label: strings.moveTo(timeName(time), dayName(dayOf(time, zone))) })}
+            {...(time === undefined ? {} : { label: strings.rescheduleTo(timeName(time), dayName(dayOf(time, zone))) })}
           >
             {busy ? strings.moving : strings.reschedule}
           </Button>
@@ -649,7 +649,6 @@ export function CancelConfirm({
         value={note}
         onChange={setNote}
         isDisabled={busy}
-        onSubmit={commit}
       />
     </Modal>
   );
