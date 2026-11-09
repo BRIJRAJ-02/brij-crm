@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Cancelled) with sort and pages.
 // Main task: see the week (or one day) at a glance, open a booking or an event for its details, or page through the list.
-// Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views beyond an admin's Mine · Everyone (spec 0037), filing, and live arrival (it reads again when the page is shown again).
+// Leaves out: the changes themselves (BookingActions and the dialogs, which this screen only opens), the team's hours (Availability › Roster), and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
   type BookingAssignment,

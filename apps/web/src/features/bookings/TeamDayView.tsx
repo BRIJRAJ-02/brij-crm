@@ -3,7 +3,7 @@
 // what needs a host and what clashes, for everyone the reader may see.
 // Main task: spot what needs doing (Needs a host, a clash, a meeting outside someone's hours) and act on a teammate's
 // column (book someone in, block time, time off, reassign) where the reader Manages them.
-// Leaves out: changing working hours (Availability › Team), dragging a booking to another column (Reassign from its
+// Leaves out: changing working hours (Availability › Roster), dragging a booking to another column (Reassign from its
 // card instead, AC-777), and colleagues' calendar details (Busy only, AC-770).
 import type {
   BookingAssignment,

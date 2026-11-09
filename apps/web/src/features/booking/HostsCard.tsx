@@ -3,7 +3,7 @@
 // Main task: see who can be booked and whose calendar is missing; pick up to 3 groups, add a fixed host, and choose where a reschedule goes; each host change saves at once.
 // A workspace link (30 Oct 2026) leads with one switch, "Everyone in the workspace, including people who join later"
 // (Cal.com's "Add all team members"): on, it books "Everyone on the roster" and nothing else shows; off, the pickers.
-// Leaves out: a rotation's own members and rules (Settings › Rotations, linked here), and each member's hours (their schedules).
+// Leaves out: a rotation's own members and rules (Settings › Scheduling › Round robin, linked here), and each member's hours (their schedules).
 import { isDataError, type BookingPageView, type DataLayer, type MemberSummary, type RotationView } from '@crm/data';
 import {
   Button,

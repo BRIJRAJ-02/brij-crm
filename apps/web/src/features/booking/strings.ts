@@ -361,33 +361,6 @@ export const strings = {
   linkOnlyHint: 'Not on your profile. It can also book your reserved time.',
   /** Under Who can book, while a public page is being switched to Link only: the old address stops working. */
   linkOnlyChanging: 'Old address stops working on save.',
-  /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
-  tips: {
-    bufferBefore: {
-      text: 'Time kept free before each meeting, so nobody books right up to its start.',
-      example: 'With 15 minutes, a 10:00 AM meeting keeps 9:45 to 10:00 clear.',
-    },
-    bufferAfter: {
-      text: 'Free time after each meeting.',
-      example: 'With 10 minutes, nothing can start before 11:10 AM after a meeting that ends at 11:00.',
-    },
-    notice: {
-      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
-      example: 'With 4 hours, a 2:00 PM slot can’t be booked after 10:00 AM that day.',
-    },
-    window: {
-      text: 'How many days ahead people can book. The window moves forward each day.',
-      example: 'With 30 days, on 1 March people can book up to about 31 March.',
-    },
-    dailyLimit: {
-      text: 'Meetings from this page in one day.',
-      example: 'With 3, once three people book Tuesday, Tuesday shows no times.',
-    },
-    step: {
-      text: 'How often a start time is offered. Meeting length starts one right after another.',
-      example: 'With 15 minutes, a 30 minute meeting offers 9:00, 9:15, 9:30 and so on.',
-    },
-  },
   bufferBefore: 'Buffer before',
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',

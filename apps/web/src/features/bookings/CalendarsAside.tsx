@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Bookings' calendars beside the week and the list (spec 0024 milestone 5), as Google Calendar keeps them: a small month to jump to a date (the week), then each calendar as a box in its colour.
 // Main task: show one calendar, several or all on this view.
-// Leaves out: the calendars' own switches and which one takes new bookings (settings, in Settings › Calendars).
+// Leaves out: the calendars' own switches and which one takes new bookings (settings, in Settings › Account › Calendars).
 import type { CalendarAccountView, CalendarListState, CalendarsHeld } from '@crm/data';
 import { useCalendarList } from '@crm/data/react';
 import {

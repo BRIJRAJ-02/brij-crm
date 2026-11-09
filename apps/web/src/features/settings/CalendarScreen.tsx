@@ -49,8 +49,6 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings } from './calendar-strings.ts';
 import type { ConnectResult } from './connect-result.ts';
@@ -73,11 +71,6 @@ export interface CalendarScreenProps {
   readonly result?: ConnectResult;
   /** Clears `?calendar=` once the person has read it. */
   readonly onResultSeen: () => void;
-  /**
-   * Drawn as a tab of Bookings rather than a page of Settings (25 October 2026): the body alone, with Connect in
-   * the frame's own TopBar where Availability puts New schedule, one primary per screen.
-   */
-  readonly inFrame?: boolean;
 }
 
 const number = new Intl.NumberFormat();
@@ -419,13 +412,11 @@ function calendarsByAccount(list: CalendarListState): ReadonlyMap<string, readon
  * Settings › Scheduling › Calendars (spec 0024): a card per connected account with its calendars, the default
  * marked, live while shown, and Connect (Google, Outlook, or a menu of both).
  */
-export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame = false }: CalendarScreenProps) {
+export function CalendarScreen({ data, slug, view, result, onResultSeen }: CalendarScreenProps) {
   const state = useCalendar(view);
   const list = useCalendarList(data.calendar.calendars(slug));
   const settings = useCalendarSettings(data.calendar.settings(slug));
   const { toasts } = useRouteContext({ from: '__root__' });
-  // Where the frame wants this tab's one primary action, when the frame is Bookings rather than Settings.
-  const actionSlot = useBookingsActionSlot();
   const byAccount = calendarsByAccount(list);
   const allCalendars = [...byAccount.values()].flat();
   const destination = allCalendars.find((calendar) => calendar.isDestination);
@@ -599,19 +590,14 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
     );
   }
 
-  // The one Connect, in whichever bar this frame has: Settings' own TopBar takes it as an action, and the Bookings
-  // frame takes it through the slot its layout lends the chosen tab. In the Bookings frame it is there even with
-  // nothing connected (the bookings critique, A5: a tab's primary always sits in the TopBar), beside the empty
-  // state's own two buttons.
-  const action = connectButton !== undefined && (hasList || inFrame) ? connectButton : undefined;
+  // The one Connect, in Settings' TopBar once something is connected (the empty state has its own two buttons).
+  const action = connectButton !== undefined && hasList ? connectButton : undefined;
   return (
     <SettingsPage
       title={strings.title}
       isLoading={state.status === 'loading'}
-      inFrame={inFrame}
-      {...(inFrame || action === undefined ? {} : { actions: action })}
+      {...(action === undefined ? {} : { actions: action })}
     >
-      {inFrame && action !== undefined && actionSlot !== null && createPortal(action, actionSlot)}
       {outcome !== undefined && (
         <Callout
           tone={outcome.tone}
