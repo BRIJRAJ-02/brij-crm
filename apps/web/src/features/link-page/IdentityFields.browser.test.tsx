@@ -93,6 +93,21 @@ describe('who the page is from', () => {
     expect(cleared).toHaveBeenCalledWith('acme', { jobTitle: '', showJobTitle: false });
   });
 
+  it('leaves the switch alone when a title is reworded, and sends Enter then Tab once', async () => {
+    const update = vi.fn(
+      (_slug: string, _change: object) =>
+        new Promise<MyProfile>((resolve) => {
+          setTimeout(() => resolve(profile({ jobTitle: 'Sales lead', showJobTitle: false })), 50);
+        }),
+    );
+    await render(update, TITLED);
+    await userEvent.fill(page.getByRole('textbox', { name: 'Title' }), 'Sales lead');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.tab();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith('acme', { jobTitle: 'Sales lead' });
+  });
+
   it('saves the switch at once, with a title to show under the name', async () => {
     const update = vi.fn((_slug: string, _change: object) =>
       Promise.resolve(profile({ jobTitle: 'Head of partnerships', showJobTitle: true })),
@@ -124,13 +139,24 @@ describe('who the page is from', () => {
     await expect.element(site).toHaveValue('https://acme.com/');
   });
 
-  it('keeps a refusal on its own field, with what was typed still there', async () => {
-    await render(() => Promise.reject(dataError('INPUT_INVALID', 'Enter your name.')));
+  it('says an empty name on the field and sends nothing', async () => {
+    const update = vi.fn();
+    await render(update);
     const name = page.getByRole('textbox', { name: 'Name' });
     await userEvent.fill(name, ' ');
     await userEvent.keyboard('{Enter}');
-    await expect.element(page.getByText('Enter your name.')).toBeVisible();
+    await expect.element(page.getByText('Enter a name.')).toBeVisible();
     await expect.element(name).toHaveValue(' ');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a refusal on its own field, with what was typed still there', async () => {
+    await render(() => Promise.reject(dataError('CONFIG_INVALID', 'Use 1 to 80 characters for your name.')));
+    const name = page.getByRole('textbox', { name: 'Name' });
+    await userEvent.fill(name, 'Ada K');
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByText('Use 1 to 80 characters for your name.')).toBeVisible();
+    await expect.element(name).toHaveValue('Ada K');
   });
 
   it.each(THEMES)('passes axe in %s', async (theme) => {
@@ -156,7 +182,9 @@ describe('on someone else’s page', () => {
   it('shows a member with a login their own name, read only, and says where they change it', async () => {
     await render(vi.fn(), TITLED, { kind: 'kept', by: 'self' });
     await expect.element(page.getByRole('textbox', { name: 'Name' })).toHaveAttribute('readonly');
-    await expect.element(page.getByText('They change this in their own Profile.').first()).toBeVisible();
+    await expect.element(page.getByText('They change their name and title in their own Profile.')).toBeVisible();
+    // Their title kept to the team isn't shown as the page's.
+    expect(page.getByRole('textbox', { name: 'Title' }).query()).toBeNull();
   });
 
   it.each(THEMES)('passes axe read only in %s', async (theme) => {
@@ -177,7 +205,11 @@ describe.runIf(SHOT_DIR !== undefined && SHOT_DIR !== '')('the Details card, pho
       { ...TITLED, showJobTitle: true, site: 'https://acme.com/', footLine: 'Replies within a day.' },
     ],
     ['team', { kind: 'team', member: 'm-1' }, { ...OFF, name: 'Nick Page', jobTitle: 'Barista' }],
-    ['kept', { kind: 'kept', by: 'self' }, { ...OFF, name: 'Priya Raman', jobTitle: 'Head of Sales' }],
+    [
+      'kept',
+      { kind: 'kept', by: 'self' },
+      { ...OFF, name: 'Priya Raman', jobTitle: 'Head of Sales', showJobTitle: true },
+    ],
   ];
   it('in light and dark, at a desktop’s and a phone’s width', async () => {
     for (const [name, owner, identity] of owners) {

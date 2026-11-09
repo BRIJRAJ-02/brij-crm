@@ -65,7 +65,7 @@ const EMAIL_TAKEN =
 const NOT_PAGE_ONLY = 'That person isn’t a page only person here. Remove anyone else from Members.';
 const NOT_A_MEMBER = 'Only a member of this workspace adds people from Team pages.';
 const NOT_PAGE_ONLY_NAMED = 'That person isn’t a page only person here. They change their own name in Profile.';
-const NAME_KEPT = 'This person is an owner or admin now. They change their own name in Profile.';
+const NAME_KEPT = 'This person is an owner or admin now, so their name isn’t changed from Team pages.';
 const ADMIN_KEPT = 'This person is an admin now. Only owners and admins can remove them.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only owners remove them, from Members.';
 
@@ -310,8 +310,8 @@ const NOT_ONE_LINE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
  * change the name and an option to add title below the name"), from their page's editor. `link_pages.manage_team`,
  * from a member, as Add a page. Only a page only person active in this workspace, whom no partner added: anyone with
  * a login changes their own in Profile, and a partner's person is the partner's, so either is `NOT_FOUND`, as is
- * anyone elsewhere. A title given turns it on under their name (a title typed for their page is meant to show); one
- * cleared turns it off. A change that changes nothing writes nothing; otherwise, in one transaction, their member row
+ * anyone elsewhere; one made an owner or admin is `FORBIDDEN`. A first title given turns it on under their name (a
+ * title typed for their page is meant to show); one cleared turns it off; one reworded leaves the choice alone. A change that changes nothing writes nothing; otherwise, in one transaction, their member row
  * (and their page's choice), one `member.profile_updated` History row with the manager as actor, and a `members`
  * outbox row. Answers what was saved.
  */
@@ -376,8 +376,10 @@ export async function namePageOnlyPerson(
         before.jobTitle = person.jobTitle;
         after.jobTitle = nextTitle;
       }
-      // A title given here shows under their name; one cleared shows nothing. Untouched, their choice stands.
-      const show = titleChanged ? nextTitle !== null : (held?.showJobTitle ?? false);
+      // A first title given here shows under their name; one cleared shows nothing. A title reworded, or none
+      // touched, leaves their choice as it stands.
+      const heldShow = held?.showJobTitle ?? false;
+      const show = !titleChanged ? heldShow : nextTitle === null ? false : person.jobTitle === null ? true : heldShow;
       if (held !== undefined && show !== held.showJobTitle) {
         await saveIdentity(tx, found.userId, scope.workspaceId, { ...held, showJobTitle: show });
         before.showJobTitle = held.showJobTitle;

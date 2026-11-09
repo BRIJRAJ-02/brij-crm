@@ -436,6 +436,14 @@ describe('naming a page only person', () => {
     expect(await getMyProfile(page)).toMatchObject({ name: 'Nick Page', jobTitle: 'Barista', showJobTitle: true });
     // The same again writes nothing.
     await namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Nick Page' });
+    // A title reworded leaves the choice where it stands: turned off by hand, it stays off.
+    await testQuery(ownerUrl, `update auth.public_profiles set show_job_title = false where workspace_id = $1`, [
+      w.workspaceId,
+    ]);
+    expect(await namePageOnlyPerson(w.owner, { member: added.memberId, jobTitle: 'Head barista' })).toMatchObject({
+      jobTitle: 'Head barista',
+      showJobTitle: false,
+    });
     // A title cleared shows nothing.
     const cleared = await namePageOnlyPerson(w.owner, { member: added.memberId, jobTitle: '' });
     expect(cleared).toEqual({ handle: cleared.handle, name: 'Nick Page', showJobTitle: false });
@@ -443,7 +451,7 @@ describe('naming a page only person', () => {
     const history = (await listAuditEvents(w.owner, {})).entries.filter(
       (entry) => entry.action === 'member.profile_updated',
     );
-    expect(history).toHaveLength(2);
+    expect(history).toHaveLength(3);
     expect(history.at(-1)).toMatchObject({
       params: { isOwn: false, fields: ['name', 'jobTitle', 'showJobTitle'] },
     });
@@ -472,6 +480,11 @@ describe('naming a page only person', () => {
     await setMemberRole(w.owner, { memberId: added.memberId, role: 'guest' });
     expect(await refusalOf(namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Guest' }))).toMatchObject({
       code: 'NOT_FOUND',
+    });
+    // One made an admin since (never by Team pages, so by hand here) is theirs to keep.
+    await testQuery(ownerUrl, `update members set role = 'admin' where id = $1`, [added.memberId]);
+    expect(await refusalOf(namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Admin' }))).toMatchObject({
+      code: 'FORBIDDEN',
     });
     const [row] = await testQuery<{ name: string }>(ownerUrl, `select name from members where id = $1`, [
       added.memberId,

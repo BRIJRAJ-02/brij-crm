@@ -1336,7 +1336,7 @@ function Blocks({
               setIdentity(saved);
               linkPage.publication.changed();
             }}
-            onSwitchRefused={setIdentityRefusal}
+            onSwitchRefused={() => undefined}
           />
         </Card>
       )}

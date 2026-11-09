@@ -108,7 +108,8 @@ export type RemovePageOnlyPersonInput = z.infer<typeof RemovePageOnlyPersonInput
 /**
  * A page only person's name and the line under it, changed from their page's editor (9 Nov 2026, the owner: "an option
  * to change the name and an option to add title below the name"). Either or both; an empty title clears it. Only a page
- * only person in this workspace: anyone with a login changes their own in Profile, so they are `NOT_FOUND` here.
+ * only person in this workspace: anyone with a login changes their own in Profile, so they are `NOT_FOUND` here, and
+ * one made an owner or admin since is `FORBIDDEN`.
  */
 export const NamePageOnlyPersonInput = WorkspaceScoped.extend({
   member: Uuid,

@@ -103,6 +103,8 @@ export const strings = {
   /** The line under the name: the job title Profile holds, shown once one is typed here. */
   jobTitle: 'Title',
   jobTitlePlaceholder: 'Head of Sales',
+  /** Said on the Name field when it is left empty: nothing is sent. */
+  nameRequired: 'Enter a name.',
   /** Under the title, while there is one: off keeps it to the team and off the page. */
   showJobTitle: 'Show under my name',
   site: 'Company site',

@@ -61,9 +61,10 @@ type Part = keyof PageIdentity;
 /** The change one field's new value sends, for the caller's own page. */
 function ownChange(part: Part, value: boolean | string, identity: PageIdentity): Record<string, boolean | string> {
   if (part !== 'jobTitle' || typeof value !== 'string') return { [part]: value };
-  // A title typed here is meant to show under the name; one cleared has nothing to show, so it stops showing, and a
-  // title given later (here or in Profile) never appears on the page unasked.
-  const show = value !== '';
+  // A first title typed here is meant to show under the name; one cleared has nothing to show, so it stops showing,
+  // and a title given later (here or in Profile) never appears on the page unasked. A title reworded keeps the
+  // switch where its owner left it: off keeps it to the team.
+  const show = value === '' ? false : identity.jobTitle === '' ? true : identity.showJobTitle;
   return show === identity.showJobTitle ? { jobTitle: value } : { jobTitle: value, showJobTitle: show };
 }
 
@@ -90,33 +91,41 @@ export function IdentityFields({
   // The switch shows its new place the moment it is pressed, and goes back if the save is refused.
   const [switched, setSwitched] = useState<boolean | undefined>(undefined);
   const [problems, setProblems] = useState<Partial<Record<Part, string>>>({});
+  // What each field last sent while its answer is out: Enter then Tab sends it once, not twice.
+  const [sending, setSending] = useState<Partial<Record<Part, boolean | string>>>({});
   const draft = (part: keyof typeof drafts) => (value: string) => setDrafts((held) => ({ ...held, [part]: value }));
   const send = (part: Part, value: boolean | string): Promise<PageIdentity> => {
     if (owner.kind === 'team') {
       const change = part === 'name' ? { name: String(value) } : { jobTitle: String(value) };
-      return data.teamPages
-        .namePerson(slug, owner.member, change)
-        .then((named) => ({
-          ...identity,
-          name: named.name,
-          jobTitle: named.jobTitle ?? '',
-          showJobTitle: named.showJobTitle,
-        }));
+      return data.teamPages.namePerson(slug, owner.member, change).then((named) => ({
+        ...identity,
+        name: named.name,
+        jobTitle: named.jobTitle ?? '',
+        showJobTitle: named.showJobTitle,
+      }));
     }
     return data.profile.update(slug, ownChange(part, value, identity)).then(identityOf);
   };
   const save = (part: Part, value: boolean | string) => {
-    if (identity[part] === value) return;
+    if (identity[part] === value || sending[part] === value) return;
+    // A page always has a name: an empty one is said on the field, and nothing is sent.
+    if (part === 'name' && value === '') {
+      setProblems((held) => ({ ...held, name: strings.nameRequired }));
+      return;
+    }
+    setSending((held) => ({ ...held, [part]: value }));
     setProblems((held) => ({ ...held, [part]: undefined }));
     if (part === 'showJobTitle') onSwitchRefused(undefined);
     if (part === 'showJobTitle' && typeof value === 'boolean') setSwitched(value);
     send(part, value).then(
       (kept) => {
+        setSending((held) => ({ ...held, [part]: undefined }));
         if (part !== 'showJobTitle') setDrafts((held) => ({ ...held, [part]: kept[part] }));
         else setSwitched(undefined);
         onSaved(kept);
       },
       (error: unknown) => {
+        setSending((held) => ({ ...held, [part]: undefined }));
         const said = isDataError(error) ? error.message : strings.identityFailed;
         if (part === 'showJobTitle') {
           setSwitched(undefined);
@@ -137,7 +146,8 @@ export function IdentityFields({
   if (owner.kind === 'kept') {
     // Theirs to change, in their own Profile (or their partner's app): shown so the manager sees what the page says.
     const reason = owner.by === 'partner' ? teamStrings.nameFromPartner : teamStrings.nameTheirs;
-    const hasTitle = identity.jobTitle !== '';
+    // The title only as their page shows it: one kept to the team isn't the page's to show.
+    const hasTitle = identity.jobTitle !== '' && identity.showJobTitle;
     // The reason once, under the last field, rather than the same line under each.
     return (
       <>
