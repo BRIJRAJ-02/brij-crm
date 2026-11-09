@@ -264,8 +264,10 @@ function ConfirmItsYou({ data, retry }: { readonly data: DataLayer; readonly ret
             <Button
               variant="primary"
               isPending={isChecking}
-              // The boxes send themselves once full, so this waits for what they can't: a backup code.
+              // The boxes send themselves once full, so this waits for what they can't: a backup code. No ↵ keycap:
+              // Enter in a part typed code has nothing to send.
               isDisabled={!stepUp.isReady}
+              kbd={[]}
               onPress={() => commit.current()}
             >
               {strings.confirm}

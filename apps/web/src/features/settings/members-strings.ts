@@ -64,7 +64,7 @@ export const strings = {
   twoFactorOff: 'Off',
   you: 'You',
   /** A person a connected app added, who has no Timefix login (spec 0070): the app's name, else that it was an app. */
-  viaApp: (name: string | undefined) => (name === undefined ? 'Connected app' : `Via ${name}`),
+  viaApp: (name: string | undefined) => (name === undefined ? 'Via a connected app' : `Via ${name}`),
   search: 'Search members',
   searchPlaceholder: 'Name or email',
   /** A guest searches by name alone (spec 0031, AC-829). */

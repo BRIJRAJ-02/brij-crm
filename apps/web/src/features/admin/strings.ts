@@ -165,7 +165,7 @@ export const strings = {
   twoFactorText: 'These pages show every account.',
   twoFactorAction: 'Open sign in and devices',
   signInTitle: 'Confirm it’s you',
-  signInText: 'These pages ask for a code from your authenticator app every 12 hours.',
+  signInText: 'These pages ask for a code every 12 hours.',
   signInAction: 'Enter code',
   confirmTitle: 'Confirm it’s you',
   confirm: 'Continue',

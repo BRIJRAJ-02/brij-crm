@@ -258,9 +258,10 @@ export function MembersScreen({
       : []),
     ...members.map((member): PersonRow => ({ kind: 'member', id: member.id, member })),
   ];
-  // The ticks on rows shown now: a search that hides someone unticks them (spec 0037, AC-1242).
+  // The ticks on rows shown now: a search that hides someone unticks them (spec 0037, AC-1242). A phone has no
+  // checkboxes, so none count there, and no bar counts what can't be seen.
   const ticked: ReadonlySet<string> = new Set(
-    members.filter((member) => selected.has(member.id)).map((member) => member.id),
+    isPhone ? [] : members.filter((member) => selected.has(member.id)).map((member) => member.id),
   );
   // Calendar health for the rows shown, read together, for holders of `members.manage` (AC-1308).
   const healthStore = useSchedulingStore(data, canManage);
@@ -691,25 +692,14 @@ export function MembersScreen({
       >
         {strings.approve}
       </Button>
-      {/* On a phone Decline is its cross alone (named for screen readers), so the name keeps its room. */}
-      {isPhone ? (
-        <Button
-          variant="ghost"
-          icon="x"
-          label={strings.declineFor(request.name)}
-          isDisabled={approving === request.id}
-          onPress={() => decline(request)}
-        />
-      ) : (
-        <Button
-          variant="ghost"
-          label={strings.declineFor(request.name)}
-          isDisabled={approving === request.id}
-          onPress={() => decline(request)}
-        >
-          {strings.decline}
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        label={strings.declineFor(request.name)}
+        isDisabled={approving === request.id}
+        onPress={() => decline(request)}
+      >
+        {strings.decline}
+      </Button>
     </ButtonGroup>
   );
 
@@ -735,12 +725,12 @@ export function MembersScreen({
               size="lg"
               // Their email under the name; a guest is told nobody's address (spec 0031, AC-829). The reader's own row
               // says "You" first, beside the name rather than across a wide column at the line's end.
-              // Someone a connected app added, with no Timefix login of their own (spec 0070), says which app there too:
-              // a tag by the name cut their email short.
+              // Someone a connected app added, with no Timefix login of their own (spec 0070), says so after the email,
+              // so the address people look for is never the part cut.
               meta={[
                 ...(member.id === access.memberId ? [strings.you] : []),
-                ...(member.viaApp === undefined ? [] : [strings.viaApp(member.viaApp.name)]),
                 ...(member.email === undefined ? [] : [member.email]),
+                ...(member.viaApp === undefined ? [] : [strings.viaApp(member.viaApp.name)]),
               ]}
               {...(member.avatarUrl === undefined ? {} : { src: member.avatarUrl })}
             />

@@ -45,8 +45,8 @@ export const MemberView = MemberSummary.extend({
    */
   twoFactor: z.boolean().optional(),
   /**
-   * Added by a connected app (spec 0070, a managed member with no Timefix login of their own): the app's name when the
-   * registry gives it. Absent for everyone who joined themselves.
+   * Added by a connected app (spec 0070, a managed member with no Timefix login of their own). Its name only for
+   * readers who may see Connected apps (owners); a guest is told nothing. Absent for everyone who joined themselves.
    */
   viaApp: z.object({ name: z.string().min(1).optional() }).optional(),
 });

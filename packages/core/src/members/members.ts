@@ -47,6 +47,9 @@ import { workspaceLogoVersion } from '../brand/brand.ts';
 const { managedMembers, members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
+/** Whether the reader may see which connected app added someone: those who may see Connected apps (spec 0070). */
+const seesNames = (scope: EngineScope): boolean => can(scope.access, 'connected_apps.manage');
+
 const isGuest = (scope: EngineScope): boolean =>
   scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest';
 
@@ -178,11 +181,20 @@ export async function listMembers(
     options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
       ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
       : undefined;
-  // Each app's name once, from the registry; a name it can't give still marks the person as added by an app.
-  const partnerIds = [...new Set(page.flatMap((row) => (row.partnerId === null ? [] : [row.partnerId])))];
+  // Each app's name once, from the registry, and only for who may see Connected apps (owners); everyone else but a
+  // guest sees the mark alone. A name the registry can't give (or a failed read) still marks the person.
+  const partnerIds = seesNames(scope)
+    ? [...new Set(page.flatMap((row) => (row.partnerId === null ? [] : [row.partnerId])))]
+    : [];
   const appNames = new Map(
     await Promise.all(
-      partnerIds.map(async (partnerId) => [partnerId, await options.partnerName?.(partnerId)] as const),
+      partnerIds.map(async (partnerId) => {
+        try {
+          return [partnerId, await options.partnerName?.(partnerId)] as const;
+        } catch {
+          return [partnerId, undefined] as const;
+        }
+      }),
     ),
   );
   return {
@@ -191,7 +203,7 @@ export async function listMembers(
       return {
         ...toView(row, seesEmails),
         ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
-        ...(row.partnerId === null ? {} : { viaApp: appName === undefined ? {} : { name: appName } }),
+        ...(row.partnerId === null || !seesEmails ? {} : { viaApp: appName === undefined ? {} : { name: appName } }),
       };
     }),
     total,
