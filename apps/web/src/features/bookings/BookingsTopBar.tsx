@@ -55,10 +55,9 @@ export function BookingsTopBar({ slug, actionSlot, isAddingPage, onAddPage, onAd
     timeZone,
   );
   // The member's hours, when the Calendar has read them; else nine to five on weekdays.
-  const calendarData = useSettled(
-    useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData?.extras,
-  );
-  const availability = calendarData?.availability;
+  const calendarLoaded = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData;
+  const calendarData = useSettled(calendarLoaded?.extras);
+  const availability = calendarLoaded?.availability;
   // Whom the member Manages, for New meeting's For (spec 0037, AC-1272), as the Calendar read them.
   const forPeople = calendarData?.forPeople;
   const pages = useCaptureList(data.bookingPages.view(slug));

@@ -31,16 +31,11 @@ import {
   type ToastAction,
 } from '@crm/ui';
 import type { ReactNode } from 'react';
-import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { zoneDisplay, zoneName } from '../../public/booking/time.ts';
+import { LinkRecordDialog } from './lazy-parts.tsx';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
-
-// Link to a record's dialog is the field set's record picker, which brings every field editor and their schemas: it
-// loads when first opened, so Bookings' Calendar and List don't carry it (load time, bookings redesign step 1).
-const LinkRecordDialog = lazy(() =>
-  import('./LinkRecordDialog.tsx').then((module) => ({ default: module.LinkRecordDialog })),
-);
 
 /** What the card's changes call: the data layer's, bound to the workspace by the route. */
 export interface HostBookingActions {
@@ -348,15 +343,14 @@ export function BookingDialog({
   if (shown === 'link') {
     // Linked, the card opens again showing the record, with focus back on More (`onClose`).
     return actions.linking === undefined ? null : (
-      <Suspense fallback={null}>
-        <LinkRecordDialog
-          booking={booking}
-          linking={actions.linking}
-          notify={actions.notify}
-          isOpen={ask === 'link'}
-          onClose={onClose}
-        />
-      </Suspense>
+      // Its own chunk (the field set's record picker brings every field editor): see `lazy-parts.tsx`.
+      <LinkRecordDialog
+        booking={booking}
+        linking={actions.linking}
+        notify={actions.notify}
+        isOpen={ask === 'link'}
+        onClose={onClose}
+      />
     );
   }
   if (shown === 'meetingLink') {

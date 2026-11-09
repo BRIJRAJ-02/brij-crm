@@ -16,7 +16,8 @@
 //   .ics when ours was the file that invited them.
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
-// A guest never gets the visitor's link: it is the visitor's key.
+// A guest never gets the visitor's link: it is the visitor's key. The visitor's own .ics carries it as its URL, the
+// same as the guest page's own download does.
 import { and, eq, sql } from 'drizzle-orm';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
@@ -170,7 +171,7 @@ export async function prepareBookingMail(
     const page = await loadPage(tx, row.pageId);
     if (page === undefined) return { messages: [], invited: [], skipped: 'gone' };
     const [host] = await tx
-      .select({ name: members.name, email: members.email })
+      .select({ name: members.name, email: members.email, status: members.status })
       .from(members)
       .where(eq(members.id, row.hostMemberId));
     // A round robin booking's every host (spec 0037, AC-1322): the organiser first, each told, all named.
@@ -348,7 +349,13 @@ export async function prepareBookingMail(
       : `You got this email because this address was used to book ${page.title} with ${hostName}.`;
     // A reply to the visitor's mail reaches the organising host (see `replyTo`); a request's mail, before any invitation
     // named them, keeps the sending address.
-    const replyToHost = host === undefined ? {} : { replyTo: host.email };
+    // Only to an active member (as every queued email's reply, emails/send.ts), and only to the address the visitor has
+    // already seen: our calendar file lists each host's member address, and so does the calendar event of a page's
+    // booking or of a host booking themselves in. A member who booked them in for a colleague put the event on that
+    // colleague's calendar, whose account may show another address as the organiser, so nothing is shared there.
+    const bookedForColleague = bookedByHost && row.createdByMemberId !== row.hostMemberId;
+    const replyToHost =
+      host === undefined || host.status !== 'active' || (hasEvent && bookedForColleague) ? {} : { replyTo: host.email };
     const guestWhy = `You got this email because ${row.visitorName} added this address to ${page.title}.`;
     const hostWhy = `You got this email because you host ${page.title}.`;
     const newGuests = guests.filter((guest) => !invited.includes(guest));

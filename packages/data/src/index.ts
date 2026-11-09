@@ -189,6 +189,7 @@ import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
 import { followBookings } from './bookings/live.ts';
+import { browserReturn, FRESH_EVERY_MS } from './bookings/fresh.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import {
   createBookingsStore,
@@ -1796,8 +1797,32 @@ export function createDataLayer({
     liveStatus = next;
     for (const listener of liveListeners) listener();
   };
+  // The member's default schedule's hours, as Bookings' Calendar reads them for where a day starts and its open hours:
+  // one read per workspace and zone, so a hover's preload of the Calendar never reads them again. A read is kept for
+  // a minute (`FRESH_EVERY_MS`) and never past the person's return to the page, where held reads read again too; a
+  // schedule change (a write here, a `schedules` event, a resync) and signing out drop it. A failed read is dropped.
+  const hoursRead = new Map<
+    string,
+    { readonly reading: Promise<{ availability: BookingAvailability }>; readonly at: number }
+  >();
+  let lastReturnAt = Number.NEGATIVE_INFINITY;
+  browserReturn(() => {
+    lastReturnAt = Date.now();
+  });
+  const hoursKey = (workspace: string, timeZone: string) => `${workspace}\u0000${timeZone}`;
+  const dropHours = (workspace: string) => {
+    for (const key of [...hoursRead.keys()]) if (key.startsWith(`${workspace}\u0000`)) hoursRead.delete(key);
+  };
+  /** A schedule write, dropping the cached hours once it settles (landed or refused, either may have changed them). */
+  const schedulesWrite = <T>(workspace: string, write: Promise<T>): Promise<T> =>
+    write.finally(() => {
+      dropHours(workspace);
+    });
+
   const forget = () => {
     me = undefined;
+    // Another member may sign in on this tab: none of this one's hours may show.
+    hoursRead.clear();
     objects = new Map();
     usage = new Map();
     members = new Map();
@@ -2946,20 +2971,6 @@ export function createDataLayer({
       ),
     mintId,
   });
-
-  // The member's default schedule's hours, as Bookings' Calendar reads them for where a day starts and its open hours:
-  // one read per workspace and zone, kept until a schedule changes (a write here, a `schedules` event, a resync), so a
-  // hover's preload of the Calendar never reads them again. A failed read is dropped, to be tried again next time.
-  const hoursRead = new Map<string, Promise<{ availability: BookingAvailability }>>();
-  const hoursKey = (workspace: string, timeZone: string) => `${workspace}\u0000${timeZone}`;
-  const dropHours = (workspace: string) => {
-    for (const key of [...hoursRead.keys()]) if (key.startsWith(`${workspace}\u0000`)) hoursRead.delete(key);
-  };
-  /** A schedule write, dropping the cached hours once it settles (landed or refused, either may have changed them). */
-  const schedulesWrite = <T>(workspace: string, write: Promise<T>): Promise<T> =>
-    write.finally(() => {
-      dropHours(workspace);
-    });
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -5472,16 +5483,17 @@ export function createDataLayer({
       },
       /**
        * The member's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone`. Read once per
-       * workspace and zone and kept until a schedule changes, so a preload never reads them again.
+       * workspace and zone and kept for a minute, until a return or a schedule change, so a preload doesn't read again.
        */
       hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> => {
         const key = hoursKey(workspace, timeZone);
         const held = hoursRead.get(key);
-        if (held !== undefined) return held;
+        const now = Date.now();
+        if (held !== undefined && now - held.at < FRESH_EVERY_MS && held.at >= lastReturnAt) return held.reading;
         const reading = call((options) => api.bookings.hours({ workspace, timeZone }, options));
-        hoursRead.set(key, reading);
+        hoursRead.set(key, { reading, at: now });
         reading.catch(() => {
-          if (hoursRead.get(key) === reading) hoursRead.delete(key);
+          if (hoursRead.get(key)?.reading === reading) hoursRead.delete(key);
         });
         return reading;
       },

@@ -189,7 +189,10 @@ export function createBookingsStore(deps: BookingsDeps) {
       },
       /** Reads it now when a screen holds it, starting its minute again (Sync now ran); nothing when none does. */
       refresh() {
-        fresh?.now();
+        // Held: read now. Unheld: something changed that no screen read, so the next hold reads rather than trusting a
+        // read that landed just before the change.
+        if (fresh === undefined) landedAt = undefined;
+        else fresh.now();
       },
       /** Shows `edit` of what is shown at once (a ready state only); answers how to put it back. */
       patch(edit: (shown: T) => T): () => void {

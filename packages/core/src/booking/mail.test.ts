@@ -3,7 +3,9 @@
 // only when no calendar event invited them, reminders that go stale, and
 // guests invited once. Against a real Postgres.
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { enterBookingByToken, enterBookingPage, systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -15,7 +17,7 @@ import { markGuestsTold, prepareBookingMail } from './mail.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-booking-mail-tests' });
@@ -133,6 +135,35 @@ describe('the confirmation (AC-636)', () => {
     // The event is already in the host's calendar, so their email carries no file either.
     expect(host?.ics).toBeUndefined();
     expect(visitor?.rows).toContainEqual({ label: 'Where', value: 'https://meet.example/abc' });
+  });
+
+  it('replies to the host only where the visitor saw their address, and never to a member no longer active', async () => {
+    const b = await booked(withEvent);
+    // A page's booking: the event lists the host's member address, so a reply reaches them.
+    expect((await b.prepare('confirmed')).messages[0]?.replyTo).toBe('ada@example.com');
+    // Booked in by a member for a colleague: the event sits on the colleague's calendar, whose account may show
+    // another address as its organiser, so the reply stays with the sender.
+    const colleague = newId();
+    await db.withWorkspace(b.host.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${b.host.workspaceId}, ${colleague}, ${'Bea Colleague'}, ${'bea@example.com'}, ${'member'}, 'system', 'system')`,
+      ),
+    );
+    await testQuery(
+      ownerUrl,
+      `update bookings set host_member_id = $2, answers = answers || '{"bookedBy":"host"}'::jsonb where id = $1`,
+      [b.bookingId, colleague],
+    );
+    expect((await b.prepare('confirmed')).messages[0]?.replyTo).toBeUndefined();
+    // A host who left: no reply address.
+    await testQuery(ownerUrl, `update bookings set answers = answers - 'bookedBy' where id = $1`, [b.bookingId]);
+    expect((await b.prepare('confirmed')).messages[0]?.replyTo).toBe('bea@example.com');
+    await testQuery(
+      ownerUrl,
+      `update members set status = 'removed', left_at = now(), removed_by_type = 'system' where id = $1`,
+      [colleague],
+    );
+    expect((await b.prepare('confirmed')).messages[0]?.replyTo).toBeUndefined();
   });
 });
 

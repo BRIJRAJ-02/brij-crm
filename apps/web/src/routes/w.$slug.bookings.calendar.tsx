@@ -59,11 +59,14 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
           .ready()
           .catch(() => undefined);
     }
-    // Everything beside the week feeds menus, filters and dialogs, so the page waits for the week alone (load time,
-    // bookings redesign step 1): the rest starts now, beside it, and fills in as it lands (at once when cached).
-    const extras = settling(calendarExtras(data, params.slug, zone));
-    await Promise.all([week?.ready(), teamDay?.ready().catch(() => undefined)]);
-    return { extras };
+    // The rest feeds menus, filters and dialogs, so the page waits for the week and the member's hours alone (load
+    // time, bookings redesign step 1): the hours set where the week scrolls to and its open hours, so arriving late
+    // they moved the week under the reader; they are cached after the first visit. The rest starts now, beside them,
+    // and fills in as it lands (at once when cached).
+    const hours = data.bookings.hours(params.slug, zone).catch(() => undefined);
+    const extras = settling(calendarExtras(data, params.slug));
+    const [, , read] = await Promise.all([week?.ready(), teamDay?.ready().catch(() => undefined), hours]);
+    return { extras, availability: read?.availability };
   },
   pendingComponent: CalendarPending,
   errorComponent: CalendarError,
@@ -96,29 +99,26 @@ function heldTeamDay(search: BookingsSearch, data: DataLayer, slug: string, zone
   });
 }
 
-/** What the page shows before what it reads beside the week has landed: no choices yet, a 9:00 day. */
-const NO_EXTRAS: CalendarLoaded = {
+/** What the page shows before what it reads beside the week has landed: no choices yet. */
+const NO_EXTRAS: CalendarExtras = {
   objects: [],
   pages: [],
   connections: [],
-  availability: undefined,
   forPeople: [],
   members: [],
 };
 
 /**
  * What the page reads beside the week, in parallel, none of it holding the page: the objects (record search), the Link
- * filter's pages, the member's hours, their calendar connections and whom they may see and Manage. Each part that
+ * filter's pages, their calendar connections and whom they may see and Manage. Each part that
  * fails leaves its empty answer.
  */
-async function calendarExtras(data: DataLayer, slug: string, zone: string): Promise<CalendarLoaded> {
+async function calendarExtras(data: DataLayer, slug: string): Promise<CalendarExtras> {
   const calendar = data.calendar.view(slug);
-  const [objects, pages, hours, , visible] = await Promise.all([
+  const [objects, pages, , visible] = await Promise.all([
     data.objects.list(slug).catch(() => []),
     // The Link filter's choices; a member without booking pages has none.
     data.bookingPages.held(slug).catch(() => []),
-    // Where a day starts when time is drawn from the keyboard; without it, 9:00.
-    data.bookings.hours(slug, zone).catch(() => undefined),
     calendar.ready().catch(() => undefined),
     // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
     data.scheduling
@@ -132,13 +132,15 @@ async function calendarExtras(data: DataLayer, slug: string, zone: string): Prom
     objects,
     pages,
     connections,
-    availability: hours?.availability,
     // The caller comes first in their own reach: For lists the others they Manage.
     forPeople: visible.slice(1).filter((member) => member.canManage),
     // Everyone the reader may see, for the Team day's People filter (spec 0030, AC-1434).
     members: visible.map(({ id, name }) => ({ id, name })),
   };
 }
+
+/** What the page reads beside the week and the hours, filled in as it lands. */
+type CalendarExtras = Omit<CalendarLoaded, 'availability'>;
 
 /** What the loader read beside the week. */
 interface CalendarLoaded {
@@ -153,8 +155,8 @@ interface CalendarLoaded {
 }
 
 function CalendarRoute() {
-  const { extras } = Route.useLoaderData();
-  return <Calendar {...(useSettled(extras) ?? NO_EXTRAS)} />;
+  const { extras, availability } = Route.useLoaderData();
+  return <Calendar {...(useSettled(extras) ?? NO_EXTRAS)} availability={availability} />;
 }
 
 /**
@@ -164,7 +166,7 @@ function CalendarRoute() {
 function CalendarPending() {
   return (
     <LoadingNow>
-      <Calendar {...NO_EXTRAS} />
+      <Calendar {...NO_EXTRAS} availability={undefined} />
     </LoadingNow>
   );
 }

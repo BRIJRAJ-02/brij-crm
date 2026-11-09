@@ -29,6 +29,15 @@ function refOf(value: unknown): { readonly objectId: string; readonly recordId: 
   return typeof objectId === 'string' && typeof recordId === 'string' ? { objectId, recordId } : undefined;
 }
 
+/** Props for LinkRecordDialog. */
+export interface LinkRecordDialogProps {
+  readonly booking: BookingListItem;
+  readonly linking: BookingLinking;
+  readonly notify: HostBookingActions['notify'];
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+}
+
 /**
  * Link to a record (polish F2): the record picker over the objects a booking may be linked to (Deals first, the
  * switcher in its menu as on a task's Records), then Link (⌘↵ from anywhere in it). It starts on the record linked
@@ -36,19 +45,7 @@ function refOf(value: unknown): { readonly objectId: string; readonly recordId: 
  * task. The picker holds still while Link is out. A refusal stays under the picker; linked, it closes and says so,
  * and the card shows the record.
  */
-export function LinkRecordDialog({
-  booking,
-  linking,
-  notify,
-  isOpen,
-  onClose,
-}: {
-  readonly booking: BookingListItem;
-  readonly linking: BookingLinking;
-  readonly notify: HostBookingActions['notify'];
-  readonly isOpen: boolean;
-  readonly onClose: () => void;
-}) {
+export function LinkRecordDialog({ booking, linking, notify, isOpen, onClose }: LinkRecordDialogProps) {
   const now = booking.linkedRecord;
   const [objectId, setObjectId] = useState(
     linking.objects.find((object) => object.id === now?.objectId)?.id ?? linking.objects[0]?.id ?? '',

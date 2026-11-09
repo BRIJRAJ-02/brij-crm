@@ -236,7 +236,10 @@ export function createMeetingsStore(deps: MeetingsDeps) {
         void readFirst();
       },
       refresh() {
-        fresh?.now();
+        // Held: read now. Unheld: something changed that no screen read, so the next hold reads rather than trusting a
+        // read that landed just before the change.
+        if (fresh === undefined) landedAt = undefined;
+        else fresh.now();
       },
       patch(edit) {
         if (state.status !== 'ready') return () => undefined;
