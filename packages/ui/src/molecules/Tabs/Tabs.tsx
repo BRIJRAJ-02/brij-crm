@@ -142,6 +142,23 @@ export function Tabs({
   // Tabs past the bar's end (a phone) fade there, so the row shows it scrolls, as a scrollable Table does.
   const { edges, ref: listRef } = useScrollEdges(true);
   const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
+  // With no panels (each tab its own address, the page under it the chosen one's), the chosen tab's aria-controls
+  // would name a panel that isn't there (axe), so the tabs drop it.
+  const barRef = useRef<HTMLDivElement>(null);
+  const hasPanels = children !== undefined && children !== null;
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (hasPanels || bar === null) return undefined;
+    const drop = () => {
+      for (const tab of bar.querySelectorAll('[role="tab"][aria-controls]')) tab.removeAttribute('aria-controls');
+    };
+    drop();
+    const observer = new MutationObserver(drop);
+    observer.observe(bar, { subtree: true, childList: true, attributeFilter: ['aria-controls'] });
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasPanels]);
   return (
     <AriaTabs
       className={styles.root}
@@ -157,6 +174,7 @@ export function Tabs({
           })}
     >
       <div
+        ref={barRef}
         className={styles.bar}
         data-variant={variant === 'strip' ? undefined : variant}
         data-inset={inset === 'none' && !atPageEdge ? 'none' : undefined}
