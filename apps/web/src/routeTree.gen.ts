@@ -51,6 +51,7 @@ import { Route as WSlugBookingsPagesRouteImport } from './routes/w.$slug.booking
 import { Route as WSlugBookingsRosterRouteImport } from './routes/w.$slug.bookings.roster.tsx'
 import { Route as WSlugBookingsRoundRobinRouteImport } from './routes/w.$slug.bookings.round-robin.tsx'
 import { Route as WSlugBookingsRoutingRouteImport } from './routes/w.$slug.bookings.routing.tsx'
+import { Route as WSlugBookingsSettingsRouteImport } from './routes/w.$slug.bookings_.settings.tsx'
 import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
 import { Route as WSlugListsListRouteImport } from './routes/w.$slug.lists.$list.tsx'
@@ -74,6 +75,11 @@ import { Route as WSlugSettingsTeamsRouteImport } from './routes/w.$slug.setting
 import { Route as WSlugSettingsTrashRouteImport } from './routes/w.$slug.settings.trash.tsx'
 import { Route as WSlugSettingsWebhooksRouteImport } from './routes/w.$slug.settings.webhooks.tsx'
 import { Route as WSlugBookingsAvailabilityScheduleIdRouteImport } from './routes/w.$slug.bookings_.availability.$scheduleId.tsx'
+import { Route as WSlugBookingsSettingsIndexRouteImport } from './routes/w.$slug.bookings_.settings.index.tsx'
+import { Route as WSlugBookingsSettingsAccessRouteImport } from './routes/w.$slug.bookings_.settings.access.tsx'
+import { Route as WSlugBookingsSettingsBrandRouteImport } from './routes/w.$slug.bookings_.settings.brand.tsx'
+import { Route as WSlugBookingsSettingsCalendarsRouteImport } from './routes/w.$slug.bookings_.settings.calendars.tsx'
+import { Route as WSlugBookingsSettingsTeamsRouteImport } from './routes/w.$slug.bookings_.settings.teams.tsx'
 import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
@@ -342,6 +348,11 @@ const WSlugBookingsRoutingRoute = WSlugBookingsRoutingRouteImport.update({
   path: '/routing',
   getParentRoute: () => WSlugBookingsRoute,
 } as any)
+const WSlugBookingsSettingsRoute = WSlugBookingsSettingsRouteImport.update({
+  id: '/bookings_/settings',
+  path: '/bookings/settings',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugCapturesIndexRoute = WSlugCapturesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -459,6 +470,36 @@ const WSlugBookingsAvailabilityScheduleIdRoute =
     id: '/bookings_/availability/$scheduleId',
     path: '/bookings/availability/$scheduleId',
     getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugBookingsSettingsIndexRoute =
+  WSlugBookingsSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
+  } as any)
+const WSlugBookingsSettingsAccessRoute =
+  WSlugBookingsSettingsAccessRouteImport.update({
+    id: '/access',
+    path: '/access',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
+  } as any)
+const WSlugBookingsSettingsBrandRoute =
+  WSlugBookingsSettingsBrandRouteImport.update({
+    id: '/brand',
+    path: '/brand',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
+  } as any)
+const WSlugBookingsSettingsCalendarsRoute =
+  WSlugBookingsSettingsCalendarsRouteImport.update({
+    id: '/calendars',
+    path: '/calendars',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
+  } as any)
+const WSlugBookingsSettingsTeamsRoute =
+  WSlugBookingsSettingsTeamsRouteImport.update({
+    id: '/teams',
+    path: '/teams',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
   } as any)
 const WSlugCapturesFormsIndexRoute = WSlugCapturesFormsIndexRouteImport.update({
   id: '/forms/',
@@ -831,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/roster': typeof WSlugBookingsRosterRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
+  '/w/$slug/bookings/settings': typeof WSlugBookingsSettingsRouteWithChildren
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/menus/design': typeof WSlugMenusDesignRoute
@@ -855,6 +897,10 @@ export interface FileRoutesByFullPath {
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
+  '/w/$slug/bookings/settings/access': typeof WSlugBookingsSettingsAccessRoute
+  '/w/$slug/bookings/settings/brand': typeof WSlugBookingsSettingsBrandRoute
+  '/w/$slug/bookings/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/captures/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
@@ -883,6 +929,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
+  '/w/$slug/bookings/settings/': typeof WSlugBookingsSettingsIndexRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
@@ -974,6 +1021,10 @@ export interface FileRoutesByTo {
   '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
+  '/w/$slug/bookings/settings/access': typeof WSlugBookingsSettingsAccessRoute
+  '/w/$slug/bookings/settings/brand': typeof WSlugBookingsSettingsBrandRoute
+  '/w/$slug/bookings/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/captures/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
@@ -1002,6 +1053,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
+  '/w/$slug/bookings/settings': typeof WSlugBookingsSettingsIndexRoute
   '/w/$slug/captures/forms': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account': typeof WSlugSettingsAccountIndexRoute
@@ -1074,6 +1126,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/roster': typeof WSlugBookingsRosterRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
+  '/w/$slug/bookings_/settings': typeof WSlugBookingsSettingsRouteWithChildren
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/menus_/design': typeof WSlugMenusDesignRoute
@@ -1098,6 +1151,10 @@ export interface FileRoutesById {
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/bookings_/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
+  '/w/$slug/bookings_/settings/access': typeof WSlugBookingsSettingsAccessRoute
+  '/w/$slug/bookings_/settings/brand': typeof WSlugBookingsSettingsBrandRoute
+  '/w/$slug/bookings_/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings_/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/captures_/managed/$templateId': typeof WSlugCapturesManagedTemplateIdRoute
@@ -1126,6 +1183,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/settings/scheduling/routing': typeof WSlugSettingsSchedulingRoutingRoute
   '/w/$slug/settings/staff/$staffId': typeof WSlugSettingsStaffStaffIdRoute
+  '/w/$slug/bookings_/settings/': typeof WSlugBookingsSettingsIndexRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
@@ -1199,6 +1257,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/roster'
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/bookings/routing'
+    | '/w/$slug/bookings/settings'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/menus/design'
@@ -1223,6 +1282,10 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
     | '/w/$slug/bookings/availability/$scheduleId'
+    | '/w/$slug/bookings/settings/access'
+    | '/w/$slug/bookings/settings/brand'
+    | '/w/$slug/bookings/settings/calendars'
+    | '/w/$slug/bookings/settings/teams'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/captures/managed/$templateId'
@@ -1251,6 +1314,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
+    | '/w/$slug/bookings/settings/'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
@@ -1342,6 +1406,10 @@ export interface FileRouteTypes {
     | '/w/$slug/captures'
     | '/w/$slug/settings'
     | '/w/$slug/bookings/availability/$scheduleId'
+    | '/w/$slug/bookings/settings/access'
+    | '/w/$slug/bookings/settings/brand'
+    | '/w/$slug/bookings/settings/calendars'
+    | '/w/$slug/bookings/settings/teams'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/captures/managed/$templateId'
@@ -1370,6 +1438,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
+    | '/w/$slug/bookings/settings'
     | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/settings/account'
@@ -1441,6 +1510,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/roster'
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/bookings/routing'
+    | '/w/$slug/bookings_/settings'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
     | '/w/$slug/menus_/design'
@@ -1465,6 +1535,10 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
     | '/w/$slug/bookings_/availability/$scheduleId'
+    | '/w/$slug/bookings_/settings/access'
+    | '/w/$slug/bookings_/settings/brand'
+    | '/w/$slug/bookings_/settings/calendars'
+    | '/w/$slug/bookings_/settings/teams'
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
     | '/w/$slug/captures_/managed/$templateId'
@@ -1493,6 +1567,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/settings/scheduling/routing'
     | '/w/$slug/settings/staff/$staffId'
+    | '/w/$slug/bookings_/settings/'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
@@ -1836,6 +1911,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugBookingsRoutingRouteImport
       parentRoute: typeof WSlugBookingsRoute
     }
+    '/w/$slug/bookings_/settings': {
+      id: '/w/$slug/bookings_/settings'
+      path: '/bookings/settings'
+      fullPath: '/w/$slug/bookings/settings'
+      preLoaderRoute: typeof WSlugBookingsSettingsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/captures/': {
       id: '/w/$slug/captures/'
       path: '/'
@@ -1996,6 +2078,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/w/$slug/bookings/availability/$scheduleId'
       preLoaderRoute: typeof WSlugBookingsAvailabilityScheduleIdRouteImport
       parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/bookings_/settings/': {
+      id: '/w/$slug/bookings_/settings/'
+      path: '/'
+      fullPath: '/w/$slug/bookings/settings/'
+      preLoaderRoute: typeof WSlugBookingsSettingsIndexRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
+    }
+    '/w/$slug/bookings_/settings/access': {
+      id: '/w/$slug/bookings_/settings/access'
+      path: '/access'
+      fullPath: '/w/$slug/bookings/settings/access'
+      preLoaderRoute: typeof WSlugBookingsSettingsAccessRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
+    }
+    '/w/$slug/bookings_/settings/brand': {
+      id: '/w/$slug/bookings_/settings/brand'
+      path: '/brand'
+      fullPath: '/w/$slug/bookings/settings/brand'
+      preLoaderRoute: typeof WSlugBookingsSettingsBrandRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
+    }
+    '/w/$slug/bookings_/settings/calendars': {
+      id: '/w/$slug/bookings_/settings/calendars'
+      path: '/calendars'
+      fullPath: '/w/$slug/bookings/settings/calendars'
+      preLoaderRoute: typeof WSlugBookingsSettingsCalendarsRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
+    }
+    '/w/$slug/bookings_/settings/teams': {
+      id: '/w/$slug/bookings_/settings/teams'
+      path: '/teams'
+      fullPath: '/w/$slug/bookings/settings/teams'
+      preLoaderRoute: typeof WSlugBookingsSettingsTeamsRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
     }
     '/w/$slug/captures/forms/': {
       id: '/w/$slug/captures/forms/'
@@ -2568,6 +2685,27 @@ const WSlugSettingsRouteWithChildren = WSlugSettingsRoute._addFileChildren(
   WSlugSettingsRouteChildren,
 )
 
+interface WSlugBookingsSettingsRouteChildren {
+  WSlugBookingsSettingsAccessRoute: typeof WSlugBookingsSettingsAccessRoute
+  WSlugBookingsSettingsBrandRoute: typeof WSlugBookingsSettingsBrandRoute
+  WSlugBookingsSettingsCalendarsRoute: typeof WSlugBookingsSettingsCalendarsRoute
+  WSlugBookingsSettingsTeamsRoute: typeof WSlugBookingsSettingsTeamsRoute
+  WSlugBookingsSettingsIndexRoute: typeof WSlugBookingsSettingsIndexRoute
+}
+
+const WSlugBookingsSettingsRouteChildren: WSlugBookingsSettingsRouteChildren = {
+  WSlugBookingsSettingsAccessRoute: WSlugBookingsSettingsAccessRoute,
+  WSlugBookingsSettingsBrandRoute: WSlugBookingsSettingsBrandRoute,
+  WSlugBookingsSettingsCalendarsRoute: WSlugBookingsSettingsCalendarsRoute,
+  WSlugBookingsSettingsTeamsRoute: WSlugBookingsSettingsTeamsRoute,
+  WSlugBookingsSettingsIndexRoute: WSlugBookingsSettingsIndexRoute,
+}
+
+const WSlugBookingsSettingsRouteWithChildren =
+  WSlugBookingsSettingsRoute._addFileChildren(
+    WSlugBookingsSettingsRouteChildren,
+  )
+
 interface WSlugRouteChildren {
   WSlugBookingsRoute: typeof WSlugBookingsRouteWithChildren
   WSlugCapturesRoute: typeof WSlugCapturesRouteWithChildren
@@ -2587,6 +2725,7 @@ interface WSlugRouteChildren {
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugAvailabilitySplatRoute: typeof WSlugAvailabilitySplatRoute
   WSlugBookingPagesSplatRoute: typeof WSlugBookingPagesSplatRoute
+  WSlugBookingsSettingsRoute: typeof WSlugBookingsSettingsRouteWithChildren
   WSlugFormsSplatRoute: typeof WSlugFormsSplatRoute
   WSlugListsListRoute: typeof WSlugListsListRoute
   WSlugMenusDesignRoute: typeof WSlugMenusDesignRoute
@@ -2627,6 +2766,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugAvailabilitySplatRoute: WSlugAvailabilitySplatRoute,
   WSlugBookingPagesSplatRoute: WSlugBookingPagesSplatRoute,
+  WSlugBookingsSettingsRoute: WSlugBookingsSettingsRouteWithChildren,
   WSlugFormsSplatRoute: WSlugFormsSplatRoute,
   WSlugListsListRoute: WSlugListsListRoute,
   WSlugMenusDesignRoute: WSlugMenusDesignRoute,

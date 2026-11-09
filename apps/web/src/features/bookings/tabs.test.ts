@@ -68,10 +68,10 @@ describe('Bookings redirects', () => {
     expect(redirectOf(IndexRoute, {}).to).toBe('/w/$slug/bookings/calendar');
   });
 
-  it('send the old Calendars and Round robin addresses to their one home in Settings', () => {
+  it('send the old Calendars and Round robin addresses to their one home in Bookings settings', () => {
     const calendars = redirectOf(CalendarsRoute, { calendar: 'connected' });
-    expect(calendars.to).toBe('/w/$slug/settings/account/calendars');
+    expect(calendars.to).toBe('/w/$slug/bookings/settings/calendars');
     expect(calendars.search).toEqual({ calendar: 'connected' });
-    expect(redirectOf(RoundRobinRoute, {}).to).toBe('/w/$slug/settings/scheduling/round-robin');
+    expect(redirectOf(RoundRobinRoute, {}).to).toBe('/w/$slug/bookings/settings/teams');
   });
 });

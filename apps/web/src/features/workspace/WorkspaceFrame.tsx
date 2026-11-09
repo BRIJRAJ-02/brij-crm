@@ -95,6 +95,8 @@ const SETTINGS_HOME = /^\/w\/[^/]+\/settings\/?$/;
 
 /** Bookings › Calendar's address, whose single keys the shortcut help lists. */
 const CALENDAR_TAB = /\/bookings\/calendar\/?$/;
+/** Bookings settings › Calendars, where the stopped calendar banner stays off: the page already says it. */
+const CALENDARS_PAGE = /\/bookings\/settings\/calendars\/?$/;
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {
@@ -221,9 +223,9 @@ export function WorkspaceFrame({
   useUndoShortcut(data, toasts, slug, openHelp, openSettings);
   // The member's own sidebar (spec 0034): read with the workspace (AC-936), each change shown at once (AC-937). While
   // it loads, Records alone shows loading; read and failed, the defaults show, and the data layer says so.
-  // Whether this is Settings › Account › Calendars, the one page the stopped calendar banner stays off (see `banner`
-  // below); Bookings' old Calendars address redirects there.
-  const isOnCalendars = settings?.current === 'calendars';
+  // Whether this is Bookings settings › Calendars, the one page the stopped calendar banner stays off (see `banner`
+  // below); every old Calendars address redirects there.
+  const isOnCalendars = useLocation({ select: (location) => CALENDARS_PAGE.test(location.pathname) });
   // On a phone (5 November 2026) Settings is a list that pushes into each page: the list alone on Settings' own
   // address, each page alone (its TopBar's chevron the way back) everywhere else in Settings.
   const isSettingsHome = useLocation({ select: (location) => SETTINGS_HOME.test(location.pathname) });

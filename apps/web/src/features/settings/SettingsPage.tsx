@@ -18,6 +18,9 @@ import {
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import type { ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
+import { bookingsHref } from '../booking/links.ts';
+import { useBookingsSettingsFrame } from '../bookings/settings-frame.ts';
+import { strings as bookingsSettings } from '../bookings/settings-strings.ts';
 import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   objectsSettingsHref,
@@ -164,19 +167,30 @@ export function SettingsPage({
         {body}
       </EntryTabs>
     );
-  const shownTitle = entry?.label ?? home?.label ?? title;
+  // One of Bookings settings' pages (9 November 2026): its own grouped navigation beside the body, called what that
+  // navigation calls it, under Bookings › Settings, and the way back on a phone is Bookings.
+  const bookingsFrame = useBookingsSettingsFrame();
+  const bookingsEntry = bookingsFrame?.nav.find((each) => each.id === bookingsFrame.current);
+  const shownTitle = (keepsTitle ? undefined : bookingsEntry?.label) ?? entry?.label ?? home?.label ?? title;
   const shownHasTabs = hasTabs || entry !== undefined;
   // Settings heads the trail, so the page says where it is even on a phone, where the sidebar is a rail of icons.
   // TopBar ends it with the title, as the current place. A place the navigation lists reads as the navigation names
   // it (a place's way back to Places, never "Business" again after the group).
-  const trail: readonly Crumb[] = [
-    { id: 'settings', label: strings.settings },
-    ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
-    ...crumbs.map((crumb) => {
-      const name = crumb.href === undefined ? undefined : settingsNameAt(visible, crumb.href);
-      return name === undefined ? crumb : { ...crumb, label: name };
-    }),
-  ];
+  const trail: readonly Crumb[] =
+    bookingsFrame !== undefined
+      ? [
+          { id: 'bookings', label: bookingsSettings.bookings, href: bookingsHref(slug) },
+          { id: 'settings', label: bookingsSettings.settings },
+          ...crumbs,
+        ]
+      : [
+          { id: 'settings', label: strings.settings },
+          ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
+          ...crumbs.map((crumb) => {
+            const name = crumb.href === undefined ? undefined : settingsNameAt(visible, crumb.href);
+            return name === undefined ? crumb : { ...crumb, label: name };
+          }),
+        ];
   const slot = useSettingsTopBarSlot();
   const barMeta =
     viewOnly === undefined ? (
@@ -202,7 +216,11 @@ export function SettingsPage({
                   title={shownTitle}
                   crumbs={trail}
                   // On a phone the sidebar is hidden on a page (5 November 2026): a chevron back to the list.
-                  back={{ label: strings.allSettings, href: `/w/${slug}/settings` }}
+                  back={
+                    bookingsFrame === undefined
+                      ? { label: strings.allSettings, href: `/w/${slug}/settings` }
+                      : { label: bookingsSettings.backToBookings, href: bookingsHref(slug) }
+                  }
                   // An object's page loads with its tile still unknown: the bar's skeleton holds the trail's place.
                   isLoading={isLoading && hasTile}
                   {...(titleRef === undefined ? {} : { titleRef })}
@@ -220,6 +238,13 @@ export function SettingsPage({
             ) : (
               <SettingsLayout
                 header="bar"
+                {...(bookingsFrame === undefined
+                  ? {}
+                  : {
+                      nav: bookingsFrame.nav,
+                      navLabel: bookingsSettings.title,
+                      ...(bookingsFrame.current === undefined ? {} : { currentNavId: bookingsFrame.current }),
+                    })}
                 hasTabs={shownHasTabs}
                 title={shownTitle}
                 isLoading={isLoading}

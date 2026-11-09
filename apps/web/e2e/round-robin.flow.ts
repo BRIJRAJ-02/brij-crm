@@ -76,7 +76,7 @@ test.describe('round robin', () => {
     }
 
     // The group, all three at once: nobody is refused for missing hours.
-    await page.goto(`/w/${slug}/settings/scheduling/round-robin`);
+    await page.goto(`/w/${slug}/bookings/settings/teams`);
     await page.getByRole('button', { name: 'New group' }).first().click();
     const group = page.getByRole('dialog', { name: 'New group' });
     await group.getByLabel('Name').fill('Sales team');

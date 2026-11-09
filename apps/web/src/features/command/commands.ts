@@ -8,6 +8,7 @@
 import type { CalendarState, ListView, ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
+import { bookingsSettingsNav, visibleBookingsSettingsNav } from '../bookings/settings-nav.ts';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, calendarsHref, linksHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
@@ -121,10 +122,10 @@ export function pageCommands(
           run: go(availabilityHref(slug)),
         },
         // Connecting a calendar is the one thing every Bookings tab needs (critic B, 5 November 2026: "calendar" in
-        // the menu found nothing to do): an action, opening Settings › Account › Calendars. Round robin and the
-        // Calendars page itself are Settings entries now, so the menu lists them under Settings. Only where the
+        // the menu found nothing to do): an action, opening Bookings settings › Calendars. Teams and the Calendars
+        // page itself are Bookings settings' pages (9 November 2026), so the menu lists them under it. Only where the
         // page can connect one (5 November 2026): with sync off here, or every account slot taken, "calendar" finds
-        // Settings › Calendars alone.
+        // Bookings settings › Calendars alone.
         ...(offersConnect
           ? [
               {
@@ -235,10 +236,20 @@ const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
   preferences: strings.preferencesTerms,
   objects: strings.objectsTerms,
   security: strings.signInTerms,
-  'round-robin': strings.roundRobinTerms,
 };
 
-/** The Settings pages this member may open (`visibleSettingsNav`), named "Settings › <page>" (AC-1082). */
+/** Each Bookings settings page's other words. */
+const BOOKINGS_SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
+  calendars: strings.calendarsTerms,
+  teams: strings.roundRobinTerms,
+  access: strings.schedulingAccessTerms,
+  brand: strings.brandTerms,
+};
+
+/**
+ * The Settings pages this member may open (`visibleSettingsNav`), named "Settings › <page>" (AC-1082), then Bookings
+ * settings' own pages, "Bookings settings › <page>" (9 November 2026), in place of Settings' one way there.
+ */
 export function settingsCommands(
   slug: string,
   permissions: readonly Permission[] | undefined,
@@ -247,9 +258,9 @@ export function settingsCommands(
 ): readonly Command[] {
   // The trash's entry opens its own page, which "Open trash" already reaches.
   // An entry with tabs (Members: Teams) gives each tab its own command, so "Settings › Teams" still finds it.
-  return visibleSettingsNav(settingsNav(slug, appsNav), permissions, false, isGuest).flatMap((group) =>
+  const inSettings = visibleSettingsNav(settingsNav(slug, appsNav), permissions, false, isGuest).flatMap((group) =>
     group.entries
-      .filter((entry) => entry.id !== 'trash')
+      .filter((entry) => entry.id !== 'trash' && entry.id !== 'bookings')
       .flatMap((entry) =>
         (entry.tabs ?? [entry]).map((page): Command => ({
           id: `settings:${page.id}`,
@@ -265,6 +276,16 @@ export function settingsCommands(
         })),
       ),
   );
+  const inBookings = visibleBookingsSettingsNav(bookingsSettingsNav(slug), permissions, isGuest).map(
+    (entry): Command => ({
+      id: `bookings-settings:${entry.id}`,
+      name: strings.bookingsSettingsPage(entry.label),
+      icon: entry.icon,
+      terms: BOOKINGS_SETTINGS_TERMS[entry.id] ?? [],
+      run: go(entry.href),
+    }),
+  );
+  return [...inSettings, ...inBookings];
 }
 
 /** Where the menu opened, for the actions that work on it: the object page and view on screen, and who may invite. */

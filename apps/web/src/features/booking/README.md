@@ -32,7 +32,7 @@ The Questions tab (spec 0057, after Meeting) holds the CRM Card (Add each bookin
 
 ## Availability (`/w/$slug/bookings/availability` and `/w/$slug/settings/scheduling/availability`, spec 0035)
 
-One screen in two places (5 November 2026): Bookings' tab, and Settings › Scheduling › Availability through `SchedulingSettingsPage` (New schedule in the settings TopBar, the schedule switcher on its own bar under it, `SectionBar variant="bar"`). Both routes load through `availability-load.ts`, and a switch keeps the reader on the address they are on.
+One screen in one place since 9 November 2026: Bookings' Availability tab (New schedule in the TopBar, the schedule switcher on its own bar under it, `SectionBar variant="bar"`); the old Settings › Scheduling › Availability address redirects there with its `?member=` and `?schedule=`. The route loads through `availability-load.ts`.
 
 - Purpose: the open schedule's editor, the Calendly way (22 October 2026): the default opens first, `?schedule=<id>` opens another (AC-969, AC-970).
 - Main task: change the weekly hours (add or remove a day's ranges, copy them to other days), the time zone or the days off, then Save; switch schedules in the schedule Select, and rename, set as default, duplicate or delete the open one from its ⋯.
