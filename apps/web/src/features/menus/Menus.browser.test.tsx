@@ -7,6 +7,7 @@ import type {
   DataError,
   HospitalityHeld,
   HospitalityHeldState,
+  HospitalityStore,
   ItemFields,
   MenuDraft,
   MenuStore,
@@ -712,6 +713,68 @@ describe('the guest menu', () => {
         await shoot('guest-sheet', theme, width);
         await userEvent.keyboard('{Escape}');
         await expect.element(sheet).not.toBeInTheDocument();
+      }
+    }
+  });
+});
+
+describe('Copy to another business, in the editor (spec 0065 H7, AC-6591)', () => {
+  /** The suite's store as the editor reads it: three businesses, the first shown. */
+  const hospitalityOf = () => {
+    const ready = <Value,>(value: Value): HospitalityHeld<Value> => {
+      const state: HospitalityHeldState<Value> = { status: 'ready', value, isSaving: false };
+      return {
+        subscribe: () => () => undefined,
+        getSnapshot: () => state,
+        retain: () => () => undefined,
+        retry: () => undefined,
+      };
+    };
+    return {
+      properties: () =>
+        ready({
+          canManage: true,
+          properties: [
+            { id: id(201), name: 'Harbour Café', kind: 'cafe', currency: 'GBP', position: 0, holds: 3 },
+            { id: id(202), name: 'Late Bar', kind: 'bar', currency: 'EUR', position: 1, holds: 1 },
+          ],
+        }),
+      choice: () => ready<string | undefined>(undefined),
+      requestChoice: () => Promise.resolve(true),
+    } as unknown as HospitalityStore;
+  };
+
+  it('opens from ⋯ over the editor, warns of the other currency, and is clean in both themes at both widths', async () => {
+    const live: MenuDraft = { ...DRAFT, publishedAt: '2026-11-01T10:00:00.000Z' };
+    const { store } = storeOf(live);
+    const hospitality = hospitalityOf();
+    for (const width of [1280, 390]) {
+      for (const theme of THEMES) {
+        await page.viewport(width, 900);
+        shown?.unmount();
+        shown = await renderInApp(
+          () => (
+            <MenusScreen
+              view={{}}
+              store={store}
+              hospitality={hospitality}
+              slug="acme"
+              toasts={toasts}
+              business={BUSINESS}
+            />
+          ),
+          { data: {}, pattern: '/w/$slug/menus', at: '/w/acme/menus' },
+        );
+        applyTheme(theme);
+        await userEvent.click(page.getByRole('button', { name: 'More', exact: true }));
+        await userEvent.click(page.getByRole('menuitem', { name: 'Copy to another business' }));
+        await expect.element(page.getByText(/Prices are in GBP here and EUR there/)).toBeVisible();
+        const ending = document
+          .getAnimations()
+          .filter((animation) => animation.effect?.getTiming().iterations !== Number.POSITIVE_INFINITY);
+        await Promise.all(ending.map((animation) => animation.finished.catch(() => undefined)));
+        expect(await axeViolations()).toEqual([]);
+        await shoot('copy-in-editor', theme, width);
       }
     }
   });

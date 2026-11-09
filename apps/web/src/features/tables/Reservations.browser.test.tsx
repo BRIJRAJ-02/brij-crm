@@ -538,3 +538,63 @@ describe('Reservations (checklabs’ one page)', () => {
     });
   }
 });
+
+describe('a place of another business in the address (spec 0065 H7, AC-6517)', () => {
+  const OTHER_PLACE = id(901);
+  const OTHER_BUSINESS = id(902);
+
+  /** The page as the route draws it, with `?place=` set and a switch to take, or none once the person switched. */
+  function Linked({
+    tables,
+    onOther,
+  }: {
+    readonly tables: TablesStore;
+    readonly onOther?: (property: string) => void;
+  }) {
+    const [search, setSearch] = useState<ReservationsSearch>({ place: OTHER_PLACE });
+    return (
+      <>
+        <output aria-label="address">{search.place ?? 'none'}</output>
+        <ReservationsScreen
+          slug="acme"
+          tables={tables}
+          toasts={toasts}
+          search={search}
+          onSearch={setSearch}
+          {...(onOther === undefined ? {} : { onOtherBusiness: onOther })}
+        />
+      </>
+    );
+  }
+
+  const withElsewhere = () => {
+    const stores = storesOf();
+    const listed = heldOf({ ...BUSINESS, elsewhere: [{ id: OTHER_PLACE, property: OTHER_BUSINESS }] });
+    return { tables: { ...stores.tables, places: () => listed } as unknown as TablesStore };
+  };
+
+  it('opens the business a linked place belongs to, as the page opens', async () => {
+    await page.viewport(1280, 900);
+    const { tables } = withElsewhere();
+    const switched: string[] = [];
+    shown = await renderInApp(() => <Linked tables={tables} onOther={(property) => switched.push(property)} />, {
+      data: {},
+      pattern: '/w/$slug/reservations',
+      at: '/w/acme/reservations',
+      permissions: ['hospitality.manage', 'hospitality.service'],
+    });
+    await expect.poll(() => switched).toEqual([OTHER_BUSINESS]);
+  });
+
+  it('drops a place left from before a switch rather than switching back', async () => {
+    await page.viewport(1280, 900);
+    const { tables } = withElsewhere();
+    shown = await renderInApp(() => <Linked tables={tables} />, {
+      data: {},
+      pattern: '/w/$slug/reservations',
+      at: '/w/acme/reservations',
+      permissions: ['hospitality.manage', 'hospitality.service'],
+    });
+    await expect.element(page.getByRole('status', { name: 'address' })).toHaveTextContent('none');
+  });
+});
