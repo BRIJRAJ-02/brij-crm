@@ -1,4 +1,4 @@
-// News and offers on a table reservation, by double opt-in (9 November 2026, migration 0203). A guest who ticks the
+// News and offers on a table reservation, by double opt-in (9 November 2026, migration 0202). A guest who ticks the
 // box is asked to confirm by email: the tick is kept as a request (`consent_requests`), never as a consent, and the
 // guest gets a signed link. Only the guest confirming on the page it opens writes the consent (`consent_records`,
 // granted, source `appointment` and the visit), so a request never counts anywhere a consent is read: every reader

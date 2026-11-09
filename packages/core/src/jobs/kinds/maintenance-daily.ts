@@ -157,7 +157,7 @@ const Totals = z.object({
   views: Count.default(0),
   // Added by spec 0063 (AC-6319): part filled forms past their 30 days, which nobody came back to.
   partials: Count.default(0),
-  // Added 9 Nov 2026 (migration 0203): news and offers requests that ran out unconfirmed.
+  // Added 9 Nov 2026 (migration 0202): news and offers requests that ran out unconfirmed.
   consentRequests: Count.default(0),
   // Added by spec 0063 (AC-6320): form visit rows past their thirteen months.
   formVisits: Count.default(0),
@@ -456,7 +456,7 @@ async function expiredPartials(context: WriteContext, at: Checkpoint, limit: num
 }
 
 /**
- * Phase 1g2 (9 Nov 2026, migration 0203): news and offers requests a guest never confirmed, once their link ran out,
+ * Phase 1g2 (9 Nov 2026, migration 0202): news and offers requests a guest never confirmed, once their link ran out,
  * `limit` a batch, soonest expiry first. A request was never a consent, so only the row goes. The confirm checks the
  * expiry itself, so a row this phase hasn't reached yet already confirms nothing.
  */

@@ -475,7 +475,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job.result).toMatchObject({ cleanup: { partials: 2 } });
   });
 
-  it('removes news requests that ran out unconfirmed, and keeps confirmed and open ones (migration 0203)', async () => {
+  it('removes news requests that ran out unconfirmed, and keeps confirmed and open ones (migration 0202)', async () => {
     const t = await team([]);
     const guest = await person(t.owner, 'Guest');
     for (const [hours, confirmed, mark] of [

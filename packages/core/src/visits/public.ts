@@ -295,7 +295,7 @@ export interface GuestReserved {
 /**
  * Reserves a table (AC-6551, AC-6553): Table seating installed and published, at most 3 upcoming reservations per
  * email at the place, then the engine's booking (idempotency, place lock, recheck, SLOT_TAKEN with the next times).
- * A ticked marketing box is a request the guest confirms by email (`askForNews`, migration 0203): it becomes a consent
+ * A ticked marketing box is a request the guest confirms by email (`askForNews`, migration 0202): it becomes a consent
  * on their Person (spec 0023 records, source `appointment`) only once they do.
  */
 export async function guestReserve(

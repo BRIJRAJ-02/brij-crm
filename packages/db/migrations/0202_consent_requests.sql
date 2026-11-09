@@ -1,5 +1,4 @@
--- Double opt-in for news and offers on public reservations (9 November 2026). Numbered 0203: 0202 is held for
--- another lane.
+-- Double opt-in for news and offers on public reservations (9 November 2026). Numbered 0202.
 --
 -- A guest who ticks "Send me news and offers" on a reservation page no longer gives a consent there and then: the
 -- tick is kept here as a request, and the guest gets an email with a signed link. Only opening that link and saying

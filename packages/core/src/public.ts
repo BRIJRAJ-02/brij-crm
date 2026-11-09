@@ -167,7 +167,7 @@ export {
   type GuestKey,
   type GuestReserved,
 } from './visits/public.ts';
-// News and offers by double opt-in (migration 0203): the confirm a reservation's email link opens.
+// News and offers by double opt-in (migration 0202): the confirm a reservation's email link opens.
 export { confirmNews, NEWS_LINK_DAYS, type NewsConfirmed } from './visits/news.ts';
 
 /** The business pages search engines may list (spec 0066, AC-6644), for sitemap-handles.xml. */

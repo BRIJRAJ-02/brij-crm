@@ -452,7 +452,7 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     }
   });
 
-  // Yes to news and offers (double opt-in, migration 0203): the token from the email's link, in the body. The page
+  // Yes to news and offers (double opt-in, migration 0202): the token from the email's link, in the body. The page
   // that link opens asks first and posts only on a press, since link scanners open links too. Limited per address in
   // memory and durably; a token that opens nothing is the one NOT_FOUND, whatever the reason.
   app.post('/public/tables/:key/news', async (c) => {

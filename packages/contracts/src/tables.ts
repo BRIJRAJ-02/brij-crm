@@ -143,7 +143,7 @@ export const PublicReserveInput = z.object({
   occasion: TableOccasion.optional(),
   /**
    * News and offers from the business: unticked by default, separate from the reservation. A tick is a request the
-   * guest confirms from an email (double opt-in, migration 0203); it is a consent only once they do.
+   * guest confirms from an email (double opt-in, migration 0202); it is a consent only once they do.
    */
   marketing: z.boolean().default(false),
   timeZone: z.string().max(64).optional(),
@@ -210,7 +210,7 @@ export const PublicTableCancelInput = z.object({
 /** A guest's cancel. */
 export type PublicTableCancelInput = z.infer<typeof PublicTableCancelInput>;
 
-/** A news and offers confirm (migration 0203): the signed token from the email's link, sent in the body. */
+/** A news and offers confirm (migration 0202): the signed token from the email's link, sent in the body. */
 export const PublicNewsConfirmInput = z.object({ token: z.string().min(1).max(1024) });
 /** A news and offers confirm. */
 export type PublicNewsConfirmInput = z.infer<typeof PublicNewsConfirmInput>;

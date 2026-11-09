@@ -399,7 +399,7 @@ export const consentRecords = pgTable(
 );
 
 /**
- * A consent asked for and not yet given (9 November 2026, migration 0203): a guest ticked news and offers on a
+ * A consent asked for and not yet given (9 November 2026, migration 0202): a guest ticked news and offers on a
  * reservation page, and is emailed a signed link. Only confirming it through that link writes the consent into
  * `consent_records`, so a request never counts anywhere a consent is read. Confirmed once (`confirmed_at`), never
  * after `expires_at`; the purge deletes a person's requests with them and a merge moves them.
