@@ -144,7 +144,9 @@ export default [
   },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   // Raised from 18 kB by the owner (5 Nov 2026) for the four page templates of spec 0068 (measured 18.21 kB).
-  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18.5 kB', gzip: true, running: false },
+  // 18.7 kB since the Members and item sheet passes (9 Nov 2026): shared Select, Card and Button CSS the page draws
+  // grew by 78 B (measured 18.58 kB).
+  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18.7 kB', gzip: true, running: false },
   // Spec 0061, AC-6126, measured on this build (2 November 2026, gzipped): media 1.15 kB, the picture and gallery
   // chunk 1.68 kB (one chunk: `LinkPageGallery.tsx` re-exports `LinkPageImage`, so a page with either draws from
   // the same code), next times 1.11 kB and the notice sheet 0.49 kB. Each limit is the measurement with a little
