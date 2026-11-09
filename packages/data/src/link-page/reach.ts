@@ -373,13 +373,17 @@ export interface ReachApi {
  * the link page's own chunk. The server decides the type by the bytes and keeps at most 1.5 MB. Answers the stored
  * recording's id, or rejects with a DataError (the network, or the route's refusal with its status).
  */
-export async function sendAudio(origin: string, workspace: string, recording: Blob): Promise<string> {
+export async function sendAudio(origin: string, workspace: string, recording: Blob, member?: string): Promise<string> {
   let response: Response;
   try {
     response = await fetch(new URL('/api/profile/audio', origin).href, {
       method: 'POST',
       // A recording a phone made may come with no type; the server reads its bytes either way.
-      headers: { 'x-crm-workspace': workspace, 'content-type': recording.type === '' ? 'audio/mpeg' : recording.type },
+      headers: {
+        'x-crm-workspace': workspace,
+        ...pageHeader(member),
+        'content-type': recording.type === '' ? 'audio/mpeg' : recording.type,
+      },
       body: recording,
       credentials: 'include',
     });
@@ -405,12 +409,17 @@ export async function sendAudio(origin: string, workspace: string, recording: Bl
  * AC-6108), from the link page's own chunk so it never rides in the first load. Answers the stored picture, or
  * rejects with a DataError (the network, or the route's refusal with its status).
  */
-export async function sendPicture(origin: string, workspace: string, picture: Blob): Promise<StoredPicture> {
+export async function sendPicture(
+  origin: string,
+  workspace: string,
+  picture: Blob,
+  member?: string,
+): Promise<StoredPicture> {
   let response: Response;
   try {
     response = await fetch(new URL('/api/profile/images', origin).href, {
       method: 'POST',
-      headers: { 'x-crm-workspace': workspace, 'content-type': picture.type },
+      headers: { 'x-crm-workspace': workspace, ...pageHeader(member), 'content-type': picture.type },
       body: picture,
       credentials: 'include',
     });
@@ -432,6 +441,19 @@ export async function sendPicture(origin: string, workspace: string, picture: Bl
   return { image, width, height };
 }
 
+/**
+ * The header naming whose page an upload is for (spec 0070, `PAGE_MEMBER_HEADER`): none for the caller's own. The
+ * server lets it through the door's `enterTeamLinkPage` only.
+ */
+export function pageHeader(member: string | undefined): Readonly<Record<string, string>> {
+  return member === undefined ? {} : { 'x-crm-page-member': member };
+}
+
+/** The query naming whose page a read is for, beside the workspace: none for the caller's own. */
+function pageQuery(workspace: string, member: string | undefined, more: Readonly<Record<string, string>> = {}): string {
+  return new URLSearchParams({ workspace, ...(member === undefined ? {} : { member }), ...more }).toString();
+}
+
 /** How long a period's figures serve a new holder before they are read again. */
 export const INSIGHTS_FRESH_MS = 60_000;
 
@@ -439,6 +461,8 @@ export const INSIGHTS_FRESH_MS = 60_000;
 export function createReach(deps: {
   readonly api: ReachApi;
   readonly mintId: () => string;
+  /** Whose page (spec 0070): absent, the caller's own; its pictures and recordings are read with it. */
+  readonly member?: string;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
 }) {
@@ -651,13 +675,13 @@ export function createReach(deps: {
       }),
     /** Where the owner's own browser plays one of their stored recordings: their copy, live or not. */
     audioSrc: (workspace: string, audioId: string): string =>
-      `/api/profile/audio/${encodeURIComponent(audioId)}?${new URLSearchParams({ workspace }).toString()}`,
+      `/api/profile/audio/${encodeURIComponent(audioId)}?${pageQuery(workspace, deps.member)}`,
     /** Where the owner's own browser reads one of their stored pictures: their copy, live or not. */
     pictureSrc: (workspace: string, imageId: string): string =>
-      `/api/profile/images/${encodeURIComponent(imageId)}?${new URLSearchParams({ workspace }).toString()}`,
+      `/api/profile/images/${encodeURIComponent(imageId)}?${pageQuery(workspace, deps.member)}`,
     /** The Insights CSV's address (AC-6120): one row per day, metric and key, `from` to `to` (at most 365 days). */
     insightsCsvHref: (workspace: string, from: string, to: string): string =>
-      `/api/profile/insights.csv?${new URLSearchParams({ workspace, from, to }).toString()}`,
+      `/api/profile/insights.csv?${pageQuery(workspace, deps.member, { from, to })}`,
     /** The pieces of the rules the editor words its controls with. */
     rules: {
       mediaProviderOf,

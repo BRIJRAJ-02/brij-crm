@@ -37,6 +37,7 @@ import { publicSocialsOf } from '../booking/socials.ts';
 import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
+import { parsePartnerAccessToken } from '../partners/tokens.ts';
 import { requirePermission } from './check.ts';
 import { managesPageOf } from './scheduling.ts';
 import { workspaceRules } from './stored-rules.ts';
@@ -50,6 +51,8 @@ import {
   formAccess,
   isRole,
   keyAccess,
+  linkPageAccess,
+  partnerAccess,
   NO_RULES,
   roleAccess,
   SYSTEM_ACCESS,
@@ -574,6 +577,78 @@ export async function noteKeyUse(deps: { readonly db: Database }, entry: KeyEntr
   );
 }
 
+/** What the door answers for a partner it let in: the connection's scope, and its last call (for the touch). */
+export interface PartnerEntry {
+  readonly scope: EngineScope;
+  readonly connectionId: string;
+  readonly partnerId: string;
+  readonly lastCallAt: Date | undefined;
+}
+
+/**
+ * The scope for a partner's connection (spec 0070, slice 2): the access token as the partner sent it, or undefined
+ * for anything that isn't a live connection's token, the same for a malformed, unknown, disconnected or wrong one and
+ * a deleted workspace. The token's public half names the workspace and the connection, so the row is read under that
+ * workspace's row level security; its secret is compared with the stored SHA-256 in constant time. The access is
+ * `partnerAccess` (no permission, no object) and the actor the connection, so History names the partner.
+ */
+export async function enterAsPartner(
+  deps: { readonly db: Database },
+  token: string,
+): Promise<PartnerEntry | undefined> {
+  const parts = parsePartnerAccessToken(token);
+  if (parts === undefined) return undefined;
+  const { workspaceId, id: connectionId, secret } = parts;
+  const [row] = await deps.db.withWorkspace(workspaceId, (tx) =>
+    tx
+      .select({
+        partnerId: schema.partnerConnections.partnerId,
+        modules: schema.partnerConnections.modules,
+        tokenHash: schema.partnerConnections.tokenHash,
+        lastCallAt: schema.partnerConnections.lastCallAt,
+      })
+      .from(schema.partnerConnections)
+      .innerJoin(workspaces, eq(workspaces.id, schema.partnerConnections.workspaceId))
+      .where(
+        and(
+          eq(schema.partnerConnections.id, connectionId),
+          isNull(schema.partnerConnections.disconnectedAt),
+          isNull(workspaces.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  if (row === undefined || !keySecretMatches(secret, row.tokenHash)) return undefined;
+  const access = partnerAccess({ connectionId, partnerId: row.partnerId, modules: row.modules });
+  const scope = mintScope({ db: deps.db, workspaceId, actor: { type: 'partner', id: connectionId }, access });
+  return {
+    scope,
+    connectionId,
+    partnerId: row.partnerId,
+    lastCallAt: row.lastCallAt === null ? undefined : new Date(row.lastCallAt),
+  };
+}
+
+/**
+ * Notes a partner's call (spec 0070, AC-7013's "last call"): `last_call_at` moves to now when it is older than a
+ * minute, so a busy partner writes at most once a minute. Run after the answer; a failure is the caller's to log.
+ */
+export async function notePartnerCall(deps: { readonly db: Database }, entry: PartnerEntry): Promise<void> {
+  if (entry.lastCallAt !== undefined && Date.now() - entry.lastCallAt.getTime() < 60_000) return;
+  await deps.db.withWorkspace(entry.scope.workspaceId, (tx) =>
+    tx
+      .update(schema.partnerConnections)
+      .set({ lastCallAt: sql`now()` })
+      .where(
+        and(
+          eq(schema.partnerConnections.id, entry.connectionId),
+          isNull(schema.partnerConnections.disconnectedAt),
+          sql`(${schema.partnerConnections.lastCallAt} is null or ${schema.partnerConnections.lastCallAt} < now() - interval '1 minute')`,
+        ),
+      ),
+  );
+}
+
 /** The nil uuid: a workspace no row has, for the reads that find a form's or a booking page's workspace by a key. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
 
@@ -715,6 +790,59 @@ export async function previewScope(
   // Their data policy and none of their permissions: previewing an owner must never hand out an owner's powers.
   const access: Access = Object.freeze({ ...found.access, permissions: Object.freeze([]) });
   return { scope: rescope(scope, scope.actor, access), name: found.name };
+}
+
+/** The refusal for an owner's page, to someone who isn't an owner. */
+const OWNER_PAGE = 'Only an owner can change an owner’s link page.';
+
+/** The answer for a member a team page manager can't reach: the same whether they don't exist or aren't here. */
+const NO_SUCH_PAGE = 'That person isn’t in this workspace.';
+
+/**
+ * Someone else's link page, for a team page manager (spec 0070, AC-7001, AC-7002): `link_pages.manage_team` first
+ * (403 `FORBIDDEN`), then the active member `memberId` of this workspace, who must have their own identity and not be
+ * a guest (guests have no link page). The scope keeps the manager as its actor, so every audit row names them, and
+ * holds the member as its principal with no permission and no data (`linkPageAccess`), so it reaches only the link
+ * page services, which take the page's owner from the principal and never from an input. Naming yourself answers
+ * your own scope unchanged. Anyone else is `NOT_FOUND`, whatever the reason.
+ */
+export async function enterTeamLinkPage(scope: EngineScope, memberId: string): Promise<EngineScope> {
+  requirePermission(scope, 'link_pages.manage_team');
+  const { principal } = scope.access;
+  if (principal.kind === 'member' && principal.memberId === memberId) return scope;
+  if (!isUuid(memberId)) throw refuse('NOT_FOUND', NO_SUCH_PAGE);
+  const found = await inWorkspace(scope, async (tx) => {
+    const [row] = await tx
+      .select({ id: members.id, userId: members.userId, role: members.role })
+      .from(members)
+      .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
+    return row;
+  });
+  if (found === undefined || found.userId === null || !isRole(found.role) || found.role === 'guest') {
+    throw refuse('NOT_FOUND', NO_SUCH_PAGE);
+  }
+  // An owner's page is changed by owners only, as the owner rules keep every other power over an owner (scheduling
+  // delegations, roles): an admin or a custom role holding the permission reaches everyone else's.
+  if (found.role === 'owner' && (principal.kind !== 'member' || principal.role !== 'owner')) {
+    throw refuse('FORBIDDEN', OWNER_PAGE);
+  }
+  return rescope(scope, scope.actor, linkPageAccess({ memberId: found.id, userId: found.userId, role: found.role }));
+}
+
+/**
+ * Whether `scope` is a team page manager acting on someone else's link page (`enterTeamLinkPage`): a member actor
+ * whose principal is another member, holding no permission. Such a change never puts the page live on its own (only
+ * the Live switch does), and is written to History as `link_page.changed_for`.
+ */
+export function isTeamPageEdit(scope: EngineScope): boolean {
+  checkScope(scope);
+  const { actor, access } = scope;
+  return (
+    actor.type === 'member' &&
+    access.principal.kind === 'member' &&
+    actor.id !== access.principal.memberId &&
+    access.permissions.length === 0
+  );
 }
 
 /**

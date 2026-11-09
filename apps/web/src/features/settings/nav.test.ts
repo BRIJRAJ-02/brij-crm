@@ -27,6 +27,7 @@ const OWNER: readonly Permission[] = [
   'webhooks.manage',
   'automations.manage',
   'api_keys.manage',
+  'connected_apps.manage',
 ];
 
 const ids = (groups: readonly SettingsNavGroup[]) => groups.map((group) => group.entries.map((entry) => entry.id));
@@ -44,11 +45,11 @@ describe('settingsNav', () => {
     ]);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Notifications', 'Sign in and security', 'Calendars'],
-      ['General', 'Brand', 'History', 'Apps'],
+      ['General', 'Brand', 'History', 'Apps', 'Connected apps'],
       ['Members', 'Roles and access'],
       ['Availability', 'Round robin', 'Routing', 'Scheduling access'],
       ['Objects', 'Lists', 'Trash'],
-      ['Overview', 'Users', 'Booking pages', 'Website'],
+      ['Overview', 'Users', 'Booking pages', 'Website', 'Partners'],
     ]);
   });
 
@@ -126,6 +127,8 @@ describe('settingsNav', () => {
       'admin-users': '/w/acme/settings/admin/users',
       'admin-pages': '/w/acme/settings/admin/booking-pages',
       'admin-website': '/w/acme/settings/admin/website',
+      'admin-partners': '/w/acme/settings/admin/partners',
+      'connected-apps': '/w/acme/settings/connected-apps',
     });
     expect(profileHref('acme')).toBe('/w/acme/settings/account/profile');
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
@@ -149,7 +152,7 @@ describe('visibleSettingsNav', () => {
   it('shows an owner every group but Super admin', () => {
     expect(ids(visibleSettingsNav(settingsNav('acme'), OWNER))).toEqual([
       ['profile', 'preferences', 'notifications', 'security', 'calendars'],
-      ['general', 'brand', 'history'],
+      ['general', 'brand', 'history', 'connected-apps'],
       ['members', 'roles'],
       ['availability', 'round-robin', 'routing', 'scheduling-access'],
       ['objects', 'lists', 'trash'],
@@ -282,6 +285,8 @@ describe('settingsPageOf', () => {
       'admin/users/0199a6f2-0000-7000-8000-000000000001': 'admin-users',
       'admin/booking-pages': 'admin-pages',
       'admin/website': 'admin-website',
+      'admin/partners': 'admin-partners',
+      'connected-apps': 'connected-apps',
     };
     for (const [rest, page] of Object.entries(cases)) expect(settingsPageOf(`/w/acme/settings/${rest}`)).toBe(page);
   });

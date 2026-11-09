@@ -305,6 +305,24 @@ export const PERMISSIONS = {
     group: 'Business',
     grant: 'any',
   },
+  // Team link pages (spec 0070, AC-7001 to AC-7004): claiming a handle for a colleague and editing, publishing and
+  // sharing their link page and its QR code. The page stays its member's; every change is written to History.
+  'link_pages.manage_team': {
+    message: 'Only people who manage the team’s link pages can change someone else’s.',
+    label: 'Manage team link pages',
+    description: 'Claim handles for people, and edit, publish and share everyone’s link page and QR code.',
+    group: 'People',
+    grant: 'any',
+  },
+  // Partner connect (spec 0070, AC-7011, AC-7013): linking an outside product to the workspace, and changing or
+  // ending that link in Settings › Connected apps. Owners only: a partner adds and removes people.
+  'connected_apps.manage': {
+    message: 'Only workspace owners can connect apps.',
+    label: 'Connect apps',
+    description: 'Connect an outside product to the workspace, and change or end its connection.',
+    group: 'Owner only',
+    grant: 'owner',
+  },
 } as const satisfies Record<string, PermissionEntry>;
 
 /** Every permission's name, in catalog order. */
@@ -368,6 +386,10 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   // Spec 0066: business booking stays with people for now too.
   'services.manage',
   'services.calendar',
+  // Spec 0070: a link page is a person's, so editing someone else's stays with people (a partner gets its own way in).
+  'link_pages.manage_team',
+  // Spec 0070: connecting a partner, which adds and removes people, is an owner's own act.
+  'connected_apps.manage',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

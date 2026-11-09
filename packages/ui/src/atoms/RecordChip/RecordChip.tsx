@@ -24,7 +24,9 @@ export interface RecordChipProps {
 }
 
 /** The mark each actor that isn't a member shows in place of a face, here and in the inbox's rows. */
-export const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 'form' | 'booking', IconName>> = {
+export const ACTOR_ICONS: Readonly<
+  Record<'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner', IconName>
+> = {
   api_key: 'key',
   automation: 'zap',
   system: 'server',
@@ -32,6 +34,8 @@ export const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 
   form: 'clipboard-list',
   // A visitor's booking through a booking page (spec 0025).
   booking: 'calendar-clock',
+  // A connected app acting for the workspace (spec 0070).
+  partner: 'plug',
 };
 
 function isRecord(display: RecordRefDisplay | ActorDisplay): display is RecordRefDisplay {

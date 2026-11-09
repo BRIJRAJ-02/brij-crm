@@ -121,6 +121,25 @@ const READS: ReadonlySet<string> = new Set([
   'operator.pages',
   'operator.page',
   'operator.site',
+  // Partners (spec 0070, slice 2): the registry lives in schema auth, kept in the console's log; the connect's code and
+  // Connected apps' changes are who may call the partner API, not CRM data, so they store no outbox row (each writes
+  // its History row, as API keys do).
+  'operator.partners',
+  'operator.registerPartner',
+  'operator.updatePartner',
+  'operator.replacePartnerSecret',
+  'partnerConnect.offer',
+  'partnerConnect.deny',
+  'partnerConnect.approve',
+  'connectedApps.list',
+  'connectedApps.setModules',
+  'connectedApps.disconnect',
+  // Embedded screens (spec 0070, slice 4): a launch's one time code used up and a session made in schema auth, and
+  // the session's own read; no CRM data changes, so no outbox row. The sandbox wipe is the console's, as the registry
+  // is: each connection it ends writes its History row.
+  'embed.start',
+  'embed.session',
+  'operator.wipeTestConnections',
   // The Hospitality setup's reads (spec 0065, H0).
   'hospitality.apps',
   'hospitality.business',
@@ -129,6 +148,9 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.qrCodes',
   // The places a link page's Menu or Reserve block can name (spec 0065, AC-6528).
   'profile.placeChoices',
+  // Team link pages (spec 0070): the list, and who last changed the caller's own page.
+  'teamPages.list',
+  'teamPages.editedBy',
   // The Menu app's draft (spec 0065, H1).
   'menu.draft',
   // Table seating's reads (spec 0066 B7 lite).
@@ -763,6 +785,25 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
+  },
+  // A handle claimed for a teammate (spec 0070, AC-7002): their page made with their membership is taken away first,
+  // so they have none. It lives in schema auth: no tenant change, so no outbox row; the History row is the audit's.
+  'teamPages.claim': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await testQuery(
+      ownerUrl,
+      `delete from auth.public_profiles p using members m where m.id = $1 and p.user_id = m.user_id and p.workspace_id = m.workspace_id`,
+      [mate.memberId],
+    );
+    const claimed = await m.client.teamPages.claim({
+      workspace: m.slug,
+      member: mate.memberId,
+      handle: freeHandle(),
+      mutationId,
+    });
+    expect(claimed).toMatchObject({ memberId: mate.memberId, isLive: false, views: 0, isSelf: false });
+    // The one row is the teammate joining; the claim adds none.
+    return [{ kind: 'members' }];
   },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
@@ -3472,6 +3513,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'imports.undo': 5,
   'members.setRole': 3,
   'members.setRoles': 3,
+  // A teammate invited and accepted first, then the claim (spec 0070).
+  'teamPages.claim': 3,
   // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
   'roles.update': 2,
   'roles.duplicate': 2,

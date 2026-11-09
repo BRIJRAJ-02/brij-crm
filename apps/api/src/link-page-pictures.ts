@@ -21,6 +21,7 @@ import {
   PROFILE_AUDIO_TYPE_REFUSAL,
   PROFILE_AUDIO_TYPES,
   PROFILE_IMAGE_TYPES,
+  PAGE_MEMBER_HEADER,
   UPLOAD_WORKSPACE_HEADER,
   type MediaProvider,
   type ProfileImageKind,
@@ -31,6 +32,7 @@ import {
   checkProfileImage,
   profileAudioStorePath,
   cleanTitle,
+  enterTeamLinkPage,
   getMyProfile,
   isMediaInfoHost,
   isMediaPosterHost,
@@ -55,6 +57,35 @@ import {
 import { errorFields, log } from './log.ts';
 import type { OutsideFetch } from './public/outside.ts';
 import type { FileStore } from './storage/blob.ts';
+
+/**
+ * The link page an upload or a read is for (spec 0070, AC-7002): the caller's own, or with `member` that member's,
+ * through the door's `enterTeamLinkPage` (`link_pages.manage_team`, else FORBIDDEN; someone not here is NOT_FOUND).
+ * `owner` is the page's own identity, whose folder its files are kept in, whoever sends them.
+ */
+export async function pageScopeOf(
+  c: Context<{ Variables: ImageVariables }>,
+  deps: Pick<ImageRouteDeps, 'auth' | 'enter' | 'errorResponse'>,
+  slug: string | undefined,
+  member: string | undefined,
+): Promise<
+  | { readonly scope: MemberScope; readonly session: Parameters<ImageRouteDeps['enter']>[0]; readonly owner: string }
+  | Response
+> {
+  // A link page's own routes: an embedded frame's session may reach them (spec 0070, AC-7033).
+  const entered = await memberScopeOf(c, deps, slug, { embed: true });
+  if (entered instanceof Response) return entered;
+  try {
+    const scope =
+      member === undefined || member === '' ? entered.scope : await enterTeamLinkPage(entered.scope, member);
+    const { principal } = scope.access;
+    const owner = principal.kind === 'member' ? principal.userId : undefined;
+    if (owner === undefined) return deps.errorResponse('FORBIDDEN', 'Only a signed in person has a link page.');
+    return { scope, session: entered.session, owner };
+  } catch (error) {
+    return refusalResponse(error, deps.errorResponse);
+  }
+}
 
 /** Pictures added: 60 an hour per person, in this process (the definer counts the same across every one). */
 const PICTURE_UPLOAD_LIMIT = { max: 60, windowMs: IMAGE_UPLOAD_LIMIT.windowMs } as const;
@@ -313,9 +344,9 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
   const { files, limiter, errorResponse } = deps;
 
   app.post('/profile/images', imageBodyLimit(errorResponse), async (c: Context<{ Variables: ImageVariables }>) => {
-    const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
+    const entered = await pageScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER), c.req.header(PAGE_MEMBER_HEADER));
     if (entered instanceof Response) return entered;
-    const { scope, session } = entered;
+    const { scope, session, owner } = entered;
     if (files === undefined) return errorResponse('API_UNAVAILABLE', PICTURE_REFUSALS.store);
     if (!limiter(`link-page-picture:${session.user.id}`, PICTURE_UPLOAD_LIMIT).allowed) {
       return errorResponse('RATE_LIMITED', 'You’ve added a lot of pictures just now. Try again later.');
@@ -327,7 +358,7 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     if (bytes.byteLength === 0) return errorResponse('INPUT_INVALID', 'Choose a picture.');
     try {
-      const stored = await storeLinkPicture(files, scope, session.user.id, bytes, 'upload');
+      const stored = await storeLinkPicture(files, scope, owner, bytes, 'upload');
       if (!stored.ok) {
         return errorResponse(
           stored.reason === 'size' ? 'PAYLOAD_TOO_LARGE' : 'INPUT_INVALID',
@@ -346,7 +377,7 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
   });
 
   app.get('/profile/images/:id', async (c) => {
-    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    const entered = await pageScopeOf(c, deps, c.req.query('workspace'), c.req.query('member'));
     if (entered instanceof Response) return entered;
     const found = await readOwnProfileImage(entered.scope, c.req.param('id'));
     const stored = found === undefined ? undefined : await loadStoredImage(files, found.path, found.type);
@@ -363,9 +394,9 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
   });
 
   app.post('/profile/audio', imageBodyLimit(errorResponse), async (c: Context<{ Variables: ImageVariables }>) => {
-    const entered = await memberScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER));
+    const entered = await pageScopeOf(c, deps, c.req.header(UPLOAD_WORKSPACE_HEADER), c.req.header(PAGE_MEMBER_HEADER));
     if (entered instanceof Response) return entered;
-    const { scope, session } = entered;
+    const { scope, session, owner } = entered;
     if (files === undefined) return errorResponse('API_UNAVAILABLE', 'Recordings can’t be uploaded here yet.');
     // The same budget as pictures: a recording is one more of the page's files.
     if (!limiter(`link-page-picture:${session.user.id}`, PICTURE_UPLOAD_LIMIT).allowed) {
@@ -377,7 +408,7 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     if (bytes.byteLength === 0) return errorResponse('INPUT_INVALID', 'Choose a recording.');
     try {
-      const stored = await storeLinkAudio(files, scope, session.user.id, bytes);
+      const stored = await storeLinkAudio(files, scope, owner, bytes);
       if (!stored.ok) {
         return stored.reason === 'size'
           ? errorResponse('PAYLOAD_TOO_LARGE', PROFILE_AUDIO_SIZE_REFUSAL)
@@ -393,7 +424,7 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
   });
 
   app.get('/profile/audio/:id', async (c) => {
-    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    const entered = await pageScopeOf(c, deps, c.req.query('workspace'), c.req.query('member'));
     if (entered instanceof Response) return entered;
     const found = await readOwnProfileImage(entered.scope, c.req.param('id'));
     const stored = found === undefined ? undefined : await loadStoredAudio(files, found.path, found.type);
@@ -402,7 +433,7 @@ export function mountLinkPagePictures(app: Hono<{ Variables: ImageVariables }>, 
   });
 
   app.get('/profile/insights.csv', async (c) => {
-    const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
+    const entered = await pageScopeOf(c, deps, c.req.query('workspace'), c.req.query('member'));
     if (entered instanceof Response) return entered;
     const { scope, session } = entered;
     if (!limiter(`link-page-csv:${session.user.id}`, CSV_LIMIT).allowed) {

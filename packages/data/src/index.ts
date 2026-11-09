@@ -149,7 +149,10 @@ import type {
   RecentItem,
   WorkspaceDomainsView,
   DeletedWorkspace,
+  LinkPageEditedBy,
   MyProfile,
+  TeamLinkPage,
+  TeamLinkPages,
   SocialLink,
   SubmissionsBeyond,
   WorkspaceSettings,
@@ -249,6 +252,20 @@ export {
 /** A booking a guest made, as Bookings' arrival toast hears it (B-12). */
 export type { BookingArrival } from './bookings/arrivals.ts';
 export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
+// Partners (spec 0070, slice 2): the console's registry, the connect page, and Settings › Connected apps.
+export type {
+  ConnectableWorkspace,
+  ConnectedApp,
+  EmbedSessionView,
+  PartnerConnectOffer,
+  PartnerConnectRequest,
+  PartnerLogoUpload,
+  PartnerModule,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+} from '@crm/contracts';
 /** The settings Settings changes live on a form (forms fixes 2). */
 export type LiveSettingsChange = ApplyFormSettingsInput['settings'];
 // Insights (spec 0067).
@@ -522,6 +539,18 @@ import {
 import type { Report as ReportView, ReportConfig } from '@crm/contracts';
 import type { RecordFileView } from '@crm/contracts';
 import type { ApiKey, ApiKeyAccess } from '@crm/contracts';
+import type {
+  ConnectedApp,
+  EmbedSessionView,
+  PartnerConnectOffer,
+  PartnerConnectRequest,
+  PartnerLogoUpload,
+  PartnerModule,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+} from '@crm/contracts';
 import type { ReportPlan } from '@crm/contracts/reports';
 import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
@@ -840,7 +869,10 @@ export type {
   WorkspaceDomainsView,
   WorkspaceSummary,
   DeletedWorkspace,
+  LinkPageEditedBy,
   MyProfile,
+  TeamLinkPage,
+  TeamLinkPages,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -1268,7 +1300,9 @@ export interface ReplacedValue {
     | { readonly kind: 'api_key' }
     | { readonly kind: 'automation' }
     | { readonly kind: 'form' }
-    | { readonly kind: 'booking' };
+    | { readonly kind: 'booking' }
+    /** A connected app (spec 0070), from slice 3 on. */
+    | { readonly kind: 'partner' };
   readonly useMine: () => void;
 }
 
@@ -1498,6 +1532,11 @@ export interface DataLayerOptions {
   /** The network. The browser's `fetch` by default; tests pass a fake API. */
   readonly fetch?: FetchLike;
   /**
+   * Headers every API call carries: an embedded frame's (spec 0070, AC-7031), so the API reads the frame's own
+   * session cookie and holds it to the shared modules. None in the app.
+   */
+  readonly callHeaders?: Readonly<Record<string, string>>;
+  /**
    * Centrifugo's WebSocket address (`VITE_REALTIME_URL`). Unset (previews),
    * live updates are off and `live.status()` says so.
    */
@@ -1588,6 +1627,7 @@ export function createDataLayer({
   onSessionChange = () => undefined,
   onSessionKnown = () => undefined,
   fetch = (input, init) => globalThis.fetch(input, init),
+  callHeaders,
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   onReplaced = () => undefined,
@@ -1600,6 +1640,7 @@ export function createDataLayer({
   const api: ApiClient = createORPCClient(
     new RPCLink<CallContext>({
       url: new URL('/api/rpc', origin).href,
+      ...(callHeaders === undefined ? {} : { headers: { ...callHeaders } }),
       fetch: async (request, init, { context }, path) => {
         const response = await fetch(request, init);
         const requestId = response.headers.get('x-request-id') ?? undefined;
@@ -1837,6 +1878,9 @@ export function createDataLayer({
     void brand?.then((made) => {
       made.clear();
     });
+    // Other members' pages (spec 0070) are the last person's to have opened: the next person opens them afresh.
+    memberLinkPages.clear();
+    memberBrands.clear();
     void hospitality?.then((made) => {
       made.clear();
     });
@@ -3065,6 +3109,9 @@ export function createDataLayer({
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
+  // Team link pages (spec 0070): a member's page as a team page manager edits it, one store per member.
+  const memberLinkPages = new Map<string, Promise<LinkPageStore>>();
+  const memberBrands = new Map<string, Promise<BrandStore>>();
   // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
   // photos, loaded with the first screen that asks, never in the first load.
   let brand: Promise<BrandStore> | undefined;
@@ -3081,11 +3128,14 @@ export function createDataLayer({
     path: string,
     workspace: string,
     body?: Blob,
+    member?: string,
   ): Promise<{ readonly version?: string; readonly removed?: boolean; readonly same?: boolean }> => {
     const response = await fetch(new URL(path, origin).href, {
       method: body === undefined ? 'DELETE' : 'POST',
       headers: {
         'x-crm-workspace': workspace,
+        // Whose link page a photo is for (spec 0070), when it isn't the caller's own.
+        ...(member === undefined ? {} : { 'x-crm-page-member': member }),
         ...(body === undefined ? {} : { 'content-type': body.type }),
       },
       ...(body === undefined ? {} : { body }),
@@ -3102,6 +3152,47 @@ export function createDataLayer({
       ...(fields.same === true ? { same: true } : {}),
     };
   };
+  /** A link page's store, the caller's own (`member` undefined) or a member's (spec 0070), in its own chunk. */
+  const openLinkPageFor = (member: string | undefined): Promise<LinkPageStore> =>
+    import('./link-page/store.ts').then(({ openLinkPage }) =>
+      openLinkPage({
+        profile: api.profile,
+        call,
+        mintId,
+        notify,
+        // A link page's picture (spec 0061, AC-6101, AC-6108): sent from the store's own chunk, to this origin.
+        origin,
+        summary: refusalSummary,
+        ...(member === undefined ? {} : { member }),
+        signup: {
+          /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
+          workspaces: () => readMe().then((who) => who?.workspaces ?? []),
+          // Loaded with the editor that uses it, so its three writes never ride in the first load.
+          make: async (workspace, input) =>
+            (await import('./link-page/signup-form.ts')).makeSignupForm(
+              { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
+              workspace,
+              input,
+            ),
+        },
+      }),
+    );
+  /** The brand store, for the caller's own link page (`member` undefined) or a member's (spec 0070). */
+  const openBrandFor = (member: string | undefined): Promise<BrandStore> =>
+    import('./brand/store.ts').then(({ openBrand }) =>
+      openBrand({
+        brand: api.brand,
+        profile: api.profile,
+        call,
+        mintId,
+        send: sendImage,
+        ...(member === undefined ? {} : { member }),
+        onLogo: (workspace, version) => {
+          logoStamp += 1;
+          setLogo(workspace, version ?? null);
+        },
+      }),
+    );
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
   const pictureChoice = createPictureChoiceStore({
     api: {
@@ -3266,6 +3357,31 @@ export function createDataLayer({
   // change events of their own, so the list is read again when a screen holds it after a while.
   const apiKeyLists = createCaptureList<ApiKey>({
     read: (workspace) => call((options) => api.apiKeys.list({ workspace }, options)).then((answer) => answer.keys),
+  });
+  // Settings › Connected apps (spec 0070, AC-7013): one held list per workspace, patched by every change below. A
+  // connection has no change events of its own, so the list is read again when a screen holds it after a while.
+  /** A connection's new modules at once, and its old ones back on a refusal (while it still shows the new). */
+  const shownModules = (
+    items: readonly ConnectedApp[] | undefined,
+    connectionId: string,
+    modules: readonly PartnerModule[],
+  ) => {
+    const before = items?.find((item) => item.id === connectionId)?.modules;
+    const shown = [...modules];
+    return {
+      show: (now: readonly ConnectedApp[]) =>
+        now.map((item) => (item.id === connectionId ? { ...item, modules: shown } : item)),
+      undo: (now: readonly ConnectedApp[]) =>
+        now.map((item) =>
+          item.id === connectionId && before !== undefined && item.modules === shown
+            ? { ...item, modules: before }
+            : item,
+        ),
+    };
+  };
+  const connectedAppLists = createCaptureList<ConnectedApp>({
+    read: (workspace) =>
+      call((options) => api.connectedApps.list({ workspace }, options)).then((answer) => answer.apps),
   });
   /** A question's calculations as the records layer holds them: a report's figures ask through it. */
   const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
@@ -6283,49 +6399,48 @@ export function createDataLayer({
      * ones before it; refused, it is put back and a toast says why, with Try again.
      */
     linkPage: {
-      load: (): Promise<LinkPageStore> =>
-        (linkPage ??= import('./link-page/store.ts').then(({ openLinkPage }) =>
-          openLinkPage({
-            profile: api.profile,
-            call,
-            mintId,
-            notify,
-            // A link page's picture (spec 0061, AC-6101, AC-6108): sent from the store's own chunk, to this origin.
-            origin,
-            summary: refusalSummary,
-            signup: {
-              /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */
-              workspaces: () => readMe().then((who) => who?.workspaces ?? []),
-              // Loaded with the editor that uses it, so its three writes never ride in the first load.
-              make: async (workspace, input) =>
-                (await import('./link-page/signup-form.ts')).makeSignupForm(
-                  { forms: signupWrites, lists: formLists, landForm, mintId, readMe },
-                  workspace,
-                  input,
-                ),
-            },
-          }),
-        )),
+      load: (): Promise<LinkPageStore> => (linkPage ??= openLinkPageFor(undefined)),
+      /**
+       * A member's link page, for a team page manager (spec 0070, AC-7002): the same store as the person's own, one per
+       * member for the app load, every call naming `member` for the server's door to check.
+       */
+      loadFor: (member: string): Promise<LinkPageStore> => {
+        let found = memberLinkPages.get(member);
+        if (found === undefined) {
+          found = openLinkPageFor(member);
+          memberLinkPages.set(member, found);
+        }
+        return found;
+      },
+    },
+    /**
+     * Team link pages (spec 0070, AC-7001 to AC-7004): everyone's page in the workspace (`link_pages.manage_team`), read
+     * fresh on each visit (no change event carries it); a handle claimed for someone, which waits for the server, since
+     * whether a handle is free is the server's to say; and who last changed the caller's own page.
+     */
+    teamPages: {
+      list: (workspace: string): Promise<TeamLinkPages> =>
+        call((options) => api.teamPages.list({ workspace }, options)),
+      claim: (workspace: string, member: string, handle: string): Promise<TeamLinkPage> =>
+        call((options) => api.teamPages.claim({ workspace, member, handle, mutationId: mintId() }, options)),
+      editedBy: (workspace: string): Promise<LinkPageEditedBy> =>
+        call((options) => api.teamPages.editedBy({ workspace }, options)),
     },
     /**
      * The workspace's brand kit (Settings › Brand) and a link page's own colour and photos (its Design panel), spec
      * 0060: the store, loaded on first use with the colour guard it previews with.
      */
     brand: {
-      load: (): Promise<BrandStore> =>
-        (brand ??= import('./brand/store.ts').then(({ openBrand }) =>
-          openBrand({
-            brand: api.brand,
-            profile: api.profile,
-            call,
-            mintId,
-            send: sendImage,
-            onLogo: (workspace, version) => {
-              logoStamp += 1;
-              setLogo(workspace, version ?? null);
-            },
-          }),
-        )),
+      load: (): Promise<BrandStore> => (brand ??= openBrandFor(undefined)),
+      /** The Design panel of a member's link page (spec 0070): its look read and saved with `member`. */
+      loadFor: (member: string): Promise<BrandStore> => {
+        let found = memberBrands.get(member);
+        if (found === undefined) {
+          found = openBrandFor(member);
+          memberBrands.set(member, found);
+        }
+        return found;
+      },
     },
     /**
      * The Hospitality suite's setup (spec 0065, H0): the Apps page, the business with its places and hours, and each
@@ -6510,6 +6625,12 @@ export function createDataLayer({
       },
       /** Reads the profile now (the route's loader); whether their picture shows comes with it, held below. */
       get: (workspace: string): Promise<MyProfile> => pictureChoice.read(workspace),
+      /**
+       * A member's profile as their link page shows it, for a team page manager opening their page (spec 0070): read
+       * each time, never held, and refused (`FORBIDDEN`, `NOT_FOUND`) by the server's door as the page would be.
+       */
+      getFor: (workspace: string, member: string): Promise<MyProfile> =>
+        call((options) => api.profile.get({ workspace, member }, options)),
       /** Whether their picture shows on their booking pages and profile (owner ask A124), as the screen holds it. */
       picture: (workspace: string): PictureChoiceHeld => pictureChoice.of(workspace),
       /**
@@ -7992,6 +8113,112 @@ export function createDataLayer({
               b.createdAt.localeCompare(a.createdAt),
             ),
         }),
+    },
+    /**
+     * Settings › Connected apps (spec 0070, AC-7013), owners only: the outside apps connected to the workspace as a
+     * held list (`useCaptureList`), newest first. A change of modules shows at once and is put back on a refusal;
+     * Disconnect takes the row away at once and puts it back on a refusal.
+     */
+    connectedApps: {
+      view: (workspace: string): CaptureListView<ConnectedApp> => connectedAppLists.view(workspace),
+      setModules: (workspace: string, connectionId: string, modules: readonly PartnerModule[]): Promise<ConnectedApp> =>
+        connectedAppLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.connectedApps.setModules(
+                { workspace, connectionId, modules: [...modules], mutationId: mintId() },
+                options,
+              ),
+            ),
+          ...shownModules(connectedAppLists.items(workspace), connectionId, modules),
+          land: (items, changed) => items.map((item) => (item.id === changed.id ? changed : item)),
+        }),
+      disconnect: (workspace: string, connectionId: string): Promise<{ readonly id: string }> =>
+        connectedAppLists.write(workspace, {
+          send: () =>
+            call((options) => api.connectedApps.disconnect({ workspace, connectionId, mutationId: mintId() }, options)),
+          ...shownDrop(connectedAppLists.items(workspace), connectionId),
+        }),
+    },
+    /**
+     * An embedded frame's own calls (spec 0070, AC-7031): `start` redeems a launch's one time code and the server sets
+     * the frame's session cookie; `session` reads what that session opens. Neither ends a session on a 401 (the frame
+     * says so itself); once a session answers, a later 401 on any screen ends it as anywhere. `frameOrigins` reads the
+     * partner's registered origins, the only ones the frame tells its height or asks for a fresh launch; none on a
+     * failure, so nothing is ever sent to an origin nobody registered.
+     */
+    embed: {
+      start: (code: string): Promise<EmbedSessionView> =>
+        attempt((options) => api.embed.start({ code }, options)).then((view) => {
+          ended = false;
+          seenPerson = true;
+          return view;
+        }),
+      session: (): Promise<EmbedSessionView> =>
+        attempt((options) => api.embed.session(undefined, options)).then((view) => {
+          ended = false;
+          seenPerson = true;
+          return view;
+        }),
+      frameOrigins: async (clientId: string): Promise<readonly string[]> => {
+        if (!/^tfp_[A-Za-z0-9_-]{22}$/.test(clientId)) return [];
+        try {
+          const response = await fetch(new URL(`/api/public/partners/${clientId}/frame`, origin).href);
+          const answer: unknown = response.ok ? await response.json() : undefined;
+          const listed =
+            typeof answer === 'object' && answer !== null && 'frameOrigins' in answer ? answer.frameOrigins : [];
+          return Array.isArray(listed) ? listed.filter((each): each is string => typeof each === 'string') : [];
+        } catch {
+          return [];
+        }
+      },
+    },
+    /**
+     * The OAuth connect page (spec 0070, AC-7011, AC-7012): what the partner asks and the person's own workspaces,
+     * the owner's approval in one of them, and No thanks. Read fresh; each answers where the browser goes next, an
+     * address the server built from the partner's registered one.
+     */
+    partnerConnect: {
+      offer: (request: PartnerConnectRequest): Promise<PartnerConnectOffer> =>
+        call((options) => api.partnerConnect.offer(request, options)),
+      approve: (
+        workspace: string,
+        request: PartnerConnectRequest,
+        modules: readonly PartnerModule[],
+      ): Promise<{ readonly redirectTo: string }> =>
+        call((options) =>
+          api.partnerConnect.approve({ workspace, request, modules: [...modules], mutationId: mintId() }, options),
+        ),
+      deny: (request: PartnerConnectRequest): Promise<{ readonly redirectTo: string }> =>
+        call((options) => api.partnerConnect.deny(request, options)),
+    },
+    /**
+     * The operator console's partners (spec 0070, AC-7010), super admins only: read fresh, every write waits for the
+     * server. A register or a replace answers the whole secret, once.
+     */
+    partners: {
+      list: (): Promise<readonly PartnerView[]> =>
+        call((options) => api.operator.partners(undefined, options)).then((answer) => answer.partners),
+      register: (input: RegisterPartnerInput): Promise<PartnerWithSecret> =>
+        call((options) => api.operator.registerPartner(input, options)),
+      update: (input: UpdatePartnerInput): Promise<PartnerView> =>
+        call((options) => api.operator.updatePartner(input, options)),
+      replaceSecret: (partnerId: string): Promise<PartnerWithSecret> =>
+        call((options) => api.operator.replacePartnerSecret({ partnerId }, options)),
+      /** A sandbox partner's test connections ended in one go (AC-7035): how many. */
+      wipeTests: (partnerId: string): Promise<number> =>
+        call((options) => api.operator.wipeTestConnections({ partnerId }, options)).then((answer) => answer.wiped),
+      /** A picked logo file as the register and the change send it: its type and its bytes as base64. */
+      logoFrom: async (file: Blob): Promise<PartnerLogoUpload | undefined> => {
+        const type = file.type;
+        if (type !== 'image/png' && type !== 'image/jpeg' && type !== 'image/webp') return undefined;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = '';
+        for (let at = 0; at < bytes.length; at += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+        }
+        return { type, data: btoa(binary) };
+      },
     },
     reports: {
       /**

@@ -16,6 +16,8 @@ export const strings = {
   places: 'Places',
   preferences: 'Preferences',
   calendars: 'Calendars',
+  // Settings › Workspace › Connected apps (spec 0070).
+  connectedApps: 'Connected apps',
   availability: 'Availability',
   roundRobin: 'Round robin',
   routing: 'Routing',

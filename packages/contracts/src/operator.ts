@@ -5,6 +5,15 @@
 // factor, a recent sign in), never a workspace role.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import {
+  PartnerList,
+  PartnerRefInput,
+  PartnerView,
+  PartnerWithSecret,
+  RegisterPartnerInput,
+  UpdatePartnerInput,
+  WipedTestConnections,
+} from './partners.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -56,7 +65,13 @@ export type OperatorOverviewDay = z.infer<typeof OperatorOverviewDay>;
 
 /** Overview (AC-1629): the app's dashboard analytics for a period. */
 export const OperatorOverview = OperatorRange.extend({
-  people: z.object({ total: z.number().int().nonnegative(), new: OperatorFigure }),
+  people: z.object({
+    /** People who signed up themselves. */
+    total: z.number().int().nonnegative(),
+    new: OperatorFigure,
+    /** A partner's managed members (spec 0070), counted apart: no sign up, no sign in. */
+    managed: z.number().int().nonnegative().optional(),
+  }),
   active: z.object({
     /** Users active on any day of the period, against the period before. */
     period: OperatorFigure,
@@ -91,6 +106,8 @@ export const OperatorUserRow = z.object({
   bookingsHosted: z.number().int().nonnegative(),
   pages: z.number().int().nonnegative(),
   twoFactor: z.boolean(),
+  /** Present for a partner's managed member (spec 0070): made by the partner, never signed up, can't sign in. */
+  managed: z.literal(true).optional(),
 });
 /** One person in the users list. */
 export type OperatorUserRow = z.infer<typeof OperatorUserRow>;
@@ -270,6 +287,21 @@ export const operatorContract = {
   pages: oc.input(OperatorPeriodInput).output(OperatorPages),
   page: oc.input(OperatorPageInput).output(OperatorPageDetail),
   site: oc.input(OperatorPeriodInput).output(OperatorSite),
+  /**
+   * Partners (spec 0070, AC-7010): every registered partner; register one (its secret answered once); change its
+   * name, logo or addresses; replace its secret (the old one stops at once, the new one is answered once). Each write
+   * is kept in the console's log. `NOT_FOUND` for a partner that isn't there; `INPUT_INVALID` for an address that
+   * isn't one.
+   */
+  partners: oc.output(PartnerList),
+  registerPartner: oc.input(RegisterPartnerInput).output(PartnerWithSecret),
+  updatePartner: oc.input(UpdatePartnerInput).output(PartnerView),
+  replacePartnerSecret: oc.input(PartnerRefInput).output(PartnerWithSecret),
+  /**
+   * A sandbox partner's test connections ended in one go (spec 0070, AC-7035): each is disconnected in its workspace
+   * (History says so) and its embedded sessions end. `CONFIG_INVALID` for a partner that isn't a sandbox one.
+   */
+  wipeTestConnections: oc.input(PartnerRefInput).output(WipedTestConnections),
 };
 
 /** What the marketing site's beacon sends (AC-1627): the path, the referring site's host, and `utm_source`. */

@@ -128,12 +128,15 @@ export function UserBody({
                     { id: 'lastActive', term: strings.columns.lastActive, description: '', isPlaceholder: true },
                   ]
                 : [
-                    {
-                      id: 'email',
-                      term: strings.email,
-                      description: user.emailVerified ? user.email : `${user.email} (${strings.emailUnverified})`,
-                      copy: { value: user.email, label: strings.email },
-                    },
+                    // A partner's managed member (spec 0070): no address or sign in of their own.
+                    user.managed === true
+                      ? { id: 'email', term: strings.email, description: strings.managed }
+                      : {
+                          id: 'email',
+                          term: strings.email,
+                          description: user.emailVerified ? user.email : `${user.email} (${strings.emailUnverified})`,
+                          copy: { value: user.email, label: strings.email },
+                        },
                     { id: 'signedUp', term: strings.columns.signedUp, description: format.date(user.createdAt) },
                     {
                       id: 'lastActive',
@@ -144,7 +147,10 @@ export function UserBody({
                     {
                       id: 'methods',
                       term: strings.signIn,
-                      description: user.methods.map((method) => strings.methods[method]).join(', '),
+                      description:
+                        user.methods.length === 0
+                          ? strings.noSignIn
+                          : user.methods.map((method) => strings.methods[method]).join(', '),
                     },
                     {
                       id: 'twoFactor',

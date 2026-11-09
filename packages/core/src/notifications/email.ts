@@ -101,7 +101,16 @@ export async function prepareNotificationEmail(
     const workspace = await tx.execute<{ name: string; slug: string }>(sql`
       select name, slug from workspaces where id = ${input.workspaceId}::uuid
     `);
-    return { members: members.rows, objects: objects.rows, workspace: workspace.rows[0] };
+    // A partner's managed member (spec 0070, AC-7023) gets only what their page's visitors trigger.
+    const managed = await tx.execute<{ managed: boolean }>(sql`
+      select exists (select 1 from managed_members where member_id = ${input.memberId}::uuid) as managed
+    `);
+    return {
+      members: members.rows,
+      objects: objects.rows,
+      workspace: workspace.rows[0],
+      managed: managed.rows[0]?.managed === true,
+    };
   });
   const me = facts.members.find((member) => member.id === input.memberId);
   if (me === undefined || facts.workspace === undefined) return { skipped: 'removed' };
@@ -111,6 +120,8 @@ export async function prepareNotificationEmail(
   const base = `/w/${facts.workspace.slug}`;
   const sent: string[] = [];
   const items = batch.items.flatMap((view): NotificationEmailItem[] => {
+    // Managed members (spec 0070, AC-7023): a booking or a form answer from a visitor only, never a mention or a task.
+    if (facts.managed && view.kind !== 'booking' && view.submissionId === undefined) return [];
     const actor = view.actor.type === 'member' && view.actor.id !== null ? nameOf(view.actor.id) : 'Someone';
     let path: string;
     if (view.taskId !== undefined) path = `${base}/inbox?task=${view.taskId}`;

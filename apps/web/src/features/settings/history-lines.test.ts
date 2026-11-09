@@ -186,6 +186,12 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'member.removed', target: member(gone), params: {} },
     'Ada Lovelace removed a deleted user from the workspace',
   ],
+  // Spec 0070, AC-7020: someone a connected app added.
+  [
+    { ...base, action: 'member.added', target: member(bea), params: { role: 'admin' } },
+    'Ada Lovelace added Bea Rao to the workspace as Admin',
+  ],
+  [{ ...base, action: 'member.added', target: member(bea), params: {} }, 'Ada Lovelace added Bea Rao to the workspace'],
   [{ ...base, actor: bea, action: 'member.left', target: member(bea), params: {} }, 'Bea Rao left the workspace'],
   [
     { ...base, action: 'workspace.ownership_transferred', target: member(bea), params: {} },
@@ -316,6 +322,24 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [
     { ...base, action: 'api_key.restored', target: workspace, params: { name: 'Zapier' } },
     'Ada Lovelace brought back the API key Zapier',
+  ],
+  // Spec 0070: a connected app.
+  [
+    { ...base, action: 'partner.connected', target: workspace, params: { name: 'Hub', modules: ['link_pages'] } },
+    'Ada Lovelace connected Hub for Link pages',
+  ],
+  [
+    {
+      ...base,
+      action: 'partner.modules_changed',
+      target: workspace,
+      params: { name: 'Hub', modules: ['link_pages'] },
+    },
+    'Ada Lovelace changed what Hub can use to Link pages',
+  ],
+  [
+    { ...base, action: 'partner.disconnected', target: workspace, params: { name: 'Hub', modules: ['link_pages'] } },
+    'Ada Lovelace disconnected Hub',
   ],
   [
     { ...base, action: 'rotation.adjusted', target: rotation, params: { person: bea, units: 2 } },
@@ -664,6 +688,19 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [
     { ...base, action: 'link_page.version_restored', target: member(bea), params: { version: 1 } },
     'Ada Lovelace restored version 1 of Bea Rao’s link page as its draft',
+  ],
+  // Spec 0070, AC-7004: someone else's link page, changed by a team page manager.
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'blocks' } },
+    'Ada Lovelace edited Bea Rao’s link page',
+  ],
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'live' } },
+    'Ada Lovelace turned Bea Rao’s link page Live',
+  ],
+  [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'handle', handle: 'bea' } },
+    'Ada Lovelace claimed /bea for Bea Rao',
   ],
   [
     { ...base, action: 'managed_page.propagated', target: managedPage, params: {} },

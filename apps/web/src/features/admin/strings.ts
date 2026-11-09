@@ -96,6 +96,12 @@ export const strings = {
   emailUnverified: 'Not verified',
   signIn: 'Signs in with',
   methods: { email: 'Email code', google: 'Google' },
+  /** A partner's managed member (spec 0070), in place of their address. */
+  managed: 'Managed by a connected app',
+  /** A managed member's way in: only through the app that manages them. */
+  noSignIn: 'Only through their connected app',
+  /** Overview: managed members, counted apart from people who signed up. */
+  managedTotal: 'Managed by apps',
   twoFactor: 'Two factor',
   on: 'On',
   off: 'Off',

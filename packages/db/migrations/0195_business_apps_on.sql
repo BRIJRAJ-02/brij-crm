@@ -96,7 +96,7 @@ begin
     )
     or has_function_privilege('crm_identity', menu_door, 'EXECUTE')
     or has_function_privilege('crm_identity', table_door, 'EXECUTE') then
-    raise exception '0191_business_apps_on: the two doors must stay narrow';
+    raise exception '0195_business_apps_on: the two doors must stay narrow';
   end if;
 end
 $$;

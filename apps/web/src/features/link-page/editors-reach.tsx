@@ -36,6 +36,7 @@ import { PICTURE_PICK_MAX_BYTES } from './photo-prep.ts';
 import { reachStrings as words } from './reach-strings.ts';
 import type { BlockEditorProps } from './registry.tsx';
 import { strings } from './strings.ts';
+import { useLinkPagePlace } from './place.tsx';
 
 /** The words under a refused field, or nothing. */
 const errorOf = (problems: BlockProblems, key: keyof BlockProblems) =>
@@ -498,6 +499,8 @@ type TimesChoices =
  * first length the one the chips are for. Editing one keeps its page and changes only its window.
  */
 export function TimesChooser({ slug, item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  // A partner's frame shares Link pages alone (spec 0070, AC-7033): no way out to another module's screens.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'times' ? item : undefined;
@@ -577,7 +580,7 @@ export function TimesChooser({ slug, item, items, linkPage, chrome, onSubmit, on
       <EmptyState
         layout="row"
         title={strings.noPagesYet}
-        actions={<ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink>}
+        {...(isEmbedded ? {} : { actions: <ButtonLink href={linksHref(slug)}>{strings.noPagesAction}</ButtonLink> })}
       />
     );
   } else {
@@ -754,6 +757,8 @@ function PlaceChooser({
   onSubmit,
   onClose,
 }: BlockEditorProps & { readonly which: 'menu' | 'reserve' }) {
+  // A partner's frame shares Link pages alone (spec 0070, AC-7033): no way out to another module's screens.
+  const { isEmbedded } = useLinkPagePlace(slug);
   const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'menu' || item?.kind === 'reserve' ? item : undefined;
@@ -826,7 +831,9 @@ function PlaceChooser({
         layout="row"
         icon="store"
         title={words.noPlacesTitle}
-        actions={<ButtonLink href={businessSettingsHref(slug)}>{words.openBusiness}</ButtonLink>}
+        {...(isEmbedded
+          ? {}
+          : { actions: <ButtonLink href={businessSettingsHref(slug)}>{words.openBusiness}</ButtonLink> })}
       >
         {words.noPlacesText}
       </EmptyState>

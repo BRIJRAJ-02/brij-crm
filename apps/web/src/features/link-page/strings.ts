@@ -230,6 +230,8 @@ export const strings = {
   /** The overview's first empty moment (spec 0058, AC-8): one picture, one line, one way in. */
   startTitle: 'Nothing on your page yet',
   startText: 'Add your links and booking pages.',
+  /** In a partner's frame, where only Link pages is shared (spec 0070). */
+  startTextEmbedded: 'Add your links, text and pictures.',
   startAction: 'Add to your page',
   // The rows.
   heading: 'Section',
@@ -259,6 +261,7 @@ export const strings = {
   // The states.
   empty: 'Your page is empty',
   emptyText: 'Add a link, a booking page or anything else.',
+  emptyTextEmbedded: 'Add a link, some text or a picture.',
   /** No handle yet (spec 0058, AC-8): claimed right here, never a trip to Profile. */
   noHandle: 'Claim your link',
   noHandleText: 'Your page goes live at this address.',

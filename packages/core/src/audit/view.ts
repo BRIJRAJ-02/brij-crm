@@ -6,6 +6,8 @@
 // from the reader), and a deleted account's profile changes keep their field
 // names and lose their values (AC-4610).
 import {
+  LINK_PAGE_TEAM_CHANGES,
+  PARTNER_MODULES,
   AUDIT_KINDS,
   type AuditChange,
   type AuditEntryView,
@@ -191,6 +193,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         return person(row.actorMemberId);
       case 'api_key':
         return { kind: 'api_key' };
+      // A connected app, through the partner API (spec 0070, AC-7025).
+      case 'partner':
+        return { kind: 'partner' };
       default:
         // The system, and the system's own kinds of actor (an automation, a form, a booking page).
         return { kind: 'system' };
@@ -406,6 +411,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'member.left':
     case 'account.deleted':
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    // Someone a connected app added (spec 0070, AC-7020), with the role they joined with.
+    case 'member.added': {
+      const joined = roleOf(after.role);
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: joined === undefined ? {} : { role: joined },
+        changes: [],
+      };
+    }
     case 'member.profile_updated': {
       const target = memberTarget();
       const known = (
@@ -511,6 +527,20 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'api_key.revoked':
     case 'api_key.restored':
       return { ...base, action, target: workspace, params: { name: text(after.name) ?? 'a key' }, changes: [] };
+    // An outside app connected, its modules changed, or disconnected (spec 0070): its name then, and its modules.
+    case 'partner.connected':
+    case 'partner.modules_changed':
+    case 'partner.disconnected': {
+      const listed: unknown[] = Array.isArray(after.modules) ? after.modules : [];
+      const modules = PARTNER_MODULES.filter((module) => listed.includes(module));
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: { name: text(after.name) ?? 'an app', modules },
+        changes: [],
+      };
+    }
     case 'workspace_security.changed': {
       const twoFactor = typeof after.requireTwoFactor === 'boolean' ? after.requireTwoFactor : undefined;
       const days = has(after, 'sessionLengthDays')
@@ -859,6 +889,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'link_page.draft_discarded':
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
+    // Someone else's link page changed by a team page manager (spec 0070, AC-7004): what, and a claimed handle.
+    case 'link_page.changed_for': {
+      const change = LINK_PAGE_TEAM_CHANGES.find((each) => each === after.change);
+      if (change === undefined) return undefined;
+      const handle = typeof after.handle === 'string' ? after.handle : undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { change, ...(handle === undefined ? {} : { handle }) },
+        changes: [],
+      };
+    }
     case 'managed_page.propagated':
       return { ...base, action, target: thing('booking_page', names.bookingPages), params: {}, changes: [] };
     // A one-time link made or revoked (spec 0062, AC-6204): the page only; the link's id and uses stay in the row.
