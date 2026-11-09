@@ -9,6 +9,7 @@ import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { CalloutBar } from '../../molecules/Callout/CalloutBar.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkListToolbar } from '../LinkList/LinkList.tsx';
 import {
@@ -56,7 +57,7 @@ function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) 
       <TopBar
         title="Companies"
         icon="building"
-        hue="blue"
+        hue="orange"
         meta={<Button variant="ghost" icon="info" label="About Companies" />}
       >
         <AvatarStack
@@ -100,7 +101,7 @@ function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) 
           : {})}
       >
         <SortChip attribute="Funding raised" direction="descending" more={1} />
-        <FilterChip attribute={['Segment']} icon="tag" operator="is" value={<Tag hue="blue">SaaS</Tag>} />
+        <FilterChip attribute={['Segment']} icon="tag" operator="is" value={<Tag hue="orange">SaaS</Tag>} />
         <Button variant="dashed" icon="list-filter">
           Filter
         </Button>
@@ -174,6 +175,55 @@ export const RecordPage: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('link', { name: 'Companies' })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { level: 1, name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};
+
+/** A module's tabs in its TopBar (Bookings): one header, its tabs' underline on the bar's one hairline. */
+function ModuleTabs() {
+  const [tab, setTab] = useState('meetings');
+  return (
+    <TopBar
+      title="Bookings"
+      icon="calendar-days"
+      hue="orange"
+      tabs={
+        <Tabs
+          variant="topbar"
+          label="Bookings"
+          selectedKey={tab}
+          onSelectionChange={setTab}
+          tabs={[
+            { id: 'meetings', label: 'Meetings' },
+            { id: 'pages', label: 'Pages' },
+            { id: 'availability', label: 'Availability' },
+            { id: 'routing', label: 'Routing' },
+          ]}
+        />
+      }
+    >
+      <Button variant="primary" icon="plus">
+        New
+      </Button>
+      <Button variant="ghost" icon="settings" label="Bookings settings" />
+    </TopBar>
+  );
+}
+
+/** The tabs fill the bar's height, so the chosen one's underline sits on its hairline; the arrows move between them. */
+export const TopBarModuleTabs: Story = {
+  render: () => <ModuleTabs />,
+  play: async ({ canvas, userEvent }) => {
+    const banner = canvas.getByRole('banner');
+    const meetings = canvas.getByRole('tab', { name: 'Meetings' });
+    await expect(meetings).toHaveAttribute('aria-selected', 'true');
+    // The tab's foot is the bar's content edge: the underline lands on the hairline under it.
+    const hairline = Number.parseFloat(getComputedStyle(banner).borderBlockEndWidth);
+    await expect(Math.round(meetings.getBoundingClientRect().bottom)).toBe(
+      Math.round(banner.getBoundingClientRect().bottom - hairline),
+    );
+    await userEvent.click(meetings);
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('tab', { name: 'Pages' })).toHaveAttribute('aria-selected', 'true');
   },
 };
 

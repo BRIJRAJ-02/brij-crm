@@ -141,6 +141,37 @@ export const Default: Story = {
   },
 };
 
+/** A module's own settings (Bookings), its navigation in groups, each under its name. */
+export const GroupedNav: Story = {
+  render: () => (
+    <Stage>
+      <SettingsLayout
+        header="bar"
+        navLabel="Bookings settings"
+        nav={[
+          { id: 'calendars', label: 'Calendars', href: '#calendars', icon: 'calendar', group: 'Connections' },
+          { id: 'teams', label: 'Teams', href: '#teams', icon: 'users-round', group: 'People' },
+          { id: 'access', label: 'Scheduling access', href: '#access', icon: 'eye', group: 'People' },
+          { id: 'brand', label: 'Brand', href: '#brand', icon: 'palette', group: 'Guests see' },
+        ]}
+        currentNavId="teams"
+        title="Teams"
+      >
+        <SettingsSection title="Sales">
+          <Card>Priya, Oliver and Arjun take turns.</Card>
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const nav = canvas.getByRole('navigation', { name: 'Bookings settings' });
+    await expect(nav).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'People' })).toBeInTheDocument();
+    await expect(canvas.getByText('Connections')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'Teams' })).toHaveAttribute('aria-current', 'page');
+  },
+};
+
 /** An object's page: its tile, the Custom badge, and its tabs in the body. */
 export const ObjectPage: Story = {
   args: { page: 'object' },

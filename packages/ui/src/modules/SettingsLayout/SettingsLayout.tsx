@@ -19,7 +19,7 @@ import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
 import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { PageEdge } from '../../lib/page-edge.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
-import { NavItem } from '../Sidebar/Sidebar.tsx';
+import { NavGroup, NavItem } from '../Sidebar/Sidebar.tsx';
 import styles from './SettingsLayout.module.css';
 import { strings } from './strings.ts';
 
@@ -29,6 +29,11 @@ export interface SettingsNavEntry {
   readonly label: string;
   readonly href: string;
   readonly icon: IconName;
+  /**
+   * The group the entry sits under, its name shown above it ("Connections", "People"): entries in a row with the same
+   * group share one heading, in the order given. Left out, the entry stands in the plain list.
+   */
+  readonly group?: string;
 }
 
 /** Props for SettingsLayout. */
@@ -263,7 +268,7 @@ export function ViewOnlyTag({ reason }: ViewOnlyTagProps) {
   );
 }
 
-/** The settings pages as a column beside the page, the one shown marked. */
+/** The settings pages as a column beside the page, the one shown marked, under their groups' names when they have them. */
 function SettingsNav({
   nav,
   currentNavId,
@@ -273,19 +278,46 @@ function SettingsNav({
   readonly currentNavId: string | undefined;
   readonly navLabel: string;
 }) {
+  const list = (entries: readonly SettingsNavEntry[]) => (
+    <ul className={styles.entries}>
+      {entries.map((entry) => (
+        <li key={entry.id}>
+          <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
+            {entry.label}
+          </NavItem>
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <nav className={styles.nav} aria-label={navLabel}>
-      <ul className={styles.entries}>
-        {nav.map((entry) => (
-          <li key={entry.id}>
-            <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
-              {entry.label}
-            </NavItem>
-          </li>
-        ))}
-      </ul>
+      {groupsOf(nav).map((run) =>
+        run.group === undefined ? (
+          <div key={run.key}>{list(run.entries)}</div>
+        ) : (
+          <NavGroup key={run.key} label={run.group} isLabelShown>
+            {list(run.entries)}
+          </NavGroup>
+        ),
+      )}
     </nav>
   );
+}
+
+/** The entries in runs that share a group (or have none), in the order given, each keyed by its first entry. */
+function groupsOf(nav: readonly SettingsNavEntry[]) {
+  return nav.reduce<
+    readonly {
+      readonly key: string;
+      readonly group: string | undefined;
+      readonly entries: readonly SettingsNavEntry[];
+    }[]
+  >((runs, entry) => {
+    const last = runs.at(-1);
+    return last !== undefined && last.group === entry.group
+      ? [...runs.slice(0, -1), { ...last, entries: [...last.entries, entry] }]
+      : [...runs, { key: entry.id, group: entry.group, entries: [entry] }];
+  }, []);
 }
 
 /** Props for SettingsStack. */

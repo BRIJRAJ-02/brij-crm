@@ -192,6 +192,29 @@
     padding-inline: calc(var(--space-16) - var(--space-6)) 0;
   }
 
+  /* A module's tabs inside its TopBar (Bookings): the bar's height and no line of their own, the underline on the
+     TopBar's hairline, so the page has one header and one line under it (the owner, 9 November 2026). The first
+     label sits a tab's padding from the title's end; on a narrow bar the row scrolls inside itself. */
+  .root:has(> .bar[data-variant='topbar']) {
+    flex: 0 1 auto;
+  }
+
+  .bar[data-variant='topbar'] {
+    flex: 1;
+    flex-wrap: nowrap;
+    border-block-end: none;
+  }
+
+  .bar[data-variant='topbar'] .list {
+    gap: var(--space-2);
+    padding-inline: 0;
+  }
+
+  .bar[data-variant='topbar'] .tab {
+    block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    padding-inline: var(--space-6);
+  }
+
   .tab[data-selected] {
     color: var(--text);
   }

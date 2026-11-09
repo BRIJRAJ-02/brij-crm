@@ -98,6 +98,16 @@
     min-inline-size: 0;
   }
 
+  /* A module's tabs after the title (`tabs`): the bar's whole height, so their underline sits on its hairline. They
+     give way before the actions, scrolling sideways inside themselves on a narrow bar. */
+  .tabs {
+    display: flex;
+    flex: 0 1 auto;
+    align-self: stretch;
+    min-inline-size: 0;
+    margin-inline-start: var(--space-8);
+  }
+
   .end {
     display: flex;
     flex: none;

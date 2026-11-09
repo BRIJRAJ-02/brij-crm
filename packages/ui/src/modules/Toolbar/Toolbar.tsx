@@ -48,6 +48,12 @@ export interface TopBarProps {
   readonly crumbs?: readonly Crumb[];
   /** Beside the title: an info button, the favourite star. */
   readonly meta?: ReactNode;
+  /**
+   * A module's own tabs after the title, on the bar's line (Bookings' Meetings · Pages · Availability · Routing): a
+   * `Tabs variant="topbar"`, whose underline sits on the bar's hairline, so the page has one header and one line
+   * under it (the owner, 9 November 2026: no second line under the module tabs).
+   */
+  readonly tabs?: ReactNode;
   /** The end of the bar: who else is here, the page's actions. */
   readonly children?: ReactNode;
   /** The title's heading, for the app to focus after navigating. */
@@ -72,7 +78,18 @@ export interface TopBarProps {
  * the page's h1, and the page's actions. With `crumbs`, the trail shows the
  * title as its current place and the h1 stays for screen readers.
  */
-export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isLoading = false, back }: TopBarProps) {
+export function TopBar({
+  title,
+  icon,
+  hue,
+  crumbs,
+  meta,
+  tabs,
+  children,
+  titleRef,
+  isLoading = false,
+  back,
+}: TopBarProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   const hasTrail = crumbs !== undefined && crumbs.length > 0;
   // Focused only by the app after a route change, so it never joins the tab order.
@@ -102,6 +119,8 @@ export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isL
       {shownTitle}
       {isLoading || hasTrail ? <VisuallyHidden>{heading}</VisuallyHidden> : null}
       {isLoading || meta === undefined ? null : <span className={styles.meta}>{meta}</span>}
+      {/* The tabs stay while the page loads: they are the module's, known before its page is. */}
+      {tabs !== undefined && <div className={styles.tabs}>{tabs}</div>}
       {!isLoading && children !== undefined && <div className={styles.end}>{children}</div>}
     </header>
   );
