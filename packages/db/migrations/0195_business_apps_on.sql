@@ -15,6 +15,16 @@
 -- Postgres 17 compatible. Any change to these roles or functions goes through security-access-reviewer.
 set local lock_timeout = '5s';
 --> statement-breakpoint
+-- A workspace the operator console had taken early access away from, while it still had apps installed, kept them
+-- hidden. Opening every app to everyone must not quietly bring those back: its installed apps are switched off here, as
+-- an owner's switch-off, and an owner turns them on again in Settings › Apps.
+update workspace_apps a
+set removed_at = now()
+from workspaces w
+where w.id = a.workspace_id
+  and a.removed_at is null
+  and not ('business_apps' = any (w.early_access));
+--> statement-breakpoint
 grant crm_menu_lookup to current_user with inherit false, set true;
 --> statement-breakpoint
 grant create on schema public to crm_menu_lookup;
