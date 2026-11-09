@@ -764,6 +764,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
     services: {
       catalogue: os.services.catalogue.handler(notServed),
+      duplicate: os.services.duplicate.handler(notServed),
       saveCategory: os.services.saveCategory.handler(notServed),
       deleteCategory: os.services.deleteCategory.handler(notServed),
       moveCategory: os.services.moveCategory.handler(notServed),
@@ -827,6 +828,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     // The Menu app (spec 0065, H1) is driven against its own fake in `menu/store.test.ts`.
     menu: {
       draft: os.menu.draft.handler(notServed),
+      duplicate: os.menu.duplicate.handler(notServed),
       saveMenu: os.menu.saveMenu.handler(notServed),
       deleteMenu: os.menu.deleteMenu.handler(notServed),
       saveSection: os.menu.saveSection.handler(notServed),

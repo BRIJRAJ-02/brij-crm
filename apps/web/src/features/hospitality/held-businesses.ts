@@ -50,3 +50,25 @@ export function useHeldBusinesses(data: DataLayer, slug: string): HeldBusinesses
   const chosen = choice.status === 'ready' ? choice.value : undefined;
   return { store, properties, current: chosen ?? properties[0]?.id, chosen };
 }
+
+/** The other businesses a screen can copy to, and the shown one's currency (AC-6591); none while there is one. */
+export interface OtherBusinesses {
+  readonly others: readonly PropertySummary[];
+  readonly currency: string | undefined;
+}
+
+/**
+ * The businesses other than `shown` (undefined is the first), for Duplicate to another business (spec 0065 H7,
+ * AC-6591): empty without the suite's store, while the list loads, and with one business.
+ */
+export function useOtherBusinesses(
+  store: HospitalityStore | undefined,
+  slug: string,
+  shown: string | undefined,
+): OtherBusinesses {
+  const listed = useHospitality(store === undefined ? NOT_HELD : store.properties(slug));
+  if (listed.status !== 'ready' || listed.value.properties.length < 2) return { others: [], currency: undefined };
+  const { properties } = listed.value;
+  const here = properties.find((each) => each.id === shown) ?? properties[0];
+  return { others: properties.filter((each) => each.id !== here?.id), currency: here?.currency };
+}

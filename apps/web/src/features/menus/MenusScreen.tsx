@@ -6,7 +6,14 @@
 // Structure and Items, with the guest menu's phone beside them, staying as the tabs change.
 // Main task: build a menu and publish it, watching the guest menu take shape in the phone beside it.
 // Leaves out: the guest look (the Design page), QR codes per table (H2, the Menu QR app), import (H6), analytics (0066).
-import { isDataError, type MenuDraft, type MenuItem as Dish, type MenuStore, type PlaceHours } from '@crm/data';
+import {
+  isDataError,
+  type HospitalityStore,
+  type MenuDraft,
+  type MenuItem as Dish,
+  type MenuStore,
+  type PlaceHours,
+} from '@crm/data';
 import { menuLookScheme } from '@crm/data/menu';
 import { useHospitality } from '@crm/data/react';
 import {
@@ -59,6 +66,9 @@ import { StructureTab } from './StructureTab.tsx';
 import { MenusPending } from './MenusPending.tsx';
 import { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 import { StartBusiness } from '../hospitality/StartBusiness.tsx';
+import { DuplicateToBusiness } from '../hospitality/DuplicateToBusiness.tsx';
+import { useOtherBusinesses } from '../hospitality/held-businesses.ts';
+import { strings as hospitalityStrings } from '../hospitality/strings.ts';
 import { strings } from './strings.ts';
 
 export { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
@@ -77,12 +87,15 @@ export type Open =
   | { readonly kind: 'qr' }
   | { readonly kind: 'hide' }
   | { readonly kind: 'deleteMenu'; readonly menuId: string; readonly name: string }
+  | { readonly kind: 'duplicateMenu'; readonly menuId: string; readonly name: string }
   | { readonly kind: 'deleteSection'; readonly sectionId: string; readonly name: string }
   | { readonly kind: 'deleteItem'; readonly item: Dish }
   | undefined;
 
 export interface MenusScreenProps {
   readonly store: MenuStore;
+  /** The suite's store: from two businesses, a menu can be copied to another (spec 0065 H7, AC-6591). */
+  readonly hospitality?: HospitalityStore;
   readonly slug: string;
   readonly toasts: Toasts;
   /**
@@ -98,8 +111,9 @@ export interface MenusScreenProps {
 }
 
 /** The Menus screen (spec 0065, H1). */
-export function MenusScreen({ store, slug, toasts, business, view }: MenusScreenProps) {
+export function MenusScreen({ store, hospitality, slug, toasts, business, view }: MenusScreenProps) {
   const state = useHospitality(store.draft(slug));
+  const businesses = useOtherBusinesses(hospitality, slug, store.property(slug));
   const [placeId, setPlaceId] = useState<string | undefined>();
   const [open, setOpen] = useState<Open>();
   // Add another stays on from one opening of the item sheet to the next, as Create more does.
@@ -364,6 +378,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     ...(isNarrow ? (['design'] as const) : []),
     ...(isNarrow && current !== undefined ? (['settings'] as const) : []),
     ...(draft.canEdit && isLive && draft.changes > 0 ? (['discard'] as const) : []),
+    ...(draft.canEdit && current !== undefined && businesses.others.length > 0 ? (['duplicate'] as const) : []),
     ...(draft.canEdit && current !== undefined ? (['delete'] as const) : []),
   ];
   const hasDrafts = draft.canEdit && isLive && draft.changes > 0;
@@ -432,6 +447,8 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
                 else if (key === 'discard') setOpen({ kind: 'discard' });
                 else if (key === 'delete' && current !== undefined)
                   setOpen({ kind: 'deleteMenu', menuId: current.id, name: current.name });
+                else if (key === 'duplicate' && current !== undefined)
+                  setOpen({ kind: 'duplicateMenu', menuId: current.id, name: current.name });
               }}
             >
               {moreItems.includes('design') ? (
@@ -447,6 +464,11 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
               {moreItems.includes('discard') ? (
                 <MenuItem id="discard" icon="undo-2">
                   {strings.discardChanges}
+                </MenuItem>
+              ) : null}
+              {moreItems.includes('duplicate') ? (
+                <MenuItem id="duplicate" icon="copy">
+                  {hospitalityStrings.duplicateMenu}
                 </MenuItem>
               ) : null}
               {moreItems.includes('delete') ? (
@@ -824,6 +846,19 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
             >
               {strings.deleteMenuLine}
             </Modal>
+            {open?.kind === 'duplicateMenu' ? (
+              <DuplicateToBusiness
+                isOpen
+                onOpenChange={(isOpen) => {
+                  if (!isOpen) setOpen(undefined);
+                }}
+                name={open.name}
+                others={businesses.others}
+                currency={businesses.currency}
+                onDuplicate={(to) => store.duplicate(slug, open.menuId, to)}
+                toasts={toasts}
+              />
+            ) : null}
             <Modal
               variant="confirm"
               tone="danger"

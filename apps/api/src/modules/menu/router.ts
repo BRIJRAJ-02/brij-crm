@@ -6,6 +6,7 @@ import {
   deleteOptionGroup,
   deleteSection,
   discardMenuDraft,
+  duplicateMenu,
   moveMenuPart,
   placeItem,
   publishMenus,
@@ -185,6 +186,17 @@ export const menuRouter = m.router({
     await removeFiles(context, removedPaths);
     return draft;
   }),
+  // A copy into another business's draft (spec 0065 H7, AC-6591): nothing a guest sees changes until it publishes.
+  duplicate: m.duplicate.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      duplicateMenu(context.scope, {
+        ...inProperty(input),
+        menuId: input.menuId,
+        toPropertyId: input.to,
+        id: input.id,
+      }),
+    ),
+  ),
   discard: m.discard.handler(async ({ context, input }) => {
     const { draft, removedPaths } = await commitWrite(context, { mutationId: input.mutationId }, () =>
       discardMenuDraft(context.scope, inProperty(input)),

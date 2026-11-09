@@ -13,6 +13,7 @@ import { installApp } from './apps.ts';
 import {
   deleteItem,
   discardMenuDraft,
+  duplicateMenu,
   placeItem,
   publishMenus,
   readMenuDraft,
@@ -23,7 +24,13 @@ import {
 } from './menu.ts';
 import { createPlace, getBusiness, saveBusiness } from './places.ts';
 import { createProperty, listProperties, removeProperty } from './property.ts';
-import { archiveServices, getCatalogue, saveService, saveServiceCategory } from '../visits/catalogue.ts';
+import {
+  archiveServices,
+  duplicateService,
+  getCatalogue,
+  saveService,
+  saveServiceCategory,
+} from '../visits/catalogue.ts';
 import { listServicePlaces } from '../visits/table-service.ts';
 
 let db: Database;
@@ -401,5 +408,63 @@ describe('review fixes (spec 0065 H7)', () => {
     await expect(saveService(w.owner, { id: randomUUID(), service })).rejects.toThrow(
       'One of those rooms or chairs doesn’t exist.',
     );
+  });
+});
+
+describe('Duplicate to another business (spec 0065 H7, AC-6591)', () => {
+  it('copies a menu with its sections and dishes, keeping the numbers, once however often it is sent', async () => {
+    const w = await twoBusinesses();
+    const menuId = randomUUID();
+    await saveMenu(w.owner, { id: menuId, name: 'Dinner', placeIds: [w.placeId] });
+    const sectionId = randomUUID();
+    await saveSection(w.owner, { id: sectionId, menuId, name: 'Mains', layout: 'list' });
+    await saveItem(w.owner, { id: randomUUID(), sectionId, item: DISH });
+    const copy = randomUUID();
+    const sent = { menuId, toPropertyId: w.second, id: copy };
+    const draft = await duplicateMenu(w.owner, sent);
+    expect(draft.currency).toBe('EUR');
+    expect(draft.menus).toMatchObject([{ id: copy, name: 'Dinner', placeIds: [] }]);
+    expect(draft.sections.map((section) => section.name)).toEqual(['Mains']);
+    expect(draft.items.map((item) => [item.name, item.priceMinor])).toEqual([['Soup', 650]]);
+    expect(draft.sections[0]?.itemIds).toEqual(draft.items.map((item) => item.id));
+    // New rows, never the first's: the first's own draft is as it was.
+    const first = await readMenuDraft(w.owner);
+    expect(first.items.map((item) => item.id)).not.toContain(draft.items[0]?.id);
+    expect((await duplicateMenu(w.owner, sent)).menus).toHaveLength(1);
+    await expect(
+      duplicateMenu(w.owner, {
+        menuId,
+        toPropertyId: (await listProperties(w.owner)).properties[0]?.id ?? '',
+        id: randomUUID(),
+      }),
+    ).rejects.toThrow('Pick another business.');
+  });
+
+  it('copies a service with its options to another business, offered nowhere yet', async () => {
+    const w = await visitWorkspace(db, 'appointments');
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Spa', kind: 'spa', currency: 'EUR' });
+    const serviceId = randomUUID();
+    await saveService(w.owner, {
+      id: serviceId,
+      service: {
+        name: 'Cut',
+        categoryId: null,
+        bufferAfterMin: 5,
+        online: true,
+        staffRule: 'all',
+        staffIds: [],
+        placeIds: [w.placeId],
+        needs: [],
+        variants: [{ name: 'Short', minutes: 30, priceMinor: 2000, priceType: 'fixed', bufferBeforeMin: 0 }],
+      },
+    });
+    const copy = randomUUID();
+    const there = await duplicateService(w.owner, { serviceId, toPropertyId: second, id: copy });
+    expect(there.currency).toBe('EUR');
+    expect(there.services).toMatchObject([
+      { id: copy, name: 'Cut', online: false, placeIds: [], variants: [{ name: 'Short', priceMinor: 2000 }] },
+    ]);
+    expect((await getCatalogue(w.owner)).services.map((each) => each.id)).toEqual([serviceId]);
   });
 });

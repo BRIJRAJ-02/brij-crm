@@ -3459,6 +3459,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'menu.saveLook': 5,
   'menu.publish': 5,
   'menu.discard': 6,
+  // Duplicate to another business (spec 0065 H7, AC-6591): a second business made before the copy.
+  'menu.duplicate': 6,
   // The Hospitality setup (spec 0065): Table seating installed first (and tables added, an area made, or a table
   // archived before the case's own write).
   'hospitality.remove': 2,
@@ -3494,6 +3496,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'services.setCategory': 3,
   'services.archive': 3,
   'services.restore': 4,
+  'services.duplicate': 4,
   'services.saveStaff': 2,
   'services.moveStaff': 3,
   'services.linkStaff': 3,
@@ -4173,6 +4176,21 @@ Object.assign(WRITES, {
     await m.client.menu.discard({ workspace: m.slug, mutationId });
     return [{ kind: 'nav' }];
   },
+  // A copy into another business's draft changes no record: only the second business's own `nav` row is stored.
+  'menu.duplicate': async (m: Member, mutationId: string) => {
+    const { menuId } = await menuItemOf(m);
+    const to = newId();
+    await m.client.hospitality.createProperty({
+      workspace: m.slug,
+      id: to,
+      name: 'Second',
+      kind: 'bar',
+      currency: 'EUR',
+      mutationId: newId(),
+    });
+    await m.client.menu.duplicate({ workspace: m.slug, menuId, to, id: newId(), mutationId });
+    return [{ kind: 'nav' }, { kind: 'nav' }];
+  },
 });
 
 // Table seating (spec 0066 B7 lite): saving the setup changes no record and stores no row of its own; a status move
@@ -4378,6 +4396,22 @@ Object.assign(WRITES, {
     const serviceId = await haircutAt(m, placeId);
     await m.client.services.archive({ workspace: m.slug, serviceIds: [serviceId], mutationId });
     return [{ kind: 'nav' }, visitsAt(placeId), visitsAt(placeId, mutationId)];
+  },
+  // A copy offered at no place yet: no `visits` row of its own.
+  'services.duplicate': async (m: Member, mutationId: string) => {
+    const { placeId } = await appointmentsOf(m);
+    const serviceId = await haircutAt(m, placeId);
+    const to = newId();
+    await m.client.hospitality.createProperty({
+      workspace: m.slug,
+      id: to,
+      name: 'Second',
+      kind: 'spa',
+      currency: 'EUR',
+      mutationId: newId(),
+    });
+    await m.client.services.duplicate({ workspace: m.slug, serviceId, to, id: newId(), mutationId });
+    return [{ kind: 'nav' }, visitsAt(placeId), { kind: 'nav' }];
   },
   'services.restore': async (m: Member, mutationId: string) => {
     const { placeId } = await appointmentsOf(m);

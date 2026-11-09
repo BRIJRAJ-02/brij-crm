@@ -405,6 +405,14 @@ export type SaveMenuLookInput = z.infer<typeof SaveMenuLookInput>;
 
 /** Publish or Discard (AC-6525). */
 export const MenuDraftWrite = PropertyScoped.extend(Write);
+
+/**
+ * Duplicate a menu to another business (spec 0065 H7, AC-6591): `id` is the copy's, the caller's own, so a retry makes
+ * one. Answers the other business's draft.
+ */
+export const DuplicateMenuInput = PropertyScoped.extend({ menuId: Uuid, to: Uuid, id: Uuid, ...Write });
+/** Duplicating a menu to another business. */
+export type DuplicateMenuInput = z.infer<typeof DuplicateMenuInput>;
 /** Publish or Discard. */
 export type MenuDraftWrite = z.infer<typeof MenuDraftWrite>;
 
@@ -558,4 +566,6 @@ export const menuContract = {
   saveLook: oc.input(SaveMenuLookInput).output(MenuDraft),
   publish: oc.input(MenuDraftWrite).output(MenuDraft),
   discard: oc.input(MenuDraftWrite).output(MenuDraft),
+  /** Copies a menu into another business's draft (AC-6591); answers that draft. */
+  duplicate: oc.input(DuplicateMenuInput).output(MenuDraft),
 };

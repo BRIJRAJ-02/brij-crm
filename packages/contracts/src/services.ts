@@ -299,6 +299,14 @@ export type SetServicesOnlineInput = z.infer<typeof SetServicesOnlineInput>;
 
 /** Several services into one category (null: none), after its last. */
 export const SetServicesCategoryInput = ServicesInput.extend({ categoryId: Uuid.nullable() });
+
+/**
+ * Duplicate a service to another business (spec 0065 H7, AC-6591): `id` is the copy's, the caller's own, so a retry
+ * makes one. Answers the other business's catalogue.
+ */
+export const DuplicateServiceInput = CatalogueWrite.extend({ serviceId: Uuid, to: Uuid, id: Uuid });
+/** Duplicating a service to another business. */
+export type DuplicateServiceInput = z.infer<typeof DuplicateServiceInput>;
 /** Several services into one category. */
 export type SetServicesCategoryInput = z.infer<typeof SetServicesCategoryInput>;
 
@@ -401,6 +409,8 @@ export const servicesContract = {
   setCategory: oc.input(SetServicesCategoryInput).output(CatalogueView),
   archive: oc.input(ServicesInput).output(CatalogueView),
   restore: oc.input(ServicesInput).output(CatalogueView),
+  /** Copies a service into another business's catalogue (AC-6591); answers that catalogue. */
+  duplicate: oc.input(DuplicateServiceInput).output(CatalogueView),
   team: oc.input(WorkspaceScoped).output(StaffTeamView),
   shifts: oc.input(WorkspaceScoped).output(StaffTeamView),
   saveStaff: oc.input(SaveStaffInput).output(StaffTeamView),

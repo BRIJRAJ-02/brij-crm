@@ -31,6 +31,9 @@ import {
 import { useId, useMemo, useState } from 'react';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { ShownBusinessLink } from '../hospitality/ShownBusinessLink.tsx';
+import { DuplicateToBusiness } from '../hospitality/DuplicateToBusiness.tsx';
+import { useOtherBusinesses } from '../hospitality/held-businesses.ts';
+import { strings as hospitalityStrings } from '../hospitality/strings.ts';
 import { servicePrice, serviceLength } from './format.ts';
 import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
@@ -60,13 +63,16 @@ const COLUMNS: readonly TableColumn[] = [
 type Open =
   | { readonly kind: 'service'; readonly service?: CatalogueService; readonly start?: ServiceStart }
   | { readonly kind: 'category'; readonly category?: CatalogueCategory }
-  | { readonly kind: 'delete-category'; readonly category: CatalogueCategory };
+  | { readonly kind: 'delete-category'; readonly category: CatalogueCategory }
+  | { readonly kind: 'duplicate'; readonly service: CatalogueService };
 
 /** The catalogue. */
 export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScreenProps) {
   const { locale } = useFormatSettings();
   const newId = store.newId;
   const state = useHospitality(store.catalogue(slug));
+  // From two businesses, a service can be copied to another (spec 0065 H7, AC-6591).
+  const businesses = useOtherBusinesses(hospitality, slug, hospitality?.current(slug));
   const [open, setOpen] = useState<Open | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const view = state.status === 'ready' ? state.value : undefined;
@@ -349,6 +355,7 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
                             if (key === 'down')
                               void store.moveService(slug, service.id, categoryId, index + 1).then(said);
                             if (key === 'archive') archive([service]);
+                            if (key === 'duplicate') setOpen({ kind: 'duplicate', service });
                           }}
                         >
                           <MenuItem id="edit" icon="pencil">
@@ -360,6 +367,11 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
                           <MenuItem id="down" icon="arrow-down">
                             {strings.moveDown}
                           </MenuItem>
+                          {businesses.others.length > 0 ? (
+                            <MenuItem id="duplicate" icon="copy">
+                              {hospitalityStrings.duplicateService}
+                            </MenuItem>
+                          ) : null}
                           <MenuSeparator />
                           <MenuItem id="archive" icon="archive">
                             {strings.archive}
@@ -449,6 +461,19 @@ export function ServicesScreen({ store, hospitality, slug, toasts }: ServicesScr
             if (refused === undefined) setOpen(undefined);
             return refused?.message;
           }}
+        />
+      ) : null}
+      {open?.kind === 'duplicate' ? (
+        <DuplicateToBusiness
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setOpen(undefined);
+          }}
+          name={open.service.name}
+          others={businesses.others}
+          currency={businesses.currency}
+          onDuplicate={(to) => store.duplicate(slug, open.service.id, to)}
+          toasts={toasts}
         />
       ) : null}
       <Modal

@@ -747,3 +747,78 @@ export async function restoreServices(
     return { places: await placesOfServices(tx, ids) };
   });
 }
+
+/**
+ * Duplicate to another business (spec 0065 H7, AC-6591): copies a live service of this business (`propertyId`, else
+ * the first) into `toPropertyId`'s catalogue under `id` (the caller's, so a retry makes one), with its options and
+ * their numbers (nothing converts a price; the screen warns first when the currencies differ), its staff rule and
+ * chosen staff (staff work across businesses), and the kinds of room or chair it needs. It is offered at no place and
+ * sits in no category until the other business picks them, and it starts offline. Answers the other's catalogue.
+ */
+export async function duplicateService(
+  scope: EngineScope,
+  input: { readonly serviceId: string; readonly toPropertyId: string; readonly id: string } & InProperty,
+  deps: CatalogueDeps = {},
+  hooks: readonly AfterWrite[] = [],
+): Promise<CatalogueView> {
+  requirePermission(scope, 'services.manage');
+  const serviceId = checkId(input.serviceId, SERVICE_MISSING);
+  const id = checkId(input.id, SERVICE_MISSING);
+  const where = { propertyId: input.toPropertyId };
+  return catalogueWrite(scope, where, deps, hooks, 'service.duplicated', async ({ tx }, by, toPropertyId) => {
+    const from = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    if (from.id === toPropertyId) throw inputInvalid('toPropertyId', 'Pick another business.');
+    const [taken] = (await tx.execute<{ id: string }>(sql`select id::text from services where id = ${id}::uuid`)).rows;
+    const ids: Record<string, string> = { serviceId, copyId: id, propertyId: from.id, toPropertyId };
+    if (taken !== undefined) return { places: [], ids };
+    await requireServices(tx, from.id, [serviceId]);
+    const [counted] = (
+      await tx.execute<{ n: number }>(sql`select count(*)::int as n from services where archived_at is null`)
+    ).rows;
+    if ((counted?.n ?? 0) >= L.services) {
+      throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.services)} services.`);
+    }
+    const [source] = (await tx.execute<{ name: string }>(sql`select name from services where id = ${serviceId}::uuid`))
+      .rows;
+    const [end] = (
+      await tx.execute<{ next: number }>(sql`
+        select coalesce(max(position) + 1, 0)::int as next from services
+        where category_id is null and property_id = ${toPropertyId}::uuid
+      `)
+    ).rows;
+    await tx.execute(sql`
+      insert into services (workspace_id, id, property_id, category_id, name, description, slug, buffer_after_min, online,
+        capacity_mode, staff_rule, cancel_note, position, created_by_member_id, updated_by_member_id)
+      select workspace_id, ${id}::uuid, ${toPropertyId}::uuid, null, name, description,
+        ${await freeSlug(tx, source?.name ?? 'service', id)}, buffer_after_min, false, capacity_mode, staff_rule,
+        cancel_note, ${end?.next ?? 0}, ${by}::uuid, ${by}::uuid
+      from services where id = ${serviceId}::uuid
+    `);
+    const variants = (
+      await tx.execute<{ id: string }>(sql`
+        select id::text from service_variants where service_id = ${serviceId}::uuid and archived_at is null
+        order by position, id
+      `)
+    ).rows;
+    for (const variant of variants) {
+      await tx.execute(sql`
+        insert into service_variants (workspace_id, id, service_id, name, minutes, price_minor, price_type,
+          buffer_before_min, position)
+        select workspace_id, ${newId()}::uuid, ${id}::uuid, name, minutes, price_minor, price_type, buffer_before_min,
+          position
+        from service_variants where id = ${variant.id}::uuid
+      `);
+    }
+    await tx.execute(sql`
+      insert into service_staff (workspace_id, service_id, staff_id)
+      select workspace_id, ${id}::uuid, staff_id from service_staff where service_id = ${serviceId}::uuid
+    `);
+    // A kind of room or chair travels; a named one belongs to the source's places, so it stays behind.
+    await tx.execute(sql`
+      insert into service_resources (workspace_id, service_id, kind, count)
+      select workspace_id, ${id}::uuid, kind, count from service_resources
+      where service_id = ${serviceId}::uuid and resource_id is null
+    `);
+    return { places: [], ids };
+  });
+}

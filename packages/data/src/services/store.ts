@@ -59,6 +59,10 @@ export interface ServicesProcedures {
   ) => Promise<CatalogueView>;
   readonly archive: (input: CatalogueWrite & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
   readonly restore: (input: CatalogueWrite & { serviceIds: string[] }, options: Options) => Promise<CatalogueView>;
+  readonly duplicate: (
+    input: CatalogueWrite & { serviceId: string; to: string; id: string },
+    options: Options,
+  ) => Promise<CatalogueView>;
   readonly team: (input: Scoped, options: Options) => Promise<StaffTeamView>;
   readonly shifts: (input: Scoped, options: Options) => Promise<StaffTeamView>;
   readonly saveStaff: (input: Write & { id: string; staff: StaffFields }, options: Options) => Promise<StaffTeamView>;
@@ -333,6 +337,24 @@ export function openServices(given: {
           (mutationId, options, where) =>
             api.restore({ workspace, ...where, serviceIds: [...serviceIds], mutationId }, options),
         ),
+      /**
+       * Duplicate to another business (spec 0065 H7, AC-6591): a copy of the service in `to`'s catalogue, waiting for
+       * the server; this business's catalogue is untouched. The other's held copy reads again when next held.
+       */
+      duplicate: async (workspace: string, serviceId: string, to: string): Promise<DataError | undefined> => {
+        const where = whereOf(workspace);
+        try {
+          await call((options) =>
+            api.duplicate({ workspace, ...where, serviceId, to, id: mintId(), mutationId: mintId() }, options),
+          );
+        } catch (error) {
+          return toDataError(error);
+        }
+        for (const key of [...catalogues.keys()]) {
+          if (key.startsWith(`${workspace}:`) && key !== `${workspace}:${where.property ?? ''}`) catalogues.delete(key);
+        }
+        return undefined;
+      },
       /** The team: Staff's copy (`team`) or Shifts' (`shifts`). */
       team: (workspace: string, copy: TeamCopy = 'team'): HospitalityHeld<StaffTeamView> =>
         teamOf(workspace, copy).held,

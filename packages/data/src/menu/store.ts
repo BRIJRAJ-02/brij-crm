@@ -82,6 +82,10 @@ export interface MenuProcedures {
   readonly saveLook: (input: Scoped & { look: MenuLook }, options: Options) => Promise<MenuDraft>;
   readonly publish: (input: Scoped, options: Options) => Promise<MenuDraft>;
   readonly discard: (input: Scoped, options: Options) => Promise<MenuDraft>;
+  readonly duplicate: (
+    input: Scoped & { menuId: string; to: string; id: string },
+    options: Options,
+  ) => Promise<MenuDraft>;
 }
 
 /** A photo drawn again by the screen at both widths (AC-6527). */
@@ -554,6 +558,34 @@ export function openMenus(given: {
           (draft) => draft,
           (mutationId, options, at) => api.publish({ workspace, ...at, mutationId }, options),
         ),
+      /**
+       * Duplicate to another business (spec 0065 H7, AC-6591): a copy of the menu in `to`'s draft, waiting for the
+       * server; this business's draft is untouched. The other business's held copy reads again when next held.
+       */
+      duplicate: async (workspace: string, menuId: string, to: string): Promise<DataError | undefined> => {
+        const property = propertyOf(workspace);
+        try {
+          await call((options) =>
+            api.duplicate(
+              {
+                workspace,
+                ...(property === undefined ? {} : { property }),
+                menuId,
+                to,
+                id: mintId(),
+                mutationId: mintId(),
+              },
+              options,
+            ),
+          );
+        } catch (error) {
+          return toDataError(error);
+        }
+        for (const key of [...drafts.keys()]) {
+          if (key.startsWith(`${workspace}:`) && key !== `${workspace}:${property ?? ''}`) drafts.delete(key);
+        }
+        return undefined;
+      },
       /** Discard (AC-6525): back to what guests see. */
       discard: (workspace: string): Promise<DataError | undefined> =>
         edit(

@@ -26,7 +26,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
-import { checkId } from '../engine/ids.ts';
+import { checkId, newId } from '../engine/ids.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import { readMenuBrandIn } from '../brand/public.ts';
 import { auditSetup, hospitalityMember, requireApp } from './gate.ts';
@@ -1224,6 +1224,183 @@ export async function discardMenuDraft(scope: EngineScope, where: InProperty = {
     const removedPaths = await dropUnusedPhotos(tx, ws, property.id);
     await auditSetup(tx, scope, 'menu.discarded', { propertyId: property.id });
     return { draft: await readDraft(tx, scope, property), placeIds: [], removedPaths };
+  });
+}
+
+/**
+ * Duplicate to another business (spec 0065 H7, AC-6591): copies a menu, its sections and the dishes placed in them
+ * (with their sizes and option groups) into `toPropertyId`'s draft, as new rows under new ids. The copy keeps its
+ * numbers: nothing converts a price, so the screen warns first when the two currencies differ. It shows at no place
+ * (the other business picks its own), and its dishes carry no photo (a photo's files are one business's). `id` is the
+ * caller's, so a retry makes one copy. Counts against the other business's limits; answers its draft.
+ */
+export async function duplicateMenu(
+  scope: EngineScope,
+  input: { readonly menuId: string; readonly toPropertyId: string; readonly id: string } & InProperty,
+): Promise<MenuDraft> {
+  requirePermission(scope, 'hospitality.manage');
+  const by = hospitalityMember(scope);
+  const menuId = checkId(input.menuId, MENU_NOT_FOUND);
+  const id = checkId(input.id, MENU_NOT_FOUND);
+  return inWorkspace(scope, async (tx) => {
+    const ws = scope.workspaceId;
+    await requireApp(tx, ws, 'menu');
+    const from = await currentProperty(tx, ws, input.propertyId);
+    const to = await currentProperty(tx, ws, input.toPropertyId);
+    if (from.id === to.id) throw inputInvalid('toPropertyId', 'Pick another business.');
+    await lockKey(tx, `menu:${ws}`);
+    // A retry: the copy is already there.
+    if ((await menuOf(tx, ws, to.id, id)) !== undefined) return readDraft(tx, scope, to);
+    const rows = await readMenuRows(tx, ws, from.id);
+    const menu = rows.menus.find((row) => row.id === menuId);
+    if (menu === undefined) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
+    const sections = rows.sections.filter((row) => row.menuId === menuId);
+    const sectionIds = new Set(sections.map((row) => row.id));
+    const placements = rows.placements.filter((row) => sectionIds.has(row.sectionId));
+    const itemIds = new Set(placements.map((row) => row.itemId));
+    const items = rows.items.filter((row) => itemIds.has(row.id));
+    const itemGroups = rows.itemGroups.filter((row) => itemIds.has(row.itemId));
+    const groupIds = new Set(itemGroups.map((row) => row.groupId));
+    const groups = rows.groups.filter((row) => groupIds.has(row.id));
+    const counts = await tx.execute<{ menus: number; items: number; groups: number }>(sql`
+      select
+        (select count(*)::int from menus where workspace_id = ${ws}::uuid and property_id = ${to.id}::uuid) as menus,
+        (select count(*)::int from menu_items where workspace_id = ${ws}::uuid and property_id = ${to.id}::uuid) as items,
+        (select count(*)::int from menu_option_groups where workspace_id = ${ws}::uuid and property_id = ${to.id}::uuid)
+          as groups`);
+    const held = counts.rows[0] ?? { menus: 0, items: 0, groups: 0 };
+    if (held.menus >= L.menus) throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.menus)} menus.`);
+    if (held.items + items.length > L.items) {
+      throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.items)} dishes.`);
+    }
+    if (held.groups + groups.length > L.groups) {
+      throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.groups)} option groups.`);
+    }
+    // New ids for everything copied, so the two businesses never share a row.
+    const fresh = new Map<string, string>();
+    const idFor = (old: string): string => {
+      let next = fresh.get(old);
+      if (next === undefined) {
+        next = newId();
+        fresh.set(old, next);
+      }
+      return next;
+    };
+    const ownOf = (old: string): string => fresh.get(old) ?? old;
+    await tx.insert(menus).values({
+      workspaceId: ws,
+      id,
+      propertyId: to.id,
+      name: menu.name,
+      note: menu.note,
+      serving: menu.serving,
+      taxRate: menu.taxRate ?? 0,
+      serviceRate: menu.serviceRate ?? 0,
+      position: held.menus,
+      createdByMemberId: by,
+      updatedByMemberId: by,
+    });
+    for (const level of [
+      sections.filter((row) => row.parentId === null),
+      sections.filter((row) => row.parentId !== null),
+    ]) {
+      if (level.length === 0) continue;
+      await tx.insert(menuSections).values(
+        level.map((row) => ({
+          workspaceId: ws,
+          id: idFor(row.id),
+          menuId: id,
+          parentId: row.parentId === null ? null : ownOf(row.parentId),
+          name: row.name,
+          description: row.description,
+          layout: row.layout,
+          serving: row.serving,
+          position: row.position,
+        })),
+      );
+    }
+    if (groups.length > 0) {
+      await tx.insert(menuOptionGroups).values(
+        groups.map((row) => ({
+          workspaceId: ws,
+          id: idFor(row.id),
+          propertyId: to.id,
+          name: row.name,
+          rule: row.rule,
+          min: row.min ?? 0,
+          max: row.max,
+        })),
+      );
+      const options = rows.options.filter((row) => groupIds.has(row.groupId));
+      if (options.length > 0) {
+        await tx.insert(menuOptions).values(
+          options.map((row) => ({
+            workspaceId: ws,
+            groupId: ownOf(row.groupId),
+            name: row.name,
+            priceDeltaMinor: row.priceDeltaMinor,
+            position: row.position,
+          })),
+        );
+      }
+    }
+    for (let start = 0; start < items.length; start += 500) {
+      await tx.insert(menuItems).values(
+        items.slice(start, start + 500).map((row) => ({
+          workspaceId: ws,
+          id: idFor(row.id),
+          propertyId: to.id,
+          name: row.name,
+          description: row.description,
+          priceMinor: row.priceMinor,
+          priceNote: row.priceNote,
+          diet: [...row.diet],
+          allergens: row.allergens,
+          kcal: row.kcal,
+          featured: row.featured,
+          createdByMemberId: by,
+          updatedByMemberId: by,
+        })),
+      );
+    }
+    const sizes = rows.sizes.filter((row) => itemIds.has(row.itemId));
+    for (const [table, list] of [
+      [
+        menuItemSizes,
+        sizes.map((row) => ({
+          workspaceId: ws,
+          itemId: ownOf(row.itemId),
+          name: row.name,
+          priceMinor: row.priceMinor,
+          position: row.position,
+        })),
+      ],
+      [
+        menuItemOptionGroups,
+        itemGroups.map((row) => ({
+          workspaceId: ws,
+          itemId: ownOf(row.itemId),
+          groupId: ownOf(row.groupId),
+          position: row.position,
+        })),
+      ],
+      [
+        menuPlacements,
+        placements.map((row) => ({
+          workspaceId: ws,
+          sectionId: ownOf(row.sectionId),
+          itemId: ownOf(row.itemId),
+          position: row.position,
+        })),
+      ],
+    ] as const) {
+      for (let start = 0; start < list.length; start += 1000) {
+        await tx.insert(table).values(list.slice(start, start + 1000) as never[]);
+      }
+    }
+    await noteChange(tx, ws, to.id);
+    await auditSetup(tx, scope, 'menu.duplicated', { menuId, copyId: id, propertyId: from.id, toPropertyId: to.id });
+    return readDraft(tx, scope, to);
   });
 }
 

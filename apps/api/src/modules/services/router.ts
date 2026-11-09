@@ -1,4 +1,5 @@
 import {
+  duplicateService,
   addStaffBlock,
   addStaffTimeOff,
   archiveServices,
@@ -116,6 +117,17 @@ export const servicesRouter = s.router({
       archiveServices(
         context.scope,
         { ...inProperty(input), serviceIds: input.serviceIds },
+        { slotCache: context.visitSlots },
+        hooks,
+      ),
+    ),
+  ),
+  // A copy into another business's catalogue (spec 0065 H7, AC-6591).
+  duplicate: s.duplicate.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      duplicateService(
+        context.scope,
+        { ...inProperty(input), serviceId: input.serviceId, toPropertyId: input.to, id: input.id },
         { slotCache: context.visitSlots },
         hooks,
       ),

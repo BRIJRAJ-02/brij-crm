@@ -93,7 +93,17 @@ function ShownMenus({
   const bound = useMemo(() => store.at(property), [store, property]);
   // The preview's header is the loader's business until its answer for the new one lands.
   const shown = property === fromLoader ? business : { name: '', hours: {} };
-  return <MenusScreen key={property ?? ''} store={bound} slug={slug} toasts={toasts} business={shown} view={view} />;
+  return (
+    <MenusScreen
+      key={property ?? ''}
+      store={bound}
+      hospitality={hospitality}
+      slug={slug}
+      toasts={toasts}
+      business={shown}
+      view={view}
+    />
+  );
 }
 
 function MenusError({ error }: ErrorComponentProps) {
