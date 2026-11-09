@@ -144,6 +144,8 @@ const READS: ReadonlySet<string> = new Set([
   'hospitality.apps',
   'hospitality.business',
   'hospitality.resources',
+  // The workspace's properties (spec 0065 H7, slice 2).
+  'hospitality.properties',
   // Menu QR's codes (spec 0065, H2).
   'hospitality.qrCodes',
   // The places a link page's Menu or Reserve block can name (spec 0065, AC-6528).
@@ -3428,6 +3430,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'hospitality.remove': 2,
   'hospitality.saveBusiness': 2,
   'hospitality.createPlace': 2,
+  // Properties (spec 0065 H7): the business set up first (and a second property added before a removal).
+  'hospitality.createProperty': 2,
+  'hospitality.removeProperty': 3,
   'hospitality.updatePlace': 2,
   'hospitality.saveArea': 2,
   'hospitality.deleteArea': 3,
@@ -3830,6 +3835,33 @@ Object.assign(WRITES, {
       mutationId,
     });
     return [{ kind: 'nav' }];
+  },
+  // Adding or removing a property stores one `nav` row naming every active member: the switcher shows from two.
+  'hospitality.createProperty': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    await m.client.hospitality.createProperty({
+      workspace: m.slug,
+      id: newId(),
+      name: 'Second',
+      kind: 'bar',
+      currency: 'EUR',
+      mutationId,
+    });
+    return [{ kind: 'nav' }, { kind: 'nav', mutation_id: mutationId }];
+  },
+  'hospitality.removeProperty': async (m: Member, mutationId: string) => {
+    await hospitalityOf(m);
+    const property = newId();
+    await m.client.hospitality.createProperty({
+      workspace: m.slug,
+      id: property,
+      name: 'Second',
+      kind: 'bar',
+      currency: 'EUR',
+      mutationId: newId(),
+    });
+    await m.client.hospitality.removeProperty({ workspace: m.slug, property, mutationId });
+    return [{ kind: 'nav' }, { kind: 'nav' }, { kind: 'nav', mutation_id: mutationId }];
   },
   'hospitality.createPlace': async (m: Member, mutationId: string) => {
     await hospitalityOf(m);

@@ -38,7 +38,7 @@ const { members, properties, workspaceApps, workspaceRoles, workspaces } = schem
  * Tells every active member's sidebar that the Hospitality section changed (AC-6510): one `nav` change event naming
  * them, which their sidebars already follow, so the section comes and goes within the usual moment.
  */
-async function recordSidebars(context: WriteContext): Promise<void> {
+export async function recordSidebars(context: WriteContext): Promise<void> {
   const { tx, scope } = context;
   const rows = await tx
     .select({ id: members.id })

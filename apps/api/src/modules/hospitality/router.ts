@@ -4,6 +4,9 @@ import {
   archiveResource,
   businessCacheTags,
   createPlace,
+  createProperty,
+  listProperties,
+  removeProperty,
   deleteArea,
   deleteResource,
   getBusiness,
@@ -69,10 +72,29 @@ export const hospitalityRouter = h.router({
     await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
     return view;
   }),
-  business: h.business.handler(({ context }) => getBusiness(context.scope)),
+  business: h.business.handler(({ context, input }) =>
+    getBusiness(context.scope, input.property === undefined ? {} : { propertyId: input.property }),
+  ),
+  // Properties (spec 0065 H7, slice 2): adding or removing one changes every member's sidebar (the switcher), so each
+  // stores one `nav` change event; neither changes a guest page, so nothing at the edge is purged.
+  properties: h.properties.handler(({ context }) => listProperties(context.scope)),
+  createProperty: h.createProperty.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      createProperty(
+        context.scope,
+        { id: input.id, name: input.name, kind: input.kind, currency: input.currency },
+        hooks,
+      ),
+    ),
+  ),
+  removeProperty: h.removeProperty.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      removeProperty(context.scope, { propertyId: input.property }, hooks),
+    ),
+  ),
   saveBusiness: h.saveBusiness.handler(async ({ context, input }) => {
     const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
-      saveBusiness(context.scope, input.profile),
+      saveBusiness(context.scope, input.profile, input.property === undefined ? {} : { propertyId: input.property }),
     );
     await forgetMenus(context);
     // The business page reads its name, kind and contact live (spec 0066, B4): its edge copies go.
@@ -81,7 +103,11 @@ export const hospitalityRouter = h.router({
   }),
   createPlace: h.createPlace.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      createPlace(context.scope, { id: input.id, place: input.place }),
+      createPlace(context.scope, {
+        id: input.id,
+        place: input.place,
+        ...(input.property === undefined ? {} : { propertyId: input.property }),
+      }),
     ),
   ),
   updatePlace: h.updatePlace.handler(async ({ context, input }) => {

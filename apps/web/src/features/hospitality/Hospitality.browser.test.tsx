@@ -11,6 +11,7 @@ import type {
   HospitalityHeldState,
   HospitalityStore,
   PlaceFloor,
+  PropertiesView,
 } from '@crm/data';
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -47,6 +48,7 @@ const APPS: AppsView = {
 const BUSINESS: BusinessView = {
   canEdit: true,
   profile: {
+    id: '0192f0c8-0000-7000-8000-00000000b001',
     name: 'Somewhere Nowhere',
     kind: 'restaurant',
     description: 'Small plates, natural wine, late nights.',
@@ -127,10 +129,26 @@ function heldOf<Value>(first: Value) {
   return { held, set };
 }
 
+const FIRST = '0192f0c8-0000-7000-8000-00000000b001';
+const SECOND = '0192f0c8-0000-7000-8000-00000000b002';
+
+/** The workspace's businesses (spec 0065 H7): the one, or a second with nothing in it yet. */
+const businessesOf = (count: 1 | 2, canManage: boolean): PropertiesView => ({
+  canManage,
+  properties: [
+    { id: FIRST, name: 'Somewhere Nowhere', kind: 'restaurant', currency: 'GBP', position: 0, holds: 1 },
+    ...(count === 2
+      ? [{ id: SECOND, name: 'Late Bar', kind: 'bar' as const, currency: 'EUR', position: 1, holds: 0 }]
+      : []),
+  ],
+});
+
 /** A store holding one workspace's apps, business and one floor, recording the writes. */
-function storeOf(canManage = true) {
+function storeOf(canManage = true, businesses: 1 | 2 = 1) {
   const calls: string[] = [];
   const apps = heldOf({ ...APPS, canManage });
+  const properties = heldOf(businessesOf(businesses, canManage));
+  const choice = heldOf<string | undefined>(undefined);
   const business = heldOf(BUSINESS);
   const floor = heldOf(FLOOR);
   const done = () => Promise.resolve(undefined);
@@ -138,6 +156,21 @@ function storeOf(canManage = true) {
     newId: () => '01900002-0000-7000-8000-000000000001',
     apps: () => apps.held,
     business: () => business.held,
+    properties: () => properties.held,
+    choice: () => choice.held,
+    choose: (_slug: string, id: string) => {
+      calls.push(`choose:${id}`);
+      choice.set(() => id);
+    },
+    createProperty: (_slug: string, input: { readonly name: string }) => {
+      calls.push(`createProperty:${input.name}`);
+      return done();
+    },
+    removeProperty: (_slug: string, id: string) => {
+      calls.push(`removeProperty:${id}`);
+      properties.set((view) => ({ ...view, properties: view.properties.filter((each) => each.id !== id) }));
+      return done();
+    },
     floor: () => floor.held,
     // Each live table's code, as the QR codes answer reads (spec 0065, H2).
     qrCodes: () =>
@@ -299,6 +332,48 @@ describe('Settings › Business and a place’s tables', () => {
     await expect.element(page.getByText('6 tables')).toBeInTheDocument();
   });
 
+  it('offers an admin a second business, and lists two with the one shown marked, switching on a row', async () => {
+    await page.viewport(1280, 900);
+    const one = storeOf();
+    shown = await renderInApp(() => <BusinessScreen store={one.store} slug="acme" toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/business',
+      at: '/w/acme/settings/business',
+    });
+    await expect.element(page.getByText('Run another brand?')).toBeVisible();
+    await page.getByRole('button', { name: 'Add business' }).click();
+    await expect.element(page.getByRole('dialog', { name: 'New business' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    shown.unmount();
+    const { store, calls } = storeOf(true, 2);
+    shown = await renderInApp(() => <BusinessScreen store={store} slug="acme" toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/business',
+      at: '/w/acme/settings/business',
+    });
+    await expect.element(page.getByRole('rowheader', { name: 'Somewhere Nowhere · Showing' })).toBeVisible();
+    // Only the empty second one can go, and it asks first.
+    await expect.element(page.getByRole('button', { name: 'Remove Somewhere Nowhere' })).not.toBeInTheDocument();
+    await page.getByRole('rowheader', { name: 'Late Bar' }).click();
+    expect(calls).toContain(`choose:${SECOND}`);
+    await expect.element(page.getByRole('rowheader', { name: 'Late Bar · Showing' })).toBeVisible();
+    await page.getByRole('button', { name: 'Remove Late Bar' }).click();
+    await page.getByRole('button', { name: 'Remove business' }).click();
+    expect(calls).toContain(`removeProperty:${SECOND}`);
+  });
+
+  it('hides the businesses from a member who can’t add one while there is one', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf(false);
+    shown = await renderInApp(() => <BusinessScreen store={store} slug="acme" toasts={toasts} />, {
+      data: {},
+      pattern: '/w/$slug/settings/business',
+      at: '/w/acme/settings/business',
+    });
+    await expect.element(page.getByRole('rowheader', { name: 'Soho' })).toBeInTheDocument();
+    await expect.element(page.getByText('Run another brand?')).not.toBeInTheDocument();
+  });
+
   it('reads a late Friday as running into the next morning', async () => {
     await page.viewport(1280, 900);
     const { store } = storeOf();
@@ -370,9 +445,12 @@ describe('axe and the pictures', () => {
         await page.viewport(width, 900);
         applyTheme(theme);
         const { store } = storeOf();
+        const many = storeOf(true, 2).store;
         const screens = [
           ['apps', 'Menu QR', () => <AppsScreen store={store} slug="acme" toasts={toasts} />],
           ['business', 'Places', () => <BusinessScreen store={store} slug="acme" toasts={toasts} />],
+          // Two businesses (spec 0065 H7): the list, the one shown marked.
+          ['businesses', 'Businesses', () => <BusinessScreen store={many} slug="acme" toasts={toasts} />],
           [
             'tables',
             'Zones',

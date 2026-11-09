@@ -105,6 +105,9 @@ export type WeekDay = (typeof WEEK_DAYS)[number];
 
 /** The rules settled by the cross check (spec 0065, Limits), in one place. */
 export const HOSPITALITY_LIMITS = {
+  /** Properties a workspace holds (spec 0065 H7, AC-6518). */
+  properties: 20,
+  /** Places a property holds (AC-6518). */
   places: 20,
   areasPerPlace: 12,
   resourcesPerPlace: 300,

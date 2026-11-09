@@ -25,7 +25,7 @@ import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { auditSetup, hospitalityMember, requireAnyApp, requireBusiness } from './gate.ts';
-import { currentProperty, currentPropertyRef } from './property.ts';
+import { currentProperty, requireCurrencyFree } from './property.ts';
 
 const { places, properties, resources } = schema;
 
@@ -73,8 +73,9 @@ function checkZone(zone: string): void {
 }
 
 /**
- * Adds a place (up to 20, `LIMIT_REACHED` past it) in the caller's transaction, under the workspace's places lock;
- * a retry with the same id answers the place already made. The first install's card and Add place both call it.
+ * Adds a place to a property (up to 20 a property, AC-6518, `LIMIT_REACHED` past it) in the caller's transaction,
+ * under the workspace's places lock; a retry with the same id answers the place already made. The first install's
+ * card and Add place both call it. Left out, the property is the first.
  */
 export async function insertPlace(
   tx: WorkspaceTx,
@@ -83,6 +84,7 @@ export async function insertPlace(
   fields: PlaceFields,
   by: string,
   hours: PlaceHoursShape = RESTAURANT_HOURS,
+  propertyId?: string,
 ): Promise<void> {
   checkZone(fields.timeZone);
   await lockKey(tx, `places:${scope.workspaceId}`);
@@ -91,15 +93,24 @@ export async function insertPlace(
     .from(places)
     .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, id)));
   if (again !== undefined) return;
-  const [counted] = await tx.select({ n: count() }).from(places).where(eq(places.workspaceId, scope.workspaceId));
-  const position = counted?.n ?? 0;
-  if (position >= HOSPITALITY_LIMITS.places) {
-    throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(HOSPITALITY_LIMITS.places)} places.`);
+  const property = await currentProperty(tx, scope.workspaceId, propertyId);
+  const [counted] = await tx
+    .select({ n: count() })
+    .from(places)
+    .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.propertyId, property.id)));
+  if ((counted?.n ?? 0) >= HOSPITALITY_LIMITS.places) {
+    throw refuse('LIMIT_REACHED', `A business takes up to ${String(HOSPITALITY_LIMITS.places)} places.`);
   }
+  // Positions run across the workspace, so places keep one order whichever property lists them.
+  const [last] = await tx
+    .select({ end: sql<number>`coalesce(max(${places.position}) + 1, 0)::int` })
+    .from(places)
+    .where(eq(places.workspaceId, scope.workspaceId));
+  const position = last?.end ?? 0;
   await tx.insert(places).values({
     workspaceId: scope.workspaceId,
     id,
-    propertyId: currentPropertyRef(scope.workspaceId),
+    propertyId: property.id,
     ...placeColumns(fields),
     hours,
     publicKey: newKey(),
@@ -156,12 +167,21 @@ function placeView(row: PlaceRow, tables: number): Place {
   };
 }
 
-/** The workspace's places in order (or the one `only` names), each with its live table count. */
-async function readPlaces(tx: WorkspaceTx, workspaceId: string, only?: string): Promise<Place[]> {
+/** A property's places in order (or the one `only` names), each with its live table count. */
+async function readPlaces(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  only: { readonly placeId: string } | { readonly propertyId: string },
+): Promise<Place[]> {
   const rows = await tx
     .select(PLACE_COLUMNS)
     .from(places)
-    .where(and(eq(places.workspaceId, workspaceId), ...(only === undefined ? [] : [eq(places.id, only)])))
+    .where(
+      and(
+        eq(places.workspaceId, workspaceId),
+        'placeId' in only ? eq(places.id, only.placeId) : eq(places.propertyId, only.propertyId),
+      ),
+    )
     .orderBy(asc(places.position), asc(places.id));
   const counts = await tx
     .select({ placeId: resources.placeId, n: count() })
@@ -170,7 +190,7 @@ async function readPlaces(tx: WorkspaceTx, workspaceId: string, only?: string): 
       and(
         eq(resources.workspaceId, workspaceId),
         isNull(resources.archivedAt),
-        ...(only === undefined ? [] : [eq(resources.placeId, only)]),
+        ...('placeId' in only ? [eq(resources.placeId, only.placeId)] : []),
       ),
     )
     .groupBy(resources.placeId);
@@ -180,16 +200,17 @@ async function readPlaces(tx: WorkspaceTx, workspaceId: string, only?: string): 
 
 /** One place, or NOT_FOUND. */
 async function readPlace(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<Place> {
-  const [found] = await readPlaces(tx, workspaceId, placeId);
+  const [found] = await readPlaces(tx, workspaceId, { placeId });
   if (found === undefined) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
   return found;
 }
 
 /** The property as the screens show it, with its currency; undefined until someone has set it up. */
-async function readProperty(tx: WorkspaceTx, workspaceId: string): Promise<Property | undefined> {
-  const row = await currentProperty(tx, workspaceId);
+async function readProperty(tx: WorkspaceTx, workspaceId: string, propertyId?: string): Promise<Property | undefined> {
+  const row = await currentProperty(tx, workspaceId, propertyId);
   if (row.name === null || row.kind === null) return undefined;
   return {
+    id: row.id,
     name: row.name,
     kind: row.kind as Property['kind'],
     ...(row.description === null ? {} : { description: row.description }),
@@ -201,27 +222,46 @@ async function readProperty(tx: WorkspaceTx, workspaceId: string): Promise<Prope
   };
 }
 
-/** Settings › Business (AC-6507, AC-6508): the property and the places, for `hospitality.manage`. */
-export async function getBusiness(scope: EngineScope): Promise<BusinessView> {
+/**
+ * Settings › Business (AC-6507, AC-6508): a property and its places, for `hospitality.manage`. Left out, the property
+ * is the first (AC-6516: one property reads exactly as before).
+ */
+export async function getBusiness(
+  scope: EngineScope,
+  input: { readonly propertyId?: string } = {},
+): Promise<BusinessView> {
   requirePermission(scope, 'hospitality.manage');
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
-    const profile = await readProperty(tx, scope.workspaceId);
+    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    const profile = await readProperty(tx, scope.workspaceId, property.id);
     return {
       ...(profile === undefined ? {} : { profile }),
-      places: await readPlaces(tx, scope.workspaceId),
+      places: await readPlaces(tx, scope.workspaceId, { propertyId: property.id }),
       canEdit: true,
     };
   });
 }
 
-/** Saves the property, whole (AC-6507): empty text clears a field. Answers it as saved. */
-export async function saveBusiness(scope: EngineScope, fields: PropertyFields): Promise<Property> {
+/**
+ * Saves a property, whole (AC-6507): empty text clears a field. Its currency changes only while it has no price
+ * (AC-6519, `IN_USE`). Left out, the property is the first. Answers it as saved.
+ */
+export async function saveBusiness(
+  scope: EngineScope,
+  fields: PropertyFields,
+  input: { readonly propertyId?: string } = {},
+): Promise<Property> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     await requireBusiness(tx, scope.workspaceId);
+    const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
+    if (fields.currency !== undefined) {
+      await lockKey(tx, `menu:${scope.workspaceId}`);
+      await requireCurrencyFree(tx, scope.workspaceId, property, fields.currency);
+    }
     const values = {
       name: fields.name,
       kind: fields.kind,
@@ -230,6 +270,7 @@ export async function saveBusiness(scope: EngineScope, fields: PropertyFields): 
       email: blank(fields.email),
       website: blank(fields.website),
       links: fields.links ?? [],
+      ...(fields.currency === undefined ? {} : { currency: fields.currency }),
       updatedByMemberId: by,
     };
     await tx
@@ -239,11 +280,9 @@ export async function saveBusiness(scope: EngineScope, fields: PropertyFields): 
         createdByMemberId: sql`coalesce(${properties.createdByMemberId}, ${by}::uuid)`,
         updatedAt: sql`now()`,
       })
-      .where(
-        and(eq(properties.workspaceId, scope.workspaceId), eq(properties.id, currentPropertyRef(scope.workspaceId))),
-      );
-    await auditSetup(tx, scope, 'business.saved');
-    const saved = await readProperty(tx, scope.workspaceId);
+      .where(and(eq(properties.workspaceId, scope.workspaceId), eq(properties.id, property.id)));
+    await auditSetup(tx, scope, 'business.saved', { propertyId: property.id });
+    const saved = await readProperty(tx, scope.workspaceId, property.id);
     if (saved === undefined) throw new Error('The property was not stored.');
     return saved;
   });
@@ -252,7 +291,7 @@ export async function saveBusiness(scope: EngineScope, fields: PropertyFields): 
 /** Adds a place (AC-6508; up to 20). `id` is the caller's own, so a retry makes one place. */
 export async function createPlace(
   scope: EngineScope,
-  input: { readonly id: string; readonly place: PlaceFields },
+  input: { readonly id: string; readonly place: PlaceFields; readonly propertyId?: string },
 ): Promise<Place> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
@@ -260,7 +299,7 @@ export async function createPlace(
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     await requireBusiness(tx, scope.workspaceId);
-    await insertPlace(tx, scope, id, input.place, by);
+    await insertPlace(tx, scope, id, input.place, by, RESTAURANT_HOURS, input.propertyId);
     await auditSetup(tx, scope, 'place.created', { placeId: id });
     return readPlace(tx, scope.workspaceId, id);
   });

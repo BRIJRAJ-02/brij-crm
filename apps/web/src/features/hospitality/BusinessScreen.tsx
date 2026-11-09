@@ -2,6 +2,7 @@
 // Purpose: Settings › Business (spec 0065, AC-6507, AC-6508): the business the Hospitality apps share, and its places.
 // Main task: keep the profile right, see each place at a glance, and open one for its hours and tables.
 // Leaves out: menus, codes and reservation rules (each app's page), the logo (Settings › Brand), the cover photo.
+// With two businesses or more (spec 0065 H7), it shows the one chosen in the sidebar's switcher, and lists them all.
 import type { BusinessKind, Property, HospitalityStore, Place, PlaceFields, ResourceKind } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { BUSINESS_KINDS, DEFAULT_RESOURCE_KIND } from '@crm/data/hospitality';
@@ -10,6 +11,7 @@ import {
   ButtonLink,
   Card,
   CountryPicker,
+  CurrencyPicker,
   EmptyState,
   Field,
   Form,
@@ -33,6 +35,7 @@ import { appsSettingsHref, businessPageHref, placeTablesHref } from '../settings
 import { pageStrings } from './business-page-strings.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
+import { Businesses } from './Businesses.tsx';
 import { StartBusiness } from './StartBusiness.tsx';
 import { strings } from './strings.ts';
 
@@ -57,6 +60,9 @@ export interface BusinessScreenProps {
 
 /** Settings › Business: the profile, then each place. */
 export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
+  // The business shown follows the switcher (AC-6517): a new choice holds that business's copy.
+  const choice = useHospitality(store.choice(slug));
+  const properties = useHospitality(store.properties(slug));
   const state = useHospitality(store.business(slug));
   const apps = useHospitality(store.apps(slug));
   const [isAdding, setAdding] = useState(false);
@@ -120,6 +126,17 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
         </Button>
       }
     >
+      {/* From two businesses, which one this page shows comes first (spec 0065 H7). */}
+      {properties.status === 'ready' && properties.value.properties.length > 1 && (
+        <Businesses
+          store={store}
+          slug={slug}
+          toasts={toasts}
+          view={properties.value}
+          choice={choice.status === 'ready' ? choice.value : undefined}
+          currency={view?.profile?.currency}
+        />
+      )}
       {/* The public page (spec 0066, B4 lite): its own screen, one step from here. */}
       <SettingsSection title={pageStrings.title}>
         <Card>
@@ -199,6 +216,16 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
           />
         )}
       </SettingsSection>
+      {properties.status === 'ready' && properties.value.properties.length < 2 && (
+        <Businesses
+          store={store}
+          slug={slug}
+          toasts={toasts}
+          view={properties.value}
+          choice={choice.status === 'ready' ? choice.value : undefined}
+          currency={view?.profile?.currency}
+        />
+      )}
       <AddPlaceDialog
         key={isAdding ? 'open' : 'closed'}
         isOpen={isAdding}
@@ -214,7 +241,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   );
 }
 
-const PROFILE_FIELDS = ['name', 'kind', 'description', 'phone', 'email', 'website'] as const;
+const PROFILE_FIELDS = ['name', 'kind', 'description', 'phone', 'email', 'website', 'currency'] as const;
 
 /** The profile's fields, saved together with Save. */
 function ProfileCard({
@@ -230,6 +257,7 @@ function ProfileCard({
     readonly email: string;
     readonly website: string;
     readonly links: Property['links'];
+    readonly currency?: string;
   }) => Promise<void>;
 }) {
   const formId = useId();
@@ -239,6 +267,7 @@ function ProfileCard({
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
   const [website, setWebsite] = useState(profile?.website ?? '');
+  const [currency, setCurrency] = useState<string | null>(profile?.currency ?? null);
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const changed =
@@ -247,12 +276,23 @@ function ProfileCard({
     description !== (profile?.description ?? '') ||
     phone !== (profile?.phone ?? '') ||
     email !== (profile?.email ?? '') ||
-    website !== (profile?.website ?? '');
+    website !== (profile?.website ?? '') ||
+    (currency !== null && currency !== (profile?.currency ?? null));
   const save = () => {
     if (isBusy || !changed) return;
     setBusy(true);
     setRefusals([]);
-    onSave({ name, kind, description, phone, email, website, links: profile?.links ?? [] }).then(
+    onSave({
+      name,
+      kind,
+      description,
+      phone,
+      email,
+      website,
+      links: profile?.links ?? [],
+      // Sent only when it changed, so a price kept elsewhere never blocks a save of the other fields (AC-6519).
+      ...(currency !== null && currency !== (profile?.currency ?? null) ? { currency } : {}),
+    }).then(
       () => setBusy(false),
       (error: unknown) => {
         setBusy(false);
@@ -345,6 +385,9 @@ function ProfileCard({
             value={website}
             onChange={setWebsite}
           />
+        </SettingsRow>
+        <SettingsRow title={strings.currency} description={strings.currencyHint} control="field">
+          <CurrencyPicker label={strings.currency} isLabelHidden value={currency} onChange={setCurrency} />
         </SettingsRow>
       </Form>
     </Card>

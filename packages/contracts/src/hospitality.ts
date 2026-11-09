@@ -126,6 +126,7 @@ const Currency = z.string().refine((code) => CURRENCIES.has(code), { error: 'Pic
 
 /** A property (AC-6507, AC-6513), as Settings › Business shows it. Optional fields are absent when empty. */
 export const Property = z.object({
+  id: Uuid,
   name: z.string(),
   kind: BusinessKindName,
   description: z.string().optional(),
@@ -153,6 +154,11 @@ export const PropertyFields = z.object({
     })
     .optional(),
   links: SocialLinks.optional(),
+  /**
+   * What the property's prices are in (AC-6519). Left out, it stays as it is; a change is refused `IN_USE` while the
+   * property has a priced dish or service, since nothing ever converts a price.
+   */
+  currency: Currency.optional(),
 });
 /** A property as saved. */
 export type PropertyFields = z.infer<typeof PropertyFields>;
@@ -246,6 +252,52 @@ export const AppsView = z.object({
 /** Settings › Apps. */
 export type AppsView = z.infer<typeof AppsView>;
 
+/**
+ * Which property a hospitality call works in (spec 0065 H7, AC-6517): the switcher's choice. Left out, it is the
+ * workspace's first, so a workspace with one property never names it. One of another workspace answers `NOT_FOUND`.
+ */
+export const PropertyScoped = WorkspaceScoped.extend({ property: Uuid.optional() });
+/** Which property a hospitality call works in. */
+export type PropertyScoped = z.infer<typeof PropertyScoped>;
+
+/** One property as the switcher and Settings › Business list it (AC-6516, AC-6517). */
+export const PropertySummary = z.object({
+  id: Uuid,
+  /** Absent while nobody has set it up (the first property before the business card). */
+  name: z.string().optional(),
+  kind: BusinessKindName.optional(),
+  currency: z.string().optional(),
+  position: z.number().int().nonnegative(),
+  /** Its places, menus and services together: a property with none can be removed (AC-6590). */
+  holds: z.number().int().nonnegative(),
+});
+/** One property as listed. */
+export type PropertySummary = z.infer<typeof PropertySummary>;
+
+/**
+ * The workspace's properties in order (AC-6516, AC-6517), first first. Any member who reads hospitality reads it;
+ * `canManage` says whether this reader may add or remove one (`workspace.manage`).
+ */
+export const PropertiesView = z.object({ properties: z.array(PropertySummary), canManage: z.boolean() });
+/** The workspace's properties. */
+export type PropertiesView = z.infer<typeof PropertiesView>;
+
+/** Adding a property (AC-6516, up to 20). `id` is the client's own, so a retry makes one property. */
+export const CreatePropertyInput = WorkspaceScoped.extend({
+  id: Uuid,
+  name: PropertyFields.shape.name,
+  kind: BusinessKindName,
+  currency: Currency,
+  mutationId: Uuid,
+});
+/** Adding a property. */
+export type CreatePropertyInput = z.infer<typeof CreatePropertyInput>;
+
+/** Removing an empty property (AC-6590): never the first one left. */
+export const RemovePropertyInput = WorkspaceScoped.extend({ property: Uuid, mutationId: Uuid });
+/** Removing a property. */
+export type RemovePropertyInput = z.infer<typeof RemovePropertyInput>;
+
 /** Settings › Business: the profile (absent before the first install) and its places, in order. */
 export const BusinessView = z.object({
   profile: Property.optional(),
@@ -288,12 +340,12 @@ export const RemoveAppInput = WorkspaceScoped.extend({
 export type RemoveAppInput = z.infer<typeof RemoveAppInput>;
 
 /** Saving the business profile, whole. */
-export const SaveBusinessInput = WorkspaceScoped.extend({ profile: PropertyFields, mutationId: Uuid });
+export const SaveBusinessInput = PropertyScoped.extend({ profile: PropertyFields, mutationId: Uuid });
 /** Saving the business profile. */
 export type SaveBusinessInput = z.infer<typeof SaveBusinessInput>;
 
 /** Adding a place (up to 20). `id` is the client's own, so a retry makes one place. */
-export const CreatePlaceInput = WorkspaceScoped.extend({ id: Uuid, place: PlaceFields, mutationId: Uuid });
+export const CreatePlaceInput = PropertyScoped.extend({ id: Uuid, place: PlaceFields, mutationId: Uuid });
 /** Adding a place. */
 export type CreatePlaceInput = z.infer<typeof CreatePlaceInput>;
 
@@ -437,7 +489,13 @@ export const hospitalityContract = {
   apps: oc.input(WorkspaceScoped).output(AppsView),
   install: oc.input(InstallAppInput).output(AppsView),
   remove: oc.input(RemoveAppInput).output(AppsView),
-  business: oc.input(WorkspaceScoped).output(BusinessView),
+  business: oc.input(PropertyScoped).output(BusinessView),
+  /** The workspace's properties (AC-6516, AC-6517): any member who reads hospitality. */
+  properties: oc.input(WorkspaceScoped).output(PropertiesView),
+  /** Adds a property (AC-6516): `workspace.manage`; `LIMIT_REACHED` past 20. */
+  createProperty: oc.input(CreatePropertyInput).output(PropertiesView),
+  /** Removes an empty property (AC-6590): `workspace.manage`; `IN_USE` while it holds anything, or is the first. */
+  removeProperty: oc.input(RemovePropertyInput).output(PropertiesView),
   saveBusiness: oc.input(SaveBusinessInput).output(Property),
   createPlace: oc.input(CreatePlaceInput).output(Place),
   updatePlace: oc.input(UpdatePlaceInput).output(Place),

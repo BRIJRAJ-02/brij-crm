@@ -16,6 +16,7 @@ import type {
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
 import { Menu, MenuItem, NavGroup, NavItem, NavSection, type Toasts } from '@crm/ui';
 import { useLocation } from '@tanstack/react-router';
+import { BusinessSwitch } from '../hospitality/BusinessSwitch.tsx';
 import { objectHref } from './objects.ts';
 import { listHref } from '../lists/paths.ts';
 import { strings as listStrings } from '../lists/strings.ts';
@@ -187,6 +188,8 @@ export function SidebarSections({
               });
             }}
           >
+            {/* From two businesses, the Business group opens on its switcher (spec 0065 H7, AC-6517). */}
+            {section.key === 'hospitality' && <BusinessSwitch data={data} slug={slug} />}
             {section.entries.filter((entry) => !entry.hidden).flatMap((entry) => itemOf(entry, context))}
           </NavSection>
         ),

@@ -45,7 +45,13 @@ const shift = (date: string, days: number) =>
 
 const BUSINESS: BusinessView = {
   canEdit: true,
-  profile: { name: 'Somewhere Nowhere', kind: 'restaurant', links: [], currency: 'GBP' },
+  profile: {
+    id: '0192f0c8-0000-7000-8000-00000000b001',
+    name: 'Somewhere Nowhere',
+    kind: 'restaurant',
+    links: [],
+    currency: 'GBP',
+  },
   places: [
     {
       id: PLACE,

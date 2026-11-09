@@ -1003,6 +1003,7 @@ export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExport
 export { listApps, installApp, removeApp } from './hospitality/apps.ts';
 export { appInstalled, requireApp, requireAnyApp, APP_NOT_INSTALLED_MESSAGE } from './hospitality/gate.ts';
 export { getBusiness, saveBusiness, createPlace, updatePlace, localeForCountry } from './hospitality/places.ts';
+export { listProperties, createProperty, removeProperty, PROPERTY_NOT_FOUND } from './hospitality/property.ts';
 export {
   listResources,
   saveArea,

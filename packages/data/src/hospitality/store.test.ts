@@ -188,3 +188,73 @@ describe('the held copies', () => {
     expect(reads).toBe(2);
   });
 });
+
+describe('businesses (spec 0065 H7)', () => {
+  const FIRST = '0192f0c8-0000-7000-8000-00000000b001';
+  const SECOND = '0192f0c8-0000-7000-8000-00000000b002';
+  const listed = (count: number) => ({
+    canManage: true,
+    properties: [
+      { id: FIRST, name: 'One', position: 0, holds: 1 },
+      ...(count > 1 ? [{ id: SECOND, name: 'Two', position: 1, holds: 0 }] : []),
+    ],
+  });
+  const view = { canEdit: true, places: [] };
+
+  it('names no business with one, reads the chosen one with two, and keeps the choice on the device', async () => {
+    const asked: (string | undefined)[] = [];
+    const kept = new Map<string, string>();
+    let count = 1;
+    const api = new Proxy({} as HospitalityProcedures, {
+      get: (_target, name: string) => {
+        if (name === 'properties') return () => Promise.resolve(listed(count));
+        if (name === 'business')
+          return (input: { property?: string }) => {
+            asked.push(input.property);
+            return Promise.resolve(view);
+          };
+        return () => Promise.reject(new Error('Not used here.'));
+      },
+    });
+    const store = openHospitality({
+      api,
+      call: (run) => run({}),
+      mintId: () => 'id',
+      choices: { get: (key) => kept.get(key) ?? null, set: (key, id) => kept.set(key, id) },
+    });
+    await store.readProperties('acme');
+    store.choose('acme', SECOND);
+    // One business: nothing to choose, so the first is read, named by nothing.
+    await store.readBusiness('acme');
+    expect(asked).toEqual([undefined]);
+    count = 2;
+    store.properties('acme').retry();
+    await store.readProperties('acme');
+    const choice = store.choice('acme').getSnapshot();
+    expect(choice.status === 'ready' && choice.value).toBe(SECOND);
+    await store.readBusiness('acme');
+    expect(asked).toEqual([undefined, SECOND]);
+    expect(kept.get('crm.business.acme')).toBe(SECOND);
+    // The first again is no name at all, so its copy is the one the first read made.
+    store.choose('acme', FIRST);
+    const first = store.choice('acme').getSnapshot();
+    expect(first.status === 'ready' && first.value).toBeUndefined();
+  });
+
+  it('keeps a removed business out of the choice', async () => {
+    const kept = new Map<string, string>([['crm.business.acme', SECOND]]);
+    const api = new Proxy({} as HospitalityProcedures, {
+      get: (_target, name: string) =>
+        name === 'properties' ? () => Promise.resolve(listed(1)) : () => Promise.reject(new Error('Not used here.')),
+    });
+    const store = openHospitality({
+      api,
+      call: (run) => run({}),
+      mintId: () => 'id',
+      choices: { get: (key) => kept.get(key) ?? null, set: (key, id) => kept.set(key, id) },
+    });
+    await store.readProperties('acme');
+    const choice = store.choice('acme').getSnapshot();
+    expect(choice.status === 'ready' && choice.value).toBeUndefined();
+  });
+});

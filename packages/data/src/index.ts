@@ -438,6 +438,8 @@ export type {
   BusinessKind,
   Property,
   PropertyFields,
+  PropertiesView,
+  PropertySummary,
   BusinessView,
   Resource,
   FirstBusiness,
@@ -6469,6 +6471,13 @@ export function createDataLayer({
               void loadNav()
                 .then((store) => store.reload(workspace))
                 .catch(() => undefined);
+            },
+            // The business a member last chose stays on this device (spec 0065 H7, AC-6517): a hint, never a record.
+            choices: {
+              get: (key) => globalThis.localStorage.getItem(key),
+              set: (key, id) => {
+                globalThis.localStorage.setItem(key, id);
+              },
             },
           }),
         )),

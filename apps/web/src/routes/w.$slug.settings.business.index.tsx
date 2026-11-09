@@ -10,7 +10,9 @@ import { SettingsFailed, SettingsPage } from '../features/settings/SettingsPage.
 export const Route = createFileRoute('/w/$slug/settings/business/')({
   loader: async ({ context, params }): Promise<{ readonly store: HospitalityStore }> => {
     const store = await context.data.hospitality.load();
-    // The screen draws its own refusal (no app installed, no permission): the read's failure stays in the store.
+    // The screen draws its own refusal (no app installed, no permission): the read's failure stays in the store. The
+    // businesses come first, so the read is of the one the switcher chose (spec 0065 H7).
+    await store.readProperties(params.slug).catch(() => undefined);
     await store.readBusiness(params.slug).catch(() => undefined);
     return { store };
   },

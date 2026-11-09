@@ -17,6 +17,7 @@ import type {
   PlaceFloor,
   PlaceHours,
   PlaceQrCodes,
+  PropertiesView,
   Property,
   PropertyFields,
   ResourceKind,
@@ -41,6 +42,8 @@ export interface HospitalityHeld<Value> {
 
 type Options = { signal?: AbortSignal };
 type Scoped = { workspace: string };
+/** A call that works in one property (spec 0065 H7): left out, the workspace's first. */
+type InProperty = { property?: string };
 
 /** The hospitality procedures the store calls, as the data layer's client answers them. */
 export interface HospitalityProcedures {
@@ -58,13 +61,22 @@ export interface HospitalityProcedures {
     input: Scoped & { app: HospitalityApp; withDependents: boolean; mutationId: string },
     options: Options,
   ) => Promise<AppsView>;
-  readonly business: (input: Scoped, options: Options) => Promise<BusinessView>;
+  readonly business: (input: Scoped & InProperty, options: Options) => Promise<BusinessView>;
+  readonly properties: (input: Scoped, options: Options) => Promise<PropertiesView>;
+  readonly createProperty: (
+    input: Scoped & { id: string; name: string; kind: Property['kind']; currency: string; mutationId: string },
+    options: Options,
+  ) => Promise<PropertiesView>;
+  readonly removeProperty: (
+    input: Scoped & { property: string; mutationId: string },
+    options: Options,
+  ) => Promise<PropertiesView>;
   readonly saveBusiness: (
-    input: Scoped & { profile: PropertyFields; mutationId: string },
+    input: Scoped & InProperty & { profile: PropertyFields; mutationId: string },
     options: Options,
   ) => Promise<Property>;
   readonly createPlace: (
-    input: Scoped & { id: string; place: PlaceFields; mutationId: string },
+    input: Scoped & InProperty & { id: string; place: PlaceFields; mutationId: string },
     options: Options,
   ) => Promise<Place>;
   readonly updatePlace: (
@@ -271,11 +283,28 @@ export function openHospitality(given: {
   readonly now?: () => number;
   /** An app was installed or removed: the sidebar's Hospitality section reads its pages again. */
   readonly onAppsChanged?: (workspace: string) => void;
+  /**
+   * Where this device keeps the business each workspace's member last chose (AC-6517); none keeps it for the app load
+   * only. Reads and writes may throw (blocked storage), which reads as no choice.
+   */
+  readonly choices?: { readonly get: (key: string) => string | null; readonly set: (key: string, id: string) => void };
 }) {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
   const appsHeld = new Map<string, ReturnType<typeof holder<AppsView>>>();
   const businessHeld = new Map<string, ReturnType<typeof holder<BusinessView>>>();
+  const propertiesHeld = new Map<string, ReturnType<typeof holder<PropertiesView>>>();
+  // The business each workspace works in on this device (AC-6517), and the screens following it.
+  const chosen = new Map<string, string>();
+  const choiceListeners = new Set<() => void>();
+  const choiceKey = (workspace: string) => `crm.business.${workspace}`;
+  const storedChoice = (workspace: string): string | undefined => {
+    try {
+      return given.choices?.get(choiceKey(workspace)) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const floors = new Map<string, ReturnType<typeof holder<PlaceFloor>>>();
   const qrHeld = new Map<string, ReturnType<typeof holder<PlaceQrCodes>>>();
   const qrOf = (workspace: string, placeId: string) => {
@@ -296,14 +325,71 @@ export function openHospitality(given: {
     }
     return found;
   };
-  const businessOf = (workspace: string) => {
-    let found = businessHeld.get(workspace);
+  const propertiesOf = (workspace: string) => {
+    let found = propertiesHeld.get(workspace);
     if (found === undefined) {
-      found = holder(() => call((options) => api.business({ workspace }, options)), now);
-      businessHeld.set(workspace, found);
+      found = holder(() => call((options) => api.properties({ workspace }, options)), now);
+      propertiesHeld.set(workspace, found);
     }
     return found;
   };
+  /**
+   * The business this workspace works in: the one chosen on this device while the workspace still has it, else none
+   * (the first). With one business there is nothing to choose, so nothing is ever named (AC-6516).
+   */
+  const choiceOf = (workspace: string): string | undefined => {
+    const listed = propertiesHeld.get(workspace)?.held.getSnapshot();
+    if (listed?.status !== 'ready' || listed.value.properties.length < 2) return undefined;
+    const picked = chosen.get(workspace) ?? storedChoice(workspace);
+    const found = listed.value.properties.find((each) => each.id === picked);
+    // The first is what none names: its copy is the one every screen already holds.
+    return found === undefined || found.id === listed.value.properties[0]?.id ? undefined : found.id;
+  };
+  const businessOf = (workspace: string, property = choiceOf(workspace)) => {
+    const key = `${workspace}:${property ?? ''}`;
+    let found = businessHeld.get(key);
+    if (found === undefined) {
+      found = holder(
+        () => call((options) => api.business({ workspace, ...(property === undefined ? {} : { property }) }, options)),
+        now,
+      );
+      businessHeld.set(key, found);
+    }
+    return found;
+  };
+  /** The chosen business, as a held copy a screen follows: it changes when the member switches (AC-6517). */
+  const choiceHeld = (workspace: string): HospitalityHeld<string | undefined> => ({
+    subscribe(listener) {
+      choiceListeners.add(listener);
+      const listed = propertiesOf(workspace).held.subscribe(listener);
+      return () => {
+        choiceListeners.delete(listener);
+        listed();
+      };
+    },
+    getSnapshot: () => {
+      const listed = propertiesOf(workspace).held.getSnapshot();
+      if (listed.status !== 'ready') return listed;
+      const value = choiceOf(workspace);
+      // One snapshot per answer, so a screen re-renders only when the choice or the list moved.
+      const last = choiceSnapshots.get(workspace);
+      if (last !== undefined && last.value === value && last.listed === listed) return last.state;
+      const state = { status: 'ready' as const, value, isSaving: listed.isSaving };
+      choiceSnapshots.set(workspace, { value, listed, state });
+      return state;
+    },
+    retain: () => propertiesOf(workspace).held.retain(),
+    retry: () => propertiesOf(workspace).held.retry(),
+  });
+  const choiceHelds = new Map<string, HospitalityHeld<string | undefined>>();
+  const choiceSnapshots = new Map<
+    string,
+    {
+      readonly value: string | undefined;
+      readonly listed: HospitalityHeldState<PropertiesView>;
+      readonly state: HospitalityHeldState<string | undefined>;
+    }
+  >();
   const floorOf = (workspace: string, placeId: string) => {
     const key = `${workspace}:${placeId}`;
     let found = floors.get(key);
@@ -316,7 +402,7 @@ export function openHospitality(given: {
 
   /** Each place's table count follows its floor, so Business shows it without a read. */
   const countTables = (workspace: string, placeId: string, floor: PlaceFloor) => {
-    const held = businessHeld.get(workspace);
+    const held = businessHeld.get(`${workspace}:${choiceOf(workspace) ?? ''}`);
     if (held === undefined) return;
     held.patch((view) => ({
       ...view,
@@ -359,9 +445,21 @@ export function openHospitality(given: {
     const refused = await appsOf(workspace).change(show, () => call((options) => send(mintId(), options)));
     if (refused === undefined) {
       // The business card made the business and its first place: an open Business reads them again.
-      businessHeld.get(workspace)?.reread();
+      businessHeld.get(`${workspace}:`)?.reread();
+      propertiesHeld.get(workspace)?.reread();
       given.onAppsChanged?.(workspace);
     }
+    return refused;
+  };
+
+  /** A businesses write: shown at once by `show`, then the server's list; the sidebar's switcher follows. */
+  const onProperties = async (
+    workspace: string,
+    show: (view: PropertiesView) => PropertiesView,
+    send: (mutationId: string, options: Options) => Promise<PropertiesView>,
+  ): Promise<DataError | undefined> => {
+    const refused = await propertiesOf(workspace).change(show, () => call((options) => send(mintId(), options)));
+    if (refused === undefined) given.onAppsChanged?.(workspace);
     return refused;
   };
 
@@ -408,26 +506,89 @@ export function openHospitality(given: {
         api.remove({ workspace, app, withDependents, mutationId }, callOptions),
       ),
 
-    /** Settings › Business (AC-6507, AC-6508): the profile and the places, read when first held. */
+    /** The workspace's businesses (spec 0065 H7, AC-6516, AC-6517), read when first held. */
+    properties: (workspace: string): HospitalityHeld<PropertiesView> => propertiesOf(workspace).held,
+    /** Reads the businesses now (a route's loader, before it reads the chosen one); rejects with the refusal. */
+    readProperties: (workspace: string): Promise<PropertiesView> => propertiesOf(workspace).read(),
+    /** The business this workspace works in on this device: undefined is the first (AC-6517). */
+    choice: (workspace: string): HospitalityHeld<string | undefined> => {
+      // One held copy per workspace, so a screen's subscription stays put across renders.
+      let found = choiceHelds.get(workspace);
+      if (found === undefined) {
+        found = choiceHeld(workspace);
+        choiceHelds.set(workspace, found);
+      }
+      return found;
+    },
+    /** Switches the business every hospitality screen shows (AC-6517), kept on this device. */
+    choose: (workspace: string, property: string): void => {
+      chosen.set(workspace, property);
+      try {
+        given.choices?.set(choiceKey(workspace), property);
+      } catch {
+        // Blocked storage: the choice lasts for this app load.
+      }
+      for (const listener of choiceListeners) listener();
+    },
+    /**
+     * Adds a business (AC-6516) under `id` (the screen's own, from `newId`); it lists once the server made it, and
+     * the sidebar's switcher follows. `LIMIT_REACHED` past 20 comes back for the screen to say.
+     */
+    createProperty: (
+      workspace: string,
+      property: {
+        readonly id: string;
+        readonly name: string;
+        readonly kind: Property['kind'];
+        readonly currency: string;
+      },
+    ): Promise<DataError | undefined> =>
+      onProperties(
+        workspace,
+        (view) => view,
+        (mutationId, options) => api.createProperty({ workspace, ...property, mutationId }, options),
+      ),
+    /** Removes an empty business (AC-6590; the screen asks first): gone at once, back with the reason if refused. */
+    removeProperty: (workspace: string, property: string): Promise<DataError | undefined> =>
+      onProperties(
+        workspace,
+        (view) => ({ ...view, properties: view.properties.filter((each) => each.id !== property) }),
+        (mutationId, options) => api.removeProperty({ workspace, property, mutationId }, options),
+      ),
+
+    /** Settings › Business (AC-6507, AC-6508): the chosen business's profile and places, read when first held. */
     business: (workspace: string): HospitalityHeld<BusinessView> => businessOf(workspace).held,
     /** Reads Business now (the route's loader); rejects with the refusal. */
     readBusiness: (workspace: string): Promise<BusinessView> => businessOf(workspace).read(),
-    /** Saves the profile, whole; shown at once (the currency stays the workspace's). */
+    /**
+     * Saves the chosen business's profile, whole; shown at once. A currency change is refused `IN_USE` while it has
+     * prices (AC-6519), and the screen says why.
+     */
     saveBusiness: (workspace: string, profile: PropertyFields): Promise<DataError | undefined> =>
       businessOf(workspace).change(
-        (view) => ({
-          ...view,
-          profile: {
-            ...view.profile,
-            name: profile.name,
-            kind: profile.kind,
-            links: profile.links ?? view.profile?.links ?? [],
-          },
-        }),
+        (view) =>
+          view.profile === undefined
+            ? view
+            : {
+                ...view,
+                profile: {
+                  ...view.profile,
+                  name: profile.name,
+                  kind: profile.kind,
+                  links: profile.links ?? view.profile.links,
+                  ...(profile.currency === undefined ? {} : { currency: profile.currency }),
+                },
+              },
         async () => {
+          const property = choiceOf(workspace);
           const saved = await call((options) =>
-            api.saveBusiness({ workspace, profile, mutationId: mintId() }, options),
+            api.saveBusiness(
+              { workspace, ...(property === undefined ? {} : { property }), profile, mutationId: mintId() },
+              options,
+            ),
           );
+          // The switcher and the list name it: they read again.
+          propertiesHeld.get(workspace)?.reread();
           return (view: BusinessView) => ({ ...view, profile: saved });
         },
       ),
@@ -436,9 +597,14 @@ export function openHospitality(given: {
       businessOf(workspace).change(
         (view) => view,
         async () => {
+          const property = choiceOf(workspace);
           const made = await call((options) =>
-            api.createPlace({ workspace, id, place, mutationId: mintId() }, options),
+            api.createPlace(
+              { workspace, ...(property === undefined ? {} : { property }), id, place, mutationId: mintId() },
+              options,
+            ),
           );
+          propertiesHeld.get(workspace)?.reread();
           return (view: BusinessView) => ({
             ...view,
             places: [...view.places.filter((each) => each.id !== made.id), made],
@@ -658,6 +824,9 @@ export function openHospitality(given: {
     clear: (): void => {
       appsHeld.clear();
       businessHeld.clear();
+      propertiesHeld.clear();
+      chosen.clear();
+      choiceSnapshots.clear();
       floors.clear();
     },
   };
