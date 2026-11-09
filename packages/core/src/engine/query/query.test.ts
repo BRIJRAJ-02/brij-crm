@@ -243,6 +243,20 @@ beforeAll(async () => {
     entryIds.push(entryId);
   }
 
+  // One launch today in New York, after the seeded ones so their sequence is unchanged: the seeded dates sit around
+  // a fixed day, so on some days none falls in this week and "this week" would match nothing.
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(NOW));
+  const launchToday = await createRecord(scope, {
+    objectId: missions,
+    values: { [id('name')]: 'launch today', [id('launch')]: today },
+  });
+  missionIds.push(launchToday.recordId);
+
   const views = await getRecords(scope, { ids: [...missionIds, ...companyIds] });
   const times = await db.withWorkspace(scope.workspaceId, (tx) =>
     tx.execute<{ id: string; created: string; updated: string }>(
