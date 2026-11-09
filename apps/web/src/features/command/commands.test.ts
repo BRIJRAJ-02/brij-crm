@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { CalendarState, ListView, ObjectSummary, Permission, RecordHit } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
+  businessCommands,
   actionCommands,
   addToListCommands,
   canConnectCalendar,
@@ -482,5 +483,23 @@ describe('notes, tasks and making what nothing matched (the flow pass of 30 Oct 
     expect(createNamedCommand('acme', OBJECTS, OBJECTS[1], 'Globex')?.name).toBe('Create company named “Globex”');
     expect(createNamedCommand('acme', OBJECTS, OBJECTS[2], 'Big deal')).toBeUndefined();
     expect(createNamedCommand('acme', OBJECTS, undefined, '  ')).toBeUndefined();
+  });
+});
+
+describe('switching business (spec 0065 H7)', () => {
+  const A = '01900000-0000-7000-8000-0000000000a1';
+  const B = '01900000-0000-7000-8000-0000000000b1';
+  it('offers each other business from two up, never the one in use, and nothing with one', () => {
+    expect(businessCommands([{ id: A, name: 'Harbour' }], A)).toEqual([]);
+    const offered = businessCommands(
+      [
+        { id: A, name: 'Harbour' },
+        { id: B, name: 'Bar' },
+      ],
+      A,
+    );
+    expect(offered.map((command) => [command.name, command.run])).toEqual([
+      ['Switch to Bar', { kind: 'business', propertyId: B }],
+    ]);
   });
 });

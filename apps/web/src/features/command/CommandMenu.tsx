@@ -27,8 +27,10 @@ import { listHref } from '../lists/paths.ts';
 import { strings as listStrings } from '../lists/strings.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { useAppsNav } from '../settings/useHasBusiness.ts';
+import { useHeldBusinesses } from '../hospitality/held-businesses.ts';
 import {
   actionCommands,
+  businessCommands,
   addToListCommands,
   canConnectCalendar,
   createNamedCommand,
@@ -105,10 +107,13 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   const canMakeForms = permissions?.includes('forms.manage') === true;
   const viewId = params.viewId;
   const pathname = useLocation({ select: (location) => location.pathname });
+  // From two businesses, Switch to … for each other one (spec 0065 H7).
+  const businesses = useHeldBusinesses(data, slug);
   const actions = useMemo(
     () =>
       mode === 'commands'
         ? [
+            ...(businesses === undefined ? [] : businessCommands(businesses.properties, businesses.current)),
             ...recordCommands(record),
             ...addToListCommands(record, here === undefined ? [] : listsToAddTo(lists, here.id)),
             // A record page's own New task links the record; elsewhere one Create a task.
@@ -122,7 +127,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
             }),
           ]
         : [],
-    [mode, slug, objects, here, viewId, canInvite, canMakeLists, canMakeForms, record, pathname, lists],
+    [mode, slug, objects, here, viewId, canInvite, canMakeLists, canMakeForms, record, pathname, lists, businesses],
   );
   // Invite members opens the one Invite dialog over the page, as Home's setup step does.
   const [isInviting, setInviting] = useState(false);
@@ -214,6 +219,15 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
       close();
       if (command.run.kind === 'theme') {
         runTheme(command.run.choice);
+        return;
+      }
+      if (command.run.kind === 'business') {
+        const { propertyId } = command.run;
+        const name = businesses?.properties.find((each) => each.id === propertyId)?.name;
+        // The screen in front may hold unsaved changes: its guard asks first, as the sidebar's switcher does.
+        void businesses?.store.requestChoice(slug, propertyId).then((went) => {
+          if (went && name !== undefined) toasts.toast({ tone: 'info', message: strings.showingBusiness(name) });
+        });
         return;
       }
       if (command.run.kind === 'invite') {

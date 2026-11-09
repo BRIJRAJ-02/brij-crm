@@ -74,6 +74,9 @@ export const strings = {
   createNamed: (singular: string, name: string) => `Create ${singular.toLocaleLowerCase()} named “${name}”`,
   /** Anywhere: a new task, on the page when it can hold the dialog, else on Tasks. */
   createTask: 'Create a task',
+  switchToBusiness: (name: string) => `Switch to ${name}`,
+  businessTerm: 'business',
+  showingBusiness: (name: string) => `Showing ${name}`,
   newWord: 'new',
   /** The record page's own actions, named after it. */
   newNoteOn: (name: string) => `New note on ${name}`,

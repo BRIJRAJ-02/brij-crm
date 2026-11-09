@@ -39,7 +39,9 @@ export type CommandRun =
   /** Opens the New list dialog over the page (spec 0048, AC-4827). */
   | { readonly kind: 'new-list' }
   /** Puts the open record in a list (spec 0048, AC-4827). */
-  | { readonly kind: 'add-to-list'; readonly listId: string; readonly recordId: string };
+  | { readonly kind: 'add-to-list'; readonly listId: string; readonly recordId: string }
+  /** Shows another business on every hospitality page (spec 0065 H7, AC-6517). */
+  | { readonly kind: 'business'; readonly propertyId: string };
 
 /** One page, Settings page or action the menu lists. */
 export interface Command {
@@ -58,6 +60,30 @@ export interface Command {
 
 /** Where the menu opened: everything (⌘K, Quick actions), or search only (`/`, the sidebar's search). */
 export type CommandMode = 'commands' | 'search';
+
+/**
+ * Switch to each other business (spec 0065 H7, AC-6517), from two businesses up: the sidebar's switcher, from the
+ * keyboard. The one in use isn't offered.
+ */
+export function businessCommands(
+  properties: readonly { readonly id: string; readonly name?: string | undefined }[],
+  current: string | undefined,
+): readonly Command[] {
+  if (properties.length < 2) return [];
+  return properties.flatMap((property) =>
+    property.id === current || property.name === undefined
+      ? []
+      : [
+          {
+            id: `business:${property.id}`,
+            name: strings.switchToBusiness(property.name),
+            icon: 'store' as const,
+            terms: [strings.businessTerm, property.name],
+            run: { kind: 'business' as const, propertyId: property.id },
+          },
+        ],
+  );
+}
 
 /**
  * The pages (AC-1075), mirroring the sidebar's destinations in its order (foolproof audit, 5 November 2026): Home and
