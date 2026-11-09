@@ -109,7 +109,8 @@ describe('a workspace’s one property (AC-6512, AC-6513)', () => {
     const view = await getBusinessPage(w.owner);
     expect(view.suggestedHandle).toBeDefined();
     const empties = await empty();
-    await expect(getBusinessPage(empties.owner)).rejects.toMatchObject({ refusal: { code: 'APP_NOT_INSTALLED' } });
+    // Nobody has set the property up: the page opens with no name, so it suggests no handle.
+    expect((await getBusinessPage(empties.owner)).suggestedHandle).toBeUndefined();
   });
 });
 
