@@ -322,7 +322,7 @@
   .root[data-layout='columns'] .titleLine {
     gap: var(--space-8);
     min-inline-size: 0;
-    margin-inline-start: calc(-1 * var(--space-8));
+    margin-inline-start: 0;
   }
 
   /* The title button takes its words' width and gives way to the status, its label cut short (the popup names it). */
@@ -330,6 +330,13 @@
     display: flex;
     flex: 0 1 auto;
     min-inline-size: 0;
+  }
+
+  /* The guest's name in ink (a value button takes its words' colour and type from here), the row's lead. */
+  .root[data-layout='columns'] .name {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   .status {

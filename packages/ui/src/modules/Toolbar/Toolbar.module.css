@@ -121,6 +121,35 @@
     margin-inline-start: auto;
   }
 
+  /* A phone's bar with module tabs: the title and the actions keep the bar's line, and the tabs take a line of their
+     own under them, scrolling sideways inside it, rather than the actions running over the tabs (Bookings at 390px). */
+  @container (width < 480px) {
+    .top[data-has-tabs] {
+      flex-wrap: wrap;
+      block-size: auto;
+      min-block-size: var(--size-bar);
+      row-gap: 0;
+    }
+
+    .top[data-has-tabs] .title {
+      flex: 0 1 auto;
+      min-block-size: var(--size-bar);
+      align-content: center;
+    }
+
+    .top[data-has-tabs] .end {
+      flex: none;
+    }
+
+    .top[data-has-tabs] .tabs {
+      order: 1;
+      flex-basis: calc(100% + 2 * var(--space-16));
+      block-size: var(--size-bar);
+      margin-inline: calc(-1 * var(--space-16));
+      padding-inline: var(--space-8);
+    }
+  }
+
   /* While the views load: a line the width of a short view name. */
   .loading {
     display: inline-flex;
