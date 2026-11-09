@@ -38,6 +38,8 @@ export const AUDIT_KINDS = {
     'invitation.accepted',
     'invitation.link_set',
     'invitation.link_revoked',
+    // A connected app added someone (spec 0070, AC-7020).
+    'member.added',
     'workspace.domains_set',
     'join_request.created',
     'join_request.approved',
@@ -67,6 +69,10 @@ export const AUDIT_KINDS = {
     'api_key.created',
     'api_key.revoked',
     'api_key.restored',
+    // Outside products connected to the workspace (spec 0070).
+    'partner.connected',
+    'partner.modules_changed',
+    'partner.disconnected',
     // Numbers handed to someone outside (spec 0067): a share link made or revoked.
     'insights.share_created',
     'insights.share_revoked',
@@ -116,6 +122,7 @@ export const AUDIT_KINDS = {
     'link_page.published',
     'link_page.draft_discarded',
     'link_page.version_restored',
+    'link_page.changed_for',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 

@@ -1,10 +1,9 @@
 // The Menu app's first run, end to end (spec 0065, H1; owner, 4 Nov 2026): a new person in an empty workspace called
-// Somewhere installs Menu, finds the place already keeping a restaurant's week, builds a menu from nothing (a section, a dish with a photo, sizes,
+// Somewhere fills in the business card, finds the place already keeping a restaurant's week, builds a menu from nothing (a section, a dish with a photo, sizes,
 // options and allergens), reorders, previews, reviews and publishes, opens the guest menu, filters, searches, picks a
 // size and adds to picks, marks a dish Sold out and sees it live, edits and republishes, discards, and deletes. Each
-// step is a screenshot when FLOW_SCREENSHOTS names a folder. The operator's early access switch is flipped through
-// the owner connection (`FLOW_OWNER_URL`, a local database), as the operator console would; without it the flow is
-// skipped.
+// step is a screenshot when FLOW_SCREENSHOTS names a folder. The workspace is named through the owner connection
+// (`FLOW_OWNER_URL`, a local database); without it the flow is skipped.
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -89,43 +88,34 @@ test.describe('the Menu app from an empty workspace', () => {
   if (process.env.FLOW_COLOR_SCHEME === 'dark') test.use({ colorScheme: 'dark' });
   if (process.env.FLOW_WIDTH !== undefined)
     test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
-  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to name the new workspace.');
   test.skip(
     ({ viewport }) => (viewport?.width ?? 0) < 1000 && process.env.FLOW_WIDTH === undefined,
     'Walked at a desktop width.',
   );
 
-  test('install, build, publish, guest, sold out, republish, discard, delete', async ({ page, context }) => {
+  test('set up, build, publish, guest, sold out, republish, discard, delete', async ({ page, context }) => {
     test.setTimeout(240_000);
     const slug = `somewhere-${String(Date.now()).slice(-6)}`;
     const email = `${slug}@example.com`;
 
     await test.step('a new person makes the Somewhere workspace', async () => {
       await newWorkspace(page, email, slug);
-      execFileSync('psql', [
-        OWNER_URL ?? '',
-        '-c',
-        `update workspaces set early_access = '{business_apps}', name = 'Somewhere' where slug = '${slug}'`,
-      ]);
+      execFileSync('psql', [OWNER_URL ?? '', '-c', `update workspaces set name = 'Somewhere' where slug = '${slug}'`]);
     });
 
-    await test.step('install Menu with the business card', async () => {
-      await page.goto(`/w/${slug}/settings/apps`);
-      await shot(page, '01-apps');
-      await page
-        .getByRole('button', { name: /^Install/ })
-        .first()
-        .click();
+    await test.step('the first screen: the business card', async () => {
+      await page.goto(`/w/${slug}/menus`);
+      await shot(page, '01-first-screen');
+      await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
       await expect(card).toBeVisible();
       await card.getByLabel('Business name').fill('Somewhere');
       await shot(page, '02-business-card');
-      // Country, time zone and currency start from the person's own, so Install works at once.
-      await card.getByRole('button', { name: 'Install', exact: true }).click();
-      await page.waitForTimeout(1500);
-      await shot(page, '02b-after-install');
+      // Country, time zone and currency start from the person's own, so Set up works at once.
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
-      await shot(page, '03-installed');
+      await shot(page, '03-set-up');
     });
 
     await test.step('open Menus: the place already keeps a restaurant’s hours, so the next step is a menu', async () => {
@@ -436,13 +426,13 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
   if (process.env.FLOW_COLOR_SCHEME === 'dark') test.use({ colorScheme: 'dark' });
   if (process.env.FLOW_WIDTH !== undefined)
     test.use({ viewport: { width: Number(process.env.FLOW_WIDTH), height: 844 } });
-  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to open business apps for the new workspace.');
+  test.skip(OWNER_URL === undefined, 'Needs FLOW_OWNER_URL to name the new workspace.');
   test.skip(
     ({ viewport }) => (viewport?.width ?? 0) < 1000 && process.env.FLOW_WIDTH === undefined,
     'Walked at a desktop width.',
   );
 
-  test('install both, tables, a code per table, downloads, the print sheet, the guest’s table, a new code', async ({
+  test('tables, a code per table, downloads, the print sheet, the guest’s table, a new code', async ({
     page,
     context,
     browser,
@@ -450,22 +440,14 @@ test.describe('Menu QR from an empty workspace (spec 0065, H2)', () => {
     test.setTimeout(240_000);
     const slug = `somewhere-qr-${String(Date.now()).slice(-6)}`;
     await newWorkspace(page, `${slug}@example.com`, slug);
-    execFileSync('psql', [
-      OWNER_URL ?? '',
-      '-c',
-      `update workspaces set early_access = '{business_apps}', name = 'Somewhere' where slug = '${slug}'`,
-    ]);
+    execFileSync('psql', [OWNER_URL ?? '', '-c', `update workspaces set name = 'Somewhere' where slug = '${slug}'`]);
 
-    await test.step('install Menu QR: it needs Menu, so both go in one step', async () => {
-      await page.goto(`/w/${slug}/settings/apps`);
-      await page.getByRole('button', { name: 'Install Menu QR' }).click();
-      const asked = page.getByRole('dialog');
-      await expect(asked).toBeVisible();
-      await shot(page, 'qr-01-needs-menu');
-      await asked.getByRole('button', { name: 'Install both' }).click();
+    await test.step('the first screen of Tables: the business card', async () => {
+      await page.goto(`/w/${slug}/qr`);
+      await page.getByRole('button', { name: 'Set up your business' }).click();
       const card = page.getByRole('dialog');
       await card.getByLabel('Business name').fill('Somewhere');
-      await card.getByRole('button', { name: 'Install', exact: true }).click();
+      await card.getByRole('button', { name: 'Set up', exact: true }).click();
       await expect(card).toBeHidden({ timeout: 15_000 });
     });
 

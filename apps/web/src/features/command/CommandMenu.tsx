@@ -92,10 +92,10 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
     [slug, objects, permissions, lists, isGuest, canConnect],
   );
   // Apps and Business only as the Settings sidebar shows them, so a workspace with no apps is offered neither.
-  const { hasApps, hasBusiness } = useAppsNav(data, slug, permissions);
+  const { hasBusiness } = useAppsNav(data, slug, permissions);
   const settings = useMemo(
-    () => settingsCommands(slug, permissions, isGuest, { hasApps, hasBusiness }),
-    [slug, permissions, isGuest, hasApps, hasBusiness],
+    () => settingsCommands(slug, permissions, isGuest, { hasBusiness }),
+    [slug, permissions, isGuest, hasBusiness],
   );
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).
   const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });

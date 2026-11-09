@@ -612,7 +612,7 @@ export interface TrashEntry {
   readonly deletedAt: string;
   /** Absent where a field rule hides Created by or Updated by on the object from the reader (spec 0017). */
   readonly deletedBy?: {
-    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
     readonly id: string | null;
   };
   /** When the daily cleanup removes it for good: 30 days after the delete. */
@@ -753,7 +753,7 @@ export async function queryTrash(
         at: string;
         deleted_at: string;
         expires_at: string;
-        by_type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+        by_type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
         by_id: string | null;
       }>(trashPageQuery(where, after, limit + 1))
       .catch((error: unknown) => {

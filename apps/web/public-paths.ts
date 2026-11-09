@@ -31,6 +31,22 @@ export const HANDLE_HEADER_SOURCE = `/(${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?)`;
 export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|m/[^/]+$|r/[^/]+(?:/manage)?$|embed/|${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?$).*)`;
 
 /**
+ * vercel.json's rewrite source for an embedded screen (spec 0070, AC-7032), `/embed/<clientId>/…`: the app's own page,
+ * framed by a partner. Its `frame-ancestors` is the partner's registered origins, which only the middleware can read
+ * (`EMBED_PAGE_PATH`), so vercel.json sends it no policy of its own.
+ */
+export const EMBED_PAGE_SOURCE = '/embed/(tfp_[A-Za-z0-9_-]{22})/(.*)';
+
+/** vercel.json's header source for the embed script (`/embed/v1.js`, spec 0023): every `/embed/` path but a screen's. */
+export const EMBED_SCRIPT_SOURCE = '/embed/((?!tfp_).*)';
+
+/**
+ * An embedded screen's page, as the middleware matches it: the partner's client id is its first segment, and every
+ * path vercel.json sends to the app under it (`EMBED_PAGE_SOURCE`), so none is served without the partner's policy.
+ */
+export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/.*$/;
+
+/**
  * The share card's own path, `/api/public/handles/<handle>/card.png` (spec 0055, AC-5510). It sits under the public
  * API's prefix, so one origin serves it and the public host already allows it, but this project's own function
  * draws it (`api/card.mjs`), never the API: the middleware leaves it alone and vercel.json's rewrite takes it.

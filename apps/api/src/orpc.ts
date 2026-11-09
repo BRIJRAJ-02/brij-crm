@@ -11,6 +11,7 @@
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
 import {
+  embedConnectionModules,
   enterWorkspace,
   type BookingCalendar,
   type CalendarEvents,
@@ -25,11 +26,12 @@ import type { WalletKind } from '@crm/contracts/brand';
 import type { WalletLinkMaker } from './wallet/wallet.ts';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
-import type { Auth, SessionUser } from './auth/auth.ts';
+import { EMBED_HEADER, type Auth, type EmbedScope, type SessionUser } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
 import type { EdgeCache } from './edge-cache.ts';
+import { embedReachOf } from './embed.ts';
 import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
 import type { OutsideFetch } from './public/outside.ts';
@@ -194,6 +196,17 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   googleLinked: (userId: string) => Promise<boolean>;
   /**
+   * The partner registry's two reads (spec 0070), by client id or partner id: the connect's check of what a partner
+   * sent, and Connected apps' names and logos. Kept for member handlers, unlike `identity`; each answer carries a
+   * secret's hash only for the connect's own check, which never answers it.
+   */
+  partners: Pick<IdentityStore, 'partnerByClientId' | 'partnerById'>;
+  /**
+   * Ends a connection's embedded sessions (spec 0070, AC-7013): Disconnect calls it once its change commits. By
+   * connection ids only; a session without an embed scope is never touched.
+   */
+  embedSessions: { readonly end: (connectionIds: readonly string[]) => Promise<number> };
+  /**
    * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials
    * for. The pass holds only what the caller's own page already shows; the handler reads that and hands it over.
    */
@@ -240,6 +253,11 @@ export interface SessionContext {
   doorSession: DoorSession;
   /** How this session last proved itself: the operator console asks for a second factor (spec 0047). */
   verifiedWith: 'email' | 'second_factor';
+  /**
+   * An embedded session's scope (spec 0070, AC-7031): its connection and workspace. Such a session reaches only the
+   * procedures `embed.ts` lists, and only in that workspace (`requireMember`).
+   */
+  embed: EmbedScope | undefined;
 }
 
 export const base = implement(contract).$context<RequestContext>();
@@ -256,8 +274,16 @@ const NOT_USE: ReadonlySet<string> = new Set(['realtime.connectionToken', 'realt
 
 /** Puts the signed in person in `context.user`, or refuses UNAUTHENTICATED. A renewed session cookie goes back out. */
 export const requireSession = os.$context<RequestContext>().middleware(async ({ context, next, path }) => {
-  const session = await context.auth.session(context.headers, context.clientIp);
+  // The frame's calls carry its header and are read by its cookie alone; every other call by the app's cookie alone.
+  const session = await context.auth.session(context.headers, context.clientIp, {
+    embed: context.headers.has(EMBED_HEADER),
+  });
   if (session === undefined) throw apiError('UNAUTHENTICATED', 'Sign in to continue.');
+  // An embedded session (spec 0070, AC-7033) reaches the shared modules' procedures and its own read, and nothing
+  // else: anything more is absent to it, as a procedure that doesn't exist.
+  if (session.embed !== undefined && embedReachOf(path.join('.')) === undefined) {
+    throw apiError('NOT_FOUND', 'There is nothing at this address.');
+  }
   // An error report from here on names the user, by id only.
   setRequestScope({ userId: session.user.id });
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
@@ -273,6 +299,7 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
       sessionId: session.sessionId,
       doorSession: doorSession(session),
       verifiedWith: session.verifiedWith ?? 'email',
+      embed: session.embed,
     },
   });
 });
@@ -307,7 +334,7 @@ export function memberDoor(context: Pick<RequestContext, 'db' | 'identity' | 'ru
  */
 export const requireMember = os
   .$context<RequestContext & SessionContext>()
-  .middleware(async ({ context, next }, input: unknown) => {
+  .middleware(async ({ context, next, path }, input: unknown) => {
     const scoped = WorkspaceScoped.safeParse(input);
     if (!scoped.success) {
       const { message, issues } = inputProblems([
@@ -320,6 +347,16 @@ export const requireMember = os
       slug: scoped.data.workspace,
       session: context.doorSession,
     });
+    // An embedded session (spec 0070, AC-7033) opens only its own workspace, and a module's procedure only while its
+    // connection is live with that module: a disconnect, or a module switched off, closes the frame at once.
+    const { embed } = context;
+    if (embed !== undefined) {
+      const reach = embedReachOf(path.join('.'));
+      const absent = () => apiError('NOT_FOUND', 'There is nothing at this address.');
+      if (reach === undefined || scope.workspaceId !== embed.workspaceId) throw absent();
+      const modules = await embedConnectionModules({ db: context.db }, embed);
+      if (modules === undefined || (reach !== 'session' && !modules.includes(reach))) throw absent();
+    }
     // An error report from here on names the workspace the door let them into.
     setRequestScope({ workspaceId: scope.workspaceId });
     return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });
@@ -332,7 +369,9 @@ export const OPERATOR_FRESH_MS = 12 * 60 * 60 * 1000;
 function operatorTarget(input: unknown): { readonly target?: string; readonly period?: string; readonly q?: string } {
   if (typeof input !== 'object' || input === null) return {};
   const fields = input as Record<string, unknown>;
-  const target = [fields['userId'], fields['pageId'], fields['workspaceId']].find((value) => typeof value === 'string');
+  const target = [fields['userId'], fields['pageId'], fields['workspaceId'], fields['partnerId']].find(
+    (value) => typeof value === 'string',
+  );
   const period = fields['period'];
   const q = fields['q'];
   return {

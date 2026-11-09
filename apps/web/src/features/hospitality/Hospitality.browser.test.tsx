@@ -1,5 +1,5 @@
 // The Hospitality setup in Chromium (spec 0065, H0), over a fake store that changes as the real one shows a change:
-// Settings › Apps asks for Menu before Menu QR and installs both; Settings › Business lists each place with today's
+// Settings › Apps asks for Menu before Menu QR and turns both on, and asks before turning one off; Settings › Business lists each place with today's
 // hours; a place's page draws a late Friday as running into the next morning; a place's tables add "T7 to T16" in one go and take a table offline at once. axe is clean in
 // light and dark at a desktop's and a phone's width. With VITE_SHOT_DIR set, each screen is also photographed there.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
@@ -33,13 +33,14 @@ afterEach(() => {
 });
 
 const APPS: AppsView = {
-  available: true,
   canManage: true,
   hasBusiness: true,
   apps: [
     { app: 'menu', installed: true, installedAt: '2026-11-01T10:00:00.000Z' },
     { app: 'menu_qr', installed: false },
     { app: 'table_seating', installed: false },
+    { app: 'appointments', installed: true },
+    { app: 'events', installed: false },
   ],
 };
 
@@ -127,9 +128,9 @@ function heldOf<Value>(first: Value) {
 }
 
 /** A store holding one workspace's apps, business and one floor, recording the writes. */
-function storeOf() {
+function storeOf(canManage = true) {
   const calls: string[] = [];
-  const apps = heldOf(APPS);
+  const apps = heldOf({ ...APPS, canManage });
   const business = heldOf(BUSINESS);
   const floor = heldOf(FLOOR);
   const done = () => Promise.resolve(undefined);
@@ -218,48 +219,70 @@ async function shoot(name: string, theme: Theme, width: number) {
   await page.screenshot({ path: `${SHOT_DIR}/${name}-${theme}-${String(width)}.png`, fullPage: true } as never);
 }
 
+/** The press a pointer gives a switch: on its label. */
+async function pressSwitch(name: string) {
+  const label = page.getByRole('switch', { name, exact: true }).element().closest('label');
+  if (label === null) throw new Error('No switch.');
+  await userEvent.click(label);
+}
+
+const openApps = (store: HospitalityStore) => {
+  return renderInApp(() => <AppsScreen store={store} slug="acme" toasts={toasts} />, {
+    data: {},
+    pattern: '/w/$slug/settings/apps',
+    at: '/w/acme/settings/apps',
+  });
+};
+
 describe('Settings › Apps', () => {
-  it('installs Menu QR in one press while Menu is in', async () => {
+  it('turns Menu QR on in one press while Menu is on', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf();
-    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
-      data: {},
-      pattern: '/w/$slug/settings/apps',
-      at: '/w/acme/settings/apps',
-    });
+    shown = await openApps(store);
     await expect.element(page.getByRole('heading', { name: 'Menu QR' })).toBeInTheDocument();
-    // Menu is in already, so Menu QR's Install asks nothing more.
-    await userEvent.click(page.getByRole('button', { name: 'Install Menu QR', exact: true }));
+    await pressSwitch('Menu QR');
     await expect.poll(() => calls).toEqual(['install:menu_qr:false']);
   });
 
-  it('offers no Install on an app still on its way', async () => {
+  it('offers no switch on an app still on its way, and says nothing of installing', async () => {
     await page.viewport(1280, 900);
     const { store } = storeOf();
-    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
-      data: {},
-      pattern: '/w/$slug/settings/apps',
-      at: '/w/acme/settings/apps',
-    });
+    shown = await openApps(store);
     await expect.element(page.getByRole('heading', { name: 'Events' })).toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: 'Install Events', exact: true })).not.toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: 'Install Appointments', exact: true })).toBeInTheDocument();
+    await expect.element(page.getByRole('switch', { name: 'Events', exact: true })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('switch', { name: 'Appointments', exact: true })).toBeInTheDocument();
     await expect.element(page.getByText('On its way').first()).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/install/i);
   });
 
-  it('asks for Menu when Menu QR is installed alone', async () => {
+  it('asks for Menu when Menu QR is turned on alone', async () => {
     await page.viewport(1280, 900);
     const { store, calls } = storeOf();
     await store.remove('acme', 'menu');
-    shown = await renderInApp(() => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />, {
-      data: {},
-      pattern: '/w/$slug/settings/apps',
-      at: '/w/acme/settings/apps',
-    });
-    await userEvent.click(page.getByRole('button', { name: 'Install Menu QR', exact: true }));
+    shown = await openApps(store);
+    await pressSwitch('Menu QR');
     await expect.element(page.getByRole('heading', { name: 'Menu QR needs Menu' })).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: 'Install both' }));
+    await userEvent.click(page.getByRole('button', { name: 'Turn both on' }));
     await expect.poll(() => calls).toEqual(['install:menu_qr:true']);
+  });
+
+  it('asks before turning an app off', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf();
+    shown = await openApps(store);
+    await pressSwitch('Menu');
+    await expect.element(page.getByRole('heading', { name: 'Turn off Menu?' })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Turn off', exact: true }));
+    await expect.element(page.getByRole('switch', { name: 'Menu', exact: true })).not.toBeChecked();
+  });
+
+  it('shows someone who can’t switch the apps a word for each, and no switch', async () => {
+    await page.viewport(1280, 900);
+    const { store } = storeOf(false);
+    shown = await openApps(store);
+    await expect.element(page.getByRole('heading', { name: 'Menu QR' })).toBeInTheDocument();
+    await expect.element(page.getByRole('switch').first()).not.toBeInTheDocument();
+    await expect.element(page.getByText('Only owners and admins can turn apps on or off.')).toBeVisible();
   });
 });
 
@@ -348,7 +371,7 @@ describe('axe and the pictures', () => {
         applyTheme(theme);
         const { store } = storeOf();
         const screens = [
-          ['apps', 'Menu QR', () => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />],
+          ['apps', 'Menu QR', () => <AppsScreen store={store} slug="acme" toasts={toasts} />],
           ['business', 'Places', () => <BusinessScreen store={store} slug="acme" toasts={toasts} />],
           [
             'tables',
@@ -396,11 +419,12 @@ describe.skipIf(SHOT_DIR === undefined || SHOT_DIR === '')('the pictures with so
         await shoot('row-menu', theme, width);
         await userEvent.keyboard('{Escape}');
         shown.unmount();
-        shown = await renderInApp(
-          () => <AppsScreen store={store} slug="acme" workspace={undefined} toasts={toasts} />,
-          { data: {}, pattern: '/w/$slug/settings/x', at: '/w/acme/settings/x' },
-        );
-        await userEvent.click(page.getByRole('button', { name: 'Remove' }));
+        shown = await renderInApp(() => <AppsScreen store={store} slug="acme" toasts={toasts} />, {
+          data: {},
+          pattern: '/w/$slug/settings/x',
+          at: '/w/acme/settings/x',
+        });
+        await pressSwitch('Menu');
         await expect.element(page.getByRole('alertdialog').or(page.getByRole('dialog'))).toBeVisible();
         await new Promise((resolve) => setTimeout(resolve, 400));
         await shoot('remove-app', theme, width);

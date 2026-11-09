@@ -560,6 +560,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deleted: os.deletedWorkspace.deleted.handler(notServed),
       restore: os.deletedWorkspace.restore.handler(notServed),
     },
+    teamPages: {
+      list: os.teamPages.list.handler(notServed),
+      claim: os.teamPages.claim.handler(notServed),
+      editedBy: os.teamPages.editedBy.handler(notServed),
+    },
     profile: {
       get: os.profile.get.handler(notServed),
       update: os.profile.update.handler(notServed),
@@ -730,7 +735,27 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       pages: os.operator.pages.handler(notServed),
       page: os.operator.page.handler(notServed),
       site: os.operator.site.handler(notServed),
-      setEarlyAccess: os.operator.setEarlyAccess.handler(notServed),
+      partners: os.operator.partners.handler(notServed),
+      registerPartner: os.operator.registerPartner.handler(notServed),
+      updatePartner: os.operator.updatePartner.handler(notServed),
+      replacePartnerSecret: os.operator.replacePartnerSecret.handler(notServed),
+      wipeTestConnections: os.operator.wipeTestConnections.handler(notServed),
+    },
+    // Partner connect (spec 0070) is read through to the api as is; its checks are core's and the api's tests.
+    partnerConnect: {
+      offer: os.partnerConnect.offer.handler(notServed),
+      approve: os.partnerConnect.approve.handler(notServed),
+      deny: os.partnerConnect.deny.handler(notServed),
+    },
+    connectedApps: {
+      list: os.connectedApps.list.handler(notServed),
+      setModules: os.connectedApps.setModules.handler(notServed),
+      disconnect: os.connectedApps.disconnect.handler(notServed),
+    },
+    // The embedded frame's calls (spec 0070, slice 4): the api's tests drive them.
+    embed: {
+      start: os.embed.start.handler(notServed),
+      session: os.embed.session.handler(notServed),
     },
     // The Hospitality setup (spec 0065) is driven against its own fake in `hospitality/store.test.ts`.
     services: {

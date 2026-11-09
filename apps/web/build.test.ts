@@ -240,8 +240,10 @@ describe('the first load', () => {
   // 50 since the guest menu and the reservation page became entries of their own (spec 0065, 0066, 5 November 2026): what
   // they share with the app (the search readers, `today`, `week`, the router's hooks) leaves the entry for shared chunks
   // rather than a copy in each. The bytes are the first load budget's, which still holds; these are more files, not more.
+  // 51 since the partner connect page (spec 0070, 6 November 2026): its request reader (`connect-request.ts`) is read
+  // by the route up front and by the screen, so the build keeps it in a shared chunk of its own. Same bytes, one file.
   it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
-    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(50);
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(51);
   });
 
   it('never loads the grid, editor, charts or schema map chunk up front', () => {

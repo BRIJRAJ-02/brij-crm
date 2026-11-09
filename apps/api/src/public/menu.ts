@@ -5,8 +5,8 @@
 //   GET /public/menu/:key/logo?v=                the business's logo (the brand kit's)
 //   GET /public/menu/:key/photos/:id/:size?v=    a photo the live snapshot shows, at 1200 or 400 pixels
 //   GET /public/menu/:key/tables/:code           the table a QR's code names (H2), counting the scan; never cached
-// Each enters through the menu door (`crm_menu_by_key`: ids only, and only while the workspace is live, has early
-// access and has Menu installed), so a key that names nothing, a malformed one and a removed app all answer the same
+// Each enters through the menu door (`crm_menu_by_key`: ids only, and only while the workspace is live and Menu is
+// on), so a key that names nothing, a malformed one and a removed app all answer the same
 // 404 `no-store`. Answers are kept at the edge under the place's tag (`menu:<placeId>`) and the workspace's brand tag,
 // so Publish, Sold out, a profile change, a brand change and removing the app purge them at once (Rules settled:
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a

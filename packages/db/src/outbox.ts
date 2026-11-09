@@ -72,7 +72,7 @@ export interface OutboxRow {
  */
 export interface OutboxReplaced {
   readonly by: {
-    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
     readonly id: string | null;
   };
   readonly cells: readonly {

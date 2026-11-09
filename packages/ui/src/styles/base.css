@@ -12,6 +12,12 @@
     block-size: 100dvb;
   }
 
+  /* One of our screens inside another product's frame (spec 0070, AC-7032): as tall as what it shows, so the frame
+     can be sized to it, and the page scrolls as a document where the frame is shorter. */
+  [data-app-root][data-embedded] {
+    block-size: auto;
+  }
+
   body {
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

@@ -142,12 +142,12 @@ export function SettingsPage({
   const { slug = '' } = useParams({ strict: false });
   const pathname = useLocation({ select: (location) => location.pathname });
   const page = settingsPageOf(pathname);
-  const group = settingsGroupOf(settingsNav(slug, { hasApps: true, hasBusiness: true }), page);
+  const group = settingsGroupOf(settingsNav(slug, { hasBusiness: true }), page);
   const access = useMyAccess();
   const navigate = useNavigate();
   // The navigation as this member sees it: the one source of a settings page's name and its trail's places.
   const visible = visibleSettingsNav(
-    settingsNav(slug, { hasApps: true, hasBusiness: true }),
+    settingsNav(slug, { hasBusiness: true }),
     access?.permissions,
     false,
     access?.role === 'guest',

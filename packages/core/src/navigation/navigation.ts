@@ -270,8 +270,7 @@ const HOSPITALITY_PAGES_BUILT = NAV_HOSPITALITY_PAGES.filter((page) => page !== 
 
 /**
  * The Hospitality pages the caller has (spec 0065, AC-6510; Rules settled: Navigation): the installed apps' pages,
- * in their order, for a member holding Manage hospitality or Run service; none for anyone else, or while early access
- * is closed.
+ * in their order, for a member holding Manage hospitality or Run service; none for anyone else.
  */
 async function hospitalityFor(tx: WorkspaceTx, scope: EngineScope): Promise<readonly NavPage[]> {
   if (scope.actor.type !== 'member') return [];

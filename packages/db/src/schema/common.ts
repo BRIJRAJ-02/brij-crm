@@ -20,6 +20,7 @@ export const actorType = pgEnum('actor_type', [
   'calendar',
   'form',
   'booking',
+  'partner',
 ]);
 
 /** Every attribute type the field set knows (spec 0003), mirrored from `@crm/contracts/values`. */
@@ -46,7 +47,7 @@ export const timestamptz = (name: string) => timestamp(name, { withTimezone: tru
  * and values its submissions make, and a booking page (spec 0025) the people
  * and companies a visitor's booking makes, so both are among them.
  */
-export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
 
 /** Every actor type, calendar sync's too (spec 0024): what calendar sync's own tables store. */
 export type CalendarActorType = StoredActorType | 'calendar';

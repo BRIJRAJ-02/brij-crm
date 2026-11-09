@@ -85,6 +85,11 @@ const WORKSPACE_FIELDS = {
 } as const;
 const LINK_FIELDS = { role: 'role', expires: 'expiry', uses: 'number of uses' } as const;
 
+/** A connected app's modules in words, after `lead` (" for Link pages"), or nothing with none. */
+const MODULE_WORDS: Readonly<Record<string, string>> = { link_pages: 'Link pages' };
+const moduleList = (modules: readonly string[], lead: string) =>
+  modules.length === 0 ? '' : `${lead}${modules.map((module) => MODULE_WORDS[module] ?? module).join(' and ')}`;
+
 const SENTENCES: SentenceTemplates = {
   'invitation.created': (entry, w) =>
     actor(
@@ -155,6 +160,13 @@ const SENTENCES: SentenceTemplates = {
     );
   },
   'member.removed': (entry, w) => actor(`removed ${w.person(entry.target.person)} from the workspace`),
+  // Someone a connected app added (spec 0070, AC-7020).
+  'member.added': (entry, w) =>
+    actor(
+      entry.params.role === undefined
+        ? `added ${w.person(entry.target.person)} to the workspace`
+        : `added ${w.person(entry.target.person)} to the workspace as ${w.role(entry.params.role)}`,
+    ),
   'member.left': () => actor('left the workspace'),
   'workspace.ownership_transferred': (entry, w) =>
     actor(`made ${w.person(entry.target.person)} an owner, and became an admin`),
@@ -209,6 +221,11 @@ const SENTENCES: SentenceTemplates = {
   'api_key.created': (entry) => actor(`made the API key ${entry.params.name}`),
   'api_key.revoked': (entry) => actor(`revoked the API key ${entry.params.name}`),
   'api_key.restored': (entry) => actor(`brought back the API key ${entry.params.name}`),
+  // A connected app (spec 0070, AC-7013): its name then, and the modules it may use.
+  'partner.connected': (entry) => actor(`connected ${entry.params.name}${moduleList(entry.params.modules, ' for ')}`),
+  'partner.modules_changed': (entry) =>
+    actor(`changed what ${entry.params.name} can use${moduleList(entry.params.modules, ' to ')}`),
+  'partner.disconnected': (entry) => actor(`disconnected ${entry.params.name}`),
   'rotation.adjusted': (entry, w) =>
     actor(
       `adjusted ${w.persons(entry.params.person)} count in ${w.thing(entry.target)} by ${units(entry.params.units)}`,
@@ -369,6 +386,30 @@ const SENTENCES: SentenceTemplates = {
     actor(
       `restored version ${String(entry.params.version)} of ${w.persons(entry.target.person)} link page as its draft`,
     ),
+  // Someone else's link page, changed by a team page manager (spec 0070, AC-7004).
+  'link_page.changed_for': (entry, w) => {
+    const page = `${w.persons(entry.target.person)} link page`;
+    switch (entry.params.change) {
+      case 'blocks':
+        return actor(`edited ${page}`);
+      case 'look':
+        return actor(`changed the look of ${page}`);
+      case 'live':
+        return actor(`turned ${page} Live`);
+      case 'private':
+        return actor(`made ${page} Private`);
+      case 'qr':
+        return actor(`styled the QR code of ${page}`);
+      case 'search':
+        return actor(`changed whether search engines show ${page}`);
+      case 'handle':
+        return actor(
+          entry.params.handle === undefined
+            ? `claimed a handle for ${w.person(entry.target.person)}`
+            : `claimed /${entry.params.handle} for ${w.person(entry.target.person)}`,
+        );
+    }
+  },
   'managed_page.propagated': (entry, w) => actor(`updated ${w.thing(entry.target)} from its managed page`),
   'booking_page.link_created': (entry, w) => actor(`made a one-time link for ${w.thing(entry.target)}`),
   'booking_page.link_revoked': (entry, w) => actor(`revoked a one-time link for ${w.thing(entry.target)}`),
@@ -419,6 +460,8 @@ export const strings = {
     deleted: 'Deleted user',
     system: 'System',
     apiKey: 'API key',
+    /** A connected app, through the partner API (spec 0070). */
+    partner: 'Connected app',
     /** An actor whose member row can't be read. */
     unknown: 'Unknown person',
     asker: 'Asked to join',

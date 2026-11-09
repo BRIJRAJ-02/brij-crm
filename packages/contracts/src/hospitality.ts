@@ -1,5 +1,5 @@
 // The Hospitality suite's setup (spec 0065, H0, AC-6501 to AC-6511): the Apps page (install and remove per workspace,
-// behind Timefix's early access), the business profile, its places with opening hours, and each place's areas and
+// on for every workspace), the business profile, its places with opening hours, and each place's areas and
 // resources. Every procedure is inside a workspace, behind the member door; installing and removing are for
 // `workspace.manage`, the business and its places for `hospitality.manage`, and each refuses `APP_NOT_INSTALLED`
 // while no Hospitality app is installed. The closed lists and pure rules are in `hospitality-model.ts`, shared with
@@ -9,7 +9,6 @@ import * as z from 'zod';
 import { TimeZoneName } from './booking/settings.ts';
 import {
   BUSINESS_KINDS,
-  EARLY_ACCESS_FLAGS,
   HOSPITALITY_APPS,
   HOSPITALITY_LIMITS,
   hoursProblem,
@@ -45,11 +44,6 @@ const L = HOSPITALITY_LIMITS;
 export const HospitalityAppName = z.enum(HOSPITALITY_APPS, { error: 'Pick one of the apps.' });
 /** One Hospitality app. */
 export type HospitalityAppName = z.infer<typeof HospitalityAppName>;
-
-/** One early access flag. */
-export const EarlyAccessFlagName = z.enum(EARLY_ACCESS_FLAGS);
-/** One early access flag. */
-export type EarlyAccessFlagName = z.infer<typeof EarlyAccessFlagName>;
 
 /** What a business is. */
 export const BusinessKindName = z.enum(BUSINESS_KINDS, { error: 'Pick what kind of place it is.' });
@@ -241,11 +235,10 @@ export const AppState = z.object({
 export type AppState = z.infer<typeof AppState>;
 
 /**
- * Settings › Apps (AC-6501): `available` only when Timefix opened early access for the workspace, and `apps` empty
- * otherwise, so nothing about them shows. `canManage` says whether this reader may install and remove.
+ * Settings › Apps (AC-6501): every app and whether it is on. `canManage` says whether this reader may switch them, and
+ * `hasBusiness` whether the business card has been filled in yet.
  */
 export const AppsView = z.object({
-  available: z.boolean(),
   canManage: z.boolean(),
   hasBusiness: z.boolean(),
   apps: z.array(AppState),
@@ -274,7 +267,7 @@ export type FirstBusiness = z.infer<typeof FirstBusiness>;
 
 /**
  * Installing an app (AC-6503, AC-6505, AC-6506): `withNeeded` installs what it needs in the same step (Menu with
- * Menu QR); `business` is required the first time any Hospitality app is installed (`BUSINESS_NEEDED` without it).
+ * Menu QR); `business` sets the business up while it isn't yet, and changes nothing once it is.
  */
 export const InstallAppInput = WorkspaceScoped.extend({
   app: HospitalityAppName,
@@ -436,7 +429,7 @@ export const RegenerateTableCodeInput = WorkspaceScoped.extend({ placeId: Uuid, 
 export type RegenerateTableCodeInput = z.infer<typeof RegenerateTableCodeInput>;
 
 /**
- * The Hospitality setup (H0). `apps` is any member's (empty without early access); `install` and `remove` are
+ * The Hospitality setup (H0). `apps` is any member's; `install` and `remove` are
  * `workspace.manage`'s; the rest are `hospitality.manage`'s, and refuse `APP_NOT_INSTALLED` while no Hospitality app
  * is installed. Limits answer `LIMIT_REACHED`; a label or area name already in the place `NAME_TAKEN`.
  */
@@ -463,17 +456,3 @@ export const hospitalityContract = {
   /** A new code for one table (H2): the old print stops opening it. `hospitality.manage`, Menu QR installed. */
   regenerateTableCode: oc.input(RegenerateTableCodeInput).output(PlaceQrCodes),
 };
-
-/** The operator console's one write (AC-6502): a workspace's early access flag on or off. */
-export const SetEarlyAccessInput = z.object({ workspaceId: Uuid, flag: EarlyAccessFlagName, on: z.boolean() });
-/** The operator console's one write. */
-export type SetEarlyAccessInput = z.infer<typeof SetEarlyAccessInput>;
-
-/** A workspace's early access flags, before and after the switch. */
-export const EarlyAccessChange = z.object({
-  workspaceId: Uuid,
-  before: z.array(EarlyAccessFlagName),
-  after: z.array(EarlyAccessFlagName),
-});
-/** A workspace's early access flags, before and after. */
-export type EarlyAccessChange = z.infer<typeof EarlyAccessChange>;

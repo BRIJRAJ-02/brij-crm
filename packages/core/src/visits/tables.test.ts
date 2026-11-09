@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import { LOOKUP_PATTERN } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { installApp, removeApp } from '../hospitality/apps.ts';
 import { NO_CALENDAR } from '../booking/calendar.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { rollingWeek } from '../../test/dates-kit.ts';
@@ -65,6 +66,25 @@ async function refusal(promise: Promise<unknown>) {
     throw error;
   }
 }
+
+describe('each app’s switch-off holds by itself (spec 0065)', () => {
+  it('stops haircuts with Appointments off and tables with Table seating off, each leaving the other', async () => {
+    const w = await visitWorkspace(db);
+    const { table } = await tablePlace(w);
+    const haircut = await addService(w, { name: 'Haircut', minutes: 30, capacityMode: 'one', staffRule: 'all' });
+    const times = (item: { serviceId: string; variantId: string }) =>
+      refusal(visitTimes(w.owner, deps, { placeId: w.placeId, items: [item], party: 1, date: DAY }));
+    await removeApp(w.owner, { app: 'appointments' });
+    expect(await times(haircut)).toMatchObject({ code: 'APP_NOT_INSTALLED' });
+    expect(
+      (await visitTimes(w.owner, deps, { placeId: w.placeId, items: [table], party: 2, date: DAY })).length,
+    ).toBeGreaterThan(0);
+    await installApp(w.owner, { app: 'appointments' });
+    await removeApp(w.owner, { app: 'table_seating' });
+    expect(await times(table)).toMatchObject({ code: 'APP_NOT_INSTALLED' });
+    expect(await times(haircut)).toBeUndefined();
+  });
+});
 
 describe('tables (no staff, a party fitted best fit)', () => {
   it('offers starts from opening to close less the party’s hold, by its size', async () => {
@@ -172,7 +192,8 @@ describe('tables (no staff, a party fitted best fit)', () => {
     const { rescope } = await import('../testing.ts');
     const member = rescope(w.owner, { role: 'member' });
     expect(await refusal(bookVisit(member, deps, request(table, w)))).toMatchObject({ code: 'FORBIDDEN' });
-    await w.sql(sql`update workspace_apps set removed_at = now()`);
+    await removeApp(w.owner, { app: 'table_seating' });
+    await removeApp(w.owner, { app: 'appointments' });
     expect(await refusal(bookVisit(w.owner, deps, request(table, w)))).toMatchObject({ code: 'APP_NOT_INSTALLED' });
   });
 });

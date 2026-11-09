@@ -58,7 +58,7 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 /** Settings › Workspace › Brand (spec 0060, AC-1): the logo, colour and template its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
 
-/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace installs (the Hospitality suite today). */
+/** Settings › Workspace › Apps (spec 0065, AC-6501): the apps a workspace has on (the business apps today). */
 export const appsSettingsHref = (slug: string) => `/w/${slug}/settings/apps`;
 
 /** Settings › Business › Places (spec 0065, AC-6507): the business profile and its places. */
@@ -120,8 +120,11 @@ export const routingSettingsHref = (slug: string) => `/w/${slug}/settings/schedu
 /** Settings › Scheduling › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
 export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/scheduling/access`;
 
+/** Settings › Workspace › Connected apps (spec 0070, AC-7013): the outside apps an owner connected. */
+export const connectedAppsHref = (slug: string) => `/w/${slug}/settings/connected-apps`;
+
 /** Settings › Super admin (spec 0047): Overview, or one of its pages. */
-export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website') =>
+export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'website' | 'partners') =>
   `/w/${slug}/settings/admin${page === undefined ? '' : `/${page}`}`;
 
 /** Every settings page the navigation knows, by id. */
@@ -135,6 +138,7 @@ export type SettingsPageId =
   | 'brand'
   | 'history'
   | 'apps'
+  | 'connected-apps'
   | 'business'
   | 'services'
   | 'staff'
@@ -154,7 +158,8 @@ export type SettingsPageId =
   | 'admin-overview'
   | 'admin-users'
   | 'admin-pages'
-  | 'admin-website';
+  | 'admin-website'
+  | 'admin-partners';
 
 /** The settings navigation's groups, in order (spec 0026, AC-682; regrouped on 5 November 2026). */
 export type SettingsGroupId = 'account' | 'workspace' | 'people' | 'scheduling' | 'business' | 'data' | 'admin';
@@ -162,6 +167,8 @@ export type SettingsGroupId = 'account' | 'workspace' | 'people' | 'scheduling' 
 /** The icon an entry wears: each entry its own, so the phone's list never shows one twice. */
 export type SettingsIcon =
   | 'user-round'
+  | 'plug'
+  | 'handshake'
   | 'sliders-horizontal'
   | 'bell'
   | 'shield-check'
@@ -294,12 +301,10 @@ export function settingsNav(
   slug: string,
   options: {
     /**
-     * Whether Appointments or Table seating is installed (spec 0065, 0066): only then does the Business group show
+     * Whether Appointments or Table seating is on (spec 0065, 0066): only then does the Business group show
      * (Places, Services, Staff and Shifts). Absent, the group is left out.
      */
     readonly hasBusiness?: boolean;
-    /** Whether Timefix opened early access for the workspace (spec 0065, AC-6501): only then does Apps show. */
-    readonly hasApps?: boolean;
   } = {},
 ): readonly SettingsNavGroup[] {
   return [
@@ -376,20 +381,24 @@ export function settingsNav(
           requires: 'audit.read',
           keywords: ['audit', 'log', 'changes', 'activity'],
         },
-        // Apps (spec 0065, AC-6501): owners and admins install them, so nobody else sees the entry at all, and
-        // nobody does before Timefix opens early access.
-        ...(options.hasApps === true
-          ? [
-              {
-                id: 'apps' as const,
-                label: hospitality.appsTitle,
-                href: appsSettingsHref(slug),
-                icon: 'blocks' as const,
-                requires: 'workspace.manage' as const,
-                keywords: ['hospitality', 'menu', 'qr', 'table seating', 'appointments', 'install'],
-              },
-            ]
-          : []),
+        // Apps (spec 0065, AC-6501): owners and admins switch them, so nobody else sees the entry at all.
+        {
+          id: 'apps',
+          label: hospitality.appsTitle,
+          href: appsSettingsHref(slug),
+          icon: 'blocks',
+          requires: 'workspace.manage',
+          keywords: ['business', 'hospitality', 'menu', 'qr', 'table seating', 'appointments', 'turn on', 'turn off'],
+        },
+        // Connected apps (spec 0070, AC-7013): owners only, so nobody else sees the entry at all.
+        {
+          id: 'connected-apps',
+          label: strings.connectedApps,
+          href: connectedAppsHref(slug),
+          icon: 'plug',
+          requires: 'connected_apps.manage',
+          keywords: ['integrations', 'partner', 'oauth', 'disconnect', 'marketing hub'],
+        },
       ],
     },
     {
@@ -526,6 +535,14 @@ export function settingsNav(
           label: admin.website,
           href: adminHref(slug, 'website'),
           icon: 'globe',
+          operatorOnly: true,
+        },
+        // Partners (spec 0070, AC-7010): the outside products allowed to connect workspaces.
+        {
+          id: 'admin-partners',
+          label: admin.partners,
+          href: adminHref(slug, 'partners'),
+          icon: 'handshake',
           operatorOnly: true,
         },
       ],
@@ -696,6 +713,8 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (under('admin/users')) return 'admin-users';
   if (under('admin/booking-pages')) return 'admin-pages';
   if (rest === 'admin/website') return 'admin-website';
+  if (rest === 'admin/partners') return 'admin-partners';
+  if (rest === 'connected-apps') return 'connected-apps';
   return undefined;
 }
 

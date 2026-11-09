@@ -217,7 +217,7 @@ export function settingsCommands(
   slug: string,
   permissions: readonly Permission[] | undefined,
   isGuest = false,
-  appsNav: { readonly hasApps?: boolean; readonly hasBusiness?: boolean } = {},
+  appsNav: { readonly hasBusiness?: boolean } = {},
 ): readonly Command[] {
   // The trash's entry opens its own page, which "Open trash" already reaches.
   // An entry with tabs (Members: Teams) gives each tab its own command, so "Settings › Teams" still finds it.

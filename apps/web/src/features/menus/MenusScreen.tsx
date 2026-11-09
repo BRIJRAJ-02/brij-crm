@@ -58,6 +58,7 @@ import { SettingsTab } from './SettingsTab.tsx';
 import { StructureTab } from './StructureTab.tsx';
 import { MenusPending } from './MenusPending.tsx';
 import { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { strings } from './strings.ts';
 
 export { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
@@ -152,6 +153,27 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
     );
   }
   const draft = state.value;
+  // No business yet: every workspace has Menu on, so this is someone's first sight of it.
+  if (draft.places.length === 0) {
+    return (
+      <WorkspacePage
+        currentPage="menus"
+        page={{
+          topBar: <TopBar title={strings.title} />,
+          body: (
+            <StartBusiness
+              slug={slug}
+              app="menu"
+              icon="utensils"
+              title={strings.startTitle}
+              text={strings.startText}
+              onDone={() => store.draft(slug).retry()}
+            />
+          ),
+        }}
+      />
+    );
+  }
   const said = (refused: { readonly message: string } | undefined) => {
     if (refused !== undefined) toasts.toast({ tone: 'danger', message: refused.message });
   };

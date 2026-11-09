@@ -8,7 +8,6 @@ import type { ServicesStore, StaffTeamView, StaffView } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import {
   Button,
-  ButtonLink,
   Callout,
   EmptyState,
   HoursEditor,
@@ -30,8 +29,9 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { clockLabel } from '../hospitality/hours-rows.ts';
-import { businessSettingsHref, shiftsSettingsHref, staffSettingsHref } from '../settings/nav.ts';
+import { shiftsSettingsHref, staffSettingsHref } from '../settings/nav.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
+import { StartBusiness } from '../hospitality/StartBusiness.tsx';
 import { NotInstalled } from './NotInstalled.tsx';
 import { RegularShifts } from './RegularShifts.tsx';
 import {
@@ -109,17 +109,14 @@ export function ShiftsScreen({ store, slug, placeId, week, toasts }: ShiftsScree
   if (team !== undefined && team.places.length === 0) {
     return (
       <SettingsPage title={strings.shiftsTitle}>
-        <EmptyState
-          title={strings.noPlaces}
+        <StartBusiness
+          slug={slug}
+          app="appointments"
           icon="calendar-clock"
-          actions={
-            <ButtonLink variant="primary" href={businessSettingsHref(slug)}>
-              {strings.openBusiness}
-            </ButtonLink>
-          }
-        >
-          {strings.noPlacesText}
-        </EmptyState>
+          title={strings.startShifts}
+          text={strings.startShiftsText}
+          onDone={() => store.team(slug, 'shifts').retry()}
+        />
       </SettingsPage>
     );
   }

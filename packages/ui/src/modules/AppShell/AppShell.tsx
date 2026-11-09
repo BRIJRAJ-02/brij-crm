@@ -51,8 +51,11 @@ export type PhoneSidebar = 'rail' | 'hidden' | 'full';
 
 /** Props for AppShell. */
 export interface AppShellProps {
-  /** The `Sidebar`. */
-  readonly sidebar: ReactElement;
+  /**
+   * The `Sidebar`. Left out, the page has the whole width and no skip link (there is nothing to skip): a screen of
+   * ours embedded in another product's frame, which brings its own navigation (spec 0070, AC-7032).
+   */
+  readonly sidebar?: ReactElement;
   /** The `TopBar`, with the page's title. */
   readonly topBar?: ReactNode;
   /** The `ViewBar`, on a view. */
@@ -139,16 +142,18 @@ export function AppShell({
       <PanelPushContext value={push}>
         <div className={styles.root} data-phone-sidebar={phoneSidebar === 'rail' ? undefined : phoneSidebar}>
           {/* On a phone's settings list the page is hidden behind it, so there is no content to skip to. */}
-          {!(isFull && isPhone) && (
+          {sidebar !== undefined && !(isFull && isPhone) && (
             <VisuallyHidden isFocusable>
               <a className={styles.skip} href={`#${mainId}`}>
                 {strings.skipToContent}
               </a>
             </VisuallyHidden>
           )}
-          <div className={styles.sidebar}>
-            <AppShellContext value={sidebarShell}>{sidebar}</AppShellContext>
-          </div>
+          {sidebar !== undefined && (
+            <div className={styles.sidebar}>
+              <AppShellContext value={sidebarShell}>{sidebar}</AppShellContext>
+            </div>
+          )}
           <main id={mainId} className={styles.main} tabIndex={-1} data-pushed={pushed}>
             {topBar}
             {viewBar}

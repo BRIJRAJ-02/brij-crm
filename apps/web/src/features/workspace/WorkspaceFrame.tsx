@@ -661,8 +661,7 @@ function SettingsNavigation({
     setQueryFor(settings.current);
     setQuery('');
   }
-  // Apps only where early access is open, Business (Places, Services, Staff, Shifts) only while Appointments or Table
-  // seating is installed.
+  // Business (Places, Services, Staff, Shifts) only while Appointments or Table seating is on.
   const appsNav = useAppsNav(data, slug, permissions);
   const groups = visibleSettingsNav(settingsNav(slug, appsNav), permissions, isOperator, isGuest);
   const hits = searchSettings(groups, query);

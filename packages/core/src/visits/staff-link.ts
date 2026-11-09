@@ -14,7 +14,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember } from '../hospitality/gate.ts';
 import { writeAudits, type AuditEntry } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
-import { requireVisitApp } from './book.ts';
+import { requireApp } from '../hospitality/gate.ts';
 import { personLockKeys } from './locks.ts';
 
 /** One overlap that stops a link: the visit's hold and the meeting, by their times. */
@@ -50,7 +50,7 @@ export async function linkStaffMember(
     scope,
     async (context) => {
       const { tx } = context;
-      await requireVisitApp(tx, scope.workspaceId);
+      await requireApp(tx, scope.workspaceId, 'appointments');
       // The person locks come BEFORE the staff row's lock, in the order a booking takes them (a booking holds a person
       // lock while its holds take a key share on this row), so a link and a booking never wait on each other in a ring.
       const read = async (lock: boolean) =>

@@ -1,11 +1,11 @@
-// The Hospitality apps (spec 0065, AC-6501 to AC-6506, AC-6511): which apps a workspace has, the one gate every app's
-// entry point calls (`appInstalled`, `requireApp`), and installing and removing. An app shows only where Timefix
-// opened early access (`workspaces.early_access`, the operator console's switch), and a workspace admin
-// (`workspace.manage`) installs or removes it. Removing keeps every row: it sets `removed_at`, and installing again
-// clears it. The first install of any Hospitality app takes the business card (profile and first place) in the same
-// transaction, and seeds the "Floor staff" custom role (Run service only, read data access).
+// The Hospitality apps (spec 0065, AC-6501 to AC-6506, AC-6511): which apps a workspace has on, and switching them.
+// Every app but Events starts on (`appsOn`), and a workspace admin (`workspace.manage`) switches one off or back on.
+// Off keeps every row: it sets `removed_at`, and on again clears it. The business card (profile and first place) is
+// taken whenever it is sent and the business isn't set up yet, in the same transaction, and setting it up seeds the
+// "Floor staff" custom role (Run service only, read data access).
 import {
   APP_NEEDS,
+  APPS_ON_BY_DEFAULT,
   APPOINTMENT_HOURS,
   APPOINTMENT_KINDS,
   appsNeeding,
@@ -28,7 +28,7 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { syncBusinessListing } from './business-page.ts';
-import { hasEarlyAccess, hospitalityMember, installedRows, isApp } from './gate.ts';
+import { auditSetup, hospitalityMember, installedHospitalityApps, isApp } from './gate.ts';
 import { insertPlace } from './places.ts';
 
 const { businessProfiles, members, workspaceApps, workspaceRoles, workspaces } = schema;
@@ -58,34 +58,30 @@ const APP_NAMES: Readonly<Record<HospitalityApp, string>> = {
 /** The Apps page as this reader sees it, inside the caller's transaction. */
 async function viewOf(tx: WorkspaceTx, scope: EngineScope): Promise<AppsView> {
   const canManage = can(scope.access, 'workspace.manage');
-  if (!(await hasEarlyAccess(tx, scope.workspaceId))) {
-    return { available: false, canManage, hasBusiness: false, apps: [] };
-  }
+  const on = await installedHospitalityApps(tx, scope.workspaceId);
   const rows = await tx
-    .select({ app: workspaceApps.app, installedAt: workspaceApps.installedAt, removedAt: workspaceApps.removedAt })
+    .select({ app: workspaceApps.app, installedAt: workspaceApps.installedAt })
     .from(workspaceApps)
-    .where(eq(workspaceApps.workspaceId, scope.workspaceId));
+    .where(and(eq(workspaceApps.workspaceId, scope.workspaceId), isNull(workspaceApps.removedAt)));
   const [profile] = await tx
     .select({ name: businessProfiles.name })
     .from(businessProfiles)
     .where(eq(businessProfiles.workspaceId, scope.workspaceId));
   return {
-    available: true,
     canManage,
     hasBusiness: profile !== undefined,
     apps: HOSPITALITY_APPS.map((app) => {
-      const row = rows.find((each) => each.app === app && each.removedAt === null);
+      if (!on.has(app)) return { app, installed: false };
+      // On by default has no row, so no date.
+      const row = rows.find((each) => each.app === app);
       return row === undefined
-        ? { app, installed: false }
+        ? { app, installed: true }
         : { app, installed: true, installedAt: new Date(row.installedAt).toISOString() };
     }),
   };
 }
 
-/**
- * Settings › Apps (AC-6501): any member reads it; without early access it answers nothing about the apps.
- * `canManage` says whether this reader may install and remove.
- */
+/** Settings › Apps (AC-6501): any member reads it. `canManage` says whether this reader may switch the apps. */
 export async function listApps(scope: EngineScope): Promise<AppsView> {
   checkScope(scope);
   return inWorkspace(scope, (tx) => viewOf(tx, scope));
@@ -158,11 +154,11 @@ function auditApps(
 }
 
 /**
- * Installs an app (AC-6503, AC-6505, AC-6506): `workspace.manage` only; instant. An app that needs another (Menu QR
- * needs Menu) is refused `APP_NEEDED` unless `withNeeded` installs both in this one step. The first time any
- * Hospitality app is installed, `business` (the card) is required (`BUSINESS_NEEDED` without it) and made in the same
- * transaction with the first place, and the "Floor staff" role is seeded. Installing again clears `removed_at`, so
- * everything comes back as it was. Answers the Apps page.
+ * Turns an app on (AC-6503, AC-6505, AC-6506): `workspace.manage` only; instant. An app that needs another (Menu QR
+ * needs Menu) is refused `APP_NEEDED` unless `withNeeded` turns both on in this one step. `business` (the card), sent
+ * from an app's first screen while the business isn't set up, is made in the same transaction with the first place,
+ * and the "Floor staff" role is seeded with it. On again clears `removed_at`, so everything comes back as it was.
+ * Answers the Apps page.
  */
 export async function installApp(
   scope: EngineScope,
@@ -171,31 +167,27 @@ export async function installApp(
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   const by = hospitalityMember(scope);
-  if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
+  // An app still being built can't be turned on: it would only keep a page up with every real app off.
+  if (!isApp(input.app) || !APPS_ON_BY_DEFAULT.includes(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       await lockKey(tx, `apps:${scope.workspaceId}`);
-      if (!(await hasEarlyAccess(tx, scope.workspaceId))) {
-        throw refuse('NOT_FOUND', 'The Hospitality apps aren’t open to this workspace yet.');
-      }
-      const before = await installedRows(tx, scope.workspaceId);
+      const before = await installedHospitalityApps(tx, scope.workspaceId);
       const needed = APP_NEEDS[input.app].filter((app) => !before.has(app));
       if (needed.length > 0 && input.withNeeded !== true) {
         throw refuse(
           'APP_NEEDED',
-          `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Install both?`,
+          `${APP_NAMES[input.app]} needs ${needed.map((app) => APP_NAMES[app]).join(' and ')}. Turn both on.`,
         );
       }
       const [profile] = await tx
         .select({ name: businessProfiles.name })
         .from(businessProfiles)
         .where(eq(businessProfiles.workspaceId, scope.workspaceId));
-      if (profile === undefined) {
-        if (input.business === undefined) {
-          throw refuse('BUSINESS_NEEDED', 'Tell us about the business first: its name, kind and first place.');
-        }
+      const setsUp = profile === undefined && input.business !== undefined;
+      if (setsUp) {
         await tx.insert(businessProfiles).values({
           workspaceId: scope.workspaceId,
           name: input.business.name,
@@ -205,7 +197,10 @@ export async function installApp(
         });
         // A salon or a clinic opens on a working week, a restaurant on lunch and dinner (Foolproof).
         const firstHours = APPOINTMENT_KINDS.includes(input.business.kind) ? APPOINTMENT_HOURS : RESTAURANT_HOURS;
-        await insertPlace(tx, scope, newId(), { name: input.business.name, ...input.business.place }, by, firstHours);
+        const placeId = newId();
+        await insertPlace(tx, scope, placeId, { name: input.business.name, ...input.business.place }, by, firstHours);
+        await auditSetup(tx, scope, 'business.saved');
+        await auditSetup(tx, scope, 'place.created', { placeId });
         // The card's currency becomes the workspace's only while it has none: an existing default is never moved.
         const changed = await tx
           .update(workspaces)
@@ -221,12 +216,8 @@ export async function installApp(
             after: { currency: input.business.currency },
           });
         }
+        await seedFloorStaff(tx, scope);
       }
-      const [ever] = await tx
-        .select({ n: count() })
-        .from(workspaceApps)
-        .where(eq(workspaceApps.workspaceId, scope.workspaceId));
-      if ((ever?.n ?? 0) === 0) await seedFloorStaff(tx, scope);
       const adding = [...needed, input.app].filter((app) => !before.has(app));
       if (adding.length > 0) {
         await tx
@@ -237,10 +228,11 @@ export async function installApp(
             set: { removedAt: null, installedAt: sql`now()`, installedByMemberId: by },
           });
         await auditApps(tx, scope, before, new Set([...before, ...adding]));
-        await recordSidebars(context);
         // The first app back makes a published business page live again: back in the sitemap (spec 0066, AC-6644).
         if (before.size === 0) await syncBusinessListing(tx, scope.workspaceId, true);
       }
+      // What every member's open sidebar and settings read has changed: an app, or the business now there.
+      if (adding.length > 0 || setsUp) await recordSidebars(context);
       return viewOf(tx, scope);
     },
     hooks,
@@ -249,7 +241,7 @@ export async function installApp(
 }
 
 /**
- * Removes an app (AC-6503, AC-6505): `workspace.manage` only. Its screens and public pages stop at once, every row is
+ * Switches an app off (AC-6503, AC-6505): `workspace.manage` only. Its screens and public pages stop at once, every row is
  * kept. Removing an app another installed app needs (Menu, with Menu QR) is refused `APP_NEEDED` unless
  * `withDependents` removes both. Answers the Apps page.
  */
@@ -260,28 +252,31 @@ export async function removeApp(
 ): Promise<AppsView> {
   requirePermission(scope, 'workspace.manage');
   hospitalityMember(scope);
-  if (!isApp(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
+  // An app still being built can't be turned on: it would only keep a page up with every real app off.
+  if (!isApp(input.app) || !APPS_ON_BY_DEFAULT.includes(input.app)) throw refuse('NOT_FOUND', 'There is no such app.');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       await lockKey(tx, `apps:${scope.workspaceId}`);
-      const before = await installedRows(tx, scope.workspaceId);
+      const before = await installedHospitalityApps(tx, scope.workspaceId);
       if (!before.has(input.app)) return viewOf(tx, scope);
       const dependents = appsNeeding(input.app).filter((app) => before.has(app));
       if (dependents.length > 0 && input.withDependents !== true) {
         throw refuse(
           'APP_NEEDED',
-          `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Remove both?`,
+          `${dependents.map((app) => APP_NAMES[app]).join(' and ')} needs ${APP_NAMES[input.app]}. Turn both off.`,
         );
       }
       const removing = [input.app, ...dependents];
-      for (const app of removing) {
-        await tx
-          .update(workspaceApps)
-          .set({ removedAt: sql`now()` })
-          .where(and(eq(workspaceApps.workspaceId, scope.workspaceId), eq(workspaceApps.app, app)));
-      }
+      // An app on by default has no row yet, and the switch-off is the row that keeps it off through every release.
+      await tx
+        .insert(workspaceApps)
+        .values(removing.map((app) => ({ workspaceId: scope.workspaceId, app, removedAt: sql`now()` })))
+        .onConflictDoUpdate({
+          target: [workspaceApps.workspaceId, workspaceApps.app],
+          set: { removedAt: sql`now()` },
+        });
       const left = new Set([...before].filter((app) => !removing.includes(app)));
       await auditApps(tx, scope, before, left);
       await recordSidebars(context);

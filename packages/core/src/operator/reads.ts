@@ -4,7 +4,6 @@
 // workspace; people and website numbers from the identity login's global rows.
 // Who may call these is the api's operator gate, never this module.
 import {
-  EARLY_ACCESS_FLAGS,
   OPERATOR_USERS_PAGE,
   PERIOD_DAYS,
   type OperatorFigure,
@@ -108,7 +107,6 @@ interface WorkspaceRow extends Record<string, unknown> {
   deleted_at: string | null;
   members: number;
   records: number;
-  early_access: string[] | null;
 }
 
 interface MemberRow extends Record<string, unknown> {
@@ -143,7 +141,7 @@ const workspacesOf = (db: Database, ids: readonly string[]) =>
   chunked(ids, (chunk) =>
     definer<WorkspaceRow>(
       db,
-      sql`select workspace_id, name, slug, deleted_at::text, members, records, early_access from crm_operator_workspaces(${uuids(chunk)})`,
+      sql`select workspace_id, name, slug, deleted_at::text, members, records from crm_operator_workspaces(${uuids(chunk)})`,
     ),
   );
 
@@ -211,7 +209,11 @@ export async function operatorOverview(deps: OperatorDeps, period: OperatorPerio
   const both = (key: 'records_made' | 'bookings_made' | 'submissions') => figure(sum(key, true), sum(key, false));
   return {
     ...rangeOf(days),
-    people: { total: people.total, new: figure(people.made, people.madeBefore) },
+    people: {
+      total: people.total,
+      new: figure(people.made, people.madeBefore),
+      ...(people.managed > 0 ? { managed: people.managed } : {}),
+    },
     active: {
       period: figure(people.activePeriod, people.activeBefore),
       today: people.activeToday,
@@ -282,6 +284,7 @@ export async function operatorUsers(
       bookingsHosted: used?.bookings ?? 0,
       pages: used?.pages ?? 0,
       twoFactor: person.twoFactor,
+      ...(person.managed ? { managed: true as const } : {}),
     };
   });
   const last = people.at(-1);
@@ -331,7 +334,6 @@ export async function operatorUser(
         recordsMade: member.records_made,
         bookingsHosted: member.bookings_hosted,
         pagesOwned: member.pages_owned,
-        earlyAccess: EARLY_ACCESS_FLAGS.filter((flag) => workspace.early_access?.includes(flag) === true),
       },
     ];
   });
@@ -350,7 +352,9 @@ export async function operatorUser(
       bookingsHosted: usage?.bookings ?? 0,
       pages: usage?.pages ?? 0,
       twoFactor: person.twoFactor,
-      methods: person.google ? ['email', 'google'] : ['email'],
+      ...(person.managed ? { managed: true as const } : {}),
+      // A managed member has no way in of their own (spec 0070, AC-7023).
+      methods: person.managed ? [] : person.google ? ['email', 'google'] : ['email'],
       sessions: person.sessions,
     },
     days: everyDay(days).map((day) => ({ day, active: active.has(day) })),
@@ -442,4 +446,19 @@ export async function operatorSite(deps: OperatorDeps, period: OperatorPeriod): 
     countries: [...facts.countries],
     devices: [...facts.devices],
   };
+}
+
+/**
+ * A sandbox partner's live test connections, every workspace's (spec 0070, AC-7035): ids only, through
+ * `crm_operator_partner_connections`, which reads connections marked as test alone. The wipe's one cross workspace read.
+ */
+export async function operatorTestConnections(
+  deps: { readonly db: Database },
+  partnerId: string,
+): Promise<readonly { readonly workspaceId: string; readonly connectionId: string }[]> {
+  const rows = await definer<{ workspace_id: string; connection_id: string }>(
+    deps.db,
+    sql`select workspace_id, connection_id from crm_operator_partner_connections(${partnerId}::uuid)`,
+  );
+  return rows.map((row) => ({ workspaceId: row.workspace_id, connectionId: row.connection_id }));
 }

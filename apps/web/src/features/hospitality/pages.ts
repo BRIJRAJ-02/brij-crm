@@ -12,7 +12,7 @@ const APP_OF: Readonly<Record<HospitalityPage, HospitalityApp>> = {
   reservations: 'table_seating',
 };
 
-/** Whether the page's app is installed in the workspace (the Apps page's read; false when it can't be read). */
+/** Whether the page's app is on in the workspace (the Apps page's read; false when it can't be read). */
 export async function isPageInstalled(data: DataLayer, slug: string, page: HospitalityPage): Promise<boolean> {
   const store = await data.hospitality.load();
   const view = await store.readApps(slug).catch(() => undefined);
