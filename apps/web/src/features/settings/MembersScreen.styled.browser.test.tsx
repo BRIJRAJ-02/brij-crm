@@ -268,6 +268,8 @@ describe('Works in, styled (spec 0065 H7, AC-6594)', () => {
         }
         await trigger.click();
         await expect.element(page.getByRole('option', { name: 'All of Harbour Bar' })).toBeVisible();
+        // The list fades in: axe reads contrast mid fade on a slow runner, so the entrance finishes first.
+        await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
         expect(await axeViolations()).toEqual([]);
         if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
           await page.screenshot({ path: `${SHOT_DIR}/works-in-open-${theme}-${String(width)}.png` } as never);
