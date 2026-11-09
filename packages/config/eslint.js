@@ -540,7 +540,7 @@ export function screens({ root, vendorWrappers = [] }) {
 /** Files at the repo root that belong to no workspace (.railway, root configs). */
 export function repoRoot({ root }) {
   return defineConfig(
-    globalIgnores(['apps/', 'packages/', 'infra/', 'docs/', '.claude/']),
+    globalIgnores(['apps/', 'packages/', 'infra/', 'docs/', '.claude/', 'design/']),
     base(root),
     { languageOptions: { globals: globals.node } },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),

@@ -1,0 +1,83 @@
+/* A public business page: calm, guest-facing (16px text, 44px controls), one column that steps into booking. */
+.tf-biz { display: flex; flex-direction: column; align-items: center; font: 400 16px/24px var(--font-sans); color: var(--text); }
+.tf-biz__cover { width: 100%; aspect-ratio: 3; max-height: calc(var(--size-menu) + var(--space-24)); border-radius: var(--radius-xl); overflow: hidden; background: var(--surface-subtle); }
+.tf-biz__cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tf-biz__body { width: 100%; max-width: calc(var(--size-measure) + var(--space-64)); padding: 0 var(--space-16); container-type: inline-size; }
+.tf-biz--plain .tf-biz__head { margin-top: var(--space-16); }
+
+/* 08 page side-by-side: the step before waits 8px left, the one after 8px right, both blurred 3px; the box eases to the showing step's height (01 card resize). */
+.tf-biz__steps { position: relative; overflow: clip; overflow-clip-margin: var(--space-8); transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-biz__steps.is-following { transition: none; }
+.tf-biz__step { position: absolute; top: 0; left: 0; right: 0; opacity: 0; visibility: hidden; pointer-events: none; filter: blur(var(--blur-medium)); transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast); }
+.tf-biz__step[data-pos='before'] { transform: translateX(calc(var(--distance-base) * -1)); }
+.tf-biz__step[data-pos='after'] { transform: translateX(var(--distance-base)); }
+.tf-biz__step[data-pos='current'] { opacity: 1; visibility: visible; pointer-events: auto; transform: none; filter: none; transition-delay: 0s; }
+.tf-biz__steps.is-following > .tf-biz__step { transition: none; }
+
+/* Header: the logo sits over the cover's foot, then the facts; its lines rise in once, 40ms apart (18 texts reveal). */
+.tf-biz__page { display: flex; flex-direction: column; gap: var(--space-24); padding-bottom: var(--space-24); }
+.tf-biz__head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); margin-top: calc(var(--size-avatar-lg) / -2); }
+.tf-biz__head > * { animation: tf-biz-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
+.tf-biz__head > :nth-child(2) { animation-delay: var(--duration-stagger); }
+.tf-biz__head > :nth-child(3) { animation-delay: calc(var(--duration-stagger) * 2); }
+.tf-biz__head > :nth-child(4) { animation-delay: calc(var(--duration-stagger) * 3); }
+.tf-biz__head > :nth-child(5) { animation-delay: calc(var(--duration-stagger) * 4); }
+@keyframes tf-biz-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+.tf-biz__logo { display: inline-flex; border-radius: var(--radius-md); box-shadow: 0 0 0 var(--space-4) var(--canvas); }
+.tf-biz__name { margin: var(--space-8) 0 0; font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; }
+.tf-biz__line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-6); margin: 0; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-biz__line > svg { flex: none; }
+.tf-biz__rating { display: inline-flex; align-items: center; gap: var(--space-4); color: var(--text); font-weight: 500; }
+.tf-biz__rating > svg { color: var(--text); fill: currentColor; }
+.tf-biz__muted { margin: 0; color: var(--text-secondary); font-weight: 400; font-size: 14px; }
+.tf-biz__status { color: var(--text); }
+.tf-biz__h2 { margin: 0; font: 500 18px/26px var(--font-sans); outline: none; }
+
+/* Services: tabs stick under the top and follow the scroll; rows between hairlines. */
+.tf-svc { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-svc__tabs { position: sticky; top: 0; z-index: var(--z-sticky); background: var(--canvas); }
+.tf-svc__section { display: flex; flex-direction: column; scroll-margin-top: calc(var(--size-control-lg) + var(--space-8)); padding-top: var(--space-12); }
+.tf-svc__name { margin: 0 0 var(--space-4); font: 500 15px/22px var(--font-sans); color: var(--text); }
+.tf-svc__list { list-style: none; margin: 0; padding: 0; }
+.tf-svc__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-16); padding: var(--space-12) 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-svc__row:last-child { border-bottom: 0; }
+.tf-svc__text { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-svc__title { font: 500 16px/24px var(--font-sans); }
+.tf-svc__desc { font: 400 14px/20px var(--font-sans); color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tf-svc__meta { display: inline-flex; align-items: center; gap: var(--space-4); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-svc__price { font: 500 15px/22px var(--font-sans); white-space: nowrap; }
+
+/* Table: the party size, then one ink action. */
+.tf-biz__table, .tf-biz__pane { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-biz__pane { padding-bottom: var(--space-24); }
+.tf-biz__cta { align-self: stretch; }
+.tf-biz__back { display: flex; align-items: center; gap: var(--space-8); margin: var(--space-16) 0 0 calc(var(--space-6) * -1); }
+
+/* Party size note: opens in flow under the chips (21 accordion: rows 0fr to 1fr, the line fading through a small blur). */
+.tf-party { display: flex; flex-direction: column; }
+.tf-party__more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-party__more[data-open] { grid-template-rows: 1fr; }
+.tf-party__clip { min-height: 0; overflow: hidden; }
+.tf-party__note { display: flex; align-items: center; gap: var(--space-8); margin: 0; padding-top: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text-secondary); opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-party__more[data-open] .tf-party__note { opacity: 1; filter: none; }
+.tf-party__link { color: var(--link); font-weight: 500; text-decoration: none; border-radius: var(--radius-xs); }
+.tf-party__link:hover { text-decoration: underline; }
+.tf-party__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+.tf-biz__foot { display: inline-flex; align-items: center; gap: var(--space-6); margin-top: var(--space-8); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-biz__foot:hover { background: var(--surface-hover); }
+.tf-biz__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+@container (max-width: 30rem) {
+  .tf-svc__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .tf-svc__price { grid-column: 1; grid-row: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-biz__steps, .tf-biz__step, .tf-party__more, .tf-party__note, .tf-biz__foot { transition: none; }
+  .tf-biz__head > * { animation: none; }
+}
+
+/* Demo layout only: the page scrolls inside its card. */
+.tf-bizdemo__scroll { height: calc(var(--size-panel) + var(--size-menu)); overflow-y: auto; border-radius: var(--radius-lg); outline: none; }
+.tf-bizdemo__scroll:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }

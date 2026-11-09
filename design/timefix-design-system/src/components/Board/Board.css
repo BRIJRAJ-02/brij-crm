@@ -1,0 +1,105 @@
+.tf-board { display: flex; align-items: flex-start; gap: var(--space-12); overflow-x: auto; padding-bottom: var(--space-4); font: 400 14px/20px var(--font-sans); color: var(--text); }
+
+/* A column is a grey shell (6px padding, radius-xl) of white radius-lg cards. Folding eases its width (01 card resize). */
+.tf-board__col {
+  flex: none; width: 272px; display: flex; flex-direction: column; padding: var(--space-6);
+  background: var(--surface-shell); border-radius: var(--radius-xl);
+  transition: width var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-board__col.is-collapsed { width: calc(var(--space-24) + var(--space-12)); }
+.tf-board__head { position: relative; display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-2) 0 var(--space-8); }
+.tf-board__title { margin: 0; font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-board__headactions { display: inline-flex; gap: var(--space-2); margin-left: auto; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-board__col:hover .tf-board__headactions, .tf-board__head:focus-within .tf-board__headactions { opacity: 1; }
+@media (hover: none) { .tf-board__headactions { opacity: 1; } }
+.tf-board__status { display: inline-grid; flex: none; }
+
+/* "Lead → Qualified" over the target column's header while a card from another column hovers it.
+   transitions.dev 04 text states swap: fades in with a 4px rise and a 2px blur over 250ms, out over 150ms. */
+.tf-board__transit {
+  position: absolute; inset: 0; display: flex; align-items: center; gap: var(--space-6); padding: 0 var(--space-8);
+  border-radius: var(--radius-md); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border);
+  font: 500 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; overflow: hidden; pointer-events: none;
+  opacity: 0; transform: translateY(var(--distance-micro)); filter: blur(var(--blur-small));
+  transition: opacity var(--duration-quick) var(--ease-in-out), transform var(--duration-quick) var(--ease-in-out), filter var(--duration-quick) var(--ease-in-out);
+}
+.tf-board__transit[data-open] { opacity: 1; transform: none; filter: none; transition-duration: var(--duration-fast); }
+.tf-board__transit-name { overflow: hidden; text-overflow: ellipsis; }
+.tf-board__transit-name--to { color: var(--text); }
+.tf-board__transit-arrow { flex: none; color: var(--text-tertiary); }
+.tf-board__status--gray { color: var(--tag-gray-text); }
+.tf-board__status--red { color: var(--tag-red-text); }
+.tf-board__status--orange { color: var(--tag-orange-text); }
+.tf-board__status--yellow { color: var(--tag-yellow-text); }
+.tf-board__status--lime { color: var(--tag-lime-text); }
+.tf-board__status--green { color: var(--tag-green-text); }
+.tf-board__status--sky { color: var(--tag-sky-text); }
+.tf-board__status--blue { color: var(--tag-blue-text); }
+.tf-board__status--purple { color: var(--tag-purple-text); }
+
+.tf-board__list { display: flex; flex-direction: column; min-height: var(--size-control-lg); padding: 0; outline: none; border-radius: var(--radius-lg); transition: box-shadow var(--duration-quick) var(--ease-out); }
+/* The whole column is the target (an empty column, or below the last card). */
+.tf-board__list[data-drop-target] { box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-board__empty {
+  display: grid; place-items: center; height: calc(var(--size-row) * 1.5); border-radius: var(--radius-lg);
+  border: var(--border-width-hairline) dashed var(--border); color: var(--text-tertiary); font-size: 13px;
+}
+
+/* Cards: white, hairline, lift on drag (shadow-md, 1.02, no tilt), the source stays as a faint ghost. */
+.tf-board__card {
+  position: relative; margin-bottom: var(--space-6); background: var(--surface); border-radius: var(--radius-lg);
+  border: var(--border-width-hairline) solid var(--border-subtle); box-shadow: var(--shadow-xs);
+  cursor: grab; outline: none;
+  transition: border-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out);
+}
+.tf-board__card[data-hovered] { border-color: var(--border); box-shadow: var(--shadow-sm); }
+.tf-board__card[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-board__card[data-dragging] { opacity: 0.4; box-shadow: none; }
+.tf-board__card.is-settling { animation: tf-board-settle var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-board-settle { from { transform: scale(1.02); box-shadow: var(--shadow-md); } }
+/* A new card drops in at the top: its row opens (0fr to 1fr) while it rises 12px. */
+.tf-board__card.is-new { display: grid; animation: tf-board-new var(--duration-fast) var(--ease-smooth-out); }
+.tf-board__card.is-new .tf-board__cardin { min-height: 0; overflow: hidden; animation: tf-board-rise var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-board-new { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; } }
+@keyframes tf-board-rise { from { transform: translateY(var(--distance-medium)); } }
+.tf-board__cardin { position: relative; }
+.tf-board__grip {
+  position: absolute; top: var(--space-6); right: var(--space-6); display: grid; place-items: center;
+  width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0; border-radius: var(--radius-full);
+  background: transparent; color: var(--text-tertiary); cursor: grab; opacity: 0; outline: none;
+  transition: opacity var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out);
+}
+.tf-board__card[data-hovered] .tf-board__grip, .tf-board__card[data-focus-visible] .tf-board__grip, .tf-board__grip[data-focus-visible] { opacity: 1; }
+.tf-board__grip[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-board__grip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+@media (hover: none) { .tf-board__grip { opacity: 1; } }
+
+/* The drop slot opens as a dashed placeholder. */
+.tf-board__slot { height: 0; outline: none; border-radius: var(--radius-lg); transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-board__slot[data-drop-target] { height: calc(var(--size-row) * 1.75); margin-bottom: var(--space-6); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
+
+.tf-board__body { display: flex; flex-direction: column; padding: var(--space-12); }
+.tf-board__tags { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-8); padding-right: var(--space-24); }
+.tf-board__cardtitle { margin: 0; font: 500 14px/20px var(--font-sans); color: var(--text); padding-right: var(--space-16); }
+.tf-board__desc { margin: var(--space-2) 0 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tf-board__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-12); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-board__date { display: inline-flex; align-items: center; gap: var(--space-4); font: 400 12px/16px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The drag image: the card lifted. Padding keeps its shadow inside the snapshot. */
+.tf-board__preview { padding: var(--space-12); width: 284px; }
+.tf-board__lifted { background: var(--surface); border-radius: var(--radius-lg); border: var(--border-width-hairline) solid var(--border); box-shadow: var(--shadow-md); transform: scale(1.02); }
+
+/* Collapsed: Attio's 24px rail with the status, the count and a vertical title. */
+.tf-board__rail {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-8); width: 100%; min-height: calc(var(--size-row) * 4);
+  padding: var(--space-8) 0; border: 0; border-radius: var(--radius-lg); background: transparent; color: var(--text); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-board__rail[data-hovered] { background: var(--surface-hover); }
+.tf-board__rail[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-board__railtitle { writing-mode: vertical-rl; font: 500 13px/20px var(--font-sans); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-board__col, .tf-board__headactions, .tf-board__list, .tf-board__card, .tf-board__grip, .tf-board__slot, .tf-board__rail, .tf-board__transit { transition: none; }
+  .tf-board__card.is-settling, .tf-board__card.is-new, .tf-board__card.is-new .tf-board__cardin { animation: none; }
+}

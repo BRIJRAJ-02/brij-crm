@@ -1,0 +1,99 @@
+/* ---------- display ---------- */
+.tf-attr-display { display: inline-flex; align-items: center; gap: var(--space-6); min-width: 0; max-width: 100%; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-attr-text, .tf-attr-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tf-attr-link { color: var(--link); text-decoration: none; }
+a.tf-attr-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+a.tf-attr-link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-xs); }
+.tf-attr-long { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; text-align: left; }
+.tf-attr-stamp { color: var(--text-secondary); }
+.tf-attr-empty { color: var(--text-tertiary); white-space: nowrap; }
+.tf-attr-chips { display: inline-flex; align-items: center; gap: var(--space-4); min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+.tf-attr-more { font: 500 12px/16px var(--font-sans); color: var(--text-secondary); padding: 0 var(--space-4); flex: none; }
+.tf-attr-actor { display: inline-flex; align-items: center; gap: var(--space-6); min-width: 0; white-space: nowrap; }
+.tf-attr-file { display: inline-flex; align-items: center; gap: var(--space-4); height: 22px; padding: 0 var(--space-6); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text); font: 500 12px/16px var(--font-sans); max-width: 200px; flex: none; }
+.tf-attr-file svg { flex: none; color: var(--text-secondary); }
+.tf-attr-file__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tf-attr-file__size { color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex: none; }
+.tf-attr-file__remove { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: calc(var(--space-2) * -1); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.tf-attr-file__remove[data-hovered] { background: var(--surface-selected); color: var(--text); }
+.tf-attr-file__remove[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-attr-files { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+.tf-attr-upload { display: inline-flex; align-items: center; gap: var(--space-4); height: 22px; padding: 0 var(--space-8); border: var(--border-width-hairline) dashed var(--border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font: 500 12px/16px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.tf-attr-upload[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-attr-upload[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-attr-upload[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* Record chip */
+
+/* Rating: hover previews the star under the pointer and every star before it. */
+.tf-rating { display: inline-flex; align-items: center; gap: var(--space-2); }
+.tf-rating__star { display: inline-grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-xs); color: var(--border-strong); cursor: pointer; outline: none; transition: color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-rating--static .tf-rating__star { width: var(--size-icon); height: var(--size-icon); cursor: default; }
+.tf-rating__star.is-on { color: var(--dot-yellow); }
+.tf-rating__star.is-on svg { fill: currentColor; }
+.tf-rating__star[data-pressed] { transform: scale(var(--scale-large)); }
+.tf-rating__star[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-rating:has(.tf-rating__star[data-hovered]) .tf-rating__star { color: var(--border-strong); }
+.tf-rating:has(.tf-rating__star[data-hovered]) .tf-rating__star svg { fill: none; }
+.tf-rating .tf-rating__star[data-hovered], .tf-rating .tf-rating__star:has(~ .tf-rating__star[data-hovered]) { color: var(--dot-yellow); }
+.tf-rating .tf-rating__star[data-hovered] svg, .tf-rating .tf-rating__star:has(~ .tf-rating__star[data-hovered]) svg { fill: color-mix(in srgb, currentColor 35%, transparent); }
+
+/* ---------- inline field ---------- */
+.tf-attr { position: relative; display: flex; align-items: center; min-width: 0; min-height: var(--size-control-sm); }
+.tf-attr__wash { position: absolute; inset: 0; border-radius: var(--radius-sm); background: var(--accent-soft); pointer-events: none; animation: tf-attr-wash var(--duration-very-slow) var(--ease-out) var(--duration-slow) both; }
+@keyframes tf-attr-wash { from { opacity: 1; } to { opacity: 0; } }
+.tf-attr-cell { position: relative; display: flex; align-items: center; gap: var(--space-6); width: 100%; min-width: 0; min-height: var(--size-control-sm); padding: 0 var(--space-6); margin: 0 calc(var(--space-6) * -1); border-radius: var(--radius-sm); }
+.tf-attr-cell--button { border: 0; background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-attr-cell--button[data-hovered] { background: var(--surface-hover); }
+.tf-attr-cell--button[data-pressed] { background: var(--surface-selected); }
+.tf-attr-cell--button[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-attr-cell.is-open { background: var(--surface-selected); }
+.tf-attr-cell--readonly { cursor: default; }
+.tf-attr-cell__lock { display: inline-grid; color: var(--text-tertiary); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-attr-cell--readonly:hover .tf-attr-cell__lock { opacity: 1; }
+
+/* ---------- typed editors: filled, white with an accent edge on focus ---------- */
+.tf-attr-input { display: flex; flex-direction: column; width: 100%; min-width: 0; margin: 0 calc(var(--space-6) * -1); }
+.tf-attr-input__box { display: flex; align-items: center; min-height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--surface-subtle); box-shadow: inset 0 0 0 1px transparent; transition: background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out); }
+.tf-attr-input__box:focus-within { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border); }
+.tf-attr-input__control { flex: 1; min-width: 0; height: var(--size-control-sm); padding: 0 var(--space-6); border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
+.tf-attr-input__control::placeholder { color: var(--text-tertiary); }
+.tf-attr-input__control--area { height: auto; padding: var(--space-4) var(--space-6); resize: vertical; }
+.tf-attr-input.is-error .tf-attr-input__box { box-shadow: inset 0 0 0 1px var(--danger), 0 0 0 2px var(--danger-soft); }
+.tf-attr-input__error { font: 400 12px/16px var(--font-sans); color: var(--danger); opacity: 0; max-height: 0; transition: opacity calc(var(--duration-micro) * 3.5) var(--ease-out); }
+.tf-attr-input.is-error .tf-attr-input__error { opacity: 1; max-height: none; padding-top: var(--space-4); }
+/* transitions.dev error shake: 80, 80, 60, 60 legs over 280ms; 6px swing, 4px overshoot. */
+.tf-attr-input__box.is-shaking { animation: tf-attr-shake calc(var(--duration-micro) * 3.5) linear; }
+@keyframes tf-attr-shake {
+  0% { transform: translateX(0); animation-timing-function: var(--ease-smooth-out); }
+  28.57% { transform: translateX(var(--distance-small)); animation-timing-function: var(--ease-smooth-out); }
+  57.14% { transform: translateX(calc(var(--distance-small) * -1)); animation-timing-function: var(--ease-smooth-out); }
+  78.57% { transform: translateX(var(--distance-micro)); animation-timing-function: var(--ease-smooth-out); }
+  100% { transform: translateX(0); }
+}
+.tf-attr-name { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); width: 100%; margin: 0 calc(var(--space-6) * -1); }
+.tf-attr-name .tf-attr-input { margin: 0; }
+
+.tf-attr-date { width: 100%; margin: 0 calc(var(--space-6) * -1); }
+.tf-attr-date__group { padding: 0 var(--space-2) 0 var(--space-6); }
+.tf-attr-date__input { display: flex; flex: 1; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+.tf-attr-date__seg { padding: 0 1px; border-radius: var(--radius-xs); color: var(--text); outline: none; caret-color: transparent; }
+.tf-attr-date__seg[data-placeholder] { color: var(--text-tertiary); }
+.tf-attr-date__seg[data-type='literal'] { color: var(--text-tertiary); }
+.tf-attr-date__seg[data-focused] { background: var(--accent); color: var(--on-accent); }
+.tf-attr-date__btn { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none; }
+.tf-attr-date__btn[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-attr-date__btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+
+
+/* ---------- gallery (demo) ---------- */
+.tf-attr-gallery { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--space-32); }
+.tf-attr-gallery__row { display: grid; grid-template-columns: 132px minmax(0, 1fr); align-items: center; gap: var(--space-12); min-height: var(--size-row); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-attr-gallery__type { display: inline-flex; align-items: center; gap: var(--space-8); font: 500 13px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
+.tf-attr-gallery__type svg { color: var(--text-tertiary); flex: none; }
+.tf-attr-gallery__value { min-width: 0; padding-left: var(--space-6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-attr__wash, .tf-attr-input__box.is-shaking { animation: none; }
+  .tf-attr-cell--button, .tf-attr-input__box, .tf-rating__star, .tf-attr-cell__lock { transition: none; }
+}

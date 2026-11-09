@@ -1,0 +1,27 @@
+.tf-tag { display: inline-flex; align-items: center; gap: var(--space-6); height: 26px; padding: 0 var(--space-8); border-radius: var(--radius-sm); font: 500 13px/20px var(--font-sans); white-space: nowrap; flex: none; }
+.tf-tag svg { flex: none; }
+.tf-tag--sm { height: 22px; padding: 0 var(--space-6); gap: var(--space-4); font-size: 12px; line-height: 16px; }
+.tf-tag--pill { height: 30px; padding: 0 var(--space-12) 0 var(--space-6); border-radius: var(--radius-full); font-size: 14px; }
+.tf-tag--outline { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+.tf-tag--gray { background: var(--tag-gray-bg); color: var(--tag-gray-text); }
+.tf-tag--red { background: var(--tag-red-bg); color: var(--tag-red-text); }
+.tf-tag--orange { background: var(--tag-orange-bg); color: var(--tag-orange-text); }
+.tf-tag--yellow { background: var(--tag-yellow-bg); color: var(--tag-yellow-text); }
+.tf-tag--lime { background: var(--tag-lime-bg); color: var(--tag-lime-text); }
+.tf-tag--green { background: var(--tag-green-bg); color: var(--tag-green-text); }
+.tf-tag--sky { background: var(--tag-sky-bg); color: var(--tag-sky-text); }
+.tf-tag--blue { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
+.tf-tag--purple { background: var(--tag-purple-bg); color: var(--tag-purple-text); }
+.tf-dot-label { display: inline-flex; align-items: center; gap: var(--space-6); font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex: none; }
+.tf-dot--gray { background: var(--dot-gray); } .tf-dot--red { background: var(--dot-red); } .tf-dot--orange { background: var(--dot-orange); }
+.tf-dot--yellow { background: var(--dot-yellow); } .tf-dot--lime { background: var(--dot-lime); } .tf-dot--green { background: var(--dot-green); }
+.tf-dot--sky { background: var(--dot-sky); } .tf-dot--blue { background: var(--dot-blue); } .tf-dot--purple { background: var(--dot-purple); }
+.tf-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 var(--space-6); border-radius: var(--radius-full); font: 500 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; }
+.tf-count--neutral { background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-count--accent { background: var(--tag-blue-bg); color: var(--tag-blue-text); }
+.tf-count--ink { background: var(--primary); color: var(--on-primary); }
+/* A status that just changed pops in once. */
+.tf-tag-pop { display: inline-flex; animation: tf-tag-pop var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-tag-pop { from { opacity: 0; transform: scale(var(--scale-large)); } }
+@media (prefers-reduced-motion: reduce) { .tf-tag-pop { animation: none; } }

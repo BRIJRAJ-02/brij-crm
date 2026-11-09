@@ -1,0 +1,32 @@
+.tf-signin { font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-signin__page { display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-2); }
+.tf-signin__full { width: 100%; }
+.tf-signin__notice { margin-bottom: var(--space-4); }
+
+/* A neutral G until the brand marks land. */
+.tf-signin__g {
+  display: inline-grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); flex: none;
+  border-radius: var(--radius-xs); background: var(--surface-subtle); color: var(--text); font: 500 13px/16px var(--font-sans);
+}
+
+/* "or" between two hairlines. */
+.tf-signin__or { display: flex; align-items: center; gap: var(--space-12); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-signin__or::before, .tf-signin__or::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
+
+.tf-signin__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); margin-inline: calc(var(--space-8) * -1); }
+.tf-signin__resend { display: inline-flex; align-items: center; min-height: var(--size-control-sm); }
+.tf-signin__wait { padding: 0 var(--space-8); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+/* Signed in: transitions.dev 10 success check. The tile fades and bobs up on the bounce curve while the tick draws itself (SuccessCheck). */
+.tf-signin__done { align-items: flex-start; padding-top: var(--space-16); }
+.tf-signin__mark {
+  display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full);
+  background: var(--success-soft); color: var(--success);
+  animation: tf-signin-fade var(--duration-very-slow) var(--ease-smooth-out) both, tf-signin-bob var(--duration-very-slow) var(--ease-bounce) both;
+}
+@keyframes tf-signin-fade { from { opacity: 0; filter: blur(var(--blur-large)); } }
+@keyframes tf-signin-bob { from { translate: 0 var(--distance-large); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-signin__mark { animation: none; }
+}

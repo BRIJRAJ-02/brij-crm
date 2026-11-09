@@ -1,0 +1,17 @@
+/* Inline code: mono 13 on surface-subtle, a small radius. */
+.tf-code { padding: 0 var(--space-4); border-radius: var(--radius-xs); background: var(--surface-subtle); color: var(--text); font-family: var(--font-mono); font-size: 0.92em; overflow-wrap: anywhere; }
+
+/* CodeBlock: surface-subtle, radius-md, mono 13/20; buttons at the top right or in the header line. */
+.tf-codeblock { position: relative; min-width: 0; border-radius: var(--radius-md); background: var(--surface-subtle); }
+.tf-codeblock__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-height: var(--size-control); padding: 0 var(--space-4) 0 var(--space-16); border-bottom: var(--border-width-hairline) solid var(--border-subtle); font: 500 12px/16px var(--font-sans); color: var(--text-secondary); }
+.tf-codeblock__actions { display: inline-flex; align-items: center; gap: var(--space-2); }
+.tf-codeblock--bare .tf-codeblock__actions { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 1; border-radius: var(--radius-full); background: var(--surface-subtle); }
+.tf-codeblock__pre { margin: 0; padding: var(--space-12) var(--space-16); overflow-x: auto; font: 400 13px/20px var(--font-mono); color: var(--text); white-space: pre; tab-size: 2; border-radius: var(--radius-md); outline: none; }
+.tf-codeblock--bare .tf-codeblock__pre { padding-right: calc(var(--size-control-sm) * 2 + var(--space-12)); }
+.tf-codeblock__pre--wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tf-codeblock__pre:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* SecretKey: a filled 36px field look holding the masked value, then reveal and copy. */
+.tf-secret { display: flex; align-items: center; gap: var(--space-2); min-width: 0; height: var(--size-control); padding: 0 var(--space-4) 0 var(--space-12); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.tf-secret__value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/20px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+

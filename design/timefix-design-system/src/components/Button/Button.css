@@ -1,0 +1,35 @@
+.tf-btn {
+  --tf-btn-h: var(--size-control);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-6);
+  height: var(--tf-btn-h); padding: 0 var(--space-16); border-radius: var(--radius-full);
+  border: var(--border-width-hairline) solid transparent; background: transparent; color: var(--text);
+  font: 500 14px/20px var(--font-sans); white-space: nowrap; cursor: pointer; user-select: none; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-btn svg { flex: none; }
+.tf-btn[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-btn[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-btn[data-pending] { cursor: progress; }
+
+.tf-btn--sm { --tf-btn-h: var(--size-control-sm); padding: 0 var(--space-12); font-size: 13px; gap: var(--space-4); }
+.tf-btn--lg { --tf-btn-h: var(--size-control-lg); padding: 0 var(--space-20); font-size: 15px; }
+.tf-btn--icon { width: var(--tf-btn-h); padding: 0; }
+.tf-btn--icon[data-pressed] { transform: scale(var(--scale-large)); }
+
+.tf-btn--primary { background: var(--primary); color: var(--on-primary); }
+.tf-btn--primary[data-hovered] { background: var(--primary-hover); }
+.tf-btn--secondary { background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-xs); }
+.tf-btn--secondary[data-hovered] { background: var(--surface-hover); border-color: var(--border-strong); }
+.tf-btn--soft { background: var(--surface-subtle); }
+.tf-btn--soft[data-hovered] { background: var(--surface-selected); }
+.tf-btn--ghost { color: var(--text-secondary); }
+.tf-btn--ghost[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-btn--danger { background: var(--danger); color: var(--on-danger); }
+.tf-btn--danger[data-hovered] { filter: brightness(0.94); }
+
+/* A trigger whose menu is open stays pressed. */
+.tf-btn[aria-expanded='true'] { transform: none; }
+.tf-btn[aria-expanded='true']:not(.tf-btn--primary) { background: var(--surface-selected); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) { .tf-btn { transition: none; } .tf-btn[data-pressed] { transform: none; } }

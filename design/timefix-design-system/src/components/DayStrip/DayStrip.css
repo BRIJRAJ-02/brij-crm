@@ -1,0 +1,20 @@
+/* A strip of days. The white pill slides to the chosen day over 250ms (16 tabs sliding). */
+.tf-daystrip { display: flex; align-items: center; gap: var(--space-4); min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-daystrip__group { flex: 1; min-width: 0; }
+.tf-daystrip__bar { position: relative; display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-daystrip__pill { position: absolute; top: var(--space-4); bottom: var(--space-4); left: 0; width: var(--tf-ind-w, 0); transform: translateX(var(--tf-ind-x, 0)); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-xs); pointer-events: none; }
+.tf-daystrip__bar[data-ready] .tf-daystrip__pill { transition: transform var(--duration-fast) var(--ease-smooth-out), width var(--duration-fast) var(--ease-smooth-out); }
+.tf-daystrip__day { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 0; min-width: var(--size-control-lg); padding: var(--space-6) var(--space-4) var(--space-4); border-radius: var(--radius-md); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-daystrip__day[data-hovered]:not([data-selected]) { background: var(--surface-hover); }
+.tf-daystrip__day[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-daystrip__weekday { font: 500 12px/16px var(--font-sans); color: var(--text-secondary); transition: color var(--duration-fast) var(--ease-smooth-out); }
+.tf-daystrip__date { font: 500 16px/24px var(--font-sans); color: var(--text-secondary); transition: color var(--duration-fast) var(--ease-smooth-out); }
+.tf-daystrip__day[data-hovered] .tf-daystrip__date, .tf-daystrip__day[data-selected] .tf-daystrip__date { color: var(--text); }
+.tf-daystrip__day[data-selected] .tf-daystrip__date { font-weight: 500; }
+.tf-daystrip__day--today .tf-daystrip__weekday, .tf-daystrip__day--today .tf-daystrip__date { color: var(--accent); }
+.tf-daystrip__dots { display: flex; gap: var(--space-2); height: var(--space-6); align-items: center; }
+.tf-daystrip__dot { width: var(--space-4); height: var(--space-4); border-radius: var(--radius-full); background: var(--text-tertiary); transition: background-color var(--duration-fast) var(--ease-smooth-out); }
+.tf-daystrip__day[data-selected] .tf-daystrip__dot { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .tf-daystrip__bar[data-ready] .tf-daystrip__pill, .tf-daystrip__day, .tf-daystrip__weekday, .tf-daystrip__date, .tf-daystrip__dot { transition: none; }
+}

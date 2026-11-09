@@ -1,0 +1,43 @@
+/* A person's presence hue: the dot colour for the arrow and caret, the tag pair for their name so it holds contrast. */
+.tf-hue--gray { --tf-hue: var(--dot-gray); --tf-hue-bg: var(--tag-gray-bg); --tf-hue-text: var(--tag-gray-text); }
+.tf-hue--red { --tf-hue: var(--dot-red); --tf-hue-bg: var(--tag-red-bg); --tf-hue-text: var(--tag-red-text); }
+.tf-hue--orange { --tf-hue: var(--dot-orange); --tf-hue-bg: var(--tag-orange-bg); --tf-hue-text: var(--tag-orange-text); }
+.tf-hue--yellow { --tf-hue: var(--dot-yellow); --tf-hue-bg: var(--tag-yellow-bg); --tf-hue-text: var(--tag-yellow-text); }
+.tf-hue--lime { --tf-hue: var(--dot-lime); --tf-hue-bg: var(--tag-lime-bg); --tf-hue-text: var(--tag-lime-text); }
+.tf-hue--green { --tf-hue: var(--dot-green); --tf-hue-bg: var(--tag-green-bg); --tf-hue-text: var(--tag-green-text); }
+.tf-hue--sky { --tf-hue: var(--dot-sky); --tf-hue-bg: var(--tag-sky-bg); --tf-hue-text: var(--tag-sky-text); }
+.tf-hue--blue { --tf-hue: var(--dot-blue); --tf-hue-bg: var(--tag-blue-bg); --tf-hue-text: var(--tag-blue-text); }
+.tf-hue--purple { --tf-hue: var(--dot-purple); --tf-hue-bg: var(--tag-purple-bg); --tf-hue-text: var(--tag-purple-text); }
+
+/* RemoteCursor: anchored at its tip; each new position glides in over 150ms (smooth-out) so sparse updates read as motion. */
+.tf-cursor { position: absolute; top: 0; left: 0; z-index: var(--z-sticky); display: block; pointer-events: none; transition: transform var(--duration-quick) var(--ease-smooth-out); will-change: transform; }
+.tf-cursor__arrow { display: block; fill: var(--tf-hue); stroke: var(--surface); stroke-width: 1.25px; stroke-linejoin: round; }
+.tf-cursor__name {
+  position: absolute; top: var(--space-16); left: var(--space-12); padding: var(--space-2) var(--space-6); border-radius: var(--radius-full);
+  border: var(--border-width-hairline) solid var(--tf-hue); background: var(--tf-hue-bg); color: var(--tf-hue-text); font: 500 12px/16px var(--font-sans); white-space: nowrap; box-shadow: var(--shadow-sm);
+  transform-origin: top left; transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-cursor.is-idle .tf-cursor__name { opacity: 0; transform: scale(var(--scale-large)); }
+.tf-cursor.is-idle .tf-cursor__arrow { opacity: 0.6; }
+
+/* RemoteCaret: a 2px caret the height of the line, the name on a flag above it. */
+.tf-caret { position: relative; display: inline-block; width: 0; height: 1.25em; margin: 0 -1px; vertical-align: text-bottom; border-left: 2px solid var(--tf-hue); }
+.tf-caret__flag { position: absolute; bottom: 100%; left: -2px; padding: 0 var(--space-4); border-radius: var(--radius-xs) var(--radius-xs) var(--radius-xs) 0; background: var(--tf-hue-bg); color: var(--tf-hue-text); border: var(--border-width-hairline) solid var(--tf-hue); font: 500 11px/16px var(--font-sans); white-space: nowrap; user-select: none; }
+
+/* PresenceGroup: overlapping avatars on a surface ring; the hovered one lifts 4px and grows 1.05, its neighbours follow at 0.45 per step,
+   and the stack springs back (transitions.dev 11: 320ms as duration-medium, smooth-out in, bounce-strong out). */
+.tf-presence { display: inline-flex; align-items: center; }
+.tf-presence__item {
+  position: relative; display: inline-grid; border-radius: var(--radius-full); box-shadow: 0 0 0 2px var(--surface); outline: none;
+  transform: translateY(var(--tf-shift, 0px)) scale(var(--tf-lift-scale, 1)); transform-origin: center;
+  transition: transform var(--duration-medium) var(--ease-smooth-out); will-change: transform;
+}
+.tf-presence__item + .tf-presence__item { margin-left: calc(var(--tf-av) * -0.22); }
+.tf-presence__item:hover, .tf-presence__item:focus-visible { z-index: 1; }
+.tf-presence__item:focus-visible { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring); }
+.tf-presence__more { place-items: center; width: var(--tf-av); height: var(--tf-av); background: var(--surface-subtle); color: var(--text-secondary); font: 500 12px/1 var(--font-sans); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-cursor, .tf-cursor__name, .tf-presence__item { transition: none; }
+  .tf-presence__item { transform: none; }
+}

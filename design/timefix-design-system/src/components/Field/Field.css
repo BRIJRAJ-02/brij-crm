@@ -1,0 +1,75 @@
+/* Field: label, filled box, description, error. Every input family member renders FieldBox for its box. */
+.tf-field { --tf-field-h: var(--size-control); display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-field--lg { --tf-field-h: var(--size-control-lg); }
+.tf-field__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-field__aside { font-weight: 400; color: var(--text-tertiary); }
+.tf-field__desc { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+.tf-field__box {
+  display: flex; align-items: center; gap: var(--space-8); min-height: var(--tf-field-h); padding: 0 var(--space-12);
+  border-radius: var(--radius-md); background: var(--surface-subtle);
+  border: var(--border-width-hairline) solid transparent;
+  transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out);
+  will-change: transform;
+}
+.tf-field--lg .tf-field__box { padding: 0 var(--space-16); border-radius: var(--radius-lg); }
+.tf-field__box:hover { background: var(--surface-hover); }
+.tf-field__box:focus-within { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-field[data-invalid] .tf-field__box, .tf-field__box[data-invalid] { border-color: var(--danger); transition-duration: var(--duration-medium); }
+.tf-field[data-invalid] .tf-field__box:focus-within, .tf-field__box[data-invalid]:focus-within { box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft); }
+.tf-field[data-disabled] .tf-field__box, .tf-field__box[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-field[data-disabled] .tf-field__box:hover { background: var(--surface-subtle); }
+
+.tf-field__input {
+  flex: 1; align-self: stretch; min-width: 0; padding: 0; border: 0; outline: none; background: transparent;
+  font: 400 14px/20px var(--font-sans); color: var(--text);
+}
+.tf-field--lg .tf-field__input { font-size: 16px; line-height: 24px; }
+.tf-field__input::placeholder { color: var(--text-tertiary); }
+.tf-field__input[data-disabled] { cursor: not-allowed; }
+.tf-field__icon, .tf-field__suffix { display: inline-flex; align-items: center; flex: none; color: var(--text-tertiary); }
+.tf-field__suffix { font: 400 13px/20px var(--font-sans); }
+
+.tf-field--area .tf-field__box { align-items: stretch; padding: var(--space-8) var(--space-12); }
+.tf-field__textarea {
+  height: auto; resize: none; field-sizing: content;
+  min-height: calc(var(--tf-field-rows, 3) * 1lh); max-height: calc(10 * 1lh);
+}
+.tf-field__foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12); }
+.tf-field__count { flex: none; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; transition: color var(--duration-quick) var(--ease-out); }
+.tf-field__count[data-near] { color: var(--warning); }
+.tf-field__count[data-full] { color: var(--danger); }
+
+/* transitions.dev 12: the message reveals with an opacity fade; React Aria mounts it only while invalid. */
+.tf-field__error { display: flex; align-items: flex-start; gap: var(--space-6); font: 400 13px/20px var(--font-sans); color: var(--danger); animation: tf-field-error-in var(--duration-medium) var(--ease-out) both; }
+.tf-field__error-icon { display: inline-flex; align-items: center; flex: none; height: 1lh; }
+@keyframes tf-field-error-in { from { opacity: 0; } }
+
+/* transitions.dev 12 error state shake: legs 80, 80, 60, 60ms; 6px, -6px, 4px overshoot, rest; each leg on the smooth-out curve. */
+.tf-field-shake { animation: tf-field-shake calc(var(--duration-micro) * 3.5) linear; }
+@keyframes tf-field-shake {
+  0% { transform: translateX(0); animation-timing-function: var(--ease-smooth-out); }
+  28.57% { transform: translateX(var(--distance-small)); animation-timing-function: var(--ease-smooth-out); }
+  57.14% { transform: translateX(calc(var(--distance-small) * -1)); animation-timing-function: var(--ease-smooth-out); }
+  78.57% { transform: translateX(var(--distance-micro)); animation-timing-function: var(--ease-smooth-out); }
+  100% { transform: translateX(0); }
+}
+
+/* Form layout. */
+.tf-form { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-fieldgroup { margin: 0; padding: 0; border: 0; min-width: 0; container-type: inline-size; }
+.tf-fieldgroup__title { padding: 0; margin: 0 0 var(--space-4); font: 500 15px/22px var(--font-sans); color: var(--text); }
+.tf-fieldgroup__desc { margin: 0 0 var(--space-12); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-fieldgroup__title + .tf-fieldgroup__grid { margin-top: var(--space-8); }
+.tf-fieldgroup__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); }
+@container (min-width: 440px) {
+  .tf-fieldgroup__grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tf-fieldgroup__grid--2 > .tf-field--area { grid-column: 1 / -1; }
+}
+.tf-form__actions { display: flex; justify-content: flex-end; gap: var(--space-8); }
+.tf-form__actions--full { flex-direction: column; align-items: stretch; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-field__box, .tf-field__count { transition: none; }
+  .tf-field__error, .tf-field-shake { animation: none; }
+}

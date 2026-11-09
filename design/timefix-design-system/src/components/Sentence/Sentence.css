@@ -1,0 +1,52 @@
+.tf-sentence { display: flex; flex-direction: column; color: var(--text); font: 400 14px/20px var(--font-sans); }
+/* A line: the lead word (or and/or) in a fixed column, then the pills, which wrap together; remove at the end. */
+.tf-sentence__line { display: flex; align-items: flex-start; gap: var(--space-8); padding: var(--space-4) 0; }
+.tf-sentence__lead { display: flex; align-items: center; justify-content: flex-end; flex: none; width: calc(var(--size-control-lg) + var(--space-20)); min-height: var(--size-control-sm); }
+.tf-sentence__word { font: 500 14px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-sentence__parts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; }
+
+/* Pills: 28px, rounded, filled grey; the attribute carries its type icon; the comparison is quieter; an unset value is dashed. */
+.tf-sentence__pill {
+  display: inline-flex; align-items: center; gap: var(--space-6); max-width: 100%; height: var(--size-control-sm); padding: 0 var(--space-12) 0 var(--space-8); border: 0; border-radius: var(--radius-full);
+  background: var(--surface-subtle); color: var(--text); font: 500 13px/20px var(--font-sans); white-space: nowrap; cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sentence__pill svg { flex: none; color: var(--text-secondary); }
+.tf-sentence__pill[data-hovered] { background: var(--surface-hover); }
+/* The pill stays pressed while its picker is open. */
+.tf-sentence__pill[data-pressed], .tf-sentence__pill[aria-expanded='true'] { background: var(--surface-selected); }
+.tf-sentence__pill[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-sentence__pill[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-sentence__pill--op { padding: 0 var(--space-8); background: transparent; color: var(--text-secondary); font-weight: 400; }
+.tf-sentence__pill--op[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-sentence__pill--value { padding: 0 var(--space-8); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); }
+.tf-sentence__pill--value.is-empty { box-shadow: none; background: transparent; outline: var(--border-width-hairline) dashed var(--border-strong); outline-offset: -1px; color: var(--text-tertiary); font-weight: 400; }
+.tf-sentence__pill--value.is-empty[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-sentence__pill--value > * { min-width: 0; }
+.tf-sentence__pill[data-disabled] { cursor: default; }
+.tf-sentence.is-readonly .tf-sentence__pill { background: transparent; box-shadow: none; padding: 0 var(--space-2); }
+.tf-sentence__chev { color: var(--text-tertiary); }
+
+/* and / or: one word that toggles every line's joiner, crossfading (transitions.dev 04). */
+.tf-sentence__conj {
+  display: inline-grid; place-items: center; min-width: var(--size-control-lg); height: var(--size-control-sm); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-full);
+  background: transparent; color: var(--text-secondary); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none; box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border);
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sentence__conj[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-sentence__conj[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-sentence__conj[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-sentence__conj[data-disabled] { cursor: default; box-shadow: none; }
+
+.tf-sentence__remove { flex: none; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-sentence__line:hover .tf-sentence__remove, .tf-sentence__line:focus-within .tf-sentence__remove { opacity: 1; }
+@media (hover: none) { .tf-sentence__remove { opacity: 1; } }
+.tf-sentence__pop { padding: var(--space-12); width: calc(var(--size-menu) + var(--space-20)); }
+
+@media (max-width: 480px) {
+  .tf-sentence__line { flex-wrap: wrap; }
+  .tf-sentence__lead { width: auto; justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-sentence__pill, .tf-sentence__conj, .tf-sentence__remove { transition: none; }
+}

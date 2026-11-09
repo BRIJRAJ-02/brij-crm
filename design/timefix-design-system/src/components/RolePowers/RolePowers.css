@@ -1,0 +1,35 @@
+/* Columns: the power, then one per role. The head row shares the panel rows' grid and inline padding so cells line up under their role. */
+.tf-powers { display: flex; flex-direction: column; gap: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-powers__scroll { overflow-x: auto; margin: calc(var(--space-4) * -1); padding: var(--space-4); }
+.tf-powers__table {
+  --tf-powers-cols: minmax(calc(var(--size-menu) - var(--space-24)), 1fr) repeat(var(--tf-powers-n, 3), calc(var(--size-control) * 2.5));
+  display: flex; flex-direction: column; gap: var(--space-8); min-width: min-content;
+}
+.tf-powers__head, .tf-powers__row { display: grid; grid-template-columns: var(--tf-powers-cols); align-items: center; column-gap: var(--space-8); }
+.tf-powers__head { padding: 0 calc(var(--space-16) + var(--border-width-hairline)); min-height: var(--size-control); }
+.tf-powers__corner { display: flex; align-items: center; margin-inline-start: calc(var(--space-4) * -1); }
+.tf-powers__role { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); min-width: 0; font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-powers__role-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-powers__lock { display: inline-flex; color: var(--text-tertiary); }
+
+.tf-powers__rows { display: flex; flex-direction: column; color: var(--text); }
+.tf-powers__row { min-height: var(--size-row); padding: var(--space-4) 0; border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-powers__row + .tf-powers__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-powers__power { display: flex; flex-direction: column; min-width: 0; }
+.tf-powers__label { font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-powers__desc { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-powers__cell { display: grid; place-items: center; }
+/* Owner's cells hold every power and never change: quieter, so the editable columns lead. */
+.tf-powers__cell--locked { opacity: var(--opacity-disabled); }
+
+/* A new custom role's column fades and rises into place. */
+.tf-powers__col--new { animation: tf-powers-col-in var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-powers-col-in { from { opacity: 0; transform: translateY(var(--distance-micro)); } }
+
+.tf-powers__note { display: flex; align-items: center; gap: var(--space-6); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-powers__form { display: flex; flex-direction: column; gap: var(--space-16); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-powers__row { transition: none; }
+  .tf-powers__col--new { animation: none; }
+}

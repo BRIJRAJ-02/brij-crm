@@ -1,0 +1,151 @@
+/* The public booking card. Calm: presses ease to .97, words swap with a small blur, months slide, one booked moment. */
+/* Cal.com sized: rail 240 | a compact month of 40px days with 4px gaps (304) | times 13rem. The card never grows past that. */
+.tf-booking {
+  --tf-booking-day: calc(var(--size-control) + var(--space-4));
+  --tf-booking-month: calc(var(--tf-booking-day) * 7 + var(--space-4) * 6);
+  --tf-booking-slots: 13rem;
+  --tf-booking-wide: calc(var(--size-menu) + var(--space-32) + var(--tf-booking-month) + var(--space-24) + var(--tf-booking-slots) + var(--space-24) * 2);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-16); container: tf-booking / inline-size; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-booking__card { width: 100%; max-width: var(--tf-booking-wide); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); padding: var(--space-24); }
+
+/* 08 page side-by-side: the page before waits 8px left, the page after 8px right, both blurred 3px; the box eases
+   to the showing page's height (01 card resize). */
+.tf-booking__pages { position: relative; overflow: clip; overflow-clip-margin: var(--space-6); transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__pages.is-following { transition: none; }
+.tf-booking__page { position: absolute; top: 0; left: 0; right: 0; opacity: 0; visibility: hidden; pointer-events: none; filter: blur(var(--blur-medium)); transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast); }
+.tf-booking__page[data-pos='before'] { transform: translateX(calc(var(--distance-base) * -1)); }
+.tf-booking__page[data-pos='after'] { transform: translateX(var(--distance-base)); }
+.tf-booking__page[data-pos='current'] { opacity: 1; visibility: visible; pointer-events: auto; transform: none; filter: none; transition-delay: 0s; }
+/* The first render is laid out at once, nothing fades in. */
+.tf-booking__pages.is-following > .tf-booking__page { transition: none; }
+
+.tf-booking__flow { display: grid; grid-template-columns: var(--size-menu) minmax(0, 1fr); gap: var(--space-32); align-items: start; }
+
+/* Rail */
+.tf-booking__rail { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.tf-booking__host { margin: var(--space-12) 0 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-booking__title { margin: var(--space-2) 0 var(--space-16); font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; color: var(--text); }
+.tf-booking__facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); width: 100%; }
+.tf-booking__facts > li { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control-sm); font: 500 14px/20px var(--font-sans); color: var(--text); }
+.tf-booking__facts svg { flex: none; color: var(--text-secondary); }
+.tf-booking__when { display: grid; grid-template-rows: 0fr; width: 100%; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__when[data-open='true'] { grid-template-rows: 1fr; }
+.tf-booking__when-clip { min-height: 0; overflow: hidden; }
+.tf-booking__when-row { display: flex; align-items: flex-start; gap: var(--space-8); margin: 0; padding-bottom: var(--space-12); font: 500 14px/20px var(--font-sans); color: var(--accent); opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__when-row svg { flex: none; margin-top: var(--space-2); }
+.tf-booking__when[data-open='true'] .tf-booking__when-row { opacity: 1; filter: none; }
+
+/* Time zone: a quiet trigger that stays pressed while its list is open. */
+.tf-booking__tz-trigger { display: inline-flex; align-items: center; gap: var(--space-8); height: var(--size-control-sm); margin-left: calc(var(--space-8) * -1); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text); font: 500 14px/20px var(--font-sans); cursor: pointer; outline: none; min-width: 0; max-width: 100%; transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-booking__tz-trigger svg { flex: none; color: var(--text-secondary); }
+.tf-booking__tz-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-booking__tz-trigger[data-hovered], .tf-booking__tz-trigger[aria-expanded='true'] { background: var(--surface-selected); }
+.tf-booking__tz-trigger[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-booking__tz-trigger[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* 05 menu dropdown, from the trigger: 250 in from .97, 150 out to .99. */
+
+/* Month + times */
+.tf-booking__pick { display: grid; grid-template-columns: var(--tf-booking-month) var(--tf-booking-slots); gap: var(--space-24); align-items: start; }
+.tf-booking__cal { width: var(--tf-booking-month); max-width: 100%; }
+.tf-booking__cal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-bottom: var(--space-12); }
+.tf-booking__month, .tf-booking__slots-day { margin: 0; font: 500 16px/24px var(--font-sans); color: var(--text); outline: none; }
+.tf-booking__year { color: var(--text-secondary); font-weight: 400; }
+.tf-booking__arrows { display: inline-flex; gap: var(--space-2); }
+.tf-booking__month[data-dir='forward'] { animation: tf-booking-name-up var(--duration-fast) var(--ease-in-out) both; }
+.tf-booking__month[data-dir='back'] { animation: tf-booking-name-down var(--duration-fast) var(--ease-in-out) both; }
+@keyframes tf-booking-name-up { from { opacity: 0; transform: translateY(var(--distance-micro)); filter: blur(var(--blur-small)); } }
+@keyframes tf-booking-name-down { from { opacity: 0; transform: translateY(calc(var(--distance-micro) * -1)); filter: blur(var(--blur-small)); } }
+/* The month slides in the way the arrows went (08 page slide: 8px, 3px blur, 250ms). */
+.tf-booking__grid-wrap[data-dir='forward'] { animation: tf-booking-month-fwd var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-booking__grid-wrap[data-dir='back'] { animation: tf-booking-month-back var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-booking-month-fwd { from { opacity: 0; transform: translateX(var(--distance-base)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-booking-month-back { from { opacity: 0; transform: translateX(calc(var(--distance-base) * -1)); filter: blur(var(--blur-medium)); } }
+/* Fixed 40px days, 4px apart, whatever the card's width. */
+.tf-booking__grid { width: calc(100% + var(--space-4) * 2); margin: calc(var(--space-4) * -1); border-collapse: separate; border-spacing: var(--space-4); table-layout: fixed; }
+.tf-booking__grid td, .tf-booking__grid th { width: var(--tf-booking-day); padding: 0; text-align: center; }
+.tf-booking__weekday { padding-bottom: var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-secondary); text-align: center; }
+.tf-booking__day { display: grid; place-items: center; width: var(--tf-booking-day); height: var(--tf-booking-day); max-width: 100%; margin: 0 auto; border-radius: var(--radius-full); font: 500 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); cursor: default; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-booking__day[data-outside-month] { visibility: hidden; }
+.tf-booking__day:not([data-unavailable]):not([data-disabled]):not([data-outside-month]) { background: var(--accent-soft); color: var(--accent); font-weight: 500; cursor: pointer; }
+.tf-booking__day:not([data-unavailable]):not([data-disabled])[data-hovered] { background: var(--accent-border); }
+.tf-booking__day[data-today] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); }
+.tf-booking__day[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-booking__day[data-selected]:not([data-outside-month]) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.tf-booking__day[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+.tf-booking__slots { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+.tf-booking__slots-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-height: var(--size-control-sm); }
+.tf-booking__slots-day { animation: tf-booking-swap var(--duration-quick) var(--ease-in-out) both; }
+.tf-booking__slot-list { list-style: none; margin: 0; padding: var(--space-2) var(--space-4) var(--space-4) var(--space-2); display: flex; flex-direction: column; gap: var(--space-8); max-height: calc(var(--tf-booking-day) * 7 + var(--space-4) * 6); overflow-y: auto; animation: tf-booking-swap var(--duration-fast) var(--ease-in-out) both; }
+@keyframes tf-booking-swap { from { opacity: 0; filter: blur(var(--blur-small)); } }
+/* A picked time splits into the time and an ink Next. */
+.tf-booking__slot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0fr); gap: 0; transition: grid-template-columns var(--duration-fast) var(--ease-smooth-out), gap var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__slot[data-chosen] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-8); }
+.tf-booking__time, .tf-booking__next { height: var(--size-control-lg); border-radius: var(--radius-full); font: 500 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-booking__time { width: 100%; border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text); }
+.tf-booking__time[data-hovered] { border-color: var(--accent); color: var(--accent); }
+.tf-booking__time[aria-pressed='true'] { border-color: transparent; background: var(--surface-selected); color: var(--text-secondary); }
+.tf-booking__next-wrap { display: flex; min-width: 0; overflow: hidden; border-radius: var(--radius-full); }
+.tf-booking__next { width: 100%; min-width: 0; border: 0; background: var(--primary); color: var(--on-primary); opacity: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-booking__slot[data-chosen] .tf-booking__next { opacity: 1; }
+.tf-booking__next[data-hovered] { background: var(--primary-hover); }
+.tf-booking__time[data-pressed], .tf-booking__next[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-booking__time[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* Next sits inside a clipping slot, so its ring draws inside its edge. */
+.tf-booking__next[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -2); }
+.tf-booking__none { color: var(--text-secondary); font-size: 13px; }
+
+/* 12h / 24h: two equal halves, the white pill slides between them (16). */
+
+/* Details */
+.tf-booking__form { display: flex; flex-direction: column; gap: var(--space-16); max-width: var(--size-dialog); }
+.tf-booking__form-head { display: flex; align-items: center; gap: var(--space-8); margin-left: calc(var(--space-6) * -1); }
+.tf-booking__form-title { margin: 0; font: 500 16px/24px var(--font-sans); outline: none; }
+.tf-booking__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-booking__error { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--danger); }
+.tf-booking__book { align-self: stretch; }
+
+/* Booked: 10 success check, then 18 texts reveal. */
+.tf-booking__done { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); padding: var(--space-16) 0 var(--space-8); text-align: center; }
+.tf-booking__check { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success);
+  animation: tf-booking-check-fade var(--duration-very-slow) var(--ease-smooth-out) both, tf-booking-check-rotate var(--duration-very-slow) var(--ease-smooth-out) both, tf-booking-check-blur var(--duration-very-slow) var(--ease-smooth-out) both, tf-booking-check-bob var(--duration-very-slow) var(--ease-bounce) both; }
+.tf-booking__check svg { display: block; overflow: visible; }
+.tf-booking__check path { stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: tf-booking-check-draw var(--duration-very-slow) var(--ease-smooth-out) var(--duration-micro) forwards; }
+@keyframes tf-booking-check-fade { from { opacity: 0; } }
+@keyframes tf-booking-check-rotate { from { transform: rotate(80deg); } }
+@keyframes tf-booking-check-blur { from { filter: blur(var(--blur-large)); } }
+@keyframes tf-booking-check-bob { from { translate: 0 var(--distance-large); } }
+@keyframes tf-booking-check-draw { to { stroke-dashoffset: 0; } }
+.tf-booking__reveal { display: flex; flex-direction: column; gap: var(--space-4); }
+.tf-booking__reveal-line { animation: tf-booking-reveal var(--duration-very-slow) var(--ease-smooth-out) both; animation-delay: var(--duration-quick); }
+.tf-booking__reveal .tf-booking__reveal-line + .tf-booking__reveal-line { animation-delay: calc(var(--duration-quick) + var(--duration-stagger)); }
+.tf-booking__summary.tf-booking__reveal-line { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 2); }
+.tf-booking__add.tf-booking__reveal-line { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 3); }
+@keyframes tf-booking-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+.tf-booking__done-title { margin: 0; font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; outline: none; }
+.tf-booking__done-sub { margin: 0; color: var(--text-secondary); }
+.tf-booking__summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-8) var(--space-16); width: 100%; max-width: var(--size-dialog); margin: 0; padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface-subtle); text-align: left; }
+.tf-booking__summary dt { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
+.tf-booking__summary dd { margin: 0; font: 500 14px/20px var(--font-sans); }
+.tf-booking__add { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); }
+
+.tf-booking__foot { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-booking__foot:hover { background: var(--surface-hover); }
+.tf-booking__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* A phone: one column, times run two across under the month. */
+@container tf-booking (max-width: 54rem) {
+  .tf-booking__card { padding: var(--space-16); }
+  .tf-booking__card { max-width: calc(var(--tf-booking-month) + var(--space-16) * 2 + var(--space-24)); }
+  .tf-booking__flow, .tf-booking__pick { grid-template-columns: minmax(0, 1fr); gap: var(--space-20); }
+  .tf-booking__cal { margin: 0 auto; }
+  .tf-booking__slot-list { max-height: none; overflow: visible; display: grid; grid-template-columns: 1fr 1fr; }
+  .tf-booking__slot[data-chosen] { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-booking__pages, .tf-booking__page, .tf-booking__when, .tf-booking__when-row, .tf-booking__slot, .tf-booking__time, .tf-booking__next, .tf-booking__day, .tf-booking__tz-trigger { transition: none; }
+  .tf-booking__month, .tf-booking__grid-wrap, .tf-booking__slots-day, .tf-booking__slot-list, .tf-booking__check, .tf-booking__reveal-line { animation: none; }
+  .tf-booking__check path { animation: none; stroke-dashoffset: 0; }
+}

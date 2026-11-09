@@ -1,0 +1,46 @@
+.tf-thread { display: flex; flex-direction: column; gap: var(--space-12); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-thread__list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-thread__empty { margin: 0; padding: var(--space-16) 0; font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); text-align: center; }
+
+.tf-comment { position: relative; display: grid; grid-template-columns: var(--size-avatar) minmax(0, 1fr); gap: var(--space-12); padding: var(--space-8); margin: 0 calc(var(--space-8) * -1); border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-comment:hover, .tf-comment:focus-within { background: var(--surface-hover); }
+.tf-comment__main { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-comment__head { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; }
+.tf-comment__head strong { font: 500 14px/20px var(--font-sans); }
+.tf-comment__head time { font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-comment__reply-to { display: inline-flex; align-items: center; gap: var(--space-4); margin: 0; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-comment__body { margin: 0; font: 400 14px/20px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tf-comment__reactions { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-6); }
+.tf-reaction { display: inline-flex; align-items: center; gap: var(--space-4); height: 24px; padding: 0 var(--space-8); border: 0; border-radius: var(--radius-full); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-reaction[data-hovered] { box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); }
+.tf-reaction[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-reaction[data-selected] { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border); color: var(--accent); }
+.tf-reaction[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* Hover actions float at the comment's top right and appear on hover or keyboard focus. */
+.tf-comment__hover { position: absolute; top: var(--space-4); right: var(--space-4); display: flex; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-full); background: var(--surface-raised); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border-subtle); opacity: 0; transform: translateY(var(--distance-micro)); pointer-events: none; transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
+.tf-comment:hover .tf-comment__hover, .tf-comment:focus-within .tf-comment__hover { opacity: 1; transform: none; pointer-events: auto; }
+@media (hover: none) { .tf-comment__hover { opacity: 1; transform: none; pointer-events: auto; } }
+
+/* Composer: filled at rest, white with the accent edge while writing. */
+.tf-composer { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8) var(--space-8) var(--space-6) var(--space-12); border-radius: var(--radius-lg); background: var(--surface-subtle); box-shadow: inset 0 0 0 1px transparent; transition: background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-out); }
+.tf-composer:focus-within { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border); }
+.tf-composer.is-sending { opacity: var(--opacity-busy); }
+.tf-composer__replying { display: flex; align-items: center; gap: var(--space-4); margin: 0; font: 500 12px/16px var(--font-sans); color: var(--text-secondary); }
+.tf-composer__unreply { margin-left: auto; }
+.tf-composer__field { display: flex; }
+.tf-composer__input { flex: 1; min-height: 40px; max-height: 160px; padding: var(--space-4) 0; border: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); resize: none; outline: none; field-sizing: content; }
+.tf-composer__input::placeholder { color: var(--text-tertiary); }
+.tf-composer__foot { display: flex; align-items: center; justify-content: space-between; }
+.tf-composer__hint { display: inline-flex; align-items: center; gap: var(--space-4); font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+
+/* Mention popover: transitions.dev 05 menu dropdown. */
+.tf-composer__mentions { display: flex; flex-direction: column; }
+.tf-composer__mention { display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md); font: 400 14px/20px var(--font-sans); color: var(--text); cursor: pointer; }
+.tf-composer__mention.is-active { background: var(--surface-hover); }
+
+/* Demo */
+.tf-thread-demo { max-width: 560px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-comment, .tf-comment__hover, .tf-reaction, .tf-composer { transition: none; }
+}

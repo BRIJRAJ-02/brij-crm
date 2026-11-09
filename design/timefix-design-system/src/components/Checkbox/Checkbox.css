@@ -1,0 +1,38 @@
+.tf-check, .tf-switch { display: inline-flex; align-items: center; gap: var(--space-8); cursor: pointer; font: 400 14px/20px var(--font-sans); color: var(--text); outline: none; -webkit-tap-highlight-color: transparent; }
+.tf-check[data-disabled], .tf-switch[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-check__box { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--control-border); border-radius: var(--radius-xs); background: var(--surface); transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-check[data-hovered] .tf-check__box { border-color: var(--text-secondary); }
+.tf-check[data-pressed] .tf-check__box { transform: scale(0.9); }
+.tf-check[data-focus-visible] .tf-check__box, .tf-switch[data-focus-visible] .tf-switch__track { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-check__box svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.tf-check__tick { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset var(--duration-quick) var(--ease-smooth-out); }
+.tf-check__dash { opacity: 0; }
+.tf-check[data-selected] .tf-check__box, .tf-check[data-indeterminate] .tf-check__box { background: var(--accent); border-color: var(--accent); }
+.tf-check[data-selected] .tf-check__tick { stroke-dashoffset: 0; transition: stroke-dashoffset var(--duration-medium) var(--ease-smooth-out); }
+.tf-check[data-indeterminate] .tf-check__tick { opacity: 0; }
+.tf-check[data-indeterminate] .tf-check__dash { opacity: 1; }
+.tf-check[data-invalid] .tf-check__box { border-color: var(--danger); }
+.tf-check--round .tf-check__box { border-radius: var(--radius-full); }
+.tf-check--round[data-selected] .tf-check__label { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+.tf-check__label { transition: color var(--duration-fast) var(--ease-smooth-out); }
+.tf-check--radio .tf-check__box { border-radius: var(--radius-full); }
+.tf-check__dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--on-accent); transform: scale(0); transition: transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-check--radio[data-selected] .tf-check__box { background: var(--accent); border-color: var(--accent); }
+.tf-check--radio[data-selected] .tf-check__dot { transform: scale(1); }
+.tf-radio-group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-radio-group__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-radio-group__items { display: flex; flex-wrap: wrap; gap: var(--space-8) var(--space-24); }
+.tf-radio-group[data-orientation='vertical'] .tf-radio-group__items { flex-direction: column; }
+.tf-switch__track { width: 36px; height: 20px; border-radius: var(--radius-full); background: var(--border-strong); padding: 2px; flex: none; transition: background-color var(--duration-quick) var(--ease-smooth-out); }
+.tf-switch__thumb { display: block; margin-left: 0; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--on-accent); box-shadow: var(--shadow-sm); translate: 0 0; transition: width var(--duration-quick) var(--ease-smooth-out), margin-left var(--duration-quick) var(--ease-smooth-out); }
+.tf-switch[data-pressed] .tf-switch__thumb { width: 20px; }
+.tf-switch[data-selected] .tf-switch__track { background: var(--accent); }
+.tf-switch[data-selected] .tf-switch__thumb { translate: 16px 0; }
+/* When on, the pressed thumb stretches leftward, so it never leaves the track (the toggle animation owns translate). */
+.tf-switch[data-selected][data-pressed] .tf-switch__thumb { margin-left: calc(var(--space-4) * -1); }
+/* transitions.dev toggle: the thumb travels with a double-bounce overshoot (once the user has touched it). */
+.tf-switch.is-touched[data-selected] .tf-switch__thumb { animation: tf-toggle-on var(--duration-medium) var(--ease-bounce) both; }
+.tf-switch.is-touched:not([data-selected]) .tf-switch__thumb { animation: tf-toggle-off var(--duration-medium) var(--ease-bounce) both; }
+@keyframes tf-toggle-on { 0% { translate: 0 0; } 55% { translate: 17px 0; } 80% { translate: 16px 0; } 100% { translate: 16px 0; } }
+@keyframes tf-toggle-off { 0% { translate: 16px 0; } 55% { translate: -1px 0; } 80% { translate: 0 0; } 100% { translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .tf-check__box, .tf-check__tick, .tf-check__dot, .tf-check__label, .tf-switch__track, .tf-switch__thumb { transition: none; animation: none; } }

@@ -1,0 +1,68 @@
+/* Scrim: fades with the dialog's clock. */
+.tf-scrim {
+  position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center; padding: var(--space-16); overflow-y: auto;
+  background: var(--scrim);
+  transition: opacity var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-scrim[data-entering] { opacity: 0; }
+.tf-scrim[data-exiting] { opacity: 0; transition-duration: var(--duration-quick); }
+
+/* transitions.dev 06 modal: scale 0.96 -> 1 over 250ms, back to 0.96 over 150ms, smooth-out. */
+.tf-dialog {
+  width: 100%; max-width: var(--size-dialog); outline: none;
+  background: var(--surface-raised); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg);
+  transform-origin: center;
+  transition: transform var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-dialog[data-entering] { transform: scale(var(--scale-large)); opacity: 0; }
+.tf-dialog[data-exiting] { transform: scale(var(--scale-large)); opacity: 0; transition-duration: var(--duration-quick); }
+.tf-dialog--sm { max-width: calc(var(--size-dialog) - var(--space-64)); }
+.tf-dialog--wide { max-width: var(--size-dialog-wide); }
+.tf-dialog--static { box-shadow: var(--shadow-md); border: var(--border-width-hairline) solid var(--border-subtle); }
+
+.tf-dialog__dialog { position: relative; display: flex; flex-direction: column; padding: var(--space-24); outline: none; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-dialog__close { position: absolute; top: var(--space-16); right: var(--space-16); }
+.tf-dialog__title { margin: 0; padding-right: var(--space-32); font: 500 16px/24px var(--font-sans); color: var(--text); }
+.tf-dialog__desc { margin: var(--space-4) 0 0; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-dialog__body { margin-top: var(--space-16); }
+.tf-dialog__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); margin-top: var(--space-24); }
+
+/* Field for overlay forms. */
+.tf-dfield { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; flex: 1; }
+.tf-dfield__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-dfield__input {
+  height: var(--size-control); padding: 0 var(--space-12); border-radius: var(--radius-md); border: var(--border-width-hairline) solid transparent;
+  background: var(--surface-subtle); color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; width: 100%;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-dfield__input::placeholder { color: var(--text-tertiary); }
+.tf-dfield__input[data-hovered] { background: var(--surface-hover); }
+.tf-dfield__input[data-focused] { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-dfield[data-invalid] .tf-dfield__input { border-color: var(--danger); background: var(--surface); }
+.tf-dfield[data-invalid] .tf-dfield__input[data-focused] { box-shadow: 0 0 0 var(--border-width-focus) var(--danger-soft); }
+
+/* Invite form: rows drop in (0fr -> 1fr plus a 12px rise, 250ms). */
+.tf-invite { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-invite__row { display: grid; grid-template-rows: 1fr; }
+.tf-invite__row--new { animation: tf-invite-row-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-invite__inner { display: flex; align-items: center; gap: var(--space-4); min-height: 0; overflow: hidden; padding: var(--space-2); margin: calc(var(--space-2) * -1); }
+@keyframes tf-invite-row-in { from { grid-template-rows: 0fr; opacity: 0; translate: 0 var(--distance-medium); } }
+.tf-invite__error { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--danger); }
+
+/* transitions.dev 08 page side-by-side + 01 card resize. */
+.tf-stepdlg__pages { position: relative; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-stepdlg__page {
+  position: absolute; inset: 0 0 auto 0; opacity: 0; pointer-events: none;
+  transform: translateX(var(--tf-page-from, 0)); filter: blur(var(--blur-medium));
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-stepdlg__page[data-state='before'] { --tf-page-from: calc(var(--distance-base) * -1); }
+.tf-stepdlg__page[data-state='after'] { --tf-page-from: var(--distance-base); }
+.tf-stepdlg__page[data-state='current'] { opacity: 1; pointer-events: auto; transform: translateX(0); filter: blur(0); }
+.tf-stepdlg__content { margin-top: var(--space-16); }
+.tf-stepdlg__count { margin-right: auto; font: 500 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-scrim, .tf-dialog, .tf-stepdlg__pages, .tf-stepdlg__page { transition: none; }
+  .tf-invite__row--new { animation: none; }
+}

@@ -1,0 +1,62 @@
+/* The shared overlay surface. transitions.dev 05 menu dropdown, on React Aria's entering/exiting states. */
+.tf-popover {
+  box-sizing: border-box; background: var(--surface-raised); color: var(--text);
+  border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-md);
+  padding: var(--space-6); outline: none; z-index: var(--z-popover); overflow: auto; overscroll-behavior: contain;
+  font: 400 14px/20px var(--font-sans);
+  /* Grow from where the trigger is: React Aria writes the anchor point for us. */
+  transform-origin: var(--trigger-anchor-point, top left);
+}
+.tf-popover--menu { min-width: max(var(--size-menu), var(--trigger-width, 0px)); max-width: calc(var(--size-menu) * 1.5); }
+.tf-popover--trigger { min-width: var(--trigger-width, var(--size-menu)); }
+.tf-popover--panel { width: min(var(--size-panel), calc(100vw - var(--space-32))); }
+.tf-popover--flush { padding: 0; }
+.tf-popover__dialog { outline: none; }
+
+.tf-popover[data-entering] { animation: tf-pop-in var(--duration-fast) var(--ease-smooth-out); }
+.tf-popover[data-exiting] { animation: tf-pop-out var(--duration-quick) var(--ease-smooth-out) forwards; pointer-events: none; }
+@keyframes tf-pop-in { from { opacity: 0; transform: scale(var(--scale-medium)); } }
+@keyframes tf-pop-out { to { opacity: 0; transform: scale(var(--scale-tiny)); } }
+
+/* The filled field every picker trigger wears. */
+.tf-pickfield {
+  box-sizing: border-box; display: flex; align-items: center; gap: var(--space-8); width: 100%; min-width: 0; height: var(--size-control); padding: 0 var(--space-12);
+  border: 0; border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text); font: 400 14px/20px var(--font-sans); text-align: left; outline: none; cursor: default;
+  transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out);
+}
+.tf-pickfield[data-hovered] { background: var(--surface-hover); }
+.tf-pickfield[data-focus-visible], .tf-pickfield[data-focus-within], .tf-pickfield[aria-expanded='true'], .tf-pickfield[data-open] {
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border);
+}
+.tf-pickfield[data-invalid] { box-shadow: inset 0 0 0 1px var(--danger); }
+.tf-pickfield[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-pickfield-label { display: block; margin-bottom: var(--space-6); font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-pickfield-help { display: block; margin-top: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-pickfield-error { display: block; margin-top: var(--space-6); font: 400 13px/18px var(--font-sans); color: var(--danger); }
+
+/* PopoverSearch: a bare filter row across the top of the surface, over a hairline. */
+.tf-popover__search { display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); padding: 0 var(--space-8); margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) var(--space-6); border-bottom: var(--border-width-hairline) solid var(--border-subtle); color: var(--text-tertiary); flex: none; }
+.tf-popover__search-input { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0 var(--space-4) 0 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
+.tf-popover__search-input::placeholder { color: var(--text-tertiary); }
+.tf-popover__search-input::-webkit-search-cancel-button { display: none; }
+
+/* InfoTip: a 20px ghost (i) that washes on hover and stays washed while open. */
+.tf-infotip {
+  display: inline-grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); padding: 0; vertical-align: middle;
+  border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-infotip[data-hovered], .tf-infotip[aria-expanded='true'] { background: var(--surface-hover); color: var(--text); }
+.tf-infotip[data-pressed] { transform: scale(var(--scale-large)); }
+.tf-infotip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-infotip__pop { max-width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-12); border-radius: var(--radius-lg); }
+.tf-infotip__text { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text); }
+.tf-infotip__link { display: inline-block; margin-top: var(--space-6); font: 500 13px/20px var(--font-sans); color: var(--link); text-decoration: none; outline: none; border-radius: var(--radius-xs); }
+.tf-infotip__link[data-hovered] { text-decoration: underline; }
+.tf-infotip__link[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-popover[data-entering], .tf-popover[data-exiting] { animation: none; }
+  .tf-infotip, .tf-pickfield { transition: none; }
+  .tf-infotip[data-pressed] { transform: none; }
+}

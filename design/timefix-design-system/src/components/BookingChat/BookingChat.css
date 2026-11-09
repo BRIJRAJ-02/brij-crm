@@ -1,0 +1,84 @@
+/* The guest booking assistant: a calm card, two speech surfaces, offers that book in place. Guest-facing: 16px text, 44px controls. */
+.tf-chat { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); font: 400 16px/24px var(--font-sans); color: var(--text); }
+.tf-chat__card { display: flex; flex-direction: column; width: 100%; max-width: var(--size-dialog); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
+
+.tf-chat__head { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-16) var(--space-20); border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-chat__who { min-width: 0; }
+.tf-chat__name { margin: 0; font: 500 15px/22px var(--font-sans); }
+.tf-chat__title { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The thread scrolls; it takes focus so the keyboard can scroll it. */
+.tf-chat__thread { display: flex; flex-direction: column; gap: var(--space-4); height: calc(var(--size-row) * 9); padding: var(--space-16) var(--space-16) var(--space-20); overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.tf-chat__thread:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: calc(var(--border-width-focus) * -1); }
+
+/* A new line rises in 6px through a small blur (250ms). */
+.tf-chat__line { display: flex; align-items: flex-start; gap: var(--space-8); animation: tf-chat-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-chat__line--start { margin-top: var(--space-12); }
+.tf-chat__line--start:first-child { margin-top: 0; }
+.tf-chat__line--guest { justify-content: flex-end; }
+@keyframes tf-chat-in { from { opacity: 0; transform: translateY(var(--distance-small)); filter: blur(var(--blur-small)); } }
+.tf-chat__face { flex: none; width: var(--size-avatar); }
+.tf-chat__stack { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; max-width: 85%; }
+.tf-chat__line--guest .tf-chat__stack { align-items: flex-end; }
+
+/* Host on the subtle surface at the left, the guest in ink at the right; the corner nearest the speaker is the small one. */
+.tf-chat__bubble { margin: 0; padding: var(--space-8) var(--space-12); border-radius: var(--radius-lg); font: 400 16px/24px var(--font-sans); overflow-wrap: anywhere; }
+.tf-chat__line--host .tf-chat__bubble { align-self: flex-start; background: var(--surface-subtle); color: var(--text); border-top-left-radius: var(--radius-xs); }
+.tf-chat__line--host:not(.tf-chat__line--start) .tf-chat__bubble { border-top-left-radius: var(--radius-lg); }
+.tf-chat__line--guest .tf-chat__bubble { background: var(--primary); color: var(--on-primary); border-top-right-radius: var(--radius-xs); }
+.tf-chat__line--guest:not(.tf-chat__line--start) .tf-chat__bubble { border-top-right-radius: var(--radius-lg); }
+.tf-chat__bubble--thinking { font: 500 14px/24px var(--font-sans); }
+.tf-chat__caret { display: inline-block; width: var(--space-2); height: 1em; margin-left: var(--space-2); vertical-align: text-bottom; border-radius: var(--radius-full); background: var(--text-tertiary); animation: tf-chat-caret calc(var(--duration-very-slow) * 2) var(--ease-linear) infinite; }
+@keyframes tf-chat-caret { 50% { opacity: 0; } }
+
+/* Offers: each day's times as round chips that book in place, rising in 40ms apart once the reply is whole. */
+.tf-chat__offers { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-chat__day, .tf-chat__suggest { animation: tf-chat-rise var(--duration-fast) var(--ease-smooth-out) both; animation-delay: calc(var(--duration-stagger) * var(--tf-chat-i, 0)); }
+@keyframes tf-chat-rise { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-small)); } }
+.tf-chat__day { display: flex; flex-direction: column; gap: var(--space-6); }
+.tf-chat__day-name { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-chat__times, .tf-chat__suggest { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-chat__time, .tf-chat__chip { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-6); height: var(--size-control-lg); padding: 0 var(--space-16); border-radius: var(--radius-full); font: 500 15px/22px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-out); }
+.tf-chat__time { min-width: calc(var(--size-control-lg) * 2); border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text); font-variant-numeric: tabular-nums; }
+.tf-chat__time[data-hovered] { border-color: var(--accent); color: var(--accent); }
+.tf-chat__time[data-pending] { border-color: transparent; background: var(--primary); color: var(--on-primary); cursor: progress; }
+.tf-chat__chip { border: var(--border-width-hairline) solid var(--border); background: transparent; color: var(--text-secondary); }
+.tf-chat__chip[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-chat__time[data-pressed], .tf-chat__chip[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-chat__time[data-focus-visible], .tf-chat__chip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-chat__time[data-disabled], .tf-chat__chip[data-disabled] { opacity: var(--opacity-disabled); cursor: default; }
+
+/* Booked: 10 success check (fade, rotate, blur, bob, draw), then the lines reveal 40ms apart. */
+.tf-chat__booked { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); margin-top: var(--space-20); padding: var(--space-20) var(--space-16); border-radius: var(--radius-lg); border: var(--border-width-hairline) solid var(--border-subtle); text-align: center; }
+.tf-chat__check { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); animation: tf-chat-bob var(--duration-very-slow) var(--ease-bounce) both; }
+@keyframes tf-chat-bob { from { opacity: 0; translate: 0 var(--distance-large); } }
+.tf-chat__booked > :not(.tf-chat__check) { animation: tf-chat-reveal var(--duration-very-slow) var(--ease-smooth-out) both; animation-delay: var(--duration-quick); }
+.tf-chat__booked > .tf-chat__booked-sub { animation-delay: calc(var(--duration-quick) + var(--duration-stagger)); }
+.tf-chat__booked > .tf-chat__summary { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 2); }
+.tf-chat__booked > .tf-chat__add { animation-delay: calc(var(--duration-quick) + var(--duration-stagger) * 3); }
+@keyframes tf-chat-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+.tf-chat__booked-title { margin: var(--space-4) 0 0; font: 500 18px/26px var(--font-sans); }
+.tf-chat__booked-sub { margin: 0; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-chat__summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-6) var(--space-16); width: 100%; margin: var(--space-8) 0 0; padding: var(--space-12) var(--space-16); border-radius: var(--radius-md); background: var(--surface-subtle); text-align: left; }
+.tf-chat__summary dt { font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-chat__summary dd { margin: 0; font: 500 14px/20px var(--font-sans); }
+.tf-chat__add { justify-content: center; margin-top: var(--space-4); }
+
+/* The composer: a filled 44px field and a round Send that turns ink once there is something to send. */
+.tf-chat__composer { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12) var(--space-16) var(--space-16); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-chat__field { flex: 1; min-width: 0; }
+.tf-chat__input { width: 100%; height: var(--size-control-lg); padding: 0 var(--space-16); border: 0; border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text); font: 400 16px/24px var(--font-sans); outline: none; transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
+.tf-chat__input::placeholder { color: var(--text-tertiary); }
+.tf-chat__input[data-hovered] { background: var(--surface-hover); }
+.tf-chat__input[data-focused] { background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent), 0 0 0 var(--border-width-focus) var(--accent-border); }
+.tf-chat__input[data-disabled] { cursor: default; }
+.tf-chat__send { flex: none; }
+
+.tf-chat__foot { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-chat__foot:hover { background: var(--surface-hover); }
+.tf-chat__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-chat__line, .tf-chat__day, .tf-chat__suggest, .tf-chat__check, .tf-chat__booked > *, .tf-chat__caret { animation: none; }
+  .tf-chat__time, .tf-chat__chip, .tf-chat__input, .tf-chat__foot { transition: none; }
+}

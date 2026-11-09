@@ -1,0 +1,35 @@
+.tf-chips { --tf-chip-h: var(--size-control); display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-chips--sm { --tf-chip-h: var(--size-control-sm); gap: var(--space-6); }
+.tf-chips__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-chips__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-chips__group { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-chips--sm .tf-chips__group { gap: var(--space-6); }
+
+.tf-chip {
+  display: inline-flex; align-items: center; height: var(--tf-chip-h); padding: 0 var(--space-16) 0 var(--space-12);
+  border-radius: var(--radius-full); border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text);
+  font: 500 14px/20px var(--font-sans); white-space: nowrap; cursor: pointer; outline: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-chips--sm .tf-chip { padding: 0 var(--space-12) 0 var(--space-8); font-size: 13px; }
+.tf-chip[data-hovered] { background: var(--surface-hover); border-color: var(--border-strong); }
+.tf-chip[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-chip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-chip[data-selected] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.tf-chip[data-selected][data-hovered] { background: var(--primary-hover); border-color: var(--primary-hover); }
+.tf-chip[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
+
+/* The mark slot: empty chips open it as the check swaps in (transitions.dev 09 icon swap: 250ms, from .25 and 2px blur);
+   a chip with a hue dot swaps the dot for the check in the same slot. */
+.tf-chip__mark { display: inline-grid; place-items: center; width: 0; height: var(--size-icon); margin-left: var(--space-4); transition: width var(--duration-fast) var(--ease-smooth-out), margin var(--duration-fast) var(--ease-smooth-out); }
+.tf-chip__mark--dot, .tf-chip[data-selected] .tf-chip__mark { width: var(--size-icon); margin: 0 var(--space-6) 0 0; }
+.tf-chip__mark > * { grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
+.tf-chip__dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--tf-chip-dot); }
+.tf-chip__check { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+.tf-chip[data-selected] .tf-chip__check { opacity: 1; filter: blur(0); transform: scale(1); }
+.tf-chip[data-selected] .tf-chip__dot { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-chip, .tf-chip__mark, .tf-chip__mark > * { transition: none; }
+  .tf-chip[data-pressed] { transform: none; }
+}

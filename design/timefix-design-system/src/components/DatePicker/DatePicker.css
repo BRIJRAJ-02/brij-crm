@@ -1,0 +1,85 @@
+/* Calendar: the booking page's month. 40px round days, today ringed, the chosen day accent. */
+.tf-cal { --tf-day: calc(var(--size-control) + var(--space-4)); width: max-content; padding: var(--space-6); outline: none; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-cal__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: 0 0 var(--space-8) var(--space-8); }
+.tf-cal__title { margin: 0; font: 500 15px/22px var(--font-sans); color: var(--text); }
+.tf-cal__nav { display: inline-flex; gap: var(--space-2); }
+.tf-cal__grid { border-collapse: separate; border-spacing: 0 var(--space-2); }
+.tf-cal__weekday { width: var(--tf-day); height: var(--size-control-sm); padding: 0; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); text-align: center; }
+.tf-cal__grid td { padding: 0; }
+
+/* Month change: the new page slides in a small step from the side it came from (transitions.dev 08). */
+.tf-cal__page--next { animation: tf-cal-next var(--duration-fast) var(--ease-smooth-out); }
+.tf-cal__page--prev { animation: tf-cal-prev var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-cal-next { from { opacity: 0; transform: translateX(var(--distance-base)); filter: blur(var(--blur-medium)); } }
+@keyframes tf-cal-prev { from { opacity: 0; transform: translateX(calc(var(--distance-base) * -1)); filter: blur(var(--blur-medium)); } }
+
+.tf-cal__cell { display: grid; place-items: center; width: var(--tf-day); height: var(--tf-day); outline: none; cursor: pointer; font-variant-numeric: tabular-nums; }
+.tf-cal__day {
+  display: grid; place-items: center; width: var(--tf-day); height: var(--tf-day); border-radius: var(--radius-full);
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out);
+}
+.tf-cal__cell[data-hovered] .tf-cal__day { background: var(--surface-hover); }
+.tf-cal__cell[data-pressed] .tf-cal__day { background: var(--surface-selected); }
+.tf-cal__cell[data-today] .tf-cal__day { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.tf-cal__cell[data-selected] .tf-cal__day { background: var(--accent); color: var(--on-accent); font-weight: 500; }
+.tf-cal__cell[data-focus-visible] .tf-cal__day { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-cal__cell[data-outside-month] { visibility: hidden; }
+.tf-cal__cell[data-disabled], .tf-cal__cell[data-unavailable] { cursor: default; color: var(--text-tertiary); }
+.tf-cal__cell[data-unavailable] .tf-cal__day { color: var(--text-tertiary); cursor: default; }
+.tf-cal__cell[data-disabled] .tf-cal__day, .tf-cal__cell[data-unavailable] .tf-cal__day { background: transparent; }
+
+/* Range: the days between sit on an accent-soft band; the two ends are accent circles. */
+.tf-cal--range .tf-cal__cell[data-selected] { background: var(--accent-soft); }
+.tf-cal--range .tf-cal__cell[data-selected] .tf-cal__day { background: transparent; color: var(--text); font-weight: 400; }
+.tf-cal--range .tf-cal__cell[data-selection-start] { border-start-start-radius: var(--radius-full); border-end-start-radius: var(--radius-full); }
+.tf-cal--range .tf-cal__cell[data-selection-end] { border-start-end-radius: var(--radius-full); border-end-end-radius: var(--radius-full); }
+.tf-cal--range .tf-cal__cell[data-selection-start] .tf-cal__day, .tf-cal--range .tf-cal__cell[data-selection-end] .tf-cal__day { background: var(--accent); color: var(--on-accent); font-weight: 500; }
+.tf-cal--range td:first-child .tf-cal__cell[data-selected] { border-start-start-radius: var(--radius-full); border-end-start-radius: var(--radius-full); }
+.tf-cal--range td:last-child .tf-cal__cell[data-selected] { border-start-end-radius: var(--radius-full); border-end-end-radius: var(--radius-full); }
+
+/* The field: typed segments plus a calendar button at its end. */
+.tf-date { display: flex; flex-direction: column; min-width: 0; }
+.tf-date__field { padding-right: var(--space-4); cursor: text; }
+.tf-date[data-open] .tf-date__field { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--accent-border); }
+.tf-date[data-invalid] .tf-date__field { box-shadow: inset 0 0 0 1px var(--danger); }
+.tf-date__input { display: flex; align-items: center; min-width: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-date__input--start { flex: none; }
+.tf-date__input:last-of-type { flex: 1; }
+.tf-date__dash { color: var(--text-tertiary); padding: 0 var(--space-6); }
+.tf-date__seg { padding: 0 1px; border-radius: var(--radius-xs); outline: none; caret-color: transparent; }
+.tf-date__seg[data-placeholder] { color: var(--text-tertiary); }
+.tf-date__seg[data-type='literal'] { color: var(--text-tertiary); padding: 0; }
+.tf-date__seg[data-focused] { background: var(--accent); color: var(--on-accent); }
+.tf-date__btn {
+  display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); margin-left: auto; padding: 0;
+  border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-date__btn[data-hovered], .tf-date__btn[aria-expanded='true'] { background: var(--surface-selected); color: var(--text); }
+.tf-date__btn[data-pressed] { transform: scale(var(--scale-large)); }
+.tf-date__btn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-date__pop { padding: var(--space-6); }
+.tf-date__foot { display: flex; justify-content: flex-end; padding: var(--space-6) var(--space-6) 0; margin-top: var(--space-2); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+
+/* Range picker: presets column beside the month. */
+.tf-range__panel { display: flex; align-items: flex-start; }
+.tf-range__presets { display: flex; flex-direction: column; gap: var(--space-2); min-width: calc(var(--size-control) * 4); padding: var(--space-6) var(--space-6) var(--space-6) 0; margin-right: var(--space-6); border-right: var(--border-width-hairline) solid var(--border-subtle); align-self: stretch; outline: none; }
+.tf-range__preset {
+  display: flex; align-items: center; min-height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md);
+  font: 400 14px/20px var(--font-sans); color: var(--text); cursor: default; outline: none; transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-range__preset[data-focused], .tf-range__preset[data-hovered] { background: var(--surface-hover); }
+.tf-range__preset[data-selected] { background: var(--accent-soft); font-weight: 500; }
+.tf-range__preset[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+
+/* DateNav */
+.tf-datenav { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; min-width: 0; }
+.tf-datenav__steps { display: inline-flex; gap: var(--space-2); }
+.tf-datenav__label { margin: 0 0 0 var(--space-4); font: 500 15px/22px var(--font-sans); color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-datenav__end { margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-cal__page--next, .tf-cal__page--prev { animation: none; }
+  .tf-cal__day, .tf-date__btn, .tf-range__preset { transition: none; }
+  .tf-date__btn[data-pressed] { transform: none; }
+}

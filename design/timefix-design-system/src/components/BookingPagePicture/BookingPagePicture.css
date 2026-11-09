@@ -1,0 +1,37 @@
+/* A booking page in miniature, and its card on the Pages list. */
+
+/* The picture: a white sheet on the page's soft colour. */
+.tf-bpp { display: flex; align-items: flex-end; justify-content: center; height: 100%; min-height: calc(var(--size-control-lg) * 3); padding: var(--space-16) var(--space-16) 0; background: var(--surface-subtle); overflow: hidden; pointer-events: none; user-select: none; }
+.tf-bpp__sheet { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: 100%; max-width: calc(var(--size-menu) - var(--space-24)); padding: var(--space-12) var(--space-12) var(--space-16); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-bottom: 0; border-radius: var(--radius-md) var(--radius-md) 0 0; box-shadow: var(--shadow-xs); }
+.tf-bpp__head { display: flex; align-items: center; gap: var(--space-6); margin-bottom: var(--space-4); min-width: 0; max-width: 100%; }
+.tf-bpp__host { font: 500 11px/16px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-bpp__title { max-width: 100%; font: 500 13px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-bpp__len { font: 400 11px/16px var(--font-sans); color: var(--text-secondary); }
+.tf-bpp__week { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-4); width: 100%; margin-top: var(--space-8); }
+.tf-bpp__day { display: grid; place-items: center; aspect-ratio: 1; border-radius: var(--radius-full); font: 500 11px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-bpp__day[data-open] { background: var(--tf-bpp-soft); color: var(--tf-bpp-ink); }
+.tf-bpp__day[data-picked] { background: var(--tf-bpp-solid); color: var(--on-accent); }
+
+/* The card: picture on top, words, then the switch and actions. */
+.tf-bpcard { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); overflow: hidden; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
+.tf-bpcard:hover { border-color: var(--border); box-shadow: var(--shadow-xs); }
+.tf-bpcard__picture { height: calc(var(--size-control-lg) * 3 + var(--space-4)); border-bottom: var(--border-width-hairline) solid var(--border-subtle); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-bpcard--hidden .tf-bpcard__picture { opacity: var(--opacity-disabled); filter: grayscale(1); }
+.tf-bpcard__body { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-12) var(--space-16) var(--space-8); min-width: 0; }
+.tf-bpcard__name { margin: 0; font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-bpcard__sub { display: flex; align-items: center; gap: var(--space-6); margin: 0; min-width: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-bpcard__sub svg { flex: none; }
+.tf-bpcard__where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-bpcard__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-8) var(--space-12) var(--space-12) var(--space-16); }
+.tf-bpcard__actions { display: inline-flex; align-items: center; gap: var(--space-4); }
+
+/* The check inside the copy button's IconSwap (Motion) takes the success colour. */
+.tf-bpcard__copied { display: inline-flex; color: var(--success); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-bpcard, .tf-bpcard__picture { transition: none; }
+}
+
+/* Demo layout only. */
+.tf-bpdemo__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-menu) + var(--space-12)), 1fr)); gap: var(--space-12); }
+.tf-bpdemo__alone { width: calc(var(--size-menu) + var(--space-12)); height: calc(var(--size-control-lg) * 3 + var(--space-4)); border-radius: var(--radius-lg); overflow: hidden; border: var(--border-width-hairline) solid var(--border-subtle); }

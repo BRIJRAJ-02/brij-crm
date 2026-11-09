@@ -1,0 +1,37 @@
+/* DragHandle: a 6-dot grip in text-tertiary, text-secondary under the pointer, grab cursor, accent while lifted.
+   Drawn 20 x 28 so the press target clears 24px. */
+.tf-drag-handle {
+  display: inline-grid; place-items: center; flex: none; width: var(--space-20); height: var(--size-control-sm); padding: 0;
+  border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-tertiary); cursor: grab; outline: none; touch-action: none;
+  transition: color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out);
+}
+.tf-drag-handle[data-hovered] { color: var(--text-secondary); background: var(--surface-hover); }
+.tf-drag-handle[data-pressed], .tf-drag-handle[data-lifted] { cursor: grabbing; }
+.tf-drag-handle[data-lifted] { color: var(--accent); }
+.tf-drag-handle[data-focus-visible] { opacity: 1; color: var(--text-secondary); outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-drag-handle--hover { opacity: 0; }
+:where(:hover, [data-hovered], [data-focus-visible], [data-dragging], :focus-within) > .tf-drag-handle--hover, .tf-drag-handle--hover[data-lifted] { opacity: 1; }
+@media (hover: none) { .tf-drag-handle--hover { opacity: 1; } }
+
+/* SortableList: 44px rows that wash on hover; the dragged row leaves a faint ghost, the slot opens dashed, the drop settles. */
+.tf-sortable { display: flex; flex-direction: column; gap: var(--space-2); outline: none; }
+.tf-sortable__row {
+  display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-row); padding: 0 var(--space-12) 0 var(--space-4);
+  border-radius: var(--radius-md); background: var(--surface); color: var(--text); outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out);
+}
+.tf-sortable__row[data-hovered] { background: var(--surface-hover); }
+.tf-sortable__row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-sortable__row[data-dragging] { opacity: 0.4; }
+.tf-sortable__row.is-settling { animation: tf-sortable-settle var(--duration-fast) var(--ease-smooth-out); }
+@keyframes tf-sortable-settle { from { transform: scale(1.02); box-shadow: var(--shadow-md); } }
+.tf-sortable__slot { height: 0; border-radius: var(--radius-md); outline: none; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-sortable__slot[data-drop-target] { height: var(--size-row); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
+/* The drag image: the row lifted (shadow-md, 1.02, no tilt). Padding keeps the shadow inside the snapshot. */
+.tf-sortable__preview { padding: var(--space-12); width: var(--size-panel); }
+.tf-sortable__row--lifted { border: var(--border-width-hairline) solid var(--border); box-shadow: var(--shadow-md); transform: scale(1.02); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-drag-handle, .tf-sortable__row, .tf-sortable__slot { transition: none; }
+  .tf-sortable__row.is-settling { animation: none; }
+}

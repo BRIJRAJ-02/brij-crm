@@ -1,0 +1,86 @@
+/* The link page editor: blocks (or the edit panel) on the left, a phone preview on the right, PublishBar floating. */
+.tf-linked-host { container-type: inline-size; }
+.tf-linked {
+  position: relative; display: grid; grid-template-columns: minmax(0, var(--size-panel)) minmax(0, 1fr); gap: var(--space-24);
+  height: calc(var(--size-dialog) * 1.5); color: var(--text); font: 400 14px/20px var(--font-sans);
+}
+
+/* 08 page side-by-side between the list and the edit panel. */
+.tf-linked__side { display: grid; min-height: 0; overflow: clip; overflow-clip-margin: var(--space-6); }
+.tf-linked__pane {
+  grid-area: 1 / 1; display: flex; flex-direction: column; min-height: 0; opacity: 0; visibility: hidden; filter: blur(var(--blur-medium));
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out), visibility 0s linear var(--duration-fast);
+}
+.tf-linked__pane[data-pos='before'] { transform: translateX(calc(var(--distance-base) * -1)); }
+.tf-linked__pane[data-pos='after'] { transform: translateX(var(--distance-base)); }
+.tf-linked__pane[data-pos='current'] { opacity: 1; visibility: visible; transform: none; filter: none; transition-delay: 0s; }
+
+.tf-linked__list { display: flex; flex-direction: column; gap: var(--space-12); min-height: 0; height: 100%; overflow-y: auto; padding: var(--space-2) var(--space-2) calc(var(--size-control-lg) + var(--space-32)); }
+.tf-linked__section { display: flex; flex-direction: column; padding: var(--space-12); border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+/* 21 accordion: the Custom colour opens under the looks. */
+.tf-linked__custom { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__custom[data-open] { grid-template-rows: 1fr; }
+.tf-linked__custom-clip { min-height: 0; overflow: hidden; opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__custom[data-open] .tf-linked__custom-clip { opacity: 1; filter: none; padding-top: var(--space-12); }
+
+.tf-linked__profile {
+  display: flex; align-items: center; gap: var(--space-12); width: 100%; min-height: var(--size-row); padding: var(--space-12); border: 0; border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); color: var(--text); text-align: left; cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-linked__profile[data-hovered] { background: var(--surface-hover); }
+.tf-linked__profile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+.tf-linked__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-4); }
+.tf-linked__heading { margin: 0; font: 500 13px/20px var(--font-sans); color: var(--text-secondary); }
+
+.tf-linked__blocks { display: flex; flex-direction: column; gap: var(--space-6); outline: none; }
+.tf-linked__row {
+  display: grid; grid-template-rows: 1fr; border-radius: var(--radius-lg); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle);
+  cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out);
+}
+.tf-linked__row[data-hovered] { background: var(--surface-hover); }
+.tf-linked__row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-linked__row[data-dragging] { opacity: 0.4; }
+.tf-linked__row.is-hidden .tf-linked__title, .tf-linked__row.is-hidden .tf-linked__tile { opacity: var(--opacity-disabled); }
+/* A new block drops in at the top; a changed one gets a brief accent wash. */
+.tf-linked__row.is-new { animation: tf-linked-open var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__row.is-new .tf-linked__rowin { animation: tf-linked-rise var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__row.is-changed { animation: tf-linked-wash var(--duration-very-slow) var(--ease-out); }
+@keyframes tf-linked-open { from { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes tf-linked-rise { from { transform: translateY(var(--distance-medium)); } }
+@keyframes tf-linked-wash { from { background: var(--accent-soft); } }
+.tf-linked__rowin { display: flex; align-items: center; gap: var(--space-8); min-height: calc(var(--size-row) + var(--space-12)); min-width: 0; padding: 0 var(--space-12) 0 var(--space-4); overflow: hidden; }
+.tf-linked__grip { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: grab; outline: none; }
+.tf-linked__grip[data-hovered] { background: var(--surface-selected); color: var(--text); }
+.tf-linked__grip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 0; }
+.tf-linked__tile { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-linked__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-linked__title { font: 500 14px/20px var(--font-sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linked__sub { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-linked__slot { height: 0; border-radius: var(--radius-lg); outline: none; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-linked__slot[data-drop-target] { height: calc(var(--size-row) + var(--space-12)); border: var(--border-width-hairline) dashed var(--border-strong); background: var(--surface-subtle); }
+.tf-linked__undo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin: 0; padding: 0 var(--space-4) 0 var(--space-12); min-height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); animation: tf-linked-fade var(--duration-quick) var(--ease-in-out); }
+@keyframes tf-linked-fade { from { opacity: 0; filter: blur(var(--blur-small)); } }
+/* 09 icon swap: the detected network's mark swaps in. */
+.tf-linked__detected { display: grid; place-items: center; animation: tf-linked-swap var(--duration-fast) var(--ease-in-out) both; }
+@keyframes tf-linked-swap { from { opacity: 0; transform: scale(0.25); filter: blur(var(--blur-small)); } }
+
+/* The phone preview. */
+.tf-linked__preview { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); min-height: 0; }
+.tf-linked__preview-label { margin: 0; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-linked__phone {
+  flex: 1; min-height: 0; width: 100%; max-width: calc(var(--size-menu) * 1.5); overflow-y: auto; overscroll-behavior: contain;
+  border-radius: calc(var(--radius-xl) * 2); border: var(--space-6) solid var(--surface-inverse); background: var(--canvas); box-shadow: var(--shadow-md);
+}
+
+@container (max-width: 48rem) {
+  .tf-linked { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .tf-linked__side { height: calc(var(--size-dialog) * 1.2); }
+  .tf-linked__phone { height: calc(var(--size-dialog) * 1.3); flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-linked__pane, .tf-linked__custom, .tf-linked__custom-clip, .tf-linked__profile, .tf-linked__row, .tf-linked__slot { transition: none; }
+  .tf-linked__row.is-new, .tf-linked__row.is-new .tf-linked__rowin, .tf-linked__row.is-changed, .tf-linked__undo, .tf-linked__detected { animation: none; }
+}

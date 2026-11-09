@@ -1,0 +1,53 @@
+/* The region sits bottom centre. Its padding-top catches the pointer over the peeking toasts; hovered or focused, it grows to hold them spread out. */
+.tf-toasts {
+  position: fixed; z-index: var(--z-toast); left: 0; right: 0; bottom: var(--space-24); margin-inline: auto;
+  width: min(var(--size-dialog), calc(100% - var(--space-32)));
+  height: calc(var(--size-control-lg) + var(--space-24)); outline: none;
+}
+.tf-toasts[data-hovered], .tf-toasts:focus-within { height: calc((var(--size-control-lg) + var(--space-8)) * var(--tf-toast-count, 1) + var(--space-24)); }
+.tf-toasts[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-lg); }
+
+/* transitions.dev 32 banner stacking (with 22 toast for a single dismiss). */
+.tf-toast {
+  position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; width: max-content; max-width: 100%;
+  display: flex; align-items: center; gap: var(--space-8); height: var(--size-control-lg); padding: 0 var(--space-8) 0 var(--space-16);
+  border-radius: var(--radius-full); background: var(--surface-inverse); color: var(--on-inverse); box-shadow: var(--shadow-lg);
+  font: 500 14px/20px var(--font-sans); outline: none;
+  transform-origin: 50% 50%; filter: blur(0);
+  transition: transform var(--duration-medium) var(--ease-smooth-out), opacity var(--duration-medium) var(--ease-smooth-out), filter var(--duration-medium) var(--ease-smooth-out);
+}
+.tf-toast[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-toast[data-depth='0'] { z-index: 3; transform: translateY(0) scale(1); opacity: 1; }
+@starting-style { .tf-toast[data-depth='0'] { transform: translateY(calc(var(--distance-large) * 2)) scale(var(--scale-medium)); opacity: 0; filter: blur(var(--blur-small)); } }
+.tf-toast[data-depth='1'] {
+  z-index: 2; transform-origin: 50% 100%;
+  transform: translateY(calc(var(--distance-medium) * -1)) scale(calc(1 - (1 - var(--scale-medium)) * 2));
+  opacity: 0.6; filter: blur(calc(var(--blur-small) / 2));
+}
+.tf-toast[data-depth='2'] {
+  z-index: 1; transform-origin: 50% 100%;
+  transform: translateY(calc(var(--distance-medium) * -2)) scale(calc(1 - (1 - var(--scale-medium)) * 4));
+  opacity: 0.36; filter: blur(var(--blur-small));
+}
+.tf-toasts[data-hovered] .tf-toast[data-depth='1'], .tf-toasts:focus-within .tf-toast[data-depth='1'], .tf-toast-stage:hover .tf-toast[data-depth='1'] { transform: translateY(calc((100% + var(--space-8)) * -1)) scale(1); opacity: 1; filter: blur(0); }
+.tf-toasts[data-hovered] .tf-toast[data-depth='2'], .tf-toasts:focus-within .tf-toast[data-depth='2'], .tf-toast-stage:hover .tf-toast[data-depth='2'] { transform: translateY(calc((100% + var(--space-8)) * -2)) scale(1); opacity: 1; filter: blur(0); }
+/* Dismissed: drops 16px, shrinks to 0.97 and blurs, on the faster 250ms clock. */
+.tf-toast[data-depth='leaving'] {
+  z-index: 0; pointer-events: none; opacity: 0; transform: translateY(var(--space-16)) scale(var(--scale-medium)); filter: blur(var(--blur-small));
+  transition-duration: var(--duration-fast);
+}
+
+.tf-toast__icon { display: inline-flex; flex: none; }
+.tf-toast[data-tone='success'] .tf-toast__icon { color: var(--dot-green); }
+.tf-toast[data-tone='danger'] .tf-toast__icon { color: var(--dot-red); }
+.tf-toast[data-tone='info'] .tf-toast__icon { color: color-mix(in srgb, var(--on-inverse) 72%, transparent); }
+.tf-toast__content { min-width: 0; padding-right: var(--space-4); }
+.tf-toast__content > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A drawn stack for docs: the same pills, in place. Hover spreads it. */
+.tf-toast-stage { position: relative; height: calc((var(--size-control-lg) + var(--space-8)) * 3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-toast { transition: none; }
+  .tf-toast[data-depth] { filter: none; }
+}

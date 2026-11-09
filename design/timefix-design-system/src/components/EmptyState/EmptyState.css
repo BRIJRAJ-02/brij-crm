@@ -1,0 +1,18 @@
+.tf-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: var(--space-48) var(--space-24); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-empty--sm { padding: var(--space-24) var(--space-16); }
+.tf-empty__well {
+  width: var(--size-control-lg); height: var(--size-control-lg); display: grid; place-items: center; border-radius: var(--radius-full);
+  background: var(--surface-raised); color: var(--text-secondary); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border-subtle); margin-bottom: var(--space-16);
+}
+.tf-empty__title { margin: 0; font: 500 15px/22px var(--font-sans); color: var(--text); }
+.tf-empty__desc { margin: var(--space-4) 0 0; max-width: calc(var(--size-measure) / 2); color: var(--text-secondary); }
+.tf-empty__actions { display: flex; gap: var(--space-8); justify-content: center; margin-top: var(--space-16); }
+
+/* transitions.dev 18 texts reveal: each line rises 12px out of a 3px blur over 500ms, 40ms after the one before. */
+.tf-empty__line { animation: tf-empty-reveal var(--duration-very-slow) var(--ease-smooth-out) both; }
+.tf-empty__title { animation-delay: var(--duration-stagger); }
+.tf-empty__desc { animation-delay: calc(var(--duration-stagger) * 2); }
+.tf-empty__actions { animation-delay: calc(var(--duration-stagger) * 3); }
+@keyframes tf-empty-reveal { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+
+@media (prefers-reduced-motion: reduce) { .tf-empty__line { animation: none; } }

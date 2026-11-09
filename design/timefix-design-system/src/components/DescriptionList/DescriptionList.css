@@ -1,0 +1,44 @@
+.tf-dl { display: flex; flex-direction: column; margin: 0; font: 400 14px/20px var(--font-sans); color: var(--text); }
+/* A fixed label column (icon well + grey label), the value beside it. */
+.tf-dl__row { display: grid; grid-template-columns: 136px minmax(0, 1fr); align-items: start; gap: var(--space-8); min-height: var(--size-control); }
+.tf-dl__label { display: flex; align-items: center; gap: var(--space-8); height: var(--size-control); font: 400 13px/20px var(--font-sans); color: var(--text-secondary); min-width: 0; white-space: nowrap; overflow: hidden; }
+.tf-dl__well { display: inline-grid; place-items: center; flex: none; width: var(--space-24); height: var(--space-24); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-dl__cell { position: relative; display: grid; align-items: center; margin: 0; min-height: var(--size-control); }
+.tf-dl__cell > * { grid-area: 1 / 1; }
+
+.tf-dl__value {
+  display: flex; align-items: center; min-width: 0; min-height: var(--size-control); padding: 0 var(--space-8); margin-left: calc(var(--space-8) * -1);
+  border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: text; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-in-out);
+}
+.tf-dl__value[data-hovered] { background: var(--surface-hover); }
+.tf-dl__value[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-dl__value--static { cursor: default; }
+.tf-dl__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: var(--space-32); }
+.tf-dl__empty { color: var(--text-tertiary); }
+/* Edit: the field crossfades in over the value (150ms, in-out). */
+.tf-dl__row.is-editing .tf-dl__value { opacity: 0; pointer-events: none; }
+.tf-dl__field { display: flex; margin-left: calc(var(--space-8) * -1); animation: tf-dl-in var(--duration-quick) var(--ease-in-out); }
+@keyframes tf-dl-in { from { opacity: 0; } }
+.tf-dl__input {
+  width: 100%; height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md);
+  border: var(--border-width-hairline) solid var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  background: var(--surface); color: var(--text); font: 400 14px/20px var(--font-sans); outline: none;
+}
+.tf-dl__input::placeholder { color: var(--text-tertiary); }
+
+/* Copy on hover (or focus): Copy swaps to Check (transitions.dev 09 icon swap). */
+.tf-dl__copy { justify-self: end; align-self: center; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-dl__row:hover .tf-dl__copy, .tf-dl__row:focus-within .tf-dl__copy { opacity: 1; }
+@media (hover: none) { .tf-dl__copy { opacity: 1; } }
+.tf-dl__swap { display: inline-grid; }
+.tf-dl__swap svg {
+  grid-area: 1 / 1; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
+}
+.tf-dl__swap[data-state='a'] svg[data-icon='b'], .tf-dl__swap[data-state='b'] svg[data-icon='a'] { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+.tf-dl__swap[data-state='b'] svg[data-icon='b'] { color: var(--success); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-dl__value, .tf-dl__copy, .tf-dl__swap svg { transition: none; }
+  .tf-dl__field { animation: none; }
+}

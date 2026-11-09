@@ -1,0 +1,41 @@
+.tf-acc { display: flex; flex-direction: column; }
+.tf-acc--card { background: var(--surface); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.tf-acc__item + .tf-acc__item { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-acc__heading { margin: 0; font: inherit; }
+.tf-acc__head {
+  display: flex; align-items: center; gap: var(--space-12); width: 100%; min-height: var(--size-row); padding: var(--space-8) var(--space-16);
+  border: 0; background: transparent; color: var(--text); text-align: start; font: 500 14px/20px var(--font-sans); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-acc--plain .tf-acc__head { padding-inline: var(--space-4); border-radius: var(--radius-md); }
+.tf-acc__head[data-hovered] { background: var(--surface-hover); }
+.tf-acc__head[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-acc__item[data-disabled] .tf-acc__head { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.tf-acc__icon { display: inline-flex; flex: none; color: var(--text-secondary); }
+.tf-acc__titles { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-acc__desc { font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
+.tf-acc__head .tf-flip-chevron { color: var(--text-tertiary); }
+
+/* transitions.dev 21: React Aria measures the panel into --disclosure-panel-height; height tweens over 250ms,
+   the inner content fades and unblurs from 2px. Padding sits on the inner, never on the collapsing panel. */
+.tf-acc__panel { height: var(--disclosure-panel-height); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-acc__inner {
+  padding: 0 var(--space-16) var(--space-16); opacity: 0; filter: blur(var(--blur-small)); color: var(--text-secondary);
+  transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-acc--plain .tf-acc__inner { padding-inline: var(--space-4); }
+.tf-acc__item[data-expanded] > .tf-acc__panel > .tf-acc__inner { opacity: 1; filter: blur(0); }
+.tf-flip-chevron { display: inline-flex; flex: none; transform: scaleY(1); transform-origin: center; transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-flip-chevron path { vector-effect: non-scaling-stroke; }
+.tf-acc__item[data-expanded] > .tf-acc__heading .tf-flip-chevron,
+.tf-acc__item[data-expanded] > .tf-showmore__trigger .tf-flip-chevron { transform: scaleY(-1); }
+
+.tf-showmore__trigger {
+  display: inline-flex; align-items: center; gap: var(--space-4); height: var(--size-control-sm); padding: 0 var(--space-8); margin-inline-start: calc(var(--space-8) * -1);
+  border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-secondary); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-showmore__trigger[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-showmore__trigger[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-showmore__inner { padding: var(--space-12) 0 0; color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .tf-acc__panel, .tf-acc__inner, .tf-flip-chevron, .tf-acc__head, .tf-showmore__trigger { transition: none; } }

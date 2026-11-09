@@ -1,0 +1,8 @@
+.tf-logo { display: inline-flex; align-items: center; gap: calc(var(--tf-logo-size) * 0.33); }
+.tf-logo__mark { flex: none; display: block; }
+.tf-logo__ink { fill: var(--text); }
+.tf-logo__tick { fill: var(--surface); }
+.tf-logo__word { height: calc(var(--tf-logo-size) * 0.72); width: auto; display: block; }
+.tf-logo__word--dark { display: none; }
+[data-theme='dark'] .tf-logo__word--light { display: none; }
+[data-theme='dark'] .tf-logo__word--dark { display: block; }

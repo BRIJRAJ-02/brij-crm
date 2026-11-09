@@ -1,0 +1,88 @@
+.tf-roll { display: inline-flex; font-variant-numeric: tabular-nums; }
+.tf-roll__digit { display: inline-block; height: 1lh; overflow: hidden; }
+.tf-roll__strip { display: flex; flex-direction: column; transition: transform var(--duration-very-slow) var(--ease-smooth-out); }
+.tf-roll__strip > span { height: 1lh; }
+
+.tf-swap { display: inline-grid; }
+.tf-swap > span { grid-area: 1 / 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-6); }
+.tf-swap__in { animation: tf-swap-in var(--duration-quick) var(--ease-in-out) both; }
+.tf-swap__out { animation: tf-swap-out var(--duration-quick) var(--ease-in-out) both; }
+@keyframes tf-swap-in { from { opacity: 0; transform: translateY(var(--distance-micro)); filter: blur(var(--blur-small)); } }
+@keyframes tf-swap-out { to { opacity: 0; transform: translateY(calc(var(--distance-micro) * -1)); filter: blur(var(--blur-small)); } }
+
+.tf-check-draw { animation: tf-check-in var(--duration-very-slow) var(--ease-smooth-out) both; }
+.tf-check-draw path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: tf-draw var(--duration-very-slow) var(--ease-smooth-out) var(--duration-micro) forwards; }
+@keyframes tf-check-in { from { opacity: 0; transform: rotate(-80deg) translateY(calc(var(--distance-micro) * 2)); filter: blur(var(--blur-large)); } }
+@keyframes tf-draw { to { stroke-dashoffset: 0; } }
+
+.tf-spinner { animation: tf-spin 700ms var(--ease-linear) infinite; flex: none; }
+@keyframes tf-spin { to { transform: rotate(360deg); } }
+
+.tf-skeleton { display: block; border-radius: var(--radius-sm); background: var(--surface-subtle); animation: tf-pulse 1000ms var(--ease-linear) infinite alternate; }
+.tf-skeleton--round { border-radius: var(--radius-full); }
+@keyframes tf-pulse { to { opacity: 0.5; } }
+
+/* 33 text morph: the shared letters hold still, the part that differs cross-blurs (180ms) while its width eases (240ms). */
+.tf-morph { white-space: nowrap; }
+.tf-morph__swap { display: inline-grid; vertical-align: bottom; justify-items: start; transition: width calc(var(--duration-fast) - var(--duration-stagger) / 4) var(--ease-smooth-out); }
+.tf-morph__swap > span { grid-area: 1 / 1; white-space: pre; transition: opacity calc(var(--duration-quick) + var(--duration-stagger) / 1.33) var(--ease-smooth-out), filter calc(var(--duration-quick) + var(--duration-stagger) / 1.33) var(--ease-smooth-out); }
+.tf-morph__new { opacity: 0; filter: blur(var(--blur-small)); }
+.tf-morph__swap.is-morphing .tf-morph__old { opacity: 0; filter: blur(var(--blur-small)); }
+.tf-morph__swap.is-morphing .tf-morph__new { opacity: 1; filter: none; }
+
+/* 34 text swap soft: both texts share one cell and cross-blur (200ms) while the width eases (240ms). */
+.tf-softswap { display: inline-grid; justify-items: start; vertical-align: bottom; transition: width calc(var(--duration-fast) - var(--duration-stagger) / 4) var(--ease-smooth-out); }
+.tf-softswap--end { justify-items: end; }
+.tf-softswap--center { justify-items: center; }
+.tf-softswap > span { grid-area: 1 / 1; white-space: pre; transition: opacity calc(var(--duration-quick) + var(--duration-stagger) * 1.25) var(--ease-in-out), filter calc(var(--duration-quick) + var(--duration-stagger) * 1.25) var(--ease-in-out); }
+.tf-softswap__new { opacity: 0; filter: blur(var(--blur-small)); }
+.tf-softswap.is-swapping .tf-softswap__old { opacity: 0; filter: blur(var(--blur-small)); }
+.tf-softswap.is-swapping .tf-softswap__new { opacity: 1; filter: none; }
+
+/* List rows: DropIn (new rows open from 0 and rise 12px) and Collapse (rows close to nothing). */
+.tf-dropin { display: grid; grid-template-rows: 1fr; }
+.tf-dropin__inner { min-height: 0; }
+.tf-dropin.is-new { animation: tf-dropin-rows var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-dropin.is-new > .tf-dropin__inner { overflow: hidden; animation: tf-dropin-rise var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-dropin-rows { from { grid-template-rows: 0fr; } }
+@keyframes tf-dropin-rise { from { opacity: 0; transform: translateY(var(--distance-medium)); } }
+/* transitions.dev 21 accordion: 0fr ↔ 1fr with a 2px cross-blur. */
+.tf-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-collapse[data-open] { grid-template-rows: 1fr; }
+.tf-collapse__inner { min-height: 0; overflow: hidden; opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-collapse[data-open] > .tf-collapse__inner { opacity: 1; filter: blur(0); }
+
+/* IconSwap (transitions.dev 09): both icons share one cell; the hidden one sits blurred at 0.25 scale. */
+.tf-iconswap { display: inline-grid; place-items: center; }
+.tf-iconswap__icon { grid-area: 1 / 1; display: inline-flex; transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out); }
+.tf-iconswap[data-state='a'] [data-icon='a'], .tf-iconswap[data-state='b'] [data-icon='b'] { opacity: 1; filter: blur(0); transform: scale(1); }
+.tf-iconswap[data-state='a'] [data-icon='b'], .tf-iconswap[data-state='b'] [data-icon='a'] { opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25); }
+
+/* transitions.dev 15 shimmer text: a band sweeps the glyphs (2000ms linear, 400% band). */
+.tf-shimmer { position: relative; display: inline-block; color: var(--text-tertiary); white-space: nowrap; }
+.tf-shimmer::before, .tf-thinking__text::before {
+  content: attr(data-text); position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(90deg, transparent 0%, transparent 40%, var(--text) 50%, transparent 60%, transparent 100%);
+  background-size: 400% 100%; background-repeat: no-repeat; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  animation: tf-shimmer calc(var(--duration-very-slow) * 4) var(--ease-linear) infinite;
+}
+@keyframes tf-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* transitions.dev 28 thinking states: the old line rises out, the new one rises in 50ms later, both blurred 2px over 150ms. */
+.tf-thinking { position: relative; display: inline-block; vertical-align: top; }
+.tf-thinking__sizer { display: block; visibility: hidden; white-space: nowrap; }
+.tf-thinking__text { position: absolute; top: 0; left: 0; right: 0; display: block; white-space: nowrap; color: var(--text-tertiary); }
+.tf-thinking__text--in { animation: tf-thinking-in var(--duration-quick) var(--ease-in-out) var(--duration-stagger) both; }
+.tf-thinking__text--out { animation: tf-thinking-out var(--duration-quick) var(--ease-in-out) forwards; }
+@keyframes tf-thinking-in { from { opacity: 0; transform: translateY(var(--distance-base)); filter: blur(var(--blur-small)); } }
+@keyframes tf-thinking-out { to { opacity: 0; transform: translateY(calc(var(--distance-base) * -1)); filter: blur(var(--blur-small)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-morph__swap, .tf-morph__swap > span, .tf-softswap, .tf-softswap > span { transition: none; }
+  .tf-roll__strip { transition: none; }
+  .tf-swap__in, .tf-swap__out, .tf-skeleton { animation: none; }
+  .tf-check-draw, .tf-check-draw path { animation: none; stroke-dashoffset: 0; }
+  .tf-dropin.is-new, .tf-dropin.is-new > .tf-dropin__inner, .tf-thinking__text--in, .tf-thinking__text--out { animation: none; }
+  .tf-collapse, .tf-collapse__inner, .tf-iconswap__icon { transition: none; }
+  .tf-shimmer::before, .tf-thinking__text::before { animation: none; display: none; }
+}

@@ -1,0 +1,42 @@
+/* A record pill: 24px, radius-sm so square company avatars sit cleanly, hairline edge on white. */
+.tf-recordchip {
+  display: inline-flex; align-items: center; gap: var(--space-6); max-width: 100%; height: var(--space-24);
+  padding: 0 var(--space-8) 0 var(--space-2); border-radius: var(--radius-sm);
+  border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text);
+  font: 500 13px/20px var(--font-sans); white-space: nowrap; text-decoration: none; vertical-align: middle; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out);
+}
+.tf-recordchip--live { cursor: pointer; }
+.tf-recordchip--live[data-hovered] { background: var(--surface-hover); border-color: var(--border-strong); }
+.tf-recordchip--live[data-pressed] { background: var(--surface-selected); }
+.tf-recordchip--live[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-recordchip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tf-recordchip--link { padding-left: var(--space-6); gap: var(--space-4); }
+.tf-recordchip__globe { flex: none; color: var(--text-tertiary); }
+.tf-recordchip--more { justify-content: center; min-width: var(--space-32); padding: 0 var(--space-6); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* Mention inside text: medium weight on a grey wash, a grey @. */
+.tf-recordchip-mention { display: inline; padding: 0 var(--space-2); border-radius: var(--radius-xs); background: var(--surface-subtle); color: var(--text); font-weight: 500; text-decoration: none; outline: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.tf-recordchip-mention__at { color: var(--text-tertiary); }
+.tf-recordchip-mention--self { background: var(--tag-yellow-bg); color: var(--tag-yellow-text); }
+.tf-recordchip-mention--self .tf-recordchip-mention__at { color: inherit; opacity: 0.7; }
+.tf-recordchip-mention--live { cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-recordchip-mention--live[data-hovered] { background: var(--surface-selected); }
+.tf-recordchip-mention--live[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+
+/* Template variable: a purple token, orange when the record can't fill it. */
+.tf-var {
+  display: inline-flex; align-items: center; padding: 0 var(--space-4); border-radius: var(--radius-xs); vertical-align: baseline;
+  background: var(--tag-purple-bg); color: var(--tag-purple-text); font: 500 12px/20px var(--font-mono); white-space: nowrap;
+}
+.tf-var__brace { opacity: 0.55; }
+.tf-var--missing { background: var(--tag-orange-bg); color: var(--tag-orange-text); }
+
+/* RecordChipList: transitions.dev 11 hover spring. translateY before scale so the scale doesn't amplify the lift. */
+.tf-rchips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); list-style: none; margin: 0; padding: 0; }
+.tf-rchips__item { display: inline-flex; min-width: 0; transform-origin: center; transform: translateY(var(--tf-shift, 0px)) scale(var(--tf-scale, 1)); transition: transform var(--duration-medium) var(--ease-smooth-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-recordchip, .tf-recordchip-mention--live { transition: none; }
+  .tf-rchips__item { transition: none; transform: none; }
+}

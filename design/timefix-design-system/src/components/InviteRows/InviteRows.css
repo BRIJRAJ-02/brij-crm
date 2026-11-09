@@ -1,0 +1,22 @@
+.tf-invites { --tf-invites-cols: minmax(0, 1fr) calc(var(--size-control) * 4) var(--size-control-sm); display: flex; flex-direction: column; gap: var(--space-8); font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-invites--plain { --tf-invites-cols: minmax(0, 1fr) var(--size-control-sm); }
+.tf-invites__head { display: grid; grid-template-columns: var(--tf-invites-cols); gap: var(--space-8); font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-invites__rows { display: flex; flex-direction: column; }
+
+/* Rows drop in (0fr -> 1fr, 12px rise, 250ms; pasted rows 40ms apart) and collapse the same way on remove. */
+.tf-invites__row { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out), opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-invites__row--new { animation: tf-invites-in var(--duration-fast) var(--ease-smooth-out) both; animation-delay: calc(var(--duration-stagger) * var(--tf-i, 0)); }
+.tf-invites__row--leaving { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+@keyframes tf-invites-in { from { grid-template-rows: 0fr; opacity: 0; translate: 0 var(--distance-medium); } }
+.tf-invites__clip { min-height: 0; overflow: hidden; margin: calc(var(--space-4) * -1); padding: var(--space-4); }
+.tf-invites__line { display: grid; grid-template-columns: var(--tf-invites-cols); align-items: start; gap: var(--space-8); padding-bottom: var(--space-8); }
+.tf-invites__remove { display: grid; place-items: center; height: var(--size-control); }
+
+.tf-invites__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); }
+.tf-invites__note { font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+.tf-invites__send { margin-inline-start: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-invites__row { transition: none; }
+  .tf-invites__row--new { animation: none; }
+}

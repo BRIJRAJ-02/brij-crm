@@ -1,0 +1,100 @@
+/* The public link page. A look is a set of --tf-lp-* values that LinkList, LinkGrid, LinkCard and SocialLinks read;
+   switching looks eases every colour over 250ms. Night is the dark theme on this subtree. */
+.tf-linkpage {
+  --tf-lp-bg: var(--canvas);
+  --tf-lp-text: var(--text);
+  --tf-lp-muted: var(--text-secondary);
+  --tf-lp-btn: var(--surface);
+  --tf-lp-btn-hover: var(--surface);
+  --tf-lp-btn-text: var(--text);
+  --tf-lp-btn-edge: var(--border-subtle);
+  --tf-lp-card: var(--surface);
+  --tf-lp-card-edge: var(--border-subtle);
+  --tf-lp-radius: var(--radius-full);
+  --tf-lp-shadow: var(--shadow-xs);
+  --tf-lp-hover: var(--surface-hover);
+  min-height: 100%; padding: var(--space-48) 0 var(--space-24); background: var(--tf-lp-bg); color: var(--tf-lp-text);
+  font: 400 16px/24px var(--font-sans); -webkit-font-smoothing: antialiased;
+  transition: background-color var(--duration-fast) var(--ease-in-out), color var(--duration-fast) var(--ease-in-out);
+}
+.tf-linkpage *, .tf-linkpage *::before, .tf-linkpage *::after { box-sizing: border-box; }
+.tf-linkpage[data-look='bold'] {
+  --tf-lp-bg: var(--surface);
+  --tf-lp-btn: var(--primary);
+  --tf-lp-btn-hover: var(--primary-hover);
+  --tf-lp-btn-text: var(--on-primary);
+  --tf-lp-btn-edge: transparent;
+  --tf-lp-card: var(--surface-subtle);
+  --tf-lp-card-edge: transparent;
+  --tf-lp-shadow: none;
+}
+.tf-linkpage[data-look='soft'] {
+  --tf-lp-bg: var(--tag-orange-bg);
+  --tf-lp-muted: var(--tag-orange-text);
+  --tf-lp-btn-edge: transparent;
+  --tf-lp-card-edge: transparent;
+  --tf-lp-radius: var(--radius-lg);
+  --tf-lp-shadow: var(--shadow-sm);
+  --tf-lp-hover: var(--surface);
+}
+.tf-linkpage[data-look='night'] {
+  --tf-lp-btn: var(--surface-raised);
+  --tf-lp-btn-hover: var(--surface-hover);
+  --tf-lp-card: var(--surface-raised);
+  --tf-lp-shadow: none;
+}
+.tf-linkpage[data-look='custom'] {
+  --tf-lp-btn: var(--tf-lp-custom);
+  --tf-lp-btn-hover: var(--tf-lp-custom);
+  --tf-lp-btn-text: var(--tf-lp-on-custom);
+  --tf-lp-btn-edge: transparent;
+}
+
+/* PageColumn: one measure, a 16px gutter. */
+.tf-pagecol { width: 100%; margin: 0 auto; padding: 0 var(--space-16); display: flex; flex-direction: column; }
+.tf-pagecol--narrow { max-width: calc(var(--size-dialog) + var(--space-16) * 2); }
+.tf-pagecol--wide { max-width: calc(var(--size-measure) + var(--space-16) * 2); }
+
+/* Hero */
+.tf-linkpage__hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
+/* The avatar at twice its largest size (the library's Avatar stops at 44). */
+.tf-linkpage__avatar { display: grid; place-items: center; width: calc(var(--size-avatar-lg) * 2); height: calc(var(--size-avatar-lg) * 2); }
+.tf-linkpage__avatar > * { transform: scale(2); }
+.tf-linkpage__name { margin: var(--space-16) 0 0; font: 500 24px/32px var(--font-sans); letter-spacing: -0.01em; color: var(--tf-lp-text); }
+.tf-linkpage[data-look='bold'] .tf-linkpage__name { font: 700 32px/40px var(--font-sans); letter-spacing: -0.02em; }
+.tf-linkpage__bio { margin: var(--space-6) 0 0; max-width: 32ch; color: var(--tf-lp-muted); font: 400 15px/22px var(--font-sans); }
+.tf-linkpage__socials { display: flex; justify-content: center; }
+.tf-linkpage__hero .tf-linkpage__socials { margin-top: var(--space-16); }
+
+/* Blocks */
+.tf-linkpage__blocks { display: flex; flex-direction: column; gap: var(--space-12); margin-top: var(--space-32); }
+.tf-linkpage__heading { margin: var(--space-16) 0 0; font: 500 13px/20px var(--font-sans); color: var(--tf-lp-muted); text-align: center; }
+.tf-linkpage__divider { width: var(--space-48); margin: var(--space-12) auto; border: 0; border-top: var(--border-width-hairline) solid var(--border-strong); }
+
+/* Booking block: a card with Book; the booking card opens in place under it. */
+.tf-linkpage__booking { padding: var(--space-12); border-radius: var(--radius-xl); background: var(--tf-lp-card); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-card-edge), var(--tf-lp-shadow); color: var(--tf-lp-text); }
+.tf-linkpage__booking-head { display: flex; align-items: center; gap: var(--space-12); }
+.tf-linkpage__booking-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); }
+.tf-linkpage__booking-text { display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left; }
+.tf-linkpage__booking-title { font: 500 16px/24px var(--font-sans); }
+.tf-linkpage__booking-sub { font: 400 13px/20px var(--font-sans); color: var(--tf-lp-muted); }
+.tf-linkpage__book { flex: none; }
+.tf-linkpage__booking-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-linkpage__booking[data-open] .tf-linkpage__booking-panel { grid-template-rows: 1fr; }
+.tf-linkpage__booking-clip { min-height: 0; overflow: hidden; opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
+.tf-linkpage__booking[data-open] .tf-linkpage__booking-clip { opacity: 1; filter: none; padding-top: var(--space-12); }
+
+/* The foot: "Powered by Timefix" stays. */
+.tf-linkpage__foot-wrap { display: flex; justify-content: center; margin-top: var(--space-48); }
+.tf-linkpage__foot { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--tf-lp-muted); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-linkpage__foot:hover { background: var(--tf-lp-hover); }
+.tf-linkpage__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* Demo controls above the page. */
+.tf-linkpage-demo { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-linkpage-demo__controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-16); }
+.tf-linkpage-demo__frame { height: calc(var(--size-dialog) * 1.6); overflow: auto; border-radius: var(--radius-xl); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-linkpage, .tf-linkpage__booking-panel, .tf-linkpage__booking-clip, .tf-linkpage__foot { transition: none; }
+}

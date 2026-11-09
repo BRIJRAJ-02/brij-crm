@@ -1,0 +1,104 @@
+.tf-grid { position: relative; font: 400 14px/20px var(--font-sans); color: var(--text); }
+.tf-grid__scroll { overflow: auto; max-width: 100%; }
+.tf-grid__table { border-collapse: separate; border-spacing: 0; table-layout: fixed; outline: none; min-width: 100%; }
+
+/* Header: one rounded grey strip, grey 13px names with their attribute icons. */
+.tf-grid__th {
+  position: sticky; top: 0; z-index: 2; height: var(--size-control); padding: 0; text-align: left;
+  background: var(--surface-subtle); font: 500 13px/20px var(--font-sans); color: var(--text-secondary);
+  outline: none; cursor: default; white-space: nowrap;
+}
+.tf-grid__th:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.tf-grid__th:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.tf-grid__th[data-allows-sorting] { cursor: pointer; }
+.tf-grid__th[data-hovered] { color: var(--text); }
+.tf-grid__th[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-grid__th--check, .tf-grid__td--check { position: sticky; left: 0; z-index: 3; text-align: center; padding: 0; }
+.tf-grid__th--check { padding-left: var(--space-2); }
+.tf-grid__th--pin, .tf-grid__td--pin { position: sticky; left: var(--size-row); z-index: 3; }
+.tf-grid__td--check, .tf-grid__td--pin { z-index: 1; }
+.tf-grid__thin { position: relative; display: flex; align-items: center; gap: var(--space-6); height: var(--size-control); padding: 0 var(--space-12); }
+.tf-grid__th--num .tf-grid__thin { justify-content: flex-end; }
+.tf-grid__thicon { display: inline-grid; color: var(--text-tertiary); flex: none; }
+.tf-grid__thname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* Sort arrow: transitions.dev 09 icon swap between up and down; hidden while unsorted. */
+.tf-grid__sort { display: inline-grid; flex: none; color: var(--text); }
+.tf-grid__sort svg {
+  grid-area: 1 / 1; opacity: 0; filter: blur(var(--blur-small)); transform: scale(0.25);
+  transition: opacity var(--duration-fast) var(--ease-in-out), filter var(--duration-fast) var(--ease-in-out), transform var(--duration-fast) var(--ease-in-out);
+}
+.tf-grid__sort[data-state='ascending'] svg[data-icon='ascending'],
+.tf-grid__sort[data-state='descending'] svg[data-icon='descending'] { opacity: 1; filter: blur(0); transform: scale(1); }
+.tf-grid__th[data-hovered] .tf-grid__sort[data-state='none'] svg[data-icon='ascending'] { opacity: 0.4; filter: blur(0); transform: scale(1); }
+
+/* Column resizer: a hairline that darkens on hover and turns accent while dragging. */
+.tf-grid__resizer {
+  position: absolute; right: 0; top: var(--space-8); bottom: var(--space-8); width: var(--space-6);
+  display: flex; justify-content: center; cursor: col-resize; outline: none; touch-action: none;
+}
+.tf-grid__resizer::after { content: ''; width: 1px; height: 100%; background: var(--border); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-grid__resizer[data-hovered]::after { background: var(--border-strong); }
+.tf-grid__resizer[data-resizing]::after, .tf-grid__resizer[data-focus-visible]::after { width: var(--border-width-focus); background: var(--accent); }
+
+/* Rows: 44px, a hairline under each, a wash on hover, pale blue when selected. */
+.tf-grid__row { outline: none; }
+.tf-grid__td {
+  height: var(--size-row); padding: 0 var(--space-12); background: var(--surface);
+  border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-grid__td--check { padding: 0; }
+.tf-grid__td--pin { border-right: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-grid__td--num { text-align: right; font-variant-numeric: tabular-nums; }
+.tf-grid__row[data-hovered] > .tf-grid__td { background: var(--surface-hover); }
+.tf-grid__row[data-selected] > .tf-grid__td { background: var(--accent-soft); }
+.tf-grid__row[data-focus-visible] > .tf-grid__td { box-shadow: inset 0 var(--border-width-focus) 0 0 var(--focus-ring), inset 0 calc(var(--border-width-focus) * -1) 0 0 var(--focus-ring); }
+.tf-grid__row[data-disabled] { cursor: default; }
+/* The focused cell, and the cell being edited, get the focus box. */
+.tf-grid__td[data-focus-visible], .tf-grid__td.is-editing { box-shadow: inset 0 0 0 var(--border-width-focus) var(--accent); }
+/* A row that just changed washes accent-soft once. */
+.tf-grid__row.is-changed > .tf-grid__td { animation: tf-grid-wash calc(var(--duration-very-slow) * 2) var(--ease-out); }
+@keyframes tf-grid-wash { 0%, 30% { background-color: var(--accent-soft); } }
+
+.tf-grid__value { position: relative; display: flex; align-items: center; min-width: 0; height: calc(var(--size-row) - 1px); cursor: default; }
+.tf-grid__td--num .tf-grid__value { justify-content: flex-end; }
+.tf-grid__content { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
+.tf-grid__muted { color: var(--text-secondary); }
+.tf-grid__person { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; }
+
+/* transitions.dev 14 skeleton reveal: the skeleton blurs out while the content blurs in, on the same spot. */
+.tf-grid__ghost { position: absolute; inset: 0; display: flex; align-items: center; pointer-events: none; }
+.tf-grid__td--num .tf-grid__ghost { justify-content: flex-end; }
+.tf-grid--revealing .tf-grid__ghost { animation: tf-grid-skel-out var(--duration-slow) var(--ease-in-out) forwards; }
+.tf-grid--revealing .tf-grid__content { animation: tf-grid-skel-in var(--duration-slow) var(--ease-in-out) both; }
+@keyframes tf-grid-skel-out { to { opacity: 0; filter: blur(var(--blur-small)); } }
+@keyframes tf-grid-skel-in { from { opacity: 0; filter: blur(var(--blur-small)); } }
+
+.tf-grid__empty { padding: var(--space-16) var(--space-12); color: var(--text-secondary); font-size: 13px; }
+
+/* "+ New record": a quiet row, aligned with the name column. */
+.tf-grid__add {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%; height: var(--size-row);
+  padding: 0 var(--space-12) 0 calc(var(--size-row) + var(--space-12)); border: 0; border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: transparent; color: var(--text-tertiary); font: 400 14px/20px var(--font-sans); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out);
+}
+.tf-grid__add[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-grid__add[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+
+/* The inline editor sits over its cell. */
+.tf-grid__editor { min-width: max(var(--trigger-width), calc(var(--size-menu) * 0.75)); padding: var(--space-4); }
+.tf-grid__field { display: flex; }
+.tf-grid__input {
+  width: 100%; height: var(--size-control); padding: 0 var(--space-8); border-radius: var(--radius-md);
+  border: var(--border-width-hairline) solid var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-border);
+  background: var(--surface); color: var(--text); font: 400 14px/20px var(--font-sans); outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-grid__sort svg, .tf-grid__td, .tf-grid__add, .tf-grid__resizer::after { transition: none; }
+  .tf-grid__row.is-changed > .tf-grid__td, .tf-grid--revealing .tf-grid__ghost, .tf-grid--revealing .tf-grid__content { animation: none; }
+  .tf-grid--revealing .tf-grid__ghost { opacity: 0; }
+}

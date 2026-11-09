@@ -1,0 +1,152 @@
+/* The sidebar sits straight on the canvas. Every control keeps a 12px left inset inside a 40px rail column,
+   so icons never move when it folds from 256px to the 56px rail. */
+.tf-sidebar {
+  --tf-rail: calc(var(--space-48) + var(--space-8));
+  display: flex; flex-direction: column; width: var(--size-sidebar); height: 100%; min-height: 0; flex: none;
+  padding: var(--space-8); overflow: hidden; color: var(--text); font: 400 14px/20px var(--font-sans);
+  transition: width var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-sidebar[data-collapsed] { width: var(--tf-rail); }
+.tf-sidebar__fade { transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-sidebar[data-collapsed] .tf-sidebar__fade { opacity: 0; pointer-events: none; }
+
+/* Workspace switcher and person row */
+.tf-switcher, .tf-person-row {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%; height: var(--size-row); padding: 0 var(--space-6);
+  border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); text-align: start; cursor: pointer; outline: none; overflow: hidden;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-switcher[data-hovered], .tf-person-row[data-hovered] { background: var(--surface-hover); }
+.tf-switcher[aria-expanded='true'], .tf-person-row[aria-expanded='true'] { background: var(--surface-selected); }
+.tf-switcher[data-focus-visible], .tf-person-row[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-switcher__mark { display: inline-flex; flex: none; }
+.tf-person-row > .tf-person { flex: 1; min-width: 0; }
+.tf-switcher__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-switcher__name { font: 500 14px/20px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-switcher__plan { font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-switcher__chev { flex: none; color: var(--text-tertiary); }
+
+/* Search pill and the fold button */
+.tf-sidebar__tools { display: flex; gap: var(--space-4); margin-top: var(--space-8); }
+.tf-sidebar[data-collapsed] .tf-sidebar__tools { flex-direction: column; }
+.tf-sidebar__search {
+  display: flex; align-items: center; gap: var(--space-12); flex: 1; min-width: 0; height: var(--size-nav-item); padding: 0 var(--space-6) 0 var(--space-12);
+  border: 0; border-radius: var(--radius-full); background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border);
+  color: var(--text-tertiary); font: 400 14px/20px var(--font-sans); text-align: start; cursor: pointer; outline: none; overflow: hidden; white-space: nowrap;
+  transition: box-shadow var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sidebar__search svg { flex: none; color: var(--text-secondary); }
+.tf-sidebar__search > span:first-of-type { flex: 1; }
+.tf-sidebar__search[data-hovered] { box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); color: var(--text-secondary); }
+.tf-sidebar__kbd { display: inline-flex; }
+.tf-sidebar__toggle {
+  display: grid; place-items: center; flex: none; width: var(--size-nav-item); height: var(--size-nav-item); padding: 0; border: 0;
+  border-radius: var(--radius-full); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sidebar[data-collapsed] .tf-sidebar__toggle { width: 100%; }
+.tf-sidebar__toggle[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-sidebar__toggle[data-pressed] { transform: scale(var(--scale-large)); }
+.tf-sidebar__search[data-focus-visible], .tf-sidebar__toggle[data-focus-visible], .tf-getting[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* Destinations */
+.tf-sidebar__head, .tf-sidebar__tools, .tf-sidebar__foot { flex: none; }
+/* The middle is the only scroller; head and foot stay in flow and never overlap it. */
+.tf-sidebar__body {
+  flex: 1 1 0; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; scrollbar-width: none;
+  margin: var(--space-12) calc(var(--space-4) * -1) 0; padding: 0 var(--space-4);
+  border-block: var(--border-width-hairline) solid transparent;
+  transition: border-color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sidebar__body::-webkit-scrollbar { display: none; }
+.tf-sidebar__body[data-scrolled-top] { border-top-color: var(--border-subtle); }
+.tf-sidebar__body[data-scrolled-bottom] { border-bottom-color: var(--border-subtle); }
+.tf-sidebar__list { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) 0 var(--space-8); }
+.tf-nav {
+  position: relative; display: flex; align-items: center; gap: var(--space-12); height: var(--size-nav-item); padding: 0 var(--space-8) 0 var(--space-12);
+  border-radius: var(--radius-full); color: var(--text-secondary); font: 500 14px/20px var(--font-sans); text-decoration: none; white-space: nowrap;
+  cursor: pointer; outline: none; overflow: hidden; flex: none;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-nav[data-hovered]:not([aria-current='page']) { background: var(--surface-hover); color: var(--text); }
+.tf-nav[data-pressed]:not([aria-current='page']) { background: var(--surface-selected); }
+.tf-nav[aria-current='page'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs), 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-nav[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-nav__icon { display: inline-grid; place-items: center; width: var(--size-icon); height: var(--size-icon); flex: none; }
+.tf-nav__dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); }
+.tf-nav__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tf-nav__count { flex: none; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.tf-nav__kbd { display: inline-flex; flex: none; }
+
+/* transitions.dev 03: the unread badge slides in diagonally and pops, the item never moves. */
+.tf-nav__badge { position: absolute; top: calc((var(--size-nav-item) - var(--space-20)) / 2); right: var(--space-8); pointer-events: none; will-change: transform; }
+.tf-nav__badge[data-open='true'] { animation: tf-badge-slide var(--duration-fast) var(--ease-smooth-out); }
+.tf-nav__badge-dot {
+  display: block; min-width: var(--space-20); height: var(--space-20); padding: 0 var(--space-6); border-radius: var(--radius-full);
+  background: var(--accent); color: var(--on-accent); font: 500 11px/20px var(--font-sans); text-align: center; font-variant-numeric: tabular-nums;
+  transform: scale(1); opacity: 1; filter: blur(0); transform-origin: center;
+  transition: transform var(--duration-very-slow) var(--ease-bounce), opacity var(--duration-slow) var(--ease-bounce), filter var(--duration-very-slow) var(--ease-bounce);
+}
+.tf-nav__badge[data-open='false'] .tf-nav__badge-dot {
+  transform: scale(0); opacity: 0; filter: blur(var(--blur-small));
+  transition: transform var(--duration-quick) var(--ease-smooth-out), opacity var(--duration-quick) var(--ease-smooth-out), filter var(--duration-quick) var(--ease-smooth-out);
+}
+@keyframes tf-badge-slide { from { transform: translate(calc(var(--distance-base) * -1), var(--distance-medium)); } to { transform: translate(0, 0); } }
+.tf-sidebar[data-collapsed] .tf-nav__badge { top: var(--space-2); right: auto; left: var(--space-20); }
+.tf-sidebar[data-collapsed] .tf-nav__badge-dot { min-width: var(--space-16); height: var(--space-16); padding: 0 var(--space-4); font-size: 11px; line-height: 16px; box-shadow: 0 0 0 2px var(--canvas); }
+
+/* Sections fold with the accordion motion (transitions.dev 21). */
+.tf-sidebar__section { flex: none; margin-top: var(--space-12); }
+.tf-sidebar__section-head { display: flex; align-items: center; gap: var(--space-4); height: var(--size-control-sm); }
+.tf-sidebar__section-title {
+  display: inline-flex; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; height: 100%; padding: 0 var(--space-12);
+  border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); font: 500 12px/16px var(--font-sans);
+  text-align: start; cursor: pointer; outline: none; white-space: nowrap;
+  transition: color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sidebar__section-title[data-hovered] { color: var(--text-secondary); }
+.tf-sidebar__section-title[data-focus-visible], .tf-sidebar__section-add[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-sidebar__section-chev { opacity: 0; transform: rotate(0deg); transition: opacity var(--duration-quick) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-sidebar__section-head:hover .tf-sidebar__section-chev, .tf-sidebar__section-title[data-focus-visible] .tf-sidebar__section-chev, .tf-sidebar__section:not([data-expanded]) .tf-sidebar__section-chev { opacity: 1; }
+.tf-sidebar__section:not([data-expanded]) .tf-sidebar__section-chev { transform: rotate(-90deg); }
+.tf-sidebar__section-add {
+  display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0; border: 0;
+  border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none; opacity: 0;
+  transition: opacity var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-sidebar__section-head:hover .tf-sidebar__section-add, .tf-sidebar__section-add[data-focus-visible] { opacity: 1; }
+.tf-sidebar__section-add[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-sidebar__section-panel { height: var(--disclosure-panel-height); overflow: clip; margin: 0 calc(var(--space-4) * -1); transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-sidebar__section-inner {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) var(--space-4);
+  opacity: 0; filter: blur(var(--blur-small)); transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out);
+}
+.tf-sidebar__section[data-expanded] .tf-sidebar__section-inner { opacity: 1; filter: blur(0); }
+/* In the rail a section's title becomes a hairline. */
+.tf-sidebar[data-collapsed] .tf-sidebar__section-head { height: 1px; margin: var(--space-6) var(--space-8); background: var(--border); overflow: hidden; }
+.tf-sidebar[data-collapsed] .tf-sidebar__section-head > * { visibility: hidden; }
+
+/* Foot: Getting started, then the person */
+.tf-sidebar__foot { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-8); }
+.tf-getting {
+  display: flex; align-items: center; gap: var(--space-12); width: 100%; height: var(--size-nav-item); padding: 0 var(--space-12);
+  border: 0; border-radius: var(--radius-full); background: var(--primary); color: var(--on-primary); font: 500 13px/20px var(--font-sans);
+  text-align: start; white-space: nowrap; cursor: pointer; outline: none; overflow: hidden;
+  transition: background-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-getting[data-hovered] { background: var(--primary-hover); }
+.tf-getting[data-pressed] { transform: scale(var(--scale-medium)); }
+.tf-getting__ring { flex: none; }
+.tf-getting__track { stroke: color-mix(in srgb, var(--on-primary) 25%, transparent); }
+.tf-getting__arc { stroke: var(--on-primary); transition: stroke-dashoffset var(--duration-very-slow) var(--ease-smooth-out); }
+.tf-getting__label { flex: 1; min-width: 0; }
+.tf-getting__count { font: 500 12px/16px var(--font-sans); color: color-mix(in srgb, var(--on-primary) 70%, transparent); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-sidebar, .tf-sidebar__body, .tf-sidebar__fade, .tf-switcher, .tf-person-row, .tf-sidebar__search, .tf-sidebar__toggle, .tf-nav, .tf-nav__badge-dot,
+  .tf-sidebar__section-title, .tf-sidebar__section-chev, .tf-sidebar__section-add, .tf-sidebar__section-panel, .tf-sidebar__section-inner, .tf-getting, .tf-getting__arc { transition: none; }
+  .tf-nav__badge[data-open='true'] { animation: none; }
+  .tf-sidebar__toggle[data-pressed], .tf-getting[data-pressed] { transform: none; }
+}
+/* A grey value at the end of a menu row (Theme · System). */
+.tf-sidebar__menu-value { flex: none; font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }

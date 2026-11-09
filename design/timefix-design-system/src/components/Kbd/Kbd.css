@@ -1,0 +1,2 @@
+.tf-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 var(--space-4); border-radius: var(--radius-xs); border: var(--border-width-hairline) solid var(--border); background: var(--surface); color: var(--text-tertiary); font: 500 11px/16px var(--font-sans); letter-spacing: 0.02em; flex: none; }
+.tf-kbd:is(.tf-btn--primary *), .tf-kbd:is(.tf-tooltip *) { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 30%, transparent); }

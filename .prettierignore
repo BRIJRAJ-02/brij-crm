@@ -14,3 +14,6 @@ packages/tokens/tokens.css
 **/*.md
 .claude/
 docs/
+
+# Reference source for the design system artifact, ported into packages/ui deliberately (see design/timefix-design-system/README.md)
+design/

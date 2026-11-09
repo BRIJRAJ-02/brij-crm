@@ -1,0 +1,39 @@
+.tf-combo { display: flex; flex-direction: column; min-width: 0; }
+.tf-combo__field { cursor: text; }
+.tf-combo__icon { flex: none; color: var(--text-tertiary); }
+.tf-combo__field .tf-spinner { color: var(--text-tertiary); }
+.tf-combo__input { flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: var(--text); font: 400 14px/20px var(--font-sans); outline: none; }
+.tf-combo__input::placeholder { color: var(--text-tertiary); }
+
+.tf-combo__pop { display: flex; flex-direction: column; }
+.tf-combo__list { display: flex; flex-direction: column; gap: var(--space-2); outline: none; overflow: auto; min-height: 0; max-height: calc(var(--size-row) * 7); }
+.tf-combo__section { display: flex; flex-direction: column; gap: var(--space-2); }
+.tf-combo__header { padding: var(--space-6) var(--space-8) var(--space-4); font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); }
+.tf-combo__empty { padding: var(--space-8); font: 400 13px/20px var(--font-sans); color: var(--text-tertiary); }
+
+/* Rows wash under the keyboard highlight and the pointer alike. */
+.tf-combo__item {
+  display: flex; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md); color: var(--text); font: 400 14px/20px var(--font-sans); cursor: default; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out);
+}
+.tf-combo__item[data-focused] { background: var(--surface-hover); }
+.tf-combo__item[data-pressed] { background: var(--surface-selected); }
+.tf-combo__item[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
+.tf-combo__item--create { color: var(--text-secondary); }
+.tf-combo__plus { display: inline-grid; place-items: center; width: var(--size-avatar); height: var(--size-avatar); flex: none; border-radius: var(--radius-full); border: 1px dashed var(--border-strong); color: var(--text-secondary); }
+.tf-combo__none { color: var(--text-tertiary); }
+.tf-combo__create-name { color: var(--text); font-weight: 500; }
+
+/* Results arrive the transitions.dev 14 skeleton reveal way: the rows fade up out of a small blur. */
+.tf-combo__item--found { animation: tf-combo-reveal var(--duration-slow) var(--ease-in-out) both; }
+@keyframes tf-combo-reveal { from { opacity: 0; filter: blur(var(--blur-small)); } }
+
+.tf-combo__skeletons { display: flex; flex-direction: column; gap: var(--space-2); }
+.tf-combo__skeleton-row { display: flex; align-items: center; gap: var(--space-12); height: var(--size-row); padding: 0 var(--space-8); }
+.tf-combo__skeleton-text { display: flex; flex-direction: column; gap: var(--space-6); flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-combo__item { transition: none; }
+  .tf-combo__item--found { animation: none; }
+}
