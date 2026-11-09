@@ -172,6 +172,16 @@ describe('the booking email', () => {
     expect(message.html).toContain('href="https://app.example/b/x/manage?t=y"');
     expect(message.html).toContain('prefers-color-scheme: dark');
     expect(message.attachments).toBeUndefined();
+    // No reply address given, none set; one given goes on the message (a visitor's reply reaches their host).
+    expect(message.replyTo).toBeUndefined();
+    expect(
+      (
+        await bookingEmail(
+          { ...mail, replyTo: 'ada@example.com' },
+          { appOrigin: 'https://app.example', medium: 'email_booking' },
+        )
+      ).replyTo,
+    ).toBe('ada@example.com');
     expect(message.text).toBe(
       [
         'You’re booked',

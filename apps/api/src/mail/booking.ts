@@ -17,6 +17,8 @@ export interface BookingMail {
   /** Why the reader got it, for the footer. */
   readonly why: string;
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
+  /** Where a reply goes: the host, on the visitor's mail. */
+  readonly replyTo?: string;
 }
 
 /** Where the email's links point, and which footer tag it carries: a reminder's, or every other booking email's. */
@@ -31,7 +33,7 @@ export interface BookingEmailOptions {
   readonly publicOrigin?: string | undefined;
 }
 
-/** A booking email, ready for a `Mailer`: subject, HTML, plain text and the calendar file. */
+/** A booking email, ready for a `Mailer`: subject, HTML, plain text, where a reply goes and the calendar file. */
 export async function bookingEmail(mail: BookingMail, options: BookingEmailOptions): Promise<MailMessage> {
   const { subject, html, text } = await renderBookingEmail(mail, options);
   return {
@@ -39,6 +41,7 @@ export async function bookingEmail(mail: BookingMail, options: BookingEmailOptio
     subject,
     html,
     text,
+    ...(mail.replyTo === undefined ? {} : { replyTo: mail.replyTo }),
     ...(mail.ics === undefined
       ? {}
       : {

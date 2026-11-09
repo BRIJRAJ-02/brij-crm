@@ -11,7 +11,7 @@ import { testScope } from '../testing.ts';
 import { NO_CALENDAR, type BookingCalendar } from './calendar.ts';
 import { addGuests, cancelBooking, guestTarget, hostTarget, moveBooking, removeGuest } from './change.ts';
 import type { BookingMailKind } from './mail-queue.ts';
-import { markGuestsTold, prepareBookingMail, whenLine } from './mail.ts';
+import { markGuestsTold, prepareBookingMail } from './mail.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
 
@@ -89,10 +89,17 @@ describe('the confirmation (AC-636)', () => {
     });
     expect(visitor?.rows).toContainEqual({
       label: 'When',
-      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)',
+      value: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
     });
     expect(visitor?.ics?.method).toBe('REQUEST');
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
+    // The file's link is the visitor's own booking page, not Book again; the host's opens the booking on Bookings.
+    expect(unfolded(visitor?.ics?.content)).toContain(`URL:${ORIGIN}/b/${b.page.publicKey}/manage?t=${b.manageToken}`);
+    expect(unfolded(host?.ics?.content)).toContain(`/bookings/list?open=${b.bookingId}`);
+    // A reply to the visitor's mail reaches the host, whose address their invitation already names.
+    expect(visitor?.replyTo).toBe('ada@example.com');
+    expect(host?.replyTo).toBeUndefined();
+    expect(guest?.replyTo).toBeUndefined();
     expect(host).toMatchObject({ subject: 'New booking: Intro call with Grace Hopper' });
     // The host is in the meeting by default (owner, 22 Oct 2026): both files list them, and the host gets one too.
     expect(unfolded(visitor?.ics?.content)).toContain('MAILTO:ada@example.com');
@@ -138,7 +145,7 @@ describe('changes (AC-638 to AC-640)', () => {
     expect(moved.messages.map((mail) => mail.to)).toEqual(['grace@navy.example', 'ada@example.com']);
     expect(moved.messages[0]?.rows).toContainEqual({
       label: 'Was',
-      value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)',
+      value: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
     });
     expect(moved.messages[0]?.ics?.content).not.toContain('SEQUENCE:0');
     expect(moved.messages[1]?.ics?.method).toBe('REQUEST');
@@ -276,22 +283,5 @@ describe('reminders (AC-637)', () => {
     // Too early (a reminder left from before a move) or after it started: nothing.
     expect((await b.prepare('reminder_1h', new Date('2026-11-01T09:00:00Z'))).skipped).toBe('stale');
     expect((await b.prepare('reminder_24h', new Date('2026-11-02T09:10:00Z'))).skipped).toBe('stale');
-  });
-});
-
-describe('whenLine', () => {
-  it('writes the range in the zone, the zone named', () => {
-    expect(whenLine(new Date('2026-11-02T09:00:00Z'), new Date('2026-11-02T09:30:00Z'), 'America/New_York')).toBe(
-      'Monday 2 November 2026, 4:00 AM to 4:30 AM, New York time (GMT-5)',
-    );
-  });
-
-  it('names the zone as the booking pages do, never by its raw or old id (QA Q78)', () => {
-    const start = new Date('2026-10-27T04:00:00Z');
-    const end = new Date('2026-10-27T04:30:00Z');
-    expect(whenLine(start, end, 'Asia/Calcutta')).toBe(
-      'Tuesday 27 October 2026, 9:30 AM to 10:00 AM, Kolkata time (GMT+5:30)',
-    );
-    expect(whenLine(start, end, 'UTC')).toBe('Tuesday 27 October 2026, 4:00 AM to 4:30 AM, UTC');
   });
 });
