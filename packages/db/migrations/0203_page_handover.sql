@@ -1,7 +1,5 @@
 -- A page only person's page handed over, and removed managed pages purged (spec 0070 leftovers, 9 Nov 2026).
 --
--- Numbered 0204 and stamped after 0203, which another lane holds; the journal check names the gap until 0203 lands.
---
 -- 1. `invitations.member_id`: an email invitation that hands a page only person's page to whoever accepts it (Team
 --    pages › Invite to manage their page). Accepting it makes the person's own identity a login at the invited
 --    address, so they stay the same member, with their page, handle and history. Only an email invitation for the

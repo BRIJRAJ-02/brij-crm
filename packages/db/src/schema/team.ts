@@ -61,7 +61,7 @@ export const invitations = pgTable(
     usedByMemberId: uuid('used_by_member_id'),
     /**
      * The page only person whose page it hands over (Team pages, 9 Nov 2026): accepting it makes their own identity a
-     * login at the invited address, so they stay the same member. Only a Member email invitation names one (0204).
+     * login at the invited address, so they stay the same member. Only a Member email invitation names one (0203).
      */
     memberId: uuid('member_id'),
     ...auditColumns(),
@@ -126,7 +126,7 @@ export const invitations = pgTable(
     index('invitations_custom_role')
       .on(t.workspaceId, t.customRoleId)
       .where(sql`${t.customRoleId} is not null`),
-    // One open hand over per page only person, and theirs found by member (migration 0204).
+    // One open hand over per page only person, and theirs found by member (migration 0203).
     uniqueIndex('invitations_open_member')
       .on(t.workspaceId, t.memberId)
       .where(sql`${t.status} = 'open' and ${t.memberId} is not null`),

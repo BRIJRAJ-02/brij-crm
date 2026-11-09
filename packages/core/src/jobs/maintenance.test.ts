@@ -1078,7 +1078,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     ).toEqual([{ handle: `${stem}-b` }]);
   });
 
-  it('refuses the page purge for anyone still a member, and in another workspace (migration 0204)', async () => {
+  it('refuses the page purge for anyone still a member, and in another workspace (migration 0203)', async () => {
     const t = await listedTeam();
     const other = await team([]);
     const users = {

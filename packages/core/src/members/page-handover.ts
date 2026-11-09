@@ -1,5 +1,5 @@
 // A page only person's page handed over (Team pages, 9 Nov 2026; spec 0070's leftover): "Invite to manage their page"
-// sends an email invitation that names the person (`invitations.member_id`, migration 0204); opening it makes that
+// sends an email invitation that names the person (`invitations.member_id`, migration 0203); opening it makes that
 // person's own identity a login at the invited address, so they stay the same member, with their page, handle and
 // history, and are no page only person any more. It rides the workspace's invitations: one token mailed and only its
 // hash kept, a fresh 7 days a send, single use, its sender's say still needed when it is opened, and every write with

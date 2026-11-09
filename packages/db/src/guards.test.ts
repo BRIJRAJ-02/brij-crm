@@ -261,7 +261,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_share_image', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_publish_link_page', owner: 'crm_handle' },
-      // A removed managed person's page, purged by the daily cleanup 30 days on (spec 0070, migration 0204).
+      // A removed managed person's page, purged by the daily cleanup 30 days on (spec 0070, migration 0203).
       { name: 'crm_purge_managed_page', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
@@ -404,7 +404,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_publish_link_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
-      // A plpgsql body: it checks the identity and the membership before it deletes (migration 0204).
+      // A plpgsql body: it checks the identity and the membership before it deletes (migration 0203).
       { name: 'crm_purge_managed_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -716,7 +716,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_businesses',
         // Bento cards (spec 0068, migration 0189): the one line rule the block check reads, run only inside it.
         'crm_profile_text_ok',
-        // A removed managed person's page purged (spec 0070, migration 0204).
+        // A removed managed person's page purged (spec 0070, migration 0203).
         'crm_purge_managed_page',
       ],
       [
@@ -2934,7 +2934,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles DELETE',
-      // A removed managed person's page purged 30 days on (migration 0204), only through crm_purge_managed_page.
+      // A removed managed person's page purged 30 days on (migration 0203), only through crm_purge_managed_page.
       'public_profiles DELETE',
       'public_profiles INSERT',
       'public_profiles SELECT',
@@ -2999,7 +2999,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth."user".id SELECT',
       'auth."user".image SELECT',
       'auth."user".name SELECT',
-      // Whose identity a purged page was (migration 0204): a managed one of this workspace, read by
+      // Whose identity a purged page was (migration 0203): a managed one of this workspace, read by
       // crm_purge_managed_page alone, never the partner or its id there.
       'auth.managed_users.user_id SELECT',
       'auth.managed_users.workspace_id SELECT',
@@ -3053,7 +3053,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.user_prefs.updated_at UPDATE',
       'auth.user_prefs.user_id INSERT',
       'auth.user_prefs.user_id SELECT',
-      // Who a purged page was (migration 0204): removed 30 days ago, and no member here any more, read by
+      // Who a purged page was (migration 0203): removed 30 days ago, and no member here any more, read by
       // crm_purge_managed_page alone under the tables' row level security.
       'managed_members.removed_at SELECT',
       'managed_members.user_id SELECT',

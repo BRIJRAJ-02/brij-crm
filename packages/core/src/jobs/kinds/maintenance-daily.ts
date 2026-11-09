@@ -30,7 +30,7 @@
 //    a year, the person's rather than the workspace's, through a definer.
 // 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
 //    membership's own transaction would have made it (`ensureLinkPage`): the retry for one that failed there.
-// 1h3. `managed_pages` (spec 0070, AC-7022; migration 0204): a partner's or page only person removed more than 30 days
+// 1h3. `managed_pages` (spec 0070, AC-7022; migration 0203): a partner's or page only person removed more than 30 days
 //    ago goes for good: their page (blocks, counts, pictures and photos, the files removed from the store first),
 //    their `managed_members` row and their open hand over; their handle is held 90 days as a deleted account's, then
 //    freed by `released_handles`. Their member row stays, as every removed member's does, so History keeps naming them,
@@ -181,7 +181,7 @@ const Totals = z.object({
   linkPagesMissed: Count.default(0),
   /** Handles freed 90 days after their person's account was deleted (migration 0126); 0 in an older checkpoint. */
   handles: Count.default(0),
-  /** Managed people purged 30 days after their removal (migration 0204); 0 in an older checkpoint. */
+  /** Managed people purged 30 days after their removal (migration 0203); 0 in an older checkpoint. */
   managedPages: Count.default(0),
   expired: Count,
   items: Count,
@@ -642,7 +642,7 @@ const MANAGED_PAGES_BATCH = 10;
 const MANAGED_PAGES_KEPT = '30 days';
 
 /**
- * Phase 1h3 (spec 0070, AC-7022; migration 0204): managed people (a partner's, or page only ones from Team pages)
+ * Phase 1h3 (spec 0070, AC-7022; migration 0203): managed people (a partner's, or page only ones from Team pages)
  * removed more than 30 days ago, `MANAGED_PAGES_BATCH` at a time, oldest first. For each, `crm_purge_managed_page`
  * deletes their page here and answers its stored files, which go from the store before this commits (a failed removal
  * rolls it all back for the retry); then their open hand over is cancelled, their `managed_members` row goes, and their
