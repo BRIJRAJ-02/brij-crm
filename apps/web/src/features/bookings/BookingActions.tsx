@@ -32,7 +32,8 @@ import {
 } from '@crm/ui';
 import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { zoneDisplay, zoneName } from '../../public/booking/time.ts';
+import { zoneName } from '../../public/booking/time.ts';
+import { clockTime, shortDay, zoneLabel } from './meeting-format.ts';
 import { LinkRecordDialog } from './lazy-parts.tsx';
 import { strings } from './strings.ts';
 import { useNow } from './useNow.ts';
@@ -117,14 +118,12 @@ export type BookingAsk = 'move' | 'cancel' | 'reassign' | 'reassignAway' | 'link
 export function useBookingActions({
   booking,
   actions,
-  locale,
   onAsk,
   focusOnMount,
   onReassign,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
-  readonly locale: string;
   /** Hands Reschedule, Cancel booking and Reassign to the screen; left out, they open here. */
   readonly onAsk?: (ask: BookingAsk) => void;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
@@ -143,6 +142,15 @@ export function useBookingActions({
    * link: the linked record's object is one they may link from. The card's row offers it as its ×; More holds it too.
    */
   readonly unlink?: () => void;
+  /** Opens one of the card's dialogs (or hands it to the screen): the meeting popup's ⋯ menu asks through it. */
+  readonly ask: (kind: BookingAsk) => void;
+  /** Marks it a no show, or takes the mark back, once it has started (the popup's ⋯ menu). */
+  readonly markNoShow: () => void;
+  /** Whether a record may be linked from here, and the linked one unlinked (the popup's ⋯ menu). */
+  readonly canLink: boolean;
+  readonly canUnlinkRecord: boolean;
+  /** It has started: Reschedule and Cancel are gone, Mark no show is offered. */
+  readonly hasStarted: boolean;
 } {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
@@ -292,7 +300,6 @@ export function useBookingActions({
         key={opens}
         booking={booking}
         actions={actions}
-        locale={locale}
         ask={open}
         onClose={() => setOpen(undefined)}
         onDone={() => setOpen(undefined)}
@@ -304,6 +311,11 @@ export function useBookingActions({
     actions: footer,
     dialogs,
     guestLink,
+    ask,
+    markNoShow: () => void markNoShow(),
+    canLink,
+    canUnlinkRecord: canUnlink,
+    hasStarted,
     ...(hasFocusTarget ? { focusMore: () => focusLater(() => moreRef.current ?? cancelRef.current) } : {}),
     ...(hasMore && canUnlink ? { unlink } : {}),
   };
@@ -316,14 +328,12 @@ export function useBookingActions({
 export function BookingDialog({
   booking,
   actions,
-  locale,
   ask,
   onClose,
   onDone,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
-  readonly locale: string;
   /** The dialog open now; undefined while it closes. */
   readonly ask: BookingAsk | undefined;
   /** Dismissed: Keep booking, Keep this time, or Esc. */
@@ -336,9 +346,7 @@ export function BookingDialog({
   if (ask !== undefined && ask !== last) setLast(ask);
   const shown = ask ?? last;
   if (shown === 'move') {
-    return ask === 'move' ? (
-      <MoveDialog booking={booking} actions={actions} locale={locale} onClose={onClose} onDone={onDone} />
-    ) : null;
+    return ask === 'move' ? <MoveDialog booking={booking} actions={actions} onClose={onClose} onDone={onDone} /> : null;
   }
   if (shown === 'link') {
     // Linked, the card opens again showing the record, with focus back on More (`onClose`).
@@ -372,13 +380,11 @@ export function BookingDialog({
 function MoveDialog({
   booking,
   actions,
-  locale,
   onClose,
   onDone,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
-  readonly locale: string;
   readonly onClose: () => void;
   readonly onDone: () => void;
 }) {
@@ -388,9 +394,8 @@ function MoveDialog({
   const [slots, setSlots] = useState<readonly string[] | undefined>(undefined);
   const [day, setDay] = useState<string | undefined>(undefined);
   const [time, setTime] = useState<string | undefined>(undefined);
-  // The member's own clock, as the rest of the app shows times; the 12h or 24h switch is the visitor's, on the
-  // public page (the host's Reschedule follows the language, as Google Calendar follows its settings).
-  const hour12 = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hour12 ?? true;
+  // The admin's clock is twelve hours (the redesign's ruling: "9:30 am" everywhere in Meetings).
+  const hour12 = true;
   const [error, setError] = useState('');
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -429,17 +434,10 @@ function MoveDialog({
   for (const start of slots ?? []) byDay.set(dayOf(start, zone), [...(byDay.get(dayOf(start, zone)) ?? []), start]);
   const days = [...byDay.keys()].sort();
   const shown = day !== undefined && byDay.has(day) ? day : days[0];
-  const dayName = (key: string) =>
-    new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(
-      new Date(`${key}T12:00:00Z`),
-    );
-  const timeName = (start: string) =>
-    new Intl.DateTimeFormat(locale, {
-      hour: hour12 ? 'numeric' : '2-digit',
-      minute: '2-digit',
-      hour12,
-      timeZone: zone,
-    }).format(new Date(start));
+  // Meetings' one way of writing them (meeting-format.ts): "Tue 10 Nov", "10:30 am".
+  const today = dayOf(new Date(openedAt).toISOString(), zone);
+  const dayName = (key: string) => shortDay(key, today);
+  const timeName = (start: string) => clockTime(start, zone);
   const minutes = Math.round((Date.parse(booking.endsAt) - Date.parse(booking.startsAt)) / 60_000);
   // The guest's own clock under each time (B-05), when it reads differently from the member's: a move is never
   // made blind to their night. A zone this browser doesn't know shows nothing.
@@ -448,12 +446,7 @@ function MoveDialog({
   const theirTimeOf = (start: string): string | undefined => {
     if (theirZone === '' || theirZone === zone) return undefined;
     try {
-      const theirs = new Intl.DateTimeFormat(locale, {
-        hour: hour12 ? 'numeric' : '2-digit',
-        minute: '2-digit',
-        hour12,
-        timeZone: theirZone,
-      }).format(new Date(start));
+      const theirs = clockTime(start, theirZone);
       return theirs === timeName(start) ? undefined : theirs;
     } catch {
       return undefined;
@@ -486,7 +479,11 @@ function MoveDialog({
   };
   return (
     <Modal
-      title={strings.rescheduleTitle(booking.pageTitle, booking.visitorName)}
+      title={strings.rescheduleWith(firstNameOf(booking.visitorName))}
+      // The zone the times are in, beside the title, as the offset is on the day shown (past a daylight saving change).
+      context={strings.timesIn(
+        zoneLabel(zone, shown === undefined ? openedAt : Date.parse(byDay.get(shown)?.[0] ?? '') || openedAt),
+      )}
       isOpen
       isBusy={busy}
       onOpenChange={(isOpen) => {
@@ -497,12 +494,14 @@ function MoveDialog({
           <Button slot="close" isDisabled={busy}>
             {strings.keepTime}
           </Button>
-          <Button variant="primary" isDisabled={time === undefined} isPending={busy} onPress={move}>
-            {busy
-              ? strings.moving
-              : time === undefined
-                ? strings.pickTime
-                : strings.moveTo(timeName(time), dayName(dayOf(time, zone)))}
+          <Button
+            variant="primary"
+            isDisabled={time === undefined}
+            isPending={busy}
+            onPress={move}
+            {...(time === undefined ? {} : { label: strings.moveTo(timeName(time), dayName(dayOf(time, zone))) })}
+          >
+            {busy ? strings.moving : strings.reschedule}
           </Button>
         </>
       }
@@ -560,12 +559,6 @@ function MoveDialog({
             layout="grid"
             isLoading={slots === undefined}
           />
-          {/* The offset as it is on the day shown, which may be past a daylight saving change. */}
-          <p>
-            {strings.timesIn(
-              zoneDisplay(zone, shown === undefined ? openedAt : Date.parse(byDay.get(shown)?.[0] ?? '') || openedAt),
-            )}
-          </p>
         </>
       )}
       {!failed && error !== '' && (
@@ -577,10 +570,92 @@ function MoveDialog({
   );
 }
 
+/** A guest's first name, for a question or a toast ("Cancel meeting with Rahul?"). */
+export const firstNameOf = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
 /**
- * Cancel booking: asks first, naming the booking, with a reason the guest's email carries. The commit stays busy
- * until the server answers (the booking already shows cancelled behind it), and a refusal shows here.
+ * The one cancel confirm (the owner's ruling of 9 November 2026), from a row's ⋯ and from the popup alike: the
+ * question, an optional note the guest's email carries, and Keep / Cancel meeting. It emails the guest, so there is no
+ * Undo; the commit stays busy until the server answers, and a refusal shows here. Decline for a request is the same.
  */
+export function CancelConfirm({
+  guestName,
+  isRequest = false,
+  isOpen = true,
+  onCancel,
+  onClose,
+}: {
+  readonly guestName: string;
+  /** A request: Decline, not Cancel meeting. */
+  readonly isRequest?: boolean;
+  /** Closing (its exit plays); the caller keeps it mounted until then. */
+  readonly isOpen?: boolean;
+  /** Cancels (or declines) with the note, rejecting with the refusal's words. */
+  readonly onCancel: (note: string) => Promise<void>;
+  readonly onClose: () => void;
+}) {
+  const first = firstNameOf(guestName);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const commit = () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    onCancel(note.trim()).then(
+      () => setBusy(false),
+      (caught: unknown) => {
+        setBusy(false);
+        setError(messageOf(caught));
+      },
+    );
+  };
+  return (
+    <Modal
+      variant="confirm"
+      tone="danger"
+      title={isRequest ? strings.declineRequestOf(first) : strings.cancelMeetingWith(first)}
+      isOpen={isOpen}
+      isBusy={busy}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !busy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={busy}>
+            {strings.keep}
+          </Button>
+          <Button variant="danger-solid" isPending={busy} onPress={commit}>
+            {busy
+              ? isRequest
+                ? strings.declining
+                : strings.cancelling
+              : isRequest
+                ? strings.decline
+                : strings.cancelMeeting}
+          </Button>
+        </>
+      }
+    >
+      {error !== '' && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
+      <Field
+        label={strings.noteTo(first)}
+        labelAside={strings.optional}
+        maxLength={500}
+        value={note}
+        onChange={setNote}
+        isDisabled={busy}
+        onSubmit={commit}
+      />
+    </Modal>
+  );
+}
+
+/** Cancel meeting, from the popup's ⋯, a row's ⋯ or the week's card: the one compact confirm. */
 function CancelDialog({
   booking,
   actions,
@@ -594,61 +669,18 @@ function CancelDialog({
   readonly onClose: () => void;
   readonly onDone: () => void;
 }) {
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const cancel = () => {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    actions.cancel(booking.id, reason.trim()).then(
-      () => {
-        actions.notify('success', strings.cancelledToast(booking.visitorName));
-        setBusy(false);
-        onDone();
-      },
-      (caught: unknown) => {
-        setBusy(false);
-        setError(messageOf(caught));
-      },
-    );
-  };
   return (
-    <Modal
-      title={strings.cancelTitle(booking.pageTitle, booking.visitorName)}
-      tone="danger"
+    <CancelConfirm
+      guestName={booking.visitorName}
       isOpen={isOpen}
-      isBusy={busy}
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
-      actions={
-        <>
-          <Button slot="close" isDisabled={busy}>
-            {strings.keepBooking}
-          </Button>
-          <Button variant="danger-solid" icon="circle-x" isPending={busy} onPress={cancel}>
-            {busy ? strings.cancelling : strings.confirmCancel}
-          </Button>
-        </>
+      onClose={onClose}
+      onCancel={(note) =>
+        actions.cancel(booking.id, note).then(() => {
+          actions.notify('success', strings.cancelledTold(firstNameOf(booking.visitorName)));
+          onDone();
+        })
       }
-    >
-      {error !== '' && (
-        <Callout tone="danger" isAnnounced>
-          {error}
-        </Callout>
-      )}
-      <p>{strings.cancelText(booking.visitorName)}</p>
-      <Field
-        label={strings.reason}
-        hint={strings.reasonHint(booking.visitorName)}
-        isMultiline
-        maxLength={500}
-        value={reason}
-        onChange={setReason}
-        isDisabled={busy}
-      />
-    </Modal>
+    />
   );
 }
 

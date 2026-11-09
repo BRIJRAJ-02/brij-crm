@@ -2,10 +2,13 @@
 // routes (plain functions, no React, so loaders can use them):
 // - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view, `team` for the Team day),
 //   `link`, `cal`; the Team day's filters `who` (people's ids), `booked` and `order` (spec 0030, AC-766);
-// - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
+// - List: `tab` (`requests`, `past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
 // The list pages by cursor (More), so the address holds no page.
 import type { BookingsTab, MeetingSource } from '@crm/data';
 import { dayKeyOf, isDayKey, weekOf } from './week.ts';
+
+/** Meetings' list tabs: Bookings' three, and Requests, the bookings waiting for the host's Accept (spec 0062). */
+export type MeetingsTab = BookingsTab | 'requests';
 
 /** The address as it is written; anything else in it is dropped. */
 export interface RawBookingsSearch {
@@ -16,7 +19,7 @@ export interface RawBookingsSearch {
   readonly who?: string;
   readonly booked?: '1';
   readonly order?: 'title';
-  readonly tab?: 'past' | 'cancelled';
+  readonly tab?: 'requests' | 'past' | 'cancelled';
   readonly src?: 'bookings' | 'calendar';
   readonly link?: string;
   readonly cal?: string;
@@ -38,7 +41,7 @@ export interface BookingsSearch {
   readonly withBookings?: boolean;
   /** The Team day's order (AC-1438): by job title; absent is me first, then by name. */
   readonly order?: 'title';
-  readonly tab: BookingsTab;
+  readonly tab: MeetingsTab;
   /** The list's meetings: all, the bookings, or the calendar events. */
   readonly source: MeetingSource;
   /** One booking page's bookings only. */
@@ -58,7 +61,7 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
       : {}),
     ...(search.booked === '1' || search.booked === 1 ? { booked: '1' as const } : {}),
     ...(search.order === 'title' ? { order: 'title' as const } : {}),
-    ...(search.tab === 'past' || search.tab === 'cancelled' ? { tab: search.tab } : {}),
+    ...(search.tab === 'requests' || search.tab === 'past' || search.tab === 'cancelled' ? { tab: search.tab } : {}),
     ...(search.src === 'bookings' || search.src === 'calendar' ? { src: search.src } : {}),
     ...(typeof search.link === 'string' && /^[0-9a-f-]{36}$/i.test(search.link) ? { link: search.link } : {}),
     ...(typeof search.cal === 'string' && search.cal.length <= 4_000 ? { cal: search.cal } : {}),

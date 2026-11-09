@@ -7,6 +7,7 @@ import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } fro
 import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
+import { weekOf } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { useBookingsHosts } from '../features/bookings/toolbarSlot.ts';
 import { useCan } from '../features/workspace/WorkspacePage.tsx';
@@ -45,7 +46,8 @@ export const Route = createFileRoute('/w/$slug/bookings/list')({
 /** The list's question from the address: the tab, the source and the calendars picked. */
 function queryOf(search: BookingsSearch): MeetingsQuery {
   return {
-    when: search.tab,
+    // Requests read on their own (the screen's); the list behind them is Upcoming's.
+    when: search.tab === 'requests' ? 'upcoming' : search.tab,
     source: search.source,
     ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
   };
@@ -78,11 +80,21 @@ function ListPending() {
 function List({ objects, pages, seesTeam }: ListLoaded) {
   const { slug } = Route.useParams();
   const { timeZone } = useFormatSettings();
-  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay(), timeZone);
+  const firstDay = useFirstDay();
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), firstDay, timeZone);
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug, objects), [data, toasts, slug, objects]);
+  // Requests (spec 0062) through the data layer, one set per workspace, so the tab never reads again for a redraw.
+  const requests = useMemo(
+    () => ({
+      list: (pageId: string) => data.bookingFlow.requests(slug, pageId),
+      confirm: (bookingId: string) => data.bookingFlow.confirm(slug, bookingId),
+      decline: (bookingId: string, reason?: string) => data.bookingFlow.decline(slug, bookingId, reason),
+    }),
+    [data, slug],
+  );
   // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
   const choice = useBookingsHosts();
   // Team where the calendar offers it: a colleague to see, or someone the reader could invite.
@@ -108,13 +120,18 @@ function List({ objects, pages, seesTeam }: ListLoaded) {
       pages={pages}
       locale={navigator.languages[0] ?? 'en-GB'}
       actions={actions}
+      requests={requests}
       openFirst={asked}
       calendarViews={seesTeam || canInvite ? ['day', 'week', 'team'] : ['day', 'week']}
-      onCalendarView={(view) =>
+      onCalendarView={(view, day) =>
         void navigate({
           to: '/w/$slug/bookings/calendar',
           params: { slug },
-          search: rawOf('calendar', { ...search, view }),
+          search: rawOf('calendar', {
+            ...search,
+            view,
+            ...(day === undefined ? {} : { day, week: weekOf(day, firstDay) }),
+          }),
         })
       }
       onSearch={(next) =>

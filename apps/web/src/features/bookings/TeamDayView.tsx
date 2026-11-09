@@ -29,7 +29,6 @@ import {
   ButtonLink,
   Callout,
   EmptyState,
-  linkHue,
   Menu,
   MenuItem,
   MenuSection,
@@ -72,7 +71,8 @@ import { AwayReassignDialog, NewMeetingDialog, ReassignDialog, TimeOffDialog } f
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 import { openingMinute, type MinuteSpan } from './team-grid.ts';
-import { minuteOfDay, timeRange } from './week.ts';
+import { minuteOfDay } from './week.ts';
+import { clockRange } from './meeting-format.ts';
 
 /** What the Team day needs beside its held read. */
 export interface TeamDayViewProps {
@@ -245,7 +245,7 @@ export function TeamDayView(props: TeamDayViewProps) {
           dayKey: column.memberId,
           startMinute,
           endMinute,
-          time: timeRange(startsAt, endsAt, locale, timeZone),
+          time: clockRange(startsAt, endsAt, timeZone),
         };
         if (booking !== undefined) {
           const isLive = booking.status === 'confirmed';
@@ -267,10 +267,11 @@ export function TeamDayView(props: TeamDayViewProps) {
               block: {
                 ...base,
                 id: `${column.memberId}:${booking.id}`,
-                title: booking.pageTitle,
-                detail: booking.visitorName,
+                // The guest first, as Meetings names a meeting (the redesign of 9 November 2026), in the one Timefix
+                // colour every booking shares.
+                title: booking.visitorName,
+                detail: booking.pageTitle,
                 kind: 'booking',
-                hue: linkHue(booking.pageId),
                 // Every booking came through Timefix: its mark, beside the title (synced calendar time has none).
                 provider: 'timefix',
                 isCancelled: !isLive,
@@ -335,7 +336,7 @@ export function TeamDayView(props: TeamDayViewProps) {
         ];
       }),
     );
-  }, [answer, byBooking, issueOf, locale, timeZone, markOf]);
+  }, [answer, byBooking, issueOf, timeZone, markOf]);
   const blocks = useMemo(() => placed.map((each) => each.block), [placed]);
   // Each column's open hours in minutes, once per answer (the grid asks for them on every draw).
   const openByColumn = useMemo(() => {
@@ -571,7 +572,7 @@ export function TeamDayView(props: TeamDayViewProps) {
       <MenuItem
         key={`${issue.kind}:${String(index)}`}
         id={`${issue.memberId}:${issue.bookingId}:${String(index)}`}
-        description={timeRange(booking.startsAt, booking.endsAt, locale, timeZone)}
+        description={clockRange(booking.startsAt, booking.endsAt, timeZone)}
       >
         {strings.issueLine(booking.pageTitle, column.name)}
       </MenuItem>
@@ -839,7 +840,6 @@ export function TeamDayView(props: TeamDayViewProps) {
             key={asked.opening}
             booking={byBooking.get(asked.booking.id) ?? asked.booking}
             actions={actions}
-            locale={locale}
             ask={isAsking ? asked.kind : undefined}
             onClose={dismiss}
             onDone={done}
