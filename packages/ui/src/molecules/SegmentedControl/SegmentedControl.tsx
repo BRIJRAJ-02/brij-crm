@@ -32,6 +32,11 @@ export interface Segment {
    * eye reads `label`.
    */
   readonly accessibleLabel?: string;
+  /**
+   * A quiet count after the label (Meetings' Requests 2), in the secondary colour; a new number rolls in from below.
+   * Read after the label ("Requests, 2").
+   */
+  readonly count?: number;
 }
 
 /** Props for SegmentedControl. */
@@ -173,6 +178,15 @@ export function SegmentedControl({
               <span className={styles.label}>{segment.label}</span>
             ) : (
               <HueLabel label={segment.label} hue={segment.hue} />
+            )}
+            {segment.count !== undefined && (
+              // Keyed by the number, so each new one rolls in rather than swapping in place.
+              <span className={styles.count}>
+                <VisuallyHidden>, </VisuallyHidden>
+                <span key={segment.count} className={styles.countValue}>
+                  {segment.count}
+                </span>
+              </span>
             )}
           </RadioButton>
         </RadioField>

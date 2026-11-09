@@ -14,6 +14,8 @@ New. ChoiceChips and SegmentedControl hold a few labelled choices that fit on on
 
 `today` (5 November 2026, a reservation's three weeks after checklabs) adds a third line under each date: its month, or Today on today, so "Tue 1" after "Mon 30" reads as a new month. Left out, nothing changes. Story: WithMonths.
 
+- The days past either end fade there (a `mask-image` linear gradient over `space-32`), the start once it has scrolled, so the strip shows it scrolls both ways (the Bookings redesign, 9 November 2026).
+
 ## States
 
 Default, chosen, Best, hover, focus, pressed, loading.

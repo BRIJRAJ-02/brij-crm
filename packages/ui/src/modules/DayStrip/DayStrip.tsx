@@ -1,4 +1,5 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
+import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import { dayLabels } from '../../lib/month.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -47,6 +48,16 @@ export function DayStrip({
 }: DayStripProps) {
   const { locale } = useFormatSettings();
   const strip = useRef<HTMLDivElement>(null);
+  // The days past either end fade there (a mask-image gradient), so the strip shows it scrolls both ways.
+  const { edges, ref: edgesRef } = useScrollEdges(true);
+  const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
+  const setStrip = useCallback(
+    (element: HTMLDivElement | null) => {
+      strip.current = element;
+      edgesRef(element);
+    },
+    [edgesRef],
+  );
   const button = (key: string) => strip.current?.querySelector<HTMLButtonElement>(`button[data-day="${key}"]`);
   useEffect(() => {
     if (value === undefined) return;
@@ -83,7 +94,7 @@ export function DayStrip({
     );
   }
   return (
-    <div ref={strip} className={styles.root} role="group" aria-label={strings.days}>
+    <div ref={setStrip} className={styles.root} data-fade={fade} role="group" aria-label={strings.days}>
       {days.map((key) => {
         const labels = dayLabels(key, locale);
         const isBest = bestDays?.has(key) === true;

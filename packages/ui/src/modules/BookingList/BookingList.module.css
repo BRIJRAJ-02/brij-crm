@@ -195,70 +195,201 @@
     }
   }
 
-  /* Columns (Bookings › List): the records table's rhythm, one line a row at the row height, every row on one grid
-     so the time, who, source, status and actions line up down the list. */
+  /* Columns (Bookings › Meetings, the redesign of 9 November 2026): each day a white card of its own on the page, its
+     head the day, its date and a quiet count; a row is the time over its length, who it is with (their face, their
+     name over a quiet line), then Join, the quick changes on hover and the row's actions. */
+  .root[data-layout='columns'] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .root[data-layout='columns'] .group {
+    overflow: clip;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+  }
+
+  /* The day's head: "Today Mon 9 Nov … 5 meetings", the count plain grey text (no pill). */
+  .head {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  .root[data-layout='columns'] .band {
+    position: static;
+    flex: 1;
+    min-inline-size: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text);
+    font: var(--text-body-strong);
+    font-variant-caps: normal;
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .sublabel,
+  .count {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .count {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+
   .root[data-layout='columns'] .row {
     display: grid;
-    grid-template-columns:
-      calc(var(--size-measure) / 2) minmax(0, 1fr) minmax(0, var(--size-column))
-      var(--size-column-narrow) auto;
+    grid-template-columns: var(--size-column-min) minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-12);
     min-block-size: var(--size-row);
-    padding-block: var(--space-4);
+    padding: var(--space-8) var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .root[data-layout='columns'] .row:last-child {
+    border-block-end: none;
+  }
+
+  /* Pressed: a step darker than hover, nothing shrinks (house rule: no press scale in admin). */
+  .root[data-layout='columns'] .row:active:not(:has([data-pressed])) {
+    background: var(--surface-selected);
+  }
+
+  /* The open row (its popup is up): white with a firmer hairline, never a grey fill (the redesign's ruling). */
+  .root[data-layout='columns'] .row[data-open] {
+    background: var(--surface-raised);
+    outline: var(--border-width-hairline) solid var(--border-strong);
+    outline-offset: calc(-1 * var(--border-width-hairline));
+  }
+
+  .root[data-layout='columns'] .when {
+    flex-direction: column;
+    inline-size: auto;
   }
 
   .root[data-layout='columns'] .date {
-    font: var(--text-body);
+    font: var(--text-body-strong);
     font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-body);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+  }
+
+  .root[data-layout='columns'] .time {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .person {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  /* The guest's face, or an event's calendar mark in a face's room. */
+  .face {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--avatar-lg);
   }
 
   .root[data-layout='columns'] .main {
-    flex-direction: row;
+    gap: 0;
+    min-inline-size: 0;
   }
 
   .root[data-layout='columns'] .titleLine {
-    gap: var(--space-4);
-    margin-inline-start: 0;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin-inline-start: calc(-1 * var(--space-8));
   }
 
-  /* The title button takes its words' width and gives way to the row's other columns, its label cut short (the panel names it whole). */
+  /* The title button takes its words' width and gives way to the status, its label cut short (the popup names it). */
   .name {
     display: flex;
     flex: 0 1 auto;
     min-inline-size: 0;
   }
 
-  .root[data-layout='columns'] .main,
-  .root[data-layout='columns'] .titleLine {
-    min-inline-size: 0;
-  }
-
-  /* The guest's face before their name, as a record chip draws a person; the name's button keeps its own padding. */
-  .face {
+  .status {
     display: flex;
     flex: none;
-  }
-
-  .root[data-layout='columns'] .join {
-    margin-inline-start: var(--space-8);
-  }
-
-  .source {
-    display: flex;
-    min-inline-size: 0;
-    overflow: clip;
     color: var(--text-secondary);
+    font: var(--text-label);
+  }
+
+  .subline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .sublineText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .status {
-    display: flex;
-    min-inline-size: 0;
+  /* Done earlier today: the words step back, the row still opens. */
+  .row[data-done] .date,
+  .row[data-done] .name {
+    color: var(--text-secondary);
   }
 
-  /* Reschedule and Cancel: their room kept, shown while the row is hovered or holds focus, and always on touch. */
+  /* The time now, between what's done and what's next: a hairline in the danger colour with the time at its start. */
+  .now {
+    position: relative;
+    display: flex;
+    align-items: center;
+    block-size: 0;
+    margin-inline: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--danger);
+    pointer-events: none;
+  }
+
+  .nowLabel {
+    position: absolute;
+    inset-inline-start: 0;
+    padding-inline-end: var(--space-6);
+    background: var(--surface-raised);
+    color: var(--danger);
+    font: var(--text-label-strong);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label-strong);
+    translate: 0 -50%;
+  }
+
+  .joinAt {
+    display: flex;
+  }
+
+  /* The ⋯ menu: its room kept, shown while the row is hovered or holds focus, and always on touch. */
   .quick {
     display: flex;
     align-items: center;
@@ -271,6 +402,8 @@
       transition: opacity var(--duration-hover) var(--ease-hover);
     }
 
+    /* Its menu open (focus has gone into the menu): the ⋯ stays, pressed. */
+    .row:has([aria-expanded='true']) .quick,
     .row:hover .quick,
     .row:focus-within .quick,
     .row[data-open] .quick {
@@ -278,33 +411,22 @@
     }
   }
 
-  /* A narrow list (a phone): the time and the status on the first line, who on the second, with the whole width for
-     their name; the source and the quick changes go, since the row opens the booking's sheet, which holds Reschedule
-     and Cancel. */
+  /* A phone: the time over its length, who beside it; Join and the ⋯ go, since the row opens the popup, which holds
+     them all. A request's Decline and Accept stay. */
   @container (inline-size < 480px) {
     .root[data-layout='columns'] .row {
-      grid-template-areas:
-        'when status'
-        'who who';
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: var(--space-2) var(--space-8);
+      grid-template-columns: var(--size-column-min) minmax(0, 1fr);
+      padding-inline: var(--space-12);
     }
 
-    .root[data-layout='columns'] .date {
-      grid-area: when;
-    }
-
-    .root[data-layout='columns'] .main {
-      grid-area: who;
-      margin-inline-start: calc(-1 * var(--space-2));
-    }
-
-    .root[data-layout='columns'] .status {
-      grid-area: status;
-    }
-
-    .root[data-layout='columns'] .source,
     .root[data-layout='columns'] .actions {
+      grid-column: 1 / -1;
+      justify-content: flex-end;
+    }
+
+    .root[data-layout='columns'] .actions[data-quiet],
+    .root[data-layout='columns'] .quick,
+    .root[data-layout='columns'] .joinAt {
       display: none;
     }
   }

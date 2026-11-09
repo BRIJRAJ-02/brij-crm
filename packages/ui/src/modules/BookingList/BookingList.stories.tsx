@@ -241,44 +241,67 @@ function columnGroups(): BookingListGroup[] {
     {
       id: '2026-10-08',
       label: 'Today',
+      sublabel: 'Thu 8 Oct',
+      count: '3 meetings',
       rows: [
         {
+          id: 'standup',
+          date: '9:00 am',
+          time: '15 min',
+          title: 'Stand-up',
+          provider: 'google-calendar',
+          subline: { text: 'From your calendar · Work' },
+          isDone: true,
+        },
+        {
           id: 'grace',
-          date: '16:00 – 16:30',
-          time: '',
+          date: '4:00 pm',
+          time: '30 min',
           title: 'Intro call',
+          nowBefore: '3:30 pm',
           chip: { objectId: 'people', recordId: 'grace', name: 'Grace Hopper', kind: 'person' },
-          source: { name: 'Intro call', hue: 'blue' },
-          status: { label: 'Confirmed', hue: 'green' },
+          subline: { icon: 'video', text: 'Intro call · Google Meet' },
           join: { href: 'https://meet.google.com/abc-defg-hij', provider: 'Google Meet' },
-          quickActions: (
-            <>
-              <Button variant="ghost" icon="calendar-clock" label="Reschedule Intro call with Grace Hopper" />
-              <Button variant="ghost-danger" icon="circle-x" label="Cancel Intro call with Grace Hopper" />
-            </>
-          ),
+          quickActions: <Button variant="ghost" icon="ellipsis" label="More for Grace Hopper" />,
         },
         {
           id: 'sync',
-          date: '17:00 – 18:00',
-          time: '',
+          date: '5:00 pm',
+          time: '60 min',
           title: 'Pipeline sync',
-          source: { name: 'Team', hue: 'green' },
+          provider: 'google-calendar',
+          subline: { text: 'From your calendar · Team' },
         },
       ],
     },
     {
       id: '2026-10-09',
-      label: 'Fri, 9 Oct',
+      label: 'Fri 9 Oct',
+      count: '2 meetings',
       rows: [
         {
           id: 'alan',
-          date: '10:00 – 11:00',
-          time: '',
+          date: '10:00 am',
+          time: '60 min',
           title: 'Site visit',
           chip: { objectId: 'people', recordId: 'alan', name: 'Alan Turing', kind: 'person' },
-          source: { name: 'Site visit', hue: 'purple' },
+          subline: { icon: 'map-pin', text: 'Site visit · In person' },
           status: { label: 'Needs a host', hue: 'orange' },
+          quickActions: <Button variant="ghost" icon="ellipsis" label="More for Alan Turing" />,
+        },
+        {
+          id: 'ada',
+          date: '2:00 pm',
+          time: '30 min',
+          title: 'Intro call',
+          chip: { objectId: 'people', recordId: 'ada', name: 'Ada Lovelace', kind: 'person' },
+          subline: { icon: 'phone', text: 'Intro call · Phone call' },
+          actions: (
+            <>
+              <Button>Decline</Button>
+              <Button>Accept</Button>
+            </>
+          ),
         },
       ],
     },
@@ -286,8 +309,8 @@ function columnGroups(): BookingListGroup[] {
 }
 
 /**
- * Columns: the records table's rhythm. The open row is selected (`aria-current`); Reschedule and Cancel show on hover
- * or focus, and always on a touch screen.
+ * Columns: each day its own card, the open row white with a firmer hairline (`aria-current`); the ⋯ shows on hover or
+ * focus, and always on a touch screen. The time now runs between what's done and what's next.
  */
 export const Columns: Story = {
   parameters: { crm: { preview: true } },
@@ -300,16 +323,17 @@ export const Columns: Story = {
     const open = canvas.getByRole('button', { name: 'Grace Hopper' });
     await expect(open.closest('li')).toHaveAttribute('aria-current', 'true');
     await expect(canvas.getByText('Needs a host')).toBeInTheDocument();
+    await expect(canvas.getByText('3 meetings')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Alan Turing' }));
     await expect(args.onOpen).toHaveBeenCalledWith('alan', expect.any(HTMLElement));
     // A quick change is its own press, never the row's.
     const opened = args.onOpen.mock.calls.length;
-    await userEvent.click(canvas.getByRole('button', { name: 'Cancel Intro call with Grace Hopper' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'More for Grace Hopper' }));
     await expect(args.onOpen).toHaveBeenCalledTimes(opened);
   },
 };
 
-/** Columns in a phone's list: the time and status, then who on a line of their own; the page column and quick changes go. */
+/** Columns in a phone's list: the time beside who; Join and the ⋯ go (the popup holds them), Decline and Accept stay. */
 export const ColumnsNarrow: Story = {
   // The list is its own inline-size container, so it takes the phone's whole width from the stage (`phone-fill`), as
   // it fills a block column in the app: a shrink to fit item of the plain phone row measured 0 wide.

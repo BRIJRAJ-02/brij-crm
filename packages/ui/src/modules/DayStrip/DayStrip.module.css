@@ -9,8 +9,31 @@
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
-    /* The days run on past the card's edge: a fade there says so, where a hard cut read as the last day (critic A4). */
+  }
+
+  /* The days run on past an edge: a fade there says so, where a hard cut read as the last day (critic A4); both ends
+     once it has scrolled (the redesign of 9 November 2026). Only the mask's alpha counts, so the surface token stands
+     in for opaque. */
+  .root[data-fade] {
+    scroll-padding-inline: var(--space-32);
+  }
+
+  .root[data-fade='end'] {
     mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-32)), transparent);
+  }
+
+  .root[data-fade='start'] {
+    mask-image: linear-gradient(to left, var(--surface) calc(100% - var(--space-32)), transparent);
+  }
+
+  .root[data-fade='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--surface) var(--space-32),
+      var(--surface) calc(100% - var(--space-32)),
+      transparent
+    );
   }
 
   .day {

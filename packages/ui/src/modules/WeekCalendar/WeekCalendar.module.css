@@ -117,14 +117,15 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
-  /* Outside the member's open hours: a step darker than the grid, under everything drawn on it. */
+  /* Outside the member's open hours: a light step off the grid (subtle, not sunken: the redesign of 9 November 2026
+     wanted it lighter), under everything drawn on it. */
   .offHours {
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
     inset-inline: 0;
     block-size: calc(var(--length) / 60 * var(--hour));
-    /* The hour lines carry on through it, lined up with the column's. Sunken, so the open hours read at a glance. */
-    background-color: var(--surface-sunken);
+    /* The hour lines carry on through it, lined up with the column's. Subtle, so the open hours read at a glance. */
+    background-color: var(--surface-subtle);
     background-image: repeating-linear-gradient(
       to bottom,
       var(--border-subtle) 0,
@@ -649,13 +650,16 @@
     translate: -50% -50%;
   }
 
-  /* The time now on the axis, level with the line, over the hour label it may cross. */
+  /* The time now on the axis, level with the line, over the hour label it may cross. It starts at the axis's start, so
+     a long time ("10:20 am") runs on toward the line rather than being cut at the page's edge. */
   .nowLabel {
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
-    inset-inline-end: 0;
+    inset-inline-start: 0;
     z-index: var(--z-raised);
-    padding-inline: var(--space-2) var(--space-6);
+    min-inline-size: 100%;
+    padding-inline: var(--space-2) var(--space-4);
+    text-align: end;
     background: var(--surface-raised);
     color: var(--danger);
     font: var(--text-label-strong);
