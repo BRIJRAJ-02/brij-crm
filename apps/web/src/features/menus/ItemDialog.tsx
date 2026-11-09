@@ -406,6 +406,7 @@ export function ItemDialog({
           <Field
             isReadOnly={isReadOnly}
             label={strings.kcal}
+            placeholder={strings.kcalPlaceholder}
             value={form.kcal}
             onChange={(kcal) => change({ kcal })}
             inputMode="numeric"
@@ -415,7 +416,8 @@ export function ItemDialog({
         <FormRow>
           <Switch
             label={strings.availableSwitch}
-            {...(isReadOnly ? { description: strings.availableNow } : {})}
+            // Unlike the rest, Available needs no Publish: said once it is changed, and always to Run service.
+            {...(isReadOnly || form.isAvailable !== opened.isAvailable ? { description: strings.availableNow } : {})}
             isSelected={form.isAvailable}
             onChange={(next) => {
               change({ isAvailable: next });
@@ -452,8 +454,9 @@ export function ItemDialog({
 }
 
 /**
- * The item's one way of being priced: the choice sits on the line of the box it changes, after it, so Tab goes from
- * the price straight on. Sizes opens rows under it; only the kind chosen is saved.
+ * The item's one way of being priced: first how (One price, Sizes or Other, under Pricing), then the box or
+ * rows for that kind alone, so nothing reads as locked. Only the kind chosen is saved. Read only, the kind's own value
+ * under its own label.
  */
 function PriceFields({
   form,
@@ -470,56 +473,80 @@ function PriceFields({
   readonly newKey: () => string;
   readonly onChange: (next: ItemForm) => void;
 }) {
-  const kinds = isReadOnly ? undefined : (
-    <SegmentedControl
-      label={strings.priceHow}
-      size="compact"
-      isFitted
-      segments={[
-        { value: 'price', label: strings.priceOne },
-        { value: 'sizes', label: strings.priceSizes },
-        { value: 'text', label: strings.priceTextKind },
-      ]}
-      value={form.priceKind}
-      onChange={(kind) => onChange(withPriceKind(form, kind as PriceKind, newKey))}
-    />
-  );
   const setSize = (key: string, patch: { readonly name?: string; readonly price?: string }) =>
     onChange({ ...form, sizes: form.sizes.map((each) => (each.key === key ? { ...each, ...patch } : each)) });
+  if (isReadOnly && form.priceKind === 'sizes') {
+    return (
+      <>
+        <Field label={strings.price} value={strings.priceBySize} isReadOnly />
+        {form.sizes.map((size, index) => (
+          <Field
+            isReadOnly
+            key={size.key}
+            label={`${strings.sizeName} ${String(index + 1)}`}
+            isLabelHidden
+            value={size.name}
+            after={
+              <Field
+                isReadOnly
+                label={strings.sizePriceOf(index + 1, currency)}
+                isLabelHidden
+                prefix={currency}
+                value={size.price}
+              />
+            }
+          />
+        ))}
+      </>
+    );
+  }
+  if (isReadOnly) {
+    return form.priceKind === 'text' ? (
+      <Field isReadOnly label={strings.priceText} value={form.priceText} />
+    ) : (
+      <Field isReadOnly label={strings.price} prefix={currency} value={form.price} />
+    );
+  }
   return (
     <>
+      <SegmentedControl
+        // Pricing, not Price: the box under it is the Price, and two controls of one name read as one.
+        label={strings.pricing}
+        isLabelVisible
+        segments={[
+          { value: 'price', label: strings.priceOne },
+          { value: 'sizes', label: strings.priceSizes },
+          { value: 'text', label: strings.priceTextKind },
+        ]}
+        value={form.priceKind}
+        onChange={(kind) => onChange(withPriceKind(form, kind as PriceKind, newKey))}
+      />
       {form.priceKind === 'text' ? (
         <Field
           key="text"
-          isReadOnly={isReadOnly}
           label={strings.priceText}
+          isLabelHidden
           placeholder={strings.priceTextPlaceholder}
           value={form.priceText}
           onChange={(priceText) => onChange({ ...form, priceText })}
           maxLength={MENU_LIMITS.priceNoteMax}
-          after={kinds}
         />
-      ) : form.priceKind === 'sizes' ? (
-        <Field key="sizes" label={strings.price} value={strings.priceBySize} isReadOnly after={kinds} />
-      ) : (
+      ) : form.priceKind === 'price' ? (
         <Field
           key="price"
-          isReadOnly={isReadOnly}
           label={strings.price}
+          isLabelHidden
           prefix={currency}
-          placeholder="0.00"
+          placeholder={strings.pricePlaceholder}
           value={form.price}
           onChange={(price) => onChange({ ...form, price })}
           error={problems.price}
           inputMode="decimal"
-          after={kinds}
         />
-      )}
-      {form.priceKind === 'sizes' ? (
+      ) : (
         <>
           {form.sizes.map((size, index) => (
             <Field
-              isReadOnly={isReadOnly}
               key={size.key}
               label={`${strings.sizeName} ${String(index + 1)}`}
               isLabelHidden
@@ -532,29 +559,26 @@ function PriceFields({
               after={
                 <>
                   <Field
-                    isReadOnly={isReadOnly}
                     label={strings.sizePriceOf(index + 1, currency)}
                     error={problems[`size-${size.key}-price`]}
                     isLabelHidden
                     prefix={currency}
-                    placeholder="0.00"
+                    placeholder={strings.pricePlaceholder}
                     value={size.price}
                     inputMode="decimal"
                     onChange={(price) => setSize(size.key, { price })}
                   />
-                  {isReadOnly ? null : (
-                    <Button
-                      variant="ghost"
-                      icon="x"
-                      label={strings.removeSize}
-                      onPress={() => onChange({ ...form, sizes: form.sizes.filter((each) => each.key !== size.key) })}
-                    />
-                  )}
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    label={strings.removeSize}
+                    onPress={() => onChange({ ...form, sizes: form.sizes.filter((each) => each.key !== size.key) })}
+                  />
                 </>
               }
             />
           ))}
-          {isReadOnly || form.sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
+          {form.sizes.length >= MENU_LIMITS.sizesPerItem ? null : (
             <Button
               icon="plus"
               onPress={() => onChange({ ...form, sizes: [...form.sizes, { key: newKey(), name: '', price: '' }] })}
@@ -563,7 +587,7 @@ function PriceFields({
             </Button>
           )}
         </>
-      ) : null}
+      )}
     </>
   );
 }

@@ -140,6 +140,17 @@ export function FileDrop({
   // that field's, and a dialog opened over this one (the cropper) keeps its own paste.
   const ownRef = useRef<HTMLDivElement>(null);
   const takesPaste = variant === 'photo' && !isDisabled && !isReadOnly && !isPending;
+  // The listener goes on once per opening, reading the latest checks through a ref, not again after every render.
+  const takeRef = useRef(take);
+  useEffect(() => {
+    takeRef.current = take;
+  });
+  useEffect(() => {
+    // React Aria's drop target keeps a hidden button of its own for the keyboard (the first button in the box,
+    // react-aria-components 1.21); here the box itself and the paste do that job, so Tab doesn't stop twice on one
+    // photo. Again after each render, since the box remounts as a picture comes and goes.
+    if (variant === 'photo') ownRef.current?.querySelector('button')?.setAttribute('tabindex', '-1');
+  });
   useEffect(() => {
     const own = ownRef.current;
     if (!takesPaste || own === null) return;
@@ -151,16 +162,13 @@ export function FileDrop({
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest(dialog) !== own.closest(dialog)) return;
       event.preventDefault();
-      take(files);
+      takeRef.current(files);
     };
-    // React Aria's drop target keeps a hidden button of its own for the keyboard; here the box itself and the paste do
-    // that job, so Tab doesn't stop twice on one photo.
-    own.querySelector('button')?.setAttribute('tabindex', '-1');
     doc.addEventListener('paste', onPaste);
     return () => {
       doc.removeEventListener('paste', onPaste);
     };
-  });
+  }, [takesPaste]);
   const limits = [types, maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale))].filter(
     (part) => part !== undefined,
   );

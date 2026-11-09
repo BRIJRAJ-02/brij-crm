@@ -424,10 +424,12 @@ describe('the Menus editor', () => {
     await expect.poll(focusedName).toBe('Name');
     await userEvent.tab();
     expect(focusedName()).toBe('Description');
+    // How it is priced first, one stop, then the price, one stop for the photo, and into the allergens.
     await userEvent.tab();
-    expect(focusedName()).toBe('Price');
-    // On past how it is priced, one stop for the photo, and into the allergens.
+    expect(document.activeElement?.closest('[role="radiogroup"]')?.textContent).toContain('One price');
     await userEvent.tab();
+    // Named for screen readers alone: Pricing above it already says what it is.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Price');
     await userEvent.tab();
     expect(document.activeElement?.textContent).toContain('Add photo');
     await userEvent.tab();
@@ -488,7 +490,7 @@ describe('the Menus editor', () => {
     // In the other list it says where it is, and can't be picked.
     await userEvent.click(may);
     const milk = page.getByRole('option', { name: /Milk/ });
-    await expect.poll(() => milk.element().textContent).toContain('In Contains');
+    await expect.poll(() => milk.element().textContent).toContain('Already in Contains');
     await expect.element(milk).toHaveAttribute('aria-disabled', 'true');
     await userEvent.keyboard('{Escape}');
     await userEvent.click(sheet.getByRole('button', { name: /Dietary/ }));
