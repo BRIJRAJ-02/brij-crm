@@ -198,6 +198,55 @@ export const AsRow: Story = {
   },
 };
 
+/** The row with a line under its label saying what the picture is for, which describes the drop target too. */
+export const AsRowDescribed: Story = {
+  // New after the last baselines were shot on CI; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Background photo',
+    description: 'Fills the page behind everything',
+    variant: 'row',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Fills the page behind everything')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Upload background photo' })).toHaveAccessibleDescription(
+      'Fills the page behind everything',
+    );
+  },
+};
+
+/** Described, with a picture there, in a narrow column: the buttons wrap under the words, at the row's end. */
+export const AsRowDescribedFilled: Story = {
+  // New after the last baselines were shot on CI; its screenshot joins with the next baseline run.
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Cover photo',
+    description: 'The wide photo at the top',
+    variant: 'row',
+    acceptedTypes: ['image/png', 'image/jpeg'],
+    preview: { src: PIXEL, alt: 'Your cover photo' },
+    onAdjust: fn(),
+    onRemove: fn(),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Change cover photo' })).toHaveAccessibleDescription(
+      'The wide photo at the top',
+    );
+    await expect(canvas.getByRole('button', { name: 'Remove cover photo' })).toBeEnabled();
+  },
+};
+
 /** The row with a square tile, for a picture you have to recognise (a menu item's photo). */
 export const AsRowSquare: Story = {
   parameters: { crm: { screenshot: false } },

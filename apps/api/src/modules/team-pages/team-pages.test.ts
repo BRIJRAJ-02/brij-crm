@@ -122,6 +122,7 @@ describe('someone else’s link page through the api (AC-7001 to AC-7004)', () =
       ],
       [`/api/profile/insights.csv?workspace=${ada.slug}&member=${cy.memberId}&from=2026-11-01&to=2026-11-02`, {}],
       [`/api/profile/images/${newId()}?workspace=${ada.slug}&member=${cy.memberId}`, {}],
+      [`/api/me/link-page/avatar?workspace=${ada.slug}&member=${cy.memberId}&v=0123456789ab`, {}],
     ] as const) {
       const answer = await edge(path, bea.cookie, init);
       expect([path, answer.status]).toEqual([path, 403]);

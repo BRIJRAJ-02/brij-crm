@@ -73,7 +73,14 @@ afterAll(async () => {
 /** A request through the edge from the app's own origin, as a browser sends it. */
 function send(
   path: string,
-  init: { method?: string; cookie?: string; workspace?: string; type?: string; body?: Uint8Array } = {},
+  init: {
+    method?: string;
+    cookie?: string;
+    workspace?: string;
+    member?: string;
+    type?: string;
+    body?: Uint8Array;
+  } = {},
 ) {
   return app.request(path, {
     method: init.method ?? 'GET',
@@ -84,6 +91,7 @@ function send(
       origin: APP_URL,
       ...(init.cookie === undefined ? {} : { cookie: init.cookie }),
       ...(init.workspace === undefined ? {} : { 'x-crm-workspace': init.workspace }),
+      ...(init.member === undefined ? {} : { 'x-crm-page-member': init.member }),
       ...(init.type === undefined ? {} : { 'content-type': init.type }),
     },
     ...(init.body === undefined ? {} : { body: init.body }),
@@ -456,5 +464,107 @@ describe('a drafted cover (spec 0068, AC-6810)', () => {
     expect(await again.json()).toEqual({ version, same: true });
     expect(kept.size).toBe(files);
     expect(await changes()).toEqual(before);
+  });
+});
+
+describe('a page’s own profile photo (9 Nov 2026)', () => {
+  it('is drafted, read by its editor alone through the door, and is the page’s picture once published', async () => {
+    const owner = await memberWithWorkspace(app);
+    const handle = `ada-${newId().slice(-8)}`;
+    await owner.client.profile.update({ workspace: owner.slug, handle, mutationId: newId() });
+    await owner.client.profile.publish({ workspace: owner.slug, mutationId: newId() });
+    const uploaded = await send('/api/me/link-page/avatar', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    expect(uploaded.status).toBe(200);
+    const { version } = (await uploaded.json()) as { version: string };
+    expect((await owner.client.profile.look({ workspace: owner.slug })).avatar).toBe(version);
+    expect((await owner.client.profile.publication({ workspace: owner.slug })).changes).toContain(
+      'Profile photo added',
+    );
+
+    // The editor's own copy: at its version only, theirs alone, never the edge's.
+    const own = await read(`/api/me/link-page/avatar?workspace=${owner.slug}&v=${version}`, owner.cookie);
+    expect(own.status).toBe(200);
+    expect(own.headers.get('cache-control')).toBe('private, max-age=3600');
+    expect((await read(`/api/me/link-page/avatar?workspace=${owner.slug}&v=000000000000`, owner.cookie)).status).toBe(
+      404,
+    );
+    const stranger = await memberWithWorkspace(app);
+    expect((await read(`/api/me/link-page/avatar?workspace=${owner.slug}&v=${version}`, stranger.cookie)).status).toBe(
+      404,
+    );
+    expect((await read(`/api/me/link-page/avatar?workspace=${owner.slug}&v=${version}`)).status).toBe(401);
+
+    // Guests see no picture until Publish, then this one, however the account picture stands.
+    const pictureOf = async () =>
+      ((await (await read(`/api/public/handles/${handle}`)).json()) as { image?: string }).image;
+    expect(await pictureOf()).toBeUndefined();
+    await owner.client.profile.publish({ workspace: owner.slug, mutationId: newId() });
+    const image = await pictureOf();
+    expect(image).toMatch(new RegExp(`^/api/public/profiles/${handle}/picture\\?v=[0-9a-f]{12}$`));
+    const shown = await read(image ?? '');
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get('content-type')).toBe('image/jpeg');
+
+    // Removed and published, the page has no picture again (this account has none).
+    expect(
+      (await send('/api/me/link-page/avatar', { method: 'DELETE', cookie: owner.cookie, workspace: owner.slug }))
+        .status,
+    ).toBe(200);
+    await owner.client.profile.publish({ workspace: owner.slug, mutationId: newId() });
+    expect(await pictureOf()).toBeUndefined();
+  });
+
+  it('is put on a member’s page by an owner editing it (spec 0070), and read back through the same door', async () => {
+    const owner = await memberWithWorkspace(app);
+    const [row] = await testQuery<{ id: string }>(ownerUrl, 'select id::text as id from workspaces where slug = $1', [
+      owner.slug,
+    ]);
+    const bea = await joined(row?.id ?? '', 'member');
+    await bea.client.profile.update({ workspace: owner.slug, handle: `bea-${newId().slice(-8)}`, mutationId: newId() });
+    const members = await testQuery<{ id: string; name: string }>(
+      ownerUrl,
+      `select m.id::text as id, m.name from members m join workspaces w on w.id = m.workspace_id where w.slug = $1`,
+      [owner.slug],
+    );
+    const beaId = members.find((one) => one.name === 'Bea')?.id ?? '';
+    const ownerId = members.find((one) => one.name !== 'Bea')?.id ?? '';
+    const uploaded = await send('/api/me/link-page/avatar', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      member: beaId,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    expect(uploaded.status).toBe(200);
+    const { version } = (await uploaded.json()) as { version: string };
+    // On Bea's page, not the owner's.
+    expect((await bea.client.profile.look({ workspace: owner.slug })).avatar).toBe(version);
+    expect((await owner.client.profile.look({ workspace: owner.slug })).avatar).toBeUndefined();
+    const theirs = `/api/me/link-page/avatar?workspace=${owner.slug}&member=${beaId}&v=${version}`;
+    expect((await read(theirs, owner.cookie)).status).toBe(200);
+    // Bea holds no team page permission: the owner's page is out of her reach, to read or to write.
+    expect(
+      (await read(`/api/me/link-page/avatar?workspace=${owner.slug}&member=${ownerId}&v=${version}`, bea.cookie))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await send('/api/me/link-page/avatar', {
+          method: 'POST',
+          cookie: bea.cookie,
+          workspace: owner.slug,
+          member: ownerId,
+          type: 'image/jpeg',
+          body: JPEG,
+        })
+      ).status,
+    ).toBe(403);
   });
 });

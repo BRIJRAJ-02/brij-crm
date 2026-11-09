@@ -415,6 +415,13 @@ export const publicProfiles = auth.table(
     groundType: text('ground_type'),
     groundVersion: text('ground_version'),
     /**
+     * The page's own profile photo (migration 0197, 9 Nov 2026), drafted like the two above: on the public page it
+     * wins over the account picture. Written only by `crm_save_profile_image`.
+     */
+    avatarPath: text('avatar_path'),
+    avatarType: text('avatar_type'),
+    avatarVersion: text('avatar_version'),
+    /**
      * The share QR's style (spec 0061, AC-6124): a module colour, a centre picture and a frame label, at most 1,024
      * bytes, null for the plain code. Written only by `crm_save_profile_qr_style`.
      */
@@ -492,6 +499,13 @@ export const publicProfiles = auth.table(
         or (${t.groundPath} ~ ('^profile-images/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/[0-9a-f-]{36}[.](png|jpg|webp)$')
           and ${t.groundType} in ('image/png', 'image/jpeg', 'image/webp')
           and ${t.groundVersion} ~ '^[0-9a-f]{12}$')`,
+    ),
+    check(
+      'public_profiles_avatar',
+      sql`(${t.avatarPath} is null and ${t.avatarType} is null and ${t.avatarVersion} is null)
+        or (${t.avatarPath} ~ ('^profile-images/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/[0-9a-f-]{36}[.](png|jpg|webp)$')
+          and ${t.avatarType} in ('image/png', 'image/jpeg', 'image/webp')
+          and ${t.avatarVersion} ~ '^[0-9a-f]{12}$')`,
     ),
     check(
       'public_profiles_qr_style',

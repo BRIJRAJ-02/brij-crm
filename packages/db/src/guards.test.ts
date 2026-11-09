@@ -2993,10 +2993,13 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
-      // The page's own accent pair and photos (spec 0060, migration 0155): eight columns, and only through
-      // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
+      // The page's own accent pair and photos (spec 0060, migration 0155; the profile photo's three, migration 0197):
+      // eleven columns, and only through crm_save_profile_accent and crm_save_profile_image.
       'auth.public_profiles.accent UPDATE',
       'auth.public_profiles.accent_dark UPDATE',
+      'auth.public_profiles.avatar_path UPDATE',
+      'auth.public_profiles.avatar_type UPDATE',
+      'auth.public_profiles.avatar_version UPDATE',
       'auth.public_profiles.bio UPDATE',
       // When the page became its owner's choice (spec 0058, AC-23, migration 0154): only through
       // crm_show_public_profile and crm_set_public_profile_live.

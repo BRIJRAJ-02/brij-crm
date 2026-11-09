@@ -290,6 +290,7 @@ export {
 } from './brand/brand.ts';
 export {
   pageImageFolder,
+  readPageImage,
   readProfileLook,
   saveProfileAccent,
   saveProfileImage,

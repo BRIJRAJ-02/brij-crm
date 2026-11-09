@@ -133,24 +133,36 @@ export const strings = {
   /** A separate colour for dark pages, under More (AC-6). */
   colourMore: 'Dark colour',
   colourDarkDefault: 'Automatic',
-  avatar: 'Photo shape',
+  /** The profile photo's shape, under its picker, since it shapes that photo. */
+  avatar: 'Profile photo shape',
   avatarCircle: 'Circle',
   avatarRounded: 'Rounded',
-  /** The photo pickers (AC-10, AC-13): the drop area's words, and what the preview shows. */
+  /**
+   * The three photo pickers (AC-10, AC-13; 9 Nov 2026), named by where each shows on the page and in that order, top
+   * to bottom, each with one line saying where (the owner's team: people couldn't tell which did what).
+   */
   coverPhoto: 'Cover photo',
-  coverPhotoDrop: 'Add a cover photo',
+  coverPhotoHint: 'The wide photo at the top',
+  avatarPhoto: 'Profile photo',
+  avatarPhotoHint: 'The small photo above the name',
   groundPhoto: 'Background photo',
-  groundPhotoDrop: 'Add a background photo',
-  photoAlt: 'The photo on your page',
-  /** The types a cover or ground photo takes, as people name them, in the picker's hint. */
+  groundPhotoHint: 'Fills the page behind everything',
+  coverAlt: 'The cover photo on this page',
+  avatarAlt: 'The profile photo on this page',
+  groundAlt: 'The background photo on this page',
+  /** The types a page photo takes, as people name them, in the picker's refusal. */
   photoTypes: 'PNG, JPG or WebP',
   /** The types a share picture takes, as people name them, in the picker's hint. */
   shareImageTypes: 'PNG or JPG',
   shareImageUnreadable: 'That picture couldn’t be read. Try a PNG or JPG.',
   photoRemove: 'Remove photo',
-  photoRemoving: 'Remove this photo?',
-  photoRemoveText: 'Your page goes back to its plain background.',
-  coverRemoveText: 'Your page goes back to the centred header.',
+  /** Asked before a photo goes, naming which, and what the page shows instead. */
+  coverRemoving: 'Remove the cover photo?',
+  coverRemoveText: 'The page shows no banner.',
+  avatarRemoving: 'Remove the profile photo?',
+  avatarRemoveText: 'The page goes back to the usual photo, or initials.',
+  groundRemoving: 'Remove the background photo?',
+  groundRemoveText: 'The page goes back to its template’s background.',
   photoUnreadable: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.',
   /** The page already has exactly this photo in this crop (spec 0068): nothing was sent to the draft. */
   samePhoto: 'Same photo. Nothing changed.',

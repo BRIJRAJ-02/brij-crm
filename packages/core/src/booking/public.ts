@@ -70,7 +70,13 @@ import type {
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
-import { personPicture, type AccountPictureReader, type PersonPicture } from './picture.ts';
+import {
+  pagePictureOf,
+  pictureVersion,
+  personPicture,
+  type AccountPictureReader,
+  type PersonPicture,
+} from './picture.ts';
 import { faviconSources, faviconVersion } from './favicon.ts';
 import { isMediaRef, mediaFrameSrc } from '../profile/embeds.ts';
 import { isPictureHidden } from './picture-choice.ts';
@@ -390,16 +396,21 @@ export async function readPagePicture(
 }
 
 /**
- * A handle's profile picture to serve: their upload or Google's (`personPicture`), else undefined.
- * `crm_handle_owner` answers no picture for a person who keeps it off their public pages (owner ask A124).
+ * A handle's profile picture to serve: the page's own published photo (migration 0197), else their upload or
+ * Google's (`personPicture`), else undefined. `crm_handle_owner` answers the page photo whatever the "show my photo"
+ * switch says (its editor chose it for this page), and otherwise no picture for a person who keeps it off their
+ * public pages (owner ask A124).
  */
 export function readProfilePicture(owner: HandleOwner): PersonPicture | undefined {
+  const page = pagePictureOf(owner.userId, owner.workspaceId, owner.image);
+  if (page !== undefined) return { kind: 'stored', path: page, version: pictureVersion(owner.userId, `page:${page}`) };
   return personPicture(owner.userId, owner.image);
 }
 
 /**
  * A link page's contact card as its vCard is written (AC-5113, AC-5114): the card's stored fields checked again, and
- * the person's picture to embed, unless they have none or hid it (the door reads no image then). A card whose stored
+ * the page's picture to embed (`readProfilePicture`: the page's own photo, else the account picture unless they hid
+ * it), or none. A card whose stored
  * fields no longer pass the rule is NOT_FOUND, as no card is.
  */
 export function readContactCard(found: { readonly owner: HandleOwner; readonly data: unknown }): {

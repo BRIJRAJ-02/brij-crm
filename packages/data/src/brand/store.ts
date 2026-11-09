@@ -206,9 +206,8 @@ function withField<Value extends object, Key extends keyof Value>(
   return (next === undefined ? rest : { ...rest, [key]: next }) as Value;
 }
 
-/** A workspace address, a handle and a version, as the image paths take them. */
+/** A version, as the image paths take them. */
 const VERSION = /^[0-9a-f]{12}$/;
-const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * The brand kit's and a link page look's store, made once by the data layer the first time a screen asks
@@ -422,7 +421,7 @@ export function openBrand(given: {
         },
       ),
     /**
-     * A cover or photo ground (AC-10, AC-13): the bytes, already cropped and drawn again by the screen. Answers the
+     * A cover, photo ground or profile photo (AC-10, AC-13): the bytes, already cropped and drawn again by the screen. Answers the
      * refusal, `'same'` when the page already has exactly this photo (the same picture in the same crop: nothing was
      * stored and nothing changed, spec 0068), or undefined once it landed and the look names the new version.
      */
@@ -443,7 +442,7 @@ export function openBrand(given: {
       );
       return refused ?? (answered.isSame ? 'same' : undefined);
     },
-    /** Takes a cover or photo ground off the page (the screen asks first). Answers the refusal, or undefined. */
+    /** Takes a cover, photo ground or profile photo off the page (the screen asks first). Answers the refusal, or undefined. */
     removePhoto: (workspace: string, slot: PageImageSlot): Promise<DataError | undefined> =>
       lookOf(workspace).change(
         (look) => withField(look, slot, undefined),
@@ -452,10 +451,17 @@ export function openBrand(given: {
           return (look) => withField(look, slot, undefined);
         },
       ),
-    /** Where the owner's browser reads one of their photos: the handle's own route, which knows its owner. */
-    photoSrc: (handle: string, slot: PageImageSlot, version: string): string | undefined =>
-      HANDLE.test(handle) && handle.length <= 40 && VERSION.test(version)
-        ? `/api/public/profiles/${handle}/${slot}?v=${version}`
+    /**
+     * Where the editor's browser reads one of the page's photos as its draft holds it: `/api/me/link-page/<slot>`,
+     * through the same door as the upload, so a team page manager sees the photo they put on a member's page too.
+     */
+    photoSrc: (workspace: string, slot: PageImageSlot, version: string): string | undefined =>
+      VERSION.test(version)
+        ? `/api/me/link-page/${slot}?${new URLSearchParams({
+            workspace,
+            ...page,
+            v: version,
+          }).toString()}`
         : undefined,
 
     /** Signed out: forgets every copy. */

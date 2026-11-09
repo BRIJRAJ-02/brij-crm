@@ -27,6 +27,9 @@ export interface LookRow extends Record<string, unknown> {
   readonly ground_path: string | null;
   readonly ground_type: string | null;
   readonly ground_version: string | null;
+  readonly avatar_path: string | null;
+  readonly avatar_type: string | null;
+  readonly avatar_version: string | null;
 }
 
 /**
@@ -41,9 +44,11 @@ export async function lookRowOf(
 ): Promise<LookRow | undefined> {
   const found = await tx.execute<LookRow>(
     which === 'published'
-      ? sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
+      ? sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version,
+            avatar_path, avatar_type, avatar_version
           from crm_profile_look_public(${owner}::uuid, ${workspace}::uuid)`
-      : sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version
+      : sql`select accent, accent_dark, cover_path, cover_type, cover_version, ground_path, ground_type, ground_version,
+            avatar_path, avatar_type, avatar_version
           from crm_profile_look(${owner}::uuid, ${workspace}::uuid)`,
   );
   return found.rows[0];
@@ -61,7 +66,28 @@ export async function readProfileLook(scope: EngineScope): Promise<ProfileLook> 
     ...(typeof row?.accent_dark === 'string' ? { accentDark: row.accent_dark } : {}),
     ...(typeof row?.cover_version === 'string' ? { cover: row.cover_version } : {}),
     ...(typeof row?.ground_version === 'string' ? { ground: row.ground_version } : {}),
+    ...(typeof row?.avatar_version === 'string' ? { avatar: row.avatar_version } : {}),
   };
+}
+
+/**
+ * One of the page's photos as its draft holds it (the Design panel's own copy, 9 Nov 2026), for the editor's browser:
+ * the page the scope's door entered (the caller's own, or a member's a team page manager edits), at exactly
+ * `version`, else undefined. Guests never reach it: they read the published photos through the handle's routes.
+ */
+export async function readPageImage(
+  scope: EngineScope,
+  slot: PageImageSlot,
+  version: string,
+): Promise<StoredPageImage | undefined> {
+  const owner = ownUserId(scope);
+  const row = await inWorkspace(scope, (tx) => lookRowOf(tx, owner, scope.workspaceId));
+  const path = row?.[`${slot}_path`];
+  const type = row?.[`${slot}_type`];
+  const held = row?.[`${slot}_version`];
+  if (typeof path !== 'string' || typeof held !== 'string' || held !== version) return undefined;
+  if (!path.startsWith(pageImageFolder(owner, scope.workspaceId))) return undefined;
+  return type === 'image/png' || type === 'image/jpeg' || type === 'image/webp' ? { path, type, version } : undefined;
 }
 
 /** Maps what the definers raise to refusals; anything else is rethrown. */
@@ -143,7 +169,8 @@ export async function saveProfileImage(
       // A photo guests still see (spec 0068: the change waits for Publish) stays in the store until it is replaced
       // there too.
       const live = replaced === undefined ? undefined : await lookRowOf(tx, owner, scope.workspaceId, 'published');
-      return replaced !== undefined && (live?.cover_path === replaced || live?.ground_path === replaced)
+      return replaced !== undefined &&
+        (live?.cover_path === replaced || live?.ground_path === replaced || live?.avatar_path === replaced)
         ? undefined
         : replaced;
     } catch (error) {

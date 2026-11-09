@@ -55,10 +55,13 @@
 
   /* variant="row": one line, a small picture, the label, and its buttons at the end. Still a drop target, so a
      dragged file rings it in the accent as the zone does. */
+  /* Too narrow for the words and the buttons side by side (a phone), the buttons wrap under them, kept at the row's
+     end (`margin-inline-start: auto` on `.rowActions`), where they sit when they fit beside the words. */
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-12);
+    gap: var(--space-4) var(--space-12);
     min-block-size: var(--size-row);
     padding-block: var(--space-4);
     border: var(--border-width-hairline) solid transparent;
@@ -93,9 +96,11 @@
     background: var(--surface-subtle);
   }
 
+  /* Square, it keeps the wide tile's column, so its label lines up with a wide row's above or below it. */
   .thumb[data-shape='square'] {
     inline-size: var(--avatar-title);
     block-size: var(--avatar-title);
+    margin-inline-end: calc(var(--size-row) * 2 - var(--avatar-title));
     border-radius: var(--radius-md);
   }
 
@@ -201,15 +206,38 @@
   }
 
   .rowLabel {
-    flex: 1;
+    flex: 1 1 var(--size-column-narrow);
     min-inline-size: 0;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
+  /* The label with its one line under it (`description`), taking the row's free room as the label alone does. */
+  .rowText {
+    display: flex;
+    flex: 1 1 var(--size-column-narrow);
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .rowText .rowLabel {
+    flex: none;
+  }
+
+  .rowHint {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .row[data-disabled] .rowHint {
+    color: var(--text-tertiary);
+  }
+
   .rowActions {
     display: flex;
     flex: none;
+    margin-inline-start: auto;
     align-items: center;
     gap: var(--space-4);
   }

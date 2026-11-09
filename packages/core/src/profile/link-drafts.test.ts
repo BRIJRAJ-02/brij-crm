@@ -24,6 +24,7 @@ describe('a link page’s changes', () => {
         bio: 'Hello',
         theme: { template: 'studio', avatar: 'rounded' },
         accent: '#112233',
+        avatar_path: 'x/2.jpg',
         show_job_title: true,
       },
       [link('b', 'Blog'), link('a', 'Shop, renamed'), link('d', 'New')],
@@ -31,8 +32,9 @@ describe('a link page’s changes', () => {
     expect(diffLinkPage(published, draft)).toEqual([
       'Bio changed',
       'Template Classic → Studio',
-      'Face Circle → Rounded',
+      'Photo shape Circle → Rounded',
       'Colour changed',
+      'Profile photo added',
       'Cover photo removed',
       'Job title shown',
       'Changed “Shop, renamed”',
@@ -51,5 +53,6 @@ describe('a link page’s changes', () => {
 
   it('names the photos a snapshot keeps in the store', () => {
     expect(photoPathsOf(page({ cover_path: 'x/1.jpg', ground_path: null }))).toEqual(['x/1.jpg']);
+    expect(photoPathsOf(page({ ground_path: 'x/3.jpg', avatar_path: 'x/2.jpg' }))).toEqual(['x/3.jpg', 'x/2.jpg']);
   });
 });

@@ -1,10 +1,11 @@
 // Brief
 // Purpose: the link page's Design panel (spec 0068, AC-6802, AC-6804): one of four finished templates, then the
-// owner's colour, cover photo and face shape, and nothing else. Calm by design (owner, 5 November 2026: "too much
-// issues and complicated"): the phone beside it is the large live picture of the page, so the controls are small.
+// owner's colour and the page's three photos (cover, profile photo with its shape, background; 9 Nov 2026), and
+// nothing else. Calm by design (owner, 5 November 2026: "too much issues and complicated"): the phone beside it is
+// the large live picture of the page, so the controls are small.
 // Main task: pick a template; the phone beside it crossfades to the page in it at once.
-// Leaves out: fonts, grounds, gradients, patterns, row shapes and fills, which each template fixes; sentences under
-// the templates; and any value of its own: every pick is a name from a closed set.
+// Leaves out: fonts, ground colours, gradients, patterns, row shapes and fills, which each template fixes; sentences
+// under the templates; and any value of its own: every pick is a name from a closed set or a photo.
 import { themeForTemplate, type BrandColours, type DataError, type PageLookExtras, type PageTheme } from '@crm/data';
 import {
   AccentPicker,
@@ -35,13 +36,20 @@ const TEMPLATES: readonly { readonly id: PageTemplate; readonly name: string }[]
   { id: 'split', name: strings.templateSplit },
 ];
 
+/** What the Remove question says for each photo: which one, and what the page shows instead. */
+const REMOVING: Readonly<Record<PhotoSlot, { readonly title: string; readonly text: string }>> = {
+  cover: { title: strings.coverRemoving, text: strings.coverRemoveText },
+  avatar: { title: strings.avatarRemoving, text: strings.avatarRemoveText },
+  ground: { title: strings.groundRemoving, text: strings.groundRemoveText },
+};
+
 /** A template's name, as the picker says it. */
 function nameOf(template: PageTemplate): string {
   return TEMPLATES.find((one) => one.id === template)?.name ?? strings.templateClassic;
 }
 
-/** A page's two photos. */
-export type PhotoSlot = 'cover' | 'ground';
+/** A page's three photos, in the order they show on it, top to bottom. */
+export type PhotoSlot = 'cover' | 'avatar' | 'ground';
 
 /** The page's own colour and photos, and what changes them (spec 0060); absent, the panel draws names alone. */
 export interface DesignExtras {
@@ -80,26 +88,84 @@ export interface AppearanceCardProps {
   readonly extras?: DesignExtras;
   /**
    * The owner's page as the template pictures draw it (spec 0068, AC-6804): their name, picture or initials, logo and
-   * first rows' titles. The cover comes from `extras`. Left out, the pictures draw a sample.
+   * first rows' titles. The cover, the page's own profile photo and its background come from `extras`. Left out, the pictures draw a sample.
    */
   readonly profile?: LinkPageThumbnailProfile;
 }
 
 /**
  * Design (spec 0068, AC-6802, AC-6804, AC-6805), one quiet column: the four templates as small pictures of the page
- * with a name each (the one it wears ringed and ticked; the phone beside is the large live one), then Colour, the
- * cover photo as one row, and Photo shape as two segments. A page with no template of its own wears its workspace's, and
+ * with a name each (the one it wears ringed and ticked; the phone beside is the large live one), then Colour, then
+ * the three photos as one row each in the order they show on the page (cover, profile photo with Photo shape under
+ * it, background), each saying in a line where it shows. A page with no template of its own wears its workspace's, and
  * the picker says so in three words. A page moved to a template says so once, with Keep it.
  */
 export function AppearanceCard({ theme, onChange, refusal, extras, profile }: AppearanceCardProps) {
+  // Whether Remove is being asked, and of which photo, apart: the dialog keeps its words while it closes.
   const [isRemoving, setRemoving] = useState(false);
+  const [asked, setAsked] = useState<PhotoSlot>('cover');
   const variables = extras?.variables ?? [];
   const look = extras?.look;
   const workspaceTemplate = look?.workspaceTemplate ?? 'classic';
   const worn = theme.template ?? workspaceTemplate;
   const colours = extras?.colours(look?.accent, look?.accentDark);
-  const cover = look?.cover;
-  const coverSrc = cover === undefined ? undefined : extras?.photoSrc('cover', cover);
+  const srcOf = (slot: PhotoSlot) => {
+    const version = look?.[slot];
+    return version === undefined ? undefined : extras?.photoSrc(slot, version);
+  };
+  const coverSrc = srcOf('cover');
+  const avatarSrc = srcOf('avatar');
+  const groundSrc = srcOf('ground');
+  // The miniatures draw this page: its own profile photo over the account picture, and its background photo.
+  const shownProfile =
+    profile === undefined
+      ? undefined
+      : {
+          ...profile,
+          ...(coverSrc === undefined ? {} : { cover: coverSrc }),
+          ...(avatarSrc === undefined ? {} : { picture: avatarSrc }),
+          ...(groundSrc === undefined ? {} : { hasGround: true }),
+        };
+  /** One photo's row: what is there, Upload or Change, Adjust crop and Remove, and the line saying where it shows. */
+  const photoRow = (
+    slot: PhotoSlot,
+    label: string,
+    hint: string,
+    alt: string,
+    src: string | undefined,
+    /** What the page shows in its place while it has none of its own (the account picture): nothing to remove. */
+    standIn?: string,
+  ) => (
+    <FileDrop
+      variant="row"
+      label={label}
+      description={hint}
+      {...(slot === 'avatar' ? { thumb: 'square' as const } : {})}
+      acceptedTypes={BRAND_PHOTO_TYPES}
+      typesText={strings.photoTypes}
+      maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
+      isDisabled={extras === undefined || look === undefined}
+      isPending={extras?.sending === slot}
+      {...(src === undefined
+        ? standIn === undefined
+          ? {}
+          : { preview: { src: standIn, alt } }
+        : {
+            preview: { src, alt },
+            onAdjust: () => {
+              extras?.onPhoto(slot, src);
+            },
+            onRemove: () => {
+              setAsked(slot);
+              setRemoving(true);
+            },
+          })}
+      onFiles={(files) => {
+        const [file] = files;
+        if (file !== undefined) extras?.onPhoto(slot, file);
+      }}
+    />
+  );
   return (
     <Card title={strings.appearance}>
       <SettingsStack variant="plain">
@@ -134,9 +200,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
                 <LinkPageThumbnail
                   theme={themeForTemplate(template.id, theme)}
                   variables={variables}
-                  {...(profile === undefined
-                    ? {}
-                    : { profile: { ...profile, ...(coverSrc === undefined ? {} : { cover: coverSrc }) } })}
+                  {...(shownProfile === undefined ? {} : { profile: shownProfile })}
                 />
               ),
             }))}
@@ -176,29 +240,19 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
             )}
           </AccentPicker>
         )}
-        {/* The cover (AC-6802) as one row: Studio and Split lead with it; Classic and Night show it when there is one. */}
-        <FileDrop
-          variant="row"
-          label={strings.coverPhoto}
-          acceptedTypes={BRAND_PHOTO_TYPES}
-          typesText={strings.photoTypes}
-          maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
-          isDisabled={extras === undefined || look === undefined}
-          isPending={extras?.sending === 'cover'}
-          {...(coverSrc === undefined
-            ? {}
-            : {
-                preview: { src: coverSrc, alt: strings.photoAlt },
-                onAdjust: () => {
-                  extras?.onPhoto('cover', coverSrc);
-                },
-                onRemove: () => setRemoving(true),
-              })}
-          onFiles={(files) => {
-            const [file] = files;
-            if (file !== undefined) extras?.onPhoto('cover', file);
-          }}
-        />
+        {/* The page's photos, in the order they show on it (owner's team, 9 Nov 2026), each saying where in one line:
+            the cover (AC-6802; Studio and Split lead with it, Classic and Night show it when there is one), the
+            profile photo with the shape it takes, then the background behind every template. */}
+        {photoRow('cover', strings.coverPhoto, strings.coverPhotoHint, strings.coverAlt, coverSrc)}
+        {/* With no photo of its own the page shows the account picture: the row shows it too, offering Change. */}
+        {photoRow(
+          'avatar',
+          strings.avatarPhoto,
+          strings.avatarPhotoHint,
+          strings.avatarAlt,
+          avatarSrc,
+          profile?.picture,
+        )}
         <SegmentedControl
           label={strings.avatar}
           isLabelVisible
@@ -212,11 +266,12 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
             { value: 'rounded', label: strings.avatarRounded },
           ]}
         />
+        {photoRow('ground', strings.groundPhoto, strings.groundPhotoHint, strings.groundAlt, groundSrc)}
       </SettingsStack>
       <Modal
         isOpen={isRemoving}
         onOpenChange={setRemoving}
-        title={strings.photoRemoving}
+        title={REMOVING[asked].title}
         variant="confirm"
         tone="danger"
         actions={
@@ -227,7 +282,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
             <Button
               variant="danger-solid"
               onPress={() => {
-                extras?.onRemovePhoto('cover');
+                extras?.onRemovePhoto(asked);
                 setRemoving(false);
               }}
             >
@@ -236,7 +291,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
           </>
         }
       >
-        {strings.coverRemoveText}
+        {REMOVING[asked].text}
       </Modal>
     </Card>
   );
