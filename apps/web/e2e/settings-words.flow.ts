@@ -49,9 +49,9 @@ test.describe('the settings pages that say less', () => {
     const slug = await fresh(page, 'wordsb');
 
     // Alone in the workspace: the owners and admins row alone, and nobody to add, in a few words. The old Account
-    // address opens Settings › Scheduling › Scheduling access (5 November 2026).
+    // address opens Bookings settings › Scheduling access (9 November 2026).
     await page.goto(`/w/${slug}/settings/account/scheduling`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/scheduling/access$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/settings/access$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Scheduling access' })).toBeAttached();
     await expect(page.getByText('Nobody else yet.')).toHaveCount(0);
     await expect(page.getByText(/Add an assistant or a colleague/)).toHaveCount(0);
@@ -66,7 +66,7 @@ test.describe('the settings pages that say less', () => {
     await expect(page.getByText('Last 90 days.')).toHaveCount(0);
 
     // Calendars: a provider button where sync is on, or the plain note where it is off. Never a paragraph of why.
-    await page.goto(`/w/${slug}/settings/account/calendars`);
+    await page.goto(`/w/${slug}/bookings/settings/calendars`);
     await expect(page.getByRole('heading', { level: 1, name: 'Calendars' })).toBeVisible();
     await expect(page.getByText(/Connect your calendar so bookings avoid your busy times/)).toHaveCount(0);
     const off = page.getByText('Calendar sync is off');

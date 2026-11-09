@@ -1,60 +1,15 @@
-import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
-import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { loadRouting, routingSearch } from '../features/routing/load.ts';
-import { RoutingPending, RoutingScreen } from '../features/routing/RoutingScreen.tsx';
-import { strings as routingStrings } from '../features/routing/tab-strings.ts';
-import { SchedulingSettingsPage } from '../features/settings/SchedulingSettingsPage.tsx';
-import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
-import { strings } from '../features/settings/strings.ts';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { routingSearch } from '../features/routing/load.ts';
 
-// Settings › Scheduling › Routing (5 November 2026): the screen Bookings › Routing shows (spec 0037, AC-1383), here so
-// every setting is under Settings, for holders of routing.manage. One screen and one loader (`routing/load.ts`).
+// The old Settings › Scheduling › Routing address: routing lives in Bookings › Routing alone now (the mock's IA,
+// 9 November 2026: global Settings keeps account and workspace items). Links still open it there, with their search.
 export const Route = createFileRoute('/w/$slug/settings/scheduling/routing')({
-  codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
-  validateSearch: routingSearch,
-  loader: ({ context, params }) => loadRouting(context.data, params.slug),
-  pendingComponent: () => (
-    <LoadingNow>
-      <SchedulingSettingsPage title={strings.routing} isLoading>
-        <RoutingPending />
-      </SchedulingSettingsPage>
-    </LoadingNow>
-  ),
-  errorComponent: RoutingError,
-  component: RoutingRoute,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: '/w/$slug/bookings/routing',
+      params: { slug: params.slug },
+      search: routingSearch(search as Record<string, unknown>),
+      replace: true,
+    });
+  },
 });
-
-function RoutingRoute() {
-  const { members, stage } = Route.useLoaderData();
-  const { slug } = Route.useParams();
-  const search = Route.useSearch();
-  const { data, toasts } = Route.useRouteContext();
-  const navigate = useNavigate({ from: Route.fullPath });
-  if (members === undefined) return <SettingsMissing backTo="home" />;
-  return (
-    <SchedulingSettingsPage title={strings.routing} hasToolsInBar>
-      <RoutingScreen
-        data={data}
-        slug={slug}
-        search={search}
-        members={members}
-        {...(stage === undefined ? {} : { stage })}
-        toasts={toasts}
-        onSearch={(next) => void navigate({ search: (current) => ({ ...current, ...next }), replace: true })}
-      />
-    </SchedulingSettingsPage>
-  );
-}
-
-function RoutingError({ error }: ErrorComponentProps) {
-  const router = useRouter();
-  return (
-    <SettingsFailed
-      title={strings.routing}
-      heading={routingStrings.failedTitle}
-      text={isDataError(error) ? error.message : routingStrings.failedText}
-      onRetry={() => void router.invalidate()}
-    />
-  );
-}

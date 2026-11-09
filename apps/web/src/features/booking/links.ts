@@ -61,19 +61,30 @@ const availabilityQuery = (member: string | undefined, schedule?: string) => {
 export const availabilityHref = (slug: string, member?: string) =>
   `/w/${slug}/bookings/availability${availabilityQuery(member)}`;
 
-// Calendars and Round robin live in Settings (5 November 2026), and Bookings links there for setup. Their addresses
-// sit here beside Availability's rather than in `bookings/tabs.ts`, because the command menu and the screens that
-// link to them are in the first load and that module is not: one import of it would put the whole tab strip's model
-// there, in a chunk of its own, for two strings (`build.test.ts` counts the files).
+// Calendars, Teams (round robin's groups) and Scheduling access live in Bookings settings, behind the gear on Bookings'
+// TopBar (the mock's IA, 9 November 2026). Their addresses sit here beside Availability's rather than in
+// `bookings/tabs.ts`, because the command menu and the screens that link to them are in the first load and that
+// module is not: one import of it would put the whole tab strip's model there, in a chunk of its own, for two strings
+// (`build.test.ts` counts the files).
 
-/** Settings › Account › Calendars: the one place a member connects a calendar (specs 0024 and 0026). */
-export const calendarsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
+/** One page of Bookings settings, by its address's last segment. */
+export type BookingsSettingsPage = 'calendars' | 'teams' | 'access' | 'brand';
+
+/** Bookings settings (the gear on Bookings' TopBar), or one of its pages; bare, it opens on Calendars. */
+export const bookingsSettingsHref = (slug: string, page?: BookingsSettingsPage) =>
+  `/w/${slug}/bookings/settings${page === undefined ? '' : `/${page}`}`;
+
+/** Bookings settings › Calendars: the one place a member connects a calendar (specs 0024 and 0026). */
+export const calendarsHref = (slug: string) => bookingsSettingsHref(slug, 'calendars');
 
 /** Bookings' own tab (its week or list, as the member left it). */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 
-/** Settings › Scheduling › Round robin: the groups a booking is shared out between (spec 0029), their one home. */
-export const roundRobinHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
+/** Bookings settings › Teams: the groups a round robin booking is shared out between (spec 0029), their one home. */
+export const roundRobinHref = (slug: string) => bookingsSettingsHref(slug, 'teams');
+
+/** Bookings settings › Scheduling access: who can see or manage the member's scheduling (spec 0037, AC-1266). */
+export const schedulingAccessHref = (slug: string) => bookingsSettingsHref(slug, 'access');
 
 /**
  * One schedule open in the Availability tab (spec 0035, the Calendly way: the tab is the editor); `default` opens

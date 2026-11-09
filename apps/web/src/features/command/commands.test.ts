@@ -94,32 +94,32 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
   });
 
   // Round robin is for someone who makes booking pages, as its own page is: hidden means absent (25 October 2026).
-  it('offers Settings › Round robin only to a member who may make booking pages', () => {
+  it('offers Bookings settings › Teams only to a member who may make booking pages', () => {
     const names = (permissions: Permission[]) => settingsCommands('acme', permissions).map((each) => each.name);
-    expect(names([])).not.toContain('Settings › Round robin');
-    expect(names(['booking.manage'])).toContain('Settings › Round robin');
+    expect(names([])).not.toContain('Bookings settings › Teams');
+    expect(names(['booking.manage'])).toContain('Bookings settings › Teams');
   });
 
   // Critic B (5 November 2026): "calendar" in the menu found nothing to do.
-  it('connects a calendar from the menu, in Settings › Account › Calendars', () => {
+  it('connects a calendar from the menu, in Bookings settings › Calendars', () => {
     const connect = pageCommands('acme', OBJECTS, undefined, [], false, true).find(
       (command) => command.id === 'page:calendars',
     );
     expect(connect?.name).toBe('Connect a calendar');
-    expect(connect?.run).toEqual({ kind: 'go', href: '/w/acme/settings/account/calendars' });
+    expect(connect?.run).toEqual({ kind: 'go', href: '/w/acme/bookings/settings/calendars' });
     const all = [...pageCommands('acme', OBJECTS, undefined, [], false, true), ...settingsCommands('acme', [])];
     expect(
       matchCommands(all, 'calendar')
         .map((command) => command.name)
         .slice(0, 2),
-    ).toEqual(['Connect a calendar', 'Settings › Calendars']);
+    ).toEqual(['Connect a calendar', 'Bookings settings › Calendars']);
   });
 
   // 5 November 2026: the menu offered Connect a calendar where the Calendars page has no Connect at all.
-  it('leaves Connect a calendar out where it couldn’t connect, so "calendar" finds Settings › Calendars alone', () => {
+  it('leaves Connect a calendar out where it couldn’t connect, so "calendar" finds Bookings settings › Calendars', () => {
     const all = [...pageCommands('acme', OBJECTS), ...settingsCommands('acme', [])];
     expect(all.map((command) => command.name)).not.toContain('Connect a calendar');
-    expect(matchCommands(all, 'calendar').map((command) => command.name)[0]).toBe('Settings › Calendars');
+    expect(matchCommands(all, 'calendar').map((command) => command.name)[0]).toBe('Bookings settings › Calendars');
     expect(
       pageCommands('acme', OBJECTS, ['booking.manage'], [], true, true).map((command) => command.name),
     ).not.toContain('Connect a calendar');
@@ -205,16 +205,16 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Settings › Preferences',
       'Settings › Notifications',
       'Settings › Sign in and security',
-      'Settings › Calendars',
       'Settings › General',
       'Settings › Brand',
       'Settings › Members',
       'Settings › Teams',
       'Settings › Roles',
-      'Settings › Availability',
-      'Settings › Scheduling access',
       'Settings › Objects',
       'Settings › Lists',
+      'Bookings settings › Calendars',
+      'Bookings settings › Scheduling access',
+      'Bookings settings › Brand',
     ]);
   });
 });
@@ -238,16 +238,16 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings › Preferences',
       'Settings › Notifications',
       'Settings › Sign in and security',
-      'Settings › Calendars',
       'Settings › General',
       'Settings › Brand',
       'Settings › Members',
       'Settings › Teams',
       'Settings › Roles',
-      'Settings › Availability',
-      'Settings › Scheduling access',
       'Settings › Objects',
       'Settings › Lists',
+      'Bookings settings › Calendars',
+      'Bookings settings › Scheduling access',
+      'Bookings settings › Brand',
     ]);
   });
 

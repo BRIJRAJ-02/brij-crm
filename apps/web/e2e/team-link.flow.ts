@@ -197,7 +197,7 @@ test.describe('a team link', () => {
     await expect(guest.getByText(/isn’t taking bookings|Nothing is bookable/).first()).toBeVisible();
 
     // Everyone switched off, from the group's More options.
-    await page.goto(`/w/${slug}/settings/scheduling/round-robin`);
+    await page.goto(`/w/${slug}/bookings/settings/teams`);
     await page.getByRole('button', { name: 'More for Team Link' }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
     // A group a page books from says so before anything is pressed.

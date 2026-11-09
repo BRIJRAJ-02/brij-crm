@@ -10,6 +10,8 @@ export const strings = {
   workspace: 'Workspace',
   people: 'People',
   scheduling: 'Scheduling',
+  /** Scheduling's one entry: the way to Bookings settings, where its settings live (9 November 2026). */
+  bookingsSettings: 'Bookings settings',
   business: 'Business',
   data: 'Data',
   /** Settings › Business's first entry: the business profile and its places (spec 0065). */

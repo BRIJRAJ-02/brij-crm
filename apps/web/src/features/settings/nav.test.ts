@@ -44,10 +44,10 @@ describe('settingsNav', () => {
       'Super admin',
     ]);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Notifications', 'Sign in and security', 'Calendars'],
+      ['Profile', 'Preferences', 'Notifications', 'Sign in and security'],
       ['General', 'Brand', 'History', 'Apps', 'Connected apps'],
       ['Members', 'Roles and access'],
-      ['Availability', 'Round robin', 'Routing', 'Scheduling access'],
+      ['Bookings settings'],
       ['Objects', 'Lists', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website', 'Partners'],
     ]);
@@ -101,14 +101,13 @@ describe('settingsNav', () => {
     expect(entry?.requires).toBe('workspace.manage');
   });
 
-  it('opens every entry inside Settings, Profile first', () => {
+  it('opens every entry inside Settings, Profile first, and Scheduling’s one in Bookings settings', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
       notifications: '/w/acme/settings/account/notifications',
       security: '/w/acme/settings/account/sign-in',
-      calendars: '/w/acme/settings/account/calendars',
       general: '/w/acme/settings/general',
       brand: '/w/acme/settings/brand',
       history: '/w/acme/settings/history',
@@ -116,10 +115,8 @@ describe('settingsNav', () => {
       apps: '/w/acme/settings/apps',
       members: '/w/acme/settings/members',
       roles: '/w/acme/settings/roles',
-      availability: '/w/acme/settings/scheduling/availability',
-      'round-robin': '/w/acme/settings/scheduling/round-robin',
-      routing: '/w/acme/settings/scheduling/routing',
-      'scheduling-access': '/w/acme/settings/scheduling/access',
+      // Scheduling's settings live in Bookings settings (9 November 2026): one way there.
+      bookings: '/w/acme/bookings/settings',
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
       trash: '/w/acme/settings/trash',
@@ -151,21 +148,21 @@ describe('settingsNav', () => {
 describe('visibleSettingsNav', () => {
   it('shows an owner every group but Super admin', () => {
     expect(ids(visibleSettingsNav(settingsNav('acme'), OWNER))).toEqual([
-      ['profile', 'preferences', 'notifications', 'security', 'calendars'],
+      ['profile', 'preferences', 'notifications', 'security'],
       ['general', 'brand', 'history', 'connected-apps'],
       ['members', 'roles'],
-      ['availability', 'round-robin', 'routing', 'scheduling-access'],
+      ['bookings'],
       ['objects', 'lists', 'trash'],
     ]);
   });
 
-  it('leaves out for a member what needs a permission: History, Round robin, Routing, Sign in rules', () => {
+  it('leaves out for a member what needs a permission: History, Sign in rules', () => {
     const shown = visibleSettingsNav(settingsNav('acme'), []);
     expect(ids(shown)).toEqual([
-      ['profile', 'preferences', 'notifications', 'security', 'calendars'],
+      ['profile', 'preferences', 'notifications', 'security'],
       ['general', 'brand'],
       ['members', 'roles'],
-      ['availability', 'scheduling-access'],
+      ['bookings'],
       ['objects', 'lists', 'trash'],
     ]);
     // Roles and access, with Sign in rules gone, is Roles alone, by its tab's name.
@@ -214,7 +211,7 @@ describe('searchSettings', () => {
 
   it('puts a name that starts with the query first, then names holding it, then keywords', () => {
     expect(searchSettings(owner, 'pro').map((hit) => hit.label)).toEqual(['Profile']);
-    expect(searchSettings(owner, 'cal').map((hit) => hit.label)).toEqual(['Calendars', 'Scheduling access']);
+    expect(searchSettings(owner, 'cal').map((hit) => hit.label)).toEqual(['Bookings settings']);
     expect(searchSettings(owner, 'logo').map((hit) => hit.label)).toEqual(['Brand']);
   });
 
@@ -223,7 +220,8 @@ describe('searchSettings', () => {
     expect(searchSettings(owner, 'Two-factor').map((hit) => hit.id)).toEqual(['security', 'workspace-security']);
     // A tab's own words open that tab, not its entry's first.
     expect(searchSettings(owner, 'session length').map((hit) => hit.href)).toEqual(['/w/acme/settings/security']);
-    expect(searchSettings(owner, 'google calendar').map((hit) => hit.id)).toEqual(['calendars']);
+    // Calendars moved to Bookings settings (9 November 2026): its words find the way there.
+    expect(searchSettings(owner, 'google calendar').map((hit) => hit.id)).toEqual(['bookings']);
   });
 
   it('finds a tab by its name, saying which entry it sits in', () => {
@@ -234,6 +232,14 @@ describe('searchSettings', () => {
         href: '/w/acme/settings/teams',
         icon: 'users',
         where: 'People › Members',
+      },
+      // Round robin's groups, Teams in Bookings settings, by the keyword.
+      {
+        id: 'bookings',
+        label: 'Bookings settings',
+        href: '/w/acme/bookings/settings',
+        icon: 'calendar-clock',
+        where: 'Scheduling',
       },
     ]);
     expect(searchSettings(owner, 'sign in rules').map((hit) => hit.href)).toEqual(['/w/acme/settings/security']);
@@ -260,8 +266,6 @@ describe('settingsPageOf', () => {
       'account/sign-in': 'security',
       // An old address still marks its page while it redirects.
       'account/security': 'security',
-      'account/calendars': 'calendars',
-      'account/scheduling': 'scheduling-access',
       general: 'general',
       brand: 'brand',
       history: 'history',
@@ -271,10 +275,6 @@ describe('settingsPageOf', () => {
       roles: 'roles',
       'roles/admin': 'roles',
       security: 'workspace-security',
-      'scheduling/availability': 'availability',
-      'scheduling/round-robin': 'round-robin',
-      'scheduling/routing': 'routing',
-      'scheduling/access': 'scheduling-access',
       objects: 'objects',
       'objects/people/attributes': 'objects',
       lists: 'lists',
@@ -305,7 +305,7 @@ describe('settingsPageOf', () => {
     expect(settingsGroupOf(groups, 'teams')?.label).toBe('People');
     expect(settingsEntryOf(groups, 'teams')?.id).toBe('members');
     expect(settingsEntryOf(groups, 'workspace-security')?.id).toBe('roles');
-    expect(settingsGroupOf(groups, 'availability')?.label).toBe('Scheduling');
+    expect(settingsGroupOf(groups, 'bookings')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'trash')?.label).toBe('Data');
     // Background jobs is parked: its page has no place in the navigation.
     expect(settingsGroupOf(groups, 'jobs')).toBeUndefined();

@@ -48,6 +48,8 @@ export const strings = {
   trash: 'Open trash',
   settings: 'Settings',
   settingsPage: (page: string) => `Settings › ${page}`,
+  /** One of Bookings settings' pages (9 November 2026). */
+  bookingsSettingsPage: (page: string) => `Bookings settings › ${page}`,
   /** Other words each page answers to (AC-1082). */
   tasksTerms: ['todo', 'to do', 'assigned'],
   insightsTerms: ['analytics', 'views', 'clicks', 'visits', 'stats'],
@@ -64,7 +66,9 @@ export const strings = {
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
   calendarsTerms: ['calendar', 'calendars', 'google', 'outlook', 'microsoft', 'sync', 'connect'],
-  roundRobinTerms: ['rotation', 'rotations', 'team', 'share out', 'distribution'],
+  roundRobinTerms: ['round robin', 'rotation', 'rotations', 'team', 'share out', 'distribution'],
+  schedulingAccessTerms: ['manage', 'delegate', 'calendar access'],
+  brandTerms: ['logo', 'colour', 'color', 'template'],
   objectsTerms: ['attributes', 'fields', 'columns', 'schema'],
   /** Account › Sign in and security answers to what people call it elsewhere (it was Security). */
   signInTerms: ['security', 'password', 'two factor', 'sessions', 'devices', 'sign out'],

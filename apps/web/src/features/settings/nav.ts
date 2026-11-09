@@ -11,7 +11,6 @@ import { historyHref } from './history-href.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
-import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as brand } from './brand-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
 import { strings as roles } from './roles-nav-strings.ts';
@@ -22,6 +21,7 @@ import { navStrings as admin } from '../admin/nav-strings.ts';
 import { strings as hospitality } from '../hospitality/strings.ts';
 import { strings as services } from '../services/strings.ts';
 import type { ObjectTab } from './object-tabs.ts';
+import { bookingsSettingsHref } from '../booking/links.ts';
 
 export { OBJECT_TABS, isObjectTab, type ObjectTab } from './object-tabs.ts';
 export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './history-href.ts';
@@ -105,21 +105,6 @@ export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/a
 /** Settings › Account › Sign in and security (spec 0033): two factor, the devices signed in and recent sign ins. */
 export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/sign-in`;
 
-/** Settings › Account › Calendars (specs 0024 and 0026): the one place a member connects and disconnects calendars. */
-export const calendarsSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
-
-/** Settings › Scheduling › Availability (spec 0035): the member's schedules, the screen Bookings' tab shows too. */
-export const availabilitySettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/availability`;
-
-/** Settings › Scheduling › Round robin (spec 0029): the groups a booking is shared out between. */
-export const roundRobinSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
-
-/** Settings › Scheduling › Routing (spec 0037, AC-1383): what every routed form and team page shares. */
-export const routingSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/routing`;
-
-/** Settings › Scheduling › Scheduling access (spec 0037, AC-1266): who can see or manage the member's scheduling. */
-export const schedulingAccessHref = (slug: string) => `/w/${slug}/settings/scheduling/access`;
-
 /** Settings › Workspace › Connected apps (spec 0070, AC-7013): the outside apps an owner connected. */
 export const connectedAppsHref = (slug: string) => `/w/${slug}/settings/connected-apps`;
 
@@ -133,7 +118,6 @@ export type SettingsPageId =
   | 'preferences'
   | 'notifications'
   | 'security'
-  | 'calendars'
   | 'general'
   | 'brand'
   | 'history'
@@ -147,10 +131,7 @@ export type SettingsPageId =
   | 'teams'
   | 'roles'
   | 'workspace-security'
-  | 'availability'
-  | 'round-robin'
-  | 'routing'
-  | 'scheduling-access'
+  | 'bookings'
   | 'objects'
   | 'lists'
   | 'trash'
@@ -290,8 +271,8 @@ function businessGroup(slug: string): SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682), as decided on 5 November 2026 (the owner delegates the call): Account
- * (the member's own, Calendars included), Workspace (what the whole workspace wears, and its History), People (who
- * is in it and what they may do), Scheduling (the screens Bookings' tabs show, so every setting is under Settings),
+ * (the member's own), Workspace (what the whole workspace wears, and its History), People (who is in it and what they
+ * may do), Scheduling (one way to Bookings settings, where scheduling's settings live since 9 November 2026),
  * Business (only while Appointments or Table seating is installed), Data (Objects, Lists and Trash), then Super
  * admin for operators. Webhooks, Automations, Developer and Background
  * jobs stay parked out of the navigation until each is built properly; their addresses redirect, or (jobs) stay
@@ -339,15 +320,6 @@ export function settingsNav(
           href: securitySettingsHref(slug),
           icon: 'shield-check',
           keywords: ['two factor', '2fa', 'devices', 'sessions', 'sign ins', 'backup codes', 'google', 'sign out'],
-        },
-        // The one place to connect a calendar (5 November 2026); Bookings links here for setup.
-        {
-          id: 'calendars',
-          label: strings.calendars,
-          href: calendarsSettingsHref(slug),
-          icon: 'calendar',
-          notForGuests: true,
-          keywords: ['google', 'outlook', 'microsoft', 'connect', 'sync'],
         },
       ],
     },
@@ -439,42 +411,33 @@ export function settingsNav(
       ],
     },
     {
-      // The screens Bookings' tabs show (spec 0037), here too so every setting is under Settings. One screen each;
-      // Bookings' tabs stay as shortcuts to them.
+      // Scheduling's settings live in Bookings settings, behind the gear on Bookings' TopBar (the mock's IA,
+      // 9 November 2026): Calendars, Teams (round robin's groups) and Scheduling access moved there, and the hours and
+      // routing are Bookings' own tabs. Settings keeps account and workspace items, and one way there, which Find a
+      // setting reaches by the moved pages' words.
       id: 'scheduling',
       label: strings.scheduling,
       entries: [
         {
-          id: 'availability',
-          label: strings.availability,
-          href: availabilitySettingsHref(slug),
+          id: 'bookings',
+          label: strings.bookingsSettings,
+          href: bookingsSettingsHref(slug),
           icon: 'calendar-clock',
           notForGuests: true,
-          keywords: ['hours', 'schedule', 'working hours', 'time off', 'limits'],
-        },
-        {
-          id: 'round-robin',
-          label: strings.roundRobin,
-          href: roundRobinSettingsHref(slug),
-          icon: 'refresh-cw',
-          requires: 'booking.manage',
-          keywords: ['rotation', 'groups', 'team booking'],
-        },
-        {
-          id: 'routing',
-          label: strings.routing,
-          href: routingSettingsHref(slug),
-          icon: 'git-branch',
-          requires: 'routing.manage',
-          keywords: ['skills', 'decisions', 'routed forms'],
-        },
-        {
-          id: 'scheduling-access',
-          label: schedulingAccess.title,
-          href: schedulingAccessHref(slug),
-          icon: 'eye',
-          notForGuests: true,
-          keywords: ['manage', 'delegate', 'calendar access'],
+          keywords: [
+            'calendars',
+            'google',
+            'outlook',
+            'microsoft',
+            'connect',
+            'sync',
+            'round robin',
+            'teams',
+            'rotation',
+            'scheduling access',
+            'delegate',
+            'brand',
+          ],
         },
       ],
     },
@@ -688,7 +651,6 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
-  if (rest === 'account/calendars') return 'calendars';
   if (rest === 'general') return 'general';
   if (rest === 'brand') return 'brand';
   if (rest === 'apps') return 'apps';
@@ -701,10 +663,6 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'teams') return 'teams';
   if (under('roles')) return 'roles';
   if (rest === 'security') return 'workspace-security';
-  if (rest === 'scheduling/availability') return 'availability';
-  if (rest === 'scheduling/round-robin') return 'round-robin';
-  if (rest === 'scheduling/routing') return 'routing';
-  if (rest === 'scheduling/access' || rest === 'account/scheduling') return 'scheduling-access';
   if (under('objects')) return 'objects';
   if (under('lists')) return 'lists';
   if (rest === 'trash') return 'trash';
