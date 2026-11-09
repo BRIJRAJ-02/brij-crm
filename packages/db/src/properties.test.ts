@@ -318,8 +318,10 @@ describe('who can work where (migration 0201, spec 0065 H7 AC-6594)', () => {
     const at = await place(id, second);
     const member = randomUUID();
     await db.withWorkspace(id, (tx) =>
+      // An owner first: owners.test checks every workspace with an active member has one.
       tx.execute(sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
-        values (${id}, ${member}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`),
+        values (${id}, ${randomUUID()}, 'Ada', 'ada@example.com', 'owner', 'system', 'system'),
+               (${id}, ${member}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`),
     );
     const reach = (propertyId: string | null, placeId: string | null) =>
       db.withWorkspace(id, (tx) =>
