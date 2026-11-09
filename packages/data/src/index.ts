@@ -155,6 +155,7 @@ import type {
   TeamLinkPages,
   TeamHandleCheck,
   TeamHandleSuggestion,
+  PageOnlyNamed,
   PageOnlyRemoved,
   SocialLink,
   SubmissionsBeyond,
@@ -884,6 +885,7 @@ export type {
   TeamLinkPages,
   TeamHandleCheck,
   TeamHandleSuggestion,
+  PageOnlyNamed,
   PageOnlyRemoved,
   ProfileBlock,
   ProfileCounts,
@@ -6546,6 +6548,22 @@ export function createDataLayer({
       /** Removes a page only person: their handle stops and their content is kept 30 days. */
       removePerson: (workspace: string, member: string): Promise<PageOnlyRemoved> =>
         call((options) => api.teamPages.removePerson({ workspace, member, mutationId: mintId() }, options)),
+      /**
+       * A page only person's name and the title under it (9 Nov 2026), from their page's editor: waits for the server,
+       * as every Details field does, and answers what was saved (a title given shows; one cleared doesn't). The member
+       * list is read again, since the name is theirs everywhere.
+       */
+      namePerson: async (
+        workspace: string,
+        member: string,
+        change: { readonly name?: string; readonly jobTitle?: string },
+      ): Promise<PageOnlyNamed> => {
+        const named = await call((options) =>
+          api.teamPages.namePerson({ workspace, member, ...change, mutationId: mintId() }, options),
+        );
+        members.delete(workspace);
+        return named;
+      },
       /** Whether a handle can be claimed now, for Add a page as it is typed. */
       checkHandle: (workspace: string, handle: string, signal?: AbortSignal): Promise<TeamHandleCheck> =>
         call((options) => api.teamPages.checkHandle({ workspace, handle }, options), signal),

@@ -14,6 +14,8 @@
 // - Removing one is a member removal, as a partner's DELETE is: their row is marked `removed` (their handle stops,
 //   AC-5603), every feature's removal runs, and their page's content stays for 30 days.
 import {
+  JOB_TITLE_MAX,
+  type PageOnlyNamed,
   type PageOnlyRemoved,
   type TeamHandleCheck,
   type TeamHandleSuggestion,
@@ -25,7 +27,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { savePublicProfile, suggestHandle } from '../booking/handles.ts';
+import { publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
 import { touched } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
@@ -36,6 +38,7 @@ import { checkSeats } from '../members/invitations.ts';
 import { runRemovalEffects } from '../members/removal.ts';
 import { emailClash, emailTaken } from '../partners/members.ts';
 import { recordJoinReach } from '../scheduling/delegations.ts';
+import { identityOf, saveIdentity } from './identity.ts';
 import { monthOf, pagesOf, selfOf } from './team-pages.ts';
 
 const { managedMembers, members } = schema;
@@ -61,6 +64,8 @@ const EMAIL_TAKEN =
   'Someone in this workspace already uses this email, or was invited with it. Leave it empty or use another.';
 const NOT_PAGE_ONLY = 'That person isn’t a page only person here. Remove anyone else from Members.';
 const NOT_A_MEMBER = 'Only a member of this workspace adds people from Team pages.';
+const NOT_PAGE_ONLY_NAMED = 'That person isn’t a page only person here. They change their own name in Profile.';
+const NAME_KEPT = 'This person is an owner or admin now. They change their own name in Profile.';
 const ADMIN_KEPT = 'This person is an admin now. Only owners and admins can remove them.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only owners remove them, from Members.';
 
@@ -294,4 +299,120 @@ export async function removePageOnlyPerson(
     await deps.users.dropMembership(result.userId, scope.workspaceId, result.memberId);
   }
   return { removed: result.removed };
+}
+
+/** Any character a name or title may not hold: controls of every kind, and the two Unicode line breaks. */
+// eslint-disable-next-line no-control-regex
+const NOT_ONE_LINE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+/**
+ * Changes a page only person's name, the title under it on their page, or both (9 Nov 2026, the owner: "an option to
+ * change the name and an option to add title below the name"), from their page's editor. `link_pages.manage_team`,
+ * from a member, as Add a page. Only a page only person active in this workspace, whom no partner added: anyone with
+ * a login changes their own in Profile, and a partner's person is the partner's, so either is `NOT_FOUND`, as is
+ * anyone elsewhere. A title given turns it on under their name (a title typed for their page is meant to show); one
+ * cleared turns it off. A change that changes nothing writes nothing; otherwise, in one transaction, their member row
+ * (and their page's choice), one `member.profile_updated` History row with the manager as actor, and a `members`
+ * outbox row. Answers what was saved.
+ */
+export async function namePageOnlyPerson(
+  scope: EngineScope,
+  input: { readonly member: string; readonly name?: string | undefined; readonly jobTitle?: string | undefined },
+  hooks: readonly AfterWrite[] = [],
+  source: AuditSource = {},
+): Promise<PageOnlyNamed & { readonly handle?: string }> {
+  requirePermission(scope, 'link_pages.manage_team');
+  if (scope.actor.type !== 'member') throw refuse('FORBIDDEN', NOT_A_MEMBER);
+  const name = input.name?.trim();
+  if (name !== undefined && (name === '' || name.length > 80 || NOT_ONE_LINE.test(name))) {
+    throw refuseOn('CONFIG_INVALID', 'Use a name of 1 to 80 characters, on one line.', 'name');
+  }
+  const typed = input.jobTitle?.trim();
+  if (typed !== undefined && (typed.length > JOB_TITLE_MAX || NOT_ONE_LINE.test(typed))) {
+    throw refuseOn('CONFIG_INVALID', `Keep the title to one line of ${String(JOB_TITLE_MAX)} characters.`, 'jobTitle');
+  }
+  const title = typed === undefined ? undefined : typed === '' ? null : typed;
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const [found] = await tx
+        .select({ userId: managedMembers.userId })
+        .from(managedMembers)
+        .where(
+          and(
+            eq(managedMembers.workspaceId, scope.workspaceId),
+            eq(managedMembers.memberId, input.member),
+            isNull(managedMembers.partnerId),
+            isNull(managedMembers.removedAt),
+          ),
+        )
+        .for('update');
+      if (found === undefined) throw refuse('NOT_FOUND', NOT_PAGE_ONLY_NAMED);
+      const [person] = await tx
+        .select({ name: members.name, jobTitle: members.jobTitle, role: members.role, userId: members.userId })
+        .from(members)
+        .where(
+          and(eq(members.workspaceId, scope.workspaceId), eq(members.id, input.member), eq(members.status, 'active')),
+        )
+        .for('update');
+      // Removed since, or a guest now: no page to name (guests have none, as the door's `enterTeamLinkPage` says).
+      // Made an owner or admin (never by Team pages): theirs, not a page manager's.
+      if (person === undefined || person.userId !== found.userId || person.role === 'guest') {
+        throw refuse('NOT_FOUND', NOT_PAGE_ONLY_NAMED);
+      }
+      if (person.role === 'owner' || person.role === 'admin') throw refuse('FORBIDDEN', NAME_KEPT);
+      const held = await identityOf(tx, found.userId, scope.workspaceId);
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      const nextName = name ?? person.name;
+      if (nextName !== person.name) {
+        before.name = person.name;
+        after.name = nextName;
+      }
+      const nextTitle = title === undefined ? person.jobTitle : title;
+      const titleChanged = nextTitle !== person.jobTitle;
+      if (titleChanged) {
+        before.jobTitle = person.jobTitle;
+        after.jobTitle = nextTitle;
+      }
+      // A title given here shows under their name; one cleared shows nothing. Untouched, their choice stands.
+      const show = titleChanged ? nextTitle !== null : (held?.showJobTitle ?? false);
+      if (held !== undefined && show !== held.showJobTitle) {
+        await saveIdentity(tx, found.userId, scope.workspaceId, { ...held, showJobTitle: show });
+        before.showJobTitle = held.showJobTitle;
+        after.showJobTitle = show;
+      }
+      // Their handle, for the api to delete the edge's copies of their page once this commits.
+      const page = (await publicProfilesOf(tx, scope.workspaceId, [found.userId])).get(found.userId);
+      const named: PageOnlyNamed & { readonly handle?: string } = {
+        ...(page === undefined ? {} : { handle: page.handle }),
+        name: nextName,
+        ...(nextTitle === null ? {} : { jobTitle: nextTitle }),
+        showJobTitle: held === undefined ? false : show,
+      };
+      if (Object.keys(after).length === 0) return named;
+      if ('name' in after || titleChanged) {
+        await tx
+          .update(members)
+          .set({
+            ...('name' in after ? { name: nextName } : {}),
+            ...(titleChanged ? { jobTitle: nextTitle } : {}),
+            ...touched(scope),
+          })
+          .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, input.member)));
+      }
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        { action: 'member.profile_updated', targetType: 'member', targetId: input.member, before, after },
+        source,
+      );
+      context.record({ members: [input.member] });
+      return named;
+    },
+    hooks,
+  );
+  return result;
 }

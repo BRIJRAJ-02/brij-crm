@@ -842,6 +842,28 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'access', item_ids: [added.memberId], mutation_id: mutationId },
     ];
   },
+  // Added first, then named (9 Nov 2026): the name is theirs everywhere, so a `members` row; no access changed.
+  'teamPages.namePerson': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Nora Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    const named = await m.client.teamPages.namePerson({
+      workspace: m.slug,
+      member: added.memberId,
+      name: 'Nora Pagewright',
+      jobTitle: 'Barista',
+      mutationId,
+    });
+    expect(named).toEqual({ name: 'Nora Pagewright', jobTitle: 'Barista', showJobTitle: true });
+    return [
+      { kind: 'members' },
+      { kind: 'access' },
+      { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
+    ];
+  },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
     await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
@@ -3562,6 +3584,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'teamPages.claim': 3,
   // A page only person added first, then removed (9 Nov 2026).
   'teamPages.removePerson': 2,
+  // A page only person added first, then named (9 Nov 2026).
+  'teamPages.namePerson': 2,
   // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
   'roles.update': 2,
   'roles.duplicate': 2,

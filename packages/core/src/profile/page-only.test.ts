@@ -6,20 +6,27 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { enterAsPartner, enterWorkspace, NO_RULE_SOURCE } from '../access/door.ts';
+import { enterAsPartner, enterTeamLinkPage, enterWorkspace, NO_RULE_SOURCE } from '../access/door.ts';
 import { startWorkspace } from '../account/account.ts';
 import { listAuditEvents } from '../audit/audit.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { LIMITS } from '../engine/limits.ts';
 import { listMembers, setMemberRole, transferOwnership } from '../members/members.ts';
+import { getMyProfile } from '../members/profile.ts';
 import { approvePartnerConnect } from '../partners/connect.ts';
 import { exchangePartnerCode } from '../partners/exchange.ts';
 import { listPartnerMembers, putPartnerMember, removePartnerMember } from '../partners/members.ts';
 import { registerPartner } from '../partners/registry.ts';
 import { s256Challenge } from '../partners/tokens.ts';
 import { rescope, signedInNow } from '../testing.ts';
-import { addPageOnlyPerson, checkTeamHandle, removePageOnlyPerson, suggestTeamHandle } from './page-only.ts';
+import {
+  addPageOnlyPerson,
+  checkTeamHandle,
+  namePageOnlyPerson,
+  removePageOnlyPerson,
+  suggestTeamHandle,
+} from './page-only.ts';
 import { listTeamLinkPages } from './team-pages.ts';
 
 const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
@@ -409,5 +416,84 @@ describe('roles and identities', () => {
     expect(await identity.dropPageOnlyUser(joined)).toBe(false);
     const someone = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
     expect(await identity.dropPageOnlyUser(someone)).toBe(false);
+  });
+});
+
+describe('naming a page only person', () => {
+  it('changes the name and the title under it, shows a title given, and writes History once', async () => {
+    const w = await workspace();
+    const added = await addPageOnlyPerson(w.owner, { name: 'Nick', handle: handle() }, makers);
+    // The manager's editor reads who keeps the name: this workspace's team.
+    const page = await enterTeamLinkPage(w.owner, added.memberId);
+    expect((await getMyProfile(page)).managedBy).toBe('team');
+
+    const named = await namePageOnlyPerson(w.owner, {
+      member: added.memberId,
+      name: '  Nick Page ',
+      jobTitle: 'Barista',
+    });
+    expect(named).toMatchObject({ name: 'Nick Page', jobTitle: 'Barista', showJobTitle: true });
+    expect(await getMyProfile(page)).toMatchObject({ name: 'Nick Page', jobTitle: 'Barista', showJobTitle: true });
+    // The same again writes nothing.
+    await namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Nick Page' });
+    // A title cleared shows nothing.
+    const cleared = await namePageOnlyPerson(w.owner, { member: added.memberId, jobTitle: '' });
+    expect(cleared).toEqual({ handle: cleared.handle, name: 'Nick Page', showJobTitle: false });
+    expect(cleared.handle).toBe(added.handle);
+    const history = (await listAuditEvents(w.owner, {})).entries.filter(
+      (entry) => entry.action === 'member.profile_updated',
+    );
+    expect(history).toHaveLength(2);
+    expect(history.at(-1)).toMatchObject({
+      params: { isOwn: false, fields: ['name', 'jobTitle', 'showJobTitle'] },
+    });
+    expect(await refusalOf(namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Two\nlines' }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+      field: 'name',
+    });
+  });
+
+  it('never names someone with a login, a guest, another workspace’s person, or for a plain member', async () => {
+    const w = await workspace();
+    const other = await workspace();
+    const added = await addPageOnlyPerson(w.owner, { name: 'Nick', handle: handle() }, makers);
+    const ada = w.owner.access.principal.kind === 'member' ? w.owner.access.principal.memberId : '';
+    expect(await refusalOf(namePageOnlyPerson(w.owner, { member: ada, name: 'Renamed' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await getMyProfile(w.owner)).not.toHaveProperty('managedBy');
+    expect(await refusalOf(namePageOnlyPerson(other.owner, { member: added.memberId, name: 'Taken' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const member = rescope(w.owner, { role: 'member' });
+    expect(await refusalOf(namePageOnlyPerson(member, { member: added.memberId, name: 'Nope' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await setMemberRole(w.owner, { memberId: added.memberId, role: 'guest' });
+    expect(await refusalOf(namePageOnlyPerson(w.owner, { member: added.memberId, name: 'Guest' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const [row] = await testQuery<{ name: string }>(ownerUrl, `select name from members where id = $1`, [
+      added.memberId,
+    ]);
+    expect(row?.name).toBe('Nick');
+  });
+
+  it('leaves a partner’s person to the partner', async () => {
+    const hub = await connected();
+    const theirs = await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: `ext-${tag()}`,
+        person: { name: 'Pat', email: `${tag()}@example.com`, role: 'member' },
+      },
+      partnerUsers,
+    );
+    expect(
+      await refusalOf(namePageOnlyPerson(hub.owner, { member: theirs.member.memberId, name: 'Renamed' })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    const page = await enterTeamLinkPage(hub.owner, theirs.member.memberId);
+    expect((await getMyProfile(page)).managedBy).toBe('partner');
   });
 });

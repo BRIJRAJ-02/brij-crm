@@ -1,8 +1,10 @@
+import { linkPageCacheTags } from '@crm/contracts';
 import {
   addPageOnlyPerson,
   checkTeamHandle,
   claimTeamHandle,
   listTeamLinkPages,
+  namePageOnlyPerson,
   readLinkPageEditedBy,
   removePageOnlyPerson,
   suggestTeamHandle,
@@ -45,6 +47,20 @@ export const teamPagesRouter = member.teamPages.router({
       ),
     ),
   ),
+  // A page only person's name and the title under it (9 Nov 2026), from their page's editor. Their page draws both,
+  // so the edge's copies of it are deleted once the change has committed.
+  namePerson: member.teamPages.namePerson.handler(async ({ context, input }) => {
+    const { handle, ...named } = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      namePageOnlyPerson(
+        context.scope,
+        { member: input.member, name: input.name, jobTitle: input.jobTitle },
+        hooks,
+        sourceOf(context),
+      ),
+    );
+    if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
+    return named;
+  }),
   checkHandle: member.teamPages.checkHandle.handler(({ context, input }) =>
     checkTeamHandle(context.scope, { handle: input.handle }),
   ),

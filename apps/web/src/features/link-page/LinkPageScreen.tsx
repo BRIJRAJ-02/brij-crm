@@ -306,6 +306,7 @@ export function LinkPageScreen({
             <Blocks
               data={data}
               isTeam={isTeam}
+              {...(member === undefined ? {} : { member })}
               linkPage={linkPage}
               brand={brand}
               slug={slug}
@@ -457,6 +458,7 @@ const OTHER_MODULES: ReadonlySet<AddableKind> = new Set(['page', 'times', 'form'
 function Blocks({
   data,
   isTeam,
+  member,
   linkPage,
   brand,
   slug,
@@ -470,6 +472,8 @@ function Blocks({
   readonly data: DataLayer;
   /** Someone else's page (spec 0070): what is the account's own stays off this editor. */
   readonly isTeam: boolean;
+  /** Whose page, by member id, when it is someone else's: a page only person's name and title change with it. */
+  readonly member?: string;
   readonly linkPage: LinkPageStore;
   readonly brand: BrandStore;
   readonly slug: string;
@@ -1077,10 +1081,10 @@ function Blocks({
       // A new template remounts it too, so the switch crossfades (spec 0068, AC-6804).
       key={[worn.template, theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
       person={{
-        name: profile.name.trim() || handle,
+        name: identity.name.trim() || handle,
         id: handle,
         bio: profile.bio,
-        ...(identity.showJobTitle && profile.jobTitle !== undefined ? { role: profile.jobTitle } : {}),
+        ...(identity.showJobTitle && identity.jobTitle !== '' ? { role: identity.jobTitle } : {}),
         ...(faceImage === undefined ? {} : { image: faceImage }),
       }}
       // The lockup's name and link as a visitor sees them; its logo is the Brand kit's, which the phone leaves out.
@@ -1290,7 +1294,7 @@ function Blocks({
         onChange={chooseTheme}
         // The template pictures draw this page: its owner's name and face, and its first rows (spec 0068, AC-6804).
         profile={{
-          name: profile.name.trim() || handle,
+          name: identity.name.trim() || handle,
           ...(profile.image === undefined || profile.pictureHidden === true ? {} : { picture: profile.image }),
           rows: previewBlocks
             .flatMap((block) => ('title' in block && typeof block.title === 'string' ? [block.title] : []))
@@ -1314,8 +1318,28 @@ function Blocks({
           ...(sending === undefined ? {} : { sending }),
         }}
       />
-      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). The
-          account's own, so not on someone else's page (spec 0070). */}
+      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). On
+          someone else's page (spec 0070) only the name and title: a page only person's change here, anyone else's are
+          shown as they keep them (9 Nov 2026). */}
+      {isTeam && member !== undefined && (
+        <Card title={strings.details}>
+          <IdentityFields
+            data={data}
+            slug={slug}
+            owner={
+              profile.managedBy === 'team'
+                ? { kind: 'team', member }
+                : { kind: 'kept', by: profile.managedBy === 'partner' ? 'partner' : 'self' }
+            }
+            identity={identity}
+            onSaved={(saved) => {
+              setIdentity(saved);
+              linkPage.publication.changed();
+            }}
+            onSwitchRefused={setIdentityRefusal}
+          />
+        </Card>
+      )}
       {!isTeam && (
         <Card title={strings.details}>
           {/* Why the last switch didn't save, until the next try: the card has no footer to say it in. */}
@@ -1325,7 +1349,6 @@ function Blocks({
           <IdentityFields
             data={data}
             slug={slug}
-            jobTitle={profile.jobTitle}
             identity={identity}
             onSaved={(saved) => {
               setIdentity(saved);
@@ -1359,7 +1382,7 @@ function Blocks({
               newHue={nextHue(items)}
               linkPage={linkPage}
               socialNetworks={socialNetworks}
-              ownerName={profile.name}
+              ownerName={identity.name}
               socialLinks={shownSocials}
               onSubmit={submit}
               onClose={() => setEditing(undefined)}

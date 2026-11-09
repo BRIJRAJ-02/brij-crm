@@ -98,9 +98,13 @@ export const strings = {
   /** The editor's last card: who the page is from, and how it shows when shared or searched. */
   details: 'Details',
   identityFailed: 'That didn’t save. Try again.',
-  showJobTitle: 'Show my job title',
-  /** Where the job title switch would be while there is no title to show: a link to Profile. */
-  addJobTitle: 'Add a job title in Profile',
+  /** The name at the top of the page, changed here as on Linktree (9 Nov 2026); the same one Profile changes. */
+  name: 'Name',
+  /** The line under the name: the job title Profile holds, shown once one is typed here. */
+  jobTitle: 'Title',
+  jobTitlePlaceholder: 'Head of Sales',
+  /** Under the title, while there is one: off keeps it to the team and off the page. */
+  showJobTitle: 'Show under my name',
   site: 'Company site',
   sitePlaceholder: 'https://acme.com',
   footLine: 'Closing line',

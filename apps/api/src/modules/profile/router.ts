@@ -150,9 +150,14 @@ export const profileRouter = member.profile.router({
         sourceOf(context),
       ),
     );
-    // Who the page belongs to is drawn from the edge's copy of it, so a change there deletes that copy at once.
+    // Who the page belongs to is drawn from the edge's copy of it (the name and the title under it among them, now
+    // that the page's editor changes them too), so a change there deletes that copy at once.
     const identityChanged =
-      input.showJobTitle !== undefined || input.site !== undefined || input.footLine !== undefined;
+      input.name !== undefined ||
+      input.jobTitle !== undefined ||
+      input.showJobTitle !== undefined ||
+      input.site !== undefined ||
+      input.footLine !== undefined;
     if (identityChanged && saved.handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(saved.handle));
     return saved;
   }),

@@ -248,6 +248,7 @@ export { claimTeamHandle, listTeamLinkPages, readLinkPageEditedBy } from './prof
 export {
   addPageOnlyPerson,
   checkTeamHandle,
+  namePageOnlyPerson,
   removePageOnlyPerson,
   suggestTeamHandle,
   type PageOnlyUserEnder,

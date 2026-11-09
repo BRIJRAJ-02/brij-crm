@@ -18,7 +18,7 @@ import {
   type UpdateMyProfileInput,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { isTeamPageEdit } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -40,7 +40,7 @@ import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/ident
 import { touchLinkPage } from '../profile/page-touch.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
-const { members, workspaces } = schema;
+const { managedMembers, members, workspaces } = schema;
 
 /** What only the session knows about the caller. */
 export interface ProfileExtras {
@@ -124,9 +124,27 @@ async function readProfile(
       : (await profileHandlesOf(tx, userId)).flatMap((each) =>
           each.workspaceId === scope.workspaceId ? [] : [{ workspaceId: each.workspaceId }],
         );
+  // Who keeps the person's name and title, for the manager's editor only (9 Nov 2026): a page only person's are the
+  // manager's to change, a partner's person's are the partner's. Never read for anyone's own page.
+  const managed = forTeam
+    ? (
+        await tx
+          .select({ partnerId: managedMembers.partnerId })
+          .from(managedMembers)
+          .where(
+            and(
+              eq(managedMembers.workspaceId, scope.workspaceId),
+              eq(managedMembers.memberId, memberId),
+              isNull(managedMembers.removedAt),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : undefined;
   return {
     memberId,
     name: row.name,
+    ...(managed === undefined ? {} : { managedBy: managed.partnerId === null ? 'team' : 'partner' }),
     email: row.email,
     workspaceTimeZone: row.workspaceTimeZone,
     workspaceName: row.workspaceName,

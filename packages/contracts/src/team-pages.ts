@@ -5,7 +5,7 @@
 // list, the claim of a handle for someone, and the one line a member reads about who last changed their page.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { PublicHandle } from './profile.ts';
+import { JobTitle, PublicHandle } from './profile.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -105,6 +105,32 @@ export const RemovePageOnlyPersonInput = WorkspaceScoped.extend({ member: Uuid, 
 /** A page only person removed from Team pages. */
 export type RemovePageOnlyPersonInput = z.infer<typeof RemovePageOnlyPersonInput>;
 
+/**
+ * A page only person's name and the line under it, changed from their page's editor (9 Nov 2026, the owner: "an option
+ * to change the name and an option to add title below the name"). Either or both; an empty title clears it. Only a page
+ * only person in this workspace: anyone with a login changes their own in Profile, so they are `NOT_FOUND` here.
+ */
+export const NamePageOnlyPersonInput = WorkspaceScoped.extend({
+  member: Uuid,
+  name: PageOnlyName.optional(),
+  jobTitle: JobTitle.optional(),
+  mutationId: Uuid,
+});
+/** A page only person's name and title. */
+export type NamePageOnlyPersonInput = z.infer<typeof NamePageOnlyPersonInput>;
+
+/**
+ * A page only person's name and title as saved, and whether the title shows under the name on their page: a title
+ * given here is meant to show, so it does; one cleared shows nothing.
+ */
+export const PageOnlyNamed = z.object({
+  name: z.string(),
+  jobTitle: z.string().optional(),
+  showJobTitle: z.boolean(),
+});
+/** A page only person's name and title as saved. */
+export type PageOnlyNamed = z.infer<typeof PageOnlyNamed>;
+
 /** A handle checked as it is typed in Add a page: free means nobody holds or ever held it, and it isn't reserved. */
 export const TeamHandleCheckInput = WorkspaceScoped.extend({ handle: z.string().trim().toLowerCase().max(64) });
 /** A handle checked as it is typed. */
@@ -149,6 +175,7 @@ export const teamPagesContract = {
   claim: oc.input(ClaimTeamHandleInput).output(TeamLinkPage),
   addPerson: oc.input(AddPageOnlyPersonInput).output(TeamLinkPage),
   removePerson: oc.input(RemovePageOnlyPersonInput).output(PageOnlyRemoved),
+  namePerson: oc.input(NamePageOnlyPersonInput).output(PageOnlyNamed),
   checkHandle: oc.input(TeamHandleCheckInput).output(TeamHandleCheck),
   suggestHandle: oc.input(TeamHandleSuggestInput).output(TeamHandleSuggestion),
   editedBy: oc.input(WorkspaceScoped).output(LinkPageEditedBy),

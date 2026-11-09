@@ -36,6 +36,10 @@ export const teamStrings = {
   forbiddenTitle: 'No access',
   forbidden: 'Only people who manage the team’s link pages can see this.',
   copyFailed: 'The link didn’t copy.',
+  /** Why a member's name and title can't be changed on their page: they have a login, and change their own. */
+  nameTheirs: 'They change this in their own Profile.',
+  /** The same for a partner's person: the app that added them keeps it. */
+  nameFromPartner: 'The app that added them keeps this.',
   /** A member's page that can't be opened: gone, or theirs to keep. */
   unavailable: 'This page can’t be opened',
   unavailableText: 'They may have left the workspace, or it isn’t yours to change.',

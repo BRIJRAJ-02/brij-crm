@@ -235,6 +235,12 @@ export const MyProfile = z.object({
   theme: PageTheme.optional(),
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
+  /**
+   * Read by a team page manager for someone else's page only (spec 0070; 9 Nov 2026): who keeps the person's name and
+   * title. `team` is a page only person, whose name and title the manager may change here (`teamPages.namePerson`);
+   * `partner` is a partner's person, kept by the partner's app. Absent for anyone with a login, who changes their own.
+   */
+  managedBy: z.enum(['team', 'partner']).optional(),
   /** Whether their job title shows under their name on their link page and booking pages (3 Nov 2026); absent with no handle. */
   showJobTitle: z.boolean().optional(),
   /** Their link page's site address, which the workspace's logo and name link to (3 Nov 2026); absent when none. */
