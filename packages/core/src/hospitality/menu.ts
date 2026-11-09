@@ -4,6 +4,11 @@
 // the draft and counts one change (AC-6525); the guest page reads only what Publish froze per place
 // (`menu_versions`), with Sold out read live over it (AC-6526). Every write takes the workspace's menu lock, so two
 // editors never pass a limit or each other's positions, and answers the whole draft.
+//
+// Each business has its own menus, dish library, option groups, photos, draft, Publish, Live or Hidden and look (spec
+// 0065 H7, migration 0197). Every call works in one: `propertyId` when it names one of the workspace's, else the first.
+// A menu, section, dish or group of another business answers as one that doesn't exist, and the limits (30 menus,
+// 2,000 dishes, 1,000 photos, 200 option groups) count one business's rows (AC-6518).
 import {
   DEFAULT_MENU_LOOK,
   MENU_LIMITS,
@@ -36,7 +41,7 @@ import {
   snapshotFor,
   soldOutIds,
 } from './menu-rows.ts';
-import { currentProperty, currentPropertyRef } from './property.ts';
+import { currentProperty, type CurrentProperty } from './property.ts';
 
 const {
   menus,
@@ -65,12 +70,15 @@ const L = MENU_LIMITS;
 const VERSIONS_KEPT = 10;
 
 /** The property's currency, or US dollars until one is set (the first install's card sets it). */
-async function currencyOf(tx: WorkspaceTx, workspaceId: string): Promise<string> {
-  return (await currentProperty(tx, workspaceId)).currency ?? 'USD';
+const currencyOf = (property: CurrentProperty): string => property.currency ?? 'USD';
+
+/** Which business a menu call works in (spec 0065 H7): left out, the workspace's first. */
+export interface InProperty {
+  readonly propertyId?: string;
 }
 
-/** The places as the Menus screen names them, in order. */
-async function placesOf(tx: WorkspaceTx, workspaceId: string): Promise<MenuPlace[]> {
+/** The business's places as the Menus screen names them, in order. */
+async function placesOf(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<MenuPlace[]> {
   return tx
     .select({
       id: places.id,
@@ -80,74 +88,88 @@ async function placesOf(tx: WorkspaceTx, workspaceId: string): Promise<MenuPlace
       locale: places.locale,
     })
     .from(places)
-    .where(eq(places.workspaceId, workspaceId))
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.propertyId, propertyId)))
     .orderBy(asc(places.position), asc(places.id));
 }
 
-/** The draft as the reader sees it, read in the caller's transaction. */
-async function readDraft(tx: WorkspaceTx, scope: EngineScope): Promise<MenuDraft> {
+/** A menu of the business, or undefined: one of another business reads as none. */
+async function menuOf(tx: WorkspaceTx, workspaceId: string, propertyId: string, id: string) {
+  const [row] = await tx
+    .select({ id: menus.id })
+    .from(menus)
+    .where(and(eq(menus.workspaceId, workspaceId), eq(menus.propertyId, propertyId), eq(menus.id, id)));
+  return row;
+}
+
+/** The business's draft as the reader sees it, read in the caller's transaction. */
+async function readDraft(tx: WorkspaceTx, scope: EngineScope, property: CurrentProperty): Promise<MenuDraft> {
   const workspaceId = scope.workspaceId;
-  const rows = await readMenuRows(tx, workspaceId);
+  const rows = await readMenuRows(tx, workspaceId, property.id);
   const [state] = await tx
     .select({ changes: menuDrafts.changes, publishedAt: menuDrafts.publishedAt, hidden: menuDrafts.hidden })
     .from(menuDrafts)
-    .where(eq(menuDrafts.workspaceId, workspaceId));
-  const brand = await readMenuBrandIn(tx, workspaceId);
+    .where(and(eq(menuDrafts.workspaceId, workspaceId), eq(menuDrafts.propertyId, property.id)));
+  const brand = await readMenuBrandIn(tx, workspaceId, property.id);
   return draftOf(rows, {
-    currency: await currencyOf(tx, workspaceId),
+    currency: currencyOf(property),
     look: brand.menuLook ?? DEFAULT_MENU_LOOK,
     lookAccents: {
       ...(brand.accents.accent === undefined ? {} : { accent: brand.accents.accent }),
       ...(brand.accents.accentDark === undefined ? {} : { accentDark: brand.accents.accentDark }),
     },
-    places: await placesOf(tx, workspaceId),
+    places: await placesOf(tx, workspaceId, property.id),
     changes: state?.changes ?? 0,
     ...(state?.publishedAt === null || state?.publishedAt === undefined
       ? {}
       : { publishedAt: new Date(state.publishedAt).toISOString() }),
     hidden: state?.hidden ?? false,
-    soldOut: await soldOutIds(tx, workspaceId),
-    photos: await photoVersions(tx, workspaceId),
+    soldOut: await soldOutIds(tx, workspaceId, property.id),
+    photos: await photoVersions(tx, workspaceId, property.id),
     canEdit: can(scope.access, 'hospitality.manage'),
   });
 }
 
-/** Counts one change waiting for Publish (AC-6525). */
-async function noteChange(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+/** Counts one change waiting for the business's Publish (AC-6525). */
+async function noteChange(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<void> {
   await tx
     .insert(menuDrafts)
-    .values({ workspaceId, changes: 1 })
+    .values({ workspaceId, propertyId, changes: 1 })
     .onConflictDoUpdate({
-      target: menuDrafts.workspaceId,
+      target: [menuDrafts.workspaceId, menuDrafts.propertyId],
       set: { changes: sql`${menuDrafts.changes} + 1`, updatedAt: sql`now()` },
     });
 }
 
-/** One draft edit: the permission, the app, the lock, the change, its count and audit row, then the whole draft. */
+/**
+ * One draft edit: the permission, the app, the business, the lock, the change, its count and audit row, then the
+ * business's whole draft.
+ */
 async function edit(
   scope: EngineScope,
+  where: InProperty,
   what: string,
   ids: Readonly<Record<string, string>>,
-  change: (tx: WorkspaceTx, by: string) => Promise<void>,
+  change: (tx: WorkspaceTx, by: string, propertyId: string) => Promise<void>,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
+    const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
     await lockKey(tx, `menu:${scope.workspaceId}`);
-    await change(tx, by);
-    await noteChange(tx, scope.workspaceId);
+    await change(tx, by, property.id);
+    await noteChange(tx, scope.workspaceId, property.id);
     await auditSetup(tx, scope, what, ids);
-    return readDraft(tx, scope);
+    return readDraft(tx, scope, property);
   });
 }
 
-/** The Menus screen (AC-6520): the whole draft. Run service reads it too, to flip Sold out (AC-6526). */
-export async function readMenuDraft(scope: EngineScope): Promise<MenuDraft> {
+/** The Menus screen (AC-6520): the business's whole draft. Run service reads it too, to flip Sold out (AC-6526). */
+export async function readMenuDraft(scope: EngineScope, where: InProperty = {}): Promise<MenuDraft> {
   requireMenuReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    return readDraft(tx, scope);
+    return readDraft(tx, scope, await currentProperty(tx, scope.workspaceId, where.propertyId));
   });
 }
 
@@ -156,11 +178,12 @@ export async function readMenuDraft(scope: EngineScope): Promise<MenuDraft> {
  * accent), for any member who reads the Menus screen, so the phone preview draws what guests will see before the
  * first Publish. It names nothing of the draft. It is linked inside the app, so it never takes the app's own face.
  */
-export async function readMenuDraftLook(scope: EngineScope): Promise<string> {
+export async function readMenuDraftLook(scope: EngineScope, where: InProperty = {}): Promise<string> {
   requireMenuReader(scope);
   return inWorkspace(scope, async (tx) => {
     await requireApp(tx, scope.workspaceId, 'menu');
-    return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId), { inApp: true });
+    const property = await currentProperty(tx, scope.workspaceId, where.propertyId);
+    return menuLookStylesheet(await readMenuBrandIn(tx, scope.workspaceId, property.id), { inApp: true });
   });
 }
 
@@ -189,33 +212,28 @@ export async function saveMenu(
     /** Basis points; left out keeps what is there. */
     readonly taxRate?: number;
     readonly serviceRate?: number;
-  },
+  } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.id, MENU_NOT_FOUND);
-  return edit(scope, 'menu.saved', { menuId: id }, async (tx, by) => {
+  return edit(scope, input, 'menu.saved', { menuId: id }, async (tx, by, propertyId) => {
     const ws = scope.workspaceId;
     const placeIds = [...new Set(input.placeIds.map((each) => each.toLowerCase()))];
-    // A menu serves only its own business's places (spec 0065 H7, AC-6514): an existing menu keeps its business; a
-    // new one takes its first place's, else the first business's. A place of another business reads as none.
+    // A menu serves only its own business's places (spec 0065 H7, AC-6514). A menu or a place of another business
+    // reads as none.
     const [existing] = await tx
       .select({ propertyId: menus.propertyId })
       .from(menus)
       .where(and(eq(menus.workspaceId, ws), eq(menus.id, id)));
+    if (existing !== undefined && existing.propertyId !== propertyId) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
     const found =
       placeIds.length === 0
         ? []
         : await tx
-            .select({ id: places.id, propertyId: places.propertyId })
+            .select({ id: places.id })
             .from(places)
-            .where(and(eq(places.workspaceId, ws), inArray(places.id, placeIds)));
-    const propertyId =
-      existing?.propertyId ??
-      found.find((place) => place.id === placeIds[0])?.propertyId ??
-      (await currentProperty(tx, ws)).id;
-    if (found.length !== placeIds.length || found.some((place) => place.propertyId !== propertyId)) {
-      throw refuse('NOT_FOUND', 'That place doesn’t exist.');
-    }
+            .where(and(eq(places.workspaceId, ws), eq(places.propertyId, propertyId), inArray(places.id, placeIds)));
+    if (found.length !== placeIds.length) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
     const fields = {
       name: input.name,
       note: blank(input.note),
@@ -226,12 +244,15 @@ export async function saveMenu(
     const changed = await tx
       .update(menus)
       .set({ ...fields, updatedByMemberId: by, updatedAt: sql`now()` })
-      .where(and(eq(menus.workspaceId, ws), eq(menus.id, id)))
+      .where(and(eq(menus.workspaceId, ws), eq(menus.propertyId, propertyId), eq(menus.id, id)))
       .returning({ id: menus.id });
     if (changed.length === 0) {
-      const [counted] = await tx.select({ n: count() }).from(menus).where(eq(menus.workspaceId, ws));
+      const [counted] = await tx
+        .select({ n: count() })
+        .from(menus)
+        .where(and(eq(menus.workspaceId, ws), eq(menus.propertyId, propertyId)));
       const position = counted?.n ?? 0;
-      if (position >= L.menus) throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.menus)} menus.`);
+      if (position >= L.menus) throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.menus)} menus.`);
       await tx.insert(menus).values({
         workspaceId: ws,
         id,
@@ -252,25 +273,38 @@ export async function saveMenu(
 }
 
 /** Deletes a menu with its sections; its items stay in the library (AC-6524). */
-export async function deleteMenu(scope: EngineScope, input: { readonly menuId: string }): Promise<MenuDraft> {
+export async function deleteMenu(
+  scope: EngineScope,
+  input: { readonly menuId: string } & InProperty,
+): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.menuId, MENU_NOT_FOUND);
-  return edit(scope, 'menu.deleted', { menuId: id }, async (tx) => {
+  return edit(scope, input, 'menu.deleted', { menuId: id }, async (tx, _by, propertyId) => {
     const gone = await tx
       .delete(menus)
-      .where(and(eq(menus.workspaceId, scope.workspaceId), eq(menus.id, id)))
+      .where(and(eq(menus.workspaceId, scope.workspaceId), eq(menus.propertyId, propertyId), eq(menus.id, id)))
       .returning({ id: menus.id });
     if (gone.length === 0) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
-    await renumber(tx, scope.workspaceId, 'menu');
+    await renumber(tx, scope.workspaceId, 'menu', propertyId);
   });
 }
 
-/** A section's row, or NOT_FOUND. */
-async function sectionRow(tx: WorkspaceTx, workspaceId: string, id: string) {
+/** A section's row while it is in one of the business's menus, else undefined. */
+async function sectionRow(tx: WorkspaceTx, workspaceId: string, propertyId: string, id: string) {
   const [row] = await tx
     .select({ id: menuSections.id, menuId: menuSections.menuId, parentId: menuSections.parentId })
     .from(menuSections)
-    .where(and(eq(menuSections.workspaceId, workspaceId), eq(menuSections.id, id)));
+    .innerJoin(menus, and(eq(menus.workspaceId, menuSections.workspaceId), eq(menus.id, menuSections.menuId)))
+    .where(and(eq(menuSections.workspaceId, workspaceId), eq(menus.propertyId, propertyId), eq(menuSections.id, id)));
+  return row;
+}
+
+/** A dish of the business, or undefined: one of another business reads as none. */
+async function itemOf(tx: WorkspaceTx, workspaceId: string, propertyId: string, id: string) {
+  const [row] = await tx
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(and(eq(menuItems.workspaceId, workspaceId), eq(menuItems.propertyId, propertyId), eq(menuItems.id, id)));
   return row;
 }
 
@@ -288,21 +322,17 @@ export async function saveSection(
     readonly description?: string;
     readonly layout: SectionLayout;
     readonly serving?: MenuServing | null;
-  },
+  } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.id, SECTION_NOT_FOUND);
   const menuId = checkId(input.menuId, MENU_NOT_FOUND);
   const parentId = input.parentId === undefined ? null : checkId(input.parentId, SECTION_NOT_FOUND);
-  return edit(scope, 'menu.section_saved', { menuId, sectionId: id }, async (tx) => {
+  return edit(scope, input, 'menu.section_saved', { menuId, sectionId: id }, async (tx, _by, propertyId) => {
     const ws = scope.workspaceId;
-    const [menu] = await tx
-      .select({ id: menus.id })
-      .from(menus)
-      .where(and(eq(menus.workspaceId, ws), eq(menus.id, menuId)));
-    if (menu === undefined) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
+    if ((await menuOf(tx, ws, propertyId, menuId)) === undefined) throw refuse('NOT_FOUND', MENU_NOT_FOUND);
     if (parentId !== null) {
-      const parent = await sectionRow(tx, ws, parentId);
+      const parent = await sectionRow(tx, ws, propertyId, parentId);
       if (parent === undefined || parent.menuId !== menuId) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
       if (parent.parentId !== null || parentId === id) {
         throw refuse('CONFIG_INVALID', 'Sections go one level deep, such as Wines, then Red.');
@@ -322,7 +352,15 @@ export async function saveSection(
       parentId,
       ...servingValue(input.serving),
     };
-    const existing = await sectionRow(tx, ws, id);
+    const existing = await sectionRow(tx, ws, propertyId, id);
+    if (existing === undefined) {
+      // An id another business's section holds is never taken over.
+      const [elsewhere] = await tx
+        .select({ id: menuSections.id })
+        .from(menuSections)
+        .where(and(eq(menuSections.workspaceId, ws), eq(menuSections.id, id)));
+      if (elsewhere !== undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
+    }
     if (existing !== undefined) {
       if (existing.menuId !== menuId) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
       await tx
@@ -354,17 +392,17 @@ export async function saveSection(
 }
 
 /** Deletes a section with its sub sections; their items stay in the library. */
-export async function deleteSection(scope: EngineScope, input: { readonly sectionId: string }): Promise<MenuDraft> {
+export async function deleteSection(
+  scope: EngineScope,
+  input: { readonly sectionId: string } & InProperty,
+): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.sectionId, SECTION_NOT_FOUND);
-  return edit(scope, 'menu.section_deleted', { sectionId: id }, async (tx) => {
-    const gone = await tx
-      .delete(menuSections)
-      .where(and(eq(menuSections.workspaceId, scope.workspaceId), eq(menuSections.id, id)))
-      .returning({ menuId: menuSections.menuId });
-    const menuId = gone[0]?.menuId;
-    if (menuId === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
-    await renumber(tx, scope.workspaceId, 'section', menuId);
+  return edit(scope, input, 'menu.section_deleted', { sectionId: id }, async (tx, _by, propertyId) => {
+    const section = await sectionRow(tx, scope.workspaceId, propertyId, id);
+    if (section === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
+    await tx.delete(menuSections).where(and(eq(menuSections.workspaceId, scope.workspaceId), eq(menuSections.id, id)));
+    await renumber(tx, scope.workspaceId, 'section', section.menuId);
   });
 }
 
@@ -387,20 +425,27 @@ async function placementEnd(tx: WorkspaceTx, workspaceId: string, sectionId: str
  */
 export async function saveItem(
   scope: EngineScope,
-  input: { readonly id: string; readonly sectionId?: string; readonly item: ItemFields },
+  input: { readonly id: string; readonly sectionId?: string; readonly item: ItemFields } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.id, ITEM_NOT_FOUND);
   const sectionId = input.sectionId === undefined ? undefined : checkId(input.sectionId, SECTION_NOT_FOUND);
   const { item } = input;
-  return edit(scope, 'menu.item_saved', { itemId: id }, async (tx, by) => {
+  return edit(scope, input, 'menu.item_saved', { itemId: id }, async (tx, by, propertyId) => {
     const ws = scope.workspaceId;
     const groupIds = item.groupIds.map((each) => each.toLowerCase());
     if (groupIds.length > 0) {
+      // A dish offers only its own business's option groups.
       const found = await tx
         .select({ id: menuOptionGroups.id })
         .from(menuOptionGroups)
-        .where(and(eq(menuOptionGroups.workspaceId, ws), inArray(menuOptionGroups.id, groupIds)));
+        .where(
+          and(
+            eq(menuOptionGroups.workspaceId, ws),
+            eq(menuOptionGroups.propertyId, propertyId),
+            inArray(menuOptionGroups.id, groupIds),
+          ),
+        );
       if (found.length !== groupIds.length) throw refuse('NOT_FOUND', GROUP_NOT_FOUND);
     }
     const fields = {
@@ -417,15 +462,24 @@ export async function saveItem(
     const changed = await tx
       .update(menuItems)
       .set({ ...fields, updatedAt: sql`now()` })
-      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.id, id)))
+      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.propertyId, propertyId), eq(menuItems.id, id)))
       .returning({ id: menuItems.id });
     if (changed.length === 0) {
-      const [counted] = await tx.select({ n: count() }).from(menuItems).where(eq(menuItems.workspaceId, ws));
+      const [counted] = await tx
+        .select({ n: count() })
+        .from(menuItems)
+        .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.propertyId, propertyId)));
       if ((counted?.n ?? 0) >= L.items)
-        throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.items)} dishes.`);
-      await tx.insert(menuItems).values({ workspaceId: ws, id, ...fields, createdByMemberId: by });
+        throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.items)} dishes.`);
+      // An id another business's dish holds answers as a dish that doesn't exist.
+      const inserted = await tx
+        .insert(menuItems)
+        .values({ workspaceId: ws, id, propertyId, ...fields, createdByMemberId: by })
+        .onConflictDoNothing({ target: [menuItems.workspaceId, menuItems.id] })
+        .returning({ id: menuItems.id });
+      if (inserted.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
       if (sectionId !== undefined) {
-        const section = await sectionRow(tx, ws, sectionId);
+        const section = await sectionRow(tx, ws, propertyId, sectionId);
         if (section === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
         const position = await placementEnd(tx, ws, sectionId);
         await tx.insert(menuPlacements).values({ workspaceId: ws, sectionId, itemId: id, position });
@@ -462,13 +516,18 @@ export async function saveItem(
 }
 
 /** Deletes an item from every section and menu at once (the screen asks first). */
-export async function deleteItem(scope: EngineScope, input: { readonly itemId: string }): Promise<MenuDraft> {
+export async function deleteItem(
+  scope: EngineScope,
+  input: { readonly itemId: string } & InProperty,
+): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.itemId, ITEM_NOT_FOUND);
-  return edit(scope, 'menu.item_deleted', { itemId: id }, async (tx) => {
+  return edit(scope, input, 'menu.item_deleted', { itemId: id }, async (tx, _by, propertyId) => {
     const gone = await tx
       .delete(menuItems)
-      .where(and(eq(menuItems.workspaceId, scope.workspaceId), eq(menuItems.id, id)))
+      .where(
+        and(eq(menuItems.workspaceId, scope.workspaceId), eq(menuItems.propertyId, propertyId), eq(menuItems.id, id)),
+      )
       .returning({ id: menuItems.id });
     if (gone.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
   });
@@ -477,13 +536,16 @@ export async function deleteItem(scope: EngineScope, input: { readonly itemId: s
 /** Places an item in another section (AC-6524), or takes it out of one; an item in no section stays in the library. */
 export async function placeItem(
   scope: EngineScope,
-  input: { readonly itemId: string; readonly sectionId: string; readonly placed: boolean },
+  input: { readonly itemId: string; readonly sectionId: string; readonly placed: boolean } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const itemId = checkId(input.itemId, ITEM_NOT_FOUND);
   const sectionId = checkId(input.sectionId, SECTION_NOT_FOUND);
-  return edit(scope, input.placed ? 'menu.item_placed' : 'menu.item_unplaced', { itemId, sectionId }, async (tx) => {
+  const what = input.placed ? 'menu.item_placed' : 'menu.item_unplaced';
+  return edit(scope, input, what, { itemId, sectionId }, async (tx, _by, propertyId) => {
     const ws = scope.workspaceId;
+    // A dish sits only in its own business's menus: the section and the dish must both be the business's.
+    if ((await sectionRow(tx, ws, propertyId, sectionId)) === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
     if (!input.placed) {
       await tx
         .delete(menuPlacements)
@@ -497,12 +559,7 @@ export async function placeItem(
       await renumber(tx, ws, 'placement', sectionId);
       return;
     }
-    const [item] = await tx
-      .select({ id: menuItems.id })
-      .from(menuItems)
-      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.id, itemId)));
-    if (item === undefined) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
-    if ((await sectionRow(tx, ws, sectionId)) === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
+    if ((await itemOf(tx, ws, propertyId, itemId)) === undefined) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
     const [already] = await tx
       .select({ itemId: menuPlacements.itemId })
       .from(menuPlacements)
@@ -519,7 +576,10 @@ export async function placeItem(
   });
 }
 
-/** Renumbers positions from 0, keeping their order: menus, a menu's sections (each level), or a section's items. */
+/**
+ * Renumbers positions from 0, keeping their order: a business's menus, a menu's sections (each level), or a section's
+ * items. `within` is the business, the menu or the section.
+ */
 async function renumber(
   tx: WorkspaceTx,
   workspaceId: string,
@@ -529,7 +589,10 @@ async function renumber(
   if (part === 'menu') {
     await tx.execute(sql`
       update menus m set position = r.n - 1
-      from (select id, row_number() over (order by position, id) as n from menus where workspace_id = ${workspaceId}) r
+      from (
+        select id, row_number() over (order by position, id) as n
+        from menus where workspace_id = ${workspaceId} and property_id = ${within ?? null}
+      ) r
       where m.workspace_id = ${workspaceId} and m.id = r.id and m.position <> r.n - 1`);
   } else if (part === 'section') {
     await tx.execute(sql`
@@ -559,25 +622,25 @@ export async function moveMenuPart(
     readonly id: string;
     readonly sectionId?: string;
     readonly toIndex: number;
-  },
+  } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(
     input.id,
     input.part === 'menu' ? MENU_NOT_FOUND : input.part === 'section' ? SECTION_NOT_FOUND : ITEM_NOT_FOUND,
   );
-  return edit(scope, `menu.${input.part}_moved`, { id }, async (tx) => {
+  return edit(scope, input, `menu.${input.part}_moved`, { id }, async (tx, _by, propertyId) => {
     const ws = scope.workspaceId;
     let order: string[];
     if (input.part === 'menu') {
       const rows = await tx
         .select({ id: menus.id })
         .from(menus)
-        .where(eq(menus.workspaceId, ws))
+        .where(and(eq(menus.workspaceId, ws), eq(menus.propertyId, propertyId)))
         .orderBy(asc(menus.position), asc(menus.id));
       order = rows.map((row) => row.id);
     } else if (input.part === 'section') {
-      const section = await sectionRow(tx, ws, id);
+      const section = await sectionRow(tx, ws, propertyId, id);
       if (section === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
       const rows = await tx
         .select({ id: menuSections.id })
@@ -593,6 +656,7 @@ export async function moveMenuPart(
       order = rows.map((row) => row.id);
     } else {
       const sectionId = checkId(input.sectionId ?? '', SECTION_NOT_FOUND);
+      if ((await sectionRow(tx, ws, propertyId, sectionId)) === undefined) throw refuse('NOT_FOUND', SECTION_NOT_FOUND);
       const rows = await tx
         .select({ id: menuPlacements.itemId })
         .from(menuPlacements)
@@ -645,11 +709,11 @@ export async function saveOptionGroup(
     readonly min?: number;
     readonly max?: number;
     readonly options: readonly { readonly id?: string; readonly name: string; readonly priceDeltaMinor: number }[];
-  },
+  } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.id, GROUP_NOT_FOUND);
-  return edit(scope, 'menu.group_saved', { groupId: id }, async (tx) => {
+  return edit(scope, input, 'menu.group_saved', { groupId: id }, async (tx, _by, propertyId) => {
     const ws = scope.workspaceId;
     const fields = {
       name: input.name,
@@ -660,17 +724,28 @@ export async function saveOptionGroup(
     const changed = await tx
       .update(menuOptionGroups)
       .set({ ...fields, updatedAt: sql`now()` })
-      .where(and(eq(menuOptionGroups.workspaceId, ws), eq(menuOptionGroups.id, id)))
+      .where(
+        and(
+          eq(menuOptionGroups.workspaceId, ws),
+          eq(menuOptionGroups.propertyId, propertyId),
+          eq(menuOptionGroups.id, id),
+        ),
+      )
       .returning({ id: menuOptionGroups.id });
     if (changed.length === 0) {
       const [counted] = await tx
         .select({ n: count() })
         .from(menuOptionGroups)
-        .where(eq(menuOptionGroups.workspaceId, ws));
+        .where(and(eq(menuOptionGroups.workspaceId, ws), eq(menuOptionGroups.propertyId, propertyId)));
       if ((counted?.n ?? 0) >= L.groups) {
-        throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.groups)} option groups.`);
+        throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.groups)} option groups.`);
       }
-      await tx.insert(menuOptionGroups).values({ workspaceId: ws, id, ...fields });
+      const inserted = await tx
+        .insert(menuOptionGroups)
+        .values({ workspaceId: ws, id, propertyId, ...fields })
+        .onConflictDoNothing({ target: [menuOptionGroups.workspaceId, menuOptionGroups.id] })
+        .returning({ id: menuOptionGroups.id });
+      if (inserted.length === 0) throw refuse('NOT_FOUND', GROUP_NOT_FOUND);
     }
     const own = await tx
       .select({ id: menuOptions.id })
@@ -692,13 +767,22 @@ export async function saveOptionGroup(
 }
 
 /** Deletes an option group from every item that offers it. */
-export async function deleteOptionGroup(scope: EngineScope, input: { readonly groupId: string }): Promise<MenuDraft> {
+export async function deleteOptionGroup(
+  scope: EngineScope,
+  input: { readonly groupId: string } & InProperty,
+): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const id = checkId(input.groupId, GROUP_NOT_FOUND);
-  return edit(scope, 'menu.group_deleted', { groupId: id }, async (tx) => {
+  return edit(scope, input, 'menu.group_deleted', { groupId: id }, async (tx, _by, propertyId) => {
     const gone = await tx
       .delete(menuOptionGroups)
-      .where(and(eq(menuOptionGroups.workspaceId, scope.workspaceId), eq(menuOptionGroups.id, id)))
+      .where(
+        and(
+          eq(menuOptionGroups.workspaceId, scope.workspaceId),
+          eq(menuOptionGroups.propertyId, propertyId),
+          eq(menuOptionGroups.id, id),
+        ),
+      )
       .returning({ id: menuOptionGroups.id });
     if (gone.length === 0) throw refuse('NOT_FOUND', GROUP_NOT_FOUND);
   });
@@ -710,7 +794,7 @@ export async function deleteOptionGroup(scope: EngineScope, input: { readonly gr
  */
 export async function setItemSoldOut(
   scope: EngineScope,
-  input: { readonly itemId: string; readonly soldOut: boolean },
+  input: { readonly itemId: string; readonly soldOut: boolean } & InProperty,
 ): Promise<{ readonly draft: MenuDraft; readonly placeIds: readonly string[] }> {
   requireMenuReader(scope);
   hospitalityMember(scope);
@@ -718,41 +802,55 @@ export async function setItemSoldOut(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, input.propertyId);
     const changed = await tx
       .update(menuItems)
       .set({ soldOut: input.soldOut, soldOutAt: input.soldOut ? sql`now()` : null })
-      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.id, id)))
+      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.propertyId, property.id), eq(menuItems.id, id)))
       .returning({ id: menuItems.id });
     if (changed.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
     await auditSetup(tx, scope, input.soldOut ? 'menu.sold_out' : 'menu.back_on', { itemId: id });
-    return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
+    return {
+      draft: await readDraft(tx, scope, property),
+      placeIds: (await placesOf(tx, ws, property.id)).map((place) => place.id),
+    };
   });
 }
 
 /**
- * Live or Hidden (spec 0065, H1, after checklabs' menu switch): hides every guest menu of the workspace for now, or
+ * Live or Hidden (spec 0065, H1, after checklabs' menu switch): hides every guest menu of the business for now, or
  * shows it again. Live at once and never a draft change, so the count of changes and the published rows stay as they
- * are. Manage hospitality; refused `CONFLICT` before the first Publish, since there is nothing live to hide. Answers
- * the draft and the places to purge.
+ * are. Manage hospitality; refused `CONFLICT` before the business's first Publish, since there is nothing live to
+ * hide. Answers the draft and the places to purge.
  */
 export async function setMenuHidden(
   scope: EngineScope,
-  input: { readonly hidden: boolean },
+  input: { readonly hidden: boolean } & InProperty,
 ): Promise<{ readonly draft: MenuDraft; readonly placeIds: readonly string[] }> {
   requirePermission(scope, 'hospitality.manage');
   hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, input.propertyId);
     await lockKey(tx, `menu:${ws}`);
     const changed = await tx
       .update(menuDrafts)
       .set({ hidden: input.hidden, updatedAt: sql`now()` })
-      .where(and(eq(menuDrafts.workspaceId, ws), sql`${menuDrafts.publishedAt} is not null`))
+      .where(
+        and(
+          eq(menuDrafts.workspaceId, ws),
+          eq(menuDrafts.propertyId, property.id),
+          sql`${menuDrafts.publishedAt} is not null`,
+        ),
+      )
       .returning({ workspaceId: menuDrafts.workspaceId });
     if (changed.length === 0) throw refuse('CONFLICT', 'Publish the menu first, then you can hide it.');
-    await auditSetup(tx, scope, input.hidden ? 'menu.hidden' : 'menu.shown');
-    return { draft: await readDraft(tx, scope), placeIds: (await placesOf(tx, ws)).map((place) => place.id) };
+    await auditSetup(tx, scope, input.hidden ? 'menu.hidden' : 'menu.shown', { propertyId: property.id });
+    return {
+      draft: await readDraft(tx, scope, property),
+      placeIds: (await placesOf(tx, ws, property.id)).map((place) => place.id),
+    };
   });
 }
 
@@ -764,7 +862,7 @@ export async function setMenuHidden(
  */
 export async function saveMenuLook(
   scope: EngineScope,
-  input: { readonly look: unknown },
+  input: { readonly look: unknown } & InProperty,
 ): Promise<{
   readonly draft: MenuDraft;
   readonly placeIds: readonly string[];
@@ -779,25 +877,28 @@ export async function saveMenuLook(
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, input.propertyId);
     await lockKey(tx, `menu:${ws}`);
     if (look.cover !== undefined) {
+      // A cover is one of the business's own photos.
       const [photo] = await tx
         .select({ id: menuPhotos.id })
         .from(menuPhotos)
         .where(
           and(
             eq(menuPhotos.workspaceId, ws),
+            eq(menuPhotos.propertyId, property.id),
             eq(menuPhotos.id, look.cover.id),
             eq(menuPhotos.version, look.cover.version),
           ),
         );
       if (photo === undefined) throw refuse('NOT_FOUND', 'That cover photo doesn’t exist.');
     }
-    const wasCover = await savedCoverId(tx, ws);
+    const wasCover = await savedCoverId(tx, ws, property.id);
     const changed = await tx
       .update(properties)
       .set({ look, updatedAt: sql`now()`, updatedByMemberId: by })
-      .where(and(eq(properties.workspaceId, ws), eq(properties.id, currentPropertyRef(ws)), isNotNull(properties.name)))
+      .where(and(eq(properties.workspaceId, ws), eq(properties.id, property.id), isNotNull(properties.name)))
       .returning({ workspaceId: properties.workspaceId });
     if (changed.length === 0) throw refuse('CONFLICT', 'Add your business first, then you can design its menu.');
     // A cover has a photo row of its own and is live with no Publish, so one replaced or taken off goes as this saves:
@@ -811,59 +912,73 @@ export async function saveMenuLook(
               .where(
                 and(
                   eq(menuPhotos.workspaceId, ws),
+                  eq(menuPhotos.propertyId, property.id),
                   eq(menuPhotos.id, wasCover),
                   sql`not exists (select 1 from ${menuItems} where ${menuItems.workspaceId} = ${ws} and ${menuItems.photoId} = ${wasCover}::uuid)`,
                 ),
               )
               .returning({ largePath: menuPhotos.largePath, smallPath: menuPhotos.smallPath })
           ).flatMap((row) => [row.largePath, row.smallPath]);
-    await auditSetup(tx, scope, 'menu.look_saved', look.cover === undefined ? {} : { photoId: look.cover.id });
+    await auditSetup(tx, scope, 'menu.look_saved', {
+      propertyId: property.id,
+      ...(look.cover === undefined ? {} : { photoId: look.cover.id }),
+    });
     return {
-      draft: await readDraft(tx, scope),
-      placeIds: (await placesOf(tx, ws)).map((place) => place.id),
+      draft: await readDraft(tx, scope, property),
+      placeIds: (await placesOf(tx, ws, property.id)).map((place) => place.id),
       removedPaths,
     };
   });
 }
 
 /**
- * The cover the look's row names, read from the raw document rather than through its schema: a row the schema no longer
- * takes wears the default look, but still names a photo, which nothing may delete for that.
+ * The cover a business's look names, read from the raw document rather than through its schema: a row the schema no
+ * longer takes wears the default look, but still names a photo, which nothing may delete for that.
  */
-async function savedCoverId(tx: WorkspaceTx, workspaceId: string): Promise<string | undefined> {
+async function savedCoverId(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<string | undefined> {
   const [row] = await tx
     .select({ id: sql<string | null>`${properties.look} -> 'cover' ->> 'id'` })
     .from(properties)
-    .where(and(eq(properties.workspaceId, workspaceId), eq(properties.id, currentPropertyRef(workspaceId))));
+    .where(and(eq(properties.workspaceId, workspaceId), eq(properties.id, propertyId)));
   const id = row?.id ?? undefined;
   return id !== undefined && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     ? id
     : undefined;
 }
 
+/** Refuses a new photo past the business's 1,000 (AC-6518, AC-6527). */
+async function requirePhotoRoom(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<void> {
+  const [counted] = await tx
+    .select({ n: count() })
+    .from(menuPhotos)
+    .where(and(eq(menuPhotos.workspaceId, workspaceId), eq(menuPhotos.propertyId, propertyId)));
+  if ((counted?.n ?? 0) >= L.photos) {
+    throw refuse('LIMIT_REACHED', `A business takes up to ${String(L.photos)} photos.`);
+  }
+}
+
 /**
- * Keeps a new cover photo's row, up to the workspace's photos (AC-6527), and answers what the look names. Nothing shows
+ * Keeps a new cover photo's row, up to the business's photos (AC-6527), and answers what the look names. Nothing shows
  * it until a saved look does; a photo no look or item names goes with the next Publish or Discard.
  */
 export async function addMenuCover(
   scope: EngineScope,
-  input: { readonly photo: MenuPhotoFile },
+  input: { readonly photo: MenuPhotoFile } & InProperty,
 ): Promise<{ readonly id: string; readonly version: string }> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, input.propertyId);
     await lockKey(tx, `menu:${ws}`);
-    const [counted] = await tx.select({ n: count() }).from(menuPhotos).where(eq(menuPhotos.workspaceId, ws));
-    if ((counted?.n ?? 0) >= L.photos)
-      throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.photos)} photos.`);
+    await requirePhotoRoom(tx, ws, property.id);
     const [photo] = await tx
       .insert(menuPhotos)
-      .values({ workspaceId: ws, ...input.photo, createdByMemberId: by })
+      .values({ workspaceId: ws, propertyId: property.id, ...input.photo, createdByMemberId: by })
       .returning({ id: menuPhotos.id, version: menuPhotos.version });
     if (photo === undefined) throw new Error('The photo was not stored.');
-    await auditSetup(tx, scope, 'menu.cover_added', { photoId: photo.id });
+    await auditSetup(tx, scope, 'menu.cover_added', { photoId: photo.id, propertyId: property.id });
     return photo;
   });
 }
@@ -918,58 +1033,65 @@ export interface MenuPhotoFile {
  */
 export async function attachMenuPhoto(
   scope: EngineScope,
-  input: { readonly itemId: string; readonly photo: MenuPhotoFile },
+  input: { readonly itemId: string; readonly photo: MenuPhotoFile } & InProperty,
 ): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const itemId = checkId(input.itemId, ITEM_NOT_FOUND);
-  return edit(scope, 'menu.photo_added', { itemId }, async (tx, by) => {
+  return edit(scope, input, 'menu.photo_added', { itemId }, async (tx, by, propertyId) => {
     const ws = scope.workspaceId;
-    const [counted] = await tx.select({ n: count() }).from(menuPhotos).where(eq(menuPhotos.workspaceId, ws));
-    if ((counted?.n ?? 0) >= L.photos)
-      throw refuse('LIMIT_REACHED', `A workspace takes up to ${String(L.photos)} photos.`);
+    if ((await itemOf(tx, ws, propertyId, itemId)) === undefined) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
+    await requirePhotoRoom(tx, ws, propertyId);
     const [photo] = await tx
       .insert(menuPhotos)
-      .values({ workspaceId: ws, ...input.photo, createdByMemberId: by })
+      .values({ workspaceId: ws, propertyId, ...input.photo, createdByMemberId: by })
       .returning({ id: menuPhotos.id });
     if (photo === undefined) throw new Error('The photo was not stored.');
-    const changed = await tx
+    await tx
       .update(menuItems)
       .set({ photoId: photo.id, updatedByMemberId: by, updatedAt: sql`now()` })
-      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.id, itemId)))
-      .returning({ id: menuItems.id });
-    if (changed.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
+      .where(and(eq(menuItems.workspaceId, ws), eq(menuItems.propertyId, propertyId), eq(menuItems.id, itemId)));
   });
 }
 
 /** Takes an item's photo off (a draft change). */
-export async function removeMenuPhoto(scope: EngineScope, input: { readonly itemId: string }): Promise<MenuDraft> {
+export async function removeMenuPhoto(
+  scope: EngineScope,
+  input: { readonly itemId: string } & InProperty,
+): Promise<MenuDraft> {
   requirePermission(scope, 'hospitality.manage');
   const itemId = checkId(input.itemId, ITEM_NOT_FOUND);
-  return edit(scope, 'menu.photo_removed', { itemId }, async (tx) => {
+  return edit(scope, input, 'menu.photo_removed', { itemId }, async (tx, _by, propertyId) => {
     const changed = await tx
       .update(menuItems)
       .set({ photoId: null, updatedAt: sql`now()` })
-      .where(and(eq(menuItems.workspaceId, scope.workspaceId), eq(menuItems.id, itemId)))
+      .where(
+        and(
+          eq(menuItems.workspaceId, scope.workspaceId),
+          eq(menuItems.propertyId, propertyId),
+          eq(menuItems.id, itemId),
+        ),
+      )
       .returning({ id: menuItems.id });
     if (changed.length === 0) throw refuse('NOT_FOUND', ITEM_NOT_FOUND);
   });
 }
 
 /**
- * Deletes the photos neither the draft, what was published nor the saved look names (the first two are the same set
- * right after Publish or Discard), answering their stored paths for the api to remove from the store.
+ * Deletes the business's photos neither its draft, what it last published nor its saved look names (the first two are
+ * the same set right after Publish or Discard), answering their stored paths for the api to remove from the store.
  */
-async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string): Promise<readonly string[]> {
+async function dropUnusedPhotos(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<readonly string[]> {
   const used = tx
     .select({ id: menuItems.photoId })
     .from(menuItems)
     .where(and(eq(menuItems.workspaceId, workspaceId), sql`${menuItems.photoId} is not null`));
-  const coverId = await savedCoverId(tx, workspaceId);
+  const coverId = await savedCoverId(tx, workspaceId, propertyId);
   const gone = await tx
     .delete(menuPhotos)
     .where(
       and(
         eq(menuPhotos.workspaceId, workspaceId),
+        eq(menuPhotos.propertyId, propertyId),
         notInArray(menuPhotos.id, sql`(${used})`),
         ...(coverId === undefined ? [] : [ne(menuPhotos.id, coverId)]),
       ),
@@ -1017,21 +1139,22 @@ export interface MenuPublishResult {
 }
 
 /**
- * Publish (AC-6525): one versioned snapshot per place of every menu shown there, the draft kept whole so Discard can
- * go back to it, and the count of changes back to 0. Each place keeps its last ten versions.
+ * Publish (AC-6525): one versioned snapshot per place of the business, of every menu shown there, the business's draft
+ * kept whole so Discard can go back to it, and its count of changes back to 0. Each place keeps its last ten versions.
  */
-export async function publishMenus(scope: EngineScope): Promise<MenuPublishResult> {
+export async function publishMenus(scope: EngineScope, where: InProperty = {}): Promise<MenuPublishResult> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, where.propertyId);
     await lockKey(tx, `menu:${ws}`);
-    const rows = await readMenuRows(tx, ws);
+    const rows = await readMenuRows(tx, ws, property.id);
     publishProblem(rows);
-    const currency = await currencyOf(tx, ws);
-    const photos = await photoVersions(tx, ws);
-    const placeList = await placesOf(tx, ws);
+    const currency = currencyOf(property);
+    const photos = await photoVersions(tx, ws, property.id);
+    const placeList = await placesOf(tx, ws, property.id);
     for (const place of placeList) {
       const [latest] = await tx
         .select({ version: menuVersions.version })
@@ -1057,55 +1180,62 @@ export async function publishMenus(scope: EngineScope): Promise<MenuPublishResul
           ),
         );
     }
+    const published = { changes: 0, published: rows, publishedAt: sql`now()`, publishedByMemberId: by };
     await tx
       .insert(menuDrafts)
-      .values({ workspaceId: ws, changes: 0, published: rows, publishedAt: sql`now()`, publishedByMemberId: by })
+      .values({ workspaceId: ws, propertyId: property.id, ...published })
       .onConflictDoUpdate({
-        target: menuDrafts.workspaceId,
-        set: { changes: 0, published: rows, publishedAt: sql`now()`, publishedByMemberId: by, updatedAt: sql`now()` },
+        target: [menuDrafts.workspaceId, menuDrafts.propertyId],
+        set: { ...published, updatedAt: sql`now()` },
       });
-    const removedPaths = await dropUnusedPhotos(tx, ws);
-    await auditSetup(tx, scope, 'menu.published');
-    return { draft: await readDraft(tx, scope), placeIds: placeList.map((place) => place.id), removedPaths };
+    const removedPaths = await dropUnusedPhotos(tx, ws, property.id);
+    await auditSetup(tx, scope, 'menu.published', { propertyId: property.id });
+    return {
+      draft: await readDraft(tx, scope, property),
+      placeIds: placeList.map((place) => place.id),
+      removedPaths,
+    };
   });
 }
 
 /**
- * Discard (AC-6525): the draft goes back to what was last published, Sold out untouched. Refused `CONFLICT` before
- * the first Publish, since there is nothing to go back to.
+ * Discard (AC-6525): the business's draft goes back to what it last published, Sold out untouched. Refused `CONFLICT`
+ * before its first Publish, since there is nothing to go back to.
  */
-export async function discardMenuDraft(scope: EngineScope): Promise<MenuPublishResult> {
+export async function discardMenuDraft(scope: EngineScope, where: InProperty = {}): Promise<MenuPublishResult> {
   requirePermission(scope, 'hospitality.manage');
   hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     const ws = scope.workspaceId;
     await requireApp(tx, ws, 'menu');
+    const property = await currentProperty(tx, ws, where.propertyId);
     await lockKey(tx, `menu:${ws}`);
-    const [state] = await tx
-      .select({ published: menuDrafts.published })
-      .from(menuDrafts)
-      .where(eq(menuDrafts.workspaceId, ws));
+    const ownDraft = and(eq(menuDrafts.workspaceId, ws), eq(menuDrafts.propertyId, property.id));
+    const [state] = await tx.select({ published: menuDrafts.published }).from(menuDrafts).where(ownDraft);
     const kept = parseKeptRows(state?.published);
     if (kept === undefined)
       throw refuse('CONFLICT', 'Nothing has been published yet, so there’s nothing to go back to.');
-    const placeIds = new Set((await placesOf(tx, ws)).map((place) => place.id));
-    await restoreMenuRows(tx, ws, kept, {
+    const placeIds = new Set((await placesOf(tx, ws, property.id)).map((place) => place.id));
+    await restoreMenuRows(tx, ws, property.id, kept, {
       placeIds,
-      photoIds: new Set((await photoVersions(tx, ws)).keys()),
-      soldOut: await soldOutIds(tx, ws),
+      photoIds: new Set((await photoVersions(tx, ws, property.id)).keys()),
+      soldOut: await soldOutIds(tx, ws, property.id),
     });
     await tx
       .update(menuDrafts)
       .set({ changes: 0, updatedAt: sql`now()` })
-      .where(eq(menuDrafts.workspaceId, ws));
-    const removedPaths = await dropUnusedPhotos(tx, ws);
-    await auditSetup(tx, scope, 'menu.discarded');
-    return { draft: await readDraft(tx, scope), placeIds: [], removedPaths };
+      .where(ownDraft);
+    const removedPaths = await dropUnusedPhotos(tx, ws, property.id);
+    await auditSetup(tx, scope, 'menu.discarded', { propertyId: property.id });
+    return { draft: await readDraft(tx, scope, property), placeIds: [], removedPaths };
   });
 }
 
-/** The ids of every place, for purging every guest menu at once (a profile change, removing Menu). */
+/** The ids of every place of every business, for purging every guest menu at once (a profile change, removing Menu). */
 export async function menuPlaceIds(scope: EngineScope): Promise<readonly string[]> {
   hospitalityMember(scope);
-  return inWorkspace(scope, async (tx) => (await placesOf(tx, scope.workspaceId)).map((place) => place.id));
+  return inWorkspace(scope, async (tx) => {
+    const rows = await tx.select({ id: places.id }).from(places).where(eq(places.workspaceId, scope.workspaceId));
+    return rows.map((place) => place.id);
+  });
 }

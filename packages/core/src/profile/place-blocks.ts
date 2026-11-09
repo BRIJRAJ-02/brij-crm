@@ -49,15 +49,23 @@ export async function placeFactsOf(
   const facts = new Map<string, PlaceFacts>();
   if (ids.length === 0) return facts;
   const rows = await tx
-    .select({ id: places.id, name: places.name, menuKey: places.menuKey, publicKey: places.publicKey })
+    .select({
+      id: places.id,
+      name: places.name,
+      menuKey: places.menuKey,
+      publicKey: places.publicKey,
+      propertyId: places.propertyId,
+    })
     .from(places)
     .where(and(eq(places.workspaceId, workspaceId), inArray(places.id, ids)));
   if (rows.length === 0) return facts;
   const apps = await installedHospitalityApps(tx, workspaceId);
-  const [draft] = await tx
-    .select({ hidden: menuDrafts.hidden })
+  // Live or Hidden is each business's own (spec 0065 H7): the businesses whose menus are hidden now.
+  const hiddenRows = await tx
+    .select({ propertyId: menuDrafts.propertyId })
     .from(menuDrafts)
-    .where(eq(menuDrafts.workspaceId, workspaceId));
+    .where(and(eq(menuDrafts.workspaceId, workspaceId), eq(menuDrafts.hidden, true)));
+  const hidden = new Set(hiddenRows.map((each) => each.propertyId));
   for (const row of rows) {
     const [published] = apps.has('menu')
       ? await tx
@@ -71,7 +79,7 @@ export async function placeFactsOf(
       ? 'app'
       : published === undefined
         ? 'unpublished'
-        : draft?.hidden === true
+        : hidden.has(row.propertyId)
           ? 'hidden'
           : undefined;
     const service = apps.has('table_seating') ? await readTableService(tx, row.id) : undefined;

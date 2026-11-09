@@ -3,7 +3,7 @@
 // page look, beside the real guest menu in a phone.
 // Main task: pick a preset, change its colours, fonts, corners or cover if wanted, see it at once, and Save.
 // Leaves out: a colour per part of the page, importing a look from an address, and anything about a menu's contents.
-import { isDataError, type MenuDraft, type MenuLook, type MenuStore } from '@crm/data';
+import { isDataError, type HospitalityStore, type MenuDraft, type MenuLook, type MenuStore } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import {
   MENU_FONTS,
@@ -49,6 +49,8 @@ import {
 import { memo, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { publicMenuUrl } from '../booking/links.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
+import { SwitchGuard } from '../hospitality/SwitchGuard.tsx';
+import { strings as hospitalityStrings } from '../hospitality/strings.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { businessSettingsHref } from '../settings/nav.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -59,6 +61,8 @@ import { strings } from './strings.ts';
 /** Props for the Design page. */
 export interface DesignScreenProps {
   readonly store: MenuStore;
+  /** The suite's store, so unsaved changes hold a switch of business (spec 0065 H7); left out, nothing holds it. */
+  readonly hospitality?: HospitalityStore;
   readonly slug: string;
   readonly toasts: Toasts;
   readonly businessName: string;
@@ -137,7 +141,7 @@ const DesignPreview = memo(function DesignPreview({
 });
 
 /** The Design page. */
-export function DesignScreen({ store, slug, toasts, businessName, hasBusiness }: DesignScreenProps) {
+export function DesignScreen({ store, hospitality, slug, toasts, businessName, hasBusiness }: DesignScreenProps) {
   const state = useHospitality(store.draft(slug));
   const topBar = (isLoading: boolean) => (
     <TopBar
@@ -172,6 +176,7 @@ export function DesignScreen({ store, slug, toasts, businessName, hasBusiness }:
   return (
     <DesignBody
       store={store}
+      {...(hospitality === undefined ? {} : { hospitality })}
       slug={slug}
       toasts={toasts}
       businessName={businessName}
@@ -184,6 +189,7 @@ export function DesignScreen({ store, slug, toasts, businessName, hasBusiness }:
 /** The page, once the draft is here. */
 function DesignBody({
   store,
+  hospitality,
   slug,
   toasts,
   businessName,
@@ -541,6 +547,14 @@ function DesignBody({
               ) : null}
             </PreviewLayout>
             <LeaveGuard isDirty={isDirty} />
+            {hospitality !== undefined && (
+              <SwitchGuard
+                store={hospitality}
+                slug={slug}
+                isDirty={isDirty}
+                text={hospitalityStrings.discardDesignText}
+              />
+            )}
           </>
         ),
       }}

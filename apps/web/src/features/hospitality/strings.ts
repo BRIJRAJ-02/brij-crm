@@ -158,6 +158,7 @@ export const strings = {
   removeBusinessText: 'It has no places, menus or services, so nothing else changes.',
   discardTitle: 'Discard your changes?',
   discardText: 'Your profile changes aren’t saved. Switching business drops them.',
+  discardDesignText: 'Your design changes aren’t saved. Switching business drops them.',
   discard: 'Discard and switch',
   keepEditing: 'Keep editing',
   addPlace: 'Add place',

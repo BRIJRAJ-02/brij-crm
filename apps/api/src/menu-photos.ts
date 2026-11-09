@@ -9,7 +9,14 @@
 //   longer needs it. Guests get it through `GET /api/public/menu/:key/photos/...` (public/menu.ts), versioned.
 // The global Origin check refuses a write from anywhere but the app. Nothing here logs a photo or its path.
 import { createHash, randomUUID } from 'node:crypto';
-import { MENU_LIMITS, MENU_PHOTO_WIDTHS, matchesContent, pictureTypeOf, UPLOAD_WORKSPACE_HEADER } from '@crm/contracts';
+import {
+  MENU_LIMITS,
+  MENU_PHOTO_WIDTHS,
+  matchesContent,
+  pictureTypeOf,
+  UPLOAD_PROPERTY_HEADER,
+  UPLOAD_WORKSPACE_HEADER,
+} from '@crm/contracts';
 import {
   addMenuCover,
   attachMenuPhoto,
@@ -104,6 +111,10 @@ async function storeBothWidths(
   return { largePath, smallPath, type: large.type, version };
 }
 
+/** The business a request names (spec 0065 H7), as core takes it; core refuses one that isn't the workspace's. */
+const inProperty = (property: string | undefined) =>
+  property === undefined || property === '' ? {} : { propertyId: property };
+
 /** Mounts the menu photo upload. */
 export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: ImageRouteDeps): void {
   const { files, limiter, errorResponse } = deps;
@@ -131,7 +142,7 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
     if (loaded === undefined) return errorResponse('NOT_FOUND', 'There’s no photo here.');
     return pictureResponse(loaded, PRIVATE_PICTURE_CACHE_CONTROL);
   });
-  // The editor's preview look (`?workspace=`): the guests' stylesheet, for the member's own browser alone.
+  // The editor's preview look (`?workspace=&property=`): the business's guest stylesheet, for the member's own browser.
   app.get('/menu/look.css', async (c) => {
     const entered = await memberScopeOf(c, deps, c.req.query('workspace'));
     if (entered instanceof Response) return entered;
@@ -140,7 +151,7 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
     if (!decision.allowed) return errorResponse('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
     let css: string;
     try {
-      css = await readMenuDraftLook(entered.scope);
+      css = await readMenuDraftLook(entered.scope, inProperty(c.req.query('property')));
     } catch (error) {
       return refusalResponse(error, errorResponse);
     }
@@ -176,7 +187,10 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
       const stored = await storeBothWidths(c, scope.workspaceId, files, errorResponse);
       if (stored instanceof Response) return stored;
       try {
-        const cover = await addMenuCover(scope, { photo: stored });
+        const cover = await addMenuCover(scope, {
+          ...inProperty(c.req.header(UPLOAD_PROPERTY_HEADER)),
+          photo: stored,
+        });
         log.info('menu.cover.uploaded', { requestId: c.get('requestId'), type: stored.type });
         return c.json(cover);
       } catch (error) {
@@ -210,7 +224,11 @@ export function mountMenuPhotos(app: Hono<{ Variables: ImageVariables }>, deps: 
       if (stored instanceof Response) return stored;
       try {
         // Like the logo, no record changes, so no change event: the editor takes the draft this answers.
-        const draft = await attachMenuPhoto(scope, { itemId: itemId.toLowerCase(), photo: stored });
+        const draft = await attachMenuPhoto(scope, {
+          ...inProperty(c.req.header(UPLOAD_PROPERTY_HEADER)),
+          itemId: itemId.toLowerCase(),
+          photo: stored,
+        });
         log.info('menu.photo.uploaded', { requestId: c.get('requestId'), type: stored.type });
         return c.json(draft);
       } catch (error) {

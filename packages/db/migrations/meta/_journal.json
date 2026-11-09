@@ -1380,6 +1380,13 @@
       "when": 1795700017000,
       "tag": "0196_properties",
       "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1795700018000,
+      "tag": "0197_property_menus",
+      "breakpoints": true
     }
   ]
 }

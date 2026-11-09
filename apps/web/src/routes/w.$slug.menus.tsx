@@ -13,6 +13,8 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 interface MenusData {
   readonly isInstalled: boolean;
   readonly store?: MenuStore;
+  /** The business shown (spec 0065 H7): undefined is the first. A switch reads the page again. */
+  readonly property?: string | undefined;
   readonly business: {
     readonly name: string;
     readonly phone?: string;
@@ -30,6 +32,8 @@ export const Route = createFileRoute('/w/$slug/menus')({
     const empty = { name: '', hours: {} };
     if (!isInstalled) return { isInstalled, business: empty };
     const [store, hospitality] = await Promise.all([context.data.menu.load(), context.data.hospitality.load()]);
+    // The businesses come first, so the draft read is of the one the switcher chose (spec 0065 H7).
+    await hospitality.readProperties(params.slug).catch(() => undefined);
     try {
       await store.readDraft(params.slug);
     } catch (error) {
@@ -41,6 +45,7 @@ export const Route = createFileRoute('/w/$slug/menus')({
     return {
       isInstalled,
       store,
+      property: store.property(params.slug),
       business: {
         name: view?.profile?.name ?? '',
         ...(view?.profile?.phone === undefined ? {} : { phone: view.profile.phone }),
@@ -54,12 +59,13 @@ export const Route = createFileRoute('/w/$slug/menus')({
 });
 
 function PageRoute() {
-  const { isInstalled, store, business } = Route.useLoaderData();
+  const { isInstalled, store, business, property } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const view = Route.useSearch();
   const { toasts } = Route.useRouteContext();
   if (!isInstalled || store === undefined) return <AppOffScreen slug={slug} page="menus" />;
-  return <MenusScreen store={store} slug={slug} toasts={toasts} business={business} view={view} />;
+  // A business of its own starts the screen afresh: no open drawer or chosen place carries over (spec 0065 H7).
+  return <MenusScreen key={property ?? ''} store={store} slug={slug} toasts={toasts} business={business} view={view} />;
 }
 
 function MenusError({ error }: ErrorComponentProps) {

@@ -63,6 +63,10 @@ import { strings } from './strings.ts';
 
 export { MENU_TABS, menusSearch, type MenuTab, type MenusView } from './search.ts';
 
+/** The preview look's query: the workspace, the business when it isn't the first (spec 0065 H7), and the stamp. */
+const lookQuery = (slug: string, property: string | undefined, stamp: string): string =>
+  new URLSearchParams({ workspace: slug, ...(property === undefined ? {} : { property }), v: stamp }).toString();
+
 /** What the screen opens over itself: an item, a section or an option group in a drawer, a confirm, or the QR code. */
 export type Open =
   | { readonly kind: 'item'; readonly item?: Dish; readonly sectionId?: string; readonly newName?: string }
@@ -463,7 +467,7 @@ export function MenusScreen({ store, slug, toasts, business, view }: MenusScreen
         {/* The guests' own look (the Warm preset with the brand's accent), before any Publish. */}
         <link
           rel="stylesheet"
-          href={`/api/menu/look.css?workspace=${encodeURIComponent(slug)}&v=${lookStamp(draft)}`}
+          href={`/api/menu/look.css?${lookQuery(slug, store.property(slug), lookStamp(draft))}`}
           precedence="menu"
         />
         <PreviewMenu

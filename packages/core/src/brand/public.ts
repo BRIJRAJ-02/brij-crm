@@ -122,12 +122,13 @@ export async function readFormBrand(entry: { readonly scope: EngineScope }): Pro
 }
 
 /**
- * A guest menu's brand (spec 0065, AC-6570 groundwork): its workspace's accent and logo, in the caller's transaction
- * on the workspace the menu door found (`enterMenuPage`), so it reads that one workspace only.
+ * A guest menu's brand (spec 0065, AC-6570 groundwork): its workspace's accent and logo, and the look of the business
+ * it belongs to (`propertyId`, else the first; spec 0065 H7), in the caller's transaction on the workspace the menu
+ * door found (`enterMenuPage`), so it reads that one workspace only.
  */
-export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string): Promise<PageBrand> {
+export async function readMenuBrandIn(tx: WorkspaceTx, workspaceId: string, propertyId?: string): Promise<PageBrand> {
   const brand = await brandRowOf(tx, workspaceId);
-  const property = await currentProperty(tx, workspaceId);
+  const property = await currentProperty(tx, workspaceId, propertyId);
   // Checked again on the way out, as every value here is: a row that somehow held anything else wears the default.
   const look = MenuLook.safeParse(property.look);
   return { ...pageBrandOf(accentsOf(undefined, brand), brand), ...(look.success ? { menuLook: look.data } : {}) };

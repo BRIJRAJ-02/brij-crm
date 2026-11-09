@@ -33,13 +33,26 @@ import { reservePathOf } from './public-page.ts';
 
 const { menuDrafts, menuPhotos, menuVersions, places, properties } = schema;
 
-/** Whether the workspace's menu is hidden from guests for now (Live or Hidden). */
-async function isHidden(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
+/** Whether the menu of the place's business is hidden from guests for now (Live or Hidden; spec 0065 H7). */
+async function isHidden(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<boolean> {
   const [state] = await tx
     .select({ hidden: menuDrafts.hidden })
     .from(menuDrafts)
-    .where(eq(menuDrafts.workspaceId, workspaceId));
+    .innerJoin(
+      places,
+      and(eq(places.workspaceId, menuDrafts.workspaceId), eq(places.propertyId, menuDrafts.propertyId)),
+    )
+    .where(and(eq(menuDrafts.workspaceId, workspaceId), eq(places.id, placeId)));
   return state?.hidden === true;
+}
+
+/** The business a place belongs to, or undefined for a place that isn't there. */
+async function propertyOfPlace(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ propertyId: places.propertyId })
+    .from(places)
+    .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
+  return row?.propertyId;
 }
 
 /**
@@ -52,7 +65,7 @@ export async function guestMenuPathOf(
   workspaceId: string,
   placeId: string,
 ): Promise<string | undefined> {
-  if (!(await appInstalled(tx, workspaceId, 'menu')) || (await isHidden(tx, workspaceId))) return undefined;
+  if (!(await appInstalled(tx, workspaceId, 'menu')) || (await isHidden(tx, workspaceId, placeId))) return undefined;
   const [place] = await tx
     .select({
       menuKey: places.menuKey,
@@ -141,14 +154,14 @@ export async function readPublicMenu(
           isNotNull(properties.name),
         ),
       );
-    const hidden = await isHidden(tx, entry.workspaceId);
+    const hidden = await isHidden(tx, entry.workspaceId, entry.placeId);
     // Hidden, the page still offers Reserve a table while the place takes reservations online (spec 0065).
     const reservePath =
       hidden && (await appInstalled(tx, entry.workspaceId, 'table_seating'))
         ? await reservePathOf(tx, entry.workspaceId, entry.placeId)
         : undefined;
     const soldOut = hidden ? new Set<string>() : await soldOutIds(tx, entry.workspaceId);
-    const brand = await readMenuBrandIn(tx, entry.workspaceId);
+    const brand = await readMenuBrandIn(tx, entry.workspaceId, place.propertyId);
     const pin = menuLookPin(brand);
     const cover = brand.menuLook?.cover;
     // Hidden, the answer keeps the header and the look and drops every menu, dish and group.
@@ -208,12 +221,14 @@ export async function readMenuPhoto(
       .orderBy(desc(menuVersions.version))
       .limit(1);
     const parsed = MenuSnapshot.safeParse(latest?.snapshot);
-    if (!parsed.success || (await isHidden(tx, entry.workspaceId))) return undefined;
+    if (!parsed.success || (await isHidden(tx, entry.workspaceId, entry.placeId))) return undefined;
     const shown = Object.values(parsed.data.items).some(
       (item) => item.photo?.id === photoId && item.photo.version === version,
     );
     if (!shown) {
-      const cover = (await readMenuBrandIn(tx, entry.workspaceId)).menuLook?.cover;
+      const propertyId = await propertyOfPlace(tx, entry.workspaceId, entry.placeId);
+      if (propertyId === undefined) return undefined;
+      const cover = (await readMenuBrandIn(tx, entry.workspaceId, propertyId)).menuLook?.cover;
       if (cover?.id !== photoId || cover.version !== version) return undefined;
     }
     const [photo] = await tx
@@ -308,7 +323,7 @@ export async function businessMenuOf(
   workspaceId: string,
   placeId: string,
 ): Promise<BusinessPageMenu | undefined> {
-  if (await isHidden(tx, workspaceId)) return undefined;
+  if (await isHidden(tx, workspaceId, placeId)) return undefined;
   const [latest] = await tx
     .select({ snapshot: menuVersions.snapshot })
     .from(menuVersions)

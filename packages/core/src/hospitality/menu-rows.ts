@@ -1,7 +1,8 @@
 // The Menu app's rows as one value (spec 0065, H1): read in one transaction (`readMenuRows`), turned into the
 // editor's draft (`draftOf`) and into each place's published snapshot (`snapshotFor`), both pure, and kept whole in
 // `menu_drafts.published` at Publish so Discard can put them back (`restoreMenuRows`). Sold out is never part of what
-// Discard restores: it is live, not drafted (AC-6526).
+// Discard restores: it is live, not drafted (AC-6526). Every read and restore is one property's (spec 0065 H7): its
+// menus, its dish library, its option groups and its photos (migration 0197).
 import {
   ALLERGEN_LEVELS,
   DIET_MARKS,
@@ -23,8 +24,7 @@ import {
   servingOf as readServing,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, asc, eq } from 'drizzle-orm';
-import { currentPropertyRef } from './property.ts';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 const {
   menus,
@@ -106,8 +106,29 @@ export interface MenuRows {
   readonly itemGroups: readonly { readonly itemId: string; readonly groupId: string; readonly position: number }[];
 }
 
-/** Reads every row of the workspace's menus (9 statements, each one index range). */
-export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promise<MenuRows> {
+/** The ids of a property's menus, as part of a statement. */
+const menuIdsOf = (tx: WorkspaceTx, workspaceId: string, propertyId: string) =>
+  tx
+    .select({ id: menus.id })
+    .from(menus)
+    .where(and(eq(menus.workspaceId, workspaceId), eq(menus.propertyId, propertyId)));
+
+/** The ids of a property's dishes, as part of a statement. */
+const itemIdsOf = (tx: WorkspaceTx, workspaceId: string, propertyId: string) =>
+  tx
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(and(eq(menuItems.workspaceId, workspaceId), eq(menuItems.propertyId, propertyId)));
+
+/** The ids of a property's option groups, as part of a statement. */
+const groupIdsOf = (tx: WorkspaceTx, workspaceId: string, propertyId: string) =>
+  tx
+    .select({ id: menuOptionGroups.id })
+    .from(menuOptionGroups)
+    .where(and(eq(menuOptionGroups.workspaceId, workspaceId), eq(menuOptionGroups.propertyId, propertyId)));
+
+/** Reads every row of one property's menus (9 statements, each one index range). */
+export async function readMenuRows(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<MenuRows> {
   const [menuRows, placeRows, sectionRows, itemRows, placementRows, sizeRows, groupRows, optionRows, itemGroupRows] = [
     await tx
       .select({
@@ -120,12 +141,12 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         position: menus.position,
       })
       .from(menus)
-      .where(eq(menus.workspaceId, workspaceId))
+      .where(and(eq(menus.workspaceId, workspaceId), eq(menus.propertyId, propertyId)))
       .orderBy(asc(menus.position), asc(menus.id)),
     await tx
       .select({ menuId: menuPlaces.menuId, placeId: menuPlaces.placeId })
       .from(menuPlaces)
-      .where(eq(menuPlaces.workspaceId, workspaceId)),
+      .where(and(eq(menuPlaces.workspaceId, workspaceId), eq(menuPlaces.propertyId, propertyId))),
     await tx
       .select({
         id: menuSections.id,
@@ -138,7 +159,12 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         position: menuSections.position,
       })
       .from(menuSections)
-      .where(eq(menuSections.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(menuSections.workspaceId, workspaceId),
+          inArray(menuSections.menuId, menuIdsOf(tx, workspaceId, propertyId)),
+        ),
+      )
       .orderBy(asc(menuSections.menuId), asc(menuSections.position), asc(menuSections.id)),
     await tx
       .select({
@@ -154,12 +180,17 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         featured: menuItems.featured,
       })
       .from(menuItems)
-      .where(eq(menuItems.workspaceId, workspaceId))
+      .where(and(eq(menuItems.workspaceId, workspaceId), eq(menuItems.propertyId, propertyId)))
       .orderBy(asc(menuItems.id)),
     await tx
       .select({ sectionId: menuPlacements.sectionId, itemId: menuPlacements.itemId, position: menuPlacements.position })
       .from(menuPlacements)
-      .where(eq(menuPlacements.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(menuPlacements.workspaceId, workspaceId),
+          inArray(menuPlacements.itemId, itemIdsOf(tx, workspaceId, propertyId)),
+        ),
+      )
       .orderBy(asc(menuPlacements.sectionId), asc(menuPlacements.position)),
     await tx
       .select({
@@ -170,7 +201,12 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         position: menuItemSizes.position,
       })
       .from(menuItemSizes)
-      .where(eq(menuItemSizes.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(menuItemSizes.workspaceId, workspaceId),
+          inArray(menuItemSizes.itemId, itemIdsOf(tx, workspaceId, propertyId)),
+        ),
+      )
       .orderBy(asc(menuItemSizes.itemId), asc(menuItemSizes.position)),
     await tx
       .select({
@@ -181,7 +217,7 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         max: menuOptionGroups.max,
       })
       .from(menuOptionGroups)
-      .where(eq(menuOptionGroups.workspaceId, workspaceId))
+      .where(and(eq(menuOptionGroups.workspaceId, workspaceId), eq(menuOptionGroups.propertyId, propertyId)))
       .orderBy(asc(menuOptionGroups.name), asc(menuOptionGroups.id)),
     await tx
       .select({
@@ -192,7 +228,12 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         position: menuOptions.position,
       })
       .from(menuOptions)
-      .where(eq(menuOptions.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(menuOptions.workspaceId, workspaceId),
+          inArray(menuOptions.groupId, groupIdsOf(tx, workspaceId, propertyId)),
+        ),
+      )
       .orderBy(asc(menuOptions.groupId), asc(menuOptions.position)),
     await tx
       .select({
@@ -201,7 +242,12 @@ export async function readMenuRows(tx: WorkspaceTx, workspaceId: string): Promis
         position: menuItemOptionGroups.position,
       })
       .from(menuItemOptionGroups)
-      .where(eq(menuItemOptionGroups.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(menuItemOptionGroups.workspaceId, workspaceId),
+          inArray(menuItemOptionGroups.itemId, itemIdsOf(tx, workspaceId, propertyId)),
+        ),
+      )
       .orderBy(asc(menuItemOptionGroups.itemId), asc(menuItemOptionGroups.position)),
   ];
   return {
@@ -446,12 +492,16 @@ export const photoIdsOf = (rows: MenuRows): readonly string[] => [
   ...new Set(rows.items.flatMap((item) => (item.photoId === null ? [] : [item.photoId]))),
 ];
 
-/** Each named photo's version, for the draft and the snapshots. */
-export async function photoVersions(tx: WorkspaceTx, workspaceId: string): Promise<ReadonlyMap<string, string>> {
+/** Each of a property's photos' version, for the draft and the snapshots. */
+export async function photoVersions(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  propertyId: string,
+): Promise<ReadonlyMap<string, string>> {
   const rows = await tx
     .select({ id: menuPhotos.id, version: menuPhotos.version })
     .from(menuPhotos)
-    .where(eq(menuPhotos.workspaceId, workspaceId));
+    .where(and(eq(menuPhotos.workspaceId, workspaceId), eq(menuPhotos.propertyId, propertyId)));
   return new Map(rows.map((row) => [row.id, row.version]));
 }
 
@@ -496,13 +546,14 @@ export function parseKeptRows(value: unknown): MenuRows | undefined {
 }
 
 /**
- * Puts `rows` back as the workspace's whole draft (Discard, AC-6525): every menu row now is deleted and the kept ones
- * inserted, in the order their keys need. Places deleted since and photos gone since are left out; Sold out keeps its
- * live value for items that come back.
+ * Puts `rows` back as one property's whole draft (Discard, AC-6525): every menu row of that property now is deleted
+ * and the kept ones inserted under it, in the order their keys need. Places deleted since (or never the property's)
+ * and photos gone since are left out; Sold out keeps its live value for items that come back.
  */
 export async function restoreMenuRows(
   tx: WorkspaceTx,
   workspaceId: string,
+  propertyId: string,
   rows: MenuRows,
   live: {
     readonly placeIds: ReadonlySet<string>;
@@ -510,16 +561,18 @@ export async function restoreMenuRows(
     readonly soldOut: ReadonlySet<string>;
   },
 ): Promise<void> {
-  await tx.delete(menus).where(eq(menus.workspaceId, workspaceId));
-  await tx.delete(menuItems).where(eq(menuItems.workspaceId, workspaceId));
-  await tx.delete(menuOptionGroups).where(eq(menuOptionGroups.workspaceId, workspaceId));
+  await tx.delete(menus).where(and(eq(menus.workspaceId, workspaceId), eq(menus.propertyId, propertyId)));
+  await tx.delete(menuItems).where(and(eq(menuItems.workspaceId, workspaceId), eq(menuItems.propertyId, propertyId)));
+  await tx
+    .delete(menuOptionGroups)
+    .where(and(eq(menuOptionGroups.workspaceId, workspaceId), eq(menuOptionGroups.propertyId, propertyId)));
   const ws = { workspaceId };
   if (rows.menus.length > 0) {
     await tx.insert(menus).values(
       rows.menus.map((row) => ({
         ...ws,
         id: row.id,
-        propertyId: currentPropertyRef(workspaceId),
+        propertyId,
         name: row.name,
         note: row.note,
         serving: row.serving,
@@ -536,7 +589,7 @@ export async function restoreMenuRows(
         ...ws,
         menuId: row.menuId,
         placeId: row.placeId,
-        propertyId: currentPropertyRef(workspaceId),
+        propertyId,
       })),
     );
   }
@@ -561,6 +614,7 @@ export async function restoreMenuRows(
       rows.groups.map((row) => ({
         ...ws,
         id: row.id,
+        propertyId,
         name: row.name,
         rule: row.rule,
         min: row.min ?? 0,
@@ -586,6 +640,7 @@ export async function restoreMenuRows(
       rows.items.slice(start, start + 500).map((row) => ({
         ...ws,
         id: row.id,
+        propertyId,
         name: row.name,
         description: row.description,
         priceMinor: row.priceMinor,
@@ -610,11 +665,20 @@ export async function restoreMenuRows(
   }
 }
 
-/** The items sold out now (AC-6526), through the partial index on sold out items. */
-export async function soldOutIds(tx: WorkspaceTx, workspaceId: string): Promise<Set<string>> {
+/**
+ * The items sold out now (AC-6526), through the partial index on sold out items: one property's, or the workspace's
+ * when none is named (a guest read, which looks up only its snapshot's dishes).
+ */
+export async function soldOutIds(tx: WorkspaceTx, workspaceId: string, propertyId?: string): Promise<Set<string>> {
   const rows = await tx
     .select({ id: menuItems.id })
     .from(menuItems)
-    .where(and(eq(menuItems.workspaceId, workspaceId), eq(menuItems.soldOut, true)));
+    .where(
+      and(
+        eq(menuItems.workspaceId, workspaceId),
+        eq(menuItems.soldOut, true),
+        ...(propertyId === undefined ? [] : [eq(menuItems.propertyId, propertyId)]),
+      ),
+    );
   return new Set(rows.map((row) => row.id));
 }

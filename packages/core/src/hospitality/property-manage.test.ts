@@ -9,7 +9,17 @@ import { visitWorkspace } from '../../test/visits-kit.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { testScope } from '../testing.ts';
 import { installApp } from './apps.ts';
-import { publishMenus, saveItem, saveMenu, saveSection } from './menu.ts';
+import {
+  deleteItem,
+  discardMenuDraft,
+  placeItem,
+  publishMenus,
+  readMenuDraft,
+  saveItem,
+  saveMenu,
+  saveSection,
+  setMenuHidden,
+} from './menu.ts';
 import { createPlace, getBusiness, saveBusiness } from './places.ts';
 import { createProperty, listProperties, removeProperty } from './property.ts';
 
@@ -167,7 +177,7 @@ describe('a property’s currency (AC-6519)', () => {
 });
 
 describe('a menu serves its own business’s places (AC-6514)', () => {
-  it('puts a new menu in its first place’s business, and refuses a place of another as not found', async () => {
+  it('puts a new menu in the business named, and refuses a place of another as not found', async () => {
     const w = await business();
     await installApp(w.owner, { app: 'menu' });
     const second = randomUUID();
@@ -175,18 +185,116 @@ describe('a menu serves its own business’s places (AC-6514)', () => {
     const placeId = randomUUID();
     await createPlace(w.owner, { id: placeId, place: PLACE, propertyId: second });
     const menuId = randomUUID();
-    await saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId] });
+    // Named nothing, a call works in the first business, where the second's place doesn't exist.
+    expect(await refusalOf(saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId] }))).toBe('NOT_FOUND');
+    await saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId], propertyId: second });
     const rows = await w.sql<{ property_id: string }>(
       sql`select property_id::text from menus where id = ${menuId}::uuid`,
     );
     expect(rows.rows[0]?.property_id).toBe(second);
-    expect(await refusalOf(saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId, w.placeId] }))).toBe(
-      'NOT_FOUND',
-    );
+    expect(
+      await refusalOf(
+        saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId, w.placeId], propertyId: second }),
+      ),
+    ).toBe('NOT_FOUND');
     expect(await refusalOf(saveMenu(w.owner, { id: randomUUID(), name: 'Both', placeIds: [w.placeId, placeId] }))).toBe(
       'NOT_FOUND',
     );
+    // The first business can't take the second's menu over by its id.
+    expect(await refusalOf(saveMenu(w.owner, { id: menuId, name: 'Mine', placeIds: [w.placeId] }))).toBe('NOT_FOUND');
     // A business with a menu holds something, so it stays.
     expect(await refusalOf(removeProperty(w.owner, { propertyId: second }))).toBe('IN_USE');
+  });
+});
+
+/** A dish with a price, as the editor saves one. */
+const DISH = {
+  name: 'Soup',
+  priceMinor: 650,
+  diet: [],
+  allergens: [],
+  kcal: null,
+  featured: false,
+  sizes: [],
+  groupIds: [],
+} as const;
+
+/** A workspace with Menu on and a second business with a place of its own. */
+async function twoBusinesses() {
+  const w = await business();
+  await installApp(w.owner, { app: 'menu' });
+  const second = randomUUID();
+  await createProperty(w.owner, { id: second, name: 'Bar', kind: 'bar', currency: 'EUR' });
+  const secondPlace = randomUUID();
+  await createPlace(w.owner, { id: secondPlace, place: PLACE, propertyId: second });
+  return { ...w, second, secondPlace };
+}
+
+describe('each business has its own menus (spec 0065 H7, slice 2b)', () => {
+  it('keeps its own draft, library and Publish, and answers another business’s parts as not found', async () => {
+    const w = await twoBusinesses();
+    const at = { propertyId: w.second };
+    const menuId = randomUUID();
+    await saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [w.secondPlace], ...at });
+    const sectionId = randomUUID();
+    await saveSection(w.owner, { id: sectionId, menuId, name: 'Wine', layout: 'list', ...at });
+    const itemId = randomUUID();
+    const draft = await saveItem(w.owner, { id: itemId, sectionId, item: DISH, ...at });
+    expect(draft).toMatchObject({ currency: 'EUR', changes: 3 });
+    expect(draft.places.map((place) => place.id)).toEqual([w.secondPlace]);
+    expect(draft.items.map((item) => item.id)).toEqual([itemId]);
+    // The first business sees none of it, and its draft counts nothing.
+    const first = await readMenuDraft(w.owner);
+    expect(first).toMatchObject({ currency: 'GBP', changes: 0, menus: [], items: [] });
+    expect(first.places.map((place) => place.id)).toEqual([w.placeId]);
+    // Named from the first, the second's parts don't exist; its id is never taken over.
+    expect(await refusalOf(deleteItem(w.owner, { itemId }))).toBe('NOT_FOUND');
+    expect(await refusalOf(saveItem(w.owner, { id: itemId, item: { ...DISH, name: 'Mine' } }))).toBe('NOT_FOUND');
+    expect(await refusalOf(saveSection(w.owner, { id: randomUUID(), menuId, name: 'X', layout: 'list' }))).toBe(
+      'NOT_FOUND',
+    );
+    const own = randomUUID();
+    await saveItem(w.owner, { id: own, item: DISH });
+    expect(await refusalOf(placeItem(w.owner, { itemId: own, sectionId, placed: true }))).toBe('NOT_FOUND');
+    expect(await refusalOf(placeItem(w.owner, { itemId: own, sectionId, placed: true, ...at }))).toBe('NOT_FOUND');
+    // Publish is the business's own: only its place gets a version, and only its count goes back to 0.
+    const published = await publishMenus(w.owner, at);
+    expect(published.placeIds).toEqual([w.secondPlace]);
+    expect(published.draft.changes).toBe(0);
+    expect((await readMenuDraft(w.owner)).changes).toBe(1);
+    const versions = await w.sql<{ place_id: string }>(sql`select place_id::text from menu_versions`);
+    expect(versions.rows.map((row) => row.place_id)).toEqual([w.secondPlace]);
+    // Hidden is the business's own too; the first has published nothing to hide.
+    expect((await setMenuHidden(w.owner, { hidden: true, ...at })).draft.hidden).toBe(true);
+    expect(await refusalOf(setMenuHidden(w.owner, { hidden: true }))).toBe('CONFLICT');
+    expect(await refusalOf(discardMenuDraft(w.owner))).toBe('CONFLICT');
+    // Discard puts back the second's rows only: the first's unpublished dish stays.
+    await deleteItem(w.owner, { itemId, ...at });
+    await discardMenuDraft(w.owner, at);
+    expect((await readMenuDraft(w.owner, at)).items.map((item) => item.id)).toEqual([itemId]);
+    expect((await readMenuDraft(w.owner)).items.map((item) => item.id)).toEqual([own]);
+  });
+
+  it('counts dishes per business, and asks only that business’s prices about its currency (AC-6518, AC-6519)', async () => {
+    const w = await twoBusinesses();
+    const firstId = (await listProperties(w.owner)).properties[0]?.id ?? '';
+    await w.sql(sql`insert into menu_items (workspace_id, property_id, name)
+      select ${w.workspaceId}::uuid, ${firstId}::uuid, 'Dish ' || n from generate_series(1, 2000) n`);
+    expect(await refusalOf(saveItem(w.owner, { id: randomUUID(), item: DISH }))).toBe('LIMIT_REACHED');
+    await saveItem(w.owner, { id: randomUUID(), item: DISH, propertyId: w.second });
+    // The second has a price, the first none (its 2,000 dishes are unpriced): only the second's currency holds.
+    expect(
+      await refusalOf(saveBusiness(w.owner, { name: 'Bar', kind: 'bar', currency: 'USD' }, { propertyId: w.second })),
+    ).toBe('IN_USE');
+    await saveBusiness(w.owner, { name: 'Somewhere Nowhere', kind: 'restaurant', currency: 'USD' });
+    expect((await getBusiness(w.owner)).profile?.currency).toBe('USD');
+  });
+
+  it('refuses a business that isn’t this workspace’s', async () => {
+    const w = await twoBusinesses();
+    const elsewhere = await business();
+    const theirs = (await listProperties(elsewhere.owner)).properties[0]?.id ?? '';
+    expect(await refusalOf(readMenuDraft(w.owner, { propertyId: theirs }))).toBe('NOT_FOUND');
+    expect(await refusalOf(publishMenus(w.owner, { propertyId: theirs }))).toBe('NOT_FOUND');
   });
 });

@@ -164,3 +164,44 @@ describe('the Menu store', () => {
     expect(shown.status === 'ready' && shown.value.sections[0]?.itemIds).toEqual([]);
   });
 });
+
+describe('each business’s menus (spec 0065 H7)', () => {
+  it('holds one draft per business, and names the business chosen when the call goes out', async () => {
+    let chosen: string | undefined;
+    const asked: (string | undefined)[] = [];
+    const sent: (string | undefined)[] = [];
+    let id = 0;
+    const notUsed = () => Promise.reject(new Error('Not used here.'));
+    const overrides: Partial<MenuProcedures> = {
+      draft: (input) => {
+        asked.push(input.property);
+        return Promise.resolve({ ...DRAFT, currency: input.property === undefined ? 'GBP' : 'EUR' });
+      },
+      deleteItem: (input) => {
+        sent.push(input.property);
+        return Promise.resolve({ ...DRAFT, items: [] });
+      },
+    };
+    const store = openMenus({
+      api: new Proxy({} as MenuProcedures, {
+        get: (_target, name: string) => (overrides as Record<string, unknown>)[name] ?? notUsed,
+      }),
+      call: (run) => run({}),
+      mintId: () => `id-${String((id += 1))}`,
+      sendPhoto: notUsed,
+      sendCover: notUsed,
+      propertyOf: () => chosen,
+    });
+    expect((await store.readDraft('w')).currency).toBe('GBP');
+    chosen = 'second';
+    expect(store.property('w')).toBe('second');
+    expect((await store.readDraft('w')).currency).toBe('EUR');
+    expect(asked).toEqual([undefined, 'second']);
+    expect(await store.deleteItem('w', ITEM)).toBeUndefined();
+    expect(sent).toEqual(['second']);
+    // The first business's copy is untouched by the second's edit.
+    chosen = undefined;
+    const first = store.draft('w').getSnapshot();
+    expect(first.status === 'ready' ? first.value.items : undefined).toHaveLength(1);
+  });
+});

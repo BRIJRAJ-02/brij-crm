@@ -36,6 +36,7 @@ import { pageStrings } from './business-page-strings.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
 import { useBusinesses } from './Businesses.tsx';
+import { SwitchGuard } from './SwitchGuard.tsx';
 import { StartBusiness } from './StartBusiness.tsx';
 import { strings } from './strings.ts';
 
@@ -68,16 +69,6 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const [isAdding, setAdding] = useState(false);
   // Unsaved profile changes hold a switch of business until the person says to drop them.
   const [isDirty, setDirty] = useState(false);
-  const [asking, setAsking] = useState<((go: boolean) => void) | undefined>();
-  useEffect(() => {
-    if (!isDirty) return undefined;
-    store.guardChoice(slug, () => new Promise<boolean>((resolve) => setAsking(() => resolve)));
-    return () => store.guardChoice(slug, undefined);
-  }, [store, slug, isDirty]);
-  const answer = (go: boolean) => {
-    asking?.(go);
-    setAsking(undefined);
-  };
   const listed = properties.status === 'ready' ? properties.value : undefined;
   const shownProfile = state.status === 'ready' ? state.value.profile : undefined;
   const businesses = useBusinesses({
@@ -241,26 +232,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
       </SettingsSection>
       {!isMany && businesses.section}
       {businesses.dialogs}
-      {asking !== undefined && (
-        <Modal
-          title={strings.discardTitle}
-          variant="confirm"
-          isOpen
-          onOpenChange={(open) => {
-            if (!open) answer(false);
-          }}
-          actions={
-            <>
-              <Button slot="close">{strings.keepEditing}</Button>
-              <Button variant="primary" onPress={() => answer(true)}>
-                {strings.discard}
-              </Button>
-            </>
-          }
-        >
-          {strings.discardText}
-        </Modal>
-      )}
+      <SwitchGuard store={store} slug={slug} isDirty={isDirty} text={strings.discardText} />
       <AddPlaceDialog
         key={isAdding ? 'open' : 'closed'}
         isOpen={isAdding}

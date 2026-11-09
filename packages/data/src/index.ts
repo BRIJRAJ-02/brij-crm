@@ -3451,6 +3451,27 @@ export function createDataLayer({
   // defaults rather than loading for ever, and the next use loads it again.
   let navUnloaded: NavSnapshot | undefined;
   const navWaiting = new Set<() => void>();
+  /** The Hospitality store, loaded on first use: Settings › Business, the switcher, and the Menu store's choice. */
+  const loadHospitality = (): Promise<HospitalityStore> =>
+    (hospitality ??= import('./hospitality/store.ts').then(({ openHospitality }) =>
+      openHospitality({
+        api: api.hospitality,
+        call,
+        mintId,
+        onAppsChanged: (workspace) => {
+          void loadNav()
+            .then((store) => store.reload(workspace))
+            .catch(() => undefined);
+        },
+        // The business a member last chose stays on this device (spec 0065 H7, AC-6517): a hint, never a record.
+        choices: {
+          get: (key) => globalThis.localStorage.getItem(key),
+          set: (key, id) => {
+            globalThis.localStorage.setItem(key, id);
+          },
+        },
+      }),
+    ));
   const loadNav = (): Promise<NavStore> => {
     navLoading ??= import('./navigation/store.ts').then(({ createNavStore, NAV_WORDS }) => {
       navStore = createNavStore({
@@ -6461,26 +6482,7 @@ export function createDataLayer({
         )),
     },
     hospitality: {
-      load: (): Promise<HospitalityStore> =>
-        (hospitality ??= import('./hospitality/store.ts').then(({ openHospitality }) =>
-          openHospitality({
-            api: api.hospitality,
-            call,
-            mintId,
-            onAppsChanged: (workspace) => {
-              void loadNav()
-                .then((store) => store.reload(workspace))
-                .catch(() => undefined);
-            },
-            // The business a member last chose stays on this device (spec 0065 H7, AC-6517): a hint, never a record.
-            choices: {
-              get: (key) => globalThis.localStorage.getItem(key),
-              set: (key, id) => {
-                globalThis.localStorage.setItem(key, id);
-              },
-            },
-          }),
-        )),
+      load: (): Promise<HospitalityStore> => loadHospitality(),
     },
     /**
      * The Menu app's editor (spec 0065, H1): the workspace's whole menu draft, its edits, Publish, Discard, Sold out
@@ -6489,12 +6491,14 @@ export function createDataLayer({
      */
     menu: {
       load: (): Promise<MenuStore> =>
-        (menus ??= import('./menu/store.ts').then(({ openMenus }) =>
+        (menus ??= Promise.all([import('./menu/store.ts'), loadHospitality()]).then(([{ openMenus }, held]) =>
           openMenus({
             api: api.menu,
             call,
             mintId,
-            sendPhoto: async (workspace, itemId, photo) => {
+            // Each business has its own menus (spec 0065 H7): every call names the one the switcher chose.
+            propertyOf: (workspace) => held.current(workspace),
+            sendPhoto: async (workspace, property, itemId, photo) => {
               const body = new FormData();
               body.set('large', photo.large, 'large');
               body.set('small', photo.small, 'small');
@@ -6502,7 +6506,10 @@ export function createDataLayer({
                 new URL(`/api/menu/items/${encodeURIComponent(itemId)}/photo`, origin).href,
                 {
                   method: 'POST',
-                  headers: { 'x-crm-workspace': workspace },
+                  headers: {
+                    'x-crm-workspace': workspace,
+                    ...(property === undefined ? {} : { 'x-crm-property': property }),
+                  },
                   body,
                   credentials: 'include',
                 },
@@ -6517,13 +6524,16 @@ export function createDataLayer({
               return answer as MenuDraftAnswer;
             },
             // A cover for the guest look, the same two widths to its own route, answering what the look will name.
-            sendCover: async (workspace, photo) => {
+            sendCover: async (workspace, property, photo) => {
               const body = new FormData();
               body.set('large', photo.large, 'large');
               body.set('small', photo.small, 'small');
               const response = await fetch(new URL('/api/menu/look/cover', origin).href, {
                 method: 'POST',
-                headers: { 'x-crm-workspace': workspace },
+                headers: {
+                  'x-crm-workspace': workspace,
+                  ...(property === undefined ? {} : { 'x-crm-property': property }),
+                },
                 body,
                 credentials: 'include',
               }).catch((error: unknown) => {

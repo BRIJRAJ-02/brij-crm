@@ -132,6 +132,12 @@ export function memberLogoPath(workspace: string, version: string): string {
 export const UPLOAD_WORKSPACE_HEADER = 'x-crm-workspace';
 
 /**
+ * The header a menu photo or cover upload names its business by (spec 0065 H7): one of the workspace's, its id, as the
+ * RPC inputs' `property` does. Left out, the workspace's first.
+ */
+export const UPLOAD_PROPERTY_HEADER = 'x-crm-property';
+
+/**
  * The brand procedures. Any member reads the kit (everyone sees it, read only); saving it takes `workspace.manage`
  * (owners and admins). Neither touches a record, so no change event is stored.
  */

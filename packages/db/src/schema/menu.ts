@@ -126,12 +126,14 @@ export const menuSections = pgTable(
   ],
 );
 
-/** A menu photo (AC-6527): kept at two widths in the private store, versioned by its bytes. Up to 1,000. */
+/** A menu photo (AC-6527): kept at two widths in the private store, versioned by its bytes. Up to 1,000 a property. */
 export const menuPhotos = pgTable(
   'menu_photos',
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** The business whose dish or look shows it (spec 0065 H7, migration 0197). */
+    propertyId: uuid('property_id').notNull(),
     largePath: text('large_path').notNull(),
     smallPath: text('small_path').notNull(),
     type: text('type').notNull(),
@@ -144,18 +146,27 @@ export const menuPhotos = pgTable(
     foreignKey({ name: 'menu_photos_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
+    foreignKey({
+      name: 'menu_photos_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    uniqueIndex('menu_photos_in_property').on(t.workspaceId, t.id, t.propertyId),
+    index('menu_photos_property').on(t.workspaceId, t.propertyId),
     check('menu_photos_type', sql`${t.type} in ('image/webp', 'image/jpeg', 'image/png')`),
     check('menu_photos_version', sql`${t.version} ~ '^[0-9a-f]{12}$'`),
     check('menu_photos_paths', sql`char_length(${t.largePath}) <= 300 and char_length(${t.smallPath}) <= 300`),
   ],
 );
 
-/** An item (AC-6522): one thing, placed in any number of sections. Up to 2,000 a workspace. */
+/** An item (AC-6522): one thing, placed in any number of its business's sections. Up to 2,000 a property. */
 export const menuItems = pgTable(
   'menu_items',
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** The business whose library holds it (spec 0065 H7, migration 0197): its price is in that business's currency. */
+    propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     description: text('description'),
     /** Minor units of the property's currency; null with sizes, or with a price note ("Market price"). */
@@ -186,10 +197,17 @@ export const menuItems = pgTable(
       'cascade',
     ),
     foreignKey({
+      name: 'menu_items_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    // A dish shows only its own business's photo; the photo going sets `photo_id` alone null (migration 0197).
+    foreignKey({
       name: 'menu_items_photo',
-      columns: [t.workspaceId, t.photoId],
-      foreignColumns: [menuPhotos.workspaceId, menuPhotos.id],
+      columns: [t.workspaceId, t.photoId, t.propertyId],
+      foreignColumns: [menuPhotos.workspaceId, menuPhotos.id, menuPhotos.propertyId],
     }).onDelete('set null'),
+    index('menu_items_property').on(t.workspaceId, t.propertyId),
     index('menu_items_sold_out')
       .on(t.workspaceId)
       .where(sql`${t.soldOut}`),
@@ -259,12 +277,14 @@ export const menuItemSizes = pgTable(
   ],
 );
 
-/** An option group (AC-6523), shared between items: Milk, Sides. Up to 200. */
+/** An option group (AC-6523), shared between one business's items: Milk, Sides. Up to 200 a property. */
 export const menuOptionGroups = pgTable(
   'menu_option_groups',
   {
     workspaceId: workspaceId(),
     id: id(),
+    /** The business whose dishes offer it (spec 0065 H7, migration 0197). */
+    propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     rule: text('rule').notNull(),
     /** The fewest a guest must pick; 1 or more makes the group required. */
@@ -280,6 +300,12 @@ export const menuOptionGroups = pgTable(
       columns: [t.workspaceId],
       foreignColumns: [workspaces.id],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'menu_option_groups_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
+    index('menu_option_groups_property').on(t.workspaceId, t.propertyId),
     check('menu_option_groups_name', sql`char_length(${t.name}) between 1 and 40`),
     check('menu_option_groups_min', sql`${t.min} between 0 and 20`),
     check(
@@ -368,13 +394,14 @@ export const menuVersions = pgTable(
 );
 
 /**
- * The draft's state, one row a workspace (AC-6525): how many changes wait for Publish, when it last published, and
+ * The draft's state, one row a property (AC-6525; spec 0065 H7, migration 0197): how many changes wait for Publish, when it last published, and
  * the rows as published (`published`), which Discard puts back, and whether guests see it (`hidden`).
  */
 export const menuDrafts = pgTable(
   'menu_drafts',
   {
     workspaceId: workspaceId(),
+    propertyId: uuid('property_id').notNull(),
     changes: integer('changes').notNull().default(0),
     published: jsonb('published'),
     publishedAt: timestamptz('published_at'),
@@ -384,10 +411,15 @@ export const menuDrafts = pgTable(
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'menu_drafts_pkey', columns: [t.workspaceId] }),
+    primaryKey({ name: 'menu_drafts_pkey', columns: [t.workspaceId, t.propertyId] }),
     foreignKey({ name: 'menu_drafts_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
+    foreignKey({
+      name: 'menu_drafts_property',
+      columns: [t.workspaceId, t.propertyId],
+      foreignColumns: [properties.workspaceId, properties.id],
+    }),
     check('menu_drafts_changes', sql`${t.changes} >= 0`),
     check(
       'menu_drafts_published',

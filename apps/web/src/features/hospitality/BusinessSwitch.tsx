@@ -5,7 +5,8 @@
 import type { DataLayer, HospitalityHeld, HospitalityStore, PropertiesView } from '@crm/data';
 import { useHospitality } from '@crm/data/react';
 import { Menu, MenuItem, MenuTrigger, NavItem } from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { useRouter } from '@tanstack/react-router';
+import { useEffect, useRef, useState } from 'react';
 import { switchStrings as strings } from './switch-strings.ts';
 
 const LOADING = { status: 'loading' } as const;
@@ -46,6 +47,17 @@ export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
   }, [data]);
   const listed = useHospitality<PropertiesView>(store === undefined ? NOT_HELD : store.properties(slug));
   const choice = useHospitality<string | undefined>(store === undefined ? NOT_HELD : store.choice(slug));
+  // A new choice, from here or from Settings › Business, reads the open page again, so its loader reads the business
+  // now chosen: Menus, Design and the other hospitality screens follow it (AC-6517).
+  const router = useRouter();
+  const chosen = choice.status === 'ready' ? (choice.value ?? '') : undefined;
+  const last = useRef(chosen);
+  useEffect(() => {
+    if (chosen === undefined) return;
+    const was = last.current;
+    last.current = chosen;
+    if (was !== undefined && was !== chosen) void router.invalidate();
+  }, [chosen, router]);
   if (store === undefined || listed.status !== 'ready' || listed.value.properties.length < 2) return null;
   const { properties } = listed.value;
   const current = (choice.status === 'ready' ? choice.value : undefined) ?? properties[0]?.id;

@@ -281,6 +281,11 @@ export const ACCESS_TABLE = {
   getBusiness: { permission: 'hospitality.manage' },
   saveBusiness: { permission: 'hospitality.manage' },
   createPlace: { permission: 'hospitality.manage' },
+  // Properties (spec 0065 H7): the list is every member's while a business app is on (the switcher); adding and
+  // removing one is an admin's.
+  listProperties: { anyMember: true },
+  createProperty: { permission: 'workspace.manage' },
+  removeProperty: { permission: 'workspace.manage' },
   updatePlace: { permission: 'hospitality.manage' },
   listResources: { permission: 'hospitality.manage' },
   saveArea: { permission: 'hospitality.manage' },

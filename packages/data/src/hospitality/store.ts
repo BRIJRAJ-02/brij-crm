@@ -548,6 +548,11 @@ export function openHospitality(given: {
     /** Switches the business every hospitality screen shows (AC-6517), kept on this device. */
     choose,
     /**
+     * The business this workspace works in now, as a call names it: undefined is the first (or the list not read yet),
+     * which no call names. The Menu store and the screens' links read it.
+     */
+    current: (workspace: string): string | undefined => choiceOf(workspace),
+    /**
      * Adds a business (AC-6516) under `id` (the screen's own, from `newId`); it lists once the server made it, and
      * the sidebar's switcher follows. `LIMIT_REACHED` past 20 comes back for the screen to say.
      */

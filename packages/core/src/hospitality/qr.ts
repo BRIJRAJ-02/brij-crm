@@ -31,7 +31,7 @@ export const QR_SCAN_DAYS = 30;
 /** One place's QR codes, read in the caller's transaction. */
 async function readQrCodes(tx: WorkspaceTx, workspaceId: string, placeId: string): Promise<PlaceQrCodes> {
   const [place] = await tx
-    .select({ id: places.id, name: places.name, menuKey: places.menuKey })
+    .select({ id: places.id, name: places.name, menuKey: places.menuKey, propertyId: places.propertyId })
     .from(places)
     .where(and(eq(places.workspaceId, workspaceId), eq(places.id, placeId)));
   if (place === undefined) throw refuse('NOT_FOUND', PLACE_NOT_FOUND);
@@ -41,10 +41,11 @@ async function readQrCodes(tx: WorkspaceTx, workspaceId: string, placeId: string
     .where(and(eq(menuVersions.workspaceId, workspaceId), eq(menuVersions.placeId, placeId)))
     .orderBy(desc(menuVersions.version))
     .limit(1);
+  // Live or Hidden is the place's business's (spec 0065 H7).
   const [draft] = await tx
     .select({ hidden: menuDrafts.hidden })
     .from(menuDrafts)
-    .where(eq(menuDrafts.workspaceId, workspaceId));
+    .where(and(eq(menuDrafts.workspaceId, workspaceId), eq(menuDrafts.propertyId, place.propertyId)));
   const rows = await tx
     .select({ id: resources.id, label: resources.label, code: resources.tableCode, areaName: areas.name })
     .from(resources)

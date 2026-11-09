@@ -15,7 +15,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
 
-const { businessPages, properties, workspaces } = schema;
+const { businessPages, menuDrafts, properties, workspaces } = schema;
 
 /** The refusal for a property that isn't there, or is another workspace's: the same answer either way. */
 export const PROPERTY_NOT_FOUND = 'That business doesn’t exist.';
@@ -86,14 +86,17 @@ export async function currentProperty(
 }
 
 /**
- * What each of the workspace's properties holds that ties it down (AC-6590): its places, menus, service categories,
- * services and business photos, in one grouped statement however many properties there are.
+ * What each of the workspace's properties holds that ties it down (AC-6590): its places, menus, dishes, option groups,
+ * menu photos, service categories, services and business photos, in one grouped statement however many there are.
  */
 async function holdsByProperty(tx: WorkspaceTx, workspaceId: string): Promise<ReadonlyMap<string, number>> {
   const result = await tx.execute<{ property_id: string; n: number }>(sql`
     select property_id::text, count(*)::int as n from (
       select property_id from places where workspace_id = ${workspaceId}::uuid
       union all select property_id from menus where workspace_id = ${workspaceId}::uuid
+      union all select property_id from menu_items where workspace_id = ${workspaceId}::uuid
+      union all select property_id from menu_option_groups where workspace_id = ${workspaceId}::uuid
+      union all select property_id from menu_photos where workspace_id = ${workspaceId}::uuid
       union all select property_id from service_categories where workspace_id = ${workspaceId}::uuid
       union all select property_id from services where workspace_id = ${workspaceId}::uuid
       union all select property_id from business_photos where workspace_id = ${workspaceId}::uuid
@@ -103,34 +106,20 @@ async function holdsByProperty(tx: WorkspaceTx, workspaceId: string): Promise<Re
 }
 
 /**
- * Whether a property has a price that a currency change would misread (AC-6519). A dish counts for the property whose
- * menu places it; a dish no menu places yet counts for the first property, as every dish did before there were two.
+ * Whether a property has a price that a currency change would misread (AC-6519): a priced dish or size in its own
+ * library (migration 0197), or a priced service of its own.
  */
 async function isPriced(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<boolean> {
   const result = await tx.execute<{ priced: boolean }>(sql`
-    with own_items as (
-      select i.id from menu_items i
-      where i.workspace_id = ${workspaceId}::uuid
-        and (
-          exists (
-            select 1 from menu_placements pl
-            join menu_sections s on s.workspace_id = pl.workspace_id and s.id = pl.section_id
-            join menus m on m.workspace_id = s.workspace_id and m.id = s.menu_id
-            where pl.workspace_id = i.workspace_id and pl.item_id = i.id and m.property_id = ${propertyId}::uuid
-          )
-          or (
-            not exists (select 1 from menu_placements pl where pl.workspace_id = i.workspace_id and pl.item_id = i.id)
-            and ${propertyId}::uuid = ${currentPropertyRef(workspaceId)}
-          )
-        )
-    )
     select
       exists (
-        select 1 from menu_items i join own_items o on o.id = i.id
-        where i.workspace_id = ${workspaceId}::uuid and i.price_minor is not null
+        select 1 from menu_items i
+        where i.workspace_id = ${workspaceId}::uuid and i.property_id = ${propertyId}::uuid
+          and i.price_minor is not null
       ) or exists (
-        select 1 from menu_item_sizes z join own_items o on o.id = z.item_id
-        where z.workspace_id = ${workspaceId}::uuid
+        select 1 from menu_item_sizes z
+        join menu_items i on i.workspace_id = z.workspace_id and i.id = z.item_id
+        where z.workspace_id = ${workspaceId}::uuid and i.property_id = ${propertyId}::uuid
       ) or exists (
         select 1 from service_variants v
         join services s on s.workspace_id = v.workspace_id and s.id = v.service_id
@@ -279,7 +268,7 @@ export async function removeProperty(
       const first = await currentProperty(tx, scope.workspaceId);
       if (first.id === property.id) throw refuse('IN_USE', 'The first business can’t be removed.');
       if (((await holdsByProperty(tx, scope.workspaceId)).get(property.id) ?? 0) > 0) {
-        throw refuse('IN_USE', 'Remove this business’s places, menus and services first.');
+        throw refuse('IN_USE', 'Remove this business’s places, menus, dishes and services first.');
       }
       const [page] = await tx
         .select({ handle: businessPages.handle })
@@ -291,6 +280,10 @@ export async function removeProperty(
       await tx
         .delete(businessPages)
         .where(and(eq(businessPages.workspaceId, scope.workspaceId), eq(businessPages.propertyId, property.id)));
+      // Its menu draft's state goes too: with no menus and no dishes, it holds nothing anyone sees.
+      await tx
+        .delete(menuDrafts)
+        .where(and(eq(menuDrafts.workspaceId, scope.workspaceId), eq(menuDrafts.propertyId, property.id)));
       await tx
         .delete(properties)
         .where(and(eq(properties.workspaceId, scope.workspaceId), eq(properties.id, property.id)));

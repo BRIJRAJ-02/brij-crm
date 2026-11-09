@@ -3,7 +3,8 @@
 // and the server's answer (the whole draft) replaces it; refused, the copy goes back and the refusal comes back to the
 // screen. Publish, Discard and Sold out wait for nothing either: Sold out flips at once (it is live for guests, AC-6526),
 // Publish shows "0 changes" when the server answers. Only managers edit, one at a time, so no change event carries
-// the draft: another tab sees a change when it holds the draft again.
+// the draft: another tab sees a change when it holds the draft again. Each business has its own draft (spec 0065 H7):
+// the store holds one copy per workspace and business, and every call names the business chosen on this device.
 import type {
   ItemFields,
   MenuDraft,
@@ -17,11 +18,13 @@ import { toDataError, type DataError } from '../errors.ts';
 import { holder, type HospitalityHeld } from '../hospitality/store.ts';
 
 type Options = { signal?: AbortSignal };
-type Scoped = { workspace: string; mutationId: string };
+/** Which business a call works in (spec 0065 H7): left out, the workspace's first. */
+type InProperty = { property?: string };
+type Scoped = { workspace: string; mutationId: string } & InProperty;
 
 /** The menu procedures the store calls, as the data layer's client answers them. */
 export interface MenuProcedures {
-  readonly draft: (input: { workspace: string }, options: Options) => Promise<MenuDraft>;
+  readonly draft: (input: { workspace: string } & InProperty, options: Options) => Promise<MenuDraft>;
   readonly saveMenu: (
     input: Scoped & {
       id: string;
@@ -87,11 +90,26 @@ export interface MenuPhotoBlobs {
   readonly small: Blob;
 }
 
-/** Sends a photo to the api's own upload route, answering the draft or rejecting with a DataError. */
-export type SendMenuPhoto = (workspace: string, itemId: string, photo: MenuPhotoBlobs) => Promise<MenuDraft>;
+/**
+ * Sends a photo to the api's own upload route for the business named (none is the first), answering its draft or
+ * rejecting with a DataError.
+ */
+export type SendMenuPhoto = (
+  workspace: string,
+  property: string | undefined,
+  itemId: string,
+  photo: MenuPhotoBlobs,
+) => Promise<MenuDraft>;
 
-/** Sends a cover to the api's own upload route, answering what the look will name, or rejecting with a DataError. */
-export type SendMenuCover = (workspace: string, photo: MenuPhotoBlobs) => Promise<MenuLookCover>;
+/**
+ * Sends a cover to the api's own upload route for the business named (none is the first), answering what the look
+ * will name, or rejecting with a DataError.
+ */
+export type SendMenuCover = (
+  workspace: string,
+  property: string | undefined,
+  photo: MenuPhotoBlobs,
+) => Promise<MenuLookCover>;
 
 /** One more change counted on the copy, as the server will count it. */
 const counted = (draft: MenuDraft): MenuDraft => ({ ...draft, changes: draft.changes + 1 });
@@ -113,30 +131,44 @@ export function openMenus(given: {
   readonly sendPhoto: SendMenuPhoto;
   readonly sendCover: SendMenuCover;
   readonly now?: () => number;
+  /**
+   * The business each workspace works in on this device (spec 0065 H7, AC-6517: the hospitality store's choice);
+   * undefined is the first, which no call names. Left out, every call works in the first.
+   */
+  readonly propertyOf?: (workspace: string) => string | undefined;
 }) {
   const { api, call, mintId } = given;
   const now = given.now ?? Date.now;
+  const propertyOf = (workspace: string) => given.propertyOf?.(workspace);
   const drafts = new Map<string, ReturnType<typeof holder<MenuDraft>>>();
-  const draftOf = (workspace: string) => {
-    let found = drafts.get(workspace);
+  /** The business's draft: one held copy per workspace and business, so a switch shows the other's at once. */
+  const draftOf = (workspace: string, property = propertyOf(workspace)) => {
+    const key = `${workspace}:${property ?? ''}`;
+    let found = drafts.get(key);
     if (found === undefined) {
-      found = holder(() => call((options) => api.draft({ workspace }, options)), now);
-      drafts.set(workspace, found);
+      const at: InProperty = property === undefined ? {} : { property };
+      found = holder(() => call((options) => api.draft({ workspace, ...at }, options)), now);
+      drafts.set(key, found);
     }
     return found;
   };
-  /** One edit: shown at once by `show`, then the server's whole draft. */
+  /** One edit to the business chosen now: shown at once by `show`, then the server's whole draft. */
   const edit = (
     workspace: string,
     show: (draft: MenuDraft) => MenuDraft,
-    send: (mutationId: string, options: Options) => Promise<MenuDraft>,
-  ): Promise<DataError | undefined> =>
-    draftOf(workspace).change(show, () => call((options) => send(mintId(), options)));
+    send: (mutationId: string, options: Options, at: InProperty) => Promise<MenuDraft>,
+  ): Promise<DataError | undefined> => {
+    const property = propertyOf(workspace);
+    const at: InProperty = property === undefined ? {} : { property };
+    return draftOf(workspace, property).change(show, () => call((options) => send(mintId(), options, at)));
+  };
 
   return {
     /** A new id for a menu, section, item or group the screen makes, so a retry makes one. */
     newId: mintId,
-    /** The whole draft (AC-6525), read when first held. */
+    /** The business the draft is of now (spec 0065 H7): undefined is the first. */
+    property: (workspace: string): string | undefined => propertyOf(workspace),
+    /** The chosen business's whole draft (AC-6525), read when first held. */
     draft: (workspace: string): HospitalityHeld<MenuDraft> => draftOf(workspace).held,
     /** Reads the draft now (the route's loader); rejects with the refusal. */
     readDraft: (workspace: string): Promise<MenuDraft> => draftOf(workspace).read(),
@@ -192,10 +224,11 @@ export function openMenus(given: {
                 : draft.menus.map((each) => (each.id === menu.id ? next : each)),
           });
         },
-        (mutationId, options) =>
+        (mutationId, options, at) =>
           api.saveMenu(
             {
               workspace,
+              ...at,
               id: menu.id,
               name: menu.name,
               placeIds: [...menu.placeIds],
@@ -218,7 +251,7 @@ export function openMenus(given: {
             menus: draft.menus.filter((each) => each.id !== menuId),
             sections: draft.sections.filter((each) => each.menuId !== menuId),
           }),
-        (mutationId, options) => api.deleteMenu({ workspace, menuId, mutationId }, options),
+        (mutationId, options, at) => api.deleteMenu({ workspace, ...at, menuId, mutationId }, options),
       ),
     /** Adds a section under `id`, or changes one (AC-6521). */
     saveSection: (
@@ -265,10 +298,11 @@ export function openMenus(given: {
                 : draft.sections.map((each) => (each.id === section.id ? next : each)),
           });
         },
-        (mutationId, options) =>
+        (mutationId, options, at) =>
           api.saveSection(
             {
               workspace,
+              ...at,
               id: section.id,
               menuId: section.menuId,
               name: section.name,
@@ -290,7 +324,7 @@ export function openMenus(given: {
             ...draft,
             sections: draft.sections.filter((each) => each.id !== sectionId && each.parentId !== sectionId),
           }),
-        (mutationId, options) => api.deleteSection({ workspace, sectionId, mutationId }, options),
+        (mutationId, options, at) => api.deleteSection({ workspace, ...at, sectionId, mutationId }, options),
       ),
     /** Adds an item under `id` (placed at the end of `sectionId`), or changes one, whole (AC-6522, AC-6523). */
     saveItem: (workspace: string, id: string, item: ItemFields, sectionId?: string): Promise<DataError | undefined> =>
@@ -329,8 +363,11 @@ export function openMenus(given: {
                 : draft.sections,
           });
         },
-        (mutationId, options) =>
-          api.saveItem({ workspace, id, item, ...(sectionId === undefined ? {} : { sectionId }), mutationId }, options),
+        (mutationId, options, at) =>
+          api.saveItem(
+            { workspace, ...at, id, item, ...(sectionId === undefined ? {} : { sectionId }), mutationId },
+            options,
+          ),
       ),
     /** Deletes an item from every section and menu (the screen asks first). */
     deleteItem: (workspace: string, itemId: string): Promise<DataError | undefined> =>
@@ -344,7 +381,7 @@ export function openMenus(given: {
               each.itemIds.includes(itemId) ? { ...each, itemIds: each.itemIds.filter((id) => id !== itemId) } : each,
             ),
           }),
-        (mutationId, options) => api.deleteItem({ workspace, itemId, mutationId }, options),
+        (mutationId, options, at) => api.deleteItem({ workspace, ...at, itemId, mutationId }, options),
       ),
     /** Places an item in another section too (AC-6524), or takes it out of one. */
     placeItem: (
@@ -364,7 +401,8 @@ export function openMenus(given: {
               return { ...each, itemIds: placed ? [...without, itemId] : without };
             }),
           }),
-        (mutationId, options) => api.placeItem({ workspace, itemId, sectionId, placed, mutationId }, options),
+        (mutationId, options, at) =>
+          api.placeItem({ workspace, ...at, itemId, sectionId, placed, mutationId }, options),
       ),
     /** Moves a menu, a section among its siblings, or an item within a section (drag to reorder). */
     move: (
@@ -408,9 +446,9 @@ export function openMenus(given: {
             }),
           });
         },
-        (mutationId, options) =>
+        (mutationId, options, at) =>
           api.move(
-            { workspace, part, id, toIndex, ...(sectionId === undefined ? {} : { sectionId }), mutationId },
+            { workspace, ...at, part, id, toIndex, ...(sectionId === undefined ? {} : { sectionId }), mutationId },
             options,
           ),
       ),
@@ -447,10 +485,11 @@ export function openMenus(given: {
             groups: was ? draft.groups.map((each) => (each.id === group.id ? next : each)) : [...draft.groups, next],
           });
         },
-        (mutationId, options) =>
+        (mutationId, options, at) =>
           api.saveGroup(
             {
               workspace,
+              ...at,
               id: group.id,
               name: group.name,
               rule: group.rule,
@@ -476,7 +515,7 @@ export function openMenus(given: {
                 : each,
             ),
           }),
-        (mutationId, options) => api.deleteGroup({ workspace, groupId, mutationId }, options),
+        (mutationId, options, at) => api.deleteGroup({ workspace, ...at, groupId, mutationId }, options),
       ),
     /** Sold out on or off (AC-6526): live for guests at once, never a draft change. */
     setSoldOut: (workspace: string, itemId: string, soldOut: boolean): Promise<DataError | undefined> =>
@@ -486,28 +525,28 @@ export function openMenus(given: {
           ...draft,
           items: draft.items.map((each) => (each.id === itemId ? { ...each, soldOut } : each)),
         }),
-        (mutationId, options) => api.setSoldOut({ workspace, itemId, soldOut, mutationId }, options),
+        (mutationId, options, at) => api.setSoldOut({ workspace, ...at, itemId, soldOut, mutationId }, options),
       ),
     /** Live or Hidden: hides every guest menu for now, or shows it again. Never a draft change. */
     setHidden: (workspace: string, hidden: boolean): Promise<DataError | undefined> =>
       edit(
         workspace,
         (draft) => ({ ...draft, hidden }),
-        (mutationId, options) => api.setHidden({ workspace, hidden, mutationId }, options),
+        (mutationId, options, at) => api.setHidden({ workspace, ...at, hidden, mutationId }, options),
       ),
     /** Publish (AC-6525): guests see the draft from now on. */
     publish: (workspace: string): Promise<DataError | undefined> =>
       edit(
         workspace,
         (draft) => draft,
-        (mutationId, options) => api.publish({ workspace, mutationId }, options),
+        (mutationId, options, at) => api.publish({ workspace, ...at, mutationId }, options),
       ),
     /** Discard (AC-6525): back to what guests see. */
     discard: (workspace: string): Promise<DataError | undefined> =>
       edit(
         workspace,
         (draft) => draft,
-        (mutationId, options) => api.discard({ workspace, mutationId }, options),
+        (mutationId, options, at) => api.discard({ workspace, ...at, mutationId }, options),
       ),
     /**
      * Saves the guest look (AC-6570 as amended): shows at once on the copy, and the copy goes back if it's refused. No
@@ -517,28 +556,30 @@ export function openMenus(given: {
       edit(
         workspace,
         (draft) => ({ ...draft, look }),
-        (mutationId, options) => api.saveLook({ workspace, look, mutationId }, options),
+        (mutationId, options, at) => api.saveLook({ workspace, ...at, look, mutationId }, options),
       ),
     /** Keeps a new cover drawn at both widths, answering what the look will name; a refusal comes back as a DataError. */
     uploadCover: async (workspace: string, photo: MenuPhotoBlobs): Promise<MenuLookCover | DataError> => {
       try {
-        return await given.sendCover(workspace, photo);
+        return await given.sendCover(workspace, propertyOf(workspace), photo);
       } catch (error) {
         return toDataError(error);
       }
     },
     /** Gives an item a photo drawn at both widths (AC-6527); shows once the server kept it. */
-    uploadPhoto: (workspace: string, itemId: string, photo: MenuPhotoBlobs): Promise<DataError | undefined> =>
-      draftOf(workspace).change(
+    uploadPhoto: (workspace: string, itemId: string, photo: MenuPhotoBlobs): Promise<DataError | undefined> => {
+      const property = propertyOf(workspace);
+      return draftOf(workspace, property).change(
         (draft) => draft,
         async () => {
           try {
-            return await given.sendPhoto(workspace, itemId, photo);
+            return await given.sendPhoto(workspace, property, itemId, photo);
           } catch (error) {
             throw toDataError(error);
           }
         },
-      ),
+      );
+    },
     /** Takes an item's photo off. */
     removePhoto: (workspace: string, itemId: string): Promise<DataError | undefined> =>
       edit(
@@ -552,7 +593,7 @@ export function openMenus(given: {
               return rest;
             }),
           }),
-        (mutationId, options) => api.removePhoto({ workspace, itemId, mutationId }, options),
+        (mutationId, options, at) => api.removePhoto({ workspace, ...at, itemId, mutationId }, options),
       ),
 
     /** Signed out: forgets every copy. */

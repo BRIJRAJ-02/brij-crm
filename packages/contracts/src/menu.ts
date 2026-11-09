@@ -6,7 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { hoursProblem, WEEK_DAYS } from './hospitality-model.ts';
-import { PlaceDayRanges, PlaceHours } from './hospitality.ts';
+import { PlaceDayRanges, PlaceHours, PropertyScoped } from './hospitality.ts';
 import {
   ALLERGEN_LEVELS,
   DIET_MARKS,
@@ -21,7 +21,6 @@ import {
 } from './menu-model.ts';
 import { Timestamp } from './values/attribute-values.ts';
 import { Uuid } from './values/ids.ts';
-import { WorkspaceScoped } from './workspaces.ts';
 
 export * from './menu-model.ts';
 
@@ -234,7 +233,7 @@ export type MenuDraft = z.infer<typeof MenuDraft>;
 const Write = { mutationId: Uuid };
 
 /** Adds or changes a menu (`id` is the client's own, so a retry makes one). */
-export const SaveMenuInput = WorkspaceScoped.extend({
+export const SaveMenuInput = PropertyScoped.extend({
   id: Uuid,
   name: Name(M.menuNameMax, 'Name the menu, such as Dinner.'),
   note: Text(M.menuNoteMax).optional(),
@@ -250,12 +249,12 @@ export const SaveMenuInput = WorkspaceScoped.extend({
 export type SaveMenuInput = z.infer<typeof SaveMenuInput>;
 
 /** Names one menu. */
-export const MenuIdInput = WorkspaceScoped.extend({ menuId: Uuid, ...Write });
+export const MenuIdInput = PropertyScoped.extend({ menuId: Uuid, ...Write });
 /** Names one menu. */
 export type MenuIdInput = z.infer<typeof MenuIdInput>;
 
 /** Adds or changes a section (AC-6521). A sub section names its parent, which must be a top level one. */
-export const SaveSectionInput = WorkspaceScoped.extend({
+export const SaveSectionInput = PropertyScoped.extend({
   id: Uuid,
   menuId: Uuid,
   parentId: Uuid.optional(),
@@ -269,7 +268,7 @@ export const SaveSectionInput = WorkspaceScoped.extend({
 export type SaveSectionInput = z.infer<typeof SaveSectionInput>;
 
 /** Names one section. */
-export const SectionIdInput = WorkspaceScoped.extend({ sectionId: Uuid, ...Write });
+export const SectionIdInput = PropertyScoped.extend({ sectionId: Uuid, ...Write });
 /** Names one section. */
 export type SectionIdInput = z.infer<typeof SectionIdInput>;
 
@@ -316,7 +315,7 @@ export const ItemFields = z
 export type ItemFields = z.infer<typeof ItemFields>;
 
 /** Adds or changes an item; a new one is placed at the end of `sectionId`. */
-export const SaveItemInput = WorkspaceScoped.extend({
+export const SaveItemInput = PropertyScoped.extend({
   id: Uuid,
   sectionId: Uuid.optional(),
   item: ItemFields,
@@ -326,12 +325,12 @@ export const SaveItemInput = WorkspaceScoped.extend({
 export type SaveItemInput = z.infer<typeof SaveItemInput>;
 
 /** Names one item. */
-export const ItemIdInput = WorkspaceScoped.extend({ itemId: Uuid, ...Write });
+export const ItemIdInput = PropertyScoped.extend({ itemId: Uuid, ...Write });
 /** Names one item. */
 export type ItemIdInput = z.infer<typeof ItemIdInput>;
 
 /** Places an item in a section, or takes it out (AC-6524). An item left in no section stays in the library. */
-export const PlaceItemInput = WorkspaceScoped.extend({
+export const PlaceItemInput = PropertyScoped.extend({
   itemId: Uuid,
   sectionId: Uuid,
   placed: z.boolean(),
@@ -341,7 +340,7 @@ export const PlaceItemInput = WorkspaceScoped.extend({
 export type PlaceItemInput = z.infer<typeof PlaceItemInput>;
 
 /** Moves a menu, a section among its siblings, or an item within its section, to `toIndex`. */
-export const MoveMenuPartInput = WorkspaceScoped.extend({
+export const MoveMenuPartInput = PropertyScoped.extend({
   part: z.enum(['menu', 'section', 'placement']),
   id: Uuid,
   /** The section a placement moves in. */
@@ -360,7 +359,7 @@ export const MenuOptionFields = z.object({
 });
 
 /** Adds or changes an option group, whole (AC-6523). */
-export const SaveGroupInput = WorkspaceScoped.extend({
+export const SaveGroupInput = PropertyScoped.extend({
   id: Uuid,
   name: Name(M.groupNameMax, 'Name the group, such as Milk.'),
   rule: z.enum(OPTION_RULES),
@@ -385,27 +384,27 @@ export const SaveGroupInput = WorkspaceScoped.extend({
 export type SaveGroupInput = z.infer<typeof SaveGroupInput>;
 
 /** Names one option group. */
-export const GroupIdInput = WorkspaceScoped.extend({ groupId: Uuid, ...Write });
+export const GroupIdInput = PropertyScoped.extend({ groupId: Uuid, ...Write });
 /** Names one option group. */
 export type GroupIdInput = z.infer<typeof GroupIdInput>;
 
 /** Sold out on or off (AC-6526): live at once, no Publish. */
-export const SoldOutInput = WorkspaceScoped.extend({ itemId: Uuid, soldOut: z.boolean(), ...Write });
+export const SoldOutInput = PropertyScoped.extend({ itemId: Uuid, soldOut: z.boolean(), ...Write });
 /** Sold out on or off. */
 export type SoldOutInput = z.infer<typeof SoldOutInput>;
 
 /** Live or Hidden (spec 0065, H1): hide the published menu from guests for now, or show it again. No Publish. */
-export const MenuHiddenInput = WorkspaceScoped.extend({ hidden: z.boolean(), ...Write });
+export const MenuHiddenInput = PropertyScoped.extend({ hidden: z.boolean(), ...Write });
 /** Live or Hidden. */
 export type MenuHiddenInput = z.infer<typeof MenuHiddenInput>;
 
 /** Saves the guest look. No Publish: guests see it on their next read. */
-export const SaveMenuLookInput = WorkspaceScoped.extend({ look: MenuLook, ...Write });
+export const SaveMenuLookInput = PropertyScoped.extend({ look: MenuLook, ...Write });
 /** Saves the guest look. */
 export type SaveMenuLookInput = z.infer<typeof SaveMenuLookInput>;
 
 /** Publish or Discard (AC-6525). */
-export const MenuDraftWrite = WorkspaceScoped.extend(Write);
+export const MenuDraftWrite = PropertyScoped.extend(Write);
 /** Publish or Discard. */
 export type MenuDraftWrite = z.infer<typeof MenuDraftWrite>;
 
@@ -537,9 +536,12 @@ export const PublicMenuTable = z.object({ label: z.string(), name: z.string() })
 /** The table a QR named. */
 export type PublicMenuTable = z.infer<typeof PublicMenuTable>;
 
-/** The Menu app's procedures (AC-6520 to AC-6527). */
+/**
+ * The Menu app's procedures (AC-6520 to AC-6527). Each works in one business (spec 0065 H7): `property` names one of
+ * the workspace's, left out it is the first; a menu, section, dish or group of another business answers `NOT_FOUND`.
+ */
 export const menuContract = {
-  draft: oc.input(WorkspaceScoped).output(MenuDraft),
+  draft: oc.input(PropertyScoped).output(MenuDraft),
   saveMenu: oc.input(SaveMenuInput).output(MenuDraft),
   deleteMenu: oc.input(MenuIdInput).output(MenuDraft),
   saveSection: oc.input(SaveSectionInput).output(MenuDraft),

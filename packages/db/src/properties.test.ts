@@ -257,4 +257,55 @@ describe('properties (spec 0065 H7)', () => {
     `);
     expect(orphans.rows).toEqual([]);
   });
+
+  it('keeps each business’s dishes, photos and draft its own (migration 0197)', async () => {
+    const id = await workspace('menu-library');
+    const first = await firstId(id);
+    const second = await secondProperty(id);
+    const photo = randomUUID();
+    const item = randomUUID();
+    await db.withWorkspace(id, (tx) =>
+      tx.execute(sql`insert into menu_photos (workspace_id, id, property_id, large_path, small_path, type, version)
+        values (${id}, ${photo}, ${second}, 'a', 'b', 'image/webp', '0123456789ab')`),
+    );
+    // A dish shows only its own business's photo.
+    await expect(
+      db.withWorkspace(id, (tx) =>
+        tx.execute(sql`insert into menu_items (workspace_id, id, property_id, name, photo_id)
+          values (${id}, ${item}, ${first}, 'Soup', ${photo})`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
+    await db.withWorkspace(id, (tx) =>
+      tx.execute(sql`insert into menu_items (workspace_id, id, property_id, name, photo_id)
+        values (${id}, ${item}, ${second}, 'Soup', ${photo})`),
+    );
+    // The photo going leaves the dish, with no photo and on its own business.
+    await db.withWorkspace(id, (tx) => tx.execute(sql`delete from menu_photos where id = ${photo}`));
+    const dish = await db.withWorkspace(id, (tx) =>
+      tx.execute<{ photo_id: string | null; property_id: string }>(
+        sql`select photo_id, property_id::text from menu_items where id = ${item}`,
+      ),
+    );
+    expect(dish.rows).toEqual([{ photo_id: null, property_id: second }]);
+    // One draft state per business; an insert that names none lands on the first, as the old code's would.
+    await db.withWorkspace(id, (tx) =>
+      tx.execute(sql`insert into menu_drafts (workspace_id, property_id, changes) values (${id}, ${second}, 2)`),
+    );
+    await db.withWorkspace(id, (tx) =>
+      tx.execute(sql`insert into menu_drafts (workspace_id, changes) values (${id}, 1)`),
+    );
+    const drafts = await db.withWorkspace(id, (tx) =>
+      tx.execute<{ property_id: string; changes: number }>(
+        sql`select property_id::text, changes from menu_drafts order by changes`,
+      ),
+    );
+    expect(drafts.rows).toEqual([
+      { property_id: first, changes: 1 },
+      { property_id: second, changes: 2 },
+    ]);
+    // A business with a dish can't go.
+    await expect(
+      db.withWorkspace(id, (tx) => tx.execute(sql`delete from properties where id = ${second}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
+  });
 });

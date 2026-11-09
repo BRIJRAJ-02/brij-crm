@@ -143,6 +143,7 @@ function storeOf(draft: MenuDraft) {
   };
   const store = {
     newId: () => id(99),
+    property: () => undefined,
     draft: () => heldOf(draft),
     setSoldOut: done('soldOut'),
     publish: done('publish'),
