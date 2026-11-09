@@ -164,3 +164,21 @@ describe('axe and the pictures', () => {
     }
   }
 });
+
+describe('a member limited to one business (spec 0065 H7, AC-6596)', () => {
+  // The server lists only the businesses a member reaches, so someone limited to one sees the sidebar as a workspace
+  // with one business does: no switcher, and nothing of the others.
+  for (const theme of THEMES) {
+    for (const width of [1280, 390]) {
+      it(`sees no switcher in ${theme} at ${String(width)}`, async () => {
+        await page.viewport(width, 900);
+        applyTheme(theme);
+        shown = await renderInApp(sidebarWith(dataOf(1).data), { data: {}, pattern: '/w/$slug', at: '/w/acme' });
+        await expect.element(page.getByRole('link', { name: 'Menus' })).toBeVisible();
+        await expect.element(page.getByRole('button', { name: /Somewhere Nowhere/ })).not.toBeInTheDocument();
+        expect(await axeViolations()).toEqual([]);
+        await shoot(`limited-sidebar-${theme}-${String(width)}`);
+      });
+    }
+  }
+});

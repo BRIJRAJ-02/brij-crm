@@ -8,6 +8,7 @@ import type {
   DataLayer,
   InvitationView,
   JoinRequestView,
+  MemberReachView,
   MemberView,
   MyAccess,
   RolesList,
@@ -92,11 +93,16 @@ afterEach(() => {
   resetTheme();
 });
 
-async function render(members: readonly MemberView[] = [ADA, LINUS]) {
+async function render(
+  members: readonly MemberView[] = [ADA, LINUS],
+  extra: Record<string, unknown> = {},
+  access: MyAccess = ACCESS,
+) {
   const toasts = createToasts();
   const data = {
     scheduling: { loaded: () => ({ delegations: () => delegations, health }) },
     members: { watch: () => () => undefined, list: () => Promise.resolve([ADA, LINUS]) },
+    ...extra,
   } as unknown as Partial<DataLayer>;
   shown = await renderInApp(
     () => (
@@ -110,7 +116,7 @@ async function render(members: readonly MemberView[] = [ADA, LINUS]) {
         onSearch={() => undefined}
         invitations={[GRACE]}
         requests={[MARY]}
-        access={ACCESS}
+        access={access}
         roles={ROLES}
         overview={OVERVIEW}
       />
@@ -216,5 +222,61 @@ describe('Members, styled', () => {
     const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
     await expect.element(details).toBeVisible();
     expect(hugs(details.getByRole('button', { name: /Role/ }).element())).toBe(true);
+  });
+});
+
+describe('Works in, styled (spec 0065 H7, AC-6594)', () => {
+  const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
+  const reachView: MemberReachView = {
+    memberId: LINUS.id,
+    reach: { all: false, properties: [], places: ['0199a6f2-0000-7000-8000-0000000000b1'] },
+    fixed: false,
+    businesses: [
+      {
+        id: '0199a6f2-0000-7000-8000-00000000000a',
+        name: 'Somewhere Nowhere',
+        places: [{ id: '0199a6f2-0000-7000-8000-0000000000a1', name: 'Soho' }],
+      },
+      {
+        id: '0199a6f2-0000-7000-8000-00000000000b',
+        name: 'Harbour Bar',
+        places: [
+          { id: '0199a6f2-0000-7000-8000-0000000000b1', name: 'Quay' },
+          { id: '0199a6f2-0000-7000-8000-0000000000b2', name: 'Pier' },
+        ],
+      },
+    ],
+  };
+  const store = { memberReach: () => Promise.resolve(reachView), setMemberReach: () => Promise.resolve(reachView) };
+  const admin: MyAccess = { ...ACCESS, permissions: [...ACCESS.permissions, 'workspace.manage'] };
+
+  it('reads where someone works, and opens on each business under its heading, in both themes and widths', async () => {
+    for (const width of [1280, 390]) {
+      for (const theme of THEMES) {
+        await page.viewport(width, 800);
+        await render([ADA, LINUS], { hospitality: { load: () => Promise.resolve(store) } }, admin);
+        await page.getByRole('rowheader', { name: /Linus Torvalds/ }).click();
+        const details = page.getByRole('dialog', { name: 'Linus Torvalds' });
+        await expect.element(details.getByText('Works in', { exact: true })).toBeVisible();
+        const trigger = details.getByRole('button', { name: /Where Linus Torvalds works/ });
+        await expect.element(details.getByText('Quay').first()).toBeVisible();
+        expect(hugs(trigger.element())).toBe(true);
+        applyTheme(theme);
+        expect(await axeViolations()).toEqual([]);
+        if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
+          await page.screenshot({ path: `${SHOT_DIR}/works-in-${theme}-${String(width)}.png` } as never);
+        }
+        await trigger.click();
+        await expect.element(page.getByRole('option', { name: 'All of Harbour Bar' })).toBeVisible();
+        expect(await axeViolations()).toEqual([]);
+        if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
+          await page.screenshot({ path: `${SHOT_DIR}/works-in-open-${theme}-${String(width)}.png` } as never);
+        }
+        shown?.unmount();
+        shown = undefined;
+        resetTheme();
+      }
+    }
+    await page.viewport(1280, 800);
   });
 });
