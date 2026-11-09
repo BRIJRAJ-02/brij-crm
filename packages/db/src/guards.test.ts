@@ -261,6 +261,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_share_image', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_publish_link_page', owner: 'crm_handle' },
+      // A removed managed person's page, purged by the daily cleanup 30 days on (spec 0070, migration 0204).
+      { name: 'crm_purge_managed_page', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       // A guest calendar connect's single use hand off to the public host (4 Nov 2026, migration 0168).
@@ -402,6 +404,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_publish_link_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it checks the identity and the membership before it deletes (migration 0204).
+      { name: 'crm_purge_managed_page', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_put_guest_handoff', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -712,6 +716,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_sitemap_businesses',
         // Bento cards (spec 0068, migration 0189): the one line rule the block check reads, run only inside it.
         'crm_profile_text_ok',
+        // A removed managed person's page purged (spec 0070, migration 0204).
+        'crm_purge_managed_page',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -771,6 +777,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_claim_business_handle(uuid, text)',
         'crm_list_business(uuid, uuid, text, text[], boolean)',
         'crm_sitemap_businesses(text, integer)',
+        'crm_purge_managed_page(uuid)',
         // The seven that run only inside the others: crm_handle's own to call, never the app's or the worker's.
         'crm_check_profile_item(text, jsonb, uuid, uuid, uuid)',
         'crm_pack_profile_items(uuid, uuid)',
@@ -780,9 +787,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_text_ok(jsonb, integer, integer)',
         'crm_link_page_rows(uuid, uuid)',
       ],
-      // One per signature: the first 57 crm_app's to call and nobody else's, the last seven crm_handle's alone.
+      // One per signature: the first 58 crm_app's to call and nobody else's, the last seven crm_handle's alone.
       // Counted rather than written out, since a signature added without the count moved read as unreachable.
-      [...Array.from({ length: 57 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
+      [...Array.from({ length: 58 }, () => 'app'), ...Array.from({ length: 7 }, () => 'definers')],
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2927,6 +2934,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'public_handles INSERT',
       'public_handles SELECT',
       'public_profiles DELETE',
+      // A removed managed person's page purged 30 days on (migration 0204), only through crm_purge_managed_page.
+      'public_profiles DELETE',
       'public_profiles INSERT',
       'public_profiles SELECT',
       'social_links DELETE',
@@ -2990,6 +2999,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth."user".id SELECT',
       'auth."user".image SELECT',
       'auth."user".name SELECT',
+      // Whose identity a purged page was (migration 0204): a managed one of this workspace, read by
+      // crm_purge_managed_page alone, never the partner or its id there.
+      'auth.managed_users.user_id SELECT',
+      'auth.managed_users.workspace_id SELECT',
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
@@ -3040,6 +3053,14 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.user_prefs.updated_at UPDATE',
       'auth.user_prefs.user_id INSERT',
       'auth.user_prefs.user_id SELECT',
+      // Who a purged page was (migration 0204): removed 30 days ago, and no member here any more, read by
+      // crm_purge_managed_page alone under the tables' row level security.
+      'managed_members.removed_at SELECT',
+      'managed_members.user_id SELECT',
+      'managed_members.workspace_id SELECT',
+      'members.status SELECT',
+      'members.user_id SELECT',
+      'members.workspace_id SELECT',
     ]);
     const search = await owner.query<{ usage: boolean }>(
       `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,

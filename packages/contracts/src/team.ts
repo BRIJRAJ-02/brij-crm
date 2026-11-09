@@ -288,6 +288,13 @@ export const InvitePeek = z.object({
   roleLabel: z.string().optional(),
   /** The invited address as `a***@example.com`; absent for the invite link, which names nobody. */
   invitedEmailMasked: z.string().optional(),
+  /**
+   * A page's hand over (Team pages, 9 Nov 2026): whose link page accepting makes theirs to manage, and its handle.
+   * Accepting it sets up a login for that page (`invitations.claimPage`), with no sign in first.
+   */
+  page: z.object({ name: z.string(), handle: z.string().optional() }).optional(),
+  /** A page's hand over already taken (the link opened again): its login stands, and signing in is what is left. */
+  isClaimed: z.boolean().optional(),
 });
 /** What an invitation shows before accepting. */
 export type InvitePeek = z.infer<typeof InvitePeek>;
@@ -360,6 +367,19 @@ export const AcceptInviteInput = z.object({
 });
 /** Accepting an invitation. */
 export type AcceptInviteInput = z.infer<typeof AcceptInviteInput>;
+
+/**
+ * Taking over a page from its hand over (Team pages, 9 Nov 2026): the token alone, which only the invited address's
+ * inbox holds. It makes the page's own identity a login at that address; signing in there by code comes next.
+ */
+export const ClaimPageInput = z.object({ token: InviteToken });
+/** Taking over a page from its hand over. */
+export type ClaimPageInput = z.infer<typeof ClaimPageInput>;
+
+/** A page taken over: the workspace to sign in to, and the invited address (the token's inbox) to sign in with. */
+export const PageClaimed = z.object({ slug: z.string(), email: z.string() });
+/** A page taken over. */
+export type PageClaimed = z.infer<typeof PageClaimed>;
 
 /** The workspace an accepted invitation opened (AC-806). */
 export const InviteAccepted = z.object({ slug: z.string() });
@@ -643,6 +663,8 @@ export const invitationsContract = {
   revoke: oc.input(InvitationInput).output(z.void()),
   peek: oc.input(z.object({ token: InviteToken })).output(InvitePeek),
   accept: oc.input(AcceptInviteInput).output(InviteAccepted),
+  /** A page's hand over taken (no session): the page's identity becomes a login at the invited address. */
+  claimPage: oc.input(ClaimPageInput).output(PageClaimed),
   /** The invite link (slice 6, AC-818): `members.invite`. */
   link: oc.input(WorkspaceScoped).output(InviteLinkView),
   setLink: oc.input(SetInviteLinkInput).output(InviteLinkView),

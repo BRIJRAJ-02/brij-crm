@@ -331,6 +331,8 @@ describe("migration 0018's closing check", () => {
     // And migration 0147's pictures, views by fact and bookings (spec 0061), with its own closing check.
     'revoke all on auth.profile_images, auth.profile_view_source_days, auth.profile_booking_days from crm_handle',
     'revoke all (qr_style) on auth.public_profiles from crm_handle',
+    // And migration 0204's managed page purge, with its own closing check.
+    'revoke all (user_id, workspace_id) on auth.managed_users from crm_handle',
     // And migration 0168's guest connect hand off, with its own closing check.
     'revoke all on auth.guest_connect_handoffs from crm_guest_handoff',
   ];

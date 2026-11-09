@@ -74,6 +74,7 @@ export type {
 } from './identity/operator.ts';
 export type {
   ManagedPerson,
+  PageOnlyClaim,
   PageOnlyPerson,
   NewPartner,
   PartnerAudit,

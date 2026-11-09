@@ -84,6 +84,29 @@ export const teamStrings = {
       : `/${handle} stops working and their seat is freed. The page’s content is kept for 30 days.`,
   removeAction: 'Remove person',
   removed: (name: string) => `Removed ${firstOf(name)}.`,
+  /** Invite to manage their page (9 Nov 2026): a page only person handed their own page. */
+  invitePerson: 'Invite to manage their page',
+  /** Members' words for the same two actions on an invitation. */
+  resendInvite: 'Resend invitation',
+  revokeInvite: 'Revoke invitation',
+  /** The quiet mark beside a page only person whose invitation is out, or ran out. */
+  invited: 'Invited',
+  inviteExpired: 'Invitation expired',
+  inviteTitle: (name: string) => `Invite ${firstOf(name)} to manage their page`,
+  inviteText:
+    'They set up a login with this email and keep this page, its link and its views. The invitation works for 7 days.',
+  resendHint: 'The link sent before stops working.',
+  inviteEmailMissing: 'Add their email.',
+  inviteEmailInvalid: 'Enter a valid email address.',
+  inviteAction: 'Send invitation',
+  inviting: 'Sending…',
+  inviteSent: (email: string) => `Invitation sent to ${email}.`,
+  inviteUnsent: 'Saved, but the email didn’t go out.',
+  revokeInviteTitle: (name: string) => `Revoke the invitation to ${name}?`,
+  revokeInviteText: (email: string) =>
+    `The link sent to ${email} stops working. Their page stays as it is, and you can invite them again.`,
+  keepInvite: 'Keep invitation',
+  inviteRevoked: (email: string) => `Invitation to ${email} revoked.`,
   /** The member's page, opened by a manager. */
   memberTitle: (name: string) => `${firstOf(name)}’s page`,
   /** The page card's title on someone else's page, where "Your page" would be wrong. */

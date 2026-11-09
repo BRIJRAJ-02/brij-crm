@@ -28,6 +28,24 @@ export const strings = {
   /** The sign out confirm's line here: where signing in again leads. */
   signOutText: 'You’ll sign in again, then come back to this invitation.',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
+  /** A page's hand over (Team pages, 9 Nov 2026): the person takes over the link page made for them. */
+  pageTitle: 'Manage your page',
+  pageInvited: (inviter: string, address: string | undefined, workspace: string) => {
+    const page = address === undefined ? 'your link page' : `your link page, ${address},`;
+    return inviter === ''
+      ? `You’re invited to manage ${page} in ${workspace}.`
+      : `${inviter} invited you to manage ${page} in ${workspace}.`;
+  },
+  setUpLogin: 'Set up my login',
+  settingUp: 'Setting up…',
+  pageSignedIn: (email: string) => `You’re signed in as ${email}. Sign out first to set up a login for this page.`,
+  signOut: 'Sign out',
+  pageSignOutText: 'You’ll come back to this invitation, signed out.',
+  pageReadyTitle: 'Your login is ready',
+  pageReadyText: (masked: string | undefined) =>
+    masked === undefined
+      ? 'Sign in with the address this invitation was sent to.'
+      : `Sign in with ${masked} to manage your page.`,
 } as const;
 
 /** "an Admin", "a Member". */

@@ -93,20 +93,25 @@ const moduleList = (modules: readonly string[], lead: string) =>
 const SENTENCES: SentenceTemplates = {
   'invitation.created': (entry, w) =>
     actor(
-      entry.params.role === undefined
-        ? `invited ${w.invitation(entry.target)}`
-        : `invited ${w.invitation(entry.target)} as ${w.role(entry.params.role)}`,
+      entry.params.page === true
+        ? `invited ${w.invitation(entry.target)} to manage their link page`
+        : entry.params.role === undefined
+          ? `invited ${w.invitation(entry.target)}`
+          : `invited ${w.invitation(entry.target)} as ${w.role(entry.params.role)}`,
     ),
   'invitation.resent': (entry, w) =>
     actor(
-      entry.params.role === undefined
-        ? `resent the invitation to ${w.invitation(entry.target)}`
-        : `resent the invitation to ${w.invitation(entry.target)}, now as ${w.role(entry.params.role)}`,
+      entry.params.page === true
+        ? `resent the invitation to ${w.invitation(entry.target)} to manage their link page`
+        : entry.params.role === undefined
+          ? `resent the invitation to ${w.invitation(entry.target)}`
+          : `resent the invitation to ${w.invitation(entry.target)}, now as ${w.role(entry.params.role)}`,
     ),
   'invitation.revoked': (entry, w) => actor(`cancelled the invitation to ${w.invitation(entry.target)}`),
   'invitation.accepted': (entry, w) => {
     const as = entry.params.role === undefined ? '' : ` as ${w.role(entry.params.role)}`;
     if (entry.params.via === 'link') return actor(`joined through the invite link${as}`);
+    if (entry.params.via === 'page') return actor('set up a login and took over their link page');
     if (entry.params.via === 'already_member' && entry.target.type === 'invitation') {
       return actor(`used the invitation to ${w.invitation(entry.target)} and was already a member`);
     }

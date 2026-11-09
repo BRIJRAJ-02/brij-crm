@@ -20,6 +20,7 @@ const withArticle = (name: string): string => `${/^[aeiou]/i.test(name) ? 'an' :
 /** An invitation to join a workspace. */
 export const memberInvite: Template<MemberInviteEmail> = (params, context) => {
   const workspace = workspaceOf(context);
+  if (params.page !== undefined) return pageHandover(params, context);
   // A custom role by its own name (spec 0037), else the built in role.
   const role = params.roleName === undefined ? ROLES[params.role] : withArticle(params.roleName);
   const until = formatShortDay(params.expiresAt);
@@ -37,5 +38,34 @@ export const memberInvite: Template<MemberInviteEmail> = (params, context) => {
       },
     ],
     why: `You got this email because ${params.inviterName} invited this address to ${workspace}.`,
+  };
+};
+
+/**
+ * A page's hand over (Team pages, 9 Nov 2026): the link page someone made for this person, theirs to manage from now
+ * with a login of their own at this address. Same layout and the same one button as an invitation to join.
+ */
+const pageHandover: Template<MemberInviteEmail> = (params, context) => {
+  const workspace = workspaceOf(context);
+  const until = formatShortDay(params.expiresAt);
+  const handle = params.page?.handle;
+  const page = handle === undefined ? 'your link page' : `your link page, /${handle}`;
+  return {
+    subject: `${params.inviterName} invited you to manage your page on Timefix`,
+    preheader: `Set up your login to edit ${page}. The invitation works until ${until}.`,
+    eyebrow: workspace,
+    heading: 'Manage your page on Timefix',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: `${params.inviterName} made ${page} in ${workspace}, and invited you to manage it yourself.`,
+      },
+      { type: 'button', label: 'Set up your login', url: context.link(params.acceptPath) },
+      {
+        type: 'note',
+        text: `The invitation works until ${until}, and only for this address. If you weren’t expecting it, you can ignore this email.`,
+      },
+    ],
+    why: `You got this email because ${params.inviterName} invited this address to manage a page in ${workspace}.`,
   };
 };

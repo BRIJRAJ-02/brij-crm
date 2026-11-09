@@ -589,6 +589,9 @@ export function createApp({
           dropPageOnlyUser: (userId) => identity.dropPageOnlyUser(userId),
           endManagedUserSessions: (userId) => identity.endManagedUserSessions(userId),
           dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+          // A page handed over (9 Nov 2026): its identity made a login at the invited address, or put back.
+          claimPageOnlyUser: (claim) => identity.claimPageOnlyUser(claim),
+          unclaimPageOnlyUser: (claim) => identity.unclaimPageOnlyUser(claim),
         },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,

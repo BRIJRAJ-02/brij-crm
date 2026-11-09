@@ -6,7 +6,7 @@
 // link keeps its own so an admin can copy it again. Every invite, resend, revoke and accept writes
 // its audit row in its own transaction.
 import { randomBytes } from 'node:crypto';
-import { and, asc, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   INVITE_BATCH_MAX,
@@ -15,6 +15,7 @@ import {
   INVITES_LIMIT,
   maskEmail,
   memberNameFor,
+  customRolePermissions,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
   ROLE_LABELS,
@@ -42,6 +43,7 @@ import { touched } from '../engine/definitions.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 import { welcomeMember } from './welcome.ts';
 import { defaultCustomRole, readCustomRole } from '../roles/roles.ts';
+import { handedPage, takenPage } from './page-handover-read.ts';
 
 const { invitations, members, workspaceRoles, workspaces } = schema;
 
@@ -49,12 +51,12 @@ const { invitations, members, workspaceRoles, workspaces } = schema;
 const CUSTOM_ROLE_GONE = "That role doesn't exist.";
 
 /** How long an email invitation works after its last send, as SQL (`INVITE_DAYS`, 7). */
-const INVITE_WINDOW = sql`now() + interval '7 days'`;
+export const INVITE_WINDOW = sql`now() + interval '7 days'`;
 
 const INVITATION_NOT_FOUND = "That invitation doesn't exist.";
 
 /** A fresh token (32 random bytes, base64url) and the hash the database keeps. */
-function mintToken(): { readonly token: string; readonly hash: string } {
+export function mintToken(): { readonly token: string; readonly hash: string } {
   const token = randomBytes(32).toString('base64url');
   return { token, hash: inviteTokenHash(token) };
 }
@@ -80,7 +82,7 @@ export interface InviteOutcome extends InviteSender {
 }
 
 /** The workspace's name and the actor's, for the email, read in the write's transaction. */
-async function senderOf(tx: WorkspaceTx, scope: EngineScope): Promise<InviteSender> {
+export async function senderOf(tx: WorkspaceTx, scope: EngineScope): Promise<InviteSender> {
   const [workspace] = await tx
     .select({ name: workspaces.name })
     .from(workspaces)
@@ -165,12 +167,22 @@ function isVouchedFor(sent: {
   readonly sentByType: string;
   readonly senderStatus: string | null;
   readonly senderRole: string | null;
+  /** A page's hand over (Team pages), and what the sender's custom role grants beside their role. */
+  readonly isPage?: boolean;
+  readonly senderGrants?: readonly string[] | null;
 }): boolean {
   if (sent.sentByType === 'system') return true;
   if (sent.sentByType !== 'member' || sent.senderStatus !== 'active') return false;
   const senderRole = sent.senderRole ?? '';
   if (!isRole(senderRole)) return false;
   if (sent.role === 'owner') return senderRole === 'owner';
+  // A custom role's own grants in place of its base role's, as the door reads them (`customRolePermissions`).
+  const holds: readonly string[] =
+    sent.senderGrants === undefined || sent.senderGrants === null
+      ? ROLE_PERMISSIONS[senderRole]
+      : customRolePermissions(sent.senderGrants);
+  // A page's hand over took both what Add a page takes and what letting someone in takes; both must still stand.
+  if (sent.isPage === true) return holds.includes('link_pages.manage_team') && holds.includes('members.invite');
   return (ROLE_PERMISSIONS[senderRole] as readonly string[]).includes('members.invite');
 }
 
@@ -252,7 +264,7 @@ export async function revokeUnvouched(
 }
 
 /** Takes turns with every other invitation write in the workspace, so the counts below stay exact. */
-async function lockInvitations(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+export async function lockInvitations(tx: WorkspaceTx, workspaceId: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`invitations:${workspaceId}`}, 0))`);
 }
 
@@ -276,6 +288,8 @@ export async function seatsUsed(tx: WorkspaceTx, workspaceId: string): Promise<n
         eq(invitations.status, 'open'),
         eq(invitations.kind, 'email'),
         sql`${invitations.role}::text <> 'guest'`,
+        // A page's hand over (Team pages) seats nobody new: its person already holds their seat.
+        isNull(invitations.memberId),
       ),
     );
   return (active?.n ?? 0) + (invited?.n ?? 0);
@@ -325,6 +339,8 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
         eq(invitations.workspaceId, workspaceId),
         eq(invitations.status, 'open'),
         eq(invitations.kind, 'email'),
+        // A page's hand over is Team pages' to list, resend and cancel, never the Invitations tab's.
+        isNull(invitations.memberId),
         ...(ids === undefined ? [] : [inArray(invitations.id, [...ids])]),
       ),
     )
@@ -399,10 +415,28 @@ export async function inviteMembers(
           ),
         );
       const memberEmails = new Set(already.map((row) => row.email));
-      const refused: InviteRefused[] = wanted
-        .filter((email) => memberEmails.has(email))
-        .map((email) => ({ email, code: 'ALREADY_MEMBER' as const, message: 'Already a member' }));
-      const toInvite = wanted.filter((email) => !memberEmails.has(email));
+      // An address a page's hand over names (Team pages) waits for that: its open invitation is that page's.
+      const handing = await tx
+        .select({ email: invitations.email })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.workspaceId, scope.workspaceId),
+            eq(invitations.status, 'open'),
+            eq(invitations.kind, 'email'),
+            isNotNull(invitations.memberId),
+            inArray(invitations.email, wanted),
+          ),
+        );
+      const handedEmails = new Set(handing.map((row) => row.email ?? ''));
+      const refused: InviteRefused[] = wanted.flatMap((email) =>
+        memberEmails.has(email)
+          ? [{ email, code: 'ALREADY_MEMBER' as const, message: 'Already a member' }]
+          : handedEmails.has(email)
+            ? [{ email, code: 'ALREADY_MEMBER' as const, message: 'Invited to manage a page' }]
+            : [],
+      );
+      const toInvite = wanted.filter((email) => !memberEmails.has(email) && !handedEmails.has(email));
       const sender = await senderOf(tx, scope);
       if (toInvite.length === 0) return { ...sender, sent: [], refused };
       const open = await tx
@@ -413,6 +447,7 @@ export async function inviteMembers(
             eq(invitations.workspaceId, scope.workspaceId),
             eq(invitations.status, 'open'),
             eq(invitations.kind, 'email'),
+            isNull(invitations.memberId),
             inArray(invitations.email, toInvite),
           ),
         )
@@ -548,6 +583,7 @@ async function findOpen(tx: WorkspaceTx, scope: EngineScope, invitationId: strin
         eq(invitations.id, invitationId),
         eq(invitations.status, 'open'),
         eq(invitations.kind, 'email'),
+        isNull(invitations.memberId),
       ),
     );
   const [row] = await (lock ? query.for('update') : query);
@@ -655,7 +691,7 @@ export async function revokeInvite(
 }
 
 /** An invitation as acceptance reads it, inside its workspace. */
-interface HeldInvitation {
+export interface HeldInvitation {
   readonly id: string;
   readonly kind: 'email' | 'link';
   /** How many it may let in (one for an email invitation; none for an uncapped link) and has. */
@@ -673,13 +709,15 @@ interface HeldInvitation {
   readonly isVouched: boolean;
   readonly workspaceName: string;
   readonly slug: string;
+  /** The page only person whose page it hands over (Team pages), when it is one. */
+  readonly memberId?: string;
 }
 
 /**
  * Whether an open invitation opens anything now: open, unexpired, still
  * vouched for by its sender, and (a link) not yet at its most uses.
  */
-const opensNow = (held: HeldInvitation): boolean =>
+export const opensNow = (held: HeldInvitation): boolean =>
   held.status === 'open' &&
   held.live &&
   held.isVouched &&
@@ -690,7 +728,12 @@ const opensNow = (held: HeldInvitation): boolean =>
  * sent it, in a live workspace; locked when `lock`. Read by id and by the
  * token's hash, so a link a resend replaced a moment ago opens nothing.
  */
-async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: EnteredInvitation, lock: boolean) {
+export async function readInvitation(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  entered: EnteredInvitation,
+  lock: boolean,
+): Promise<HeldInvitation | undefined> {
   const query = tx
     .select({
       id: invitations.id,
@@ -705,10 +748,15 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       maxUses: invitations.maxUses,
       uses: invitations.uses,
       usedBy: invitations.usedByMemberId,
+      memberId: invitations.memberId,
       sentByType: invitations.updatedByType,
       inviterName: inviter.name,
       senderStatus: inviter.status,
       senderRole: inviter.role,
+      // What the sender's custom role grants, for a page's hand over (it vouches with Team pages' permission).
+      senderGrants: sql<
+        string[] | null
+      >`(select r.permissions from workspace_roles r where r.workspace_id = ${inviter.workspaceId} and r.id = ${inviter.customRoleId})`,
       workspaceName: workspaces.name,
       slug: workspaces.slug,
       deletedAt: workspaces.deletedAt,
@@ -754,9 +802,12 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       sentByType: row.sentByType,
       senderStatus: row.senderStatus,
       senderRole: row.senderRole,
+      isPage: row.memberId !== null,
+      senderGrants: row.senderGrants,
     }),
     workspaceName: row.workspaceName,
     slug: row.slug,
+    ...(row.memberId === null ? {} : { memberId: row.memberId }),
   };
   return held;
 }
@@ -769,14 +820,30 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
  */
 export async function peekInvite(deps: { readonly db: Database }, token: string): Promise<InvitePeek> {
   const { scope, ...entered } = await enterInvitation(deps, token);
-  const held = await inWorkspace(scope, (tx) => readInvitation(tx, scope.workspaceId, entered, false));
-  if (held === undefined || !opensNow(held)) throw inviteInvalid();
+  const { held, page, isClaimed } = await inWorkspace(scope, async (tx) => {
+    const found = await readInvitation(tx, scope.workspaceId, entered, false);
+    // A page's hand over taken already, opened again before its week is out: its login stands, so the page says to
+    // sign in rather than that the link is dead (nobody could send a new one: they are no page only person now).
+    if (found?.memberId !== undefined && found.status === 'used' && found.usedBy === found.memberId && found.live) {
+      return { held: found, page: await takenPage(tx, scope, found.memberId), isClaimed: true };
+    }
+    if (found === undefined || !opensNow(found)) throw inviteInvalid();
+    return {
+      held: found,
+      page: found.memberId === undefined ? undefined : await handedPage(tx, scope, found.memberId),
+      isClaimed: false,
+    };
+  });
+  // A page's hand over whose person is no page only person here any more opens nothing.
+  if (held.memberId !== undefined && page === undefined) throw inviteInvalid();
   return {
     workspaceName: held.workspaceName,
     inviterName: held.inviterName ?? '',
     role: held.role,
     roleLabel: held.customRole?.name ?? ROLE_LABELS[held.role],
     ...(held.kind === 'email' ? { invitedEmailMasked: maskEmail(held.email) } : {}),
+    ...(page === undefined ? {} : { page }),
+    ...(isClaimed ? { isClaimed: true } : {}),
   };
 }
 
@@ -796,6 +863,9 @@ export interface AcceptedInvite {
   readonly workspaceId: string;
   readonly memberId: string;
 }
+
+/** What a signed in person opening a page's hand over is told: it sets up a new login, which signing in can't. */
+export const PAGE_INVITE_SIGNED_IN = 'This invitation sets up a login for a page. Sign out, then open the link again.';
 
 /** What a person whose verified email isn't the invited one is told (AC-805); they join nothing. */
 function mismatch(email: string) {
@@ -836,6 +906,9 @@ export async function acceptInvite(
       const { tx } = context;
       const held = await readInvitation(tx, scope.workspaceId, entered, true);
       if (held === undefined) throw inviteInvalid();
+      // A page's hand over makes the page's own identity a login (`claimPageInvite`), never a second member: a
+      // signed in account is someone else's identity, so it is told to sign out and open the link again.
+      if (held.memberId !== undefined) throw refuse('INVITE_EMAIL_MISMATCH', PAGE_INVITE_SIGNED_IN);
       const [mine] = await tx
         .select({ id: members.id })
         .from(members)

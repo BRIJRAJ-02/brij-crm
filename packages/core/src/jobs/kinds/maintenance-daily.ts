@@ -30,6 +30,12 @@
 //    a year, the person's rather than the workspace's, through a definer.
 // 1h. `link_pages` (26 Oct 2026): every active member with a sign in and no link page here gets one, as the
 //    membership's own transaction would have made it (`ensureLinkPage`): the retry for one that failed there.
+// 1h3. `managed_pages` (spec 0070, AC-7022; migration 0204): a partner's or page only person removed more than 30 days
+//    ago goes for good: their page (blocks, counts, pictures and photos, the files removed from the store first),
+//    their `managed_members` row and their open hand over; their handle is held 90 days as a deleted account's, then
+//    freed by `released_handles`. Their member row stays, as every removed member's does, so History keeps naming them,
+//    but it loses its link to them: no identity and no address (a made up one in its place). 10 people a batch. Skipped
+//    where the host has no store to remove the files from (the people then wait).
 // 1i. `released_handles` (migration 0126): handles held 90 days after their person's account was deleted are freed,
 //    the person's rather than the workspace's, through a definer.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
@@ -64,6 +70,7 @@ import {
   UPLOAD_KEPT_HOURS,
   WEBHOOK_LOG_DAYS,
 } from '@crm/contracts';
+import { MANAGED_DOMAIN } from '@crm/db';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import { DELETED_SUBMISSIONS_KEPT_DAYS } from '../../forms/submissions.ts';
@@ -104,6 +111,7 @@ const PHASES = [
   'page_visits',
   'profile_counts',
   'link_pages',
+  'managed_pages',
   'released_handles',
   'expired',
   'items',
@@ -173,6 +181,8 @@ const Totals = z.object({
   linkPagesMissed: Count.default(0),
   /** Handles freed 90 days after their person's account was deleted (migration 0126); 0 in an older checkpoint. */
   handles: Count.default(0),
+  /** Managed people purged 30 days after their removal (migration 0204); 0 in an older checkpoint. */
+  managedPages: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -212,6 +222,7 @@ const NO_TOTALS: Totals = {
   linkPages: 0,
   linkPagesMissed: 0,
   handles: 0,
+  managedPages: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -284,6 +295,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   linkPages: totals.linkPages + (more.linkPages ?? 0),
   linkPagesMissed: totals.linkPagesMissed + (more.linkPagesMissed ?? 0),
   handles: totals.handles + (more.handles ?? 0),
+  managedPages: totals.managedPages + (more.managedPages ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -621,6 +633,74 @@ async function releasedHandles(context: WriteContext, at: Checkpoint, limit: num
   const count = swept.rows[0]?.gone ?? 0;
   const totals = plus(at.totals, { handles: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/** How many removed managed people one `managed_pages` batch purges: each is a handful of statements and a store call. */
+const MANAGED_PAGES_BATCH = 10;
+
+/** How long a removed managed person's page is kept (AC-7022: "their page's content stays for 30 days"). */
+const MANAGED_PAGES_KEPT = '30 days';
+
+/**
+ * Phase 1h3 (spec 0070, AC-7022; migration 0204): managed people (a partner's, or page only ones from Team pages)
+ * removed more than 30 days ago, `MANAGED_PAGES_BATCH` at a time, oldest first. For each, `crm_purge_managed_page`
+ * deletes their page here and answers its stored files, which go from the store before this commits (a failed removal
+ * rolls it all back for the retry); then their open hand over is cancelled, their `managed_members` row goes, and their
+ * member row loses its link to them (no identity, a made up address) while keeping their name for History. Every
+ * foreign key to the member row holds, so nothing that names them as history changes. Without a store the phase waits.
+ */
+async function removedManagedPages(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  if (store === undefined) return outcome(nextPhase(at, at.totals), at, at.totals, 0);
+  const { tx } = context;
+  const workspaceId = context.scope.workspaceId;
+  // By id after the last one looked at, so a person the definer refuses (made a member again meanwhile) is passed
+  // over, never looked at again and again in one run.
+  const found = await tx.execute<{ id: string; member_id: string; user_id: string } & Record<string, unknown>>(sql`
+    select mm.id::text as id, mm.member_id::text as member_id, mm.user_id::text as user_id
+    from managed_members mm
+    join members m on m.workspace_id = mm.workspace_id and m.id = mm.member_id
+    where mm.workspace_id = ${workspaceId}::uuid
+      and mm.removed_at < now() - ${MANAGED_PAGES_KEPT}::interval and m.status = 'removed'
+      ${at.after === undefined ? sql`` : sql`and mm.id > ${at.after}::uuid`}
+    order by mm.id
+    limit ${MANAGED_PAGES_BATCH}
+    for update of mm skip locked
+  `);
+  let purged = 0;
+  for (const row of found.rows) {
+    const files = await tx.execute<{ path: string | null } & Record<string, unknown>>(
+      sql`select path from crm_purge_managed_page(${row.user_id}::uuid)`,
+    );
+    // No rows: the definer refused (nothing deleted), so their rows here stay as they are.
+    if (files.rows.length === 0) continue;
+    const paths = files.rows.flatMap((file) => (file.path === null ? [] : [file.path]));
+    if (paths.length > 0) await store.remove(paths);
+    await tx.execute(sql`
+      update invitations set status = 'revoked', updated_at = now(), updated_by_type = 'system', updated_by_id = null,
+        updated_by_member_id = null
+      where workspace_id = ${workspaceId}::uuid and member_id = ${row.member_id}::uuid and status = 'open'
+    `);
+    await tx.execute(
+      sql`delete from managed_members where workspace_id = ${workspaceId}::uuid and id = ${row.id}::uuid`,
+    );
+    await tx.execute(sql`
+      update members set user_id = null, email = ${`${row.member_id}@${MANAGED_DOMAIN}`},
+        updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
+      where workspace_id = ${workspaceId}::uuid and id = ${row.member_id}::uuid and status = 'removed'
+    `);
+    purged += 1;
+  }
+  const last = found.rows.at(-1)?.id;
+  const totals = plus(at.totals, { managedPages: purged });
+  const next =
+    found.rows.length === MANAGED_PAGES_BATCH && last !== undefined
+      ? { ...at, totals, after: last }
+      : nextPhase(at, totals);
+  return outcome(next, at, totals, purged);
 }
 
 /** How many members one `link_pages` batch looks at: few, since each page made holds its person's lock to commit. */
@@ -1067,6 +1147,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return oldProfileCounts(context, at, limit);
         case 'link_pages':
           return missingLinkPages(context, at);
+        case 'managed_pages':
+          return removedManagedPages(context, at, uploads);
         case 'released_handles':
           return releasedHandles(context, at, limit);
         case 'expired':

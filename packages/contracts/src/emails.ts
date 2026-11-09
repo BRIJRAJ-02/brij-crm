@@ -225,6 +225,11 @@ export const MemberInviteEmail = z.strictObject({
   /** The invitation's page, with its token. Drawn into the email and sent at once, never stored. */
   acceptPath: AppPath,
   expiresAt: Instant,
+  /**
+   * A page's hand over (Team pages, 9 Nov 2026): the email asks the person to take over the link page made for them,
+   * at its handle when it has one, rather than to join.
+   */
+  page: z.strictObject({ handle: Line.optional() }).optional(),
 });
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;

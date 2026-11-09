@@ -200,9 +200,14 @@ const booking = AuditTarget.options[7];
  * names; `changes` the fields it changed, for the details (milestone 2).
  */
 export const AuditEntryView = z.discriminatedUnion('action', [
-  entry(['invitation.created'], invitation, z.strictObject({ role: Role.optional() })),
+  /** `page`: a page's hand over from Team pages (Invite to manage their page, 9 Nov 2026). */
+  entry(
+    ['invitation.created'],
+    invitation,
+    z.strictObject({ role: Role.optional(), page: z.literal(true).optional() }),
+  ),
   /** `role` only when the resend changed it. */
-  entry(['invitation.resent'], invitation, z.strictObject({ role: Role.optional() })),
+  entry(['invitation.resent'], invitation, z.strictObject({ role: Role.optional(), page: z.literal(true).optional() })),
   entry(['invitation.revoked', 'invitation.link_revoked'], invitation, NoParams),
   /**
    * Joined by an email invitation or the invite link (the actor joined, the target is their member row), or an
@@ -211,7 +216,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['invitation.accepted'],
     z.discriminatedUnion('type', [member, invitation]),
-    z.strictObject({ via: z.enum(['email', 'link', 'already_member']), role: Role.optional() }),
+    // `page`: a page only person took over their page from its hand over, as the same member (9 Nov 2026).
+    z.strictObject({ via: z.enum(['email', 'link', 'already_member', 'page']), role: Role.optional() }),
   ),
   /** The link made, made again (the old one stopped working), or its settings changed. */
   entry(

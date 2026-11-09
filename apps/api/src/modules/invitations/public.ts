@@ -1,9 +1,9 @@
 import { isIP } from 'node:net';
 import { INVITE_PEEKS_PER_IP_MINUTE } from '@crm/contracts';
-import { acceptInvite, newId, peekInvite } from '@crm/core';
+import { acceptInvite, claimPageInvite, newId, peekInvite } from '@crm/core';
 import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
-import { authed, pub } from '../../orpc.ts';
+import { authed, pub, type RequestContext } from '../../orpc.ts';
 import { sourceOf } from '../../source.ts';
 
 // The two invitation handlers that run before any workspace scope exists (spec 0031, AC-805, AC-806): `peek` (no
@@ -39,17 +39,32 @@ export function addressKey(ip: string | undefined): string {
     .join(':')}::/64`;
 }
 
-/** `invitations.peek` and `invitations.accept`, joined into the invitations router. */
+/** Counts one invitation look up (a peek, or a page taken over) against the caller's address, 20 a minute (AC-808). */
+async function limitLookups(context: Pick<RequestContext, 'identity' | 'clientIp'>): Promise<void> {
+  const limit = await context.identity.consumeRateLimit(`invites:peek:${addressKey(context.clientIp)}`, {
+    window: 60,
+    max: INVITE_PEEKS_PER_IP_MINUTE,
+  });
+  if (!limit.allowed) {
+    throw apiError('RATE_LIMITED', 'Too many invitation lookups from here. Wait a minute, then try again.');
+  }
+}
+
+/** `invitations.peek`, `invitations.accept` and `invitations.claimPage`, joined into the invitations router. */
 export const invitationsPublic = {
   peek: pub.invitations.peek.handler(async ({ context, input }) => {
-    const limit = await context.identity.consumeRateLimit(`invites:peek:${addressKey(context.clientIp)}`, {
-      window: 60,
-      max: INVITE_PEEKS_PER_IP_MINUTE,
-    });
-    if (!limit.allowed) {
-      throw apiError('RATE_LIMITED', 'Too many invitation lookups from here. Wait a minute, then try again.');
-    }
+    await limitLookups(context);
     return peekInvite({ db: context.db }, input.token);
+  }),
+  // A page's hand over taken (9 Nov 2026): no session, as the token is the invited inbox's; counted with the peeks,
+  // since a token is tried here the same way. Core makes the page's identity a login through the identity store's two
+  // narrow calls (`context.pageOnlyUsers`), then the workspace's half; signing in by code comes next, on the page.
+  claimPage: pub.invitations.claimPage.handler(async ({ context, input }) => {
+    await limitLookups(context);
+    const claimed = await commitWrite(context, { mutationId: newId() }, (hooks) =>
+      claimPageInvite({ db: context.db, users: context.pageOnlyUsers }, input.token, hooks, sourceOf(context)),
+    );
+    return claimed;
   }),
   accept: authed.invitations.accept.handler(async ({ context, input }) => {
     const { user } = context;

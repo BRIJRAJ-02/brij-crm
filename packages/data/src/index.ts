@@ -157,6 +157,8 @@ import type {
   TeamHandleSuggestion,
   PageOnlyNamed,
   PageOnlyRemoved,
+  PageInviteSent,
+  PageInviteCancelled,
   SocialLink,
   SubmissionsBeyond,
   WorkspaceSettings,
@@ -887,6 +889,8 @@ export type {
   TeamHandleSuggestion,
   PageOnlyNamed,
   PageOnlyRemoved,
+  PageInviteSent,
+  PageInviteCancelled,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -6366,6 +6370,12 @@ export function createDataLayer({
       /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
       peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
       /**
+       * Takes over a page from its hand over (9 Nov 2026), with no session: the page's own identity becomes a login at
+       * the invited address. Answers the workspace's address; signing in there by code comes next.
+       */
+      claimPage: (token: string): Promise<{ slug: string; email: string }> =>
+        attempt((options) => api.invitations.claimPage({ token }, options)),
+      /**
        * Accepts an invitation as the signed in person, with the name they typed on the invite card (may be empty):
        * answers the workspace's address. The person's workspaces are read again after.
        */
@@ -6545,6 +6555,16 @@ export function createDataLayer({
           ),
         );
       },
+      /**
+       * Invite to manage their page (9 Nov 2026): the hand over's invitation, sent to `email`, waiting for the server
+       * (the screen marks the row with the answer). One mutation id per press. `sent` false: it stands, its email didn't
+       * go, and sending again tries once more.
+       */
+      invitePerson: (workspace: string, member: string, email: string): Promise<PageInviteSent> =>
+        call((options) => api.teamPages.invitePerson({ workspace, member, email, mutationId: mintId() }, options)),
+      /** Cancels a page only person's open hand over: its link stops at once. */
+      cancelInvite: (workspace: string, member: string): Promise<PageInviteCancelled> =>
+        call((options) => api.teamPages.cancelInvite({ workspace, member, mutationId: mintId() }, options)),
       /** Removes a page only person: their handle stops and their content is kept 30 days. */
       removePerson: (workspace: string, member: string): Promise<PageOnlyRemoved> =>
         call((options) => api.teamPages.removePerson({ workspace, member, mutationId: mintId() }, options)),

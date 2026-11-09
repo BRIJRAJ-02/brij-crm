@@ -212,7 +212,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   pageOnlyUsers: Pick<
     IdentityStore,
-    'ensurePageOnlyUser' | 'dropPageOnlyUser' | 'endManagedUserSessions' | 'dropMembership'
+    | 'ensurePageOnlyUser'
+    | 'dropPageOnlyUser'
+    | 'endManagedUserSessions'
+    | 'dropMembership'
+    | 'claimPageOnlyUser'
+    | 'unclaimPageOnlyUser'
   >;
   /**
    * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials

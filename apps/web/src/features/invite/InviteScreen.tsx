@@ -13,6 +13,7 @@ import { signInFrame } from '../auth/AuthStates.tsx';
 import { signInHref } from '../auth/redirect.ts';
 import { memberNameFor } from '../welcome/names.ts';
 import { SignOutDialog } from '../auth/SignOutDialog.tsx';
+import { PageInviteCard } from './PageInviteCard.tsx';
 import { strings } from './strings.ts';
 /** Props for the invitation page: what its route loaded. */
 export interface InviteScreenProps {
@@ -75,6 +76,19 @@ export function InviteScreen({ data, token, invitation, user, hasWorkspace = fal
           {wayOn.label}
         </ButtonLink>
       </AuthLayout>
+    );
+  }
+
+  // A page's hand over (Team pages, 9 Nov 2026): its own card, which sets up the page's login rather than joining.
+  if (invitation.page !== undefined) {
+    return (
+      <PageInviteCard
+        data={data}
+        token={token}
+        invitation={{ ...invitation, page: invitation.page }}
+        user={user}
+        onInvalid={() => setStanding({ kind: 'invalid' })}
+      />
     );
   }
 

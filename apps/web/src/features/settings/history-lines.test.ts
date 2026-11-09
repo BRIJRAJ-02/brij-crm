@@ -94,6 +94,19 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     },
     'Bea Rao joined through the invite link as Member',
   ],
+  // A page only person's page handed over (9 Nov 2026).
+  [
+    { ...base, action: 'invitation.created', target: invite, params: { page: true } },
+    'Ada Lovelace invited grace@example.com to manage their link page',
+  ],
+  [
+    { ...base, action: 'invitation.resent', target: invite, params: { page: true } },
+    'Ada Lovelace resent the invitation to grace@example.com to manage their link page',
+  ],
+  [
+    { ...base, actor: bea, action: 'invitation.accepted', target: member(bea), params: { via: 'page' } },
+    'Bea Rao set up a login and took over their link page',
+  ],
   [
     { ...base, action: 'invitation.accepted', target: invite, params: { via: 'already_member' } },
     'Ada Lovelace used the invitation to grace@example.com and was already a member',

@@ -69,6 +69,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // enterInvitation, and isInvitedEmail answers sign up's yes or no.
   'peekInvite',
   'acceptInvite',
+  // Taking over a page from its hand over: the token, before any scope, as accepting an invitation.
+  'claimPageInvite',
   'isInvitedEmail',
   // The name typed on the invite card, cleaned and cut to 80 characters: pure, it reads nothing.
   'typedMemberName',

@@ -14,6 +14,8 @@ import { TeamPagesScreen } from './TeamPagesScreen.tsx';
 // Beside this file (the test server writes only inside the project); the lane moves them out and never commits them.
 const SHOTS = 'team-shots';
 const MANAGE = ['link_pages.manage_team'];
+/** Handing a page over needs Members' invite permission too. */
+const HAND_OVER = ['link_pages.manage_team', 'members.invite'];
 
 const PAGES: readonly TeamLinkPage[] = [
   {
@@ -49,6 +51,7 @@ const PAGES: readonly TeamLinkPage[] = [
     views: 0,
     isSelf: false,
     isPageOnly: true,
+    email: 'eve@example.com',
   },
 ];
 
@@ -93,6 +96,13 @@ function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: 
       }),
   );
   const removePerson = vi.fn((_slug: string, _member: string) => Promise.resolve({ removed: true }));
+  const invitePerson = vi.fn((_slug: string, _member: string, email: string) =>
+    Promise.resolve({
+      invite: { email, sentAt: '2026-11-09T10:00:00.000Z', expiresAt: '2026-11-16T10:00:00.000Z' },
+      sent: true,
+    }),
+  );
+  const cancelInvite = vi.fn((_slug: string, _member: string) => Promise.resolve({ cancelled: true }));
   const checkHandle = vi.fn((_slug: string, handle: string, _signal?: AbortSignal) =>
     Promise.resolve({ isFree: handle !== TAKEN }),
   );
@@ -103,13 +113,15 @@ function layerWith(list: () => Promise<{ pages: readonly TeamLinkPage[]; month: 
       claim,
       addPerson,
       removePerson,
+      invitePerson,
+      cancelInvite,
       checkHandle,
       suggestHandle,
       editedBy: () => Promise.resolve({}),
     },
     inbox: { unread: () => stillLoading },
   } as unknown as Partial<DataLayer>;
-  return { data, claim, addPerson, removePerson, checkHandle };
+  return { data, claim, addPerson, removePerson, invitePerson, cancelInvite, checkHandle };
 }
 
 async function renderTeam(data: Partial<DataLayer>, permissions: readonly string[] = MANAGE) {
@@ -224,6 +236,87 @@ describe('Add a page (9 Nov 2026)', () => {
     await vi.waitFor(() => expect(removePerson).toHaveBeenCalledWith('acme', PAGES[4]?.memberId));
     await expect.element(page.getByRole('rowheader', { name: /Eve Page/ })).not.toBeInTheDocument();
   });
+});
+
+describe('Invite to manage their page (9 Nov 2026)', () => {
+  it('is offered only with Members’ invite permission too', async () => {
+    await renderTeam(layerWith(ready).data);
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Remove person' })).toBeVisible();
+    expect(document.body.textContent).not.toContain('Invite to manage their page');
+  });
+
+  it('starts from their address, marks the row Invited, and asks before revoking', async () => {
+    const { data, invitePerson, cancelInvite } = layerWith(ready);
+    await renderTeam(data, HAND_OVER);
+    // Only a page only person's row offers it.
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+    expect(document.body.textContent).not.toContain('Invite to manage their page');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Invite to manage their page' }));
+    await expect.element(page.getByRole('dialog', { name: 'Invite Eve to manage their page' })).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: /Email/ })).toHaveValue('eve@example.com');
+    // Once the dialog has finished coming in (its entrance fades the text), axe judges what a person sees.
+    await new Promise((settled) => setTimeout(settled, 400));
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations()).toEqual([]);
+    }
+    // Emptied: refused before anything is sent.
+    await userEvent.clear(page.getByRole('textbox', { name: /Email/ }));
+    await userEvent.click(page.getByRole('button', { name: 'Send invitation' }));
+    await expect.element(page.getByText('Add their email.')).toBeVisible();
+    expect(invitePerson).not.toHaveBeenCalled();
+    await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'eve.page@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Send invitation' }));
+    await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+    expect(invitePerson).toHaveBeenCalledWith('acme', PAGES[4]?.memberId, 'eve.page@example.com');
+    await expect.element(page.getByRole('rowheader', { name: /Invited/ })).toBeVisible();
+    // Sent once: the menu offers it again and a cancel, which asks first.
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Resend invitation' })).toBeVisible();
+    await userEvent.click(page.getByRole('menuitem', { name: 'Revoke invitation' }));
+    await expect.element(page.getByRole('alertdialog', { name: 'Revoke the invitation to Eve Page?' })).toBeVisible();
+    expect(document.body.textContent).toContain('eve.page@example.com stops working');
+    expect(cancelInvite).not.toHaveBeenCalled();
+    await userEvent.click(page.getByRole('button', { name: 'Revoke invitation' }));
+    await vi.waitFor(() => expect(cancelInvite).toHaveBeenCalledWith('acme', PAGES[4]?.memberId));
+    await expect.element(page.getByRole('rowheader', { name: /Invited/ })).not.toBeInTheDocument();
+  });
+
+  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')(
+    'saves the hand over at 1280 and 390, light and dark',
+    async () => {
+      for (const [width, height] of [
+        [1280, 860],
+        [390, 844],
+      ] as const) {
+        await page.viewport(width, height);
+        for (const theme of THEMES) {
+          await renderTeam(layerWith(ready).data, HAND_OVER);
+          applyTheme(theme);
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+          await expect.element(page.getByRole('menuitem', { name: 'Invite to manage their page' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-menu-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('menuitem', { name: 'Invite to manage their page' }));
+          await expect.element(page.getByRole('dialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-dialog-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Send invitation' }));
+          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+          await expect.element(page.getByRole('rowheader', { name: /Invited/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-invited-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+          await userEvent.click(page.getByRole('menuitem', { name: 'Revoke invitation' }));
+          await expect.element(page.getByRole('alertdialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-cancel-${String(width)}-${theme}.png` });
+          clear();
+        }
+      }
+    },
+    120_000,
+  );
 });
 
 describe('QR codes (AC-7003)', () => {

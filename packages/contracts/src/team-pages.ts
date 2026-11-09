@@ -43,6 +43,18 @@ export const TeamLinkPage = z.object({
    * removed from Team pages; anyone else leaves through Members (or their partner).
    */
   isPageOnly: z.boolean().optional(),
+  /** A page only person's own address, when they were given one: Invite to manage their page starts from it. */
+  email: z.string().optional(),
+  /** A page only person's open hand over (Invite to manage their page): to whom, and when it was last sent. */
+  invite: z
+    .object({
+      email: z.string(),
+      sentAt: z.iso.datetime(),
+      expiresAt: z.iso.datetime(),
+      /** Its 7 days are out: its link opens nothing, and it can be sent again. */
+      isExpired: z.boolean().optional(),
+    })
+    .optional(),
 });
 /** One member's link page as Team pages lists it. */
 export type TeamLinkPage = z.infer<typeof TeamLinkPage>;
@@ -152,6 +164,44 @@ export const TeamHandleSuggestion = z.object({ handle: z.string().optional() });
 /** The suggestion. */
 export type TeamHandleSuggestion = z.infer<typeof TeamHandleSuggestion>;
 
+/**
+ * Invite to manage their page (9 Nov 2026): an email invitation that hands a page only person's page to whoever opens
+ * it at that address, who signs up there and is the same member from then on, with their page, handle and history.
+ * `link_pages.manage_team` and `members.invite` (it lets someone in with a login). Sent again to the same person, it
+ * replaces the open one (a new link, a fresh 7 days). An address someone else here uses, or another open invitation
+ * names, is refused (`UNIQUE_CONFLICT` on `email`).
+ */
+export const InviteToManagePageInput = WorkspaceScoped.extend({
+  member: Uuid,
+  email: z.email('Enter a valid email address.').max(254),
+  mutationId: Uuid,
+});
+/** Invite to manage their page. */
+export type InviteToManagePageInput = z.infer<typeof InviteToManagePageInput>;
+
+/** The hand over as sent, and whether its email went out (it stands either way, and can be sent again). */
+export const PageInviteSent = z.object({
+  invite: z.object({
+    email: z.string(),
+    sentAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime(),
+    isExpired: z.boolean().optional(),
+  }),
+  sent: z.boolean(),
+});
+/** The hand over as sent. */
+export type PageInviteSent = z.infer<typeof PageInviteSent>;
+
+/** Cancels a page only person's open hand over: its link stops working at once. */
+export const CancelPageInviteInput = WorkspaceScoped.extend({ member: Uuid, mutationId: Uuid });
+/** Cancels a page's hand over. */
+export type CancelPageInviteInput = z.infer<typeof CancelPageInviteInput>;
+
+/** Whether there was an open hand over to cancel. */
+export const PageInviteCancelled = z.object({ cancelled: z.boolean() });
+/** Whether there was an open hand over to cancel. */
+export type PageInviteCancelled = z.infer<typeof PageInviteCancelled>;
+
 /** Whether the removal changed anything (false when they were already gone). */
 export const PageOnlyRemoved = z.object({ removed: z.boolean() });
 /** Whether the removal changed anything. */
@@ -177,6 +227,8 @@ export const teamPagesContract = {
   addPerson: oc.input(AddPageOnlyPersonInput).output(TeamLinkPage),
   removePerson: oc.input(RemovePageOnlyPersonInput).output(PageOnlyRemoved),
   namePerson: oc.input(NamePageOnlyPersonInput).output(PageOnlyNamed),
+  invitePerson: oc.input(InviteToManagePageInput).output(PageInviteSent),
+  cancelInvite: oc.input(CancelPageInviteInput).output(PageInviteCancelled),
   checkHandle: oc.input(TeamHandleCheckInput).output(TeamHandleCheck),
   suggestHandle: oc.input(TeamHandleSuggestInput).output(TeamHandleSuggestion),
   editedBy: oc.input(WorkspaceScoped).output(LinkPageEditedBy),

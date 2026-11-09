@@ -2,7 +2,7 @@
 // Purpose: everyone's link page in one place (spec 0070, AC-7001), for owners, admins and holders of
 // `link_pages.manage_team`: who has a page, whether it is Live, and how many looked this month.
 // Main task: open someone's page to edit it, add a page for someone who never signs up, claim a handle for someone
-// with none, or hand out QR codes (one, or all).
+// with none, hand a page only person their own page, or hand out QR codes (one, or all).
 // Leaves out: inviting people (Members), what a page holds (its own editor) and Insights beyond this month's views.
 import { isDataError, type DataLayer, type TeamLinkPage } from '@crm/data';
 import {
@@ -32,8 +32,9 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { addressAsTyped } from '../address/address.ts';
 import { publicBookingHost, publicProfileUrl } from '../booking/links.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { AddPageDialog } from './AddPageDialog.tsx';
+import { CancelPageInvite, PageInviteDialog } from './PageInviteDialog.tsx';
 import { useLinkPagePlace } from './place.tsx';
 import { saveFile } from './qr-png.ts';
 import { teamCodeFile, zipTeamCodes, type DrawnTeamCode } from './team-qr.ts';
@@ -78,6 +79,19 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   // Add a page, open (a new key for each opening, so it starts empty), and the page only person being removed.
   const [adding, setAdding] = useState<number | undefined>(undefined);
   const [removing, setRemoving] = useState<TeamLinkPage | undefined>(undefined);
+  // A page only person being handed their page, and one whose open invitation is being cancelled.
+  const [inviting, setInviting] = useState<TeamLinkPage | undefined>(undefined);
+  const [uninviting, setUninviting] = useState<TeamLinkPage | undefined>(undefined);
+  // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks).
+  const canInvite = useCan('members.invite');
+  /** One row put back in the list as the server answered it. */
+  const replaceRow = (memberId: string, change: (page: TeamLinkPage) => TeamLinkPage) => {
+    setState((was) =>
+      was.status === 'ready'
+        ? { status: 'ready', pages: was.pages.map((each) => (each.memberId === memberId ? change(each) : each)) }
+        : was,
+    );
+  };
   // On a phone a row's figures sit on one line with no column heading over them, so the count says what it counts.
   const isPhone = usePhoneWidth();
   const read = useCallback(() => {
@@ -129,6 +143,8 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         onAction={(key) => {
           if (key === 'edit' || key === 'claim') openPage(page);
           if (key === 'remove') setRemoving(page);
+          if (key === 'invite') setInviting(page);
+          if (key === 'uninvite') setUninviting(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
           // One download at a time: a second press while one is drawn waits for it rather than being lost.
@@ -164,6 +180,21 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         {page.isPageOnly === true && (
           <>
             <MenuSeparator />
+            {canInvite &&
+              (page.invite === undefined ? (
+                <MenuItem id="invite" icon="mail">
+                  {strings.invitePerson}
+                </MenuItem>
+              ) : (
+                <>
+                  <MenuItem id="invite" icon="send">
+                    {strings.resendInvite}
+                  </MenuItem>
+                  <MenuItem id="uninvite" icon="x" isDanger>
+                    {strings.revokeInvite}
+                  </MenuItem>
+                </>
+              ))}
             <MenuItem id="remove" icon="user-x" isDanger>
               {strings.removePerson}
             </MenuItem>
@@ -180,7 +211,13 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
           <PersonLine
             id={page.memberId}
             name={page.name}
-            meta={[...(page.isSelf ? [strings.you] : []), ...(page.isPageOnly === true ? [strings.pageOnly] : [])]}
+            meta={[
+              ...(page.isSelf ? [strings.you] : []),
+              ...(page.isPageOnly === true ? [strings.pageOnly] : []),
+              ...(page.invite === undefined
+                ? []
+                : [page.invite.isExpired === true ? strings.inviteExpired : strings.invited]),
+            ]}
             {...(page.image === undefined ? {} : { src: page.image })}
           />
         );
@@ -368,6 +405,40 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                     : was,
                 );
                 toasts.toast({ tone: 'success', message: strings.removed(gone.name) });
+              }}
+            />
+            {inviting !== undefined && (
+              <PageInviteDialog
+                key={inviting.memberId}
+                data={data}
+                slug={slug}
+                page={inviting}
+                onClose={() => setInviting(undefined)}
+                onSent={(invite, sent) => {
+                  const sentFor = { ...inviting, invite };
+                  setInviting(undefined);
+                  replaceRow(inviting.memberId, () => sentFor);
+                  toasts.toast(
+                    sent
+                      ? { tone: 'success', message: strings.inviteSent(invite.email) }
+                      : {
+                          tone: 'danger',
+                          message: strings.inviteUnsent,
+                          action: { label: strings.resendInvite, onAction: () => setInviting(sentFor) },
+                        },
+                  );
+                }}
+              />
+            )}
+            <CancelPageInvite
+              data={data}
+              slug={slug}
+              page={uninviting}
+              onClose={() => setUninviting(undefined)}
+              onCancelled={(page) => {
+                setUninviting(undefined);
+                replaceRow(page.memberId, ({ invite: _gone, ...rest }) => rest);
+                toasts.toast({ tone: 'success', message: strings.inviteRevoked(page.invite?.email ?? '') });
               }}
             />
             {drawing !== undefined && (

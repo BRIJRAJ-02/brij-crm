@@ -21,10 +21,13 @@ const userOf = (name: string, email: string): SignedInUser => ({
 
 let shown: InApp | undefined;
 
-afterEach(() => {
+/** Takes the screen down. */
+function unmountShown() {
   shown?.unmount();
   shown = undefined;
-});
+}
+
+afterEach(unmountShown);
 
 /** The page for `user`, with an accept that answers once the test says (never, by default). */
 async function renderInvite(user: SignedInUser) {
@@ -108,4 +111,102 @@ describe('an invitation that opens nothing (expired, revoked, used) has a way on
     await renderExpired(undefined, false);
     await expect.element(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
   });
+});
+
+// Beside this file (the test server writes only inside the project); the lane moves them out and never commits them.
+const SHOTS = 'invite-shots';
+
+describe('a page’s hand over (9 Nov 2026)', () => {
+  const PAGE_INVITATION: InvitePeek = {
+    workspaceName: 'Acme',
+    inviterName: 'Ada',
+    role: 'member',
+    invitedEmailMasked: 'n***@example.com',
+    page: { name: 'Nick Kim', handle: 'nick' },
+  };
+
+  const renderPage = async (user: SignedInUser | undefined, answer: () => Promise<{ slug: string; email: string }>) => {
+    const claimPage = vi.fn((_token: string) => answer());
+    const signOut = vi.fn(() => Promise.resolve());
+    const data = { invitations: { claimPage }, auth: { signOut } } as unknown as DataLayer;
+    shown = await renderInApp(
+      () => <InviteScreen data={data} token={TOKEN} invitation={PAGE_INVITATION} user={user} />,
+      { data, pattern: '/invite/$token', at: `/invite/${TOKEN}` },
+    );
+    return { claimPage, signOut };
+  };
+
+  it('sets up the page’s login with no sign in, then offers Sign in into the workspace', async () => {
+    const { claimPage } = await renderPage(undefined, () =>
+      Promise.resolve({ slug: 'acme', email: 'nick@example.com' }),
+    );
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Manage your page' })).toBeVisible();
+    await expect.element(page.getByText(/Ada invited you to manage your link page, .+\/nick, in Acme/)).toBeVisible();
+    for (const theme of THEMES) {
+      applyTheme(theme);
+      expect(await axeViolations(), theme).toEqual([]);
+    }
+    resetTheme();
+    await userEvent.click(page.getByRole('button', { name: 'Set up my login' }));
+    expect(claimPage).toHaveBeenCalledExactlyOnceWith(TOKEN);
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Your login is ready' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Sign in' })).toHaveFocus();
+  });
+
+  it('says why when the address already has a login, with nothing to press again', async () => {
+    const refusal = Object.assign(new Error('This email already has a Timefix login.'), {
+      name: 'DataError',
+      code: 'UNIQUE_CONFLICT',
+    });
+    await renderPage(undefined, () => Promise.reject(refusal));
+    await userEvent.click(page.getByRole('button', { name: 'Set up my login' }));
+    await expect.element(page.getByText('This email already has a Timefix login.')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Set up my login' }).query()).toBeNull();
+  });
+
+  it('asks someone signed in to sign out first, never joining them', async () => {
+    const { claimPage, signOut } = await renderPage(userOf('Grace', 'grace@example.com'), () =>
+      Promise.resolve({ slug: 'acme', email: 'nick@example.com' }),
+    );
+    await expect.element(page.getByText(/signed in as grace@example.com\. Sign out first/)).toBeVisible();
+    expect(page.getByRole('button', { name: 'Set up my login' }).query()).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: 'Sign out' }));
+    await expect.element(page.getByRole('dialog', { name: 'Sign out?' })).toBeVisible();
+    expect(claimPage).not.toHaveBeenCalled();
+    await userEvent.click(page.getByRole('dialog', { name: 'Sign out?' }).getByRole('button', { name: 'Sign out' }));
+    expect(signOut).toHaveBeenCalledOnce();
+    // Signed out, the dialog closes: it never stays open and busy over the page it came back to.
+    await vi.waitFor(() => expect(page.getByRole('dialog', { name: 'Sign out?' }).query()).toBeNull());
+  });
+
+  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')(
+    'saves the hand over page at 1280 and 390, light and dark',
+    async () => {
+      for (const [width, height] of [
+        [1280, 860],
+        [390, 844],
+      ] as const) {
+        await page.viewport(width, height);
+        for (const theme of THEMES) {
+          await renderPage(undefined, () => Promise.resolve({ slug: 'acme', email: 'nick@example.com' }));
+          applyTheme(theme);
+          await expect.element(page.getByRole('button', { name: 'Set up my login' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-page-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Set up my login' }));
+          await expect.element(page.getByRole('heading', { level: 1, name: 'Your login is ready' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-ready-${String(width)}-${theme}.png` });
+          unmountShown();
+          await renderPage(userOf('Grace', 'grace@example.com'), () =>
+            Promise.resolve({ slug: 'acme', email: 'nick@example.com' }),
+          );
+          applyTheme(theme);
+          await expect.element(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/handover-signed-in-${String(width)}-${theme}.png` });
+          unmountShown();
+          resetTheme();
+        }
+      }
+    },
+    120_000,
+  );
 });

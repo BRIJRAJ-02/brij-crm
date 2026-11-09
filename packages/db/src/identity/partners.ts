@@ -119,6 +119,40 @@ export interface PartnerIdentity {
    * console's wipe of a sandbox partner. Sessions without an embed scope are never touched. Answers how many.
    */
   endEmbedSessions(connectionIds: readonly string[]): Promise<number>;
+  /**
+   * Hands a page only person's identity over to the person at `email` (Team pages, Invite to manage their page): the
+   * identity becomes an ordinary login at that address, verified by the invitation it was mailed, so signing in there
+   * with a code (or Google, which links by verified email) opens the same member, page, handle and history. Only the
+   * page only identity of this workspace and person; never a partner's (AC-7021). Answers `taken` when another login
+   * already holds the address (identities are never merged), `gone` when it is no page only identity here any more,
+   * else `claimed`. One transaction.
+   */
+  claimPageOnlyUser(claim: PageOnlyClaim): Promise<'claimed' | 'taken' | 'gone'>;
+  /**
+   * Undoes `claimPageOnlyUser` when the workspace's half of the hand over was refused after it (a race): the identity
+   * goes back to its made up address with no verified email, is a page only identity again, and any session it started
+   * meanwhile ends. Only while it still holds `email`. Best effort for the caller.
+   */
+  unclaimPageOnlyUser(claim: PageOnlyClaim): Promise<void>;
+}
+
+/** A page only identity handed to the person at an address: the identity, its workspace and person, and the address. */
+export interface PageOnlyClaim {
+  readonly userId: string;
+  readonly workspaceId: string;
+  readonly personId: string;
+  /** Lowercase, as the invitation holds it. */
+  readonly email: string;
+}
+
+/** Whether a failure is Postgres's unique violation, on the error or the one it wraps (drizzle wraps them). */
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    if ('code' in current && current.code === '23505') return true;
+    current = current.cause;
+  }
+  return false;
 }
 
 /** Who a managed identity is made for, and the name it shows on their link page. */
@@ -345,6 +379,67 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         )
         .returning({ id: user.id });
       return dropped.length > 0;
+    },
+
+    async claimPageOnlyUser(claim) {
+      const { userId, workspaceId, personId } = claim;
+      const email = claim.email.trim().toLowerCase();
+      if (!UUID.test(userId) || !UUID.test(workspaceId) || !UUID.test(personId) || !email.includes('@')) return 'gone';
+      if (isManagedAddress(email)) return 'taken';
+      try {
+        return await db.transaction(async (tx) => {
+          const [held] = await tx
+            .select({ userId: managedUsers.userId })
+            .from(managedUsers)
+            .where(
+              and(
+                eq(managedUsers.userId, userId),
+                eq(managedUsers.workspaceId, workspaceId),
+                isNull(managedUsers.partnerId),
+                eq(managedUsers.externalId, personId.toLowerCase()),
+              ),
+            )
+            .for('update');
+          if (held === undefined) return 'gone';
+          const [other] = await tx
+            .select({ id: user.id })
+            .from(user)
+            .where(and(sql`lower(${user.email}) = ${email}`, sql`${user.id} <> ${userId}::uuid`))
+            .limit(1);
+          if (other !== undefined) return 'taken';
+          await tx
+            .update(user)
+            .set({ email, emailVerified: true, updatedAt: sql`now()` })
+            .where(eq(user.id, userId));
+          await tx.delete(managedUsers).where(eq(managedUsers.userId, userId));
+          // None should exist (the session hook refused it), but a login starts with none from before.
+          await tx.delete(session).where(eq(session.userId, userId));
+          return 'claimed';
+        });
+      } catch (error) {
+        // Another login took the address at the same moment: its unique index says so.
+        if (isUniqueViolation(error)) return 'taken';
+        throw error;
+      }
+    },
+
+    async unclaimPageOnlyUser(claim) {
+      const { userId, workspaceId, personId } = claim;
+      const email = claim.email.trim().toLowerCase();
+      if (!UUID.test(userId) || !UUID.test(workspaceId) || !UUID.test(personId)) return;
+      await db.transaction(async (tx) => {
+        const back = await tx
+          .update(user)
+          .set({ email: `${userId}@${MANAGED_DOMAIN}`, emailVerified: false, updatedAt: sql`now()` })
+          .where(and(eq(user.id, userId), sql`lower(${user.email}) = ${email}`))
+          .returning({ id: user.id });
+        if (back.length === 0) return;
+        await tx
+          .insert(managedUsers)
+          .values({ userId, workspaceId, partnerId: null, externalId: personId.toLowerCase() })
+          .onConflictDoNothing();
+        await tx.delete(session).where(eq(session.userId, userId));
+      });
     },
 
     async endManagedUserSessions(userId) {

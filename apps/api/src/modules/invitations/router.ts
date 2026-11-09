@@ -45,7 +45,7 @@ function sendsSpent(retryAfterSeconds: number | undefined): Error {
  * caller spends nothing, and a write refused later (a full plan) still used
  * them.
  */
-async function limitSends(
+export async function limitSends(
   context: Pick<RequestContext, 'limiter'>,
   workspaceId: string,
   userId: string,
@@ -66,7 +66,7 @@ async function limitSends(
 }
 
 /** Who the email says invited them when no member did (the system, in tests): never an empty name. */
-const NO_INVITER = 'A teammate';
+export const NO_INVITER = 'A teammate';
 
 /**
  * One invitation's email (spec 0031, AC-803): `@crm/emails`' invite

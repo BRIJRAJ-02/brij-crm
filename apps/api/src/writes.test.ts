@@ -864,6 +864,44 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
     ];
   },
+  // A page only person added first, then invited to manage their page (9 Nov 2026): an invitation nobody's screen
+  // follows live, so no row of its own.
+  'teamPages.invitePerson': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Ivy Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    const email = `ivy-${newId()}@example.com`;
+    const sent = await m.client.teamPages.invitePerson({
+      workspace: m.slug,
+      member: added.memberId,
+      email,
+      mutationId,
+    });
+    expect(sent).toMatchObject({ invite: { email }, sent: true });
+    return [{ kind: 'members' }, { kind: 'access' }];
+  },
+  // Added, invited, then the invitation cancelled.
+  'teamPages.cancelInvite': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Cal Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    await m.client.teamPages.invitePerson({
+      workspace: m.slug,
+      member: added.memberId,
+      email: `cal-${newId()}@example.com`,
+      mutationId: newId(),
+    });
+    expect(await m.client.teamPages.cancelInvite({ workspace: m.slug, member: added.memberId, mutationId })).toEqual({
+      cancelled: true,
+    });
+    return [{ kind: 'members' }, { kind: 'access' }];
+  },
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
     await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
@@ -1106,6 +1144,21 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const item = await m.client.profile.saveItem({ workspace: m.slug, id: newId(), block, mutationId: newId() });
     await m.client.profile.deleteItem({ workspace: m.slug, id: item.id, mutationId });
     return [];
+  },
+  // A page only person added and invited, then the page taken over with no session (9 Nov 2026): their member row
+  // changed (its address), so a members row, and an access row naming them.
+  'invitations.claimPage': async (m) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Tia Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    const email = `tia-${newId()}@example.com`;
+    await m.client.teamPages.invitePerson({ workspace: m.slug, member: added.memberId, email, mutationId: newId() });
+    const claimed = await rpcClient(app).invitations.claimPage({ token: invitationTokens.get(email) ?? '' });
+    expect(claimed).toEqual({ slug: m.slug, email });
+    return [{ kind: 'members' }, { kind: 'access' }, { kind: 'members' }, { kind: 'access' }];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -3586,6 +3639,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'teamPages.removePerson': 2,
   // A page only person added first, then named (9 Nov 2026).
   'teamPages.namePerson': 2,
+  // A page only person added first, then invited; invited, then cancelled; or invited, then taken over.
+  'teamPages.invitePerson': 2,
+  'teamPages.cancelInvite': 3,
+  'invitations.claimPage': 3,
   // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
   'roles.update': 2,
   'roles.duplicate': 2,

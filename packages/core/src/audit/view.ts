@@ -276,7 +276,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...base,
         action,
         target: invitationTarget(),
-        params: made === undefined ? {} : { role: made },
+        params: after.page === true ? { page: true as const } : made === undefined ? {} : { role: made },
         changes: change('role', undefined, role(after.role)),
       };
     }
@@ -287,7 +287,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...base,
         action,
         target: invitationTarget(),
-        params: changed ? { role: now } : {},
+        params: { ...(changed ? { role: now } : {}), ...(after.page === true ? { page: true as const } : {}) },
         changes: changed ? change('role', role(before.role), role(after.role)) : [],
       };
     }
@@ -309,7 +309,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...base,
         action,
         target: memberTarget(),
-        params: { via: after.via === 'link' ? 'link' : 'email', ...(joined === undefined ? {} : { role: joined }) },
+        params:
+          after.via === 'page'
+            ? { via: 'page' }
+            : { via: after.via === 'link' ? 'link' : 'email', ...(joined === undefined ? {} : { role: joined }) },
         changes: change('role', undefined, role(after.role)),
       };
     }

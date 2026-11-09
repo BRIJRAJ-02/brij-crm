@@ -7,7 +7,14 @@
 // older than 30 days, and queues again only a job that lost its queue row.
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { PRUNE_BATCH, createDatabase, openQueueConnection, type QueueConnection } from '@crm/db';
+import {
+  PRUNE_BATCH,
+  createDatabase,
+  createIdentityStore,
+  openQueueConnection,
+  type IdentityStore,
+  type QueueConnection,
+} from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { systemScope } from '../access/door.ts';
@@ -17,6 +24,8 @@ import { createImport, stageImportRows } from '../imports/service.ts';
 import { deleteNote, saveNote } from '../notes/notes.ts';
 import { markSubmissionSpam } from '../forms/submissions.ts';
 import { createTask, deleteTask } from '../tasks/tasks.ts';
+import { addPageOnlyPerson, removePageOnlyPerson } from '../profile/page-only.ts';
+import { inviteToManagePage } from '../members/page-handover.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord } from '../engine/records.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -33,14 +42,17 @@ import { kindContractProblems, type AnyKind } from './registry.ts';
 import { getJob } from './service.ts';
 import { fakeClock, jobTestKit } from '../../test/jobs-kit.ts';
 
-const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
+const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-maintenance-tests' });
 let queue: QueueConnection;
+let identity: IdentityStore;
 
 beforeAll(() => {
   queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-maintenance-tests-queue', max: 2 });
+  identity = createIdentityStore({ url: identityUrl, applicationName: 'crm-maintenance-tests-identity' });
 });
 afterAll(async () => {
+  await identity.close();
   await queue.close();
   await db.close();
 });
@@ -48,6 +60,19 @@ afterAll(async () => {
 const registry = () => jobKinds({ environment: 'local', queue });
 const { team, runnerFor, queueRows, jobEvents, drive } = jobTestKit(db, ownerUrl);
 const quiet = { info: () => undefined, error: () => undefined };
+
+/** `team()` with its directory row, which a membership in schema auth (a page only person's) needs. */
+async function listedTeam() {
+  const t = await team([]);
+  const [row] = await testQuery<{ slug: string }>(ownerUrl, 'select slug from workspaces where id = $1', [
+    t.workspaceId,
+  ]);
+  await testQuery(ownerUrl, `insert into auth.workspace_directory (workspace_id, slug, name) values ($1, $2, 'Jobs')`, [
+    t.workspaceId,
+    row?.slug ?? '',
+  ]);
+  return t;
+}
 
 /** A sweep over the given workspaces only (the shared test database holds every file's), counting its calls. */
 function sweepOf(workspaceIds: readonly string[], pruned: readonly number[] = [0]) {
@@ -959,6 +984,132 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
         { id: fresh, rows: 2 },
       ].sort((a, b) => (a.id < b.id ? -1 : 1)),
     );
+  });
+
+  it('purges a page only person removed more than 30 days ago, files first, and keeps one removed since (AC-7022)', async () => {
+    const t = await listedTeam();
+    const users = {
+      ensurePageOnlyUser: (person: { workspaceId: string; personId: string; name: string }) =>
+        identity.ensurePageOnlyUser(person),
+      dropPageOnlyUser: (userId: string) => identity.dropPageOnlyUser(userId),
+      endManagedUserSessions: (userId: string) => identity.endManagedUserSessions(userId),
+      dropMembership: (userId: string, workspaceId: string, memberId?: string) =>
+        identity.dropMembership(userId, workspaceId, memberId),
+    };
+    const stem = `gone-${newId().slice(-8)}`;
+    const old = await addPageOnlyPerson(t.owner, { name: 'Old Page', handle: stem }, { users });
+    const recent = await addPageOnlyPerson(t.owner, { name: 'New Page', handle: `${stem}-b` }, { users });
+    // An open hand over for the old one, which their removal cancels and the purge leaves as History.
+    await inviteToManagePage(t.owner, { member: old.memberId, email: `${stem}@example.com` });
+    const [oldRow] = await testQuery<{ user_id: string }>(
+      ownerUrl,
+      'select user_id::text from managed_members where workspace_id = $1 and member_id = $2',
+      [t.workspaceId, old.memberId],
+    );
+    const userId = oldRow?.user_id ?? '';
+    // A picture on their page: its bytes in the store, its row in schema auth.
+    const imageId = randomUUID();
+    const path = `link-page/${userId}/${t.workspaceId}/${imageId}.png`;
+    await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute(
+        sql`select crm_add_profile_image(${userId}::uuid, ${t.workspaceId}::uuid, ${imageId}::uuid, 'upload', ${path}, 'image/png', 10::integer, 1::integer, 1::integer)`,
+      ),
+    );
+    for (const gone of [old, recent]) await removePageOnlyPerson(t.owner, { member: gone.memberId }, { users });
+    await testQuery(
+      ownerUrl,
+      `update managed_members set removed_at = now() - interval '31 days' where workspace_id = $1 and member_id = $2`,
+      [t.workspaceId, old.memberId],
+    );
+    const removed: string[] = [];
+    const store = {
+      remove: (paths: readonly string[]) => {
+        removed.push(...paths);
+        return Promise.resolve();
+      },
+    };
+    // Without a store the phase waits: nothing goes.
+    await cleanUp(t.workspaceId, '2026-10-15');
+    expect(
+      await testQuery(ownerUrl, 'select 1 from managed_members where member_id = $1', [old.memberId]),
+    ).toHaveLength(1);
+    // With one, the old person goes; the one removed yesterday stays.
+    await fanOut('2026-10-16', [t.workspaceId]);
+    const job = (await cleanups(t.workspaceId)).find((row) => row.once_key === maintenanceKey('2026-10-16'));
+    if (job === undefined) throw new Error('No cleanup was started.');
+    const withStore = jobKinds({ environment: 'local', queue, uploads: store });
+    expect((await drive(runnerFor(withStore, fakeClock()), t.workspaceId, job.id)).at(-1)).toBe('succeeded');
+    expect(removed).toEqual([path]);
+    const finished = await getJob(systemScope(db, t.workspaceId), withStore, job.id);
+    expect(finished.result).toMatchObject({ cleanup: { managedPages: 1 } });
+    expect(
+      await testQuery(ownerUrl, 'select member_id::text from managed_members where workspace_id = $1 order by 1', [
+        t.workspaceId,
+      ]),
+    ).toEqual([{ member_id: recent.memberId }]);
+    // Their member row stays for History, named, with no identity and no address of theirs.
+    const [member] = await testQuery<{ name: string; user_id: string | null; email: string; status: string }>(
+      ownerUrl,
+      'select name, user_id::text, email, status::text from members where workspace_id = $1 and id = $2',
+      [t.workspaceId, old.memberId],
+    );
+    expect(member).toEqual({
+      name: 'Old Page',
+      user_id: null,
+      email: `${old.memberId}@managed.timefix.invalid`,
+      status: 'removed',
+    });
+    // Their page and picture rows are gone; their handle is held, naming nobody, until the 90 day sweep frees it.
+    expect(await testQuery(ownerUrl, 'select 1 from auth.public_profiles where user_id = $1', [userId])).toEqual([]);
+    expect(
+      await testQuery<{ user_id: string | null; held: boolean }>(
+        ownerUrl,
+        'select user_id::text, released_at is not null as held from auth.public_handles where handle = $1',
+        [stem],
+      ),
+    ).toEqual([{ user_id: null, held: true }]);
+    // The hand over their removal cancelled stays cancelled, as History.
+    expect(await testQuery(ownerUrl, `select status from invitations where member_id = $1`, [old.memberId])).toEqual([
+      { status: 'revoked' },
+    ]);
+    // The one removed yesterday keeps their page.
+    expect(
+      await testQuery(ownerUrl, 'select handle from auth.public_profiles where workspace_id = $1', [t.workspaceId]),
+    ).toEqual([{ handle: `${stem}-b` }]);
+  });
+
+  it('refuses the page purge for anyone still a member, and in another workspace (migration 0204)', async () => {
+    const t = await listedTeam();
+    const other = await team([]);
+    const users = {
+      ensurePageOnlyUser: (person: { workspaceId: string; personId: string; name: string }) =>
+        identity.ensurePageOnlyUser(person),
+      dropPageOnlyUser: (userId: string) => identity.dropPageOnlyUser(userId),
+    };
+    const stem = `kept-${newId().slice(-8)}`;
+    const added = await addPageOnlyPerson(t.owner, { name: 'Kept Page', handle: stem }, { users });
+    const [row] = await testQuery<{ user_id: string }>(
+      ownerUrl,
+      'select user_id::text from managed_members where member_id = $1',
+      [added.memberId],
+    );
+    const purge = (workspaceId: string) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(sql`select path from crm_purge_managed_page(${row?.user_id ?? ''}::uuid)`),
+      );
+    // Active, in another workspace, removed yesterday, made a guest: refused each time, with no row back at all.
+    expect((await purge(t.workspaceId)).rows).toEqual([]);
+    expect((await purge(other.workspaceId)).rows).toEqual([]);
+    await testQuery(ownerUrl, `update members set role = 'guest' where id = $1`, [added.memberId]);
+    await testQuery(
+      ownerUrl,
+      `update managed_members set removed_at = now() - interval '31 days' where member_id = $1`,
+      [added.memberId],
+    );
+    expect((await purge(t.workspaceId)).rows).toEqual([]);
+    expect(
+      await testQuery(ownerUrl, 'select handle from auth.public_profiles where user_id = $1', [row?.user_id]),
+    ).toEqual([{ handle: stem }]);
   });
 
   it('replays a committed batch to no new effect: each phase only removes what is still due', async () => {

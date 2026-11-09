@@ -1422,6 +1422,13 @@
       "when": 1795700023000,
       "tag": "0202_consent_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 203,
+      "version": "7",
+      "when": 1795700024000,
+      "tag": "0204_page_handover",
+      "breakpoints": true
     }
   ]
 }

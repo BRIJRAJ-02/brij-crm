@@ -59,6 +59,11 @@ export const invitations = pgTable(
     lastSentAt: timestamptz('last_sent_at'),
     /** The member it made, once used. */
     usedByMemberId: uuid('used_by_member_id'),
+    /**
+     * The page only person whose page it hands over (Team pages, 9 Nov 2026): accepting it makes their own identity a
+     * login at the invited address, so they stay the same member. Only a Member email invitation names one (0204).
+     */
+    memberId: uuid('member_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -80,6 +85,15 @@ export const invitations = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }),
     check('invitations_custom_role', sql`${t.customRoleId} is null or ${t.role} = 'member'`),
+    foreignKey({
+      name: 'invitations_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check(
+      'invitations_member_shape',
+      sql`${t.memberId} is null or (${t.kind} = 'email' and ${t.role} = 'member' and ${t.customRoleId} is null)`,
+    ),
     check('invitations_kind', sql`${t.kind} in ('email', 'link')`),
     check('invitations_status', sql`${t.status} in ('open', 'used', 'revoked')`),
     check(
@@ -112,6 +126,13 @@ export const invitations = pgTable(
     index('invitations_custom_role')
       .on(t.workspaceId, t.customRoleId)
       .where(sql`${t.customRoleId} is not null`),
+    // One open hand over per page only person, and theirs found by member (migration 0204).
+    uniqueIndex('invitations_open_member')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.status} = 'open' and ${t.memberId} is not null`),
+    index('invitations_member_ix')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.memberId} is not null`),
     // The Invitations tab: open ones, newest first.
     index('invitations_open')
       .on(t.workspaceId, t.createdAt.desc(), t.id)

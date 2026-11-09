@@ -254,6 +254,14 @@ export {
   type PageOnlyUserEnder,
   type PageOnlyUserMaker,
 } from './profile/page-only.ts';
+// A page only person's page handed over (9 Nov 2026): Invite to manage their page, its cancel, and taking it over.
+export {
+  cancelPageInvite,
+  claimPageInvite,
+  inviteToManagePage,
+  type PageClaimUsers,
+  type PageInviteToSend,
+} from './members/page-handover.ts';
 export {
   discardLinkDraft,
   listLinkPageVersions,

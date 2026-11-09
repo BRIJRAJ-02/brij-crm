@@ -27,6 +27,7 @@ import { insightSharesRemoval } from '../insights/shares.ts';
 import { staffLinkRemoval } from '../visits/staff-link.ts';
 import type { AuditSource } from './audit.ts';
 import { countUnvouched, revokeUnvouched } from './invitations.ts';
+import { pageHandoverRemoval } from './page-handover.ts';
 import type { RemovalCounts, RemovalEffect } from './removal-effect.ts';
 
 /**
@@ -131,6 +132,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   // Spec 0037, AC-1331: the pages and rotations they edited.
   editorsRemoval,
   managedMembersRemoval,
+  // A page only person's open hand over goes with them (9 Nov 2026).
+  pageHandoverRemoval,
   // Spec 0037, AC-1382: the skills they held.
   skillsRemoval,
   // Spec 0067: their Insights share links are revoked.
