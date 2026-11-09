@@ -19,10 +19,11 @@ export const Route = createFileRoute('/w/$slug/bookings/roster')({
   // place), so typing never swaps the page for its pending state and loses the field's focus. The first read takes
   // the address's `?q=`, so a shared link opens searched.
   loaderDeps: ({ search }) => ({ week: search.week }),
-  loader: async ({ context, params, deps, location }) => {
+  loader: async ({ context, params, deps, location, preload }) => {
     // Only someone who sees a colleague's scheduling has a roster (spec 0037, AC-1447); anyone else opens their own
-    // hours, Availability, where a roster of one would have shown them.
+    // hours, Availability, where a roster of one would have shown them, and is told why (never on a hover's preload).
     if (!rosterIsShown(await context.data.access.mine(params.slug))) {
+      if (!preload) context.toasts.toast({ tone: 'info', message: teamWeekStrings.ownHoursOnly });
       throw redirect({ to: '/w/$slug/bookings/availability', params: { slug: params.slug }, replace: true });
     }
     const zone = memberZone(context.data, params.slug);

@@ -757,6 +757,8 @@ function Booking({
   readonly onEnded: (state: 'gone' | 'closed' | 'used') => void;
 }) {
   const [zone, setZone] = useState(chosen.zone ?? detected);
+  // The rail's time zone picker, which Book by chat's zone chip opens.
+  const zoneTrigger = useRef<HTMLButtonElement>(null);
   // The visitor's country, guessed once, for a phone or country question of the page's own (spec 0057).
   const [countryGuess] = useState(guessCountry);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
@@ -1244,6 +1246,7 @@ function Booking({
           // The clock goes with the zone (critic A24), as Calendly keeps it: in the list's foot, out of the picker's
           // corner. Book by chat follows it too.
           popoverFoot={clockSwitch}
+          triggerRef={zoneTrigger}
         />
       ),
     },
@@ -1676,7 +1679,7 @@ function Booking({
             onBooked={(token) => arrival(token)()}
             // The greeting's zone chip opens the rail's own picker, where every view changes the zone.
             onZone={() => {
-              const trigger = document.querySelector<HTMLElement>('aside button[aria-haspopup="listbox"]');
+              const trigger = zoneTrigger.current;
               trigger?.scrollIntoView({ block: 'center' });
               trigger?.click();
             }}

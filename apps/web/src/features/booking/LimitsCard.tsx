@@ -4,7 +4,7 @@
 // Leaves out: per page limits (each page's own Limits), rotation caps (the rotation's settings), and any history of changes (Settings › History).
 import type { DataLayer, LimitsDraft, MeetingLimits } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
-import { Card, EmptyState, Select, SettingsRow, type SelectItem } from '@crm/ui';
+import { Card, EmptyState, Select, SettingsRow, Skeleton, type SelectItem } from '@crm/ui';
 import { firstName } from './time-off.ts';
 import { LIMIT_CHOICES, limitsStrings as strings } from './limits-strings.ts';
 
@@ -136,19 +136,12 @@ function LimitRow({
   );
 }
 
-/** The section while it loads, in its loaded anatomy: both limits' rows, at No limit. */
+/** The section while it loads, in its loaded anatomy: both limits' rows, each control a placeholder. */
 export function LimitsCardPending({ member }: { readonly member?: { readonly name: string } | undefined } = {}) {
   const row = (label: string) => (
+    // The box the row's Select will fill, never a disabled "No limit", which read as the person's real limit.
     <SettingsRow title={label} description={strings.loading} control="compact">
-      <Select
-        label={label}
-        isLabelHidden
-        size="sm"
-        items={[{ id: NO_LIMIT, label: strings.noLimit }]}
-        value={NO_LIMIT}
-        isDisabled
-        onChange={() => undefined}
-      />
+      <Skeleton shape="field" size="sm" />
     </SettingsRow>
   );
   return (

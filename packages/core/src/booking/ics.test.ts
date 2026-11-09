@@ -3,7 +3,7 @@
 // update versus duplicate, cancellation, escaping and folding.
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
-import { buildBookingIcs, type IcsInput } from './ics.ts';
+import { buildBookingIcs, icsFilename, icsMethodOf, type IcsInput } from './ics.ts';
 
 /** One property's value, unfolded. */
 function prop(ics: string, name: string): string | null {
@@ -103,5 +103,14 @@ describe('buildBookingIcs', () => {
     });
     expect(two.match(/^ATTENDEE/gm)).toHaveLength(2);
     expect(ics()).toContain('MAILTO:bookings@app.example');
+  });
+});
+
+describe('the file’s one name (bookings redesign step 1)', () => {
+  it('is invite.ics, or cancelled.ics for a cancel, read back from the file itself', () => {
+    expect(icsFilename('REQUEST')).toBe('invite.ics');
+    expect(icsFilename('CANCEL')).toBe('cancelled.ics');
+    expect(icsMethodOf(ics({ method: 'REQUEST' }))).toBe('REQUEST');
+    expect(icsMethodOf(ics({ method: 'CANCEL' }))).toBe('CANCEL');
   });
 });

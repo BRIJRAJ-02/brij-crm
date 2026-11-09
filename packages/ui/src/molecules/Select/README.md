@@ -79,4 +79,6 @@ Enter, Space or the arrow keys open it; arrows move; typing jumps to a match; En
 
 ## Popover foot (5 November 2026)
 
+`triggerRef` takes the trigger on screen, the stand in until the list's code is in and the real trigger after, so another control can scroll to it and open it: the public booking page's chat opens the rail's time zone picker from its zone chip.
+
 `popoverFoot` puts one setting that belongs with the choice in a band under a searchable list: the public booking page's 12h or 24h clock under its time zones, as Calendly keeps it (critic A24). DeferredSelect passes it on. Tab reaches it after the search.

@@ -16,21 +16,23 @@
 //   .ics when ours was the file that invited them.
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
-// A guest never gets the visitor's link: it is the visitor's key.
+// A guest never gets the visitor's link: it is the visitor's key. The visitor's own .ics carries it as its URL, the
+// same as the guest page's own download does.
 import { and, eq, sql } from 'drizzle-orm';
-import { DateTime } from 'luxon';
-import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { schedulingManagers } from '../access/scheduling.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
-import { buildBookingIcs } from './ics.ts';
+import { buildBookingIcs, icsFilename } from './ics.ts';
+import { atLine, whenLine } from './mail-when.ts';
 import { answerWords, storedBookingAnswers } from './questions.ts';
 import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { pagePath } from './handles.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
+
+export { atLine, whenLine } from './mail-when.ts';
 
 const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
 
@@ -67,6 +69,12 @@ export interface BookingMail {
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
   /** Who they meet, by name beside their initials: a round robin booking's assigned host (owner decision, 22 Oct). */
   readonly host?: { readonly label: string; readonly name: string };
+  /**
+   * Where a reply goes: the host, on the visitor's mail once the booking stands. The visitor already has the host's
+   * address there (the calendar invitation names them, whether ours or the host's calendar's), and the guest page's
+   * "too close to change it here" line sends them to reply to their confirmation email.
+   */
+  readonly replyTo?: string;
 }
 
 /** What the emails need: the app's origin for links, the guest page key, the sender for the calendar file, the clock. */
@@ -95,20 +103,6 @@ export interface PreparedMail {
    * (a second reschedule) follows a write, so it keys differently and goes.
    */
   readonly stamp?: number;
-}
-
-/** "Monday 2 November 2026, 9:00 AM, London time (GMT)", in `zone`: one moment, as a request's deadline. */
-export function atLine(at: Date, zone: string): string {
-  const local = DateTime.fromJSDate(at, { zone });
-  return `${local.setLocale('en-GB').toFormat('cccc d LLLL yyyy')}, ${local.setLocale('en-US').toFormat('h:mm a')}, ${zoneDisplay(zone, at.getTime())}`;
-}
-
-/** "Monday 2 November 2026, 9:00 AM to 9:30 AM, London time (GMT)", in `zone`. */
-export function whenLine(start: Date, end: Date, zone: string): string {
-  const from = DateTime.fromJSDate(start, { zone }).setLocale('en-GB');
-  const to = DateTime.fromJSDate(end, { zone }).setLocale('en-GB');
-  const time = (at: DateTime) => at.setLocale('en-US').toFormat('h:mm a');
-  return `${from.toFormat('cccc d LLLL yyyy')}, ${time(from)} to ${time(to)}, ${zoneDisplay(zone, start.getTime())}`;
 }
 
 /**
@@ -177,7 +171,7 @@ export async function prepareBookingMail(
     const page = await loadPage(tx, row.pageId);
     if (page === undefined) return { messages: [], invited: [], skipped: 'gone' };
     const [host] = await tx
-      .select({ name: members.name, email: members.email })
+      .select({ name: members.name, email: members.email, status: members.status })
       .from(members)
       .where(eq(members.id, row.hostMemberId));
     // A round robin booking's every host (spec 0037, AC-1322): the organiser first, each told, all named.
@@ -260,7 +254,7 @@ export async function prepareBookingMail(
     const addedLater = addedLaterOf(row.answers);
     /** A guest's calendar file on a move or cancel: when no calendar event invited them, they have only ours. */
     const guestFile = (method: 'REQUEST' | 'CANCEL', guest: string) =>
-      hasEvent && !addedLater.includes(guest) ? {} : { ics: icsFile(method, [{ name: guest, email: guest }]) };
+      hasEvent && !addedLater.includes(guest) ? {} : { ics: icsFile(method, [{ name: guest, email: guest }], 'guest') };
     const invited = invitedOf(row.answers);
     const bookedByHost = answer(row.answers, 'bookedBy') === 'host';
     const byGuest = row.updatedByType === 'booking';
@@ -286,8 +280,15 @@ export async function prepareBookingMail(
         ? [{ label: 'Their time', value: whenLine(row.startsAt, row.endsAt, row.visitorTimeZone) }]
         : [];
     const reasonRow = row.cancelReason === null ? [] : [{ label: 'Reason', value: row.cancelReason }];
-    const icsFile = (method: 'REQUEST' | 'CANCEL', attendees: readonly { name: string; email: string }[]) => ({
-      filename: method === 'CANCEL' ? 'cancelled.ics' : 'invite.ics',
+    // The file's link opens the reader's own way back to the booking: the visitor's booking page, the host's booking on
+    // Bookings, and for a guest the page itself, since a guest never gets the visitor's link (see the header).
+    const fileUrl = { visitor: manageUrl, host: bookingsUrl, guest: bookAgainUrl } as const;
+    const icsFile = (
+      method: 'REQUEST' | 'CANCEL',
+      attendees: readonly { name: string; email: string }[],
+      reader: keyof typeof fileUrl,
+    ) => ({
+      filename: icsFilename(method),
       method,
       content: buildBookingIcs({
         bookingId: row.id,
@@ -303,7 +304,7 @@ export async function prepareBookingMail(
             ? null
             : (row.videoUrl ??
               (page.location.type === 'address' || page.location.type === 'custom' ? page.location.value : null)),
-        url: bookAgainUrl,
+        url: fileUrl[reader],
         organizerEmail: deps.organizerEmail,
         organizerName: hostName,
         attendees,
@@ -313,8 +314,11 @@ export async function prepareBookingMail(
       }),
     });
     /** The file, unless the calendar event already put it in their calendar. */
-    const ics = (method: 'REQUEST' | 'CANCEL', attendees: readonly { name: string; email: string }[]) =>
-      hasEvent ? {} : { ics: icsFile(method, attendees) };
+    const ics = (
+      method: 'REQUEST' | 'CANCEL',
+      attendees: readonly { name: string; email: string }[],
+      reader: keyof typeof fileUrl,
+    ) => (hasEvent ? {} : { ics: icsFile(method, attendees, reader) });
     const visitor = { name: row.visitorName, email: row.visitorEmail };
     // The host is in the meeting by default (the owner, 22 Oct 2026): every calendar file lists the hosts beside the
     // visitor, and a host gets the file too whenever no calendar event put the meeting in their own calendar.
@@ -336,13 +340,22 @@ export async function prepareBookingMail(
             ],
             button: { label: 'Open booking', url: bookingsUrl },
             why: hostWhy,
-            ics: icsFile(method, everyone),
+            ics: icsFile(method, everyone, 'host'),
           }));
     const change = 'Need to change it? Move it to another time or cancel it from your booking page.';
     // Why each reader got their email, for the footer: the address that booked, a guest on it, or its host.
     const visitorWhy = bookedByHost
       ? `You got this email because ${hostName} booked a time with this address.`
       : `You got this email because this address was used to book ${page.title} with ${hostName}.`;
+    // A reply to the visitor's mail reaches the organising host (see `replyTo`); a request's mail, before any invitation
+    // named them, keeps the sending address.
+    // Only to an active member (as every queued email's reply, emails/send.ts), and only to the address the visitor has
+    // already seen: our calendar file lists each host's member address, and so does the calendar event of a page's
+    // booking or of a host booking themselves in. A member who booked them in for a colleague put the event on that
+    // colleague's calendar, whose account may show another address as the organiser, so nothing is shared there.
+    const bookedForColleague = bookedByHost && row.createdByMemberId !== row.hostMemberId;
+    const replyToHost =
+      host === undefined || host.status !== 'active' || (hasEvent && bookedForColleague) ? {} : { replyTo: host.email };
     const guestWhy = `You got this email because ${row.visitorName} added this address to ${page.title}.`;
     const hostWhy = `You got this email because you host ${page.title}.`;
     const newGuests = guests.filter((guest) => !invited.includes(guest));
@@ -356,8 +369,8 @@ export async function prepareBookingMail(
         rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
         why: guestWhy,
         ...(always
-          ? { ics: icsFile('REQUEST', [{ name: guest, email: guest }]) }
-          : ics('REQUEST', [{ name: guest, email: guest }])),
+          ? { ics: icsFile('REQUEST', [{ name: guest, email: guest }], 'guest') }
+          : ics('REQUEST', [{ name: guest, email: guest }], 'guest')),
       }));
 
     switch (kind) {
@@ -382,7 +395,8 @@ export async function prepareBookingMail(
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,
-          ...ics('REQUEST', everyone),
+          ...replyToHost,
+          ...ics('REQUEST', everyone, 'visitor'),
         };
         const toHost: BookingMail[] = bookedByHost
           ? hostCopies(
@@ -409,7 +423,7 @@ export async function prepareBookingMail(
               ],
               button: { label: 'Open booking', url: bookingsUrl },
               why: hostWhy,
-              ...ics('REQUEST', everyone),
+              ...ics('REQUEST', everyone, 'host'),
             }));
         return { messages: [toVisitor, ...toHost, ...invitations(false)], invited: newGuests, stamp };
       }
@@ -475,7 +489,8 @@ export async function prepareBookingMail(
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,
-          ...ics('REQUEST', everyone),
+          ...replyToHost,
+          ...ics('REQUEST', everyone, 'visitor'),
         };
         const toGuests: BookingMail[] = guests.map((guest) => ({
           to: guest,
@@ -506,7 +521,7 @@ export async function prepareBookingMail(
               ],
               button: { label: 'Open booking', url: bookingsUrl },
               why: hostWhy,
-              ...ics('REQUEST', everyone),
+              ...ics('REQUEST', everyone, 'host'),
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
@@ -524,7 +539,8 @@ export async function prepareBookingMail(
           rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), ...reasonRow],
           button: { label: byHost ? 'Book another time' : 'Book again', url: bookAgainUrl },
           why: visitorWhy,
-          ...ics('CANCEL', everyone),
+          ...replyToHost,
+          ...ics('CANCEL', everyone, 'visitor'),
         };
         const toGuests: BookingMail[] = guests.map((guest) => ({
           to: guest,
@@ -550,7 +566,7 @@ export async function prepareBookingMail(
               intro: `${row.visitorName} cancelled ${page.title}. The time is free again.`,
               rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }, ...reasonRow],
               why: hostWhy,
-              ...ics('CANCEL', everyone),
+              ...ics('CANCEL', everyone, 'host'),
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [], stamp };
       }
@@ -569,7 +585,8 @@ export async function prepareBookingMail(
           button: join,
           footnote: change,
           why: visitorWhy,
-          ...ics('REQUEST', everyone),
+          ...replyToHost,
+          ...ics('REQUEST', everyone, 'visitor'),
         };
         const toGuests: BookingMail[] = guests.map((guest) => ({
           to: guest,
@@ -716,7 +733,8 @@ export async function prepareBookingMail(
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,
-          ...ics('REQUEST', everyone),
+          ...replyToHost,
+          ...ics('REQUEST', everyone, 'visitor'),
         };
         const toCame: BookingMail[] = came.map((each) => ({
           to: each.email,
@@ -732,7 +750,7 @@ export async function prepareBookingMail(
           ],
           button: { label: 'Open booking', url: bookingsUrl },
           why: hostWhy,
-          ...ics('REQUEST', everyone),
+          ...ics('REQUEST', everyone, 'host'),
         }));
         const toLeft: BookingMail[] = left.map((each) => ({
           to: each.email,
@@ -744,7 +762,7 @@ export async function prepareBookingMail(
           button: { label: 'Open booking', url: bookingsUrl },
           why: `You got this email because you hosted ${page.title}.`,
           // Off the calendar the file put it in: a cancel for this host alone.
-          ...ics('CANCEL', [{ name: each.name, email: each.email }]),
+          ...ics('CANCEL', [{ name: each.name, email: each.email }], 'host'),
         }));
         return { messages: [toVisitor, ...toCame, ...toLeft], invited: [], stamp };
       }
@@ -764,9 +782,10 @@ export async function prepareBookingMail(
                 row.videoUrl === null
                   ? { label: 'View your booking', url: manageUrl }
                   : { label: 'Join the call', url: row.videoUrl },
-              // With Join the call as the button, the booking page's link is in the line under it.
-              footnote: row.videoUrl === null ? change : `Need to change it? Your booking page: ${manageUrl}`,
+              // With Join the call as the button, the line under it points to the confirmation's booking page link.
+              footnote: row.videoUrl === null ? change : 'Need to change it? Use the link in your confirmation email.',
               why: visitorWhy,
+              ...replyToHost,
             },
           ],
           invited: [],

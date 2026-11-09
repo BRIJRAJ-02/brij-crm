@@ -110,6 +110,7 @@ These skills apply across the repo. Skills for one area are listed in that area'
 - [prototype-to-production](.claude/skills/prototype-to-production/): `kemiljk/skills`, hardening failure states, security edges and upkeep
 - [ai-output-judgement](.claude/skills/ai-output-judgement/): `kemiljk/skills`, critiquing generated UI, copy or code
 - [user-research](.claude/skills/user-research/): `anthropics/knowledge-work-plugins`, interviews, usability tests and surveys
+- [better-ui](.claude/skills/better-ui/), [better-typography](.claude/skills/better-typography/), [better-layout](.claude/skills/better-layout/), [better-colors](.claude/skills/better-colors/), [better-accessibility](.claude/skills/better-accessibility/), [better-interface](.claude/skills/better-interface/): `jakubkrehel/skills` (659cc4e), exact UI polish rules and a final checklist for every UI change. House exceptions: no press scale (`--scale-press` stays 1) and no blur in motion
 
 Declined: the community Centrifugo skill (low trust). The Hono skill (`yusukebe/hono-skill`) still has no valid `SKILL.md`, so retry it later.
 MCP servers: neon (connected), sentry (connected), playwright (connected), storybook (project, live while `pnpm storybook` runs), github (recommended, add it once the repo exists).

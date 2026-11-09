@@ -236,4 +236,26 @@ describe('the bookings store', () => {
     await settle();
     expect(calendar).toHaveBeenCalledTimes(3);
   });
+
+  it('skips the first hold’s read right after the loader’s, but reads when a change came while it was unheld', async () => {
+    const calendar = vi.fn(noCalendar);
+    const store = createBookingsStore({
+      api: { listAll: noList, calendar },
+      onReturn: () => () => undefined,
+      now: () => 1_000,
+    });
+    const range = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    await range.ready();
+    expect(calendar).toHaveBeenCalledTimes(1);
+    // Held a moment after the loader's read: no second read.
+    const release = range.retain();
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(1);
+    release();
+    // A change while nobody holds it (Sync now, a change event): the next hold reads.
+    store.refreshHeld('acme');
+    range.retain();
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(2);
+  });
 });

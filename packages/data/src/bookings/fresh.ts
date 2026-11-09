@@ -2,8 +2,10 @@
 // by themselves, with no Sync now). Bookings, its week and its list of every
 // meeting have no change event of their own, and where live updates are off
 // (production on Vercel Functions, spec 0045) none would come anyway. So while
-// a screen holds one, it is read when first held, again whenever the person
-// comes back to the page (the window's focus, or the tab shown again), and,
+// a screen holds one, it is read when first held (unless a read landed just
+// before, as the route's loader's did), again whenever the person comes back
+// to the page (the window's focus or the tab shown again, one read for both),
+// and,
 // while live updates are paused or off, every minute while the page shows:
 // never while it is hidden, never while a read is out, and each wait spread by
 // a random tenth either way, so a team's tabs don't read in step. A failed
@@ -20,16 +22,38 @@ export const FRESH_MAX_MS = 10 * 60_000;
 /** How far a wait is spread, either way, as a share of it. */
 const SPREAD = 0.1;
 
-/** The browser's return signal: the window's focus and the document becoming visible. */
-export function browserReturn(refresh: () => void): () => void {
+/**
+ * How recent a landed read may be for a first hold to skip its own: the route's loader read it a moment before the
+ * screen held it, so reading it again at once only doubled every visit's request.
+ */
+export const FRESH_RECENT_MS = 5_000;
+
+/** How close together the return signals count as one return: a tab shown again fires visible and focus both. */
+export const RETURN_ONCE_MS = 1_000;
+
+/**
+ * The browser's return signal: the window's focus and the document becoming visible. One return fires both, so a
+ * second signal within `RETURN_ONCE_MS` of the first is the same return and calls nothing.
+ */
+export function browserReturn(refresh: () => void, now: () => number = Date.now): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => undefined;
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') refresh();
+  let lastAt = Number.NEGATIVE_INFINITY;
+  const once = () => {
+    const at = now();
+    if (at - lastAt < RETURN_ONCE_MS) return;
+    lastAt = at;
+    refresh();
   };
-  window.addEventListener('focus', refresh);
+  const onFocus = () => {
+    once();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') once();
+  };
+  window.addEventListener('focus', onFocus);
   document.addEventListener('visibilitychange', onVisible);
   return () => {
-    window.removeEventListener('focus', refresh);
+    window.removeEventListener('focus', onFocus);
     document.removeEventListener('visibilitychange', onVisible);
   };
 }
@@ -57,6 +81,14 @@ export interface FreshDeps {
   readonly later?: (run: () => void, ms: number) => () => void;
   /** A number in [0, 1), to spread the waits (`Math.random`). */
   readonly random?: () => number;
+  /** The clock, in epoch milliseconds (`Date.now`): how long ago the last read landed. */
+  readonly now?: () => number;
+}
+
+/** What one held read says about itself when a screen first holds it. */
+export interface FreshStart {
+  /** When its last read landed (epoch milliseconds), if one has: within `FRESH_RECENT_MS`, the first read is skipped. */
+  readonly landedAt?: number | undefined;
 }
 
 /** One held read kept current, until `stop`. */
@@ -68,10 +100,11 @@ export interface Freshness {
 }
 
 /**
- * Keeps one held read current, as the header says: `read` at once, on every return, and on the minute timer while
- * live updates are paused or off. `read` answers whether it landed, and never overlaps another of these reads.
+ * Keeps one held read current, as the header says: `read` at once (unless `start.landedAt` is recent), on every
+ * return, and on the minute timer while live updates are paused or off. `read` answers whether it landed, and never
+ * overlaps another of these reads.
  */
-export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}): Freshness {
+export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}, start: FreshStart = {}): Freshness {
   const onReturn = deps.onReturn ?? browserReturn;
   const isVisible = deps.isVisible ?? browserVisible;
   const later =
@@ -83,6 +116,7 @@ export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}): F
       };
     });
   const random = deps.random ?? Math.random;
+  const now = deps.now ?? Date.now;
   const isLive = () => (deps.live?.status() ?? 'live') === 'live';
   let wait = FRESH_EVERY_MS;
   let cancel: (() => void) | undefined;
@@ -135,7 +169,9 @@ export function keepFresh(read: () => Promise<boolean>, deps: FreshDeps = {}): F
     if (isLive()) clear();
     else if (cancel === undefined) schedule();
   });
-  run();
+  // Just read (the loader's read, a moment ago): its minute starts instead of a second read.
+  if (start.landedAt !== undefined && now() - start.landedAt < FRESH_RECENT_MS) schedule();
+  else run();
   return {
     now: run,
     stop() {

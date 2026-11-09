@@ -65,7 +65,7 @@ export function drawSample(kind: string, origin: string): Promise<RenderedEmail>
           heading: 'Your booking is tomorrow',
           intro: 'A reminder of your time with Ada Lovelace.',
           button: { label: 'Join the call', url: 'https://meet.google.com/abc-defg-hij' },
-          footnote: `Need to change it? Your booking page: ${origin}/b/intro-call/manage?t=preview`,
+          footnote: 'Need to change it? Use the link in your confirmation email.',
         },
         { appOrigin: origin, medium: 'email_reminder' },
       );
