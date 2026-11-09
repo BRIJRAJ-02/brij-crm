@@ -38,7 +38,8 @@ describe('the business apps, open to every workspace', () => {
   it('lets a switch-off win, and Menu QR never outlive Menu', () => {
     expect([...appsOn([{ app: 'menu', removed: true }])]).toEqual(['table_seating', 'appointments']);
     expect(appsOn([{ app: 'table_seating', removed: true }]).has('table_seating')).toBe(false);
-    expect(appsOn([{ app: 'events', removed: false }]).has('events')).toBe(true);
+    // An Events row from before stays off: Events can't be switched off now, so it would keep a page up.
+    expect(appsOn([{ app: 'events', removed: false }]).has('events')).toBe(false);
     expect(appsOn([{ app: 'menu', removed: false }]).has('menu_qr')).toBe(true);
   });
 

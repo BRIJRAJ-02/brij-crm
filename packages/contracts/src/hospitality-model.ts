@@ -26,22 +26,23 @@ export function appsNeeding(app: HospitalityApp): readonly HospitalityApp[] {
 
 /**
  * The apps every workspace has on from the start, with nothing to activate. Events is still being built, so it stays
- * off until someone has a row saying otherwise.
+ * off, even for a workspace that installed it before (it can't be switched off either, so it never keeps a page up).
  */
 export const APPS_ON_BY_DEFAULT: readonly HospitalityApp[] = HOSPITALITY_APPS.filter((app) => app !== 'events');
 
 /**
  * Which apps a workspace has on, from its `workspace_apps` rows. A row with `removed` set is an owner's or admin's
  * switch-off and always wins; no row means the app's default. An app whose needed app is off is off too, so Menu QR
- * never outlives Menu. The one rule: `crm_menu_by_key` and `crm_table_place_by_key` (migration 0191) read it the same
- * way.
+ * never outlives Menu. An app still being built (Events) is off whatever its row says. The one rule:
+ * `crm_menu_by_key` and `crm_table_place_by_key` (migration 0195) read it the same way.
  */
 export function appsOn(
   rows: readonly { readonly app: string; readonly removed: boolean }[],
 ): ReadonlySet<HospitalityApp> {
   const isOn = (app: HospitalityApp): boolean => {
+    if (!APPS_ON_BY_DEFAULT.includes(app)) return false;
     const row = rows.find((each) => each.app === app);
-    return row === undefined ? APPS_ON_BY_DEFAULT.includes(app) : !row.removed;
+    return row === undefined || !row.removed;
   };
   return new Set(HOSPITALITY_APPS.filter((app) => isOn(app) && APP_NEEDS[app].every(isOn)));
 }
