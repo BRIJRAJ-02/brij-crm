@@ -268,8 +268,14 @@ describe('Works in, styled (spec 0065 H7, AC-6594)', () => {
         }
         await trigger.click();
         await expect.element(page.getByRole('option', { name: 'All of Harbour Bar' })).toBeVisible();
-        // The list fades in: axe reads contrast mid fade on a slow runner, so the entrance finishes first.
-        await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+        // The list fades in: axe reads contrast mid fade on a slow runner, so the entrance finishes first. Only
+        // animations that end: a looping one (a loading shimmer) never settles and would hold the test forever.
+        await Promise.all(
+          document
+            .getAnimations()
+            .filter((animation) => Number.isFinite(Number(animation.effect?.getComputedTiming().endTime)))
+            .map((animation) => animation.finished.catch(() => undefined)),
+        );
         expect(await axeViolations()).toEqual([]);
         if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
           await page.screenshot({ path: `${SHOT_DIR}/works-in-open-${theme}-${String(width)}.png` } as never);
@@ -280,5 +286,6 @@ describe('Works in, styled (spec 0065 H7, AC-6594)', () => {
       }
     }
     await page.viewport(1280, 800);
-  });
+    // Four renders, each read twice by axe: a busy CI runner needs more than the default (9 Nov 2026).
+  }, 40_000);
 });
