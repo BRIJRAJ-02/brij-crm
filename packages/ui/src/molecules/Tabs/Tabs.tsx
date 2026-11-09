@@ -90,8 +90,10 @@ export interface TabsProps {
    * its own home page (the marketing site's first fold), equal columns with an icon tile, a label and a
    * `description` each, the chosen one bright under a line that slides along their top. `pills`: a guest page's
    * categories (the guest menu's sections), outlined pills in a row that scrolls sideways, the chosen one filled.
+   * `topbar`: a module's tabs inside its TopBar (`TopBar`'s `tabs`), the bar's height with no line of their own, the
+   * underline on the TopBar's hairline (Bookings); each tab is its own address, so it takes no panels.
    */
-  readonly variant?: 'strip' | 'bar' | 'feature' | 'pills';
+  readonly variant?: 'strip' | 'bar' | 'feature' | 'pills' | 'topbar';
   /**
    * `none` drops the strip's 16px inset at both ends, so the first tab's label
    * lines up with a full width Table's first column under it and the tools
