@@ -2956,6 +2956,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
       'auth.public_profiles.accent UPDATE',
       'auth.public_profiles.accent_dark UPDATE',
+      'auth.public_profiles.avatar_path UPDATE',
+      'auth.public_profiles.avatar_type UPDATE',
+      'auth.public_profiles.avatar_version UPDATE',
       'auth.public_profiles.bio UPDATE',
       // When the page became its owner's choice (spec 0058, AC-23, migration 0154): only through
       // crm_show_public_profile and crm_set_public_profile_live.

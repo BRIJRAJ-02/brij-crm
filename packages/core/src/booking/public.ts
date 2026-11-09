@@ -70,7 +70,13 @@ import type {
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageEntry } from '../access/door.ts';
 import { pagePath } from './handles.ts';
-import { personPicture, type AccountPictureReader, type PersonPicture } from './picture.ts';
+import {
+  pagePictureOf,
+  pictureVersion,
+  personPicture,
+  type AccountPictureReader,
+  type PersonPicture,
+} from './picture.ts';
 import { faviconSources, faviconVersion } from './favicon.ts';
 import { isMediaRef, mediaFrameSrc } from '../profile/embeds.ts';
 import { isPictureHidden } from './picture-choice.ts';
@@ -390,10 +396,16 @@ export async function readPagePicture(
 }
 
 /**
- * A handle's profile picture to serve: their upload or Google's (`personPicture`), else undefined.
- * `crm_handle_owner` answers no picture for a person who keeps it off their public pages (owner ask A124).
+ * A handle's profile picture to serve: the page's own published photo (migration 0197), else their upload or
+ * Google's (`personPicture`), else undefined. `crm_handle_owner` answers the page photo whatever the "show my photo"
+ * switch says (its editor chose it for this page), and otherwise no picture for a person who keeps it off their
+ * public pages (owner ask A124).
  */
 export function readProfilePicture(owner: HandleOwner): PersonPicture | undefined {
+  const page = pagePictureOf(owner.userId, owner.workspaceId, owner.image);
+  if (page !== undefined && owner.image !== undefined) {
+    return { kind: 'stored', path: page, version: pictureVersion(owner.userId, owner.image) };
+  }
   return personPicture(owner.userId, owner.image);
 }
 

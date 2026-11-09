@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button as AriaButton, DropZone, FileTrigger, Text } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -59,6 +59,12 @@ export interface FileDropProps {
    */
   readonly thumb?: 'wide' | 'square';
   /**
+   * With `variant="row"`, one short line under the label saying what the picture is for ("The wide banner across the
+   * top"), for a card holding several pictures that would otherwise read alike (a link page's three photos). The
+   * drop target is described by it too.
+   */
+  readonly description?: string;
+  /**
    * What was picked is on its way: with `variant="button"` the button spins and takes no second press; on the zone
    * (spec 0061, a link page's picture) the zone stays where it is, says so, and its browse button keeps focus but
    * takes no second pick, so a keyboard never loses its place while a picture uploads.
@@ -111,6 +117,7 @@ export function FileDrop({
   isReadOnly = false,
   variant = 'zone',
   thumb = 'wide',
+  description,
   isPending = false,
   error: given,
   wrongTypeText,
@@ -118,6 +125,7 @@ export function FileDrop({
   onRemove,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
+  const describedBy = useId();
   const [error, setError] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = safeImageSrc(preview?.src);
@@ -308,12 +316,18 @@ export function FileDrop({
   }
   if (variant === 'row') {
     const hasPicture = shown !== undefined && failed !== shown;
+    const name = (
+      <Text slot="label" className={styles.rowLabel}>
+        {label}
+      </Text>
+    );
     return (
       <div className={styles.field}>
         <DropZone
           className={styles.row}
           isDisabled={isDisabled || isPending}
           aria-label={label}
+          {...(description === undefined ? {} : { 'aria-describedby': describedBy })}
           aria-busy={isPending || undefined}
           onDrop={(event) => {
             void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
@@ -333,9 +347,16 @@ export function FileDrop({
               <Icon name="upload" size="sm" tone="muted" />
             )}
           </span>
-          <Text slot="label" className={styles.rowLabel}>
-            {label}
-          </Text>
+          {description === undefined ? (
+            name
+          ) : (
+            <span className={styles.rowText}>
+              {name}
+              <span id={describedBy} className={styles.rowHint}>
+                {description}
+              </span>
+            </span>
+          )}
           <span className={styles.rowActions}>
             <FileTrigger
               {...(acceptedTypes === undefined ? {} : { acceptedFileTypes: [...acceptedTypes] })}

@@ -102,6 +102,26 @@ export function storedPictureOf(userId: string, image: string | undefined): stri
   return owner !== undefined && owner === userId.toLowerCase() ? path : undefined;
 }
 
+/**
+ * How `crm_handle_owner` names a link page's own published photo (migration 0197): this prefix, then its store
+ * path. Never a URL, and never anything `user.image` holds: only that definer makes it.
+ */
+export const PAGE_PICTURE_PREFIX = 'page:';
+
+/** A link page photo's store path: `profile-images/<user id>/<workspace id>/<random id>.<ext>`. */
+const PAGE_PICTURE_PATH = /^profile-images\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+
+/**
+ * The store path `image` names, only when it is the page photo of this person's page in this workspace: the prefix,
+ * the exact path shape, and their own ids in it. So no page can be made to serve another page's file.
+ */
+export function pagePictureOf(userId: string, workspaceId: string, image: string | undefined): string | undefined {
+  if (image === undefined || !image.startsWith(PAGE_PICTURE_PREFIX)) return undefined;
+  const path = image.slice(PAGE_PICTURE_PREFIX.length);
+  const found = PAGE_PICTURE_PATH.exec(path);
+  return found?.[1] === userId.toLowerCase() && found[2] === workspaceId.toLowerCase() ? path : undefined;
+}
+
 /** A person's picture to serve: Google's, fetched by its URL, or their own upload, read from the store. */
 export type PersonPicture =
   | (AccountPicture & { readonly kind: 'google' })

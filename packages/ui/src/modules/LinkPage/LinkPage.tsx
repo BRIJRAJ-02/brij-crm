@@ -459,8 +459,9 @@ export interface LinkPageProps {
    */
   readonly theme?: PageLook;
   /**
-   * Which photos the page has (spec 0060, AC-10, AC-13): a photo ground without one draws as `plain`, and a cover
-   * header without one as `centred`, so a look never draws an empty band. The photos themselves arrive as
+   * Which photos the page has (spec 0060, AC-10, AC-13): a page with a background photo stands on it whatever its
+   * template (9 Nov 2026), a photo ground without one draws as `plain`, and a cover header without one as `centred`,
+   * so a look never draws an empty band. The photos themselves arrive as
    * `--page-cover-image` and `--page-ground-image`, from the page's own stylesheet or `variables`.
    */
   readonly photos?: LinkPagePhotos;
@@ -561,7 +562,9 @@ function headerOf(look: PageLook, hasCover: boolean): PageLook['header'] {
 function lookAttributes(stored: PageLook | undefined, photos: LinkPagePhotos | undefined) {
   if (stored === undefined) return {};
   const look = drawnLook(stored);
-  const ground = look.ground === 'image' && photos?.ground !== true ? 'plain' : look.ground;
+  // A background photo the page has stands behind every template (9 Nov 2026: the owner asked for one, and a template
+  // fixes no photo); a photo ground with no photo draws as plain.
+  const ground = photos?.ground === true ? 'image' : look.ground === 'image' ? 'plain' : look.ground;
   const header = headerOf(look, photos?.cover === true);
   return {
     ...(look.mode === 'system' ? {} : { 'data-theme': look.mode }),
@@ -581,11 +584,12 @@ function lookAttributes(stored: PageLook | undefined, photos: LinkPagePhotos | u
 
 /**
  * The photos a thumbnail draws: a gallery tile shows what its look draws once the photos are there, except a cover
- * where it is optional (Classic, Night), which the miniature draws only when the owner's own page has one.
+ * where it is optional (Classic, Night), which the miniature draws only when the owner's own page has one, and a
+ * background photo, which it draws whenever the owner's page has one.
  */
-function thumbnailPhotos(look: PageLook, cover: string | undefined): LinkPagePhotos {
+function thumbnailPhotos(look: PageLook, cover: string | undefined, hasGround: boolean): LinkPagePhotos {
   const isOptional = look.template === 'classic' || look.template === 'night';
-  return { cover: !isOptional || cover !== undefined, ground: true };
+  return { cover: !isOptional || cover !== undefined, ground: look.ground === 'image' || hasGround };
 }
 
 /** How many skeleton blocks stand in while the page loads. */
@@ -2018,6 +2022,11 @@ export interface LinkPageThumbnailProfile {
   readonly picture?: string;
   readonly logo?: string;
   readonly cover?: string;
+  /**
+   * Whether the page has a background photo (9 Nov 2026): then every template's miniature stands on it, as the page
+   * does. The photo itself arrives in `variables`, as `--page-ground-image`.
+   */
+  readonly hasGround?: boolean;
   /** The first rows' titles, in order; the miniature draws the first three. */
   readonly rows?: readonly string[];
 }
@@ -2087,7 +2096,7 @@ function ThumbnailLook({ theme, variables, detail, size, profile, mode }: LinkPa
   const picture = safeImageSrc(profile?.picture);
   const logo = safeImageSrc(profile?.logo);
   const cover = safeImageSrc(profile?.cover);
-  const photos = thumbnailPhotos(look, cover);
+  const photos = thumbnailPhotos(look, cover, profile?.hasGround === true);
   const rows = profile?.rows?.slice(0, THUMBNAIL_ROWS) ?? [];
   return (
     <div

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { brandColours, openBrand, type ImageSend } from './store.ts';
 
 /** A fake API answered by hand: each procedure resolves or rejects as a test sets it. */
-function setup(over: { save?: () => Promise<never>; send?: ImageSend } = {}) {
+function setup(over: { save?: () => Promise<never>; send?: ImageSend; member?: string } = {}) {
   const sent: string[] = [];
   const store = openBrand({
     brand: {
@@ -32,6 +32,7 @@ function setup(over: { save?: () => Promise<never>; send?: ImageSend } = {}) {
         return Promise.resolve(body === undefined ? { removed: true } : { version: 'abcdefabcdef' });
       }),
     now: () => 0,
+    ...(over.member === undefined ? {} : { member: over.member }),
   });
   return { store, sent };
 }
@@ -108,8 +109,15 @@ describe('the brand store', () => {
 
   it('builds image paths only from checked parts', () => {
     const { store } = setup();
-    expect(store.photoSrc('ada', 'cover', '0123456789ab')).toBe('/api/public/profiles/ada/cover?v=0123456789ab');
-    expect(store.photoSrc('../x', 'cover', '0123456789ab')).toBeUndefined();
+    expect(store.photoSrc('acme', 'cover', '0123456789ab')).toBe(
+      '/api/me/link-page/cover?workspace=acme&v=0123456789ab',
+    );
+    expect(store.photoSrc('acme', 'avatar', '../x')).toBeUndefined();
+    // Someone else's page (spec 0070): read through the same door as the upload, naming whose page it is.
+    const theirs = setup({ member: '018f0000-0000-7000-8000-000000000001' }).store;
+    expect(theirs.photoSrc('acme', 'avatar', '0123456789ab')).toBe(
+      '/api/me/link-page/avatar?workspace=acme&member=018f0000-0000-7000-8000-000000000001&v=0123456789ab',
+    );
     expect(store.logoSrc('acme', 'nope')).toBeUndefined();
   });
 

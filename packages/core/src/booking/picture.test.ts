@@ -15,7 +15,9 @@ import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { greeting } from './chat/agent.ts';
 import { createBookingPage } from './pages.ts';
-import { accountPicture, isPictureHost, pictureVersion } from './picture.ts';
+import { pageImageFolder, readPageImage, saveProfileImage } from '../brand/look.ts';
+import { publishLinkPage } from '../profile/link-publish.ts';
+import { accountPicture, isPictureHost, pagePictureOf, pictureVersion } from './picture.ts';
 import { getPublicBookingPage, readLinkPage, readPagePicture, readProfilePicture } from './public.ts';
 
 const GOOGLE = 'https://lh3.googleusercontent.com/a/ACg8ocK_abc-123=s96-c';
@@ -211,6 +213,47 @@ describe('a profile’s picture', () => {
       (error: unknown) => error,
     );
     expect(isRefusal(missing) ? missing.refusal.code : missing).toBe('NOT_FOUND');
+  });
+});
+
+describe('a link page’s own profile photo (9 Nov 2026)', () => {
+  it('is the page’s picture once published, over the account picture and the hide switch, and gone when removed', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const handle = `ada-${randomUUID().slice(0, 8)}`;
+    await updateMyMemberProfile(ada.scope, { handle, pictureHidden: true });
+    const path = `${pageImageFolder(ada.userId, ada.workspaceId)}${randomUUID()}.jpg`;
+    await saveProfileImage(ada.scope, { slot: 'avatar', image: { path, type: 'image/jpeg', version: 'abcdef012345' } });
+    // Drafted: the editor's own read finds it at its version, guests see nothing yet.
+    expect(await readPageImage(ada.scope, 'avatar', 'abcdef012345')).toEqual({
+      path,
+      type: 'image/jpeg',
+      version: 'abcdef012345',
+    });
+    expect(await readPageImage(ada.scope, 'avatar', '000000000000')).toBeUndefined();
+    expect(readProfilePicture(await findHandleOwner({ db }, handle))).toBeUndefined();
+
+    await publishLinkPage(ada.scope);
+    const owner = await findHandleOwner({ db }, handle);
+    const version = pictureVersion(ada.userId, `page:${path}`);
+    expect(readProfilePicture(owner)).toEqual({ kind: 'stored', path, version });
+    expect((await readLinkPage(await enterLinkPage({ db }, handle, { max: 21 }))).image).toBe(
+      `/api/public/profiles/${handle}/picture?v=${version}`,
+    );
+
+    await saveProfileImage(ada.scope, { slot: 'avatar' });
+    await publishLinkPage(ada.scope);
+    expect(readProfilePicture(await findHandleOwner({ db }, handle))).toBeUndefined();
+  });
+
+  it('is read only for that page’s own folder', () => {
+    const user = randomUUID();
+    const workspace = randomUUID();
+    const path = `profile-images/${user}/${workspace}/${randomUUID()}.jpg`;
+    expect(pagePictureOf(user, workspace, `page:${path}`)).toBe(path);
+    expect(pagePictureOf(randomUUID(), workspace, `page:${path}`)).toBeUndefined();
+    expect(pagePictureOf(user, randomUUID(), `page:${path}`)).toBeUndefined();
+    expect(pagePictureOf(user, workspace, `page:${path}/../x.jpg`)).toBeUndefined();
+    expect(pagePictureOf(user, workspace, path)).toBeUndefined();
   });
 });
 

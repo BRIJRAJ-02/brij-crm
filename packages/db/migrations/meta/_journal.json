@@ -1380,6 +1380,13 @@
       "when": 1795700016500,
       "tag": "0196_page_only_people",
       "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1795700016600,
+      "tag": "0197_page_photos",
+      "breakpoints": true
     }
   ]
 }

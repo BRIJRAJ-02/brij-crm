@@ -281,9 +281,12 @@ export const PublicLook = z.object({
 /** What a link page is told of its look beyond the names. */
 export type PublicLook = z.infer<typeof PublicLook>;
 
-/** The two photos a link page may carry (spec 0060, AC-10, AC-13). */
-export const PAGE_IMAGE_SLOTS = ['cover', 'ground'] as const;
-/** One of the two photos. */
+/**
+ * The photos a link page may carry: its cover and photo ground (spec 0060, AC-10, AC-13), and its own profile photo
+ * (9 Nov 2026), which guests see as the page's picture rather than through the look stylesheet.
+ */
+export const PAGE_IMAGE_SLOTS = ['cover', 'ground', 'avatar'] as const;
+/** One of the page's photos. */
 export type PageImageSlot = (typeof PAGE_IMAGE_SLOTS)[number];
 
 /** A link page's own stylesheet: `/api/public/handles/<handle>/look.css?v=<version>`, or undefined for a bad part. */

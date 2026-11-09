@@ -604,15 +604,20 @@ function Blocks({
         : brand.colours(ownAccent, accentDark),
     [brand, ownAccent, accentDark, workspaceAccent, workspaceAccentDark],
   );
-  const photoSrc = (slot: PhotoSlot, version: string) => brand.photoSrc(handle, slot, version);
+  // The page's photos as its draft holds them, read through the same door as the upload (a team page's too).
+  const photoSrc = (slot: PhotoSlot, version: string) => brand.photoSrc(slug, slot, version);
   const lookVariables = useMemo(() => {
     const photoPairs = (['cover', 'ground'] as const).flatMap((slot) => {
       const version = extrasRead?.[slot];
-      const src = version === undefined ? undefined : brand.photoSrc(handle, slot, version);
+      const src = version === undefined ? undefined : brand.photoSrc(slug, slot, version);
       return src === undefined ? [] : [[`--page-${slot}-image`, `url("${src}")`] as const];
     });
     return [...(colours?.variables ?? []), ...photoPairs];
-  }, [colours, extrasRead, brand, handle]);
+  }, [colours, extrasRead, brand, slug]);
+  // The face the phone draws: the page's own profile photo, else the account picture unless it is kept off pages.
+  const pagePhoto = extrasRead?.avatar === undefined ? undefined : brand.photoSrc(slug, 'avatar', extrasRead.avatar);
+  const faceImage =
+    pagePhoto ?? (profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image);
   const lookPhotos = { cover: extrasRead?.cover !== undefined, ground: extrasRead?.ground !== undefined };
   const chooseAccent = (accent: string | undefined, accentDark: string | undefined) => {
     setDragged(undefined);
@@ -623,12 +628,12 @@ function Blocks({
       else linkPage.publication.changed();
     });
   };
-  // A photo picked, or the one there cropped again (spec 0068, AC-6809): the cover in its 3:1 frame, the
-  // background free, then drawn again for its kind and sent.
+  // A photo picked, or the one there cropped again (spec 0068, AC-6809): the cover in its 3:1 frame, the profile
+  // photo square, the background free, then drawn again for its kind and sent.
   const cropping = usePhotoCrop();
   const choosePhoto = (slot: PhotoSlot, source: File | string) => {
     setLookRefusal(undefined);
-    void cropping.crop(source, slot === 'cover' ? 'cover' : 'free').then((crop) => {
+    void cropping.crop(source, slot === 'cover' ? 'cover' : slot === 'avatar' ? 'square' : 'free').then((crop) => {
       if (crop === undefined) return;
       setSending(slot);
       void preparePhoto(source, slot, crop)
@@ -1076,7 +1081,7 @@ function Blocks({
         id: handle,
         bio: profile.bio,
         ...(identity.showJobTitle && profile.jobTitle !== undefined ? { role: profile.jobTitle } : {}),
-        ...(profile.image === undefined || profile.pictureHidden === true ? {} : { image: profile.image }),
+        ...(faceImage === undefined ? {} : { image: faceImage }),
       }}
       // The lockup's name and link as a visitor sees them; its logo is the Brand kit's, which the phone leaves out.
       {...(identity.site === '' || profile.workspaceName === undefined
@@ -1203,7 +1208,7 @@ function Blocks({
           onGoLive={onGoLive}
           linkPage={linkPage}
           items={everyItem}
-          personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
+          personImage={faceImage}
           editedBy={editedBy}
           {...(isTeam ? { title: teamStrings.theirPage } : {})}
         />

@@ -376,6 +376,8 @@ export const ProfileLook = z.object({
   accentDark: BrandHex.optional(),
   cover: ImageVersion.optional(),
   ground: ImageVersion.optional(),
+  /** The page's own profile photo (9 Nov 2026): on the page it stands in for the account picture. */
+  avatar: ImageVersion.optional(),
 });
 /** The caller's own link page accent and photos. */
 export type ProfileLook = z.infer<typeof ProfileLook>;

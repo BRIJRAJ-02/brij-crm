@@ -23,6 +23,7 @@ const FIELDS = [
   'accent_dark',
   'cover_path',
   'ground_path',
+  'avatar_path',
   'show_job_title',
   'site_url',
   'foot_line',
@@ -120,7 +121,7 @@ function lookSentences(before: unknown, after: unknown): readonly string[] {
     lines.push(`Template ${word(lookKey(before, 'template'))} → ${word(lookKey(after, 'template'))}`);
   }
   if (!same(lookKey(before, 'avatar'), lookKey(after, 'avatar'))) {
-    lines.push(`Face ${word(lookKey(before, 'avatar'))} → ${word(lookKey(after, 'avatar'))}`);
+    lines.push(`Photo shape ${word(lookKey(before, 'avatar'))} → ${word(lookKey(after, 'avatar'))}`);
   }
   const rest = (theme: unknown) =>
     typeof theme === 'object' && theme !== null
@@ -157,6 +158,8 @@ export function diffLinkPage(published: LinkSnapshot, draft: LinkSnapshot): read
   if (!same(before.accent, after.accent) || !same(before.accent_dark, after.accent_dark)) {
     lines.push(after.accent === null && after.accent_dark === null ? 'Colour follows the workspace' : 'Colour changed');
   }
+  const avatar = photoSentence('Profile photo', before.avatar_path, after.avatar_path);
+  if (avatar !== undefined) lines.push(avatar);
   const cover = photoSentence('Cover photo', before.cover_path, after.cover_path);
   if (cover !== undefined) lines.push(cover);
   const ground = photoSentence('Background photo', before.ground_path, after.ground_path);
@@ -183,7 +186,7 @@ export function diffLinkPage(published: LinkSnapshot, draft: LinkSnapshot): read
 
 /** The photo paths a snapshot names, for the store. */
 export function photoPathsOf(snapshot: LinkSnapshot): readonly string[] {
-  return [snapshot.fields.cover_path, snapshot.fields.ground_path].filter(
+  return [snapshot.fields.cover_path, snapshot.fields.ground_path, snapshot.fields.avatar_path].filter(
     (path): path is string => typeof path === 'string',
   );
 }
