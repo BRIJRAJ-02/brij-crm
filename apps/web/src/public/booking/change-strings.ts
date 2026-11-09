@@ -20,8 +20,7 @@ export const changeStrings = {
   moveClosed: (host: string) => `${host} isn’t taking new times here right now. You can still cancel.`,
   moving: 'Moving',
   finding: (host: string) => `Finding ${host}’s free times…`,
-  noTimes: (host: string) =>
-    `${host} has no free times in the next three weeks. Cancelling and booking again later may be easier.`,
+  noTimes: (host: string) => `${host} has no free times in the next three weeks. Check back later.`,
   moved: 'Moved.',
   // Said of what we do, never of calendars we may not hold (QA Q79).
   movedText: (host: string) => `${host} has been told, and a confirmation with the new time is on its way.`,

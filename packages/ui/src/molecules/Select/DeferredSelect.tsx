@@ -1,4 +1,13 @@
-import { useEffect, useId, useRef, useState, type PointerEvent, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type PointerEvent,
+  type KeyboardEvent,
+  type Ref,
+} from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import styles from './DeferredSelect.module.css';
@@ -44,7 +53,18 @@ export type DeferredSelectProps = Pick<
    * `intent`, the first hover, focus or press. Either way the first intent loads it at once.
    */
   readonly preload?: 'idle' | 'intent';
+  /**
+   * The trigger on screen, stand in or real, so something else on the page can scroll to it and open it (Book by
+   * chat's zone chip opens the rail's picker).
+   */
+  readonly triggerRef?: Ref<HTMLButtonElement>;
 };
+
+/** Hands `node` to a ref given as an object or a callback. */
+function handTo(ref: Ref<HTMLButtonElement> | undefined, node: HTMLButtonElement | null): void {
+  if (typeof ref === 'function') ref(node);
+  else if (ref !== undefined && ref !== null) ref.current = node;
+}
 
 /** What DeferredSelect loads: Select's module, or anything with its Select. */
 export type SelectModule = { readonly Select: typeof SelectComponent };
@@ -99,6 +119,7 @@ export function DeferredSelectFrom({
   preload = 'idle',
   onOpenChange,
   load,
+  triggerRef,
   ...props
 }: DeferredSelectProps & { readonly load: () => Promise<SelectModule> }) {
   const [loaded, setLoaded] = useState<SelectModule | undefined>(undefined);
@@ -112,6 +133,21 @@ export function DeferredSelectFrom({
   const trigger = useRef<HTMLButtonElement>(null);
   const standIn = useRef<HTMLButtonElement>(null);
   const hasReturnedFocus = useRef(false);
+  // Each trigger hands itself to the caller's ref as well as to its own.
+  const toTrigger = useCallback(
+    (node: HTMLButtonElement | null) => {
+      trigger.current = node;
+      handTo(triggerRef, node);
+    },
+    [triggerRef],
+  );
+  const toStandIn = useCallback(
+    (node: HTMLButtonElement | null) => {
+      standIn.current = node;
+      handTo(triggerRef, node);
+    },
+    [triggerRef],
+  );
   const triggerId = useId();
   const valueId = useId();
 
@@ -167,7 +203,7 @@ export function DeferredSelectFrom({
         {...props}
         isLabelHidden
         variant="inline"
-        triggerRef={trigger}
+        triggerRef={toTrigger}
         // The list opens on the press that loaded it, its search taking the focus.
         {...(opens ? { defaultOpen: true } : {})}
         onOpenChange={(isOpen) => {
@@ -198,7 +234,7 @@ export function DeferredSelectFrom({
     <div className={styles.root} data-disabled={isDisabled || undefined}>
       {/* The same button React Aria's Select draws closed: named by its value, then its label. */}
       <button
-        ref={standIn}
+        ref={toStandIn}
         type="button"
         id={triggerId}
         className={styles.trigger}

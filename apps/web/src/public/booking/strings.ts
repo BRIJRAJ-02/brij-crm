@@ -204,7 +204,7 @@ export const strings = {
   failedText: 'Check your connection, then try again.',
   /** Refused 429 (B-18): too many reads from this address for a moment, not a broken page. */
   busyTitle: 'Busy, try again in a moment',
-  busyText: 'Lots of people are opening this page right now.',
+  busyText: 'Too many tries. Wait a moment, then try again.',
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',
