@@ -86,16 +86,28 @@ export async function currentProperty(
 }
 
 /**
- * How many places, menus and services a property holds, and whether it has a price that a currency change would
- * misread (AC-6519, AC-6590). A dish counts for the property whose menu places it; a dish no menu places yet counts
- * for the first property, as every dish did before there were two.
+ * What each of the workspace's properties holds that ties it down (AC-6590): its places, menus, service categories,
+ * services and business photos, in one grouped statement however many properties there are.
  */
-async function holdingsOf(
-  tx: WorkspaceTx,
-  workspaceId: string,
-  propertyId: string,
-): Promise<{ readonly holds: number; readonly priced: boolean }> {
-  const result = await tx.execute<{ holds: number; priced: boolean }>(sql`
+async function holdsByProperty(tx: WorkspaceTx, workspaceId: string): Promise<ReadonlyMap<string, number>> {
+  const result = await tx.execute<{ property_id: string; n: number }>(sql`
+    select property_id::text, count(*)::int as n from (
+      select property_id from places where workspace_id = ${workspaceId}::uuid
+      union all select property_id from menus where workspace_id = ${workspaceId}::uuid
+      union all select property_id from service_categories where workspace_id = ${workspaceId}::uuid
+      union all select property_id from services where workspace_id = ${workspaceId}::uuid
+      union all select property_id from business_photos where workspace_id = ${workspaceId}::uuid
+    ) held
+    group by property_id`);
+  return new Map(result.rows.map((row) => [row.property_id, row.n]));
+}
+
+/**
+ * Whether a property has a price that a currency change would misread (AC-6519). A dish counts for the property whose
+ * menu places it; a dish no menu places yet counts for the first property, as every dish did before there were two.
+ */
+async function isPriced(tx: WorkspaceTx, workspaceId: string, propertyId: string): Promise<boolean> {
+  const result = await tx.execute<{ priced: boolean }>(sql`
     with own_items as (
       select i.id from menu_items i
       where i.workspace_id = ${workspaceId}::uuid
@@ -113,10 +125,6 @@ async function holdingsOf(
         )
     )
     select
-      (select count(*)::int from places where workspace_id = ${workspaceId}::uuid and property_id = ${propertyId}::uuid)
-      + (select count(*)::int from menus where workspace_id = ${workspaceId}::uuid and property_id = ${propertyId}::uuid)
-      + (select count(*)::int from services where workspace_id = ${workspaceId}::uuid and property_id = ${propertyId}::uuid)
-        as holds,
       exists (
         select 1 from menu_items i join own_items o on o.id = i.id
         where i.workspace_id = ${workspaceId}::uuid and i.price_minor is not null
@@ -129,8 +137,7 @@ async function holdingsOf(
         where v.workspace_id = ${workspaceId}::uuid and s.property_id = ${propertyId}::uuid
           and v.price_type in ('fixed', 'from') and v.price_minor > 0
       ) as priced`);
-  const row = result.rows[0];
-  return { holds: row?.holds ?? 0, priced: row?.priced ?? false };
+  return result.rows[0]?.priced ?? false;
 }
 
 /**
@@ -144,7 +151,10 @@ export async function requireCurrencyFree(
   currency: string,
 ): Promise<void> {
   if ((property.currency ?? 'USD') === currency) return;
-  if ((await holdingsOf(tx, workspaceId, property.id)).priced) {
+  // Both editors' locks, so no dish or service gets a price between this check and the change.
+  await lockKey(tx, `menu:${workspaceId}`);
+  await lockKey(tx, `services:${workspaceId}`);
+  if (await isPriced(tx, workspaceId, property.id)) {
     throw refuseOn(
       'IN_USE',
       'Prices are set in this business’s currency. Remove them first, or keep the currency.',
@@ -160,16 +170,16 @@ async function readProperties(tx: WorkspaceTx, scope: EngineScope): Promise<Prop
     .from(properties)
     .where(eq(properties.workspaceId, scope.workspaceId))
     .orderBy(asc(properties.position), asc(properties.id));
+  const holds = await holdsByProperty(tx, scope.workspaceId);
   const listed: PropertySummary[] = [];
   for (const row of rows) {
-    const { holds } = await holdingsOf(tx, scope.workspaceId, row.id);
     listed.push({
       id: row.id,
       ...(row.name === null ? {} : { name: row.name }),
       ...(row.kind === null ? {} : { kind: row.kind as NonNullable<PropertySummary['kind']> }),
       ...(row.currency === null ? {} : { currency: row.currency }),
       position: row.position,
-      holds,
+      holds: holds.get(row.id) ?? 0,
     });
   }
   return { properties: listed, canManage: can(scope.access, 'workspace.manage') };
@@ -268,7 +278,7 @@ export async function removeProperty(
       const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
       const first = await currentProperty(tx, scope.workspaceId);
       if (first.id === property.id) throw refuse('IN_USE', 'The first business can’t be removed.');
-      if ((await holdingsOf(tx, scope.workspaceId, property.id)).holds > 0) {
+      if (((await holdsByProperty(tx, scope.workspaceId)).get(property.id) ?? 0) > 0) {
         throw refuse('IN_USE', 'Remove this business’s places, menus and services first.');
       }
       const [page] = await tx
@@ -305,7 +315,7 @@ export async function followWorkspaceCurrency(
   if (currency === null) return;
   const first = await currentProperty(tx, workspaceId);
   if ((first.currency ?? 'USD') === currency) return;
-  if ((await holdingsOf(tx, workspaceId, first.id)).priced) return;
+  if (await isPriced(tx, workspaceId, first.id)) return;
   await tx
     .update(properties)
     .set({ currency })

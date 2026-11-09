@@ -26,7 +26,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import type { SlotCache } from './book.ts';
 import { appointmentsSetup } from './readiness.ts';
-import { currentPropertyRef } from '../hospitality/property.ts';
+import { currentProperty, currentPropertyRef } from '../hospitality/property.ts';
 
 /** The refusal for a service that isn't there (or is Table seating's). */
 export const SERVICE_MISSING = 'That service doesn’t exist.';
@@ -355,9 +355,16 @@ async function requireRows(
   ids: readonly string[],
   field: string,
   message: string,
+  /** Places only: the business they must belong to (spec 0065 H7). */
+  propertyId?: string,
 ): Promise<void> {
   if (ids.length === 0) return;
-  const live = table === 'places' ? sql`true` : sql`archived_at is null`;
+  const live =
+    table === 'places'
+      ? propertyId === undefined
+        ? sql`true`
+        : sql`property_id = ${propertyId}::uuid`
+      : sql`archived_at is null`;
   const [row] = (
     await tx.execute<{ n: number }>(sql`
       select count(*)::int as n from ${sql.identifier(table)}
@@ -393,21 +400,45 @@ export async function saveService(
   if (new Set(variantIds).size !== variantIds.length) throw inputInvalid('variants', 'Each option appears once.');
   return catalogueWrite(scope, deps, hooks, 'service.saved', async ({ tx }, by) => {
     const [found] = (
-      await tx.execute<{ capacity_mode: string; category_id: string | null; archived: boolean }>(sql`
-        select capacity_mode, category_id::text, archived_at is not null as archived from services
+      await tx.execute<{
+        capacity_mode: string;
+        category_id: string | null;
+        archived: boolean;
+        property_id: string;
+      }>(sql`
+        select capacity_mode, category_id::text, archived_at is not null as archived, property_id::text from services
         where id = ${id}::uuid for update
       `)
     ).rows;
     if (found !== undefined && (found.capacity_mode !== 'one' || found.archived)) {
       throw refuse('NOT_FOUND', SERVICE_MISSING);
     }
-    if (categoryId !== null) {
-      const [category] = (
-        await tx.execute<{ id: string }>(sql`select id::text from service_categories where id = ${categoryId}::uuid`)
-      ).rows;
-      if (category === undefined) throw inputInvalid('categoryId', CATEGORY_MISSING);
+    // A service serves only its own business's places, under its own business's category (spec 0065 H7, AC-6514): an
+    // existing service keeps its business; a new one takes its first place's, else its category's, else the first
+    // business's. A place or category of another business reads as none.
+    const firstPlace =
+      placeIds[0] === undefined
+        ? undefined
+        : (
+            await tx.execute<{ property_id: string }>(
+              sql`select property_id::text from places where id = ${placeIds[0]}::uuid`,
+            )
+          ).rows[0]?.property_id;
+    const [category] =
+      categoryId === null
+        ? []
+        : (
+            await tx.execute<{ property_id: string }>(
+              sql`select property_id::text from service_categories where id = ${categoryId}::uuid`,
+            )
+          ).rows;
+    if (categoryId !== null && category === undefined) throw inputInvalid('categoryId', CATEGORY_MISSING);
+    const propertyId =
+      found?.property_id ?? firstPlace ?? category?.property_id ?? (await currentProperty(tx, scope.workspaceId)).id;
+    if (category !== undefined && category.property_id !== propertyId) {
+      throw inputInvalid('categoryId', CATEGORY_MISSING);
     }
-    await requireRows(tx, 'places', placeIds, 'placeIds', 'One of those places doesn’t exist.');
+    await requireRows(tx, 'places', placeIds, 'placeIds', 'One of those places doesn’t exist.', propertyId);
     await requireRows(tx, 'staff', staffIds, 'staffIds', 'One of those staff members doesn’t exist.');
     const named = fields.needs.flatMap((need) =>
       'resourceId' in need ? [checkId(need.resourceId, 'That room or chair doesn’t exist.')] : [],
@@ -435,7 +466,7 @@ export async function saveService(
       await tx.execute(sql`
         insert into services (workspace_id, id, property_id, category_id, name, description, slug, buffer_after_min, online,
           capacity_mode, staff_rule, cancel_note, position, created_by_member_id, updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${currentPropertyRef(scope.workspaceId)}, ${categoryId}::uuid, ${fields.name.trim()}, ${description},
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${propertyId}::uuid, ${categoryId}::uuid, ${fields.name.trim()}, ${description},
           ${await freeSlug(tx, fields.name, id)}, ${fields.bufferAfterMin}, ${fields.online}, 'one', ${fields.staffRule},
           ${cancelNote}, ${end?.next ?? 0}, ${by}::uuid, ${by}::uuid)
       `);
@@ -490,7 +521,7 @@ export async function saveService(
     for (const placeId of placeIds) {
       await tx.execute(sql`
         insert into service_places (workspace_id, service_id, place_id, property_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${placeId}::uuid, ${currentPropertyRef(scope.workspaceId)})
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${placeId}::uuid, ${propertyId}::uuid)
       `);
     }
     await tx.execute(sql`delete from service_staff where service_id = ${id}::uuid`);

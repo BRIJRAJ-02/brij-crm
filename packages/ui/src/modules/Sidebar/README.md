@@ -88,6 +88,7 @@ Tab moves through the workspace switcher, the collapse button, Quick actions, ea
 ## Differences from the artifact
 
 - `workspace` is the name; the switcher is the `Menu` you pass as `workspaceMenu`, which the name opens.
+- A `NavItem` with `onPress` renders a plain React Aria Button, so it may be a `MenuTrigger`'s trigger: a switcher inside a section, such as the Business group's business switcher (spec 0065 H7), opens its `Menu` from the row, with `aria-haspopup` and focus back on close.
 - `search` became `onQuickActions`: the row shows only when the screen opens a palette.
 - `current` became `isCurrent`, and `NavItem` takes `href` or `onPress`.
 - New: `NavGroup` (with `isLabelShown`), the settings variant (`heading`, `back`, `keyboard`), `NavItem`'s `kbd`, the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.

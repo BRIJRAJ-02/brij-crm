@@ -28,14 +28,14 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { formRefusals } from '../settings/refusals.ts';
 import { appsSettingsHref, businessPageHref, placeTablesHref } from '../settings/nav.ts';
 import { pageStrings } from './business-page-strings.ts';
 import { SettingsMissing, SettingsPage } from '../settings/SettingsPage.tsx';
 import { clockLabel, todayRanges } from './hours-rows.ts';
-import { Businesses } from './Businesses.tsx';
+import { useBusinesses } from './Businesses.tsx';
 import { StartBusiness } from './StartBusiness.tsx';
 import { strings } from './strings.ts';
 
@@ -66,6 +66,37 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
   const state = useHospitality(store.business(slug));
   const apps = useHospitality(store.apps(slug));
   const [isAdding, setAdding] = useState(false);
+  // Unsaved profile changes hold a switch of business until the person says to drop them.
+  const [isDirty, setDirty] = useState(false);
+  const [asking, setAsking] = useState<((go: boolean) => void) | undefined>();
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    store.guardChoice(slug, () => new Promise<boolean>((resolve) => setAsking(() => resolve)));
+    return () => store.guardChoice(slug, undefined);
+  }, [store, slug, isDirty]);
+  const answer = (go: boolean) => {
+    asking?.(go);
+    setAsking(undefined);
+  };
+  const listed = properties.status === 'ready' ? properties.value : undefined;
+  const shownProfile = state.status === 'ready' ? state.value.profile : undefined;
+  const businesses = useBusinesses({
+    store,
+    slug,
+    toasts,
+    view: listed,
+    isFailed: properties.status === 'error',
+    choice: choice.status === 'ready' ? choice.value : undefined,
+    currency: shownProfile?.currency,
+    kind: shownProfile?.kind,
+    onChoose: (id) => {
+      void store.requestChoice(slug, id).then((went) => {
+        const name = listed?.properties.find((each) => each.id === id)?.name;
+        if (went && name !== undefined) toasts.toast({ tone: 'success', message: strings.showingNow(name) });
+      });
+    },
+  });
+  const isMany = (listed?.properties.length ?? 0) > 1;
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
   const now = useMemo(() => new Date(), []);
@@ -127,16 +158,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
       }
     >
       {/* From two businesses, which one this page shows comes first (spec 0065 H7). */}
-      {properties.status === 'ready' && properties.value.properties.length > 1 && (
-        <Businesses
-          store={store}
-          slug={slug}
-          toasts={toasts}
-          view={properties.value}
-          choice={choice.status === 'ready' ? choice.value : undefined}
-          currency={view?.profile?.currency}
-        />
-      )}
+      {isMany && businesses.section}
       {/* The public page (spec 0066, B4 lite): its own screen, one step from here. */}
       <SettingsSection title={pageStrings.title}>
         <Card>
@@ -157,6 +179,7 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
             // A new answer (another tab's save, a reload) starts the form again from it.
             key={JSON.stringify(view.profile ?? {})}
             profile={view.profile}
+            onDirtyChange={setDirty}
             onSave={async (fields) => {
               const refused = await store.saveBusiness(slug, fields);
               if (refused !== undefined) throw refused;
@@ -216,15 +239,27 @@ export function BusinessScreen({ store, slug, toasts }: BusinessScreenProps) {
           />
         )}
       </SettingsSection>
-      {properties.status === 'ready' && properties.value.properties.length < 2 && (
-        <Businesses
-          store={store}
-          slug={slug}
-          toasts={toasts}
-          view={properties.value}
-          choice={choice.status === 'ready' ? choice.value : undefined}
-          currency={view?.profile?.currency}
-        />
+      {!isMany && businesses.section}
+      {businesses.dialogs}
+      {asking !== undefined && (
+        <Modal
+          title={strings.discardTitle}
+          variant="confirm"
+          isOpen
+          onOpenChange={(open) => {
+            if (!open) answer(false);
+          }}
+          actions={
+            <>
+              <Button slot="close">{strings.keepEditing}</Button>
+              <Button variant="primary" onPress={() => answer(true)}>
+                {strings.discard}
+              </Button>
+            </>
+          }
+        >
+          {strings.discardText}
+        </Modal>
       )}
       <AddPlaceDialog
         key={isAdding ? 'open' : 'closed'}
@@ -246,9 +281,12 @@ const PROFILE_FIELDS = ['name', 'kind', 'description', 'phone', 'email', 'websit
 /** The profile's fields, saved together with Save. */
 function ProfileCard({
   profile,
+  onDirtyChange,
   onSave,
 }: {
   readonly profile: Property | undefined;
+  /** Told whether the form holds changes not yet saved, so a switch of business can ask first. */
+  readonly onDirtyChange: (isDirty: boolean) => void;
   readonly onSave: (fields: {
     readonly name: string;
     readonly kind: BusinessKind;
@@ -278,6 +316,10 @@ function ProfileCard({
     email !== (profile?.email ?? '') ||
     website !== (profile?.website ?? '') ||
     (currency !== null && currency !== (profile?.currency ?? null));
+  useEffect(() => {
+    onDirtyChange(changed);
+    return () => onDirtyChange(false);
+  }, [onDirtyChange, changed]);
   const save = () => {
     if (isBusy || !changed) return;
     setBusy(true);

@@ -165,3 +165,28 @@ describe('a property’s currency (AC-6519)', () => {
     expect((await getBusiness(w.owner)).profile).toMatchObject({ name: 'Renamed again', currency: 'EUR' });
   });
 });
+
+describe('a menu serves its own business’s places (AC-6514)', () => {
+  it('puts a new menu in its first place’s business, and refuses a place of another as not found', async () => {
+    const w = await business();
+    await installApp(w.owner, { app: 'menu' });
+    const second = randomUUID();
+    await createProperty(w.owner, { id: second, name: 'Bar', kind: 'bar', currency: 'EUR' });
+    const placeId = randomUUID();
+    await createPlace(w.owner, { id: placeId, place: PLACE, propertyId: second });
+    const menuId = randomUUID();
+    await saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId] });
+    const rows = await w.sql<{ property_id: string }>(
+      sql`select property_id::text from menus where id = ${menuId}::uuid`,
+    );
+    expect(rows.rows[0]?.property_id).toBe(second);
+    expect(await refusalOf(saveMenu(w.owner, { id: menuId, name: 'Drinks', placeIds: [placeId, w.placeId] }))).toBe(
+      'NOT_FOUND',
+    );
+    expect(await refusalOf(saveMenu(w.owner, { id: randomUUID(), name: 'Both', placeIds: [w.placeId, placeId] }))).toBe(
+      'NOT_FOUND',
+    );
+    // A business with a menu holds something, so it stays.
+    expect(await refusalOf(removeProperty(w.owner, { propertyId: second }))).toBe('IN_USE');
+  });
+});

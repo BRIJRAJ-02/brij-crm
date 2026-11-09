@@ -382,6 +382,16 @@ export function openHospitality(given: {
     retry: () => propertiesOf(workspace).held.retry(),
   });
   const choiceHelds = new Map<string, HospitalityHeld<string | undefined>>();
+  const guards = new Map<string, () => Promise<boolean>>();
+  const choose = (workspace: string, property: string): void => {
+    chosen.set(workspace, property);
+    try {
+      given.choices?.set(choiceKey(workspace), property);
+    } catch {
+      // Blocked storage: the choice lasts for this app load.
+    }
+    for (const listener of choiceListeners) listener();
+  };
   const choiceSnapshots = new Map<
     string,
     {
@@ -520,16 +530,23 @@ export function openHospitality(given: {
       }
       return found;
     },
-    /** Switches the business every hospitality screen shows (AC-6517), kept on this device. */
-    choose: (workspace: string, property: string): void => {
-      chosen.set(workspace, property);
-      try {
-        given.choices?.set(choiceKey(workspace), property);
-      } catch {
-        // Blocked storage: the choice lasts for this app load.
-      }
-      for (const listener of choiceListeners) listener();
+    /**
+     * Lets an open screen hold a switch while it has unsaved changes: `guard` asks the person and answers whether to go
+     * on. Undefined lets every switch through. One per workspace: the screen in front.
+     */
+    guardChoice: (workspace: string, guard: (() => Promise<boolean>) | undefined): void => {
+      if (guard === undefined) guards.delete(workspace);
+      else guards.set(workspace, guard);
     },
+    /** Switches the business shown (the sidebar's switcher, a Businesses row), once the guard, if any, agrees. */
+    requestChoice: async (workspace: string, property: string): Promise<boolean> => {
+      const guard = guards.get(workspace);
+      if (guard !== undefined && !(await guard())) return false;
+      choose(workspace, property);
+      return true;
+    },
+    /** Switches the business every hospitality screen shows (AC-6517), kept on this device. */
+    choose,
     /**
      * Adds a business (AC-6516) under `id` (the screen's own, from `newId`); it lists once the server made it, and
      * the sidebar's switcher follows. `LIMIT_REACHED` past 20 comes back for the screen to say.
@@ -826,6 +843,7 @@ export function openHospitality(given: {
       businessHeld.clear();
       propertiesHeld.clear();
       chosen.clear();
+      guards.clear();
       choiceSnapshots.clear();
       floors.clear();
     },

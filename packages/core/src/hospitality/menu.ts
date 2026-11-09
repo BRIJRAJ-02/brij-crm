@@ -196,12 +196,25 @@ export async function saveMenu(
   return edit(scope, 'menu.saved', { menuId: id }, async (tx, by) => {
     const ws = scope.workspaceId;
     const placeIds = [...new Set(input.placeIds.map((each) => each.toLowerCase()))];
-    if (placeIds.length > 0) {
-      const found = await tx
-        .select({ id: places.id })
-        .from(places)
-        .where(and(eq(places.workspaceId, ws), inArray(places.id, placeIds)));
-      if (found.length !== placeIds.length) throw refuse('NOT_FOUND', 'That place doesn’t exist.');
+    // A menu serves only its own business's places (spec 0065 H7, AC-6514): an existing menu keeps its business; a
+    // new one takes its first place's, else the first business's. A place of another business reads as none.
+    const [existing] = await tx
+      .select({ propertyId: menus.propertyId })
+      .from(menus)
+      .where(and(eq(menus.workspaceId, ws), eq(menus.id, id)));
+    const found =
+      placeIds.length === 0
+        ? []
+        : await tx
+            .select({ id: places.id, propertyId: places.propertyId })
+            .from(places)
+            .where(and(eq(places.workspaceId, ws), inArray(places.id, placeIds)));
+    const propertyId =
+      existing?.propertyId ??
+      found.find((place) => place.id === placeIds[0])?.propertyId ??
+      (await currentProperty(tx, ws)).id;
+    if (found.length !== placeIds.length || found.some((place) => place.propertyId !== propertyId)) {
+      throw refuse('NOT_FOUND', 'That place doesn’t exist.');
     }
     const fields = {
       name: input.name,
@@ -222,7 +235,7 @@ export async function saveMenu(
       await tx.insert(menus).values({
         workspaceId: ws,
         id,
-        propertyId: currentPropertyRef(ws),
+        propertyId,
         ...fields,
         position,
         createdByMemberId: by,
@@ -233,9 +246,7 @@ export async function saveMenu(
     if (placeIds.length > 0) {
       await tx
         .insert(menuPlaces)
-        .values(
-          placeIds.map((placeId) => ({ workspaceId: ws, menuId: id, placeId, propertyId: currentPropertyRef(ws) })),
-        );
+        .values(placeIds.map((placeId) => ({ workspaceId: ws, menuId: id, placeId, propertyId })));
     }
   });
 }

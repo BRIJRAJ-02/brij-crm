@@ -52,7 +52,7 @@ export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
   const name = properties.find((each) => each.id === current)?.name ?? strings.business;
   return (
     <MenuTrigger>
-      <NavItem icon="store" meta={strings.switchShort} onPress={() => undefined}>
+      <NavItem icon="store" onPress={() => undefined}>
         {name}
       </NavItem>
       <Menu
@@ -60,7 +60,8 @@ export function BusinessSwitch({ data, slug }: BusinessSwitchProps) {
         selectionMode="single"
         selectedKeys={current === undefined ? [] : [current]}
         onAction={(key) => {
-          store.choose(slug, String(key));
+          // An open screen with unsaved changes asks first (the store's guard).
+          void store.requestChoice(slug, String(key));
         }}
       >
         {properties.map((property) => (

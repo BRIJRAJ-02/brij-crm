@@ -73,10 +73,12 @@ function dataOf(count: 1 | 2) {
     newId: () => '01900002-0000-7000-8000-000000000001',
     properties: () => properties.held,
     choice: () => choice.held,
-    choose: (_slug: string, id: string) => {
+    requestChoice: (_slug: string, id: string) => {
       chosen.push(id);
       choice.set(id);
+      return Promise.resolve(true);
     },
+    guardChoice: () => undefined,
     business: () => heldOf(BUSINESS).held,
     apps: () => heldOf({ canManage: true, hasBusiness: true, apps: [] }).held,
   } as unknown as HospitalityStore;
@@ -97,6 +99,15 @@ const sidebarWith = (data: DataLayer) => () => (
     </NavSection>
   </Sidebar>
 );
+
+/** Waits for every running animation, so axe and the picture see a dialog or menu fully in. */
+async function settle() {
+  // A looping one (a spinner, a shimmer) never finishes: only those that end are waited for.
+  const ending = document
+    .getAnimations()
+    .filter((animation) => animation.effect?.getTiming().iterations !== Number.POSITIVE_INFINITY);
+  await Promise.all(ending.map((animation) => animation.finished.catch(() => undefined)));
+}
 
 async function shoot(name: string) {
   if (SHOT_DIR === undefined || SHOT_DIR === '') return;
@@ -131,6 +142,7 @@ describe('axe and the pictures', () => {
         shown = await renderInApp(sidebarWith(data), { data: {}, pattern: '/w/$slug', at: '/w/acme' });
         await page.getByRole('button', { name: /Somewhere Nowhere/ }).click();
         await expect.element(page.getByRole('menuitemradio', { name: 'Late Bar' })).toBeVisible();
+        await settle();
         expect(await axeViolations()).toEqual([]);
         await shoot(`switcher-${theme}-${String(width)}`);
         shown.unmount();
@@ -144,6 +156,7 @@ describe('axe and the pictures', () => {
         await shoot(`businesses-full-${theme}-${String(width)}`);
         await page.getByRole('button', { name: 'Add business' }).click();
         await expect.element(page.getByRole('dialog', { name: 'New business' })).toBeVisible();
+        await settle();
         expect(await axeViolations()).toEqual([]);
         await shoot(`add-business-${theme}-${String(width)}`);
       });

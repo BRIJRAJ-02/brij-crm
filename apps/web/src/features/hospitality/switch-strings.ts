@@ -5,5 +5,4 @@
 export const switchStrings = {
   business: 'Business',
   switchBusiness: 'Switch business',
-  switchShort: 'Switch',
 } as const;

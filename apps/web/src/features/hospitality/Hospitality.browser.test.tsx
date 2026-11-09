@@ -149,6 +149,7 @@ function storeOf(canManage = true, businesses: 1 | 2 = 1) {
   const apps = heldOf({ ...APPS, canManage });
   const properties = heldOf(businessesOf(businesses, canManage));
   const choice = heldOf<string | undefined>(undefined);
+  let guard: (() => Promise<boolean>) | undefined;
   const business = heldOf(BUSINESS);
   const floor = heldOf(FLOOR);
   const done = () => Promise.resolve(undefined);
@@ -161,6 +162,16 @@ function storeOf(canManage = true, businesses: 1 | 2 = 1) {
     choose: (_slug: string, id: string) => {
       calls.push(`choose:${id}`);
       choice.set(() => id);
+    },
+    // The real store asks the screen's guard first; this one keeps it and asks it the same way.
+    guardChoice: (_slug: string, next: (() => Promise<boolean>) | undefined) => {
+      guard = next;
+    },
+    requestChoice: async (_slug: string, id: string) => {
+      if (guard !== undefined && !(await guard())) return false;
+      calls.push(`choose:${id}`);
+      choice.set(() => id);
+      return true;
     },
     createProperty: (_slug: string, input: { readonly name: string }) => {
       calls.push(`createProperty:${input.name}`);
@@ -340,7 +351,7 @@ describe('Settings › Business and a place’s tables', () => {
       pattern: '/w/$slug/settings/business',
       at: '/w/acme/settings/business',
     });
-    await expect.element(page.getByText('Run another brand?')).toBeVisible();
+    await expect.element(page.getByText('More than one business?')).toBeVisible();
     await page.getByRole('button', { name: 'Add business' }).click();
     await expect.element(page.getByRole('dialog', { name: 'New business' })).toBeVisible();
     await userEvent.keyboard('{Escape}');
@@ -351,15 +362,22 @@ describe('Settings › Business and a place’s tables', () => {
       pattern: '/w/$slug/settings/business',
       at: '/w/acme/settings/business',
     });
-    await expect.element(page.getByRole('rowheader', { name: 'Somewhere Nowhere · Showing' })).toBeVisible();
+    await expect.element(page.getByRole('rowheader', { name: /^Somewhere Nowhere\s*Showing$/ })).toBeVisible();
     // Only the empty second one can go, and it asks first.
     await expect.element(page.getByRole('button', { name: 'Remove Somewhere Nowhere' })).not.toBeInTheDocument();
+    // Unsaved profile changes ask first: Keep editing stays, Discard and switch goes.
+    await page.getByRole('textbox', { name: 'Phone' }).fill('+44 20 7946 0001');
     await page.getByRole('rowheader', { name: 'Late Bar' }).click();
-    expect(calls).toContain(`choose:${SECOND}`);
-    await expect.element(page.getByRole('rowheader', { name: 'Late Bar · Showing' })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Keep editing' })).toBeVisible();
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    expect(calls).not.toContain(`choose:${SECOND}`);
+    await page.getByRole('rowheader', { name: 'Late Bar' }).click();
+    await page.getByRole('button', { name: 'Discard and switch' }).click();
+    await expect.poll(() => calls).toContain(`choose:${SECOND}`);
+    await expect.element(page.getByRole('rowheader', { name: /^Late Bar\s*Showing$/ })).toBeVisible();
     await page.getByRole('button', { name: 'Remove Late Bar' }).click();
     await page.getByRole('button', { name: 'Remove business' }).click();
-    expect(calls).toContain(`removeProperty:${SECOND}`);
+    await expect.poll(() => calls).toContain(`removeProperty:${SECOND}`);
   });
 
   it('hides the businesses from a member who can’t add one while there is one', async () => {
@@ -371,7 +389,7 @@ describe('Settings › Business and a place’s tables', () => {
       at: '/w/acme/settings/business',
     });
     await expect.element(page.getByRole('rowheader', { name: 'Soho' })).toBeInTheDocument();
-    await expect.element(page.getByText('Run another brand?')).not.toBeInTheDocument();
+    await expect.element(page.getByText('More than one business?')).not.toBeInTheDocument();
   });
 
   it('reads a late Friday as running into the next morning', async () => {

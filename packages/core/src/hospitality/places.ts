@@ -93,6 +93,8 @@ export async function insertPlace(
     .from(places)
     .where(and(eq(places.workspaceId, scope.workspaceId), eq(places.id, id)));
   if (again !== undefined) return;
+  // The properties lock first, so a business can't be removed while a place is being added to it.
+  await lockKey(tx, `properties:${scope.workspaceId}`);
   const property = await currentProperty(tx, scope.workspaceId, propertyId);
   const [counted] = await tx
     .select({ n: count() })
@@ -259,7 +261,6 @@ export async function saveBusiness(
     await requireBusiness(tx, scope.workspaceId);
     const property = await currentProperty(tx, scope.workspaceId, input.propertyId);
     if (fields.currency !== undefined) {
-      await lockKey(tx, `menu:${scope.workspaceId}`);
       await requireCurrencyFree(tx, scope.workspaceId, property, fields.currency);
     }
     const values = {
@@ -281,7 +282,12 @@ export async function saveBusiness(
         updatedAt: sql`now()`,
       })
       .where(and(eq(properties.workspaceId, scope.workspaceId), eq(properties.id, property.id)));
-    await auditSetup(tx, scope, 'business.saved', { propertyId: property.id });
+    // A currency change is named with its before and after (AC-6519), so History says who moved it.
+    const movedCurrency: Readonly<Record<string, string>> =
+      fields.currency !== undefined && fields.currency !== (property.currency ?? 'USD')
+        ? { currencyFrom: property.currency ?? 'USD', currencyTo: fields.currency }
+        : {};
+    await auditSetup(tx, scope, 'business.saved', { propertyId: property.id, ...movedCurrency });
     const saved = await readProperty(tx, scope.workspaceId, property.id);
     if (saved === undefined) throw new Error('The property was not stored.');
     return saved;
