@@ -26,6 +26,8 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 - `isPending` on the zone (31 October 2026, spec 0061's link page pictures): the zone stays put, its words say "uploading…", it is busy and takes no drop, and its browse button keeps focus but takes no second pick. Why: swapping the zone for a skeleton while a picture uploaded unmounted the button that had focus, and the form jumped by the zone's height twice.
 - `error` (31 October 2026): the screen's own refusal ("Add a picture.") in the zone's refusal line, so it reads as this control's error, not a note beside it.
 
+- `variant="photo"` (6 November 2026, a menu item's photo) is one picture a screen has to show well. With nothing there, one box to press, drop on or paste into ("Add photo", "Drop, paste or click"), and a picture pasted anywhere in the dialog around it lands here, so nothing has to be focused first; text pasted into a field stays the field's, and a dialog opened over this one keeps its own paste. With a picture there, the picture `size-column` wide at 4:3, with Change, then Adjust crop (`onAdjust`) and Remove (`onRemove`) under it. Read only, the picture alone at that size. Why a variant: the row's 40px tile can't be checked by eye, and the zone holds a picture at a control's height. The same checks, refusal line and drop target. One `photo` per dialog: two would both take the same paste. Its box hides React Aria's own hidden drop button from Tab (the first button inside it), so check that after a React Aria upgrade.
+
 ## States
 
 - Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).

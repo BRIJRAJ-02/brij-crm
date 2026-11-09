@@ -45,16 +45,12 @@ export const MemberView = MemberSummary.extend({
    */
   twoFactor: z.boolean().optional(),
   /**
-   * Someone with no Timefix login of their own (spec 0070): added by a connected app (`app`, with its name when it is
-   * known), or a page only person added from Team pages (`page_only`, 9 Nov 2026). Absent for everyone else.
+   * Added by a connected app (spec 0070, a managed member with no Timefix login of their own). Its name only for
+   * readers who may see Connected apps (owners); a guest is told nothing. Absent for everyone who joined themselves.
    */
-  managed: z
-    .object({
-      kind: z.enum(['app', 'page_only']),
-      partnerId: Uuid.optional(),
-      app: z.string().optional(),
-    })
-    .optional(),
+  viaApp: z.object({ name: z.string().min(1).optional() }).optional(),
+  /** A page only person an admin added from Team pages (9 Nov 2026): no Timefix login and no app. Hidden from guests. */
+  pageOnly: z.literal(true).optional(),
 });
 /** One active member as the Members page lists them. */
 export type MemberView = z.infer<typeof MemberView>;

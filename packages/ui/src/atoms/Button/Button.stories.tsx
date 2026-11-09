@@ -720,6 +720,56 @@ export const GroupRow: Story = {
   },
 };
 
+/** `layout="line"`: never wraps, in a Table's fitted cell as narrow as its content, or a link at a field's start. */
+export const GroupLine: Story = {
+  render: () => (
+    <Stage>
+      <ButtonGroup label="Answer the request" layout="line">
+        <Button size="sm">Approve</Button>
+        <Button size="sm" variant="ghost">
+          Decline
+        </Button>
+      </ButtonGroup>
+    </Stage>
+  ),
+};
+
+/** `value`: a value that opens something, in a list of values, as Select's inline variant draws one. */
+export const Value: Story = {
+  render: () => (
+    <Stage>
+      <Button variant="value" iconRight="chevron-down">
+        Only their own
+      </Button>
+    </Stage>
+  ),
+};
+
+/** `value` under the keyboard: an outline clear of its text, as Select's inline has, since it has no box. */
+export const ValueFocused: Story = {
+  render: () => (
+    <Stage>
+      <Button variant="value" iconRight="chevron-down">
+        Only their own
+      </Button>
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    await userEvent.tab();
+  },
+};
+
+/** `value` disabled. */
+export const ValueDisabled: Story = {
+  render: () => (
+    <Stage>
+      <Button variant="value" iconRight="chevron-down" isDisabled>
+        Only their own
+      </Button>
+    </Stage>
+  ),
+};
+
 /** A disclosure: open, it reads as expanded and draws held down; a danger one keeps its red. */
 export const Disclosure: Story = {
   render: () => (

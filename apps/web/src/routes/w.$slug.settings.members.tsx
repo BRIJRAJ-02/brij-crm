@@ -56,10 +56,9 @@ export const Route = createFileRoute('/w/$slug/settings/members')({
 });
 
 function MembersLoading() {
-  const { q = '' } = Route.useSearch();
   return (
     <LoadingNow>
-      <MembersPending isSearching={q !== ''} />
+      <MembersPending />
     </LoadingNow>
   );
 }

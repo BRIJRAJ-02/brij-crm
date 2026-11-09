@@ -18,18 +18,25 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Clipped, for the input's run past the end below; its padding keeps a box's focus halo inside the clip. */
   .boxes {
     position: relative;
     display: inline-flex;
     gap: var(--space-6);
     inline-size: max-content;
+    margin: calc(-1 * var(--space-4));
+    padding: var(--space-4);
+    overflow: clip;
   }
 
+  /* Runs past the last box: a password manager that ignores the opt outs draws its icon inside the input's end, which
+     is then past the boxes rather than over a digit. */
   .input {
     position: absolute;
-    inset: 0;
+    inset-block: 0;
+    inset-inline-start: 0;
     z-index: var(--z-raised);
-    inline-size: 100%;
+    inline-size: calc(100% + var(--space-32) + var(--space-8));
     padding: 0;
     border: none;
     background: transparent;
@@ -59,7 +66,7 @@
   .root[data-size='lg'] .boxes {
     display: flex;
     gap: var(--space-8);
-    inline-size: 100%;
+    inline-size: auto;
   }
 
   .root[data-size='lg'] .box {

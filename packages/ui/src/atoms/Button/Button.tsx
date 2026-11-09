@@ -42,6 +42,7 @@ export type ButtonVariant =
   | 'ghost-danger'
   | 'dashed'
   | 'link'
+  | 'value'
   | 'warning'
   | 'field';
 
@@ -557,9 +558,11 @@ export interface ButtonGroupProps {
   /**
    * `joined` (the default) draws them as one bordered control; `row` keeps
    * each its own button, spaced and wrapping, for a card's few labelled
-   * actions (a booking's Reschedule, Copy guest link, Cancel booking).
+   * actions (a booking's Reschedule, Copy guest link, Cancel booking); `line`
+   * is a row that never wraps, for a table's fitted cell, which is as narrow as
+   * its content allows (a request's Approve and Decline).
    */
-  readonly layout?: 'joined' | 'row';
+  readonly layout?: 'joined' | 'row' | 'line';
 }
 
 /**

@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
@@ -47,6 +47,9 @@ import { workspaceLogoVersion } from '../brand/brand.ts';
 const { managedMembers, members, workspaceRoles, workspaces } = schema;
 
 /** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
+/** Whether the reader may see which connected app added someone: those who may see Connected apps (spec 0070). */
+const seesNames = (scope: EngineScope): boolean => can(scope.access, 'connected_apps.manage');
+
 const isGuest = (scope: EngineScope): boolean =>
   scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest';
 
@@ -125,7 +128,11 @@ const likeLiteral = (text: string): string => text.replace(/[\\%_]/g, (char) => 
 export async function listMembers(
   scope: EngineScope,
   input: { readonly search?: string; readonly cursor?: string; readonly limit?: number } = {},
-  options: { readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>> } = {},
+  options: {
+    readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
+    /** A connected app's name by its partner id (the registry's), for the people it added (spec 0070). */
+    readonly partnerName?: (partnerId: string) => Promise<string | undefined>;
+  } = {},
 ): Promise<MembersPage> {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? MEMBERS_PAGE), 1), MEMBERS_PAGE_MAX);
   const search = input.search?.trim() ?? '';
@@ -142,10 +149,25 @@ export async function listMembers(
         ? [or(ilike(members.name, `%${likeLiteral(search)}%`), ilike(members.email, `%${likeLiteral(search)}%`))]
         : [ilike(members.name, `%${likeLiteral(search)}%`)]),
   );
-  const { rows, total, managed } = await inWorkspace(scope, async (tx) => {
+  const { rows, total } = await inWorkspace(scope, async (tx) => {
     const read = await tx
-      .select({ ...VIEW_COLUMNS, userId: members.userId, sortName })
+      .select({
+        ...VIEW_COLUMNS,
+        userId: members.userId,
+        sortName,
+        partnerId: managedMembers.partnerId,
+        managedId: managedMembers.id,
+      })
       .from(members)
+      // A person a connected app added (spec 0070, AC-7020) has no Timefix login: the list says which app.
+      .leftJoin(
+        managedMembers,
+        and(
+          eq(managedMembers.workspaceId, members.workspaceId),
+          eq(managedMembers.memberId, members.id),
+          isNull(managedMembers.removedAt),
+        ),
+      )
       .where(
         and(
           matching,
@@ -157,22 +179,7 @@ export async function listMembers(
       .orderBy(asc(sortName), asc(members.id))
       .limit(limit + 1);
     const [counted] = await tx.select({ n: count() }).from(members).where(matching);
-    // Who among them has no login of their own (spec 0070): a connected app's person, or a page only one.
-    const ids = read.slice(0, limit).map((row) => row.id);
-    const managed =
-      ids.length === 0
-        ? []
-        : await tx
-            .select({ memberId: managedMembers.memberId, partnerId: managedMembers.partnerId })
-            .from(managedMembers)
-            .where(
-              and(
-                eq(managedMembers.workspaceId, scope.workspaceId),
-                inArray(managedMembers.memberId, ids),
-                sql`${managedMembers.removedAt} is null`,
-              ),
-            );
-    return { rows: read, total: counted?.n ?? 0, managed };
+    return { rows: read, total: counted?.n ?? 0 };
   });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
@@ -181,26 +188,36 @@ export async function listMembers(
     options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
       ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
       : undefined;
-  const managedBy = new Map(managed.map((row) => [row.memberId, row.partnerId]));
+  // Each app's name once, from the registry, and only for who may see Connected apps (owners); everyone else but a
+  // guest sees the mark alone. A name the registry can't give (or a failed read) still marks the person.
+  const partnerIds = seesNames(scope)
+    ? [...new Set(page.flatMap((row) => (row.partnerId === null ? [] : [row.partnerId])))]
+    : [];
+  const appNames = new Map(
+    await Promise.all(
+      partnerIds.map(async (partnerId) => {
+        try {
+          return [partnerId, await options.partnerName?.(partnerId)] as const;
+        } catch {
+          return [partnerId, undefined] as const;
+        }
+      }),
+    ),
+  );
   return {
-    members: page.map((row) => ({
-      ...toView(row, seesEmails),
-      // A guest learns nothing of how someone joined (as no address, AC-829).
-      ...(managedBy.has(row.id) && seesEmails
-        ? {
-            managed: (() => {
-              const partnerId = managedBy.get(row.id);
-              return partnerId === null || partnerId === undefined
-                ? { kind: 'page_only' as const }
-                : { kind: 'app' as const, partnerId };
-            })(),
-          }
-        : {}),
-      // Someone with no login of their own has no second factor to speak of.
-      ...(factors === undefined || managedBy.has(row.id)
-        ? {}
-        : { twoFactor: row.userId !== null && factors.has(row.userId) }),
-    })),
+    members: page.map((row) => {
+      const appName = row.partnerId === null ? undefined : appNames.get(row.partnerId);
+      return {
+        ...toView(row, seesEmails),
+        // Someone with no login of their own has no second factor to speak of.
+        ...(factors === undefined || row.managedId !== null
+          ? {}
+          : { twoFactor: row.userId !== null && factors.has(row.userId) }),
+        ...(row.partnerId === null || !seesEmails ? {} : { viaApp: appName === undefined ? {} : { name: appName } }),
+        // A page only person (9 Nov 2026): no login and no app. A guest learns nothing of how someone joined.
+        ...(row.managedId !== null && row.partnerId === null && seesEmails ? { pageOnly: true as const } : {}),
+      };
+    }),
     total,
     ...(rows.length > limit && last !== undefined ? { nextCursor: encodeMemberCursor(last.sortName, last.id) } : {}),
   };
@@ -418,30 +435,6 @@ async function nextRoleOf(
   return { role: 'member', customRole: custom };
 }
 
-/**
- * Refuses a role a page only person can't hold (9 Nov 2026): they have no Timefix login and no partner's frame to
- * open, so they never become an owner or an admin. A partner's person keeps spec 0070's rules (the workspace may make
- * them an owner, AC-7024). One read of `managed_members`, none for other roles.
- */
-async function checkPageOnlyRole(tx: WorkspaceTx, workspaceId: string, memberIds: readonly string[], role: Role) {
-  if ((role !== 'owner' && role !== 'admin') || memberIds.length === 0) return;
-  const managed = await tx
-    .select({ id: managedMembers.id })
-    .from(managedMembers)
-    .where(
-      and(
-        eq(managedMembers.workspaceId, workspaceId),
-        inArray(managedMembers.memberId, [...memberIds]),
-        sql`${managedMembers.partnerId} is null`,
-        sql`${managedMembers.removedAt} is null`,
-      ),
-    )
-    .limit(1);
-  if (managed.length > 0) throw refuse('FORBIDDEN', PAGE_ONLY_ROLE);
-}
-
-const PAGE_ONLY_ROLE = 'A page only person has no Timefix login, so they can’t be an owner or an admin.';
-
 /** The name of the custom role a member holds now, for the audit row's before, or undefined. */
 async function customRoleName(tx: WorkspaceTx, workspaceId: string, roleId: string | null) {
   if (roleId === null) return undefined;
@@ -526,6 +519,30 @@ async function changeRole(
   context.record({ members: [target.id], access: [...new Set([target.id, ...reached])] });
   return { view: toView({ ...target, role, customRoleId: nextCustom }), cancelled, changed: true };
 }
+
+/**
+ * Refuses a role a page only person can't hold (9 Nov 2026): they have no Timefix login and no partner's frame to
+ * open, so they never become an owner or an admin. A partner's person keeps spec 0070's rules (the workspace may make
+ * them an owner, AC-7024). One read of `managed_members`, none for other roles.
+ */
+async function checkPageOnlyRole(tx: WorkspaceTx, workspaceId: string, memberIds: readonly string[], role: Role) {
+  if ((role !== 'owner' && role !== 'admin') || memberIds.length === 0) return;
+  const managed = await tx
+    .select({ id: managedMembers.id })
+    .from(managedMembers)
+    .where(
+      and(
+        eq(managedMembers.workspaceId, workspaceId),
+        inArray(managedMembers.memberId, [...memberIds]),
+        sql`${managedMembers.partnerId} is null`,
+        sql`${managedMembers.removedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (managed.length > 0) throw refuse('FORBIDDEN', PAGE_ONLY_ROLE);
+}
+
+const PAGE_ONLY_ROLE = 'A page only person has no Timefix login, so they can’t be an owner or an admin.';
 
 /**
  * Changes a member's role (spec 0009, AC-137; spec 0037, AC-1233): to a built in `role`, or a custom role

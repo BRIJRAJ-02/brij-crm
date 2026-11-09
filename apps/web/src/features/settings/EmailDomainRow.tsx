@@ -25,7 +25,7 @@ export interface EmailDomainRowProps {
 }
 
 /**
- * One SettingsRow, Company email, in its own Card after the invite link's: the reader's own domain and a
+ * One SettingsRow, Company email, in Other ways to join's Card after the invite link's: the reader's own domain and a
  * switch, titled with the domain it is for. A line shows only to say why it can't be turned on (a public or unverified
  * address). Waits for the server: meanwhile the switch stands
  * where it is going, disabled, and the line says so. Turning it off asks first (the confirm shows its own wait),

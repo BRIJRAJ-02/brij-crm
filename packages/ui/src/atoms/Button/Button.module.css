@@ -257,6 +257,20 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* A value that opens something, in a list of values (a member's Scheduling access in their details): it reads as its
+     text with a chevron, in line with the plain values above and below, as Select's inline variant does. */
+  .root[data-variant='value'] {
+    block-size: auto;
+    padding: 0;
+    border-color: transparent;
+    border-inline-start-width: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
   .root[data-variant='ghost'],
   .root[data-variant='ghost-danger'] {
     border-color: transparent;
@@ -366,6 +380,10 @@
       background: var(--accent-hover);
     }
 
+    .root[data-variant='value']:not([data-selected], [data-expanded])[data-hovered] {
+      background: transparent;
+    }
+
     .root[data-variant='danger-solid'][data-hovered] {
       background: var(--danger-fill-hover);
     }
@@ -395,6 +413,14 @@
   .root[data-focus-visible] {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
+  }
+
+  /* As Select's inline: an outline clear of its text, since it has no box to light up. */
+  .root[data-variant='value'][data-focus-visible] {
+    border-color: transparent;
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+    box-shadow: none;
   }
 
   .root[data-variant='danger'][data-focus-visible] {
@@ -494,6 +520,18 @@
     flex-wrap: wrap;
     gap: var(--space-8);
     box-shadow: none;
+  }
+
+  /* A row that never wraps: in a table's fitted cell a wrapping row stacks its buttons. */
+  .group[data-layout='line'] {
+    display: inline-flex;
+    gap: var(--space-8);
+    box-shadow: none;
+  }
+
+  /* A quiet link leading the line stands its word on the edge of what's above it. */
+  .group[data-layout='line'] > .root[data-variant='link']:first-child {
+    margin-inline-start: calc(-1 * (var(--space-4) + var(--border-width-hairline)));
   }
 
   .group > .root[data-focus-visible] {

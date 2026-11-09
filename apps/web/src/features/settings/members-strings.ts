@@ -30,11 +30,10 @@ export const strings = {
     expires: 'Expires',
   },
   /**
-   * Each row's status (owner ask T12): a member is Active; someone on their way in is Invited (Invite expired once
-   * their link ran out, sent again with Resend) or Asks to join (answered with Approve or Decline).
+   * Where someone on their way in stands (owner ask T12): Invited (Invite expired once their link ran out, sent again
+   * with Resend) or Asks to join (answered with Approve or Decline). A member needs no word for it.
    */
   status: {
-    active: 'Active',
     invited: 'Invited',
     expired: 'Invitation expired',
     asking: 'Asks to join',
@@ -64,15 +63,17 @@ export const strings = {
   twoFactorOn: 'On',
   twoFactorOff: 'Off',
   you: 'You',
-  /** No Timefix login of their own (spec 0070): a page only person, or a connected app's. */
+  /** A person a connected app added, who has no Timefix login (spec 0070): the app's name, else that it was an app. */
+  /** No Timefix login and no app: someone an admin added from Team pages (9 Nov 2026). */
   pageOnly: 'Page only',
-  viaAnApp: 'Via a connected app',
-  viaApp: (app: string) => `Via ${app}`,
+  viaApp: (name: string | undefined) => (name === undefined ? 'Via a connected app' : `Via ${name}`),
   search: 'Search members',
   searchPlaceholder: 'Name or email',
   /** A guest searches by name alone (spec 0031, AC-829). */
   searchNamePlaceholder: 'Name',
-  noMatches: 'No members match',
+  /** Requests and invitations are searched too, so not "No members". */
+  noMatches: 'Nobody matches',
+  clearSearch: 'Clear search',
   showMore: 'Show more members',
   /** The table's foot while more members wait: how many of them show. */
   shownOf: (shown: number, total: number) => `${String(shown)} of ${String(total)} members`,
@@ -185,6 +186,7 @@ export const strings = {
   linkCap: (cap: number) => `${String(cap)} people`,
   linkSpent: 'This link has expired or reached its limit, so change it or reset it.',
   linkReset: 'Reset link',
+  linkResetShort: 'Reset',
   linkResetTitle: 'Reset the invite link?',
   linkResetText: 'The old link stops working.',
   linkResetAction: 'Reset link',

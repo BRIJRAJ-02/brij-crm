@@ -260,13 +260,48 @@
     max-inline-size: var(--size-dialog-wide);
   }
 
+  /* Inside a Card: each part of the stack apart by a hairline midway, whatever it holds. */
+  .stack[data-variant='card'] > :not(:first-child) {
+    padding-block-start: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .stack[data-variant='nested'] {
     gap: var(--space-8);
     padding-block-start: 0;
   }
 
-  .stack[data-variant='flush'] {
+  .stack[data-variant='flush'],
+  .stack[data-variant='card'] {
     padding-block-start: 0;
+  }
+
+  /* A stack with a side column: the list takes what's left, the side column keeps its width at the page's end and
+     stays in view while a long list scrolls; when both can't keep their widths it wraps under, the full width. */
+  .split {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-16);
+  }
+
+  .splitMain,
+  .splitAside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+
+  .splitMain {
+    flex: 999 1 var(--size-page-card);
+  }
+
+  /* Stays in view while a long list scrolls, a breath under the entry's tab strip, which stays too. */
+  .splitAside {
+    position: sticky;
+    inset-block-start: calc(var(--size-bar) + var(--space-16));
+    flex: 1 1 calc(var(--size-column-wide) + var(--space-32));
   }
 
   /* Label left, control right on every row, the label giving way first (an editor's column beside its preview). */

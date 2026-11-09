@@ -162,8 +162,13 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(cropper).toBeHidden();
       await expect(drawer.getByRole('button', { name: 'Adjust crop' })).toBeVisible();
       await drawer.getByLabel('Price', { exact: true }).fill('5.5');
-      await drawer.getByRole('button', { name: 'Soya', exact: true }).first().click();
-      await drawer.getByRole('button', { name: 'Vegan', exact: true }).click();
+      await drawer.getByRole('button', { name: /Contains allergens/ }).click();
+      await page.getByRole('option', { name: 'Soya' }).click();
+      await page.keyboard.press('Escape');
+      await expect(drawer.getByRole('button', { name: /Contains allergens/ })).toContainText('Soya');
+      await drawer.getByRole('button', { name: /Dietary/ }).click();
+      await page.getByRole('option', { name: 'Vegan' }).click();
+      await page.keyboard.press('Escape');
       await shot(page, '09-dish-drawer');
       await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();
@@ -190,20 +195,19 @@ test.describe('the Menu app from an empty workspace', () => {
       await expect(drawer).toBeVisible();
       // Sizes: the first takes the price already typed.
       await drawer.getByLabel('Price', { exact: true }).fill('9.5');
-      await drawer.getByRole('button', { name: 'Add size' }).click();
-      await drawer.getByLabel('Size 1').fill('Glass');
-      await drawer.getByRole('button', { name: 'Add size' }).click();
-      await drawer.getByLabel('Size 2').fill('Bottle');
-      await drawer.getByLabel('Price (GBP)').nth(1).fill('38');
+      await drawer.getByText('Sizes', { exact: true }).click();
+      await drawer.getByLabel('Size 1', { exact: true }).fill('Glass');
+      await drawer.getByLabel('Size 2', { exact: true }).fill('Bottle');
+      await drawer.getByLabel('Size 2 price (GBP)').fill('38');
       await shot(page, '12-sizes');
       await drawer.getByRole('button', { name: 'Save item' }).click();
       await expect(drawer).toBeHidden();
     });
 
     await test.step('make an option group and offer it', async () => {
-      await page.getByRole('tab', { name: /^Options/ }).click();
-      await page.getByRole('button', { name: 'New group' }).first().click();
-      const drawer = page.getByRole('dialog', { name: 'New option group' });
+      await page.getByRole('tab', { name: /^Add-ons/ }).click();
+      await page.getByRole('button', { name: 'New add-on' }).first().click();
+      const drawer = page.getByRole('dialog', { name: 'New add-on' });
       await drawer.getByRole('textbox', { name: 'Name' }).fill('Sides');
       await drawer.getByRole('radio', { name: 'Up to' }).click({ force: true });
       await drawer.getByRole('textbox', { name: 'Option 1' }).fill('Fries');
@@ -211,13 +215,15 @@ test.describe('the Menu app from an empty workspace', () => {
       await drawer.getByRole('textbox', { name: 'Option 2' }).fill('Green salad');
       await drawer.getByLabel('Price change (GBP)').nth(1).fill('4');
       await shot(page, '13-option-group');
-      await drawer.getByRole('button', { name: 'Save group' }).click();
+      await drawer.getByRole('button', { name: 'Save add-on' }).click();
       await expect(drawer).toBeHidden();
       await expect(page.getByRole('row', { name: /Sides/ })).toBeVisible();
       await page.getByRole('tab', { name: /^Items/ }).click();
       await page.getByRole('row', { name: /Wine/ }).click();
       const wine = page.getByRole('dialog', { name: 'Wine' });
-      await wine.getByRole('button', { name: 'Sides', exact: true }).click();
+      await wine.getByRole('button', { name: /Add-ons/ }).click();
+      await page.getByRole('option', { name: 'Sides' }).click();
+      await page.keyboard.press('Escape');
       await wine.getByRole('button', { name: 'Save item' }).click();
       await expect(wine).toBeHidden();
       await shot(page, '14-dishes-tab');

@@ -86,6 +86,22 @@ export const Invalid: Story = {
   ),
 };
 
+/** The password managers' opt outs, and the input running past the last box, so a manager's badge can't cover a digit. */
+export const PasswordManagers: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Code from your authenticator app' },
+  play: async ({ canvas }) => {
+    const input = canvas.getByLabelText('Code from your authenticator app');
+    await expect(input).toHaveAttribute('autocomplete', 'one-time-code');
+    await expect(input).toHaveAttribute('data-1p-ignore');
+    await expect(input).toHaveAttribute('data-lpignore', 'true');
+    await expect(input).toHaveAttribute('data-bwignore');
+    await expect(input).toHaveAttribute('data-form-type', 'other');
+    const boxes = input.parentElement?.getBoundingClientRect();
+    await expect(input.getBoundingClientRect().right).toBeGreaterThan(boxes?.right ?? Infinity);
+  },
+};
+
 /** Large: the boxes share the row and stand taller, three and three, on a page whose task is the code. */
 export const Large: Story = {
   render: (args) => (

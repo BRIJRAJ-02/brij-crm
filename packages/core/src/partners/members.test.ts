@@ -12,10 +12,11 @@ import { startWorkspace } from '../account/account.ts';
 import { listAuditEvents } from '../audit/audit.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
-import { signedInNow } from '../testing.ts';
+import { rescope, signedInNow } from '../testing.ts';
 import { approvePartnerConnect } from './connect.ts';
 import { exchangePartnerCode } from './exchange.ts';
 import { listPartnerMembers, putPartnerMember, removePartnerMember } from './members.ts';
+import { listMembers } from '../members/members.ts';
 import { registerPartner } from './registry.ts';
 import { s256Challenge } from './tokens.ts';
 
@@ -142,6 +143,48 @@ describe('adding a managed member (AC-7020, AC-7021, AC-7023)', () => {
     expect((await listPartnerMembers(hub.scope, { connectionId: hub.connectionId })).members).toEqual([
       expect.objectContaining({ externalId: 'u-1', memberId: first.member.memberId, role: 'admin' }),
     ]);
+  });
+
+  it('marks them in the Members list with the app that added them', async () => {
+    const hub = await connected();
+    const added = await putPartnerMember(
+      hub.scope,
+      { connectionId: hub.connectionId, externalId: 'v-1', person: grace },
+      users(),
+    );
+    const named = await listMembers(
+      hub.owner,
+      {},
+      {
+        partnerName: async (partnerId) => (await identity.partnerById(partnerId))?.name,
+      },
+    );
+    const byId = new Map(named.members.map((member) => [member.id, member]));
+    expect(byId.get(added.member.memberId)?.viaApp?.name).toMatch(/^Hub /);
+    // The owner joined themself: no mark.
+    expect([...byId.values()].filter((member) => member.viaApp === undefined)).toHaveLength(1);
+    // The app's name is for who may see Connected apps (owners): a member sees the mark alone, a guest nothing.
+    const asRole = async (role: 'member' | 'guest') =>
+      (
+        await listMembers(
+          rescope(hub.owner, { role }),
+          {},
+          {
+            partnerName: async (partnerId) => (await identity.partnerById(partnerId))?.name,
+          },
+        )
+      ).members.find((member) => member.name === 'Grace Hopper')?.viaApp;
+    expect(await asRole('member')).toEqual({});
+    expect(await asRole('guest')).toBeUndefined();
+    // A failed registry read never fails the list: the mark stays, nameless.
+    const failed = await listMembers(hub.owner, {}, { partnerName: () => Promise.reject(new Error('down')) });
+    expect(failed.members.find((member) => member.id === added.member.memberId)?.viaApp).toEqual({});
+    // A name the registry can't give still marks them.
+    const unnamed = await listMembers(hub.owner);
+    expect(unnamed.members.find((member) => member.id === added.member.memberId)?.viaApp).toEqual({});
+    // Removed by the app: the row goes, and so does the mark with it.
+    await removePartnerMember(hub.scope, { connectionId: hub.connectionId, externalId: 'v-1' }, users());
+    expect((await listMembers(hub.owner)).members.every((member) => member.viaApp === undefined)).toBe(true);
   });
 
   it('never merges with a Timefix account that has the same address', async () => {

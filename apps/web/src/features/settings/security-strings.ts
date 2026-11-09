@@ -65,7 +65,6 @@ export const strings = {
         : `Signed out of ${String(count)} other devices.`,
   /** The step up, asked inside a change's own dialog (AC-896). */
   stepUp: {
-    title: 'Confirm it’s you',
     withApp: 'Enter the 6 digit code from your authenticator app.',
     withBackup: 'Enter a backup code. It works once.',
     withEmail: 'We’ll email you a 6 digit code.',
@@ -73,6 +72,8 @@ export const strings = {
     appLabel: 'Code from your authenticator app',
     backupLabel: 'Backup code',
     emailLabel: 'Code from the email',
+    /** Names the line holding the quiet way round, for screen readers. */
+    otherWay: 'Another way to confirm',
     useBackup: 'Use a backup code',
     useApp: 'Use your authenticator app',
     send: 'Email me a code',

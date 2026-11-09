@@ -187,7 +187,7 @@ describe('adding a page only person', () => {
     expect(listed.pages.find((page) => page.name === 'Ada')?.isPageOnly).toBeUndefined();
     const people = await listMembers(w.owner);
     const shown = people.members.find((member) => member.id === added.memberId);
-    expect(shown?.managed).toEqual({ kind: 'page_only' });
+    expect(shown?.pageOnly).toBe(true);
     expect(shown?.email).toBeUndefined();
 
     // History: added, as the owner, with the handle.
@@ -318,10 +318,9 @@ describe('beside a partner', () => {
 
     // Members marks each kind.
     const people = await listMembers(hub.owner);
-    expect(people.members.find((member) => member.id === added.memberId)?.managed).toEqual({ kind: 'page_only' });
-    expect(people.members.find((member) => member.id === theirs.member.memberId)?.managed).toMatchObject({
-      kind: 'app',
-    });
+    expect(people.members.find((member) => member.id === added.memberId)?.pageOnly).toBe(true);
+    expect(people.members.find((member) => member.id === theirs.member.memberId)?.viaApp).toBeDefined();
+    expect(people.members.find((member) => member.id === theirs.member.memberId)?.pageOnly).toBeUndefined();
     // Team pages removes only a page only person.
     expect(await refusalOf(removePageOnlyPerson(hub.owner, { member: theirs.member.memberId }, enders))).toMatchObject({
       code: 'NOT_FOUND',

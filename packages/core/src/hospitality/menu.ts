@@ -989,11 +989,7 @@ export function publishProblem(rows: MenuRows): void {
     (item) => placed.has(item.id) && item.priceMinor === null && item.priceNote === null && !sized.has(item.id),
   );
   if (unpriced !== undefined) {
-    throw refuseOn(
-      'CONFIG_INVALID',
-      `Give ${unpriced.name} a price or a price note, then publish.`,
-      `items.${unpriced.id}`,
-    );
+    throw refuseOn('CONFIG_INVALID', `Give ${unpriced.name} a price, then publish.`, `items.${unpriced.id}`);
   }
 }
 

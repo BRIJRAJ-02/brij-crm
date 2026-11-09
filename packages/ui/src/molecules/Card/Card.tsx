@@ -33,6 +33,8 @@ interface CardBase {
    * (AuthLayout's split screen): its heading, body and states stay the card's.
    */
   readonly tone?: 'default' | 'sunken' | 'bare';
+  /** The body takes no padding, for what runs to the Card's edges itself: a Table with `edge="card"`. */
+  readonly isFlush?: boolean;
   /** While a Skeleton stands in for its content: marks the card busy, so assistive tech waits for it. */
   readonly isBusy?: boolean;
 }
@@ -87,6 +89,7 @@ export function Card({
   tone = 'default',
   placement = 'inline',
   size,
+  isFlush = false,
   isBusy = false,
   onPress,
 }: CardProps) {
@@ -127,7 +130,7 @@ export function Card({
       )}
       {children !== undefined && (
         // A card frames its own content: a Table in it keeps to the card, never the page's edges.
-        <div className={styles.body}>
+        <div className={styles.body} data-flush={isFlush || undefined}>
           <PageEdge value={false}>{children}</PageEdge>
         </div>
       )}

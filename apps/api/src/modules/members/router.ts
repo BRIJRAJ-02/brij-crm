@@ -40,45 +40,20 @@ async function forget(
 
 export const membersRouter = member.members.router({
   // Owners and admins also see who has a second factor (spec 0033, AC-895): ids only to the identity store.
-  list: member.members.list.handler(async ({ context, input }) => {
-    const page = await listMembers(
+  list: member.members.list.handler(({ context, input }) =>
+    listMembers(
       context.scope,
       {
         ...(input.search === undefined ? {} : { search: input.search }),
         ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       },
-      { secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds) },
-    );
-    // A connected app's people say which app (spec 0070): its name from the registry, by id only.
-    const partnerIds = [
-      ...new Set(
-        page.members.flatMap((each) => (each.managed?.partnerId === undefined ? [] : [each.managed.partnerId])),
-      ),
-    ];
-    if (partnerIds.length === 0) return page;
-    const names = new Map(
-      await Promise.all(
-        partnerIds.map(async (id) => {
-          // Without the registry the mark says "Via a connected app": the list still answers.
-          const found = await context.partners.partnerById(id).catch((error: unknown) => {
-            log.warn('Connected app name not read', { requestId: context.requestId, ...errorFields(error) });
-            return undefined;
-          });
-          return [id, found?.name] as const;
-        }),
-      ),
-    );
-    // The app's name, never its id: the id was only for the lookup.
-    return {
-      ...page,
-      members: page.members.map((each) => {
-        if (each.managed?.partnerId === undefined) return each;
-        const app = names.get(each.managed.partnerId);
-        return { ...each, managed: { kind: each.managed.kind, ...(app === undefined ? {} : { app }) } };
-      }),
-    };
-  }),
+      {
+        secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds),
+        partnerName: async (partnerId) => (await context.partners.partnerById(partnerId))?.name,
+      },
+    ),
+  ),
   setRole: member.members.setRole.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setMemberRole(
