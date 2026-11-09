@@ -134,7 +134,7 @@ export const strings = {
   colourMore: 'Dark colour',
   colourDarkDefault: 'Automatic',
   /** The profile photo's shape, under its picker, since it shapes that photo. */
-  avatar: 'Photo shape',
+  avatar: 'Profile photo shape',
   avatarCircle: 'Circle',
   avatarRounded: 'Rounded',
   /**
@@ -142,9 +142,9 @@ export const strings = {
    * to bottom, each with one line saying where (the owner's team: people couldn't tell which did what).
    */
   coverPhoto: 'Cover photo',
-  coverPhotoHint: 'The wide banner across the top',
+  coverPhotoHint: 'The wide photo at the top',
   avatarPhoto: 'Profile photo',
-  avatarPhotoHint: 'The picture next to the name',
+  avatarPhotoHint: 'The small photo above the name',
   groundPhoto: 'Background photo',
   groundPhotoHint: 'Fills the page behind everything',
   coverAlt: 'The cover photo on this page',
@@ -158,9 +158,9 @@ export const strings = {
   photoRemove: 'Remove photo',
   /** Asked before a photo goes, naming which, and what the page shows instead. */
   coverRemoving: 'Remove the cover photo?',
-  coverRemoveText: 'The page goes back to the header without a banner.',
+  coverRemoveText: 'The page shows no banner.',
   avatarRemoving: 'Remove the profile photo?',
-  avatarRemoveText: 'The page goes back to the account photo, or initials if there isn’t one.',
+  avatarRemoveText: 'The page goes back to the usual photo, or initials.',
   groundRemoving: 'Remove the background photo?',
   groundRemoveText: 'The page goes back to its template’s background.',
   photoUnreadable: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.',

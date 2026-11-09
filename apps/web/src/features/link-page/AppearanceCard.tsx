@@ -101,7 +101,9 @@ export interface AppearanceCardProps {
  * the picker says so in three words. A page moved to a template says so once, with Keep it.
  */
 export function AppearanceCard({ theme, onChange, refusal, extras, profile }: AppearanceCardProps) {
-  const [removing, setRemoving] = useState<PhotoSlot | undefined>(undefined);
+  // Whether Remove is being asked, and of which photo, apart: the dialog keeps its words while it closes.
+  const [isRemoving, setRemoving] = useState(false);
+  const [asked, setAsked] = useState<PhotoSlot>('cover');
   const variables = extras?.variables ?? [];
   const look = extras?.look;
   const workspaceTemplate = look?.workspaceTemplate ?? 'classic';
@@ -125,7 +127,15 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
           ...(groundSrc === undefined ? {} : { hasGround: true }),
         };
   /** One photo's row: what is there, Upload or Change, Adjust crop and Remove, and the line saying where it shows. */
-  const photoRow = (slot: PhotoSlot, label: string, hint: string, alt: string, src: string | undefined) => (
+  const photoRow = (
+    slot: PhotoSlot,
+    label: string,
+    hint: string,
+    alt: string,
+    src: string | undefined,
+    /** What the page shows in its place while it has none of its own (the account picture): nothing to remove. */
+    standIn?: string,
+  ) => (
     <FileDrop
       variant="row"
       label={label}
@@ -137,13 +147,18 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
       isDisabled={extras === undefined || look === undefined}
       isPending={extras?.sending === slot}
       {...(src === undefined
-        ? {}
+        ? standIn === undefined
+          ? {}
+          : { preview: { src: standIn, alt } }
         : {
             preview: { src, alt },
             onAdjust: () => {
               extras?.onPhoto(slot, src);
             },
-            onRemove: () => setRemoving(slot),
+            onRemove: () => {
+              setAsked(slot);
+              setRemoving(true);
+            },
           })}
       onFiles={(files) => {
         const [file] = files;
@@ -229,7 +244,15 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
             the cover (AC-6802; Studio and Split lead with it, Classic and Night show it when there is one), the
             profile photo with the shape it takes, then the background behind every template. */}
         {photoRow('cover', strings.coverPhoto, strings.coverPhotoHint, strings.coverAlt, coverSrc)}
-        {photoRow('avatar', strings.avatarPhoto, strings.avatarPhotoHint, strings.avatarAlt, avatarSrc)}
+        {/* With no photo of its own the page shows the account picture: the row shows it too, offering Change. */}
+        {photoRow(
+          'avatar',
+          strings.avatarPhoto,
+          strings.avatarPhotoHint,
+          strings.avatarAlt,
+          avatarSrc,
+          profile?.picture,
+        )}
         <SegmentedControl
           label={strings.avatar}
           isLabelVisible
@@ -246,23 +269,21 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
         {photoRow('ground', strings.groundPhoto, strings.groundPhotoHint, strings.groundAlt, groundSrc)}
       </SettingsStack>
       <Modal
-        isOpen={removing !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setRemoving(undefined);
-        }}
-        title={REMOVING[removing ?? 'cover'].title}
+        isOpen={isRemoving}
+        onOpenChange={setRemoving}
+        title={REMOVING[asked].title}
         variant="confirm"
         tone="danger"
         actions={
           <>
-            <Button variant="ghost" onPress={() => setRemoving(undefined)}>
+            <Button variant="ghost" onPress={() => setRemoving(false)}>
               {strings.cancel}
             </Button>
             <Button
               variant="danger-solid"
               onPress={() => {
-                if (removing !== undefined) extras?.onRemovePhoto(removing);
-                setRemoving(undefined);
+                extras?.onRemovePhoto(asked);
+                setRemoving(false);
               }}
             >
               {strings.photoRemove}
@@ -270,7 +291,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras, profile }: Ap
           </>
         }
       >
-        {REMOVING[removing ?? 'cover'].text}
+        {REMOVING[asked].text}
       </Modal>
     </Card>
   );

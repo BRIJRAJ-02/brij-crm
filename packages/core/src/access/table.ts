@@ -237,6 +237,8 @@ export const ACCESS_TABLE = {
   saveProfileTheme: { ownLinkPage: true },
   // The link page's own accent and photos (spec 0060, AC-23): their own page only, as the look is.
   readProfileLook: { ownLinkPage: true },
+  // One of those photos as the draft holds it, for the editor's own browser (9 Nov 2026): the same page only.
+  readPageImage: { ownLinkPage: true },
   saveProfileAccent: { ownLinkPage: true },
   saveProfileImage: { ownLinkPage: true },
   // The picture their page shares with (spec 0055): their own account, like every other page setting.

@@ -403,15 +403,14 @@ export async function readPagePicture(
  */
 export function readProfilePicture(owner: HandleOwner): PersonPicture | undefined {
   const page = pagePictureOf(owner.userId, owner.workspaceId, owner.image);
-  if (page !== undefined && owner.image !== undefined) {
-    return { kind: 'stored', path: page, version: pictureVersion(owner.userId, owner.image) };
-  }
+  if (page !== undefined) return { kind: 'stored', path: page, version: pictureVersion(owner.userId, `page:${page}`) };
   return personPicture(owner.userId, owner.image);
 }
 
 /**
  * A link page's contact card as its vCard is written (AC-5113, AC-5114): the card's stored fields checked again, and
- * the person's picture to embed, unless they have none or hid it (the door reads no image then). A card whose stored
+ * the page's picture to embed (`readProfilePicture`: the page's own photo, else the account picture unless they hid
+ * it), or none. A card whose stored
  * fields no longer pass the rule is NOT_FOUND, as no card is.
  */
 export function readContactCard(found: { readonly owner: HandleOwner; readonly data: unknown }): {

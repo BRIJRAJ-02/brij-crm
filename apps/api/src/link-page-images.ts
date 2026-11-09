@@ -46,9 +46,13 @@ export function mountLinkPageImages(app: Hono<{ Variables: ImageVariables }>, de
       const entered = await pageScopeOf(c, deps, c.req.query('workspace'), c.req.query('member'));
       if (entered instanceof Response) return entered;
       const version = c.req.query('v') ?? '';
-      const found = /^[0-9a-f]{12}$/.test(version)
-        ? await readPageImage(entered.scope, slot, version).catch(() => undefined)
-        : undefined;
+      let found: Awaited<ReturnType<typeof readPageImage>>;
+      try {
+        found = /^[0-9a-f]{12}$/.test(version) ? await readPageImage(entered.scope, slot, version) : undefined;
+      } catch (error) {
+        // A refusal (no page there) answers as one; anything else reaches the one error handler.
+        return refusalResponse(error, errorResponse);
+      }
       const loaded = found === undefined ? undefined : await loadStoredImage(files, found.path, found.type);
       if (loaded === undefined) return errorResponse('NOT_FOUND', 'There’s no photo here.');
       return pictureResponse(loaded, PRIVATE_PICTURE_CACHE_CONTROL);

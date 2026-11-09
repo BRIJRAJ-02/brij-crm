@@ -60,8 +60,8 @@ export interface FileDropProps {
   readonly thumb?: 'wide' | 'square';
   /**
    * With `variant="row"`, one short line under the label saying what the picture is for ("The wide banner across the
-   * top"), for a card holding several pictures that would otherwise read alike (a link page's three photos). The
-   * drop target is described by it too.
+   * top"), for a card holding several pictures that would otherwise read alike (a link page's three photos). It
+   * describes the row's Upload or Change button, the control people reach it by.
    */
   readonly description?: string;
   /**
@@ -327,7 +327,6 @@ export function FileDrop({
           className={styles.row}
           isDisabled={isDisabled || isPending}
           aria-label={label}
-          {...(description === undefined ? {} : { 'aria-describedby': describedBy })}
           aria-busy={isPending || undefined}
           onDrop={(event) => {
             void Promise.all(event.items.flatMap((item) => (item.kind === 'file' ? [item.getFile()] : []))).then(take);
@@ -368,6 +367,7 @@ export function FileDrop({
                 isPending={isPending}
                 isDisabled={isDisabled}
                 label={hasPicture ? strings.changeNamed(label) : strings.uploadNamed(label)}
+                {...(description === undefined ? {} : { 'aria-describedby': describedBy })}
               >
                 {hasPicture ? strings.change : strings.upload}
               </Button>

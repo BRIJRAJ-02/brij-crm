@@ -680,6 +680,8 @@ describe('the walk: a principal without the access is refused', () => {
           };
         })(),
         readOwnProfileImage: core.newId(),
+        // A draft photo of Bea's own page, which she hasn't got: nothing, and nothing of Ada's.
+        readPageImage: 'avatar',
         readOwnLinkAddress: theirs.id,
         saveQrStyle: { colour: '#1f2937' },
         profileInsightsCsv: (() => {
@@ -698,6 +700,7 @@ describe('the walk: a principal without the access is refused', () => {
         name === 'listProfileFormChoices' ||
         name === 'readProfileCounts' ||
         name === 'readProfileLook' ||
+        name === 'readPageImage' ||
         name === 'importProfileLinks' ||
         name === 'readOwnProfileImage' ||
         name === 'readOwnLinkAddress' ||
