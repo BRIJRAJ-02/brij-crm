@@ -358,7 +358,14 @@ export async function deleteWorkspace(
       const people = await tx
         .select({ id: members.id, email: members.email, name: members.name, role: members.role })
         .from(members)
-        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')));
+        .where(
+          and(
+            eq(members.workspaceId, scope.workspaceId),
+            eq(members.status, 'active'),
+            // Someone with no login of their own (a partner's, or a page only person) gets no email from us (AC-7023).
+            sql`not exists (select 1 from managed_members mm where mm.workspace_id = ${members.workspaceId} and mm.member_id = ${members.id} and mm.removed_at is null)`,
+          ),
+        );
       const actor = scope.actor.type === 'member' ? scope.actor.id : undefined;
       return {
         deleted: { name: now.name, slug: now.slug, purgeAfter: new Date(row.purgeAfter).toISOString() },

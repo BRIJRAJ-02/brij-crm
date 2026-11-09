@@ -76,6 +76,8 @@ export async function holdersOf(
       and(
         eq(members.workspaceId, workspaceId),
         eq(members.status, 'active'),
+        // Someone with no login of their own (spec 0070) holds nothing a notice could ask of them.
+        sql`not exists (select 1 from managed_members mm where mm.workspace_id = ${members.workspaceId} and mm.member_id = ${members.id} and mm.removed_at is null)`,
         sql`(
           (${members.customRoleId} is null and ${inArray(members.role, builtIn.length === 0 ? ['owner'] : builtIn)})
           or (${members.customRoleId} is not null and ${members.role} = 'member'

@@ -47,6 +47,8 @@ export interface PageOnlyUserMaker {
     readonly personId: string;
     readonly name: string;
   }): Promise<string>;
+  /** Drops an identity a refused add made, when it never joined (best effort). */
+  dropPageOnlyUser(userId: string): Promise<boolean>;
 }
 
 /** What a removal needs of the identity store, once it has committed. */
@@ -59,7 +61,7 @@ const EMAIL_TAKEN =
   'Someone in this workspace already uses this email, or was invited with it. Leave it empty or use another.';
 const NOT_PAGE_ONLY = 'That person isn’t a page only person here. Remove anyone else from Members.';
 const NOT_A_MEMBER = 'Only a member of this workspace adds people from Team pages.';
-const ADMIN_KEPT = 'This person is an admin now. Only owners and admins remove them, from Members.';
+const ADMIN_KEPT = 'This person is an admin now. Only owners and admins can remove them.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only owners remove them, from Members.';
 
 /** Whether anyone holds or ever held `handle`: a handle is never freed (AC-5603). */
@@ -200,6 +202,9 @@ export async function addPageOnlyPerson(
     );
     return result;
   } catch (error) {
+    // Refused after the identity was made (a race): it never joined, so it goes again. Best effort: an orphan can't
+    // sign in, and the error said is the refusal's.
+    await deps.users.dropPageOnlyUser(userId).catch(() => false);
     // Two adds at once with one address: the unique index's clash, said as the read says it.
     const clash = emailClash(error);
     if (isRefusal(clash) && clash !== error) throw refuseOn('UNIQUE_CONFLICT', EMAIL_TAKEN, 'email');

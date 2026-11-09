@@ -244,7 +244,15 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         }}
         phoneLayout="rows"
         emptyState={
-          <EmptyState icon="users" title={strings.empty}>
+          <EmptyState
+            icon="users"
+            title={strings.empty}
+            actions={
+              <Button variant="primary" icon="user-plus" onPress={() => setAdding((was) => (was ?? 0) + 1)}>
+                {strings.addPage}
+              </Button>
+            }
+          >
             {strings.emptyText}
           </EmptyState>
         }

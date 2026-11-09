@@ -181,14 +181,18 @@ describe('Add a page (9 Nov 2026)', () => {
     await userEvent.click(page.getByRole('button', { name: 'Create page' }));
     await expect.element(page.getByText('Add their name.')).toBeVisible();
     expect(addPerson).not.toHaveBeenCalled();
+    // The link follows the name; the name's own link is taken, so the free one takes its place, saying nothing.
     await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Nick');
-    await expect.element(page.getByRole('textbox', { name: 'Link' })).toHaveValue('nick');
-    // Taken: said on the field, with a free one to pick.
-    await expect.element(page.getByText('That link is taken. Pick another.')).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: 'nick-2' }));
-    await expect.element(page.getByRole('textbox', { name: 'Link' })).toHaveValue('nick-2');
-    await expect.element(page.getByText('Free', { exact: true })).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: 'Link' }), { timeout: 4000 }).toHaveValue('nick-2');
+    await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+    expect(document.body.textContent).not.toContain('Taken');
     expect(checkHandle).toHaveBeenCalledWith('acme', 'nick-2', expect.anything());
+    // Typed by hand and taken: said on the field, with the free one to pick.
+    await userEvent.fill(page.getByRole('textbox', { name: 'Link' }), 'nick');
+    await expect.element(page.getByText('Taken. Pick another.')).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'nick-2' }));
+    await expect.element(page.getByRole('textbox', { name: 'Link' }), { timeout: 4000 }).toHaveValue('nick-2');
+    await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
     await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'not an email');
     await userEvent.click(page.getByRole('button', { name: 'Create page' }));
     await expect.element(page.getByText(/valid email address/)).toBeVisible();
@@ -290,54 +294,63 @@ describe('“Edited by” on the person’s own page (AC-7004)', () => {
 });
 
 describe('screenshots', () => {
-  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')('saves Team pages at 1280 and 390, light and dark', async () => {
-    for (const [width, height] of [
-      [1280, 860],
-      [390, 844],
-    ] as const) {
-      await page.viewport(width, height);
-      for (const theme of THEMES) {
-        await renderTeam(layerWith(ready).data);
-        applyTheme(theme);
-        await expect.element(page.getByRole('rowheader', { name: /Bea Rao/ })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/team-${String(width)}-${theme}.png` });
-        await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
-        await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
-        await expect.element(page.getByRole('dialog')).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/claim-${String(width)}-${theme}.png` });
-        await userEvent.keyboard('{Escape}');
-        await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
-        await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/menu-${String(width)}-${theme}.png` });
-        await userEvent.keyboard('{Escape}');
-        // Add a page: empty, a taken link, filled, then the new row and a page only person's menu.
-        await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
-        await expect.element(page.getByRole('dialog')).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/add-empty-${String(width)}-${theme}.png` });
-        await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Nick');
-        await expect.element(page.getByText('That link is taken. Pick another.')).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/add-taken-${String(width)}-${theme}.png` });
-        await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Kate Lim');
-        await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'kate@example.com');
-        await expect.element(page.getByText('Free', { exact: true })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/add-filled-${String(width)}-${theme}.png` });
-        await userEvent.click(page.getByRole('button', { name: 'Create page' }));
-        await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
-        await expect.element(page.getByRole('rowheader', { name: /Kate Lim/ })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/added-${String(width)}-${theme}.png` });
-        await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
-        await expect.element(page.getByRole('menuitem', { name: 'Remove person' })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/page-only-menu-${String(width)}-${theme}.png` });
-        await userEvent.click(page.getByRole('menuitem', { name: 'Remove person' }));
-        await expect.element(page.getByRole('alertdialog', { name: /Remove/ })).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/remove-${String(width)}-${theme}.png` });
-        clear();
-        await renderOverview();
-        applyTheme(theme);
-        await expect.element(page.getByText(/Edited by Ada Lovelace/)).toBeVisible();
-        await page.screenshot({ path: `${SHOTS}/edited-by-${String(width)}-${theme}.png` });
-        clear();
+  it.runIf(import.meta.env.VITE_TEAM_SHOTS === '1')(
+    'saves Team pages at 1280 and 390, light and dark',
+    async () => {
+      for (const [width, height] of [
+        [1280, 860],
+        [390, 844],
+      ] as const) {
+        await page.viewport(width, height);
+        for (const theme of THEMES) {
+          await renderTeam(layerWith(ready).data);
+          applyTheme(theme);
+          await expect.element(page.getByRole('rowheader', { name: /Bea Rao/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/team-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Dee Marsh' }));
+          await userEvent.click(page.getByRole('menuitem', { name: 'Claim link' }));
+          await expect.element(page.getByRole('dialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/claim-${String(width)}-${theme}.png` });
+          await userEvent.keyboard('{Escape}');
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Bea Rao' }));
+          await expect.element(page.getByRole('menuitem', { name: 'Download QR code (PNG)' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/menu-${String(width)}-${theme}.png` });
+          await userEvent.keyboard('{Escape}');
+          // Add a page: empty, a taken link, filled, then the new row and a page only person's menu.
+          await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
+          await expect.element(page.getByRole('dialog')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-empty-${String(width)}-${theme}.png` });
+          await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Nick');
+          await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+          await userEvent.fill(page.getByRole('textbox', { name: 'Link' }), 'nick');
+          await expect.element(page.getByText('Taken. Pick another.')).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-taken-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Cancel' }));
+          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+          await userEvent.click(page.getByRole('button', { name: 'Add a page' }));
+          await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Kate Lim');
+          await userEvent.fill(page.getByRole('textbox', { name: /Email/ }), 'kate@example.com');
+          await expect.element(page.getByText('Available', { exact: true }), { timeout: 4000 }).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/add-filled-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Create page' }));
+          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
+          await expect.element(page.getByRole('rowheader', { name: /Kate Lim/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/added-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('button', { name: 'Actions for Eve Page' }));
+          await expect.element(page.getByRole('menuitem', { name: 'Remove person' })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/page-only-menu-${String(width)}-${theme}.png` });
+          await userEvent.click(page.getByRole('menuitem', { name: 'Remove person' }));
+          await expect.element(page.getByRole('alertdialog', { name: /Remove/ })).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/remove-${String(width)}-${theme}.png` });
+          clear();
+          await renderOverview();
+          applyTheme(theme);
+          await expect.element(page.getByText(/Edited by Ada Lovelace/)).toBeVisible();
+          await page.screenshot({ path: `${SHOTS}/edited-by-${String(width)}-${theme}.png` });
+          clear();
+        }
       }
-    }
-  });
+    },
+    120_000,
+  );
 });

@@ -586,6 +586,7 @@ export function createApp({
         // Page only people from Team pages (9 Nov 2026): their identity made, and its sessions ended on removal.
         pageOnlyUsers: {
           ensurePageOnlyUser: (person) => identity.ensurePageOnlyUser(person),
+          dropPageOnlyUser: (userId) => identity.dropPageOnlyUser(userId),
           endManagedUserSessions: (userId) => identity.endManagedUserSessions(userId),
           dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
         },

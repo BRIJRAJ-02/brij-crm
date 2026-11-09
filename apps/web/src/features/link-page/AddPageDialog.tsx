@@ -34,15 +34,18 @@ const handleOf = (name: string) => (name.trim() === '' ? '' : handleFromName(nam
 
 /**
  * A Modal with Name, Email (optional) and the link after the public host. The link follows the name until it is edited
- * by hand, and is checked 300 ms after the last key (a spinner, then a tick and "Free", or "Taken" with a free one to
- * pick). Create page sends once; a refusal lands on its field (a link taken meanwhile, an address in use), anything
+ * by hand, and is checked 300 ms after the last key (a spinner, then a tick and "Available"). A link made from the name
+ * that is taken quietly becomes a free one the server suggests (nick-2); one typed by hand that is taken says so, with
+ * the free one to pick. Create page sends once; a refusal lands on its field (a link taken meanwhile, an address in use), anything
  * else above the fields. Once something is typed, only Cancel or Esc throws it away. Mount it afresh for each opening.
  */
 export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageDialogProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [typedHandle, setTypedHandle] = useState<string | undefined>(undefined);
-  const handle = typedHandle ?? handleOf(name);
+  // A free link the server made from the name, when the name's own was taken: used while the link follows the name.
+  const [auto, setAuto] = useState<{ readonly name: string; readonly handle: string } | undefined>(undefined);
+  const handle = typedHandle ?? (auto?.name === name ? auto.handle : handleOf(name));
   const [checked, setChecked] = useState<{ readonly handle: string; readonly state: HandleState } | undefined>(
     undefined,
   );
@@ -51,6 +54,8 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const [isBusy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const emailRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  const handleRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
   // The link's rule first, then the server's answer once typing stops; an answer for an older link is dropped.
   const local: HandleState | undefined =
@@ -71,23 +76,35 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
       controller.abort();
     };
   }, [data, slug, handle, local]);
-  const state: HandleState = local ?? (checked?.handle === handle ? checked.state : 'checking');
+  const answered: HandleState = local ?? (checked?.handle === handle ? checked.state : 'checking');
+  const isFollowing = typedHandle === undefined;
+  // Following the name, a taken link waits for the free one to take its place rather than saying "Taken".
+  const [suggestFailed, setSuggestFailed] = useState<string | undefined>(undefined);
+  const state: HandleState =
+    answered === 'taken' && isFollowing && auto?.name !== name && suggestFailed !== handle ? 'checking' : answered;
 
-  // A taken link offers one free one, made from the name (or the link) by the server.
+  // A taken link: one free one made from the name (or the link) by the server. Following the name, it takes the
+  // link's place; typed by hand, it is offered to pick.
   useEffect(() => {
-    if (state !== 'taken') return;
+    if (answered !== 'taken') return;
     let isCurrent = true;
     data.teamPages.suggestHandle(slug, name.trim() === '' ? handle : name).then(
       (answer) => {
-        if (isCurrent) setSuggestion(answer.handle !== handle ? answer.handle : undefined);
+        if (!isCurrent) return;
+        const free = answer.handle !== handle ? answer.handle : undefined;
+        if (isFollowing && free !== undefined && auto?.name !== name) setAuto({ name, handle: free });
+        else if (isFollowing && free === undefined) setSuggestFailed(handle);
+        else setSuggestion(free);
       },
-      () => undefined,
+      () => {
+        if (isCurrent) setSuggestFailed(handle);
+      },
     );
     return () => {
       isCurrent = false;
       setSuggestion(undefined);
     };
-  }, [data, slug, state, handle, name]);
+  }, [data, slug, answered, handle, name, isFollowing, auto]);
 
   const isTyped = name !== '' || email !== '' || typedHandle !== undefined;
 
@@ -108,7 +125,8 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
     };
     if (Object.keys(found).length > 0) {
       setProblems(found);
-      if (found.name !== undefined) nameRef.current?.focus();
+      // The first field with a problem takes focus, so the keyboard lands where the fix is.
+      (found.name !== undefined ? nameRef : found.email !== undefined ? emailRef : handleRef).current?.focus();
       return;
     }
     setBusy(true);
@@ -118,13 +136,16 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
       .addPerson(slug, { name: trimmedName, ...(trimmedEmail === '' ? {} : { email: trimmedEmail }), handle })
       .then(onAdded, (error: unknown) => {
         setBusy(false);
-        const message = isDataError(error) ? error.message : strings.addFailed;
+        const message = isDataError(error) ? error.message : sharedStrings.couldntDoThat;
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'handle')) {
           setProblems({ handle: message });
           setChecked({ handle, state: 'taken' });
-        } else if (field === 'email' || field === 'name') setProblems({ [field]: message });
-        else setFailure(isDataError(error) ? message : sharedStrings.couldntDoThat);
+          handleRef.current?.focus();
+        } else if (field === 'email' || field === 'name') {
+          setProblems({ [field]: message });
+          (field === 'name' ? nameRef : emailRef).current?.focus();
+        } else setFailure(message);
       });
   };
 
@@ -137,13 +158,15 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
   const handleHint =
     handleError !== undefined
       ? undefined
-      : state === 'checking'
-        ? strings.handleChecking
-        : state === 'free'
-          ? strings.handleFree
-          : state === 'unknown'
-            ? strings.handleUnknown
-            : undefined;
+      : state === 'invalid'
+        ? handleProblem(handle)
+        : state === 'checking'
+          ? strings.handleChecking
+          : state === 'free'
+            ? strings.handleFree
+            : state === 'unknown'
+              ? strings.handleUnknown
+              : undefined;
 
   return (
     <Modal
@@ -191,6 +214,7 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
         {...(problems.name === undefined ? {} : { error: problems.name })}
       />
       <Field
+        ref={emailRef}
         label={strings.emailLabel}
         labelAside={strings.emailAside}
         name="email"
@@ -209,6 +233,7 @@ export function AddPageDialog({ data, slug, isOpen, onClose, onAdded }: AddPageD
         {...(problems.email === undefined ? {} : { error: problems.email })}
       />
       <Field
+        ref={handleRef}
         label={strings.handleLabel}
         name="handle"
         isRequired

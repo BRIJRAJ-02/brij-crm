@@ -185,7 +185,8 @@ export async function listMembers(
   return {
     members: page.map((row) => ({
       ...toView(row, seesEmails),
-      ...(managedBy.has(row.id)
+      // A guest learns nothing of how someone joined (as no address, AC-829).
+      ...(managedBy.has(row.id) && seesEmails
         ? {
             managed: (() => {
               const partnerId = managedBy.get(row.id);
@@ -195,7 +196,10 @@ export async function listMembers(
             })(),
           }
         : {}),
-      ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
+      // Someone with no login of their own has no second factor to speak of.
+      ...(factors === undefined || managedBy.has(row.id)
+        ? {}
+        : { twoFactor: row.userId !== null && factors.has(row.userId) }),
     })),
     total,
     ...(rows.length > limit && last !== undefined ? { nextCursor: encodeMemberCursor(last.sortName, last.id) } : {}),
@@ -414,6 +418,30 @@ async function nextRoleOf(
   return { role: 'member', customRole: custom };
 }
 
+/**
+ * Refuses a role a page only person can't hold (9 Nov 2026): they have no Timefix login and no partner's frame to
+ * open, so they never become an owner or an admin. A partner's person keeps spec 0070's rules (the workspace may make
+ * them an owner, AC-7024). One read of `managed_members`, none for other roles.
+ */
+async function checkPageOnlyRole(tx: WorkspaceTx, workspaceId: string, memberIds: readonly string[], role: Role) {
+  if ((role !== 'owner' && role !== 'admin') || memberIds.length === 0) return;
+  const managed = await tx
+    .select({ id: managedMembers.id })
+    .from(managedMembers)
+    .where(
+      and(
+        eq(managedMembers.workspaceId, workspaceId),
+        inArray(managedMembers.memberId, [...memberIds]),
+        sql`${managedMembers.partnerId} is null`,
+        sql`${managedMembers.removedAt} is null`,
+      ),
+    )
+    .limit(1);
+  if (managed.length > 0) throw refuse('FORBIDDEN', PAGE_ONLY_ROLE);
+}
+
+const PAGE_ONLY_ROLE = 'A page only person has no Timefix login, so they can’t be an owner or an admin.';
+
 /** The name of the custom role a member holds now, for the audit row's before, or undefined. */
 async function customRoleName(tx: WorkspaceTx, workspaceId: string, roleId: string | null) {
   if (roleId === null) return undefined;
@@ -525,6 +553,7 @@ export async function setMemberRole(
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       const next = await nextRoleOf(tx, scope.workspaceId, asked);
+      if (next.role !== target.role) await checkPageOnlyRole(tx, scope.workspaceId, [target.id], next.role);
       const { view, cancelled } = await changeRole(context, acting, target, next, options.source);
       return { ...view, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
     },
@@ -576,6 +605,12 @@ export async function setMemberRoles(
       const nextCustom = next.customRole?.id ?? null;
       const changing = targets.filter((target) => target.role !== next.role || target.customRoleId !== nextCustom);
       if (changing.length === 0) return { changed: 0 };
+      await checkPageOnlyRole(
+        tx,
+        scope.workspaceId,
+        changing.filter((target) => target.role !== next.role).map((target) => target.id),
+        next.role,
+      );
       const leavingOwners = changing.filter((target) => target.role === 'owner').map((target) => target.id);
       if (leavingOwners.length > 0) await keepAnOwner(tx, scope, leavingOwners);
       // Guests take no seat (spec 0031, AC-809): each one leaving the role takes one, counted once for all.
@@ -842,6 +877,7 @@ export async function transferOwnership(
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       if (acting.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+      await checkPageOnlyRole(tx, scope.workspaceId, [target.id], 'owner');
       // A guest made owner takes a seat (spec 0031, AC-809).
       if (target.role === 'guest') await checkSeats(tx, scope, 1);
       await tx

@@ -12,7 +12,7 @@ import { listAuditEvents } from '../audit/audit.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { LIMITS } from '../engine/limits.ts';
-import { listMembers } from '../members/members.ts';
+import { listMembers, setMemberRole, transferOwnership } from '../members/members.ts';
 import { approvePartnerConnect } from '../partners/connect.ts';
 import { exchangePartnerCode } from '../partners/exchange.ts';
 import { listPartnerMembers, putPartnerMember, removePartnerMember } from '../partners/members.ts';
@@ -110,6 +110,7 @@ const makers = {
   users: {
     ensurePageOnlyUser: (person: { workspaceId: string; personId: string; name: string }) =>
       identity.ensurePageOnlyUser(person),
+    dropPageOnlyUser: (userId: string) => identity.dropPageOnlyUser(userId),
   },
 };
 const enders = {
@@ -362,6 +363,15 @@ describe('removing a page only person', () => {
     });
   });
 
+  it('answers NOT_FOUND for another workspace’s person', async () => {
+    const one = await workspace();
+    const two = await workspace();
+    const added = await addPageOnlyPerson(one.owner, { name: 'Nick', handle: handle() }, makers);
+    expect(await refusalOf(removePageOnlyPerson(two.owner, { member: added.memberId }, enders))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('leaves one the workspace made an owner to Members', async () => {
     const w = await workspace();
     const added = await addPageOnlyPerson(w.owner, { name: 'Owen', handle: handle() }, makers);
@@ -369,5 +379,36 @@ describe('removing a page only person', () => {
     expect(await refusalOf(removePageOnlyPerson(w.owner, { member: added.memberId }, enders))).toMatchObject({
       code: 'FORBIDDEN',
     });
+  });
+});
+
+describe('roles and identities', () => {
+  it('never makes a page only person an owner or an admin', async () => {
+    const w = await workspace();
+    const added = await addPageOnlyPerson(w.owner, { name: 'Nick', handle: handle() }, makers);
+    for (const role of ['admin', 'owner'] as const) {
+      expect(await refusalOf(setMemberRole(w.owner, { memberId: added.memberId, role }))).toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    }
+    expect(await refusalOf(transferOwnership(w.owner, { memberId: added.memberId }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    // A guest and back is theirs to have, as anyone's.
+    await setMemberRole(w.owner, { memberId: added.memberId, role: 'guest' });
+    await setMemberRole(w.owner, { memberId: added.memberId, role: 'member' });
+  });
+
+  it('drops only an identity a refused add left behind', async () => {
+    const w = await workspace();
+    const orphan = await identity.ensurePageOnlyUser({ workspaceId: w.workspaceId, personId: newId(), name: 'Gone' });
+    expect(await identity.dropPageOnlyUser(orphan)).toBe(true);
+    expect(await testQuery(ownerUrl, `select 1 from auth."user" where id = $1`, [orphan])).toEqual([]);
+    // One that joined stays, and so does anyone who isn't page only.
+    const added = await addPageOnlyPerson(w.owner, { name: 'Kept', handle: handle() }, makers);
+    const joined = (await identityOf(added.memberId))?.user_id ?? '';
+    expect(await identity.dropPageOnlyUser(joined)).toBe(false);
+    const someone = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
+    expect(await identity.dropPageOnlyUser(someone)).toBe(false);
   });
 });

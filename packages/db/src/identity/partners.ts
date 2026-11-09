@@ -104,6 +104,12 @@ export interface PartnerIdentity {
    * no partner. Idempotent, as `ensureManagedUser` is. Answers the user id.
    */
   ensurePageOnlyUser(person: PageOnlyPerson): Promise<string>;
+  /**
+   * Drops a page only identity that never joined a workspace: the add that made it was refused after it was made (a
+   * race on the address, the handle or the last seat). Only an identity with no partner and no workspace membership
+   * goes; anything else is left alone. Answers whether it went.
+   */
+  dropPageOnlyUser(userId: string): Promise<boolean>;
   /** Ends every session of a managed identity (AC-7022); any other identity's are never touched. Answers how many. */
   endManagedUserSessions(userId: string): Promise<number>;
   /** Whether this identity is a partner's managed member's (AC-7023): such an identity never starts a session itself. */
@@ -324,6 +330,21 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         externalId: personId.toLowerCase(),
         name: person.name,
       });
+    },
+
+    async dropPageOnlyUser(userId) {
+      if (!UUID.test(userId)) return false;
+      const dropped = await db
+        .delete(user)
+        .where(
+          and(
+            eq(user.id, userId),
+            sql`exists (select 1 from ${managedUsers} where ${managedUsers.userId} = ${userId}::uuid and ${managedUsers.partnerId} is null)`,
+            sql`not exists (select 1 from auth.workspace_membership wm where wm.user_id = ${userId}::uuid)`,
+          ),
+        )
+        .returning({ id: user.id });
+      return dropped.length > 0;
     },
 
     async endManagedUserSessions(userId) {

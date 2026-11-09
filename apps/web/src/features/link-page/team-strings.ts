@@ -52,25 +52,23 @@ export const teamStrings = {
   /** Add a page (9 Nov 2026): a page for someone who never signs up. */
   addPage: 'Add a page',
   addTitle: 'Add a page',
-  addText:
-    'For someone who doesn’t need a Timefix login. They get no invitation and no email. The page starts Private.',
+  addText: 'For someone without a Timefix login. Uses a seat. The page starts Private.',
   nameLabel: 'Name',
   emailLabel: 'Email',
   emailAside: '(optional)',
-  emailHint: 'Kept on their profile. We don’t email them.',
+  emailHint: 'Kept on their profile. We never email them.',
   nameMissing: 'Add their name.',
   emailInvalid: 'Enter a valid email address, or leave it empty.',
   handleChecking: 'Checking…',
-  handleFree: 'Free',
-  handleTaken: 'That link is taken. Pick another.',
+  handleFree: 'Available',
+  handleTaken: 'Taken. Pick another.',
   handleUnknown: 'Couldn’t check it now. Create checks it again.',
-  handleFreeSaid: (handle: string) => `/${handle} is free.`,
+  handleFreeSaid: (handle: string) => `/${handle} is available.`,
   handleTakenSaid: (handle: string) => `/${handle} is taken.`,
-  handleSuggestions: 'Free links',
+  handleSuggestions: 'Try instead',
   addAction: 'Create page',
   adding: 'Creating…',
-  addFailed: 'The page wasn’t created. Try again.',
-  added: (handle: string, name: string) => `Created /${handle} for ${firstOf(name)}. It’s Private for now.`,
+  added: (handle: string, name: string) => `Created /${handle} for ${firstOf(name)}.`,
   /** A page only person's quiet mark, beside their name. */
   pageOnly: 'Page only',
   /** Removing a page only person. */
@@ -78,8 +76,8 @@ export const teamStrings = {
   removeTitle: (name: string) => `Remove ${name}?`,
   removeText: (handle: string | undefined) =>
     handle === undefined
-      ? 'They leave the workspace. Their page’s content is kept for 30 days.'
-      : `/${handle} stops working and they leave the workspace. The page’s content is kept for 30 days.`,
+      ? 'Their seat is freed. Their page’s content is kept for 30 days.'
+      : `/${handle} stops working and their seat is freed. The page’s content is kept for 30 days.`,
   removeAction: 'Remove person',
   removed: (name: string) => `Removed ${firstOf(name)}.`,
   /** The member's page, opened by a manager. */

@@ -59,16 +59,23 @@ export const membersRouter = member.members.router({
     if (partnerIds.length === 0) return page;
     const names = new Map(
       await Promise.all(
-        partnerIds.map(
-          async (id) => [id, (await context.partners.partnerById(id).catch(() => undefined))?.name] as const,
-        ),
+        partnerIds.map(async (id) => {
+          // Without the registry the mark says "Via a connected app": the list still answers.
+          const found = await context.partners.partnerById(id).catch((error: unknown) => {
+            log.warn('Connected app name not read', { requestId: context.requestId, ...errorFields(error) });
+            return undefined;
+          });
+          return [id, found?.name] as const;
+        }),
       ),
     );
+    // The app's name, never its id: the id was only for the lookup.
     return {
       ...page,
       members: page.members.map((each) => {
-        const app = each.managed?.partnerId === undefined ? undefined : names.get(each.managed.partnerId);
-        return app === undefined || each.managed === undefined ? each : { ...each, managed: { ...each.managed, app } };
+        if (each.managed?.partnerId === undefined) return each;
+        const app = names.get(each.managed.partnerId);
+        return { ...each, managed: { kind: each.managed.kind, ...(app === undefined ? {} : { app }) } };
       }),
     };
   }),
