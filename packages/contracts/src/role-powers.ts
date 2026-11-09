@@ -76,6 +76,8 @@ export const PERMISSION_POWERS: Record<Permission, string> = {
   'hospitality.service': 'Run service',
   'services.manage': 'Set up services and staff',
   'services.calendar': 'Run everyone’s calendar',
+  'link_pages.manage_team': 'Edit everyone’s link page and QR code',
+  'connected_apps.manage': 'Connect outside apps',
 };
 
 /** One group of powers, as a person thinks about them rather than as the code names them. */
@@ -122,12 +124,13 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
       'access.manage',
       'comments.manage',
       'jobs.manage',
+      'link_pages.manage_team',
     ],
   },
   {
     id: 'connections',
     title: 'Connections',
-    permissions: ['api_keys.manage', 'webhooks.manage', 'automations.manage'],
+    permissions: ['api_keys.manage', 'webhooks.manage', 'automations.manage', 'connected_apps.manage'],
   },
   {
     id: 'workspace',

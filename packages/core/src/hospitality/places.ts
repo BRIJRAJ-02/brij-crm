@@ -24,7 +24,7 @@ import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
-import { auditSetup, hospitalityMember, requireAnyApp } from './gate.ts';
+import { auditSetup, hospitalityMember, requireAnyApp, requireBusiness } from './gate.ts';
 import { currentProperty, currentPropertyRef } from './property.ts';
 
 const { places, properties, resources } = schema;
@@ -221,6 +221,7 @@ export async function saveBusiness(scope: EngineScope, fields: PropertyFields): 
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    await requireBusiness(tx, scope.workspaceId);
     const values = {
       name: fields.name,
       kind: fields.kind,
@@ -258,6 +259,7 @@ export async function createPlace(
   const id = checkId(input.id, PLACE_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
+    await requireBusiness(tx, scope.workspaceId);
     await insertPlace(tx, scope, id, input.place, by);
     await auditSetup(tx, scope, 'place.created', { placeId: id });
     return readPlace(tx, scope.workspaceId, id);

@@ -104,6 +104,17 @@ export type Principal =
    * email preferences do.
    */
   | { readonly kind: 'email_link'; readonly memberId: string }
+  /**
+   * A partner's connection (spec 0070): an outside product the workspace's owner connected, acting with the
+   * connection's access token. No permission and no object: it reads its own connection only, until slice 3 adds
+   * managed members.
+   */
+  | {
+      readonly kind: 'partner';
+      readonly connectionId: string;
+      readonly partnerId: string;
+      readonly modules: readonly string[];
+    }
   | { readonly kind: 'system' };
 
 /** A member principal. */
@@ -669,6 +680,62 @@ export function bookingAccess(pageId: string, objectIds: readonly string[]): Acc
 export function emailLinkAccess(memberId: string): Access {
   return Object.freeze({
     principal: Object.freeze({ kind: 'email_link', memberId }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord([]),
+      fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * Someone else's link page as a team page manager edits it (spec 0070, AC-7002): the page's member as the principal,
+ * so the link page services act on their page and nothing else, with no permission and no object at all, so every
+ * other member service refuses it. The actor stays the manager, so History names who changed it. Only the door's
+ * `enterTeamLinkPage` builds one.
+ */
+export function linkPageAccess(member: {
+  readonly memberId: string;
+  readonly userId: string;
+  readonly role: Role;
+}): Access {
+  return Object.freeze({
+    principal: Object.freeze({
+      kind: 'member',
+      memberId: member.memberId,
+      userId: member.userId,
+      role: member.role,
+      teamIds: Object.freeze([]),
+    }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord([]),
+      fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * A partner connection's access (spec 0070, slice 2): a `partner` principal with its connection, partner and modules,
+ * no permission and no object, so every member service refuses it and only the partner's own reads take it. Only the
+ * door's `enterAsPartner` builds one.
+ */
+export function partnerAccess(connection: {
+  readonly connectionId: string;
+  readonly partnerId: string;
+  readonly modules: readonly string[];
+}): Access {
+  return Object.freeze({
+    principal: Object.freeze({
+      kind: 'partner',
+      connectionId: connection.connectionId,
+      partnerId: connection.partnerId,
+      modules: Object.freeze([...connection.modules]),
+    }),
     permissions: Object.freeze([]),
     data: sealPolicy({
       defaultObject: 'none',

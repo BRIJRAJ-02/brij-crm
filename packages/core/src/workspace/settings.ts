@@ -36,7 +36,7 @@ import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import { syncBusinessListing } from '../hospitality/business-page.ts';
-import { installedRows } from '../hospitality/gate.ts';
+import { installedHospitalityApps } from '../hospitality/gate.ts';
 import { followWorkspaceCurrency } from '../hospitality/property.ts';
 
 const { members, workspaces } = schema;
@@ -443,7 +443,7 @@ export async function restoreWorkspace(
         `);
       }
       // A published business page with an app still on is listed for search engines again (spec 0066, AC-6644).
-      const apps = await installedRows(tx, scope.workspaceId);
+      const apps = await installedHospitalityApps(tx, scope.workspaceId);
       await syncBusinessListing(tx, scope.workspaceId, apps.size > 0);
       await writeAudit(
         tx,

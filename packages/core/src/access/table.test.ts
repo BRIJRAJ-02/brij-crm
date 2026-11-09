@@ -118,8 +118,33 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'operatorPages',
   'operatorPage',
   'operatorSite',
-  // Its one write (spec 0065, AC-6502), behind the same gate, through crm_operator's one definer.
-  'setEarlyAccess',
+  // Partners (spec 0070, slice 2): the registry behind the same gate, on the identity store; the connect's check,
+  // offer (each workspace entered through the door) and refusal, before any workspace; the token exchange, server to
+  // server, whose code names its workspace as a key does; the partner door and its touch; and pure helpers.
+  'listPartners',
+  'registerPartner',
+  'updatePartner',
+  'replacePartnerSecret',
+  'toPartnerView',
+  'checkConnectRequest',
+  'partnerConnectOffer',
+  'denyPartnerConnect',
+  'exchangePartnerCode',
+  'enterAsPartner',
+  'notePartnerCall',
+  'frameOriginProblem',
+  'redirectUriProblem',
+  'partnerLogoPath',
+  'parsePartnerAccessToken',
+  's256Challenge',
+  // Embedded screens (spec 0070, slice 4): a launch's code read (pure) and redeemed (its own code is the key), an
+  // embedded session's reads (the session's own scope; `describeEmbedSession` passes the member door itself), and
+  // the console's sandbox wipe (the operator gate is the api's).
+  'parsePartnerLaunchCode',
+  'redeemPartnerLaunch',
+  'embedConnectionModules',
+  'describeEmbedSession',
+  'wipeTestConnections',
   // The Hospitality gate (spec 0065, AC-6504): it takes the caller's transaction, inside a service the door let in.
   'appInstalled',
   'requireApp',
@@ -462,6 +487,31 @@ describe('the walk: a principal without the access is refused', () => {
       message: PERMISSIONS[entry.permission].message,
     });
   });
+
+  // Partner connect (spec 0070): an admin is refused too, since connecting a partner is an owner's own act.
+  it.each(byPermission.filter(([, entry]) => entry.permission === 'connected_apps.manage'))(
+    '%s refuses an admin without %o',
+    async (name, entry) => {
+      const { scope } = await memberOf('admin');
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(scope, {})))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS[entry.permission].message,
+      });
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'ownConnectionAsPartner' in entry).map(([name]) => name))(
+    '%s refuses every scope but a partner’s own',
+    async (name) => {
+      const { scope, workspaceId } = await memberOf('admin');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      for (const each of [scope, key]) {
+        expect(await refusalOf(service(name)(each, { connectionId: core.newId() }))).toMatchObject({
+          code: 'FORBIDDEN',
+        });
+      }
+    },
+  );
 
   // History's Workspace changes (spec 0046, AC-4622): the audit log is in the walk above, owners and admins only.
   it('walks listAuditEvents as audit.read, refused to a member', async () => {

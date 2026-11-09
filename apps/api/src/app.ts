@@ -7,6 +7,7 @@ import {
   createCalendarEvents,
   createBusyCache,
   createHomeMetricsCache,
+  embedConnectionModules,
   enterWorkspace,
   mayPreviewDraft,
   jobKinds,
@@ -18,6 +19,7 @@ import {
   type RuleSource,
 } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
+import { apiError } from './errors.ts';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -92,6 +94,13 @@ import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realti
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
+import {
+  createFrameOrigins,
+  mountPartnerApi,
+  PARTNER_V1_PREFIX,
+  partnerFrameResponse,
+  partnerLogoResponse,
+} from './partner/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 import type { WebhookUrlProblem } from '@crm/core';
@@ -469,6 +478,8 @@ export function createApp({
     // The public API (parity #34) reads no cookie, only a Bearer key, so a cross site write has nothing to ride on.
     // Never mount a route that reads the session under /api/v1/: this line would let its writes past.
     if (c.req.path.startsWith(V1_PREFIX)) return next();
+    // The partner API (spec 0070) likewise: a partner's client secret or access token, never a cookie.
+    if (c.req.path.startsWith(PARTNER_V1_PREFIX)) return next();
     // The marketing site's beacon checks its own origins, SITE_ORIGINS (spec 0047, AC-1627).
     if (c.req.path === SITE_HIT_PATH && c.req.method === 'POST') return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
@@ -565,6 +576,13 @@ export function createApp({
         },
         // Only whether a person has Google linked, by their own user id, for Profile's Sync Google photo.
         googleLinked: (userId) => identity.hasGoogleAccount(userId),
+        // The partner registry's two reads (spec 0070): the connect's check, and Connected apps' names and logos.
+        partners: {
+          partnerByClientId: (clientId) => identity.partnerByClientId(clientId),
+          partnerById: (id) => identity.partnerById(id),
+        },
+        // Only ending a connection's embedded sessions, by connection id (spec 0070, slice 4): Disconnect's last step.
+        embedSessions: { end: (connectionIds) => identity.endEmbedSessions(connectionIds) },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
       },
@@ -583,6 +601,41 @@ export function createApp({
     analytics,
     keepAlive,
   });
+
+  // The partner API (spec 0070, slice 2): the token exchange, and a connection's read of itself, for a partner's
+  // server only (its secret or its access token, never a cookie), under `/api/partner/v1`.
+  mountPartnerApi(app, {
+    db,
+    partners: {
+      partnerByClientId: (clientId) => identity.partnerByClientId(clientId),
+      partnerById: (id) => identity.partnerById(id),
+    },
+    appUrl: env.APP_URL,
+    limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+    // Managed members' identities (slice 3): made by the identity login, never the app's.
+    users: {
+      ensureManagedUser: (person) => identity.ensureManagedUser(person),
+      endManagedUserSessions: (userId) => identity.endManagedUserSessions(userId),
+      dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+    },
+    wakeRelay,
+    analytics,
+    keepAlive,
+  });
+  // A partner's logo from our own origin (spec 0070, AC-7012): the connect page and Connected apps show it.
+  app.get('/public/partners/:clientId/logo', (c) =>
+    partnerLogoResponse(
+      {
+        partnerLogo: (clientId, version) => identity.partnerLogo(clientId, version),
+        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+      },
+      { clientId: c.req.param('clientId'), version: c.req.query('v'), address: c.get('clientIp') },
+    ),
+  );
+  // The origins a partner may frame its embedded screens in (spec 0070, AC-7032): the edge asks it for each
+  // `/embed/<clientId>/…` page, to send that page's `frame-ancestors`.
+  const frameOrigins = createFrameOrigins({ partnerByClientId: (clientId) => identity.partnerByClientId(clientId) });
+  app.get('/public/partners/:clientId/frame', (c) => partnerFrameResponse(frameOrigins, c.req.param('clientId')));
 
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
@@ -819,8 +872,22 @@ export function createApp({
   // the same member door the RPC opens (spec 0060, AC-2, AC-13, AC-23).
   const imageRoutes = {
     auth,
-    enter: (session: AuthSession, slug: string) =>
-      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    enter: async (session: AuthSession, slug: string) => {
+      const scope = await enterWorkspace(
+        { db, identity, log, rules },
+        { userId: session.user.id, slug, session: doorSession(session) },
+      );
+      // An embedded frame's session (spec 0070, AC-7033), which only a link page's routes take: its own workspace,
+      // while its connection is live with Link pages; anything else is absent to it.
+      if (session.embed !== undefined) {
+        const modules =
+          scope.workspaceId === session.embed.workspaceId
+            ? await embedConnectionModules({ db }, session.embed)
+            : undefined;
+        if (modules?.includes('link_pages') !== true) throw apiError('NOT_FOUND', 'There is nothing at this address.');
+      }
+      return scope;
+    },
     files: pictureFiles,
     limiter: createMemoryLimiter(),
     errorResponse,

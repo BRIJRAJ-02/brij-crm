@@ -4,7 +4,7 @@ export type { EngineScope } from '../access/mint.ts';
 
 /** Who did something: a member, an API key, an automation, or the system (whose id is null). */
 export interface Actor {
-  readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+  readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking' | 'partner';
   readonly id: string | null;
 }
 

@@ -22,7 +22,6 @@ const FLOOR: PlaceFloor = {
   resources: [table('a', 'T1', 0), table('b', 'T2', 1), table('c', 'T3', 2)],
 };
 const APPS: AppsView = {
-  available: true,
   canManage: true,
   hasBusiness: true,
   apps: [

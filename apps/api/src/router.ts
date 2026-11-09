@@ -29,6 +29,7 @@ import { membersRouter } from './modules/members/router.ts';
 import { navRouter } from './modules/nav/router.ts';
 import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
 import { profileRouter } from './modules/profile/router.ts';
+import { teamPagesRouter } from './modules/team-pages/router.ts';
 import { brandRouter } from './modules/brand/router.ts';
 import { hospitalityRouter } from './modules/hospitality/router.ts';
 import { menuRouter } from './modules/menu/router.ts';
@@ -64,6 +65,9 @@ import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
 import { automationsRouter } from './modules/automations/router.ts';
 import { apiKeysRouter } from './modules/api-keys/router.ts';
+import { connectedAppsRouter } from './modules/partners/connected-apps.ts';
+import { partnerConnectRouter } from './modules/partners/connect.ts';
+import { embedRouter } from './modules/embed/router.ts';
 import { base } from './orpc.ts';
 
 // One module per feature under ./modules, each implementing its contract namespace.
@@ -90,6 +94,7 @@ export const router = base.router({
   workspace: workspaceRouter,
   deletedWorkspace: deletedWorkspaceRouter,
   profile: profileRouter,
+  teamPages: teamPagesRouter,
   brand: brandRouter,
   hospitality: hospitalityRouter,
   menu: menuRouter,
@@ -105,6 +110,10 @@ export const router = base.router({
   jobs: jobsRouter,
   automations: automationsRouter,
   apiKeys: apiKeysRouter,
+  // Partner connect (spec 0070, slice 2): the connect page (bootstrap) and the owner's approval; Connected apps.
+  partnerConnect: partnerConnectRouter,
+  connectedApps: connectedAppsRouter,
+  embed: embedRouter,
   usage: usageRouter,
   views: viewsRouter,
   reports: reportsRouter,

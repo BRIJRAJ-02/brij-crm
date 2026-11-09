@@ -17,6 +17,9 @@ import middleware, {
   ORIGIN_HEADER,
   PUBLIC_HOST_PATH,
   CRAWL_FILES,
+  EMBED_PAGE_PATH,
+  EMBED_PAGE_POLICY_BASE,
+  embedPagePolicy,
   publicHostRedirect,
   SESSION_HINT_COOKIE,
   SESSION_HINT_PRESENT,
@@ -32,8 +35,14 @@ import {
 
 const API = 'https://api-production.up.railway.app';
 
+/** The middleware's answer for every path but an embedded screen's, which it answers at once. */
+function answered(made: Response | Promise<Response>): Response {
+  if (made instanceof Promise) throw new Error('Only an embedded screen waits on the API.');
+  return made;
+}
+
 function call(path: string, headers: Record<string, string> = {}): Response {
-  return middleware(new Request(`https://brij-crm.vercel.app${path}`, { method: 'POST', headers }));
+  return answered(middleware(new Request(`https://brij-crm.vercel.app${path}`, { method: 'POST', headers })));
 }
 
 function upstreamHeader(response: Response, name: string): string | null {
@@ -307,7 +316,7 @@ describe('the api switch (spec 0045)', () => {
 });
 
 describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
-  const at = (url: string, headers: Record<string, string> = {}) => middleware(new Request(url, { headers }));
+  const at = (url: string, headers: Record<string, string> = {}) => answered(middleware(new Request(url, { headers })));
   const hint = `${SESSION_HINT_COOKIE}=${SESSION_HINT_PRESENT}`;
   /** The same request made twice: once plain, once carrying the session hint. */
   const bothWays: readonly Record<string, string>[] = [{}, { cookie: hint }];
@@ -426,6 +435,53 @@ describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
   });
 });
 
+// Embedded screens (spec 0070, AC-7032): the app's own page, framed only by the partner's registered origins.
+describe('an embedded screen’s page', () => {
+  const CLIENT = 'tfp_AAAAAAAAAAAAAAAAAAAAAA';
+  const vercel = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8')) as {
+    readonly headers: readonly { readonly headers: readonly { readonly key: string; readonly value: string }[] }[];
+  };
+  const appPolicy =
+    vercel.headers[0]?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? 'missing';
+
+  it('sends the app’s own policy, its frame-ancestors the partner’s origins alone', () => {
+    expect(`${EMBED_PAGE_POLICY_BASE}; frame-ancestors 'self'`).toBe(appPolicy);
+    expect(embedPagePolicy(['https://hub.example.com', 'http://localhost:5390'])).toBe(
+      `${EMBED_PAGE_POLICY_BASE}; frame-ancestors https://hub.example.com http://localhost:5390`,
+    );
+    // None registered, unreadable, or anything that isn't an origin: framed by nothing at all.
+    expect(embedPagePolicy([])).toMatch(/; frame-ancestors 'none'$/);
+    expect(embedPagePolicy(['https://a.example; script-src *', 'http://evil.example', '*'])).toMatch(
+      /; frame-ancestors 'none'$/,
+    );
+  });
+
+  it('asks the API for the partner’s origins, and refuses every frame when it can’t', async () => {
+    vi.stubEnv('EDGE_SECRET', 'x'.repeat(40));
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', (input: URL, init: RequestInit) => {
+      asked.push(`${input.href} ${new Headers(init.headers).get(EDGE_HEADER) ?? ''}`);
+      return Promise.resolve(Response.json({ frameOrigins: ['https://hub.example.com'] }));
+    });
+    const page = await middleware(new Request(`https://app.timefix.com/embed/${CLIENT}/link-page?team=true`));
+    expect(asked).toEqual([`https://app.timefix.com/api/public/partners/${CLIENT}/frame ${'x'.repeat(40)}`]);
+    expect(page.headers.get('x-middleware-next')).toBe('1');
+    expect(page.headers.get('content-security-policy')).toMatch(/; frame-ancestors https:\/\/hub\.example\.com$/);
+    expect(page.headers.get('cache-control')).toBe('no-store');
+    vi.stubGlobal('fetch', () => Promise.reject(new Error('down')));
+    const refused = await middleware(new Request(`https://app.timefix.com/embed/${CLIENT}/start`));
+    expect(refused.headers.get('content-security-policy')).toMatch(/; frame-ancestors 'none'$/);
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves the embed script alone', () => {
+    expect(EMBED_PAGE_PATH.test('/embed/v1.js')).toBe(false);
+    expect(
+      answered(middleware(new Request('https://app.timefix.com/embed/v1.js'))).headers.get('content-security-policy'),
+    ).toBeNull();
+  });
+});
+
 // Vercel compiles middleware.ts on its own: an import of the repo's TypeScript or a workspace package fails the
 // deploy (it did on 22 Oct 2026), so what it needs from public-paths.ts is written out there, and kept equal here.
 describe('the public host check written out in middleware.ts', () => {
@@ -441,6 +497,7 @@ describe('the public host check written out in middleware.ts', () => {
     expect(CARD_PATH.source).toBe(paths.CARD_PATH.source);
     expect(STRIP_PATH.source).toBe(paths.STRIP_PATH.source);
     expect(CRAWL_FILES).toEqual(paths.CRAWL_FILES);
+    expect(EMBED_PAGE_PATH.source).toBe(paths.EMBED_PAGE_PATH.source);
   });
 
   it('moves exactly what public-paths.ts moves', () => {

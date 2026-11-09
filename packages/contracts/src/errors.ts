@@ -145,7 +145,6 @@ export const ERROR_MAP = {
   // first install with no business card, are conflicts the Apps page answers by asking.
   APP_NOT_INSTALLED: { status: 403 },
   APP_NEEDED: CONFLICT,
-  BUSINESS_NEEDED: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

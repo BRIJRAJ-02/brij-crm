@@ -6,7 +6,6 @@ import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { addService, visitWorkspace } from '../../test/visits-kit.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { setEarlyAccess } from '../operator/early-access.ts';
 import { testScope } from '../testing.ts';
 import { getCatalogue, saveServiceCategory } from '../visits/catalogue.ts';
 import { readTablePage } from '../visits/public.ts';
@@ -36,14 +35,13 @@ const CARD = {
   currency: 'GBP',
 } as const;
 
-/** An open workspace with nothing installed. */
+/** A workspace with nothing set up (every app on by default). */
 async function empty() {
   const created = await createWorkspace(db, {
     name: 'Somewhere',
     slug: `property-${randomUUID().slice(0, 12)}`,
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
-  await setEarlyAccess({ db }, { workspaceId: created.workspaceId, flag: 'business_apps', on: true });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   return { ...created, owner };
 }

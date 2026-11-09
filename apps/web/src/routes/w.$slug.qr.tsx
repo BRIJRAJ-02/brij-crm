@@ -1,7 +1,7 @@
 import { isDataError, type HospitalityStore } from '@crm/data';
 import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
+import { AppOffScreen, useReachesBusinessPages } from '../features/hospitality/AppOffScreen.tsx';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
 import { qrLookOf, type QrLook } from '../features/menu-qr/look.ts';
 import { QrScreen } from '../features/menu-qr/QrScreen.tsx';
@@ -16,7 +16,7 @@ interface QrData {
   readonly look: QrLook;
 }
 
-// QR codes, the Menu QR app's page (spec 0065, H2): shown only while Menu QR is installed, else not found. The
+// QR codes, the Menu QR app's page (spec 0065, H2): shown only while Menu QR is on and the reader's role reaches it. The
 // loader reads the business (its places) and the brand kit the codes wear; each place's codes are read on the page.
 export const Route = createFileRoute('/w/$slug/qr')({
   loader: async ({ context, params }): Promise<QrData> => {
@@ -35,7 +35,8 @@ function PageRoute() {
   const { isInstalled, store, look } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { toasts } = Route.useRouteContext();
-  if (!isInstalled || store === undefined) return <ComingScreen slug={slug} page="qr" isInstalled={false} />;
+  const reaches = useReachesBusinessPages();
+  if (!reaches || !isInstalled || store === undefined) return <AppOffScreen slug={slug} page="qr" />;
   return <QrScreen slug={slug} hospitality={store} look={look} toasts={toasts} />;
 }
 

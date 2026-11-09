@@ -31,7 +31,7 @@ import { inputInvalid, postgresError, refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { auditSetup, hospitalityMember, requireApp } from '../hospitality/gate.ts';
 import { addDays, wallToInstant } from '../hospitality/hours.ts';
-import { requireVisitApp, type SlotCache } from './book.ts';
+import { type SlotCache } from './book.ts';
 import { loadVisitInputs } from './load.ts';
 import { lockVisit } from './locks.ts';
 import { partyGroups, type PlannerResource } from './planner.ts';
@@ -786,7 +786,7 @@ export async function setVisitStatus(
         throw refuse('NOT_FOUND', 'That reservation doesn’t exist.');
       }
       if (found.table_only) await requireApp(tx, scope.workspaceId, 'table_seating');
-      else await requireVisitApp(tx, scope.workspaceId);
+      else await requireApp(tx, scope.workspaceId, 'appointments');
       const people = (
         await tx.execute<{ id: string; member_id: string | null }>(sql`
         select distinct s.id::text, s.member_id::text from appointment_holds h

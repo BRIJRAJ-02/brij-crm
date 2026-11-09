@@ -68,6 +68,10 @@
       "destination": "/api/handle"
     },
     {
+      "source": "/embed/(tfp_[A-Za-z0-9_-]{22})/(.*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!api/|api$|f/|b/|m/|r/|embed/).*)",
       "destination": "/index.html"
     }
@@ -197,7 +201,28 @@
       ]
     },
     {
-      "source": "/embed/(.*)",
+      "source": "/embed/(tfp_[A-Za-z0-9_-]{22})/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/embed/((?!tfp_).*)",
       "headers": [
         {
           "key": "Cache-Control",

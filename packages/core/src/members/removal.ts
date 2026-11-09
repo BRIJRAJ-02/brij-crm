@@ -197,6 +197,14 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   automations_deleted_by: 'history: who deleted an automation',
   reports_creator: 'a report is shared: it stays for everyone who can read it, and views.manage holders change it',
   member_onboarding_member: 'their first run answers (spec 0036): nobody reads them, in the app or after',
+  partner_connections_approved_by:
+    'history: who approved a connected app (spec 0070); the connection outlives them, as an API key outlives its maker',
+  partner_connections_disconnected_by: 'history: who disconnected a connected app (spec 0070)',
+  partner_codes_approved_by: 'history: who approved a connect; a code lives 60 seconds and is swept a day on',
+  managed_members_member:
+    'a partner’s person keeps their row (spec 0070, AC-7022): the same external id brings the same identity back',
+  partner_launches_member:
+    'history: whom a partner opened a screen for; a launch lives 60 seconds and is swept a day on (spec 0070)',
 };
 
 /** Runs every feature's part of a removal of `memberId`, in order, inside the removal's write. */

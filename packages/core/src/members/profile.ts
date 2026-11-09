@@ -19,6 +19,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
+import { isTeamPageEdit } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -36,6 +37,7 @@ import { touched } from '../engine/definitions.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
+import { touchLinkPage } from '../profile/page-touch.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
 const { members, workspaces } = schema;
@@ -100,7 +102,10 @@ async function readProfile(
   const userId = selfUserId(scope);
   const held = userId === undefined ? undefined : (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId);
   // While they have no handle, the field starts from a free one made from their name.
-  const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
+  const suggested =
+    held === undefined && userId !== undefined && !isTeamPageEdit(scope)
+      ? await suggestHandle(tx, row.name)
+      : undefined;
   // The person's choice; a member with no identity of their own has none to make.
   const pictureHidden = userId === undefined ? undefined : await isPictureHidden(tx, userId);
   const socials = userId === undefined ? undefined : await socialLinksOfUser(tx, userId);
@@ -110,8 +115,11 @@ async function readProfile(
   // The person's link pages in their other workspaces (spec 0056, AC-5618), as ids. Not named here: a workspace's
   // name belongs to the directory, which is global identity, and a member handler has none (`orpc.ts`'s door takes
   // it away). The browser already holds every workspace it belongs to, from `me.get`, so it names these itself.
+  // Read for someone else's page by a team page manager (spec 0070), the person's other workspaces are theirs alone,
+  // and so is a handle suggested for a claim they never asked for.
+  const forTeam = isTeamPageEdit(scope);
   const others =
-    userId === undefined || held !== undefined
+    forTeam || userId === undefined || held !== undefined
       ? []
       : (await profileHandlesOf(tx, userId)).flatMap((each) =>
           each.workspaceId === scope.workspaceId ? [] : [{ workspaceId: each.workspaceId }],
@@ -381,11 +389,20 @@ export async function updateMyMemberProfile(
 export async function showMyLinkPage(scope: EngineScope, live?: boolean): Promise<{ readonly isPublic: boolean }> {
   const userId = selfUserId(scope);
   if (userId === undefined) return { isPublic: false };
+  // A team page manager opening someone's page (spec 0070) only reads where it stands: opening it is its member's act.
+  const opensOnly = live === undefined && isTeamPageEdit(scope);
   return {
-    isPublic: await inWorkspace(scope, (tx) =>
-      live === undefined
-        ? showLinkPage(tx, userId, scope.workspaceId)
-        : setLinkPageLive(tx, userId, scope.workspaceId, live),
+    isPublic: await inWorkspace(scope, async (tx) =>
+      opensOnly
+        ? (await publicProfilesOf(tx, scope.workspaceId, [userId])).get(userId)?.isShown === true
+        : live === undefined
+          ? showLinkPage(tx, userId, scope.workspaceId)
+          : setLinkPageLive(tx, userId, scope.workspaceId, live).then(async (shown) => {
+              if (isTeamPageEdit(scope)) {
+                await touchLinkPage(tx, scope, userId, scope.workspaceId, live ? 'live' : 'private');
+              }
+              return shown;
+            }),
     ),
   };
 }

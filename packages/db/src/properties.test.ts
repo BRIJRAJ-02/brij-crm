@@ -1,4 +1,4 @@
-// Properties in the database (spec 0065 H7, migration 0192): every workspace has one first property, row level
+// Properties in the database (spec 0065 H7, migration 0196): every workspace has one first property, row level
 // security holds on the table and on the old name's view, and a menu or a service can never reach another property's
 // place, whatever the code does.
 import { randomUUID } from 'node:crypto';

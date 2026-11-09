@@ -83,7 +83,6 @@ function send(path: string, init: { method?: string; cookie?: string; workspace?
 /** A workspace with Menu installed, a menu with one dish at its place, answering what the tests need. */
 async function menuWorkspace() {
   const m = await memberWithWorkspace(app);
-  await testQuery(ownerUrl, `update workspaces set early_access = '{business_apps}' where id = $1`, [m.workspace.id]);
   await m.client.hospitality.install({
     workspace: m.slug,
     app: 'menu',
@@ -166,9 +165,9 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     });
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
     forgotten.length = 0;
-    await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', mutationId: newId() });
+    await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', withDependents: true, mutationId: newId() });
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
-    // Every answer carries the workspace's own tag too, which a deleted workspace or closed early access forgets.
+    // Every answer carries the workspace's own tag too, which a deleted workspace forgets.
     expect(tagged.flat()).toContain(menuWorkspaceCacheTags(m.workspace.id)[0]);
     const gone = await send(`/api/public/menu/${place.menuKey}`);
     expect(gone.status).toBe(404);
@@ -420,7 +419,7 @@ describe('the editor’s preview look', () => {
     const plain = await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: memberCookie });
     expect(plain.status).toBe(403);
     expect(await plain.text()).not.toContain('--menu-ground');
-    await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', mutationId: newId() });
+    await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', withDependents: true, mutationId: newId() });
     const off = await send(`/api/menu/look.css?workspace=${m.slug}`, { cookie: m.cookie });
     expect(off.status).not.toBe(200);
     expect(await off.text()).not.toContain('--menu-ground');

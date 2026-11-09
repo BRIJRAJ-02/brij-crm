@@ -95,11 +95,23 @@ export const session = auth.table(
      * Turning two factor off takes a second factor (AC-885).
      */
     verifiedWith: text('verified_with', { enum: ['email', 'second_factor'] }),
+    /**
+     * An embedded session's scope (spec 0070, AC-7031): the partner connection whose launch made it, and that
+     * connection's workspace. Set only when a launch is redeemed, never by a sign in; a session with them set opens
+     * only the shared modules' procedures in that workspace, and one without them never opens an embedded screen.
+     */
+    embedConnectionId: uuid('embed_connection_id'),
+    embedWorkspaceId: uuid('embed_workspace_id'),
   },
   (t) => [
     uniqueIndex('session_token').on(t.token),
     check('session_verified_with', sql`${t.verifiedWith} in ('email', 'second_factor')`),
+    check('session_embed', sql`(${t.embedConnectionId} is null) = (${t.embedWorkspaceId} is null)`),
     index('session_user').on(t.userId),
+    // A disconnect or a sandbox wipe ends a connection's embedded sessions at once.
+    index('session_embed_connection')
+      .on(t.embedConnectionId)
+      .where(sql`${t.embedConnectionId} is not null`),
     foreignKey({ name: 'session_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
   ],
 );
@@ -1000,5 +1012,82 @@ export const operatorEvent = auth.table(
     check('operator_event_period', sql`${t.period} in ('7d', '30d', '90d')`),
     check('operator_event_request', sql`char_length(${t.requestId}) between 1 and 100`),
     check('operator_event_q', sql`char_length(${t.q}) between 1 and 100`),
+  ],
+);
+
+/**
+ * A partner (spec 0070, AC-7010): an outside product a super admin registered in the operator console, which may
+ * connect workspaces through OAuth and, later, embed Timefix. Global, so in `auth` on the identity login: a partner
+ * is nobody's workspace. Only the SHA-256 of its secret is kept, with the secret's last four characters; the whole
+ * secret is shown once, when it is made or replaced. Addresses are kept exactly as registered: a connect's redirect
+ * address must equal one of them character for character.
+ */
+export const partners = auth.table(
+  'partners',
+  {
+    id: authId(),
+    /** Public: `tfp_` and 22 base64url characters, what the partner sends as `client_id`. */
+    clientId: text('client_id').notNull(),
+    name: text('name').notNull(),
+    /** The partner's logo, a PNG, JPEG or WebP of at most 200 KB, served from our origin; none until one is added. */
+    logo: bytea('logo'),
+    logoType: text('logo_type'),
+    /** Moves with every new logo, so its address (`?v=`) changes and no cache keeps the old one. */
+    logoVersion: integer('logo_version').notNull().default(0),
+    /** The web origins allowed to embed Timefix in a frame (slice 4's `frame-ancestors`). */
+    frameOrigins: text('frame_origins').array().notNull(),
+    /** The addresses allowed to receive a connection: a connect's `redirect_uri` must equal one exactly. */
+    redirectUris: text('redirect_uris').array().notNull(),
+    /** SHA-256 of the secret. Never the secret. */
+    secretHash: bytea('secret_hash').notNull(),
+    secretHint: text('secret_hint').notNull(),
+    /** The super admin who registered it, by user id (no foreign key: the registry outlives the account). */
+    createdBy: uuid('created_by').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    /** When the secret was last replaced; the one before stopped working at that moment. */
+    secretReplacedAt: timestamptz('secret_replaced_at'),
+    /**
+     * A sandbox partner (spec 0070, AC-7035): its developers' test product. Its connections are made as test ones,
+     * never counted for billing, and the console can wipe them in one go.
+     */
+    isTest: boolean('is_test').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('partners_client_id').on(t.clientId),
+    index('partners_created').on(t.createdAt.desc()),
+    check('partners_client_id_shape', sql`${t.clientId} ~ '^tfp_[A-Za-z0-9_-]{22}$'`),
+    check('partners_name', sql`char_length(${t.name}) between 1 and 80`),
+    check(
+      'partners_logo',
+      sql`(${t.logo} is null and ${t.logoType} is null) or (octet_length(${t.logo}) between 1 and 204800 and ${t.logoType} in ('image/png', 'image/jpeg', 'image/webp'))`,
+    ),
+    check('partners_frame_origins', sql`cardinality(${t.frameOrigins}) <= 10`),
+    check('partners_redirect_uris', sql`cardinality(${t.redirectUris}) between 1 and 10`),
+    check('partners_secret_hash', sql`octet_length(${t.secretHash}) = 32`),
+    check('partners_secret_hint', sql`char_length(${t.secretHint}) = 4`),
+  ],
+);
+
+/**
+ * An identity a partner made for a managed member (spec 0070, AC-7020 to AC-7023), by the workspace, the partner and
+ * the partner's own id for them, so the same id is always the same identity. Its `user.email` is a made up address
+ * under `.invalid`, it has no password and no linked account, so nothing signs in as it and no Timefix account is
+ * ever merged with it. Goes with its user.
+ */
+export const managedUsers = auth.table(
+  'managed_users',
+  {
+    userId: uuid('user_id').notNull().primaryKey(),
+    /** The workspace it was made for (no foreign key across schemas). */
+    workspaceId: uuid('workspace_id').notNull(),
+    partnerId: uuid('partner_id').notNull(),
+    externalId: text('external_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'managed_users_user', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    uniqueIndex('managed_users_external').on(t.workspaceId, t.partnerId, t.externalId),
+    check('managed_users_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
   ],
 );

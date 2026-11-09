@@ -1,80 +1,67 @@
-// The one gate every Hospitality entry point calls (spec 0065, AC-6504): an app counts as installed only while its
-// `workspace_apps` row has no `removed_at` and Timefix's early access is still open for the workspace. Hiding a screen
-// is never the only gate. Billing (#38, #42) plugs in here.
-import { HOSPITALITY_APPS, type HospitalityApp } from '@crm/contracts';
+// The one gate every Hospitality entry point calls (spec 0065, AC-6504): every app but Events is on in every workspace,
+// and `workspace_apps` stores only what differs from that, an owner's or admin's switch-off (`removed_at`) above all
+// (`appsOn`). So a new workspace needs no write and an old one no backfill. Hiding a screen is never the only gate.
+// Billing (#38, #42) plugs in here.
+import { appsOn, HOSPITALITY_APPS, type HospitalityApp } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { refuse } from '../engine/refusals.ts';
 import { writeAudit } from '../members/audit.ts';
 
-const { workspaceApps, workspaces } = schema;
+const { workspaceApps } = schema;
 
-/** The refusal every app entry point gives while its app isn't installed (AC-6504). */
-export const APP_NOT_INSTALLED_MESSAGE = 'This app isn’t installed in this workspace.';
+/** The refusal every app entry point gives while its app is switched off (AC-6504). */
+export const APP_NOT_INSTALLED_MESSAGE = 'This app is off in this workspace.';
 
 /** Whether a string names a Hospitality app. */
 export const isApp = (value: string): value is HospitalityApp =>
   (HOSPITALITY_APPS as readonly string[]).includes(value);
 
-/** Whether the workspace has early access to the Hospitality apps (AC-6501). */
-export async function hasEarlyAccess(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
-  const [row] = await tx
-    .select({ on: sql<boolean>`'business_apps' = any(${workspaces.earlyAccess})` })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId));
-  return row?.on === true;
-}
-
-/** The apps whose rows say installed (not removed), early access aside. */
-export async function installedRows(tx: WorkspaceTx, workspaceId: string): Promise<ReadonlySet<HospitalityApp>> {
-  const rows = await tx
-    .select({ app: workspaceApps.app })
-    .from(workspaceApps)
-    .where(and(eq(workspaceApps.workspaceId, workspaceId), isNull(workspaceApps.removedAt)));
-  return new Set(rows.map((row) => row.app).filter(isApp));
-}
-
-/**
- * The Hospitality apps installed now (the sidebar's section, AC-6510); none without early access. One query: the
- * workspace's early access joined to its live app rows.
- */
+/** The Hospitality apps on now (the sidebar's section, AC-6510). One query: the workspace's stored switches. */
 export async function installedHospitalityApps(
   tx: WorkspaceTx,
   workspaceId: string,
 ): Promise<ReadonlySet<HospitalityApp>> {
   const rows = await tx
-    .select({ app: workspaceApps.app })
+    .select({ app: workspaceApps.app, removed: sql<boolean>`${workspaceApps.removedAt} is not null` })
     .from(workspaceApps)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceApps.workspaceId))
-    .where(
-      and(
-        eq(workspaceApps.workspaceId, workspaceId),
-        isNull(workspaceApps.removedAt),
-        sql`'business_apps' = any(${workspaces.earlyAccess})`,
-      ),
-    );
-  return new Set(rows.map((row) => row.app).filter(isApp));
+    .where(eq(workspaceApps.workspaceId, workspaceId));
+  return appsOn(rows);
 }
 
-/** Whether `app` is installed and its early access still open, in the caller's own transaction (AC-6504). */
+/** Whether `app` is on, in the caller's own transaction (AC-6504). */
 export async function appInstalled(tx: WorkspaceTx, workspaceId: string, app: HospitalityApp): Promise<boolean> {
   return (await installedHospitalityApps(tx, workspaceId)).has(app);
 }
 
-/** Refuses `APP_NOT_INSTALLED` (403) unless `app` is installed (AC-6504). Called after the access door. */
+/** Refuses `APP_NOT_INSTALLED` (403) unless `app` is on (AC-6504). Called after the access door. */
 export async function requireApp(tx: WorkspaceTx, workspaceId: string, app: HospitalityApp): Promise<void> {
   if (!(await appInstalled(tx, workspaceId, app))) throw refuse('APP_NOT_INSTALLED', APP_NOT_INSTALLED_MESSAGE);
 }
 
 /**
- * Refuses `APP_NOT_INSTALLED` unless some Hospitality app is installed: the gate of what the apps share (the
+ * Refuses `APP_NOT_INSTALLED` unless some Hospitality app is on: the gate of what the apps share (the
  * business, its places, areas and tables), which exist for whichever app uses them.
  */
 export async function requireAnyApp(tx: WorkspaceTx, workspaceId: string): Promise<void> {
   if ((await installedHospitalityApps(tx, workspaceId)).size === 0) {
-    throw refuse('APP_NOT_INSTALLED', 'Install a Hospitality app first, in Settings, Apps.');
+    throw refuse('APP_NOT_INSTALLED', 'Every business app is off. Turn one on in Settings, Apps.');
   }
+}
+
+/**
+ * Refuses `CONFLICT` until the business card has made the business: its property, its first place and Floor
+ * staff come together, so nothing that hangs off a business gets ahead of it.
+ */
+export async function requireBusiness(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+  // A property nobody has set up has no name (spec 0065 H7): that is "no business yet".
+  const [property] = await tx
+    .select({ workspaceId: schema.properties.workspaceId })
+    .from(schema.properties)
+    .where(and(eq(schema.properties.workspaceId, workspaceId), isNotNull(schema.properties.name)))
+    .limit(1);
+  if (property === undefined) throw refuse('CONFLICT', 'Set up your business first.');
 }
 
 /** The member a write is stamped with: only a signed in member installs, removes or sets up. */

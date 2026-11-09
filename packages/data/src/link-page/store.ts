@@ -973,6 +973,12 @@ export function openLinkPage(given: {
   /** Email signup (spec 0052, AC-5217): the workspaces one may be made in, and the one call that makes it. */
   /** The api's origin: a picture goes to its `/api/profile/images` (spec 0061). */
   readonly origin: string;
+  /**
+   * Whose page this store edits (spec 0070, AC-7002): absent, the caller's own; else that member's, for a team page
+   * manager, every call carrying `member` for the server's door to check. The wallet, the share picture and Bring a
+   * page across stay the caller's own and are never sent with it: the screen offers none of them for someone else.
+   */
+  readonly member?: string;
   readonly signup: {
     readonly workspaces: () => Promise<
       readonly { readonly id: string; readonly slug: string; readonly name: string }[]
@@ -984,23 +990,31 @@ export function openLinkPage(given: {
   };
 }) {
   const { profile, call } = given;
+  // Every call about the page names whose it is, when it isn't the caller's own (spec 0070).
+  const page: { readonly member?: string } = given.member === undefined ? {} : { member: given.member };
+  // The share picture, the wallet pass and Bring a page across are the caller's own page's: a member's store refuses
+  // them rather than sending them without `member`, which would act on the caller's own page.
+  const ownPageOnly = (): Promise<void> =>
+    given.member === undefined
+      ? Promise.resolve()
+      : Promise.reject(toDataError({ code: 'FORBIDDEN', message: 'That stays with the page’s own person.' }));
   const deps: LinkPageDeps = {
     api: {
-      items: (input) => call((options) => profile.items(input, options)),
-      counts: (input) => call((options) => profile.counts(input, options)),
-      pageChoices: (input) => call((options) => profile.pageChoices(input, options)),
-      formChoices: (input) => call((options) => profile.formChoices(input, options)),
-      placeChoices: (input) => call((options) => profile.placeChoices(input, options)),
-      saveTheme: (input) => call((options) => profile.saveTheme(input, options)),
-      setIndexable: (input) => call((options) => profile.setIndexable(input, options)),
-      setShareImage: (input) => call((options) => profile.setShareImage(input, options)),
-      walletLink: (input) => call((options) => profile.walletLink(input, options)),
-      show: (input) => call((options) => profile.show(input, options)),
-      importLinks: (input) => call((options) => profile.importLinks(input, options)),
-      saveItem: (input) => call((options) => profile.saveItem(input, options)),
-      orderItems: (input) => call((options) => profile.orderItems({ ...input, ids: [...input.ids] }, options)),
-      archiveItem: (input) => call((options) => profile.archiveItem(input, options)),
-      deleteItem: (input) => call((options) => profile.deleteItem(input, options)),
+      items: (input) => call((options) => profile.items({ ...input, ...page }, options)),
+      counts: (input) => call((options) => profile.counts({ ...input, ...page }, options)),
+      pageChoices: (input) => call((options) => profile.pageChoices({ ...input, ...page }, options)),
+      formChoices: (input) => call((options) => profile.formChoices({ ...input, ...page }, options)),
+      placeChoices: (input) => call((options) => profile.placeChoices({ ...input, ...page }, options)),
+      saveTheme: (input) => call((options) => profile.saveTheme({ ...input, ...page }, options)),
+      setIndexable: (input) => call((options) => profile.setIndexable({ ...input, ...page }, options)),
+      setShareImage: (input) => ownPageOnly().then(() => call((options) => profile.setShareImage(input, options))),
+      walletLink: (input) => ownPageOnly().then(() => call((options) => profile.walletLink(input, options))),
+      show: (input) => call((options) => profile.show({ ...input, ...page }, options)),
+      importLinks: (input) => ownPageOnly().then(() => call((options) => profile.importLinks(input, options))),
+      saveItem: (input) => call((options) => profile.saveItem({ ...input, ...page }, options)),
+      orderItems: (input) => call((options) => profile.orderItems({ ...input, ...page, ids: [...input.ids] }, options)),
+      archiveItem: (input) => call((options) => profile.archiveItem({ ...input, ...page }, options)),
+      deleteItem: (input) => call((options) => profile.deleteItem({ ...input, ...page }, options)),
     },
     mintId: given.mintId,
     notify: given.notify,
@@ -1022,14 +1036,15 @@ export function openLinkPage(given: {
   // Spec 0061 (R4): pictures, a link's own site picture, Insights by period and the share QR's style.
   const reach = createReach({
     api: {
-      counts: (input) => call((options) => profile.counts(input, options)),
-      fetchThumbnail: (input) => call((options) => profile.fetchThumbnail(input, options)),
-      qrStyle: (input) => call((options) => profile.qrStyle(input, options)),
-      saveQrStyle: (input) => call((options) => profile.saveQrStyle(input, options)),
-      upload: (workspace, picture) => sendPicture(given.origin, workspace, picture),
-      uploadAudio: (workspace, recording) => sendAudio(given.origin, workspace, recording),
+      counts: (input) => call((options) => profile.counts({ ...input, ...page }, options)),
+      fetchThumbnail: (input) => call((options) => profile.fetchThumbnail({ ...input, ...page }, options)),
+      qrStyle: (input) => call((options) => profile.qrStyle({ ...input, ...page }, options)),
+      saveQrStyle: (input) => call((options) => profile.saveQrStyle({ ...input, ...page }, options)),
+      upload: (workspace, picture) => sendPicture(given.origin, workspace, picture, given.member),
+      uploadAudio: (workspace, recording) => sendAudio(given.origin, workspace, recording, given.member),
     },
     mintId: given.mintId,
+    ...(given.member === undefined ? {} : { member: given.member }),
   });
   return {
     /** Spec 0061's reads and writes beside the blocks, and the rules its controls are worded with. */
@@ -1135,18 +1150,18 @@ export function openLinkPage(given: {
       /** A draft write made through another store (the brand look, who the page is from) has landed. */
       changed,
       read: (workspace: string): Promise<LinkPagePublication> =>
-        call((options) => profile.publication({ workspace }, options)).catch((error: unknown) => {
+        call((options) => profile.publication({ workspace, ...page }, options)).catch((error: unknown) => {
           throw toDataError(error);
         }),
       publish: (workspace: string): Promise<LinkPagePublication> =>
-        call((options) => profile.publish({ workspace, mutationId: given.mintId() }, options)).catch(
+        call((options) => profile.publish({ workspace, ...page, mutationId: given.mintId() }, options)).catch(
           (error: unknown) => {
             throw toDataError(error);
           },
         ),
       discard: async (workspace: string): Promise<LinkPagePublication> => {
         const answer = await call((options) =>
-          profile.discard({ workspace, mutationId: given.mintId() }, options),
+          profile.discard({ workspace, ...page, mutationId: given.mintId() }, options),
         ).catch((error: unknown) => {
           throw toDataError(error);
         });
@@ -1154,12 +1169,12 @@ export function openLinkPage(given: {
         return answer;
       },
       versions: (workspace: string): Promise<PageVersionList> =>
-        call((options) => profile.versions({ workspace }, options)).catch((error: unknown) => {
+        call((options) => profile.versions({ workspace, ...page }, options)).catch((error: unknown) => {
           throw toDataError(error);
         }),
       restore: async (workspace: string, version: number): Promise<LinkPagePublication> => {
         const answer = await call((options) =>
-          profile.restore({ workspace, mutationId: given.mintId(), version }, options),
+          profile.restore({ workspace, ...page, mutationId: given.mintId(), version }, options),
         ).catch((error: unknown) => {
           throw toDataError(error);
         });

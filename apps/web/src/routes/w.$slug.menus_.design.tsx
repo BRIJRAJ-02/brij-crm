@@ -1,7 +1,7 @@
 import { isDataError, type MenuStore } from '@crm/data';
 import { EmptyState, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { ComingScreen } from '../features/hospitality/ComingScreen.tsx';
+import { AppOffScreen } from '../features/hospitality/AppOffScreen.tsx';
 import { isPageInstalled } from '../features/hospitality/pages.ts';
 import { DesignScreen } from '../features/menus/DesignScreen.tsx';
 import { strings } from '../features/menus/strings.ts';
@@ -42,7 +42,7 @@ function PageRoute() {
   const { isInstalled, store, businessName, hasBusiness } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { toasts } = Route.useRouteContext();
-  if (!isInstalled || store === undefined) return <ComingScreen slug={slug} page="menus" isInstalled={false} />;
+  if (!isInstalled || store === undefined) return <AppOffScreen slug={slug} page="menus" />;
   return (
     <DesignScreen
       store={store}

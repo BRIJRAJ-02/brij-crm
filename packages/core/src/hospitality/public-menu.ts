@@ -1,5 +1,5 @@
 // The guest menu's door and read (spec 0065, H1, AC-6528, AC-6531): a menu key names a place through
-// `crm_menu_by_key` (ids only, and only while the workspace is live, has early access and has Menu installed), then
+// `crm_menu_by_key` (ids only, and only while the workspace is live and Menu is on), then
 // one transaction on that workspace, under its row level security, reads the place's latest published snapshot (never
 // the draft), the items sold out now, the header and the brand. Nothing of a member, a guest, a draft or another
 // place is read.
@@ -77,7 +77,7 @@ export interface MenuEntry {
 
 /**
  * The workspace and place a guest menu's key names, or undefined: a malformed key never reaches the database, and an
- * unknown key, a deleted workspace, one without early access or with Menu removed all answer the same nothing.
+ * unknown key, a deleted workspace or one with Menu off all answer the same nothing.
  */
 export async function enterMenuPage(deps: { readonly db: Database }, key: string): Promise<MenuEntry | undefined> {
   if (!isMenuKey(key)) return undefined;

@@ -1340,10 +1340,45 @@
       "breakpoints": true
     },
     {
+      "idx": 191,
+      "version": "7",
+      "when": 1795700012000,
+      "tag": "0191_team_link_pages",
+      "breakpoints": true
+    },
+    {
       "idx": 192,
       "version": "7",
-      "when": 1795700020000,
-      "tag": "0192_properties",
+      "when": 1795700013000,
+      "tag": "0192_partner_connect",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1795700014000,
+      "tag": "0193_managed_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1795700015000,
+      "tag": "0194_partner_embed",
+      "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1795700016000,
+      "tag": "0195_business_apps_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1795700017000,
+      "tag": "0196_properties",
       "breakpoints": true
     }
   ]

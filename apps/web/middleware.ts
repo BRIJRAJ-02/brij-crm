@@ -44,6 +44,30 @@ export const PUBLIC_HOST_PATH = new RegExp(
   `^(?:/(?:b|f|m|r|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:embed\\.js|favicon\\.ico|layers\\.css|theme-boot\\.js)|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE}(?:/${SLUG})?/?)$`,
 );
 
+/** public-paths.ts's EMBED_PAGE_PATH: an embedded screen's page, `/embed/<clientId>/…` (spec 0070, AC-7032). */
+export const EMBED_PAGE_PATH = /^\/embed\/(tfp_[A-Za-z0-9_-]{22})\/.*$/;
+
+/**
+ * The app's own policy (vercel.json's first header rule) with its `frame-ancestors` left for an embedded screen to
+ * fill: middleware.test.ts keeps it equal to vercel.json's, apart from that one directive.
+ */
+export const EMBED_PAGE_POLICY_BASE =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app wss://brij-crm-centrifugo.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'";
+
+/** An origin as the console stores a frame origin: `https://host[:port]`, or http on a loopback host. */
+const FRAME_ORIGIN =
+  /^(?:https:\/\/[a-z0-9.-]+(?::\d{1,5})?|http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?)$/;
+
+/**
+ * An embedded screen's policy (spec 0070, AC-7032): the app's, framed only by the partner's registered origins, or by
+ * nothing (`'none'`) when it has none, or they couldn't be read. An origin with anything but an origin's characters is
+ * dropped, so nothing the registry holds can add a directive.
+ */
+export function embedPagePolicy(origins: readonly string[]): string {
+  const allowed = origins.filter((origin) => FRAME_ORIGIN.test(origin));
+  return `${EMBED_PAGE_POLICY_BASE}; frame-ancestors ${allowed.length === 0 ? "'none'" : allowed.join(' ')}`;
+}
+
 /** public-paths.ts's CRAWL_FILES: the public origin's crawl files, each answered by the API (spec 0061, AC-6123). */
 export const CRAWL_FILES: Readonly<Record<string, string>> = {
   '/robots.txt': '/api/public/robots.txt',
@@ -185,7 +209,39 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
   return origin === undefined || origin === '' ? 'function' : 'proxy';
 }
 
-export default function middleware(request: Request): Response {
+/**
+ * The origins a partner may frame its screens in, read from the API (`/api/public/partners/<clientId>/frame`),
+ * vouched for as any API request is; none when it can't be read, so the page refuses every frame rather than any.
+ */
+async function frameOriginsOf(request: Request, clientId: string): Promise<readonly string[]> {
+  try {
+    const headers: Record<string, string> = {};
+    const edgeSecret = process.env.EDGE_SECRET;
+    if (edgeSecret !== undefined && edgeSecret !== '') headers[EDGE_HEADER] = edgeSecret;
+    const answer = await fetch(new URL(`/api/public/partners/${clientId}/frame`, request.url), {
+      headers,
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!answer.ok) return [];
+    const body: unknown = await answer.json();
+    const listed = typeof body === 'object' && body !== null && 'frameOrigins' in body ? body.frameOrigins : [];
+    return Array.isArray(listed) ? listed.filter((each): each is string => typeof each === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** An embedded screen's page, with the policy its partner's registered origins make. */
+async function embedPage(request: Request, clientId: string): Promise<Response> {
+  return next({
+    headers: {
+      'content-security-policy': embedPagePolicy(await frameOriginsOf(request, clientId)),
+      'cache-control': 'no-store',
+    },
+  });
+}
+
+export default function middleware(request: Request): Response | Promise<Response> {
   const asked = new URL(request.url);
   // A crawl file is the API's own answer at its public path (spec 0061, AC-6123), vouched for as any API request is.
   const crawl = CRAWL_FILES[asked.pathname];
@@ -202,6 +258,10 @@ export default function middleware(request: Request): Response {
     });
   const home = publicHostRedirect(url, process.env, request.headers.get('cookie') ?? undefined);
   if (home !== undefined) return moved(home);
+  // An embedded screen's page (spec 0070, AC-7032): the app's own page, which only the partner's registered origins
+  // may frame. Never cached, since its policy follows the registry.
+  const embedded = EMBED_PAGE_PATH.exec(url.pathname)?.[1];
+  if (embedded !== undefined) return embedPage(request, embedded);
   if (!isApiPath(url.pathname)) {
     // The API is never a handle address, and is answered below whatever happens, so it is never moved from here.
     const booking = handleHostRedirect(url, process.env);
