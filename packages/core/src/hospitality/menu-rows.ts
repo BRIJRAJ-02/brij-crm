@@ -2,7 +2,7 @@
 // editor's draft (`draftOf`) and into each place's published snapshot (`snapshotFor`), both pure, and kept whole in
 // `menu_drafts.published` at Publish so Discard can put them back (`restoreMenuRows`). Sold out is never part of what
 // Discard restores: it is live, not drafted (AC-6526). Every read and restore is one property's (spec 0065 H7): its
-// menus, its dish library, its option groups and its photos (migration 0198).
+// menus, its dish library, its option groups and its photos (migration 0199).
 import {
   ALLERGEN_LEVELS,
   DIET_MARKS,

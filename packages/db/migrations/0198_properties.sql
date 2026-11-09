@@ -1,6 +1,6 @@
 -- Properties, slice 1 (spec 0065 H7, AC-6512 to AC-6515), invisible to everyone: `business_profiles` becomes
 -- `properties`, gains an id and a position and loses the one per workspace rule, and everything a property owns names
--- it. Numbered 0197, after 0196 (page only people).
+-- it. Numbered 0198, after 0197 (page photos).
 --
 -- What changes:
 -- * `properties`: the old table renamed in place, so its row level security, grants and rows stay. New columns: `id`,

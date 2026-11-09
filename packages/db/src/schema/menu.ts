@@ -132,7 +132,7 @@ export const menuPhotos = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose dish or look shows it (spec 0065 H7, migration 0198). */
+    /** The business whose dish or look shows it (spec 0065 H7, migration 0199). */
     propertyId: uuid('property_id').notNull(),
     largePath: text('large_path').notNull(),
     smallPath: text('small_path').notNull(),
@@ -146,7 +146,7 @@ export const menuPhotos = pgTable(
     foreignKey({ name: 'menu_photos_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
-    // Deferrable, initially deferred, in the SQL (migration 0198), as Drizzle can't say: a workspace's delete cascades
+    // Deferrable, initially deferred, in the SQL (migration 0199), as Drizzle can't say: a workspace's delete cascades
     // to both sides in whichever order, and a business with rows can't go (at commit).
     foreignKey({
       name: 'menu_photos_property',
@@ -167,7 +167,7 @@ export const menuItems = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose library holds it (spec 0065 H7, migration 0198): its price is in that business's currency. */
+    /** The business whose library holds it (spec 0065 H7, migration 0199): its price is in that business's currency. */
     propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     description: text('description'),
@@ -198,7 +198,7 @@ export const menuItems = pgTable(
     foreignKey({ name: 'menu_items_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
-    // Deferrable, initially deferred, in the SQL (migration 0198), as Drizzle can't say: a workspace's delete cascades
+    // Deferrable, initially deferred, in the SQL (migration 0199), as Drizzle can't say: a workspace's delete cascades
     // to both sides in whichever order, and a business with rows can't go (at commit).
     foreignKey({
       name: 'menu_items_property',
@@ -206,7 +206,7 @@ export const menuItems = pgTable(
       foreignColumns: [properties.workspaceId, properties.id],
     }),
     // A dish shows only its own business's photo. The photo going sets `photo_id` alone null: `on delete set null
-    // (photo_id)` in the SQL (migration 0198), which Drizzle can't say; a plain set null would null `property_id` too.
+    // (photo_id)` in the SQL (migration 0199), which Drizzle can't say; a plain set null would null `property_id` too.
     foreignKey({
       name: 'menu_items_photo',
       columns: [t.workspaceId, t.photoId, t.propertyId],
@@ -288,7 +288,7 @@ export const menuOptionGroups = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** The business whose dishes offer it (spec 0065 H7, migration 0198). */
+    /** The business whose dishes offer it (spec 0065 H7, migration 0199). */
     propertyId: uuid('property_id').notNull(),
     name: text('name').notNull(),
     rule: text('rule').notNull(),
@@ -305,7 +305,7 @@ export const menuOptionGroups = pgTable(
       columns: [t.workspaceId],
       foreignColumns: [workspaces.id],
     }).onDelete('cascade'),
-    // Deferrable, initially deferred, in the SQL (migration 0198), as Drizzle can't say: a workspace's delete cascades
+    // Deferrable, initially deferred, in the SQL (migration 0199), as Drizzle can't say: a workspace's delete cascades
     // to both sides in whichever order, and a business with rows can't go (at commit).
     foreignKey({
       name: 'menu_option_groups_property',
@@ -401,7 +401,7 @@ export const menuVersions = pgTable(
 );
 
 /**
- * The draft's state, one row a property (AC-6525; spec 0065 H7, migration 0198): how many changes wait for Publish, when it last published, and
+ * The draft's state, one row a property (AC-6525; spec 0065 H7, migration 0199): how many changes wait for Publish, when it last published, and
  * the rows as published (`published`), which Discard puts back, and whether guests see it (`hidden`).
  */
 export const menuDrafts = pgTable(
@@ -422,7 +422,7 @@ export const menuDrafts = pgTable(
     foreignKey({ name: 'menu_drafts_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
-    // Deferrable, initially deferred, in the SQL (migration 0198), as Drizzle can't say: a workspace's delete cascades
+    // Deferrable, initially deferred, in the SQL (migration 0199), as Drizzle can't say: a workspace's delete cascades
     // to both sides in whichever order, and a business with rows can't go (at commit).
     foreignKey({
       name: 'menu_drafts_property',

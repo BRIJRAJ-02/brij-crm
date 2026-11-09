@@ -1,5 +1,5 @@
 -- Properties, slice 3 (spec 0065 H7, AC-6592, AC-6593): each business has its own public page at its own handle, in
--- the one shared handle namespace. Numbered 0199, after 0198 (property menus).
+-- the one shared handle namespace. Numbered 0200, after 0199 (property menus).
 --
 -- What changes:
 -- * `property_handles`: every business handle a workspace holds names the business (property) it belongs to, current
@@ -16,7 +16,7 @@
 -- * `auth.business_listings` is per business: `property_id`, keyed (workspace_id, property_id). `crm_list_business`
 --   takes the business; with none it unlists the whole workspace (apps off, workspace deleted).
 --
--- While the deploy rolls out and after a rollback, the old code's business page writes are already refused by 0197;
+-- While the deploy rolls out and after a rollback, the old code's business page writes are already refused by 0198;
 -- its Publish now also misses the old four argument `crm_list_business`. Public reads are unaffected: the old code
 -- reads the first business's page, which these rows still name.
 --

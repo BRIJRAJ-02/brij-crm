@@ -85,7 +85,7 @@ export const businessPages = pgTable(
 
 /**
  * Every business handle a workspace holds or held, and the business (property) it belongs to (spec 0065 H7, AC-6592,
- * migration 0199): `auth.public_handles` says which workspace holds a handle, this says which of its businesses, so the
+ * migration 0200): `auth.public_handles` says which workspace holds a handle, this says which of its businesses, so the
  * public lookup finds the right page and an old handle keeps finding it. Goes with its business.
  */
 export const propertyHandles = pgTable(

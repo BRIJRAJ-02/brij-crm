@@ -1,5 +1,5 @@
 -- Properties, slice 2b (spec 0065 H7, AC-6517 to AC-6519): each business has its own menu library and its own draft.
--- Numbered 0198, after 0197 (properties).
+-- Numbered 0199, after 0198 (properties).
 --
 -- What changes:
 -- * `menu_items`, `menu_photos` and `menu_option_groups` gain `property_id` (not null), so the per business limits
@@ -8,7 +8,7 @@
 --   else the first business; an option group to the business of the first dish offering it, else the first; a photo to
 --   the business whose look names it as a cover, else the business of the first dish showing it, else the first. Today
 --   every workspace in production has one business, so each of these is that one.
--- * Where a workspace already has two businesses (a preview or a dev database since 0197), what its draft last
+-- * Where a workspace already has two businesses (a preview or a dev database since 0198), what its draft last
 --   published was the whole workspace's, so Discard has nothing of one business's own to go back to: it is cleared.
 -- * A dish's photo is its own business's: `menu_items_photo` becomes a composite key to `menu_photos`, setting only
 --   `photo_id` null when the photo goes.
@@ -17,7 +17,7 @@
 -- * A menu's position counts within its business, renumbered here.
 --
 -- While the deploy rolls out and after a rollback, the old code still runs: `crm_first_property_id()` is the new
--- columns' default, as in 0197, so an old insert lands on the first business. The old code's `on conflict
+-- columns' default, as in 0198, so an old insert lands on the first business. The old code's `on conflict
 -- (workspace_id)` write to `menu_drafts` (every menu edit counts a change through it) is refused during that window,
 -- with nothing written: the deploy window is short, and the menu editor says so and keeps nothing half done.
 --
@@ -33,7 +33,7 @@ alter table menu_option_groups add column property_id uuid;
 --> statement-breakpoint
 alter table menu_drafts add column property_id uuid;
 --> statement-breakpoint
--- Every step from here to `row_security = on` reads every workspace's rows, as the owner, like 0197.
+-- Every step from here to `row_security = on` reads every workspace's rows, as the owner, like 0198.
 set local row_security = off;
 --> statement-breakpoint
 update menu_items i set property_id = owner.property_id
