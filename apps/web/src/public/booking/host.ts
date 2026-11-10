@@ -4,6 +4,7 @@
 // and named "Team of 6" for screen readers.
 import type { PublicBookingPage } from '@crm/data/booking';
 import type { BookingHost, PageBrand } from '@crm/ui/public-booking';
+import { bookingTemplate } from './template.ts';
 import { strings } from './strings.ts';
 
 /**
@@ -71,7 +72,7 @@ export function railBrand(page: Pick<PublicBookingPage, 'publicKey' | 'brand' | 
 } {
   const version = page.brand?.logo;
   // The workspace's template (spec 0068, AC-6804), which the frame wears whether or not there is a logo.
-  const template = page.brand?.template;
+  const template = bookingTemplate(page.brand?.template);
   const withTemplate = template === undefined ? {} : { template };
   if (version === undefined || !PAGE_KEY.test(page.publicKey) || !IMAGE_VERSION.test(version)) {
     return template === undefined ? {} : { brand: withTemplate };

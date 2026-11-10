@@ -6,4 +6,6 @@ export const strings = {
   leaveText: 'Your changes here won’t be saved.',
   leaveStay: 'Keep editing',
   leaveGo: 'Leave without saving',
+  leaveDiscard: 'Discard',
+  leaveSave: 'Save',
 } as const;

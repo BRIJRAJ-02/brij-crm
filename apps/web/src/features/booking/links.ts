@@ -17,36 +17,44 @@ export const managedPageHref = (slug: string, templateId: string) => `/w/${slug}
 export const newManagedPageHref = (slug: string) => `/w/${slug}/captures/links?new=managed`;
 
 /**
- * The booking page editor's tabs, in order (22 Oct 2026); Hosts shows on a round robin page only, straight after Page,
- * since a team page's hosts are what make it bookable (6 November 2026). Appearance (T21, 5 November 2026) holds the
- * page's look in a tab of its own, as a form's editor does.
+ * The booking page editor's sections, in the order its grouped list shows them (the owner's mock of 9 November 2026):
+ * Meeting (Details, Hosts, Hours and limits), Guests (Questions, After booking), Page (Look, Share) and Activity
+ * (Bookings, Insights). Hosts shows on a team page only.
  */
 export const PAGE_TABS = [
-  'page',
+  'details',
   'hosts',
-  'meeting',
-  'questions',
   'hours',
-  'appearance',
+  'questions',
+  'booking',
+  'look',
   'share',
   'bookings',
   'insights',
 ] as const;
-/** One of the editor's tabs, as `?tab=` holds it. */
+/** One of the editor's sections, as `?tab=` holds it. */
 export type PageTab = (typeof PAGE_TABS)[number];
 
-/** A `?tab=` value as the editor's tab: Page for anything else. */
-export const pageTabOf = (value: unknown): PageTab =>
-  // Limits joined Hours as Availability (the bookings area, 4 November 2026): an old `?tab=limits` link lands there.
-  value === 'limits'
-    ? 'hours'
-    : typeof value === 'string' && (PAGE_TABS as readonly string[]).includes(value)
-      ? (value as PageTab)
-      : 'page';
+/**
+ * The sections the earlier tabs moved into (9 November 2026), so every old link still opens where its settings are:
+ * Page and Meeting to Details, Appearance to Look, and Limits (joined with Hours on 4 November 2026) to Hours.
+ */
+const OLD_TABS: Readonly<Record<string, PageTab>> = {
+  page: 'details',
+  meeting: 'details',
+  appearance: 'look',
+  limits: 'hours',
+};
 
-/** One page's editor, optionally at a tab (`?tab=hours`); Page, the first, needs none. */
+/** A `?tab=` value as the editor's section: Details for anything else. */
+export const pageTabOf = (value: unknown): PageTab =>
+  typeof value !== 'string'
+    ? 'details'
+    : (OLD_TABS[value] ?? ((PAGE_TABS as readonly string[]).includes(value) ? (value as PageTab) : 'details'));
+
+/** One page's editor, optionally at a section (`?tab=hours`); Details, the first, needs none. */
 export const pageEditorHref = (slug: string, pageId: string, tab?: PageTab) =>
-  `/w/${slug}/captures/links/${pageId}${tab === undefined || tab === 'page' ? '' : `?tab=${tab}`}`;
+  `/w/${slug}/captures/links/${pageId}${tab === undefined || tab === 'details' ? '' : `?tab=${tab}`}`;
 
 /** The Availability tab's query: whose schedules (`member`, spec 0035 AC-971) and which one (`schedule`); none for the reader's own default. */
 const availabilityQuery = (member: string | undefined, schedule?: string) => {

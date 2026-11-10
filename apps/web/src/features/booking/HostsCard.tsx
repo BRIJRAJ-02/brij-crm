@@ -1,27 +1,39 @@
 // Brief
-// Purpose: a round robin page's Hosts (spec 0029, AC-732; spec 0037, AC-1319, AC-1323): the groups it books one host from, who is in them, and fixed hosts who attend every meeting.
-// Main task: see who can be booked and whose calendar is missing; pick up to 3 groups, add a fixed host, and choose where a reschedule goes; each host change saves at once.
-// A workspace link (30 Oct 2026) leads with one switch, "Everyone in the workspace, including people who join later"
-// (Cal.com's "Add all team members"): on, it books "Everyone on the roster" and nothing else shows; off, the pickers.
-// Leaves out: a rotation's own members and rules (Settings › Scheduling › Round robin, linked here), and each member's hours (their schedules).
+// Purpose: a team page's Hosts (spec 0029, AC-732; spec 0037, AC-1319, AC-1323, AC-1388; the owner's mock of 9 November
+// 2026): who meets the guest, the teams it books one person from and who in them can be booked, who always joins, and
+// how turns work (where a reschedule goes, and whether the page books only through a routing form).
+// Main task: see who can be booked and whose calendar is missing; add up to 3 teams and up to 7 hosts who always join;
+// pick where a reschedule goes. Each host change, and Only book through a routing form, saves at once; the reschedule
+// rule waits for Save changes with the page's other settings.
+// A workspace link (30 Oct 2026) leads with one switch, Include everyone in the workspace (Cal.com's "Add all team
+// members"): on, it books "Everyone on the roster" and nothing else shows; off, the pickers.
+// Leaves out: a team's own members, weights and how it picks (Bookings settings › Teams, linked here), and each
+// member's hours (their schedules). Collective pages can't be made, so Who meets the guest only says which it is.
 import { isDataError, type BookingPageView, type DataLayer, type MemberSummary, type RotationView } from '@crm/data';
 import {
+  Avatar,
   Button,
+  ButtonLink,
   Callout,
   Card,
-  Link,
+  InfoTip,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   Modal,
-  Radio,
-  RadioGroup,
+  RecordChip,
+  SegmentedControl,
   Select,
-  SettingsStack,
+  SettingsRow,
   Switch,
   Table,
+  Tooltip,
   type SelectItem,
   type TableColumn,
-  RecordChip,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { strings as routingStrings } from '../routing/strings.ts';
 import { CalendarHealthChip, useCalendarHealth, useSchedulingStore } from './CalendarHealth.tsx';
 import { strings } from './rotation-strings.ts';
 import { roundRobinHref } from './links.ts';
@@ -30,27 +42,26 @@ import { teamOnPage } from './team-readiness.ts';
 /** The most fixed hosts, rotations, and hosts in all (spec 0037's numbers; the server checks them too). */
 const LIMITS = { fixed: 7, rotations: 3, hosts: 8 } as const;
 
-/** Props for the Hosts card. */
+/** Props for the Hosts section. */
 export interface HostsCardProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly page: BookingPageView;
-  /** The workspace's active members, for the fixed host picker. */
+  /** The workspace's active members, for Add host. */
   readonly people: readonly MemberSummary[];
-  /** The rotations the reader may see. */
+  /** The rotations (teams) the reader may see. */
   readonly rotations: readonly RotationView[];
   readonly isLocked: boolean;
+  /** The reader's own member id, so their row reads "(you)". */
+  readonly meId?: string;
   /** The draft's reschedule rule, saved with the page's other settings. */
   readonly rescheduleHost: 'same' | 'rotation';
   readonly onRescheduleChange: (value: 'same' | 'rotation') => void;
   /** A host change saved: the page as the server now has it. */
   readonly onSaved: (page: BookingPageView) => void;
+  /** The page's routing rules (RulesCard), drawn after How turns work. */
+  readonly rules?: ReactNode;
 }
-
-const COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.fixedHosts, isRowHeader: true },
-  { id: 'actions', label: strings.hostActions, isLabelHidden: true, align: 'end' },
-];
 
 const WHO_COLUMNS: readonly TableColumn[] = [
   { id: 'name', label: strings.columns.member, isRowHeader: true },
@@ -60,7 +71,11 @@ const WHO_COLUMNS: readonly TableColumn[] = [
 /** The most people listed before "and N more": a roster can hold the whole workspace. */
 const WHO_SHOWN = 8;
 
-/** The card. */
+/** A team's way of picking, as Next booking goes to says it. */
+const pickWord = (strategy: RotationView['strategy'] | undefined) =>
+  strategy === 'priority' ? strings.host.priority : strings.host.fewest;
+
+/** The Hosts section: who meets the guest, Teams, Always included, How turns work, then the routing rules. */
 export function HostsCard({
   data,
   slug,
@@ -68,16 +83,22 @@ export function HostsCard({
   people,
   rotations,
   isLocked,
+  meId,
   rescheduleHost,
   onRescheduleChange,
   onSaved,
+  rules,
 }: HostsCardProps) {
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  // Removing a host or a rotation ends something, so it asks first (house rule).
+  // Removing a host or a team ends something, so it asks first (house rule).
   const [confirming, setConfirming] = useState<
     { readonly kind: 'fixed' | 'rotation'; readonly id: string } | undefined
   >(undefined);
+  // Which team's people show under it.
+  const [openTeam, setOpenTeam] = useState<string | undefined>(undefined);
+  // Only book through a routing form, as switched before the server answered.
+  const [formOnlyShown, setFormOnlyShown] = useState<boolean | undefined>(undefined);
   const fixed = page.hosts?.fixed ?? [];
   const linked = page.hosts?.rotations ?? [];
   const nameOf = (memberId: string) => people.find((person) => person.id === memberId)?.name ?? '';
@@ -89,24 +110,16 @@ export function HostsCard({
   const followsEveryone = roster !== undefined && fixed.length === 0 && linked.length === 1 && linked[0] === roster.id;
   const [isPicking, setPicking] = useState(false);
   const isEveryone = isWorkspace && followsEveryone && !isPicking;
-  // Who the page's groups hold, each once, with their calendars through the reader's See reach (as Round robin shows).
   const { groups } = teamOnPage(page, rotations);
-  const everyRow = groups.flatMap((group) => group.members);
-  const groupPeople = everyRow
-    .filter((member, at) => everyRow.findIndex((each) => each.memberId === member.memberId) === at)
-    // On in any of the page's groups is on: the same count the page's own readiness takes.
-    .map((member) => ({
-      ...member,
-      isOn: everyRow.some((each) => each.memberId === member.memberId && each.isOn),
-    }));
   const healthStore = useSchedulingStore(data);
   const health = useCalendarHealth(
     healthStore,
     slug,
-    groupPeople.map((member) => member.memberId),
+    groups.flatMap((group) => group.members.map((member) => member.memberId)),
   );
-  // Nothing else to add: the Add a group picker would open on an empty list.
-  const hasOtherGroups = rotations.some((each) => !linked.includes(each.id));
+  const teamsLeft = rotations.filter((each) => !linked.includes(each.id) && each.follows !== 'everyone');
+  const peopleLeft = people.filter((person) => !fixed.includes(person.id));
+  const formOnly = formOnlyShown ?? page.formOnly;
 
   /** Saves the hosts; true once the server has them. */
   const save = (next: {
@@ -152,29 +165,54 @@ export function HostsCard({
       if (saved) setConfirming(undefined);
     });
   };
-  const rotationItems = (keep?: string): SelectItem[] =>
+  const switchFormOnly = (next: boolean) => {
+    setFormOnlyShown(next);
+    setSaving(true);
+    setFailure(undefined);
+    data.bookingPages.update(slug, page.id, { formOnly: next }).then(
+      (saved) => {
+        setSaving(false);
+        setFormOnlyShown(undefined);
+        onSaved(saved);
+      },
+      (error: unknown) => {
+        setSaving(false);
+        setFormOnlyShown(undefined);
+        setFailure(isDataError(error) ? error.message : routingStrings.formOnlyFailed);
+      },
+    );
+  };
+  const teamItems = (keep: string): SelectItem[] =>
     rotations
-      .filter((each) => each.id === keep || !linked.includes(each.id))
+      .filter((each) => each.id === keep || (!linked.includes(each.id) && each.follows !== 'everyone'))
       .map((each) => ({
         id: each.id,
         label: each.name,
-        description: strings.summary(each.strategy, each.windowDays, each.pages),
+        description: strings.peopleCount(each.members.length),
       }));
-  const peopleLeft: SelectItem[] = people
-    .filter((person) => !fixed.includes(person.id))
-    .map((person) => ({ id: person.id, label: person.name, description: person.email }));
+  const isTeamPage = page.kind === 'round_robin';
+  const firstTeam = rotations.find((each) => each.id === linked[0]);
 
   return (
-    <Card
-      title={strings.hosts}
-      // With everyone on, the switch says who books; the line would only repeat it.
-      {...(isEveryone ? {} : { description: strings.hostsLine(fixed.map(nameOf), linked.map(rotationName)) })}
-      actions={<Link href={roundRobinHref(slug)}>{strings.manageRotations}</Link>}
-    >
-      <SettingsStack>
-        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+    <>
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
+      <Card>
+        <SegmentedControl
+          label={strings.host.whoMeets}
+          isLabelVisible
+          segments={[
+            { value: 'round_robin', label: strings.host.inTurns },
+            { value: 'collective', label: strings.host.together },
+          ]}
+          value={page.kind === 'collective' ? 'collective' : 'round_robin'}
+          isReadOnly
+        />
         {/* Only on the page that books everyone (or was just switched off it): every team page shares the workspace's
-            scope, and on one that books a group, one press would drop its group and its fixed hosts unasked. */}
+            scope, and on one that books a team, one press would drop its team and its hosts unasked. */}
         {isWorkspace && roster !== undefined && (followsEveryone || isPicking) && (
           <Switch
             label={strings.everyoneSwitch}
@@ -196,158 +234,255 @@ export function HostsCard({
           />
         )}
         {!isEveryone && (
-          <>
-            {linked.map((rotationId, index) => (
-              <SettingsStack key={rotationId}>
-                <Select
-                  savesOnPick
-                  label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
-                  items={rotationItems(rotationId)}
-                  value={rotationId}
-                  isReadOnly={isLocked}
-                  isDisabled={isSaving}
-                  onChange={(next) => {
-                    if (next === null || next === rotationId) return;
-                    void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
-                  }}
-                />
-                {!isLocked && linked.length > 1 && (
+          <Card tone="sunken">
+            <p>
+              {strings.host.summary(
+                fixed.map(nameOf).filter((name) => name !== ''),
+                linked.map(rotationName).filter((name) => name !== ''),
+              )}
+            </p>
+          </Card>
+        )}
+      </Card>
+      {!isEveryone && isTeamPage && (
+        <Card
+          title={strings.host.teams}
+          description={strings.host.teamsLine}
+          actions={
+            <>
+              <ButtonLink href={roundRobinHref(slug)} variant="ghost" iconRight="arrow-right">
+                {strings.host.manageTeams}
+              </ButtonLink>
+              {!isLocked && (
+                <MenuTrigger>
                   <Button
-                    variant="ghost"
-                    icon="x"
-                    isDisabled={isSaving}
-                    onPress={() => {
-                      setConfirming({ kind: 'rotation', id: rotationId });
+                    icon="plus"
+                    isDisabled={isSaving || linked.length >= LIMITS.rotations || isFull || teamsLeft.length === 0}
+                  >
+                    {strings.host.addTeam}
+                  </Button>
+                  <Menu
+                    label={strings.host.addTeam}
+                    onAction={(key) => {
+                      void save({ fixed, rotations: [...linked, String(key)] });
                     }}
                   >
-                    {strings.removeRotation(rotationName(rotationId))}
-                  </Button>
-                )}
-              </SettingsStack>
-            ))}
-            {/* Who those groups hold: the page's people, in the one place that shows them. */}
-            {groupPeople.length > 0 && (
-              <Table
-                label={strings.whoIsOn}
-                isScrollable
-                columns={WHO_COLUMNS}
-                rows={groupPeople.slice(0, WHO_SHOWN)}
-                getRowId={(row) => row.memberId}
-                {...(groupPeople.length > WHO_SHOWN ? { footer: strings.andMore(groupPeople.length - WHO_SHOWN) } : {})}
-                renderCell={(row, column) =>
-                  column === 'name' ? (
-                    <>
-                      <RecordChip display={{ type: 'member', id: row.memberId, name: row.name }} isFlat />
-                      <CalendarHealthChip state={health.get(row.memberId)} name={row.name} isQuiet showsHidden />
-                    </>
-                  ) : row.isOn ? (
-                    strings.isOn
-                  ) : (
-                    strings.isOff
-                  )
-                }
-              />
-            )}
-            {linked.length < LIMITS.rotations && (linked.length === 0 || hasOtherGroups) && (
-              <Select
-                savesOnPick
-                label={linked.length === 0 ? strings.rotation : strings.addRotation}
-                {...(isFull ? { hint: strings.hostsFull(LIMITS.hosts) } : {})}
-                placeholder={strings.pickRotation}
-                items={rotationItems()}
-                value={null}
-                isReadOnly={isLocked}
-                isDisabled={isSaving || isFull}
-                onChange={(next) => {
-                  if (next !== null) void save({ fixed, rotations: [...linked, next] });
-                }}
-              />
-            )}
-            <Select
-              savesOnPick
-              label={strings.addFixed}
-              hint={
-                isFull
-                  ? strings.hostsFull(LIMITS.hosts)
-                  : fixed.length >= LIMITS.fixed
-                    ? strings.fixedFull(LIMITS.fixed)
-                    : strings.fixedHint
-              }
-              placeholder={strings.addMemberPlaceholder}
-              items={peopleLeft}
-              isSearchable
-              value={null}
-              isReadOnly={isLocked}
-              isDisabled={isSaving || fixed.length >= LIMITS.fixed || isFull}
-              onChange={(memberId) => {
-                if (memberId !== null) void save({ fixed: [...fixed, memberId], rotations: linked });
-              }}
-            />
-            {fixed.length > 0 && (
-              <Table
-                label={strings.fixedHosts}
-                isScrollable
-                columns={COLUMNS}
-                rows={fixed.map((memberId) => ({ id: memberId }))}
-                getRowId={(row) => row.id}
-                renderCell={(row, column) => {
-                  if (column === 'name') {
-                    return <RecordChip display={{ type: 'member', id: row.id, name: nameOf(row.id) }} isFlat />;
-                  }
-                  if (isLocked) return null;
-                  const index = fixed.indexOf(row.id);
-                  return (
-                    <>
-                      {index > 0 && (
-                        <Button
-                          variant="ghost"
-                          icon="arrow-up"
-                          label={strings.moveUp(nameOf(row.id))}
-                          isDisabled={isSaving}
-                          onPress={() => {
-                            move(index, -1);
-                          }}
-                        />
-                      )}
-                      {index < fixed.length - 1 && (
-                        <Button
-                          variant="ghost"
-                          icon="arrow-down"
-                          label={strings.moveDown(nameOf(row.id))}
-                          isDisabled={isSaving}
-                          onPress={() => {
-                            move(index, 1);
-                          }}
-                        />
-                      )}
-                      <Button
-                        variant="ghost"
-                        icon="x"
-                        label={strings.removeFixed(nameOf(row.id))}
-                        isDisabled={isSaving}
-                        onPress={() => {
-                          setConfirming({ kind: 'fixed', id: row.id });
-                        }}
-                      />
-                    </>
-                  );
-                }}
-              />
-            )}
-          </>
-        )}
-        <RadioGroup
-          label={strings.reschedule}
-          value={rescheduleHost}
-          isReadOnly={isLocked}
-          onChange={(value) => {
-            if (value === 'same' || value === 'rotation') onRescheduleChange(value);
-          }}
+                    {teamsLeft.map((team) => (
+                      <MenuItem key={team.id} id={team.id} description={strings.peopleCount(team.members.length)}>
+                        {team.name}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </MenuTrigger>
+              )}
+            </>
+          }
         >
-          <Radio value="same">{strings.rescheduleSame}</Radio>
-          <Radio value="rotation">{strings.rescheduleRotation}</Radio>
-        </RadioGroup>
-      </SettingsStack>
+          {linked.length === 0 ? (
+            <p>{strings.host.noTeams}</p>
+          ) : (
+            linked.map((rotationId, index) => {
+              const team = rotations.find((each) => each.id === rotationId);
+              const members = team?.members ?? [];
+              const onCount = members.filter((member) => member.isOn).length;
+              const isOpen = openTeam === rotationId;
+              return (
+                <SettingsRow
+                  key={rotationId}
+                  title={team?.name ?? strings.host.teamAt(index)}
+                  control="field"
+                  {...(isOpen && members.length > 0
+                    ? {
+                        description: (
+                          <Table
+                            label={strings.whoIsOn}
+                            isScrollable
+                            columns={WHO_COLUMNS}
+                            rows={members.slice(0, WHO_SHOWN)}
+                            getRowId={(row) => row.memberId}
+                            {...(members.length > WHO_SHOWN
+                              ? { footer: strings.andMore(members.length - WHO_SHOWN) }
+                              : {})}
+                            renderCell={(row, column) =>
+                              column === 'name' ? (
+                                <>
+                                  <RecordChip display={{ type: 'member', id: row.memberId, name: row.name }} isFlat />
+                                  <CalendarHealthChip
+                                    state={health.get(row.memberId)}
+                                    name={row.name}
+                                    isQuiet
+                                    showsHidden
+                                  />
+                                </>
+                              ) : row.isOn ? (
+                                strings.isOn
+                              ) : (
+                                strings.isOff
+                              )
+                            }
+                          />
+                        ),
+                      }
+                    : {})}
+                >
+                  <Select
+                    savesOnPick
+                    label={strings.host.teamAt(index)}
+                    isLabelHidden
+                    items={teamItems(rotationId)}
+                    value={rotationId}
+                    isReadOnly={isLocked}
+                    isDisabled={isSaving}
+                    onChange={(next) => {
+                      if (next === null || next === rotationId) return;
+                      void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    iconRight={isOpen ? 'chevron-up' : 'chevron-down'}
+                    isExpanded={isOpen}
+                    onPress={() => setOpenTeam(isOpen ? undefined : rotationId)}
+                  >
+                    {strings.host.bookable(onCount, members.length)}
+                  </Button>
+                  {!isLocked && linked.length > 1 && (
+                    <Tooltip content={strings.host.stopTeamTip}>
+                      <Button
+                        variant="ghost-danger"
+                        icon="trash"
+                        label={strings.host.stopTeam(team?.name ?? '')}
+                        isDisabled={isSaving}
+                        onPress={() => setConfirming({ kind: 'rotation', id: rotationId })}
+                      />
+                    </Tooltip>
+                  )}
+                </SettingsRow>
+              );
+            })
+          )}
+        </Card>
+      )}
+      {!isEveryone && (
+        <Card
+          title={strings.host.always}
+          description={strings.host.alwaysLine}
+          {...(isLocked
+            ? {}
+            : {
+                actions: (
+                  <MenuTrigger>
+                    <Button
+                      icon="plus"
+                      isDisabled={isSaving || fixed.length >= LIMITS.fixed || isFull || peopleLeft.length === 0}
+                    >
+                      {strings.host.addHost}
+                    </Button>
+                    <Menu
+                      label={strings.host.addHost}
+                      onAction={(key) => {
+                        void save({ fixed: [...fixed, String(key)], rotations: linked });
+                      }}
+                    >
+                      {peopleLeft.map((person) => (
+                        <MenuItem
+                          key={person.id}
+                          id={person.id}
+                          leading={<Avatar name={person.name} size="xs" isDecorative />}
+                          description={person.email}
+                        >
+                          {person.name}
+                        </MenuItem>
+                      ))}
+                    </Menu>
+                  </MenuTrigger>
+                ),
+              })}
+        >
+          {fixed.length === 0 ? (
+            <p>{strings.host.noOne}</p>
+          ) : (
+            fixed.map((memberId, index) => (
+              <SettingsRow
+                key={memberId}
+                title={memberId === meId ? strings.host.you(nameOf(memberId)) : nameOf(memberId)}
+                leading={<Avatar name={nameOf(memberId)} size="md" isDecorative />}
+                leadingAlign="center"
+              >
+                {!isLocked && (
+                  <MenuTrigger>
+                    <Button variant="ghost" icon="ellipsis" label={strings.host.hostActions(nameOf(memberId))} />
+                    <Menu
+                      label={strings.host.hostActions(nameOf(memberId))}
+                      onAction={(key) => {
+                        if (key === 'up') move(index, -1);
+                        if (key === 'down') move(index, 1);
+                        if (key === 'remove') setConfirming({ kind: 'fixed', id: memberId });
+                      }}
+                    >
+                      <MenuItem id="up" icon="arrow-up" isDisabled={index === 0}>
+                        {strings.host.moveUp}
+                      </MenuItem>
+                      <MenuItem id="down" icon="arrow-down" isDisabled={index === fixed.length - 1}>
+                        {strings.host.moveDown}
+                      </MenuItem>
+                      <MenuSeparator />
+                      <MenuItem id="remove" icon="trash" isDanger>
+                        {strings.host.remove}
+                      </MenuItem>
+                    </Menu>
+                  </MenuTrigger>
+                )}
+              </SettingsRow>
+            ))
+          )}
+        </Card>
+      )}
+      {isTeamPage && (
+        <Card title={strings.host.turns}>
+          <SettingsRow
+            title={strings.host.nextGoesTo}
+            meta={<InfoTip label={strings.host.nextGoesTo}>{strings.host.setByTeam}</InfoTip>}
+            description={pickWord(firstTeam?.strategy)}
+          />
+          <SettingsRow title={strings.host.ifReschedules}>
+            <MenuTrigger>
+              <Button iconRight="chevron-down" isDisabled={isLocked}>
+                {rescheduleHost === 'same' ? strings.host.keepSame : strings.host.pickAgain}
+              </Button>
+              <Menu
+                label={strings.host.ifReschedules}
+                placement="bottom end"
+                selectionMode="single"
+                selectedKeys={[rescheduleHost]}
+                onSelectionChange={(keys) => {
+                  if (keys.has('same')) onRescheduleChange('same');
+                  if (keys.has('rotation')) onRescheduleChange('rotation');
+                }}
+              >
+                <MenuItem id="same" description={strings.host.keepSameLine}>
+                  {strings.host.keepSame}
+                </MenuItem>
+                <MenuItem id="rotation">{strings.host.pickAgain}</MenuItem>
+              </Menu>
+            </MenuTrigger>
+          </SettingsRow>
+          <SettingsRow
+            title={strings.host.formOnly}
+            meta={<InfoTip label={strings.host.formOnly}>{strings.host.formOnlyHelp}</InfoTip>}
+          >
+            <Switch
+              label={strings.host.formOnly}
+              isLabelHidden
+              isSelected={formOnly}
+              isReadOnly={isLocked}
+              isDisabled={isSaving}
+              onChange={switchFormOnly}
+            />
+          </SettingsRow>
+        </Card>
+      )}
+      {isTeamPage && rules}
       <Modal
         title={
           confirming?.kind === 'rotation'
@@ -378,6 +513,6 @@ export function HostsCard({
       >
         {failure ?? (confirming?.kind === 'rotation' ? strings.stopRotationText : strings.removeFixedText)}
       </Modal>
-    </Card>
+    </>
   );
 }

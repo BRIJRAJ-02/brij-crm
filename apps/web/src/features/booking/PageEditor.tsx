@@ -40,33 +40,32 @@ import {
   DescriptionList,
   EditorStatus,
   EmptyState,
-  focusLater,
   Field,
   InfoTip,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   Modal,
   PreviewFrame,
   PreviewLayout,
   Popover,
-  SaveBar,
   SegmentedControl,
   Select,
   SettingsRow,
   SettingsStack,
   Skeleton,
   Switch,
-  TabPanel,
-  Tabs,
   Tooltip,
   TopBar,
+  useKeyboardPlatform,
   ViewOnlyTag,
-  type EditorStatusTone,
-  type SaveBarStatus,
+  type IconName,
   type SelectItem,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { pageHeading } from '../navigation/focus.ts';
-import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCan, useMyName, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { QuestionsSection } from '../questions/QuestionsSection.tsx';
 import { changeQuestion, planNewAttributes, type Questions } from '../questions/questions.ts';
 import { questionsProblem } from '@crm/data/forms';
@@ -84,7 +83,6 @@ import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
 import { hasNoHostsOn } from './team-readiness.ts';
 import { pageFacts } from '../routing/facts.ts';
-import { FormOnlyCard } from './FormOnlyCard.tsx';
 import type { RecordFields } from '../routing/record-fields.ts';
 import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
@@ -94,7 +92,6 @@ import { DaysOff } from './DaysOff.tsx';
 import { WeekCard, WeekCardPending } from './ScheduleEditor.tsx';
 import { useScheduleDraft } from './scheduleDraft.ts';
 import { changed, draftAfterSave } from './pageDraft.ts';
-import { EditorActions } from '../captures/EditorActions.tsx';
 import { bookingsTabHref } from '../bookings/tabs.ts';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
@@ -107,7 +104,6 @@ import {
   pageEditorHref,
   pagePreviewHref,
   roundRobinHref,
-  pageTabOf,
   publicBookingOrigin,
   publicBookingPath,
   publicBookingUrl,
@@ -131,7 +127,8 @@ import { ShareTimesCard } from './ShareTimesCard.tsx';
 import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
-import { strings as socialsStrings } from './socials-strings.ts';
+import { PageStatusMenu } from './PageStatusMenu.tsx';
+import { setPageLive } from './page-status.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -203,45 +200,28 @@ interface PageVersionRow {
   readonly label: string;
 }
 
-/**
- * Where the page stands, as the header's one status says it (the bookings area, 4 November 2026, as a form's does):
- * Draft until its first Publish, Paused, Live · edited while guests don't see some changes yet, else Live.
- */
-function statusOf(
-  page: BookingPageView,
-  hasUnpublished: boolean,
-  cantBeBooked: boolean,
-): { readonly tone: EditorStatusTone; readonly text: string } {
-  if (isDraftPage(page)) return { tone: 'draft', text: publishStrings.statusDraft };
-  if (page.status === 'paused') return { tone: 'paused', text: strings.statusOff };
-  // Live on paper, and nobody can book it: said beside the name, never a plain Live (the owner, 6 November 2026).
-  if (cantBeBooked) return { tone: 'blocked', text: strings.statusCantBook };
-  if (hasUnpublished) return { tone: 'changed', text: publishStrings.statusChanged };
-  return { tone: 'live', text: strings.statusLive };
-}
-
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
-  slug: 'page',
+  slug: 'share',
   profileSection: 'share',
   profilePosition: 'share',
-  description: 'page',
-  isPrivate: 'page',
+  description: 'details',
+  isPrivate: 'share',
   showSocials: 'share',
-  defaultView: 'appearance',
+  defaultView: 'look',
   questions: 'questions',
   answersObjectId: 'questions',
-  fileToCrm: 'meeting',
-  // Spec 0062, L1: what happens after a booking on the meeting's tab, the guests' cutoffs with the other limits.
-  afterBooking: 'meeting',
-  redirectUrl: 'meeting',
-  sendBookingDetails: 'meeting',
-  requiresConfirmation: 'meeting',
+  fileToCrm: 'booking',
+  // Spec 0062, L1: what happens after a booking in After booking, the guests' cutoffs with the other limits.
+  afterBooking: 'booking',
+  redirectUrl: 'booking',
+  sendBookingDetails: 'booking',
+  requiresConfirmation: 'booking',
   cancelCutoffMinutes: 'hours',
   moveCutoffMinutes: 'hours',
-  title: 'meeting',
-  durations: 'meeting',
-  location: 'meeting',
+  title: 'details',
+  durations: 'details',
+  location: 'details',
   rescheduleHost: 'hosts',
   scheduleId: 'hours',
   bufferBefore: 'hours',
@@ -250,6 +230,45 @@ const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   windowDays: 'hours',
   dailyLimit: 'hours',
   slotStep: 'hours',
+};
+
+/** Each section's name, in the editor's list and as its heading (the owner's mock of 9 November 2026). */
+const SECTION_LABELS: Readonly<Record<PageTab, string>> = {
+  details: strings.details,
+  hosts: strings.hostsTab,
+  hours: strings.hoursAndLimits,
+  questions: questionStrings.questions,
+  booking: strings.afterBookingTab,
+  look: strings.lookTab,
+  share: strings.shareTab,
+  bookings: activityStrings.bookingsTab,
+  insights: activityStrings.insightsTab,
+};
+
+/** The group each section sits under in the list: Meeting, Guests, Page and Activity. */
+const SECTION_GROUPS: Readonly<Record<PageTab, string>> = {
+  details: strings.sectionGroups.meeting,
+  hosts: strings.sectionGroups.meeting,
+  hours: strings.sectionGroups.meeting,
+  questions: strings.sectionGroups.guests,
+  booking: strings.sectionGroups.guests,
+  look: strings.sectionGroups.page,
+  share: strings.sectionGroups.page,
+  bookings: strings.sectionGroups.activity,
+  insights: strings.sectionGroups.activity,
+};
+
+/** Each section's icon in the list. */
+const SECTION_ICONS: Readonly<Record<PageTab, IconName>> = {
+  details: 'file-text',
+  hosts: 'users',
+  hours: 'clock',
+  questions: 'list-checks',
+  booking: 'calendar-check',
+  look: 'palette',
+  share: 'send',
+  bookings: 'calendar-days',
+  insights: 'chart-line',
 };
 
 /** The settings the preview's times come from, read from the server: it shows them only once saved. */
@@ -363,6 +382,7 @@ export function PageEditor({
   const [hasShared, setShared] = useState(false);
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const me = useMyName();
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
   // From a managed template (spec 0037, AC-1333, AC-1334): the parts the workspace sets are read only here, and
@@ -384,23 +404,25 @@ export function PageEditor({
   const [isRedirectLeft, setRedirectLeft] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
-  // Publish (spec 0068, AC-6810 to AC-6812): Save keeps the guest facing settings as the page's draft, and the bar at
-  // the head says what guests don't see yet until Publish. What stays instant (AC-6813) is saved as before.
-  const [isPublishing, setPublishing] = useState(false);
-  // The first Publish's moment, "<page> is live" with its link (the forms' live dialog, the same share part).
-  const [liveShown, setLiveShown] = useState<BookingPageView | undefined>(undefined);
-  // Publish pressed with unsaved changes: they save first, and the save that lands publishes.
-  const publishAfterSave = useRef(false);
+  // One Save changes (the owner, 9 November 2026: booking pages work like Calendly's, with no draft or publish): it
+  // writes the guest facing settings as the draft and publishes them at once (spec 0068's data shape, kept), so what
+  // is saved is what guests see. Whoever waits on a save (Save in the leave question) hears how it ended.
+  const saveWaiters = useRef<((isSaved: boolean) => void)[]>([]);
+  const settle = (isSaved: boolean) => {
+    const waiting = saveWaiters.current;
+    saveWaiters.current = [];
+    for (const each of waiting) each(isSaved);
+  };
+  // "Changes saved", once: a newer save's toast replaces the last one rather than stacking.
+  const savedToast = useRef<string | undefined>(undefined);
+  const sayChangesSaved = () => {
+    if (savedToast.current !== undefined) toasts.dismiss(savedToast.current);
+    savedToast.current = toasts.toast({ tone: 'success', message: strings.changesSaved });
+  };
   const [isVersionsOpen, setVersionsOpen] = useState(false);
   const [isVersionsFailed, setVersionsFailed] = useState(false);
-  // The header's ⋯: where focus goes once Publish or the live dialog has left (as the forms editor's `moreRef`).
+  // The header's ⋯: where focus goes once an action from it has left.
   const moreRef = useRef<HTMLButtonElement>(null);
-  // Preview pressed over unsaved changes: the tab it opened, which goes to the preview once the save lands.
-  const previewAfterSave = useRef<Window | undefined>(undefined);
-  const [isDiscardAsked, setDiscardAsked] = useState(false);
-  const [publishProblem, setPublishProblem] = useState<
-    { readonly message: string; readonly field?: string } | undefined
-  >(undefined);
   const [versions, setVersions] = useState<readonly PageVersionRow[] | undefined>(undefined);
   // A version picked while the draft holds changes waits for a yes (spec 0068, AC-6812): restoring replaces them.
   const [restoreAsked, setRestoreAsked] = useState<number | undefined>(undefined);
@@ -436,23 +458,18 @@ export function PageEditor({
     schedule: hours.schedule ?? standIn(page),
     forMember: ownerMember !== undefined,
     reload: () => schedules?.reload(),
-    // Saved shows only for a save that landed; a refused one (another tab saved first) says so and clears it.
+    // A landed save says Changes saved; a refused one (another tab saved first) says why.
     onNotice: (notice) => {
-      setJustSaved(notice.tone === 'success');
-      if (notice.tone !== 'success') toasts.toast(notice);
+      if (notice.tone === 'success') sayChangesSaved();
+      else toasts.toast(notice);
     },
   });
   const changeWeek: typeof week.change = (next) => {
-    setJustSaved(false);
     week.change(next);
   };
   const isWeekDirty = !isLocked && hours.schedule !== undefined && week.isDirty;
   const isDirty = isPageDirty || isWeekDirty;
-  // Changes that wait for Publish (spec 0068, AC-6810): while any are among the unsaved ones, Save says Save draft.
-  const isDraftDirty = isPageDirty && Object.keys(dirty).some((key) => isDraftedKey(key));
-  const [justSaved, setJustSaved] = useState(false);
   const change = (patch: Partial<BookingPageSettings>) => {
-    setJustSaved(false);
     setDraft((current) => ({ ...current, ...patch }));
   };
   // The ready picks plus any custom length the page has saved or the draft holds, so turning one off keeps its chip.
@@ -499,9 +516,30 @@ export function PageEditor({
   // Which lengths the chips refuse (a fifth), said under the chips rather than in the popover.
   const [chipsError, setChipsError] = useState<string | undefined>(undefined);
 
-  // Pause and Resume save at once, apart from the other groups, and their toast offers Undo.
-  const setLive = (status: 'live' | 'paused') => {
-    save({ status });
+  // Live or Hidden (the pill in the header) saves at once, apart from Save changes, and its toast offers Undo. Live on
+  // a page made as a draft and never published publishes it first (`setPageLive`).
+  const setLive = (isLive: boolean) => {
+    setPageLive(data, slug, page, isLive).then(
+      (next) => {
+        setPage(next);
+        setDraft((current) => ({ ...current, status: next.status }));
+        toasts.toast({
+          tone: 'success',
+          message: isLive ? strings.pageCard.madeLive(next.title) : strings.pageCard.madeHidden(next.title),
+          action: { label: capturesStrings.undo, onAction: () => setLive(!isLive) },
+        });
+      },
+      (error: unknown) =>
+        toasts.toast({
+          tone: 'danger',
+          // Why, when the server says: Live with nobody to book was refused without a word (6 November 2026).
+          message: isDataError(error) ? error.message : strings.statusFailed(page.title),
+          // Refused for its hosts: the way to fix it, before the toast goes.
+          ...(isDataError(error) && error.code === 'HOSTS_INVALID'
+            ? { action: { label: strings.goTo(strings.hostsTab), onAction: () => onTabChange('hosts') } }
+            : {}),
+        }),
+    );
   };
   const duplicate = () => {
     data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).then(
@@ -712,77 +750,26 @@ export function PageEditor({
   };
 
   /**
-   * Sends a change: what guests see goes into the page's draft (spec 0068, AC-6810), anything instant (AC-6813: the
-   * status, the address, the profile, privacy, filing) is saved as it always was. The draft goes first: a draft
-   * refused (a locked part, a bad length, a question) stops the save before anything instant has gone live, and a
-   * draft written that an instant part then refuses is only a draft, which guests never see. One answer, the page
-   * as it stands.
+   * Sends a change (the owner, 9 November 2026: one Save changes, live at once): what guests see is written as the
+   * page's draft and published in the same go, through spec 0068's data shape, so nothing waits unseen; anything
+   * instant (AC-6813: the address, the profile, privacy, filing) is saved as it always was. A draft left unpublished
+   * by an earlier editor goes out with the next save. A refused publish keeps the draft, and the save says why.
    */
   const sendSettings = async (patch: Partial<BookingPageSettings>) => {
     const drafted = Object.fromEntries(Object.entries(patch).filter(([key]) => isDraftedKey(key)));
     const instant = Object.fromEntries(Object.entries(patch).filter(([key]) => !isDraftedKey(key)));
     let next = page;
     if (Object.keys(drafted).length > 0) next = await data.bookingPages.saveDraft(slug, page.id, drafted);
+    if ((next.publication?.changes ?? []).length > 0) next = await data.bookingPages.publish(slug, page.id);
     if (Object.keys(instant).length > 0) next = await data.bookingPages.update(slug, page.id, instant);
     return next;
   };
-  /** The page as the server answered a publish, discard or restore: the draft follows, the person's own edits kept. */
-  const takePage = (next: typeof page) => {
-    setPage(next);
-    setDraft((current) => draftAfterSave(settingsOf(next), current));
-    setVersions(undefined);
-  };
-  /**
-   * Publish, as a form's (the bookings area, 4 November 2026): the draft goes to guests, and a page made as a draft
-   * goes live too, its first Publish ending on "<page> is live" with its link; a later one says Published in a toast.
-   * Called with the page a save just answered, so a Publish pressed over unsaved changes publishes what was saved.
-   */
-  const publish = (current: BookingPageView = page) => {
-    publishAfterSave.current = false;
-    if (isPublishing) return;
-    setPublishing(true);
-    setPublishProblem(undefined);
-    const wasDraft = isDraftPage(current);
-    data.bookingPages
-      .publish(slug, current.id)
-      .then((published) => {
-        // What was published shows at once, so a refused go live below never leaves changes on screen that are gone.
-        takePage(published);
-        return wasDraft ? data.bookingPages.update(slug, current.id, { status: 'live' }) : published;
-      })
-      .then(
-        (next) => {
-          takePage(next);
-          setPublishing(false);
-          if (wasDraft) setLiveShown(next);
-          else {
-            toasts.toast({ tone: 'success', message: publishStrings.published(next.title) });
-            // Publish has left the header: focus goes to ⋯ rather than falling to the page, as a form's does.
-            focusLater(() => moreRef.current);
-          }
-        },
-        (error: unknown) => {
-          setPublishing(false);
-          const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
-          setPublishProblem({
-            message: isDataError(error) ? error.message : strings.somethingWrong,
-            ...(field === undefined ? {} : { field }),
-          });
-        },
-      );
-  };
-  /** The page as Discard or Restore left it: the editor shows exactly that, with nothing of its own kept over it. */
+  /** The page as Restore left it: the editor shows exactly that, with nothing of its own kept over it. */
   const resetTo = (next: typeof page) => {
     setPage(next);
     setDraft(settingsOf(next));
     setFailure(undefined);
-    setPublishProblem(undefined);
     setVersions(undefined);
-  };
-  const discardDraft = () => {
-    data.bookingPages
-      .discard(slug, page.id)
-      .then(resetTo, () => toasts.toast({ tone: 'danger', message: publishStrings.discardFailed }));
   };
   const readVersions = () => {
     setVersions(undefined);
@@ -799,36 +786,40 @@ export function PageEditor({
       () => setVersionsFailed(true),
     );
   };
+  // A version comes back as the draft (AC-6812), so Save changes puts it live; over unsaved edits it asks first.
   const restore = (version: number) => {
     data.bookingPages.restore(slug, page.id, version).then(
       (next) => {
         resetTo(next);
-        toasts.toast({ tone: 'success', message: publishStrings.restored(version) });
+        toasts.toast({ tone: 'success', message: strings.versionRestored(version) });
       },
       () => toasts.toast({ tone: 'danger', message: publishStrings.restoreFailed }),
     );
   };
-  // Restoring over changes not published asks first, in the confirm every ending step uses; over none it just runs.
   const askRestore = (version: number) => {
-    if ((page.publication?.changes ?? []).length > 0) setRestoreAsked(version);
+    if (isDirty) setRestoreAsked(version);
     else restore(version);
   };
+  // Settings an earlier editor drafted and never published: the next Save changes puts them live, so Save offers itself.
   const changes = page.publication?.changes ?? [];
-  const problemTab = publishProblem?.field === undefined ? undefined : FIELD_TABS[publishProblem.field];
 
+  /** Sends the unsaved settings; Changes saved once they are live, or the refusal where it happened. */
   const save = (patch: Partial<BookingPageSettings>) => {
-    if (isSaving || Object.keys(patch).length === 0) return;
+    if (isSaving) return;
+    // Nothing of this page's own changed, and nothing an earlier editor left unpublished: nothing to send.
+    if (Object.keys(patch).length === 0 && changes.length === 0) {
+      settle(true);
+      return;
+    }
     setSaving(true);
     setFailure(undefined);
     sendSettings(patch).then(
       (next) => {
         setSaving(false);
         setPage(next);
-        // The server's settings, with the person's own unsaved changes on top; Pause and Resume's status is saved.
+        // The server's settings, with the person's own unsaved changes on top.
         setDraft((current) => draftAfterSave(settingsOf(next), current));
         setChipsError(undefined);
-        // Saved is said for the groups' save; Pause and Resume say theirs in a toast with Undo.
-        const { status } = patch;
         // The attributes this save filed onto, made just before it (or before an earlier save that failed).
         const made = patch.questions === undefined ? [] : madePending.current;
         if (made.length > 0) {
@@ -838,47 +829,14 @@ export function PageEditor({
             message: questionStrings.createdAttributes(made.length, choices.objectName ?? ''),
             action: { label: questionStrings.undo, onAction: () => undoAttributes(made) },
           });
-        }
-        if (status === undefined) {
-          setJustSaved(true);
-          // Publish pressed over unsaved changes: the save landed, so what it saved goes out now.
-          if (publishAfterSave.current) publish(next);
-          // Preview pressed over unsaved changes: its tab shows them now.
-          const opened = previewAfterSave.current;
-          previewAfterSave.current = undefined;
-          if (opened !== undefined) opened.location.href = pagePreviewHref(slug, next.id);
-        } else
-          toasts.toast({
-            tone: 'success',
-            message:
-              status === 'live' ? capturesStrings.resumedToast(next.title) : capturesStrings.pausedToast(next.title),
-            action: { label: capturesStrings.undo, onAction: () => setLive(status === 'live' ? 'paused' : 'live') },
-          });
+        } else sayChangesSaved();
+        settle(true);
       },
       (error: unknown) => {
         setSaving(false);
-        // A refused save publishes nothing: the bar says why, and Publish waits for the next press. A preview tab
-        // opened for it shows what is saved.
-        publishAfterSave.current = false;
-        const opened = previewAfterSave.current;
-        previewAfterSave.current = undefined;
-        if (opened !== undefined) opened.location.href = pagePreviewHref(slug, page.id);
-        // Pause and Resume aren't part of the save bar's changes: their failure says so in a toast.
-        if (patch.status !== undefined) {
-          setDraft((current) => ({ ...current, status: page.status }));
-          // Why, when the server says: Resume with nobody to book was refused without a word (6 November 2026).
-          toasts.toast({
-            tone: 'danger',
-            message: isDataError(error) ? error.message : strings.statusFailed(page.title),
-            // Refused for its hosts: the way to fix it, before the toast goes.
-            ...(isDataError(error) && error.code === 'HOSTS_INVALID'
-              ? { action: { label: publishStrings.goTo(strings.hostsTab), onAction: () => onTabChange('hosts') } }
-              : {}),
-          });
-          return;
-        }
+        settle(false);
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
-        // A refused setting on another tab: show that tab, where the field says what's wrong.
+        // A refused setting in another section: show that section, where the field says what's wrong.
         const refused = field === undefined ? undefined : FIELD_TABS[field];
         if (refused !== undefined) onTabChange(refused);
         setFailure({
@@ -888,17 +846,6 @@ export function PageEditor({
       },
     );
   };
-  // The save bar speaks for the groups' changes; the Live switch saves on its own.
-  const barError = failure?.message ?? (isWeekDirty ? week.error : undefined);
-  const barStatus: SaveBarStatus = !isDirty
-    ? justSaved
-      ? 'saved'
-      : 'hidden'
-    : isSaving || week.isSaving
-      ? 'saving'
-      : barError === undefined
-        ? 'unsaved'
-        : 'error';
   const location = draft.location;
   // What Location's Select shows: "I'll send a link" is video with no link while no calendar makes one.
   const locationChoice =
@@ -923,89 +870,103 @@ export function PageEditor({
     .filter((rotation) => teamRotations.has(rotation.id))
     .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })))
     .filter((member, at, all) => all.findIndex((each) => each.id === member.id) === at);
-  // The tabs: Hosts on a round robin page only. A tab shown that this page doesn't have falls back to Page.
-  // Hosts on a round robin page only; Bookings and Insights for whoever may change the page (its own figures).
+  // The sections: Hosts on a team page only; Bookings and Insights for whoever may change the page (its own figures).
+  // A section shown that this page doesn't have falls back to Details.
   const tabs: readonly PageTab[] = PAGE_TABS.filter(
     (each) => (each !== 'hosts' || isTeam) && ((each !== 'bookings' && each !== 'insights') || !isLocked),
   );
-  const shown: PageTab = tabs.includes(tab) ? tab : 'page';
-  // The tabs whose fields hold an error now: what's marked red on them, and a refusal's field from the server.
+  const shown: PageTab = tabs.includes(tab) ? tab : 'details';
+  // The sections whose fields hold an error now: what's marked red in the list, and a refusal's field from the server.
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing =
     ((location.type === 'address' || location.type === 'custom') && location.value.trim() === '') ||
     meetingLinkProblem(location) !== undefined;
   const hasError: Readonly<Record<PageTab, boolean>> = {
-    page: refusedTab === 'page' || slugProblem(draft.slug) !== undefined,
-    meeting:
-      refusedTab === 'meeting' ||
+    details:
+      refusedTab === 'details' ||
       draft.title.trim() === '' ||
       draft.durations.length === 0 ||
       isWhereMissing ||
-      chipsError !== undefined ||
-      redirectProblem(draft) !== undefined,
-    questions: refusedTab === 'questions' || shownProblem !== undefined,
+      chipsError !== undefined,
     hosts: refusedTab === 'hosts',
     hours: refusedTab === 'hours' || (isWeekDirty && !week.isValid),
-    appearance: refusedTab === 'appearance',
-    share: refusedTab === 'share',
+    questions: refusedTab === 'questions' || shownProblem !== undefined,
+    booking: refusedTab === 'booking' || redirectProblem(draft) !== undefined,
+    look: refusedTab === 'look',
+    share: refusedTab === 'share' || slugProblem(draft.slug) !== undefined,
     bookings: false,
     insights: false,
   };
-  const tabLabel: Readonly<Record<PageTab, string>> = {
-    page: strings.page,
-    meeting: strings.meeting,
-    questions: questionStrings.questions,
-    hosts: strings.hostsTab,
-    hours: strings.availabilityTab,
-    appearance: strings.appearanceTab,
-    share: strings.shareTab,
-    bookings: activityStrings.bookingsTab,
-    insights: activityStrings.insightsTab,
-  };
-  // What Save can't send yet, said in the bar and by Publish: a field on this tab or another that needs a fix.
+  const tabLabel: Readonly<Record<PageTab, string>> = SECTION_LABELS;
+  // What Save can't send yet: a field in this section or another that needs a fix.
   const blockedReason =
     sendable(draft) && (!isWeekDirty || week.isValid)
       ? undefined
       : tabs.some((id) => hasError[id] && id !== shown)
         ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
         : strings.fixPage;
-  /** Saves every unsaved change (the bar's Save and ⌘S); false when nothing of the page's could go. */
+  /** Saves every unsaved change (Save changes and ⌘↵); false when nothing of the page's could go. */
   const saveAll = (): boolean => {
-    // A question that would break the public page waits, shown on its tab, as a form's publish does.
+    // A question that would break the public page waits, shown in its section, as a form's publish does.
     if (isPageDirty && dirty.questions !== undefined && questionProblem !== undefined) {
       setProblemAsked(true);
       onTabChange('questions');
       return false;
     }
     setProblemAsked(false);
-    if (isPageDirty) saveWithAttributes(dirty);
+    if (isPageDirty || changes.length > 0) saveWithAttributes(dirty);
     if (isWeekDirty) week.save();
-    return isPageDirty;
+    return isPageDirty || changes.length > 0;
   };
-  /** The header's Publish: unsaved changes save first, and the save that lands publishes (as a form's flush does). */
-  const publishNow = () => {
-    if (isPublishing || isSaving) return;
+  /** ⋯ Discard changes: the editor goes back to what is saved, here only (nothing on the server changes). */
+  const discardChanges = () => {
+    week.discard();
+    setDraft(saved);
+    setSlugLeft(false);
+    setFailure(undefined);
+    setChipsError(undefined);
+  };
+  // Save changes is on while anything is unsaved, or an earlier editor left settings unpublished.
+  const canSave = !isLocked && (isDirty || changes.length > 0);
+  /** Save changes (and ⌘↵): a field that needs a fix says so and shows its section; else everything saves, live. */
+  const saveNow = (): Promise<boolean> => {
+    if (!canSave) return Promise.resolve(true);
+    if (isSaving) return Promise.resolve(false);
     if (blockedReason !== undefined) {
+      const first = tabs.find((id) => hasError[id]);
+      if (first !== undefined) onTabChange(first);
       toasts.toast({ tone: 'danger', message: blockedReason });
-      return;
+      return Promise.resolve(false);
     }
-    // Live with nobody to book is the one way a Publish misleads: the notice above the tabs already says what to do.
-    if (nobodyOn && isDraft) {
-      toasts.toast({ tone: 'danger', message: strings.nobodyOn });
-      return;
-    }
-    if (isPageDirty) {
-      publishAfterSave.current = true;
-      if (!saveAll()) publishAfterSave.current = false;
-      return;
-    }
-    if (isWeekDirty) week.save();
-    publish();
+    const waited = new Promise<boolean>((resolve) => {
+      saveWaiters.current = [...saveWaiters.current, resolve];
+    });
+    // Only the week changed: the schedule's own save says how it went.
+    if (!saveAll()) settle(!isPageDirty);
+    return waited;
   };
-  const hasUnpublished = changes.length > 0 || isDraftDirty;
+  // ⌘↵ (Ctrl+Enter elsewhere) saves from anywhere in the editor, as a dialog's primary takes it; a dialog open over
+  // the editor keeps the key for its own.
+  const platform = useKeyboardPlatform();
+  const saveRef = useRef(saveNow);
+  useLayoutEffect(() => {
+    saveRef.current = saveNow;
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
+      if (!mod || event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"]') !== null)
+        return;
+      event.preventDefault();
+      void saveRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [platform]);
   const isDraft = isDraftPage(page);
   // Why guests can't book, when they can't: nobody on (from the groups read), or no open times ahead (the public read).
-  // Paused says it already; a Resume with nobody on is refused and says why.
+  // Hidden says it already; Live with nobody on is refused and says why.
   const nobodyOn =
     page.status !== 'paused' || isDraft
       ? hasNoHostsOn(page, rotations.status === 'ready' ? rotations.items : undefined)
@@ -1021,7 +982,6 @@ export function PageEditor({
           to: 'hours',
         } as const)
       : undefined;
-  const status = statusOf(page, hasUnpublished, bookingProblem !== undefined);
   /** A row's word of help, in a tip beside its label (critic A8: help in tooltips, never a line under it). */
   const tip = (label: string, text: string) => <InfoTip label={label}>{text}</InfoTip>;
   const limitRow = (
@@ -1056,140 +1016,129 @@ export function PageEditor({
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="bookings"
       page={{
         topBar: (
           <TopBar
             title={draft.title.trim() === '' ? strings.listLabel : draft.title}
-            icon="link"
-            crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
-            // One status, as a form's (the bookings area, 4 November 2026): Draft, Live, Live · edited or Paused.
+            crumbs={[
+              { id: 'bookings', label: strings.bookingsCrumb, href: bookingsTabHref(slug, 'meetings') },
+              { id: 'pages', label: strings.pagesCrumb, href: bookingsTabHref(slug, 'pages') },
+            ]}
             meta={
               <>
-                <EditorStatus tone={status.tone} text={status.text} />
-                {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
+                {/* Live on paper, and nobody can book it: said beside the name (the owner, 6 November 2026). */}
+                {bookingProblem !== undefined && page.status === 'live' && (
+                  <EditorStatus tone="blocked" text={strings.statusCantBook} />
+                )}
+                {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its name. */}
                 {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} isWhole />}
-                {/* Made from a managed template (AC-1334): where this page's settings come from, beside its status. */}
-                {/* Each field the workspace sets draws its own lock, so no note over the tabs names them again. */}
+                {/* Made from a managed template (AC-1334): where this page's settings come from. */}
                 {workspaceSets.size > 0 && <Badge text={managedStrings.fromTemplate} isWhole />}
                 {/* A reader sees the page as it is: one tag by the title, never a note over the editor. */}
                 {isLocked && <ViewOnlyTag reason={strings.readOnlyText} />}
               </>
             }
           >
-            <EditorActions
-              // A draft has no link guests can use yet: Copy link shows from the first Publish, as a form's does.
-              {...(isDraft ? {} : { link: publicBookingUrl(page) })}
-              // The page as the draft has it, in a new tab (what guests will see once published).
-              preview={
-                <Button
-                  icon="eye"
-                  isLabelCollapsible
-                  label={publishStrings.preview}
-                  onPress={() => {
-                    // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
-                    const opened = window.open('', '_blank');
-                    if (opened === null) return;
-                    opened.opener = null;
-                    if (isPageDirty && blockedReason === undefined) {
-                      previewAfterSave.current = opened;
-                      if (saveAll()) return;
-                      previewAfterSave.current = undefined;
-                    }
-                    opened.location.href = pagePreviewHref(slug, page.id);
-                  }}
-                >
-                  {publishStrings.preview}
-                </Button>
-              }
-              // Publish, the page's one primary, while there is something guests don't see yet.
-              {...(!isLocked && (isDraft || hasUnpublished)
-                ? {
-                    publish: (
-                      <Button variant="primary" onPress={publishNow} isPending={isPublishing}>
-                        {isPublishing ? publishStrings.publishing : publishStrings.publish}
-                      </Button>
-                    ),
-                  }
-                : {})}
-              // The rest under ⋯ (the owner, 4 November 2026: Copy link and Preview in the header, nothing more).
-              menu={{
-                ...(isLocked || isDraft
-                  ? {}
-                  : { status: page.status === 'live' ? ('live' as const) : ('paused' as const) }),
-                onPause: () => setLive('paused'),
-                onResume: () => setLive('live'),
-                ...(!isLocked && page.ownerName === undefined && page.isEditor !== true
-                  ? { onDuplicate: duplicate }
-                  : {}),
-                // An editor changes the page but never deletes it (AC-1331).
-                ...(isLocked || page.isEditor === true ? {} : { onDelete: () => setDeleting(true) }),
-                deleteLabel: strings.deletePage,
-                triggerRef: moreRef,
-                extra: [
-                  ...(isDraft || page.status !== 'live'
-                    ? []
-                    : [
-                        {
-                          id: 'view',
-                          label: publishStrings.viewPage,
-                          icon: 'external-link' as const,
-                          onAction: () => {
-                            globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
-                          },
-                        },
-                      ]),
-                  // Its Insights: a tab for whoever changes the page, this for whoever may only see it.
-                  ...(isLocked
-                    ? [
-                        {
-                          id: 'insights',
-                          label: publishStrings.insights,
-                          icon: 'chart-line' as const,
-                          onAction: () => {
-                            void navigate({ href: insightsHref(slug, { kind: 'booking', page: page.id }) });
-                          },
-                        },
-                      ]
-                    : [
-                        {
-                          id: 'sharing',
-                          label: sharingStrings.menuItem,
-                          icon: 'users' as const,
-                          onAction: () => {
-                            setShared(true);
-                            setSharing(true);
-                          },
-                        },
-                      ]),
-                  ...(isLocked || isDraft
-                    ? []
-                    : [
-                        {
-                          id: 'versions',
-                          label: publishStrings.versions,
-                          icon: 'clock' as const,
-                          onAction: () => {
-                            setVersionsOpen(true);
-                            readVersions();
-                          },
-                        },
-                      ]),
-                  // Back to what guests see, once there is something unpublished to lose (it asks first).
-                  ...(!isLocked && !isDraft && changes.length > 0
-                    ? [
-                        {
-                          id: 'discard',
-                          label: publishStrings.discard,
-                          icon: 'undo-2' as const,
-                          isDanger: true,
-                          onAction: () => setDiscardAsked(true),
-                        },
-                      ]
-                    : []),
-                ],
-              }}
+            {/* Live or Hidden, Copy link, Preview, ⋯, then Save changes, the page's one primary (the mock's header). */}
+            <PageStatusMenu
+              title={page.title}
+              isLive={page.status === 'live'}
+              onChange={setLive}
+              {...(isLocked ? { lockedReason: strings.notYours } : {})}
             />
+            <Tooltip content={strings.copyLink}>
+              <CopyButton
+                value={savedLink}
+                label={strings.copyLink}
+                announcement={capturesStrings.linkCopied}
+                variant="ghost"
+                isIconOnly
+              />
+            </Tooltip>
+            <Tooltip content={strings.previewTip}>
+              <Button
+                variant="ghost"
+                icon="eye"
+                label={publishStrings.preview}
+                onPress={() => {
+                  globalThis.open(pagePreviewHref(slug, page.id), '_blank', 'noopener');
+                }}
+              />
+            </Tooltip>
+            <MenuTrigger>
+              <Button ref={moreRef} variant="ghost" icon="ellipsis" label={capturesStrings.moreActions} />
+              <Menu
+                label={capturesStrings.moreActions}
+                placement="bottom end"
+                onAction={(key) => {
+                  if (key === 'duplicate') duplicate();
+                  if (key === 'view') globalThis.open(savedLink, '_blank', 'noopener');
+                  if (key === 'insights')
+                    void navigate({ href: insightsHref(slug, { kind: 'booking', page: page.id }) });
+                  if (key === 'sharing') {
+                    setShared(true);
+                    setSharing(true);
+                  }
+                  if (key === 'versions') {
+                    setVersionsOpen(true);
+                    readVersions();
+                  }
+                  if (key === 'discard') discardChanges();
+                  if (key === 'delete') setDeleting(true);
+                }}
+              >
+                {!isLocked && page.ownerName === undefined && page.isEditor !== true && (
+                  <MenuItem id="duplicate" icon="copy">
+                    {strings.duplicate}
+                  </MenuItem>
+                )}
+                <MenuItem id="view" icon="external-link" isDisabled={page.status !== 'live'}>
+                  {publishStrings.viewPage}
+                </MenuItem>
+                {isLocked ? (
+                  <MenuItem id="insights" icon="chart-line">
+                    {publishStrings.insights}
+                  </MenuItem>
+                ) : (
+                  <MenuItem id="sharing" icon="users">
+                    {sharingStrings.menuItem}
+                  </MenuItem>
+                )}
+                {!isLocked && (
+                  <MenuItem id="versions" icon="clock">
+                    {strings.versionHistory}
+                  </MenuItem>
+                )}
+                {!isLocked && (
+                  <MenuItem id="discard" icon="undo-2" isDisabled={!isDirty}>
+                    {strings.discardChanges}
+                  </MenuItem>
+                )}
+                {!isLocked && page.isEditor !== true && <MenuSeparator />}
+                {!isLocked && page.isEditor !== true && (
+                  <MenuItem id="delete" icon="trash" isDanger>
+                    {strings.deletePage}
+                  </MenuItem>
+                )}
+              </Menu>
+            </MenuTrigger>
+            {!isLocked &&
+              (canSave ? (
+                <Button variant="primary" kbd="⌘↵" isPending={isSaving} onPress={() => void saveNow()}>
+                  {strings.saveChanges}
+                </Button>
+              ) : (
+                <Tooltip content={strings.noChangesYet} isTextTrigger>
+                  {/* A turned off button takes no focus: the wrapper does, so its reason reads by keyboard too. */}
+                  {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex */}
+                  <span tabIndex={0}>
+                    <Button variant="primary" isDisabled>
+                      {strings.saveChanges}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ))}
           </TopBar>
         ),
         body: (
@@ -1225,798 +1174,330 @@ export function PageEditor({
                 })
               }
             />
-            <Tabs
-              label={strings.tabsLabel}
-              variant="bar"
-              tabs={tabs.map((id) => ({
-                id,
-                label: tabLabel[id],
-                ...(hasError[id] ? { alert: strings.needsFix } : {}),
-              }))}
-              selectedKey={shown}
-              onSelectionChange={(id) => onTabChange(pageTabOf(id))}
+            <Modal
+              title={strings.versionHistory}
+              isOpen={isVersionsOpen}
+              onOpenChange={setVersionsOpen}
+              actions={<Button slot="close">{publishStrings.close}</Button>}
             >
-              {/* One panel, the chosen tab's: the layout and its phone preview stay mounted as the tab changes. The forms
-                  editor's frame (critic A6, 4 Nov 2026): the phone pinned beside the settings from a laptop's width, the
-                  pair centred on a wide screen, and each tab's rows held to the forms Settings tab's readable width. */}
-              <TabPanel id={shown} variant="fill">
-                <PreviewLayout
-                  previewShare="snug"
-                  bodyLayout="stack"
-                  {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
-                  // The page in a phone beside every settings tab (the owner, 22 Oct 2026), showing the unsaved edits;
-                  // Bookings and Insights take the whole width, as a form's Submissions and Analytics do.
-                  {...(shown === 'bookings' || shown === 'insights'
-                    ? {}
-                    : {
-                        preview: (
-                          <PreviewFrame
-                            src={`/b/${page.publicKey}`}
-                            title={page.title}
-                            // The page's save, or a save of the schedule it books by, draws it again with the new times.
-                            version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
-                            draft={{
-                              title: draft.title,
-                              description: draft.description,
-                              durations: draft.durations,
-                              location: draft.location,
-                              // The owner's links as they are now, while the draft shows them (booking socials).
-                              ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
-                              defaultView: draft.defaultView,
-                            }}
-                          />
-                        ),
-                      })}
-                  notices={
-                    <>
-                      {/* Why guests can't book, with the way to fix it, on every tab but the one that fixes it. */}
-                      {bookingProblem !== undefined && !isLocked && (
-                        <Callout
-                          tone="warning"
-                          title={bookingProblem.title}
-                          {...(shown !== bookingProblem.to
-                            ? {
-                                actions: (
-                                  <Button onPress={() => onTabChange(bookingProblem.to)}>
-                                    {publishStrings.goTo(tabLabel[bookingProblem.to])}
-                                  </Button>
-                                ),
-                              }
-                            : nobodyOn
-                              ? {
-                                  actions: (
-                                    <ButtonLink href={roundRobinHref(slug)}>{strings.openRoundRobin}</ButtonLink>
-                                  ),
-                                }
-                              : {})}
-                        >
-                          {bookingProblem.text}
-                        </Callout>
-                      )}
-                      {/* A refused Publish says why where it happened, with the way to the setting to fix. The
-                          page's state is the header's status, never a bar here (the bookings area). */}
-                      {publishProblem !== undefined && (
-                        <Callout
-                          tone="danger"
-                          title={publishStrings.publishRefused}
-                          isAnnounced
-                          {...(problemTab === undefined
-                            ? {}
-                            : {
-                                actions: (
-                                  <Button onPress={() => onTabChange(problemTab)}>
-                                    {publishStrings.goTo(tabLabel[problemTab])}
-                                  </Button>
-                                ),
-                              })}
-                        >
-                          {publishProblem.message}
-                        </Callout>
-                      )}
-                      <LiveDialog
-                        slug={slug}
-                        page={liveShown}
-                        onClose={() => {
-                          setLiveShown(undefined);
-                          focusLater(() => moreRef.current);
-                        }}
-                        onPutOnSite={() => {
-                          setLiveShown(undefined);
-                          onTabChange('share');
-                        }}
-                      />
-                      <Modal
-                        title={publishStrings.versionsTitle}
-                        isOpen={isVersionsOpen}
-                        onOpenChange={setVersionsOpen}
-                        actions={<Button slot="close">{publishStrings.close}</Button>}
-                      >
-                        {isVersionsFailed ? (
-                          <EmptyState tone="error" title={publishStrings.versionsFailed} onRetry={readVersions} />
-                        ) : versions === undefined ? (
-                          <Skeleton lines={3} />
-                        ) : versions.length === 0 ? (
-                          <EmptyState title={publishStrings.versionsNone} icon="clock" />
-                        ) : (
-                          <SettingsStack variant="plain">
-                            {versions.map((one) => (
-                              <SettingsRow key={one.version} title={one.label}>
-                                {one.isCurrent ? (
-                                  <Badge text={publishStrings.versionLive} isWhole />
-                                ) : (
-                                  <Button
-                                    onPress={() => {
-                                      setVersionsOpen(false);
-                                      askRestore(one.version);
-                                    }}
-                                  >
-                                    {publishStrings.restore}
-                                  </Button>
-                                )}
-                              </SettingsRow>
-                            ))}
-                          </SettingsStack>
-                        )}
-                      </Modal>
-                      <Modal
-                        title={publishStrings.discardTitle}
-                        variant="confirm"
-                        tone="danger"
-                        isOpen={isDiscardAsked}
-                        onOpenChange={setDiscardAsked}
-                        actions={
-                          <>
-                            <Button slot="close">{publishStrings.discardKeep}</Button>
-                            <Button
-                              variant="danger-solid"
-                              onPress={() => {
-                                setDiscardAsked(false);
-                                discardDraft();
-                              }}
-                            >
-                              {publishStrings.discardConfirm}
-                            </Button>
-                          </>
-                        }
-                      >
-                        {publishStrings.discardText}
-                      </Modal>
-                      <Modal
-                        title={publishStrings.restoreTitle(restoreAsked ?? 0)}
-                        variant="confirm"
-                        tone="danger"
-                        isOpen={restoreAsked !== undefined}
-                        onOpenChange={(open) => {
-                          if (!open) setRestoreAsked(undefined);
-                        }}
-                        actions={
-                          <>
-                            <Button slot="close">{publishStrings.restoreKeep}</Button>
-                            <Button
-                              variant="danger-solid"
-                              onPress={() => {
-                                if (restoreAsked !== undefined) restore(restoreAsked);
-                                setRestoreAsked(undefined);
-                              }}
-                            >
-                              {publishStrings.restoreConfirm}
-                            </Button>
-                          </>
-                        }
-                      >
-                        {publishStrings.restoreText}
-                      </Modal>
-                    </>
-                  }
-                  footer={
-                    <>
-                      <SaveBar
-                        status={barStatus}
-                        {...(isDraftDirty ? { saveLabel: publishStrings.saveDraft } : {})}
-                        {...(barError === undefined ? {} : { error: barError })}
-                        {...(blockedReason === undefined ? {} : { blockedReason })}
-                        onSave={() => {
-                          saveAll();
-                        }}
-                        onDiscard={() => {
-                          week.discard();
-                          setDraft(saved);
-                          setSlugLeft(false);
-                          setFailure(undefined);
-                          setChipsError(undefined);
-                          setJustSaved(false);
-                        }}
-                        onFocusAway={() => pageHeading(document)?.focus()}
-                      />
-                      {/* Leaving with unsaved changes asks first, in a Modal; the tabs (`?tab=`) keep the editor and its
-                        changes, so moving between them never asks. Closing the tab asks the browser's way. */}
-                      <LeaveGuard isDirty={isDirty} searchStays />
-                    </>
-                  }
-                >
-                  {shown === 'page' && (
-                    // Plain rows under small group headers, as a form's Settings tab (critic A8, 4 Nov 2026): a label on
-                    // the left with its help in a tip, the control on the right.
-                    <SettingsStack width="readable" rows="inline">
-                      {/* Multi line text runs the card's width, its label over it (the owner, 6 November 2026: label
-                          and box stood far apart). */}
-                      <Card title={strings.details}>
-                        <Field
-                          label={strings.description}
-                          value={draft.description}
-                          placeholder={strings.descriptionPlaceholder}
-                          isMultiline
-                          maxLength={2000}
-                          showCounter
-                          isReadOnly={readOnly('details')}
-                          onChange={(description) => change({ description })}
-                        />
-                      </Card>
-                      <Card title={strings.linkSection}>
-                        {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
-                          // The full address, the part after the owner's handle editable (22 Oct 2026); Copy takes the
-                          // saved link, so it waits while the address has unsaved changes. The card's width, label
-                          // over it, so the whole address reads (6 November 2026).
-                          <Field
-                            label={strings.address}
-                            info={tip(strings.address, strings.addressHelp)}
-                            value={draft.slug}
-                            prefix={`${addressHost}/${page.handle}/`}
-                            {...(isSlugUnsaved && page.status === 'live' && !page.isPrivate
-                              ? { hint: strings.slugChanging }
-                              : {})}
-                            maxLength={60}
-                            isRequired
-                            isReadOnly={readOnly('address')}
-                            onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
-                            onBlur={() => setSlugLeft(true)}
-                            {...(isSlugLeft && slugProblem(draft.slug) !== undefined
-                              ? { error: slugProblem(draft.slug) }
-                              : failure?.field === 'slug'
-                                ? { error: failure.message }
-                                : {})}
-                            // Copy inside the field, at the field's size (one control shape in the row).
-                            {...(isDraft
-                              ? {}
-                              : {
-                                  suffix: isAddressUnsaved ? (
-                                    <Tooltip content={strings.saveAddressFirst}>
-                                      <CopyButton
-                                        value={savedLink}
-                                        label={strings.copyLink}
-                                        variant="ghost"
-                                        isIconOnly
-                                        isDisabled
-                                      />
-                                    </Tooltip>
-                                  ) : (
-                                    <CopyButton value={savedLink} label={strings.copyLink} variant="ghost" isIconOnly />
-                                  ),
-                                })}
-                          />
-                        ) : (
-                          // No handle yet, a workspace link or a Link only page: its /b/ link, read only.
-                          <Field
-                            label={strings.address}
-                            info={tip(
-                              strings.address,
-                              isWorkspace ? strings.workspaceLinkSharing : strings.bAddressHelp,
-                            )}
-                            value={bLink}
-                            {...(isDraft
-                              ? { isReadOnly: true }
-                              : { variant: 'copy' as const, copyLabel: strings.copyLink })}
-                          />
-                        )}
-                        {/* The reader's own handle: on a colleague's page their Profile can't change this address. */}
-                        {page.handle === undefined && !draft.isPrivate && isOwnPage && (
-                          <SettingsRow title={strings.handleRow}>
-                            <ButtonLink href={profileHref(slug)} icon="at-sign">
-                              {strings.setHandleShort}
-                            </ButtonLink>
-                          </SettingsRow>
-                        )}
-                        {!isWorkspace && (
-                          <SettingsRow
-                            title={strings.whoCanBook}
-                            meta={tip(strings.whoCanBook, strings.linkOnlyHint)}
-                            // Switching a public page to Link only retires the address people already have: said
-                            // before Save, not found out later by a visitor on Page not found (flow walks, B10).
-                            {...(draft.isPrivate && !page.isPrivate ? { description: strings.linkOnlyChanging } : {})}
-                          >
-                            <SegmentedControl
-                              label={strings.whoCanBook}
-                              size="compact"
-                              segments={[
-                                { value: 'public', label: strings.publicPage },
-                                { value: 'link', label: strings.linkOnly },
-                              ]}
-                              value={draft.isPrivate ? 'link' : 'public'}
-                              isReadOnly={isLocked}
-                              onChange={(value) => {
-                                const isPrivate = value === 'link';
-                                // Link only hides the address: one it can't save goes back to the saved one, so
-                                // nothing hidden blocks Save.
-                                change({
-                                  isPrivate,
-                                  ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
-                                });
-                              }}
-                            />
-                          </SettingsRow>
-                        )}
-                      </Card>
-                      {/* Requests waiting for a Confirm (spec 0062, AC-6203): shown while any wait. */}
-                      <RequestsCard data={data} slug={slug} pageId={page.id} isReadOnly={isLocked} />
-                    </SettingsStack>
-                  )}
-                  {shown === 'share' && (
-                    // Every way to hand the page out, in one place (critic A21, 4 Nov 2026): its link through the
-                    // forms' own share part, then the snippet, one-time links, the social links and the link page.
-                    <SettingsStack width="readable" rows="inline">
-                      <Card title={strings.shareLinkSection}>
-                        {isDraft ? (
-                          <SettingsRow title={strings.notPublished} description={strings.publishToShare}>
-                            {!isLocked && (
-                              <Button onPress={publishNow} isPending={isPublishing}>
-                                {publishStrings.publish}
-                              </Button>
-                            )}
-                          </SettingsRow>
-                        ) : (
-                          <ShareBlock name={page.title} link={savedLink} />
-                        )}
-                      </Card>
-                      {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
-                      {!isLocked && (
-                        <ShareTimesCard
-                          data={data}
-                          publicKey={page.publicKey}
-                          title={page.title}
-                          duration={page.durations[0] ?? 30}
-                          link={savedLink}
-                          isLive={page.status === 'live'}
-                          isPaused={page.status === 'paused' && !isDraft}
-                        />
-                      )}
-                      {/* The snippet for someone else's site (spec 0062, L3). */}
-                      <EmbedCard
-                        script={data.forms.embedUrl()}
-                        publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
-                        title={page.title}
-                        isLive={page.status === 'live'}
-                        quickPicks={BRAND_QUICK_PICKS}
-                        picture={pagePicture(page)}
-                      />
-                      {/* One-time links (AC-6204). */}
-                      <OneOffLinksCard
-                        data={data}
-                        slug={slug}
-                        page={page}
-                        pageUrl={bLink}
-                        isReadOnly={isLocked}
-                        onSaved={setPage}
-                      />
-                      {!isWorkspace && (
-                        <SocialsCardSlot
-                          data={data}
-                          slug={slug}
-                          onPreviewLinks={setPreviewLinks}
-                          isTeam={page.kind !== 'personal'}
-                          isOwner={ownerMember === undefined}
-                          isShown={draft.showSocials}
-                          isLocked={isLocked}
-                          ownerName={page.ownerName}
-                          onShownChange={(showSocials) => change({ showSocials })}
-                        />
-                      )}
-                      {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
-                        // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
-                        // itself, and its place and heading are set on the link page, with the rest of the page.
-                        <Card title={strings.linkPage}>
-                          <SettingsRow
-                            title={strings.onLinkPage}
-                            meta={tip(strings.onLinkPage, strings.onLinkPageLine)}
-                          >
-                            <ButtonLink href={linkPageHref(slug)} icon="pencil">
-                              {strings.editLinkPage}
-                            </ButtonLink>
-                          </SettingsRow>
-                        </Card>
-                      )}
-                    </SettingsStack>
-                  )}
-                  {shown === 'meeting' && (
-                    <SettingsStack width="readable" rows="inline">
-                      <Card title={strings.meeting}>
-                        <SettingsRow title={strings.title} control="field">
-                          <Field
-                            label={strings.title}
-                            isLabelHidden
-                            value={draft.title}
-                            maxLength={120}
-                            isRequired
-                            isReadOnly={readOnly('details')}
-                            onChange={(title) => change({ title })}
-                            {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
-                          />
-                        </SettingsRow>
-                        {readOnly('durations') ? (
-                          // Read only: the chosen lengths as words, which a viewer can reach and read.
-                          <SettingsRow
-                            title={strings.durations}
-                            description={draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', ')}
-                          />
-                        ) : (
-                          <SettingsRow
-                            title={strings.durations}
-                            meta={tip(strings.durations, strings.durationsHelp)}
-                            control="field"
-                          >
-                            <ChoiceChips
-                              label={strings.durations}
-                              isLabelHidden
-                              choices={lengths.map((minutes) => ({
-                                id: String(minutes),
-                                label: strings.minutesShort(minutes),
-                              }))}
-                              selected={draft.durations.map(String)}
-                              onChange={(ids) => {
-                                const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
-                                // A fifth is refused here as the server would: the public page shows four.
-                                if (durations.length > LENGTHS_MAX) {
-                                  setChipsError(strings.lengthsFull);
-                                  return;
-                                }
-                                setChipsError(undefined);
-                                change({ durations });
-                              }}
-                              {...(chipsError === undefined
-                                ? draft.durations.length === 0
-                                  ? { error: strings.durationRequired }
-                                  : {}
-                                : { error: chipsError })}
-                              end={
-                                <Button
-                                  ref={customRef}
-                                  variant="dashed"
-                                  icon="plus"
-                                  onPress={() => setAddingLength(true)}
-                                >
-                                  {strings.durationCustom}
-                                </Button>
-                              }
-                            />
-                          </SettingsRow>
-                        )}
-                        {!readOnly('durations') && (
-                          <Popover
-                            label={strings.addLength}
-                            triggerRef={customRef}
-                            isOpen={isAddingLength}
-                            onOpenChange={(isOpen) => {
-                              setAddingLength(isOpen);
-                              if (!isOpen) {
-                                setLengthText('');
-                                setLengthError(undefined);
-                              }
-                            }}
-                          >
-                            <Field
-                              label={strings.customMinutes}
-                              // With four lengths already, it says so before anything is typed.
-                              hint={
-                                draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint
-                              }
-                              // The popover opens for this one field: typing starts at once.
-                              // eslint-disable-next-line jsx-a11y-x/no-autofocus
-                              autoFocus
-                              inputMode="numeric"
-                              maxLength={3}
-                              value={lengthText}
-                              onChange={(value) => {
-                                setLengthText(value);
-                                setLengthError(undefined);
-                              }}
-                              onSubmit={addLength}
-                              suffix={
-                                <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
-                                  {strings.add}
-                                </Button>
-                              }
-                              {...(lengthError === undefined ? {} : { error: lengthError })}
-                            />
-                          </Popover>
-                        )}
-                        <SettingsRow title={strings.location} control="field">
-                          <Select
-                            label={strings.location}
-                            isLabelHidden
-                            // With no calendar to make a video link (critic B-07, 5 Nov 2026): "I'll send a link" is
-                            // video with no link, the page's default, and Video asks for the host's own link below.
-                            // With one, Video is the calendar's link, or the host's own when the page keeps one.
-                            items={[
-                              ...(makesNoLink ? [{ id: SEND_LINK, label: strings.locations.sendLink }] : []),
-                              ...LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] })),
-                            ]}
-                            value={locationChoice}
-                            isReadOnly={readOnly('location')}
-                            // Only the reconnect case still needs a word: the field below asks for the rest.
-                            // A calendar that needs reconnecting makes no link: said under "I'll send a link".
-                            {...(locationChoice === SEND_LINK && noLinkReason === 'reconnect'
-                              ? { hint: strings.noVideoLinkReconnect }
-                              : {})}
-                            onChange={(type) => {
-                              if (type === SEND_LINK) change({ location: { type: 'video' } });
-                              // Video with nothing to make a link: the host's own, asked for right here.
-                              if (type === 'video')
-                                change({ location: makesNoLink ? { type: 'video', link: '' } : { type: 'video' } });
-                              if (type === 'phone') change({ location: { type } });
-                              if (type === 'address' || type === 'custom')
-                                change({ location: { type, value: 'value' in location ? location.value : '' } });
-                            }}
-                          />
-                        </SettingsRow>
-                        {location.type === 'video' && location.link !== undefined && (
-                          <SettingsRow
-                            title={strings.meetingLink}
-                            meta={tip(strings.meetingLink, strings.meetingLinkHelp)}
-                            control="field"
-                          >
-                            <Field
-                              label={strings.meetingLink}
-                              isLabelHidden
-                              type="url"
-                              inputMode="url"
-                              placeholder={strings.meetingLinkPlaceholder}
-                              value={location.link}
-                              maxLength={2048}
-                              isRequired
-                              isReadOnly={readOnly('location')}
-                              // Said once the field is left (or Save is tried), not before anything is typed.
-                              {...(meetingLinkProblem(location) === undefined || (!isLinkLeft && failure === undefined)
-                                ? {}
-                                : { error: meetingLinkProblem(location) })}
-                              onBlur={() => setLinkLeft(true)}
-                              onChange={(link) => change({ location: { type: 'video', link } })}
-                            />
-                          </SettingsRow>
-                        )}
-                        {(location.type === 'address' || location.type === 'custom') && (
-                          <SettingsRow
-                            title={location.type === 'address' ? strings.addressOrRoom : strings.where}
-                            control="field"
-                          >
-                            <Field
-                              label={location.type === 'address' ? strings.addressOrRoom : strings.where}
-                              isLabelHidden
-                              value={location.value}
-                              maxLength={500}
-                              isRequired
-                              isReadOnly={readOnly('location')}
-                              {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
-                              onChange={(value) => change({ location: { type: location.type, value } })}
-                            />
-                          </SettingsRow>
-                        )}
-                      </Card>
-                      {/* A workspace's team page is nobody's: each booking goes to whoever gets it, so nothing to pick. */}
-                      {!isWorkspace && (
-                        <PageDestination
-                          destination={data.calendar.pageDestination(slug, page.id)}
-                          calendars={data.calendar.calendars(slug)}
-                          isReadOnly={isLocked}
-                          {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
-                          onChange={(calendarId) => {
-                            // Saves at once: a refusal is put back and said by the store's own toast, as the other
-                            // calendar switches are; anything else that fails says so here rather than vanishing.
-                            data.calendar
-                              .setPageDestination(slug, page.id, calendarId)
-                              .catch(() => toasts.toast({ tone: 'danger', message: strings.somethingWrong }));
+              {isVersionsFailed ? (
+                <EmptyState tone="error" title={publishStrings.versionsFailed} onRetry={readVersions} />
+              ) : versions === undefined ? (
+                <Skeleton lines={3} />
+              ) : versions.length === 0 ? (
+                <EmptyState title={publishStrings.versionsNone} icon="clock" />
+              ) : (
+                <SettingsStack variant="flush">
+                  {versions.map((one) => (
+                    <SettingsRow key={one.version} title={one.label}>
+                      {one.isCurrent ? (
+                        <Badge text={publishStrings.versionLive} isWhole />
+                      ) : (
+                        <Button
+                          onPress={() => {
+                            setVersionsOpen(false);
+                            askRestore(one.version);
                           }}
-                          settingsHref={calendarsHref(slug)}
-                          canConnect={calendar.status === 'ready' && calendar.enabled}
-                        />
-                      )}
-                      {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
-                          October 2026). One row per setting (critic A1: two switches had shared one row). */}
-                      <Card title={strings.afterBooking}>
-                        <SettingsRow title={strings.addToCrm} meta={tip(strings.addToCrm, strings.addToCrmHelp)}>
-                          <Switch
-                            label={strings.addToCrm}
-                            isLabelHidden
-                            isSelected={draft.fileToCrm}
-                            isReadOnly={readOnly('on_booking')}
-                            onChange={(fileToCrm) => change({ fileToCrm })}
-                          />
-                        </SettingsRow>
-                        {/* Spec 0062, L1: the host confirms each booking first (AC-6203), and where the visitor goes
-                            once they have booked (AC-6201). */}
-                        <SettingsRow
-                          title={strings.confirmFirst}
-                          meta={tip(strings.confirmFirst, strings.confirmFirstHint)}
                         >
-                          <Switch
-                            label={strings.confirmFirst}
-                            isLabelHidden
-                            isSelected={draft.requiresConfirmation}
-                            isReadOnly={isLocked}
-                            onChange={(requiresConfirmation) => change({ requiresConfirmation })}
-                          />
-                        </SettingsRow>
-                        <SettingsRow title={strings.thenShow}>
-                          <SegmentedControl
-                            label={strings.thenShow}
-                            size="compact"
-                            segments={[
-                              { value: 'confirmation', label: strings.afterChoices.confirmation },
-                              { value: 'redirect', label: strings.afterChoices.redirect },
-                            ]}
-                            value={draft.afterBooking}
-                            isReadOnly={isLocked}
-                            onChange={(value) =>
-                              change(
-                                value === 'redirect'
-                                  ? { afterBooking: 'redirect' }
-                                  : { afterBooking: 'confirmation', redirectUrl: null, sendBookingDetails: false },
-                              )
-                            }
-                          />
-                        </SettingsRow>
-                        {draft.afterBooking === 'redirect' && (
-                          <>
-                            <SettingsRow title={strings.redirectUrl} control="field">
-                              <Field
-                                label={strings.redirectUrl}
-                                isLabelHidden
-                                type="url"
-                                inputMode="url"
-                                placeholder={strings.redirectPlaceholder}
-                                value={draft.redirectUrl ?? ''}
-                                isReadOnly={isLocked}
-                                {...(isRedirectLeft && redirectProblem(draft) !== undefined
-                                  ? { error: redirectProblem(draft) }
-                                  : {})}
-                                onBlur={() => setRedirectLeft(true)}
-                                onChange={(value) => change({ redirectUrl: value })}
-                              />
-                            </SettingsRow>
-                            <SettingsRow
-                              title={strings.sendDetails}
-                              meta={tip(strings.sendDetails, strings.sendDetailsHint)}
-                            >
-                              <Switch
-                                label={strings.sendDetails}
-                                isLabelHidden
-                                isSelected={draft.sendBookingDetails}
-                                isReadOnly={isLocked}
-                                onChange={(sendBookingDetails) => change({ sendBookingDetails })}
-                              />
-                            </SettingsRow>
-                          </>
-                        )}
-                      </Card>
-                    </SettingsStack>
-                  )}
-                  {shown === 'questions' && (
-                    <SettingsStack width="readable" rows="inline">
-                      {targets === undefined && !isLocked && (
-                        <Callout
-                          tone="danger"
-                          title={strings.targetsFailedTitle}
-                          actions={
-                            <Button onPress={() => void readTargets()} isPending={isReadingTargets}>
-                              {strings.tryAgain}
-                            </Button>
+                          {publishStrings.restore}
+                        </Button>
+                      )}
+                    </SettingsRow>
+                  ))}
+                </SettingsStack>
+              )}
+            </Modal>
+            <Modal
+              title={publishStrings.restoreTitle(restoreAsked ?? 0)}
+              variant="confirm"
+              tone="danger"
+              isOpen={restoreAsked !== undefined}
+              onOpenChange={(open) => {
+                if (!open) setRestoreAsked(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close">{publishStrings.restoreKeep}</Button>
+                  <Button
+                    variant="danger-solid"
+                    onPress={() => {
+                      if (restoreAsked !== undefined) restore(restoreAsked);
+                      setRestoreAsked(undefined);
+                    }}
+                  >
+                    {publishStrings.restoreConfirm}
+                  </Button>
+                </>
+              }
+            >
+              {publishStrings.restoreText}
+            </Modal>
+            {/* Leaving with unsaved edits asks one compact question: Discard drops them, Save makes them live. Moving
+                between sections (`?tab=`) keeps the editor and its edits, so it never asks. */}
+            <LeaveGuard
+              isDirty={isDirty}
+              searchStays
+              save={{
+                title: strings.leaveTitle(page.title),
+                text: strings.leaveText,
+                onSave: saveNow,
+              }}
+            />
+            <PreviewLayout
+              previewShare="column"
+              heading={tabLabel[shown]}
+              nav={{
+                label: strings.sectionsLabel,
+                currentId: shown,
+                entries: tabs.map((id) => ({
+                  id,
+                  label: tabLabel[id],
+                  href: pageEditorHref(slug, page.id, id),
+                  icon: SECTION_ICONS[id],
+                  group: SECTION_GROUPS[id],
+                  ...(hasError[id] ? { alert: strings.needsFix } : {}),
+                })),
+              }}
+              {...(isTimesStale ? { previewNote: <Callout tone="info">{strings.previewSavedTimes}</Callout> } : {})}
+              // The page in a phone beside every section but Bookings and Insights, showing the unsaved edits.
+              {...(shown === 'bookings' || shown === 'insights'
+                ? {}
+                : {
+                    preview: (
+                      <PreviewFrame
+                        src={`/b/${page.publicKey}`}
+                        title={page.title}
+                        // The page's save, or a save of the schedule it books by, draws it again with the new times.
+                        version={`${page.updatedAt}|${hours.schedule?.updatedAt ?? ''}`}
+                        draft={{
+                          title: draft.title,
+                          description: draft.description,
+                          durations: draft.durations,
+                          location: draft.location,
+                          // The owner's links as they are now, while the draft shows them (booking socials).
+                          ...(showsSocials ? { socials: draft.showSocials ? previewLinks : [] } : {}),
+                          defaultView: draft.defaultView,
+                        }}
+                      />
+                    ),
+                  })}
+              notices={
+                <>
+                  {bookingProblem !== undefined && !isLocked && (
+                    <Callout
+                      tone="warning"
+                      title={bookingProblem.title}
+                      {...(shown !== bookingProblem.to
+                        ? {
+                            actions: (
+                              <Button onPress={() => onTabChange(bookingProblem.to)}>
+                                {strings.goTo(tabLabel[bookingProblem.to])}
+                              </Button>
+                            ),
                           }
-                        >
-                          {strings.targetsFailed}
-                        </Callout>
-                      )}
-                      {brokenAnswersObject !== undefined && (
-                        <Callout
-                          tone="warning"
-                          title={strings.answersObjectBrokenTitle(brokenAnswersObject.pluralName)}
-                          {...(canBuild
-                            ? {
-                                actions: (
-                                  <ButtonLink href={objectSettingsHref(slug, brokenAnswersObject)} icon="plus">
-                                    {strings.answersObjectAddField}
-                                  </ButtonLink>
-                                ),
-                              }
-                            : {})}
-                        >
-                          {canBuild ? strings.answersObjectBroken : strings.answersObjectBrokenAsk}
-                        </Callout>
-                      )}
-                      {liveObjects.length > 0 && (
-                        <Card title={strings.answersObject} isBusy={isMovingAnswers}>
-                          <Select
-                            savesOnPick
-                            label={strings.answersObject}
-                            // The card's title already says it (flow walks B6): read, not drawn twice.
-                            isLabelHidden
-                            items={liveObjects.map((object) => ({
-                              id: object.id,
-                              label: object.pluralName,
-                              icon: object.icon,
-                              ...(noEmailMatch?.has(object.id) === true && object.id !== answersObject
-                                ? { isDisabled: true, description: strings.answersObjectNoEmail }
-                                : {}),
-                            }))}
-                            optionDescription="below"
-                            {...(isAnyUnmatched ? { hint: strings.answersObjectRule } : {})}
-                            value={answersObject}
-                            isReadOnly={readOnly('on_booking')}
-                            isDisabled={isMovingAnswers}
-                            onChange={moveAnswers}
-                          />
-                        </Card>
-                      )}
-                      {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsks}</Callout>}
-                      <QuestionsSection
-                        // What every guest is asked before these (critic A7): shown first, locked, so the count and
-                        // the list say what a guest really meets.
-                        fixed={[
-                          {
-                            id: 'fixed-name',
-                            label: strings.fixedName,
-                            typeLabel: questionStrings.answerTypes.short_text,
-                            typeIcon: 'type',
-                            isRequired: true,
-                          },
-                          {
-                            id: 'fixed-email',
-                            label: strings.fixedEmail,
-                            typeLabel: questionStrings.answerTypes.email,
-                            typeIcon: 'mail',
-                            isRequired: true,
-                          },
-                          {
-                            id: 'fixed-notes',
-                            label: strings.fixedNotes,
-                            typeLabel: questionStrings.answerTypes.long_text,
-                            typeIcon: 'file-text',
-                          },
-                        ]}
-                        questions={draft.questions}
-                        onChange={(update) => {
-                          setJustSaved(false);
-                          setDraft((current) => ({ ...current, questions: [...update(current.questions)] }));
-                        }}
-                        max={QUESTIONS_MAX}
-                        holder={questionStrings.pageHolder}
-                        keptWith="booking"
-                        attributes={choices.items}
-                        {...(choices.objectName === undefined ? {} : { objectName: choices.objectName })}
-                        isFilingOff={!draft.fileToCrm}
-                        // Saved questions keep their keys (answers already stored under them); new ones follow their label.
-                        liveIds={liveQuestionIds}
-                        newId={() => crypto.randomUUID()}
-                        toasts={toasts}
-                        canCreate={canBuild}
-                        isReadOnly={readOnly('questions')}
-                        {...(shownProblem === undefined ? {} : { problem: shownProblem })}
-                      />
-                    </SettingsStack>
+                        : nobodyOn
+                          ? {
+                              actions: <ButtonLink href={roundRobinHref(slug)}>{strings.openRoundRobin}</ButtonLink>,
+                            }
+                          : {})}
+                    >
+                      {bookingProblem.text}
+                    </Callout>
                   )}
-                  {isTeam && shown === 'hosts' && (
-                    <SettingsStack width="readable" rows="inline">
-                      <HostsCard
-                        data={data}
-                        slug={slug}
-                        page={page}
-                        people={people}
-                        rotations={rotationList}
-                        isLocked={isLocked}
-                        rescheduleHost={draft.rescheduleHost}
-                        onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
-                        onSaved={(saved) => {
-                          setPage(saved);
-                          onNotice?.(rotationStrings.hostsSaved);
+                  {/* A refused save says why where it happened, with the way to the section to fix. */}
+                  {failure !== undefined && (
+                    <Callout
+                      tone="danger"
+                      title={strings.notSaved}
+                      isAnnounced
+                      {...(refusedTab === undefined || refusedTab === shown
+                        ? {}
+                        : {
+                            actions: (
+                              <Button onPress={() => onTabChange(refusedTab)}>
+                                {strings.goTo(tabLabel[refusedTab])}
+                              </Button>
+                            ),
+                          })}
+                    >
+                      {failure.message}
+                    </Callout>
+                  )}
+                  {isWeekDirty && week.error !== undefined && <Callout tone="danger">{week.error}</Callout>}
+                </>
+              }
+            >
+              {shown === 'details' && (
+                <SettingsStack variant="flush">
+                  <Field
+                    label={strings.title}
+                    value={draft.title}
+                    maxLength={120}
+                    isRequired
+                    isReadOnly={readOnly('details')}
+                    onChange={(title) => change({ title })}
+                    {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
+                  />
+                  <Field
+                    label={strings.description}
+                    value={draft.description}
+                    placeholder={strings.descriptionPlaceholder}
+                    isMultiline
+                    maxLength={2000}
+                    showCounter
+                    isReadOnly={readOnly('details')}
+                    onChange={(description) => change({ description })}
+                  />
+                  {readOnly('durations') ? (
+                    // Read only: the chosen lengths as words, which a viewer can reach and read.
+                    <Field
+                      label={strings.lengths}
+                      value={draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', ')}
+                      isReadOnly
+                    />
+                  ) : (
+                    <ChoiceChips
+                      label={strings.lengths}
+                      labelAside={strings.lengthsAside}
+                      choices={lengths.map((minutes) => ({
+                        id: String(minutes),
+                        label: strings.minutesShort(minutes),
+                      }))}
+                      selected={draft.durations.map(String)}
+                      onChange={(ids) => {
+                        const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                        // A fifth is refused here as the server would: the public page shows four.
+                        if (durations.length > LENGTHS_MAX) {
+                          setChipsError(strings.lengthsFull);
+                          return;
+                        }
+                        setChipsError(undefined);
+                        change({ durations });
+                      }}
+                      {...(chipsError === undefined
+                        ? draft.durations.length === 0
+                          ? { error: strings.durationRequired }
+                          : {}
+                        : { error: chipsError })}
+                      end={
+                        <Button ref={customRef} variant="dashed" icon="plus" onPress={() => setAddingLength(true)}>
+                          {strings.durationCustom}
+                        </Button>
+                      }
+                    />
+                  )}
+                  {!readOnly('durations') && (
+                    <Popover
+                      label={strings.addLength}
+                      triggerRef={customRef}
+                      isOpen={isAddingLength}
+                      onOpenChange={(isOpen) => {
+                        setAddingLength(isOpen);
+                        if (!isOpen) {
+                          setLengthText('');
+                          setLengthError(undefined);
+                        }
+                      }}
+                    >
+                      <Field
+                        label={strings.customMinutes}
+                        // With four lengths already, it says so before anything is typed.
+                        hint={draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint}
+                        // The popover opens for this one field: typing starts at once.
+                        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={3}
+                        value={lengthText}
+                        onChange={(value) => {
+                          setLengthText(value);
+                          setLengthError(undefined);
                         }}
+                        onSubmit={addLength}
+                        suffix={
+                          <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
+                            {strings.add}
+                          </Button>
+                        }
+                        {...(lengthError === undefined ? {} : { error: lengthError })}
                       />
+                    </Popover>
+                  )}
+                  <Select
+                    label={strings.location}
+                    // With no calendar to make a video link (critic B-07, 5 Nov 2026): "I'll send a link" is
+                    // video with no link, the page's default, and Video asks for the host's own link below.
+                    // With one, Video is the calendar's link, or the host's own when the page keeps one.
+                    items={[
+                      ...(makesNoLink ? [{ id: SEND_LINK, label: strings.locations.sendLink }] : []),
+                      ...LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] })),
+                    ]}
+                    value={locationChoice}
+                    isReadOnly={readOnly('location')}
+                    // Only the reconnect case still needs a word: the field below asks for the rest.
+                    // A calendar that needs reconnecting makes no link: said under "I'll send a link".
+                    {...(locationChoice === SEND_LINK && noLinkReason === 'reconnect'
+                      ? { hint: strings.noVideoLinkReconnect }
+                      : {})}
+                    onChange={(type) => {
+                      if (type === SEND_LINK) change({ location: { type: 'video' } });
+                      // Video with nothing to make a link: the host's own, asked for right here.
+                      if (type === 'video')
+                        change({ location: makesNoLink ? { type: 'video', link: '' } : { type: 'video' } });
+                      if (type === 'phone') change({ location: { type } });
+                      if (type === 'address' || type === 'custom')
+                        change({ location: { type, value: 'value' in location ? location.value : '' } });
+                    }}
+                  />
+                  {location.type === 'video' && location.link !== undefined && (
+                    <Field
+                      label={strings.meetingLink}
+                      info={tip(strings.meetingLink, strings.meetingLinkHelp)}
+                      type="url"
+                      inputMode="url"
+                      placeholder={strings.meetingLinkPlaceholder}
+                      value={location.link}
+                      maxLength={2048}
+                      isRequired
+                      isReadOnly={readOnly('location')}
+                      // Said once the field is left (or Save is tried), not before anything is typed.
+                      {...(meetingLinkProblem(location) === undefined || (!isLinkLeft && failure === undefined)
+                        ? {}
+                        : { error: meetingLinkProblem(location) })}
+                      onBlur={() => setLinkLeft(true)}
+                      onChange={(link) => change({ location: { type: 'video', link } })}
+                    />
+                  )}
+                  {(location.type === 'address' || location.type === 'custom') && (
+                    <Field
+                      label={location.type === 'address' ? strings.addressOrRoom : strings.where}
+                      value={location.value}
+                      maxLength={500}
+                      isRequired
+                      isReadOnly={readOnly('location')}
+                      {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
+                      onChange={(value) => change({ location: { type: location.type, value } })}
+                    />
+                  )}
+                </SettingsStack>
+              )}
+              {isTeam && shown === 'hosts' && (
+                <SettingsStack variant="flush" rows="inline">
+                  <HostsCard
+                    data={data}
+                    slug={slug}
+                    page={page}
+                    people={people}
+                    rotations={rotationList}
+                    isLocked={isLocked}
+                    {...(me === undefined ? {} : { meId: me.id })}
+                    rescheduleHost={draft.rescheduleHost}
+                    onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
+                    onSaved={(saved) => {
+                      setPage(saved);
+                      onNotice?.(rotationStrings.hostsSaved);
+                    }}
+                    rules={
                       <RulesCard
                         data={data}
                         slug={slug}
@@ -2040,257 +1521,548 @@ export function PageEditor({
                           onNotice?.(routingStrings.saved);
                         }}
                       />
-                      <FormOnlyCard
-                        data={data}
-                        slug={slug}
-                        page={page}
-                        isLocked={isLocked}
-                        onSaved={(saved) => {
-                          setPage(saved);
-                          onNotice?.(routingStrings.saved);
+                    }
+                  />
+                </SettingsStack>
+              )}
+              {shown === 'hours' && (
+                <SettingsStack variant="flush">
+                  {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
+                      reserved time and conflicts, each a section with its heading. */}
+                  {isTeam ? (
+                    <Card
+                      title={strings.weeklyHours}
+                      description={rotationStrings.hoursMembers}
+                      actions={
+                        <ButtonLink href={bookingsTabHref(slug, 'roster')} variant="ghost" size="sm" icon="users">
+                          {rotationStrings.seeHours}
+                        </ButtonLink>
+                      }
+                    />
+                  ) : (
+                    <Card
+                      title={scheduleStrings.schedule}
+                      actions={
+                        <>
+                          {/* A schedule's week and days off are shared by every page that books by it (AC-6813). */}
+                          <InfoTip label={scheduleStrings.schedule}>{publishStrings.hoursLive}</InfoTip>
+                          <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
+                            {strings.manageSchedules}
+                          </ButtonLink>
+                        </>
+                      }
+                    >
+                      <Select
+                        label={scheduleStrings.schedule}
+                        isLabelHidden
+                        items={hours.items}
+                        value={draft.scheduleId ?? 'default'}
+                        isReadOnly={readOnly('hours') || hours.items.length === 0 || isWeekDirty}
+                        {...(hours.items.length === 0
+                          ? { readOnlyReason: strings.followOwnerHint }
+                          : isWeekDirty
+                            ? { readOnlyReason: strings.saveHoursFirst }
+                            : {})}
+                        {...(hours.schedule !== undefined && hours.schedule.pages.length > 1
+                          ? { hint: strings.sharedSchedule(hours.schedule.name, hours.schedule.pages.length) }
+                          : {})}
+                        onChange={(id) => {
+                          if (id !== null) change({ scheduleId: id === 'default' ? null : id });
                         }}
                       />
-                    </SettingsStack>
+                    </Card>
                   )}
-                  {shown === 'appearance' && (
-                    // The look in a tab of its own (T21): how the page opens, and the brand it wears.
-                    <PageAppearance
-                      data={data}
-                      slug={slug}
-                      opensIn={draft.defaultView}
-                      isLocked={isLocked}
-                      onOpensIn={(defaultView) => change({ defaultView })}
-                      brandHref={brandSettingsHref(slug)}
-                      opensInMeta={tip(strings.opensIn, strings.opensInHelp)}
+                  {!isTeam &&
+                    (hours.status === 'loading' ? (
+                      // The week's card in its loading shape, so the editor lands where it stood.
+                      <WeekCardPending />
+                    ) : hours.schedule === undefined ? (
+                      // The owner's schedules can't be read here: the week the page books by, read only, saying why.
+                      <Card
+                        title={strings.weeklyHours}
+                        description={hours.status === 'failed' ? strings.hoursUnreadable : strings.followOwnerHint}
+                      >
+                        <DescriptionList
+                          layout="compact"
+                          items={[
+                            {
+                              id: 'zone',
+                              term: strings.timeZone,
+                              description: zoneDisplay(hours.availability.timeZone, openedAt),
+                            },
+                            ...weekGroups(hours.availability, locale).map((group) => ({
+                              id: group.days,
+                              term: group.days,
+                              description: group.hours,
+                            })),
+                          ]}
+                        />
+                      </Card>
+                    ) : (
+                      <>
+                        <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={readOnly('hours')} />
+                        <DaysOff
+                          availability={week.shown}
+                          onChange={(next) => changeWeek(() => next)}
+                          isReadOnly={readOnly('hours')}
+                        />
+                      </>
+                    ))}
+                  {draft.isPrivate && (
+                    <Card
+                      title={strings.reservedTime}
+                      description={strings.reservedTimeLine}
+                      actions={
+                        <ButtonLink
+                          href={bookingsTabHref(slug, 'calendar')}
+                          variant="ghost"
+                          size="sm"
+                          icon="settings"
+                          label={strings.manageReservedTime}
+                        >
+                          {strings.manage}
+                        </ButtonLink>
+                      }
                     />
                   )}
-                  {shown === 'hours' && (
-                    // Hours and Limits as one Availability tab (critic A6, 4 Nov 2026), the forms Settings width.
-                    <SettingsStack width="readable" rows="inline">
-                      {/* In reading order (the owner, 22 Oct 2026): the schedule, its week, its days off, then
-                          reserved time and conflicts, each a section with its heading. */}
-                      {isTeam ? (
-                        <Card
-                          title={strings.weeklyHours}
-                          description={rotationStrings.hoursMembers}
-                          actions={
-                            <ButtonLink href={bookingsTabHref(slug, 'roster')} variant="ghost" size="sm" icon="users">
-                              {rotationStrings.seeHours}
-                            </ButtonLink>
-                          }
-                        />
-                      ) : (
-                        <Card
-                          title={scheduleStrings.schedule}
-                          actions={
-                            <>
-                              {/* A schedule's week and days off are shared by every page that books by it (AC-6813). */}
-                              <InfoTip label={scheduleStrings.schedule}>{publishStrings.hoursLive}</InfoTip>
-                              <ButtonLink href={hours.manageHref} variant="ghost" size="sm" icon="settings">
-                                {strings.manageSchedules}
-                              </ButtonLink>
-                            </>
-                          }
-                        >
-                          <Select
-                            label={scheduleStrings.schedule}
-                            isLabelHidden
-                            items={hours.items}
-                            value={draft.scheduleId ?? 'default'}
-                            isReadOnly={readOnly('hours') || hours.items.length === 0 || isWeekDirty}
-                            {...(hours.items.length === 0
-                              ? { readOnlyReason: strings.followOwnerHint }
-                              : isWeekDirty
-                                ? { readOnlyReason: strings.saveHoursFirst }
-                                : {})}
-                            {...(hours.schedule !== undefined && hours.schedule.pages.length > 1
-                              ? { hint: strings.sharedSchedule(hours.schedule.name, hours.schedule.pages.length) }
-                              : {})}
-                            onChange={(id) => {
-                              if (id !== null) change({ scheduleId: id === 'default' ? null : id });
-                            }}
-                          />
-                        </Card>
-                      )}
-                      {!isTeam &&
-                        (hours.status === 'loading' ? (
-                          // The week's card in its loading shape, so the editor lands where it stood.
-                          <WeekCardPending />
-                        ) : hours.schedule === undefined ? (
-                          // The owner's schedules can't be read here: the week the page books by, read only, saying why.
-                          <Card
-                            title={strings.weeklyHours}
-                            description={hours.status === 'failed' ? strings.hoursUnreadable : strings.followOwnerHint}
-                          >
-                            <DescriptionList
-                              layout="compact"
-                              items={[
-                                {
-                                  id: 'zone',
-                                  term: strings.timeZone,
-                                  description: zoneDisplay(hours.availability.timeZone, openedAt),
-                                },
-                                ...weekGroups(hours.availability, locale).map((group) => ({
-                                  id: group.days,
-                                  term: group.days,
-                                  description: group.hours,
-                                })),
-                              ]}
-                            />
-                          </Card>
-                        ) : (
-                          <>
-                            <WeekCard availability={week.shown} onChange={changeWeek} isReadOnly={readOnly('hours')} />
-                            <DaysOff
-                              availability={week.shown}
-                              onChange={(next) => changeWeek(() => next)}
-                              isReadOnly={readOnly('hours')}
-                            />
-                          </>
-                        ))}
-                      {draft.isPrivate && (
-                        <Card
-                          title={strings.reservedTime}
-                          description={strings.reservedTimeLine}
-                          actions={
-                            <ButtonLink
-                              href={bookingsTabHref(slug, 'calendar')}
-                              variant="ghost"
-                              size="sm"
-                              icon="settings"
-                              label={strings.manageReservedTime}
-                            >
-                              {strings.manage}
-                            </ButtonLink>
-                          }
-                        />
-                      )}
-                      <PageConflicts
-                        destination={data.calendar.pageDestination(slug, page.id)}
-                        calendars={data.calendar.calendars(slug)}
-                        settingsHref={calendarsHref(slug)}
-                        canConnect={calendar.status === 'ready' && calendar.enabled}
-                      />
+                  <PageConflicts
+                    destination={data.calendar.pageDestination(slug, page.id)}
+                    calendars={data.calendar.calendars(slug)}
+                    settingsHref={calendarsHref(slug)}
+                    canConnect={calendar.status === 'ready' && calendar.enabled}
+                  />
 
-                      <Card title={strings.limitGroups.buffers}>
-                        {limitRow(
-                          strings.bufferBefore,
-                          strings.limitHelp.before,
-                          BUFFERS,
-                          String(draft.bufferBefore),
-                          (id) => change({ bufferBefore: Number(id ?? 0) }),
-                        )}
-                        {limitRow(
-                          strings.bufferAfter,
-                          strings.limitHelp.after,
-                          BUFFERS,
-                          String(draft.bufferAfter),
-                          (id) => change({ bufferAfter: Number(id ?? 0) }),
-                        )}
-                      </Card>
-                      <Card title={strings.limitGroups.window}>
-                        {limitRow(
-                          strings.notice,
-                          strings.limitHelp.notice,
-                          NOTICE,
-                          String(draft.minNoticeMinutes),
-                          (id) => change({ minNoticeMinutes: Number(id ?? 0) }),
-                          draft.isPrivate ? strings.noticeIgnored : undefined,
-                        )}
-                        {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
-                          change({ windowDays: Number(id ?? 60) }),
-                        )}
-                      </Card>
-                      <Card title={strings.limitGroups.changes}>
-                        {limitRow(
-                          strings.cancelCutoff,
-                          strings.limitHelp.cancelCutoff,
-                          CUTOFF,
-                          String(draft.cancelCutoffMinutes),
-                          (id) => change({ cancelCutoffMinutes: Number(id ?? 0) }),
-                        )}
-                        {limitRow(
-                          strings.moveCutoff,
-                          strings.limitHelp.moveCutoff,
-                          CUTOFF,
-                          String(draft.moveCutoffMinutes),
-                          (id) => change({ moveCutoffMinutes: Number(id ?? 0) }),
-                        )}
-                      </Card>
-                      <Card title={strings.limitGroups.pace}>
-                        {limitRow(
-                          strings.dailyLimit,
-                          strings.limitHelp.daily,
-                          DAILY,
-                          draft.dailyLimit === null ? 'none' : String(draft.dailyLimit),
-                          (id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) }),
-                        )}
-                        {limitRow(
-                          strings.step,
-                          strings.limitHelp.step,
-                          STEPS,
-                          draft.slotStep === null ? 'duration' : String(draft.slotStep),
-                          (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
-                        )}
-                      </Card>
-                    </SettingsStack>
+                  <Card title={strings.limitGroups.buffers}>
+                    {limitRow(
+                      strings.bufferBefore,
+                      strings.limitHelp.before,
+                      BUFFERS,
+                      String(draft.bufferBefore),
+                      (id) => change({ bufferBefore: Number(id ?? 0) }),
+                    )}
+                    {limitRow(strings.bufferAfter, strings.limitHelp.after, BUFFERS, String(draft.bufferAfter), (id) =>
+                      change({ bufferAfter: Number(id ?? 0) }),
+                    )}
+                  </Card>
+                  <Card title={strings.limitGroups.window}>
+                    {limitRow(
+                      strings.notice,
+                      strings.limitHelp.notice,
+                      NOTICE,
+                      String(draft.minNoticeMinutes),
+                      (id) => change({ minNoticeMinutes: Number(id ?? 0) }),
+                      draft.isPrivate ? strings.noticeIgnored : undefined,
+                    )}
+                    {limitRow(strings.window, strings.limitHelp.ahead, WINDOW, String(draft.windowDays), (id) =>
+                      change({ windowDays: Number(id ?? 60) }),
+                    )}
+                  </Card>
+                  <Card title={strings.limitGroups.changes}>
+                    {limitRow(
+                      strings.cancelCutoff,
+                      strings.limitHelp.cancelCutoff,
+                      CUTOFF,
+                      String(draft.cancelCutoffMinutes),
+                      (id) => change({ cancelCutoffMinutes: Number(id ?? 0) }),
+                    )}
+                    {limitRow(
+                      strings.moveCutoff,
+                      strings.limitHelp.moveCutoff,
+                      CUTOFF,
+                      String(draft.moveCutoffMinutes),
+                      (id) => change({ moveCutoffMinutes: Number(id ?? 0) }),
+                    )}
+                  </Card>
+                  <Card title={strings.limitGroups.pace}>
+                    {limitRow(
+                      strings.dailyLimit,
+                      strings.limitHelp.daily,
+                      DAILY,
+                      draft.dailyLimit === null ? 'none' : String(draft.dailyLimit),
+                      (id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) }),
+                    )}
+                    {limitRow(
+                      strings.step,
+                      strings.limitHelp.step,
+                      STEPS,
+                      draft.slotStep === null ? 'duration' : String(draft.slotStep),
+                      (id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null }),
+                    )}
+                  </Card>
+                </SettingsStack>
+              )}
+              {shown === 'questions' && (
+                <SettingsStack variant="flush">
+                  {targets === undefined && !isLocked && (
+                    <Callout
+                      tone="danger"
+                      title={strings.targetsFailedTitle}
+                      actions={
+                        <Button onPress={() => void readTargets()} isPending={isReadingTargets}>
+                          {strings.tryAgain}
+                        </Button>
+                      }
+                    >
+                      {strings.targetsFailed}
+                    </Callout>
                   )}
-                  {shown === 'bookings' && <PageBookingsTab data={data} slug={slug} pageId={page.id} />}
-                  {shown === 'insights' && <PageInsightsTab data={data} slug={slug} pageId={page.id} />}
-                </PreviewLayout>
-              </TabPanel>
-            </Tabs>
+                  {brokenAnswersObject !== undefined && (
+                    <Callout
+                      tone="warning"
+                      title={strings.answersObjectBrokenTitle(brokenAnswersObject.pluralName)}
+                      {...(canBuild
+                        ? {
+                            actions: (
+                              <ButtonLink href={objectSettingsHref(slug, brokenAnswersObject)} icon="plus">
+                                {strings.answersObjectAddField}
+                              </ButtonLink>
+                            ),
+                          }
+                        : {})}
+                    >
+                      {canBuild ? strings.answersObjectBroken : strings.answersObjectBrokenAsk}
+                    </Callout>
+                  )}
+                  {liveObjects.length > 0 && (
+                    <Card title={strings.answersObject} isBusy={isMovingAnswers}>
+                      <Select
+                        savesOnPick
+                        label={strings.answersObject}
+                        // The card's title already says it (flow walks B6): read, not drawn twice.
+                        isLabelHidden
+                        items={liveObjects.map((object) => ({
+                          id: object.id,
+                          label: object.pluralName,
+                          icon: object.icon,
+                          ...(noEmailMatch?.has(object.id) === true && object.id !== answersObject
+                            ? { isDisabled: true, description: strings.answersObjectNoEmail }
+                            : {}),
+                        }))}
+                        optionDescription="below"
+                        {...(isAnyUnmatched ? { hint: strings.answersObjectRule } : {})}
+                        value={answersObject}
+                        isReadOnly={readOnly('on_booking')}
+                        isDisabled={isMovingAnswers}
+                        onChange={moveAnswers}
+                      />
+                    </Card>
+                  )}
+                  {draft.questions.length > 0 && <Callout tone="info">{strings.chatAsks}</Callout>}
+                  <QuestionsSection
+                    // What every guest is asked before these (critic A7): shown first, locked, so the count and
+                    // the list say what a guest really meets.
+                    fixed={[
+                      {
+                        id: 'fixed-name',
+                        label: strings.fixedName,
+                        typeLabel: questionStrings.answerTypes.short_text,
+                        typeIcon: 'type',
+                        isRequired: true,
+                      },
+                      {
+                        id: 'fixed-email',
+                        label: strings.fixedEmail,
+                        typeLabel: questionStrings.answerTypes.email,
+                        typeIcon: 'mail',
+                        isRequired: true,
+                      },
+                      {
+                        id: 'fixed-notes',
+                        label: strings.fixedNotes,
+                        typeLabel: questionStrings.answerTypes.long_text,
+                        typeIcon: 'file-text',
+                      },
+                    ]}
+                    questions={draft.questions}
+                    onChange={(update) => {
+                      setDraft((current) => ({ ...current, questions: [...update(current.questions)] }));
+                    }}
+                    max={QUESTIONS_MAX}
+                    holder={questionStrings.pageHolder}
+                    keptWith="booking"
+                    attributes={choices.items}
+                    {...(choices.objectName === undefined ? {} : { objectName: choices.objectName })}
+                    isFilingOff={!draft.fileToCrm}
+                    // Saved questions keep their keys (answers already stored under them); new ones follow their label.
+                    liveIds={liveQuestionIds}
+                    newId={() => crypto.randomUUID()}
+                    toasts={toasts}
+                    canCreate={canBuild}
+                    isReadOnly={readOnly('questions')}
+                    {...(shownProblem === undefined ? {} : { problem: shownProblem })}
+                  />
+                </SettingsStack>
+              )}
+              {shown === 'booking' && (
+                <SettingsStack variant="flush" rows="inline">
+                  {/* A workspace's team page is nobody's: each booking goes to whoever gets it, so nothing to pick. */}
+                  {!isWorkspace && (
+                    <PageDestination
+                      destination={data.calendar.pageDestination(slug, page.id)}
+                      calendars={data.calendar.calendars(slug)}
+                      isReadOnly={isLocked}
+                      {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
+                      onChange={(calendarId) => {
+                        // Saves at once: a refusal is put back and said by the store's own toast, as the other
+                        // calendar switches are; anything else that fails says so here rather than vanishing.
+                        data.calendar
+                          .setPageDestination(slug, page.id, calendarId)
+                          .catch(() => toasts.toast({ tone: 'danger', message: strings.somethingWrong }));
+                      }}
+                      settingsHref={calendarsHref(slug)}
+                      canConnect={calendar.status === 'ready' && calendar.enabled}
+                    />
+                  )}
+                  {/* What happens once a booking is made, on the tab about the meeting itself (the owner, 27
+                      October 2026). One row per setting (critic A1: two switches had shared one row). */}
+                  <Card title={strings.afterBooking}>
+                    <SettingsRow title={strings.addToCrm} meta={tip(strings.addToCrm, strings.addToCrmHelp)}>
+                      <Switch
+                        label={strings.addToCrm}
+                        isLabelHidden
+                        isSelected={draft.fileToCrm}
+                        isReadOnly={readOnly('on_booking')}
+                        onChange={(fileToCrm) => change({ fileToCrm })}
+                      />
+                    </SettingsRow>
+                    {/* Spec 0062, L1: the host confirms each booking first (AC-6203), and where the visitor goes
+                        once they have booked (AC-6201). */}
+                    <SettingsRow
+                      title={strings.confirmFirst}
+                      meta={tip(strings.confirmFirst, strings.confirmFirstHint)}
+                    >
+                      <Switch
+                        label={strings.confirmFirst}
+                        isLabelHidden
+                        isSelected={draft.requiresConfirmation}
+                        isReadOnly={isLocked}
+                        onChange={(requiresConfirmation) => change({ requiresConfirmation })}
+                      />
+                    </SettingsRow>
+                    <SettingsRow title={strings.thenShow}>
+                      <SegmentedControl
+                        label={strings.thenShow}
+                        size="compact"
+                        segments={[
+                          { value: 'confirmation', label: strings.afterChoices.confirmation },
+                          { value: 'redirect', label: strings.afterChoices.redirect },
+                        ]}
+                        value={draft.afterBooking}
+                        isReadOnly={isLocked}
+                        onChange={(value) =>
+                          change(
+                            value === 'redirect'
+                              ? { afterBooking: 'redirect' }
+                              : { afterBooking: 'confirmation', redirectUrl: null, sendBookingDetails: false },
+                          )
+                        }
+                      />
+                    </SettingsRow>
+                    {draft.afterBooking === 'redirect' && (
+                      <>
+                        <SettingsRow title={strings.redirectUrl} control="field">
+                          <Field
+                            label={strings.redirectUrl}
+                            isLabelHidden
+                            type="url"
+                            inputMode="url"
+                            placeholder={strings.redirectPlaceholder}
+                            value={draft.redirectUrl ?? ''}
+                            isReadOnly={isLocked}
+                            {...(isRedirectLeft && redirectProblem(draft) !== undefined
+                              ? { error: redirectProblem(draft) }
+                              : {})}
+                            onBlur={() => setRedirectLeft(true)}
+                            onChange={(value) => change({ redirectUrl: value })}
+                          />
+                        </SettingsRow>
+                        <SettingsRow
+                          title={strings.sendDetails}
+                          meta={tip(strings.sendDetails, strings.sendDetailsHint)}
+                        >
+                          <Switch
+                            label={strings.sendDetails}
+                            isLabelHidden
+                            isSelected={draft.sendBookingDetails}
+                            isReadOnly={isLocked}
+                            onChange={(sendBookingDetails) => change({ sendBookingDetails })}
+                          />
+                        </SettingsRow>
+                      </>
+                    )}
+                  </Card>
+                  {/* Requests waiting for a Confirm (spec 0062, AC-6203): shown while any wait. */}
+                  <RequestsCard data={data} slug={slug} pageId={page.id} isReadOnly={isLocked} />
+                </SettingsStack>
+              )}
+              {shown === 'look' && (
+                <PageAppearance
+                  data={data}
+                  slug={slug}
+                  opensIn={draft.defaultView}
+                  isLocked={readOnly('details')}
+                  onOpensIn={(defaultView) => change({ defaultView })}
+                  brandHref={brandSettingsHref(slug)}
+                />
+              )}
+              {shown === 'share' && (
+                // Every way to hand the page out, in one place: its address and who can book, its link and QR code,
+                // a few open times, the snippet, one-time links, the social links and the link page.
+                <SettingsStack variant="flush" rows="inline">
+                  <Card title={strings.linkSection}>
+                    {page.handle !== undefined && !draft.isPrivate && !isWorkspace ? (
+                      // The full address, the part after the owner's handle editable (22 Oct 2026); Copy takes the
+                      // saved link, so it waits while the address has unsaved changes. The card's width, label
+                      // over it, so the whole address reads (6 November 2026).
+                      <Field
+                        label={strings.address}
+                        info={tip(strings.address, strings.addressHelp)}
+                        value={draft.slug}
+                        prefix={`${addressHost}/${page.handle}/`}
+                        {...(isSlugUnsaved && page.status === 'live' && !page.isPrivate
+                          ? { hint: strings.slugChanging }
+                          : {})}
+                        maxLength={60}
+                        isRequired
+                        isReadOnly={readOnly('address')}
+                        onChange={(value) => change({ slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                        onBlur={() => setSlugLeft(true)}
+                        {...(isSlugLeft && slugProblem(draft.slug) !== undefined
+                          ? { error: slugProblem(draft.slug) }
+                          : failure?.field === 'slug'
+                            ? { error: failure.message }
+                            : {})}
+                        // Copy inside the field, at the field's size (one control shape in the row).
+                        {...{
+                          suffix: isAddressUnsaved ? (
+                            <Tooltip content={strings.saveAddressFirst}>
+                              <CopyButton
+                                value={savedLink}
+                                label={strings.copyLink}
+                                variant="ghost"
+                                isIconOnly
+                                isDisabled
+                              />
+                            </Tooltip>
+                          ) : (
+                            <CopyButton value={savedLink} label={strings.copyLink} variant="ghost" isIconOnly />
+                          ),
+                        }}
+                      />
+                    ) : (
+                      // No handle yet, a workspace link or a Link only page: its /b/ link, read only.
+                      <Field
+                        label={strings.address}
+                        info={tip(strings.address, isWorkspace ? strings.workspaceLinkSharing : strings.bAddressHelp)}
+                        value={bLink}
+                        variant="copy"
+                        copyLabel={strings.copyLink}
+                      />
+                    )}
+                    {/* The reader's own handle: on a colleague's page their Profile can't change this address. */}
+                    {page.handle === undefined && !draft.isPrivate && isOwnPage && (
+                      <SettingsRow title={strings.handleRow}>
+                        <ButtonLink href={profileHref(slug)} icon="at-sign">
+                          {strings.setHandleShort}
+                        </ButtonLink>
+                      </SettingsRow>
+                    )}
+                    {!isWorkspace && (
+                      <SettingsRow
+                        title={strings.whoCanBook}
+                        meta={tip(strings.whoCanBook, strings.linkOnlyHint)}
+                        // Switching a public page to Link only retires the address people already have: said
+                        // before Save, not found out later by a visitor on Page not found (flow walks, B10).
+                        {...(draft.isPrivate && !page.isPrivate ? { description: strings.linkOnlyChanging } : {})}
+                      >
+                        <SegmentedControl
+                          label={strings.whoCanBook}
+                          size="compact"
+                          segments={[
+                            { value: 'public', label: strings.publicPage },
+                            { value: 'link', label: strings.linkOnly },
+                          ]}
+                          value={draft.isPrivate ? 'link' : 'public'}
+                          isReadOnly={isLocked}
+                          onChange={(value) => {
+                            const isPrivate = value === 'link';
+                            // Link only hides the address: one it can't save goes back to the saved one, so
+                            // nothing hidden blocks Save.
+                            change({
+                              isPrivate,
+                              ...(isPrivate && slugProblem(draft.slug) !== undefined ? { slug: page.slug } : {}),
+                            });
+                          }}
+                        />
+                      </SettingsRow>
+                    )}
+                  </Card>
+                  <Card title={strings.shareLinkSection}>
+                    <ShareBlock name={page.title} link={savedLink} />
+                  </Card>
+                  {/* A few open times as their own link, or as text (the bookings area, 5 November 2026). */}
+                  {!isLocked && (
+                    <ShareTimesCard
+                      data={data}
+                      publicKey={page.publicKey}
+                      title={page.title}
+                      duration={page.durations[0] ?? 30}
+                      link={savedLink}
+                      isLive={page.status === 'live'}
+                      isPaused={page.status === 'paused'}
+                    />
+                  )}
+                  {/* The snippet for someone else's site (spec 0062, L3). */}
+                  <EmbedCard
+                    script={data.forms.embedUrl()}
+                    publicKey={publicBookingPath(page).replace(/^\/(b\/)?/, '')}
+                    title={page.title}
+                    isLive={page.status === 'live'}
+                    quickPicks={BRAND_QUICK_PICKS}
+                    picture={pagePicture(page)}
+                  />
+                  {/* One-time links (AC-6204). */}
+                  <OneOffLinksCard
+                    data={data}
+                    slug={slug}
+                    page={page}
+                    pageUrl={bLink}
+                    isReadOnly={isLocked}
+                    onSaved={setPage}
+                  />
+                  {!isWorkspace && (
+                    <SocialsCardSlot
+                      data={data}
+                      slug={slug}
+                      onPreviewLinks={setPreviewLinks}
+                      isTeam={page.kind !== 'personal'}
+                      isOwner={ownerMember === undefined}
+                      isShown={draft.showSocials}
+                      isLocked={isLocked}
+                      ownerName={page.ownerName}
+                      onShownChange={(showSocials) => change({ showSocials })}
+                    />
+                  )}
+                  {page.handle !== undefined && !draft.isPrivate && isOwnPage && (
+                    // Where it sits on the owner's link page at /<handle> (spec 0051): a Public page joins it by
+                    // itself, and its place and heading are set on the link page, with the rest of the page.
+                    <Card title={strings.linkPage}>
+                      <SettingsRow title={strings.onLinkPage} meta={tip(strings.onLinkPage, strings.onLinkPageLine)}>
+                        <ButtonLink href={linkPageHref(slug)} icon="pencil">
+                          {strings.editLinkPage}
+                        </ButtonLink>
+                      </SettingsRow>
+                    </Card>
+                  )}
+                </SettingsStack>
+              )}
+              {shown === 'bookings' && <PageBookingsTab data={data} slug={slug} pageId={page.id} />}
+              {shown === 'insights' && <PageInsightsTab data={data} slug={slug} pageId={page.id} />}
+            </PreviewLayout>
           </>
         ),
       }}
     />
-  );
-}
-
-/**
- * The first Publish's moment (the bookings area, 4 November 2026): "<page> is live", its link through the forms' own
- * share part (`ShareBlock`: the link with Copy and Open, its QR code, Email, WhatsApp and the share sheet), a quiet way
- * to the embed, and Done. The same anatomy as a form's live dialog (`ReadyDialog` in forms/PublishDialog.tsx), which
- * takes a form, so it is drawn here from the same parts rather than forked.
- */
-function LiveDialog({
-  slug,
-  page,
-  onClose,
-  onPutOnSite,
-}: {
-  readonly slug: string;
-  readonly page: BookingPageView | undefined;
-  readonly onClose: () => void;
-  readonly onPutOnSite: () => void;
-}) {
-  // The last page stays while the Modal plays its exit.
-  const [last, setLast] = useState(page);
-  if (page !== undefined && page !== last) setLast(page);
-  const live = page ?? last;
-  if (live === undefined) return null;
-  return (
-    <Modal
-      title={publishStrings.liveTitle(live.title)}
-      variant="form"
-      isOpen={page !== undefined}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-      actions={
-        // Copy link is the dialog's one primary; Done only closes it, and focus starts there, as a form's does.
-        // eslint-disable-next-line jsx-a11y-x/no-autofocus
-        <Button key="done" slot="close" autoFocus>
-          {publishStrings.done}
-        </Button>
-      }
-    >
-      <ShareBlock
-        name={live.title}
-        link={publicBookingUrl(live)}
-        onward={{ label: publishStrings.putOnSite, href: pageEditorHref(slug, live.id, 'share'), onPress: onPutOnSite }}
-      />
-    </Modal>
   );
 }
 
@@ -2303,71 +2075,61 @@ export interface PageEditorPendingProps {
 }
 
 /**
- * Each tab's sections as its loading state draws them, by title: the ones a page shows there whatever it holds, so the
- * editor lands where they stood (the owner, 20 Oct 2026). Profile and Reserved time wait for the page, which says
- * whether it has them; Hours draws a one on one page's, the usual kind.
+ * Each section's parts as its loading state draws them, by title: the ones a page shows there whatever it holds, so
+ * the editor lands where they stood (the owner, 20 Oct 2026). Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  page: [strings.details, strings.linkSection],
-  meeting: [strings.meeting, strings.calendarSection, strings.afterBooking],
-  questions: [questionStrings.questions],
-  hosts: [rotationStrings.hosts, routingStrings.routing],
+  details: [strings.title, strings.description],
+  hosts: [rotationStrings.host.teams, rotationStrings.host.always],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
-  appearance: [strings.layoutSection, capturesStrings.brandTitle],
-  share: [strings.shareLinkSection, socialsStrings.title],
+  questions: [questionStrings.questions],
+  booking: [strings.calendarSection, strings.afterBooking],
+  look: [strings.themeSection, strings.opensIn],
+  share: [strings.linkSection, strings.shareLinkSection],
   bookings: [activityStrings.upcoming],
   insights: [activityStrings.insightsTab],
 };
 
 /**
- * The editor while its page loads: the publish bar's strip, the tabs where the editor's will stand, and the chosen
- * one's sections, titled and busy, with skeleton fields. Hosts waits for the page, since only a round robin page has it.
+ * The editor while its page loads: the sections' list where the editor's will stand, and the chosen one's parts,
+ * titled and busy, with skeleton fields. Hosts waits for the page, since only a team page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
-  // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
+  // Hosts only when it is the section asked for (a team page's); the page says whether it has it.
   const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || tab === 'hosts');
-  const shown = tab;
-  const label: Readonly<Record<PageTab, string>> = {
-    page: strings.page,
-    meeting: strings.meeting,
-    questions: questionStrings.questions,
-    hosts: strings.hostsTab,
-    hours: strings.availabilityTab,
-    appearance: strings.appearanceTab,
-    share: strings.shareTab,
-    bookings: activityStrings.bookingsTab,
-    insights: activityStrings.insightsTab,
-  };
+  const { slug = '' } = useParams({ strict: false });
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="bookings"
       page={{
-        topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
+        topBar: <TopBar title={strings.listLabel} isLoading />,
         body: (
-          <Tabs
-            label={strings.tabsLabel}
-            variant="bar"
-            // Only the shown tab while it loads: the others wait for the page.
-            tabs={tabs.map((id) => ({ id, label: label[id], ...(id === shown ? {} : { isDisabled: true }) }))}
-            selectedKey={shown}
+          <PreviewLayout
+            previewShare="column"
+            heading={SECTION_LABELS[tab]}
+            nav={{
+              label: strings.sectionsLabel,
+              currentId: tab,
+              // While the page loads its sections point nowhere new: each is this address again.
+              entries: tabs.map((id) => ({
+                id,
+                label: SECTION_LABELS[id],
+                href: bookingsTabHref(slug, 'pages'),
+                icon: SECTION_ICONS[id],
+                group: SECTION_GROUPS[id],
+              })),
+            }}
+            {...(tab === 'bookings' || tab === 'insights' ? {} : { preview: <Skeleton shape="block" /> })}
+            {...(notices === undefined ? {} : { notices })}
           >
-            <TabPanel id={shown} variant="fill">
-              <PreviewLayout
-                previewShare="snug"
-                bodyLayout="stack"
-                {...(shown === 'bookings' || shown === 'insights' ? {} : { preview: <Skeleton shape="block" /> })}
-                {...(notices === undefined ? {} : { notices })}
-              >
-                <SettingsStack width="readable" rows="inline">
-                  {PENDING_SECTIONS[shown].map((title) => (
-                    <Card key={title} title={title} isBusy>
-                      <Skeleton lines={3} />
-                    </Card>
-                  ))}
-                </SettingsStack>
-              </PreviewLayout>
-            </TabPanel>
-          </Tabs>
+            <SettingsStack variant="flush">
+              {PENDING_SECTIONS[tab].map((title) => (
+                <Card key={title} title={title} isBusy>
+                  <Skeleton lines={3} />
+                </Card>
+              ))}
+            </SettingsStack>
+          </PreviewLayout>
         ),
       }}
     />

@@ -53,6 +53,7 @@ import {
   type ComponentProps,
 } from 'react';
 import { hasNoHosts, hostInWords, railBrand, railHost } from './host.ts';
+import { bookingTemplate } from './template.ts';
 import { brandHref, preloadImage, wearStylesheet } from '../stylesheet.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
@@ -372,8 +373,8 @@ export function BookingPage({
           // A template that pins its scheme (spec 0068: Night dark, Studio light) pins the whole document's, so the
           // foot's mark and anything opened outside the frame take it too. Never in the editor's preview, which is the
           // app's.
-          const pinned =
-            page.brand?.template === 'night' ? 'dark' : page.brand?.template === 'studio' ? 'light' : undefined;
+          // Studio and Split read as Classic on a booking page (the owner, 9 November 2026), so only Night pins.
+          const pinned = bookingTemplate(page.brand?.template) === 'night' ? 'dark' : undefined;
           if (pinned !== undefined && !isEditorPreview) document.documentElement.dataset.theme = pinned;
           // A page that opens on Book by chat fetches the chat's code now, beside its times, not once they're in.
           const opens = isEditorPreview

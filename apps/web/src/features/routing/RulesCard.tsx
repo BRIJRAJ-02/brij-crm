@@ -54,6 +54,8 @@ export interface RulesCardProps {
   readonly facts: readonly Fact[];
   /** Names the fact picker: "Question" on a form, "Question or field" on a page. */
   readonly factLabel: string;
+  /** The card's title: Routing unless the surface names it otherwise (a booking page's Routing rules). */
+  readonly title?: string;
   /** The card's one line. */
   readonly description: string;
   readonly isReadOnly: boolean;
@@ -108,6 +110,7 @@ function RulesCardBody({
   rules,
   facts,
   factLabel,
+  title = strings.routing,
   description,
   isReadOnly,
   waitsForPublish = false,
@@ -190,7 +193,7 @@ function RulesCardBody({
 
   return (
     <Card
-      title={strings.routing}
+      title={title}
       description={waitsForPublish ? `${description} ${strings.waitsForPublish}` : description}
       actions={
         <InfoTip label={strings.routing} example={strings.routingTipExample}>
