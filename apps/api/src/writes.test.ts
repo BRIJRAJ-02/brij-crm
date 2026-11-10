@@ -289,6 +289,7 @@ const READS: ReadonlySet<string> = new Set([
   // A page's one off links and requests (spec 0062, L1).
   'bookingFlow.links',
   'bookingFlow.requests',
+  'bookingFlow.waiting',
   // Managed booking pages (spec 0037, AC-1333): the templates the reader may change, and one of them.
   'managedPages.list',
   'managedPages.get',
