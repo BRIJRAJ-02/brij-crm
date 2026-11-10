@@ -113,3 +113,14 @@ export function wordmarkUrls(origin: string): { readonly light: string; readonly
     dark: appUrl(origin, '/brand/email/timefix-wordmark-dark.png'),
   };
 }
+
+/**
+ * The booking emails' masthead files on the app's origin (`pnpm --filter @crm/emails brand`): the Timefix mark and
+ * wordmark in black ink for the light theme, and in light ink for the dark one.
+ */
+export function logoUrls(origin: string): { readonly light: string; readonly dark: string } {
+  return {
+    light: appUrl(origin, '/brand/email/timefix-logo-light.png'),
+    dark: appUrl(origin, '/brand/email/timefix-logo-dark.png'),
+  };
+}
