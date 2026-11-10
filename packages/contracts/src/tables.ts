@@ -216,9 +216,31 @@ export const PublicNewsConfirmInput = z.object({ token: z.string().min(1).max(10
 export type PublicNewsConfirmInput = z.infer<typeof PublicNewsConfirmInput>;
 
 /** What a news confirm came to: saved now, or saved before (the link pressed again). */
-export const PublicNewsConfirmed = z.object({ status: z.enum(['confirmed', 'already']) });
+export const PublicNewsConfirmed = z.object({
+  status: z.enum(['confirmed', 'already']),
+  /** The unsubscribe token for the "Changed your mind?" link; absent for a link made before 10 November 2026. */
+  unsubscribeToken: z.string().min(1).max(1024).optional(),
+});
 /** What a news confirm came to. */
 export type PublicNewsConfirmed = z.infer<typeof PublicNewsConfirmed>;
+
+/**
+ * An unsubscribe from news and offers, or a subscribe again (10 November 2026): the signed token from an email's
+ * footer link or the confirm page, in the body. The one click (RFC 8058) carries it in the query instead.
+ */
+export const PublicNewsUnsubscribeInput = z.object({ token: z.string().min(1).max(1024) });
+/** An unsubscribe, or a subscribe again. */
+export type PublicNewsUnsubscribeInput = z.infer<typeof PublicNewsUnsubscribeInput>;
+
+/** What an unsubscribe came to: always the one answer, so it never says whether the address was on a list. */
+export const PublicNewsUnsubscribed = z.object({ status: z.literal('unsubscribed') });
+/** What an unsubscribe came to. */
+export type PublicNewsUnsubscribed = z.infer<typeof PublicNewsUnsubscribed>;
+
+/** What a subscribe again came to: always the one answer, whether or not an email went. */
+export const PublicNewsResubscribed = z.object({ status: z.literal('check_email') });
+/** What a subscribe again came to. */
+export type PublicNewsResubscribed = z.infer<typeof PublicNewsResubscribed>;
 
 // ---- The staff's side (RPC) ----
 

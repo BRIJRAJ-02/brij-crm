@@ -6,6 +6,8 @@
 // the calendar file's too.
 import type {
   PublicNewsConfirmed,
+  PublicNewsResubscribed,
+  PublicNewsUnsubscribed,
   PublicReserveInput,
   PublicReserved,
   PublicTablePage,
@@ -17,6 +19,8 @@ import type { FetchLike } from '../fetch.ts';
 
 export type {
   PublicNewsConfirmed,
+  PublicNewsResubscribed,
+  PublicNewsUnsubscribed,
   PublicReserveInput,
   PublicReserved,
   PublicTablePage,
@@ -59,6 +63,13 @@ export interface TableClient {
    * address. A second press answers `already`; a link that ran out is NOT_FOUND.
    */
   confirmNews(key: string, token: string): Promise<PublicNewsConfirmed>;
+  /**
+   * Unsubscribes from news and offers with an unsubscribe link's token (10 November 2026), in the body. Always the
+   * one answer, whether or not anything changed; only a token that opens nothing is NOT_FOUND.
+   */
+  unsubscribeNews(token: string): Promise<PublicNewsUnsubscribed>;
+  /** Subscribe again: asks the double opt-in's email once more (never a yes by itself); always the one answer. */
+  resubscribeNews(token: string): Promise<PublicNewsResubscribed>;
 }
 
 /** The client, on `origin` (the page's own), with `fetch` and the clock passed in for tests. */
@@ -70,10 +81,10 @@ export function createTableClient(options: {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
   const base = `${options.origin}/api/public/tables`;
-  const call = async <T>(path: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> => {
+  const callAt = async <T>(url: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> => {
     let response: Response;
     try {
-      response = await send(`${base}/${path}`, { credentials: 'omit', ...init });
+      response = await send(url, { credentials: 'omit', ...init });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
       if (isFetchFailure(error))
@@ -104,9 +115,18 @@ export function createTableClient(options: {
     );
     throw refused;
   };
+  const call = <T>(path: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> =>
+    callAt<T>(`${base}/${path}`, init, as);
   const post = <T>(path: string, body: unknown): Promise<T> =>
     call<T>(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const at = (key: string) => encodeURIComponent(key);
+  /** The news routes sit beside the tables' (`/api/public/news/*`): the token in a JSON body, never the address. */
+  const postNews = <T>(path: 'unsubscribe' | 'subscribe', token: string): Promise<T> =>
+    callAt<T>(`${options.origin}/api/public/news/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
   return {
     page: (key) => call<PublicTablePage>(at(key)),
     times: (key, query, signal) =>
@@ -140,5 +160,7 @@ export function createTableClient(options: {
         'blob',
       ),
     confirmNews: (key, token) => post<PublicNewsConfirmed>(`${at(key)}/news`, { token }),
+    unsubscribeNews: (token) => postNews<PublicNewsUnsubscribed>('unsubscribe', token),
+    resubscribeNews: (token) => postNews<PublicNewsResubscribed>('subscribe', token),
   };
 }

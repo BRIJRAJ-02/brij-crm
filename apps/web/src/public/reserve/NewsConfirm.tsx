@@ -3,7 +3,8 @@
 //   /r/<key>/manage#news=<token>: the guest ticked news and offers on a reservation, and it counts only once they say
 //   yes here.
 // Main task: one press of Yes, and say it's saved. Nothing is sent before the press, since link scanners open links.
-// Leaves out: the reservation itself (the reservation's own email opens that), and any choice beyond yes.
+// Leaves out: the reservation itself (the reservation's own email opens that), and any choice beyond yes, but for
+//   the signed up page's quiet "Changed your mind? Unsubscribe" (10 November 2026).
 import { BookingFrame, BookingMessage, Button, Callout } from '@crm/ui/public-booking';
 import { isDataError, type PublicTablePage, type TableClient } from '@crm/data/tables';
 import { useEffect, useState } from 'react';
@@ -13,7 +14,7 @@ import { strings } from './strings.ts';
 type State =
   | { readonly status: 'asking' }
   | { readonly status: 'saving' }
-  | { readonly status: 'done'; readonly already: boolean }
+  | { readonly status: 'done'; readonly already: boolean; readonly unsubscribeToken?: string }
   | { readonly status: 'gone' }
   | { readonly status: 'failed'; readonly message: string };
 
@@ -43,6 +44,16 @@ export function NewsConfirm({
         title={state.already ? strings.newsAlready : strings.newsDone}
         page="booking_manage"
         action={reserve}
+        // A quiet way back out (10 November 2026): the unsubscribe page, which asks before it does anything.
+        {...(state.unsubscribeToken === undefined
+          ? {}
+          : {
+              link: {
+                label: strings.newsChangedMind,
+                href: `/r/${encodeURIComponent(page.key)}/manage#${new URLSearchParams({ unsubscribe: state.unsubscribeToken }).toString()}`,
+                icon: null,
+              },
+            })}
       >
         {strings.newsDoneBody(business)}
       </BookingMessage>
@@ -62,7 +73,11 @@ export function NewsConfirm({
     setState({ status: 'saving' });
     client.confirmNews(page.key, token).then(
       (answer) => {
-        setState({ status: 'done', already: answer.status === 'already' });
+        setState({
+          status: 'done',
+          already: answer.status === 'already',
+          ...(answer.unsubscribeToken === undefined ? {} : { unsubscribeToken: answer.unsubscribeToken }),
+        });
       },
       (error: unknown) => {
         if (isDataError(error) && error.code === 'NOT_FOUND') setState({ status: 'gone' });

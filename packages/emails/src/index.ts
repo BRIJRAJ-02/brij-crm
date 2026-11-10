@@ -5,8 +5,10 @@
 // worker (a booking's emails, and the queued kinds through `crm_email`).
 import {
   EMAIL_PARAMS,
+  GuestUnsubscribe,
   JoinApprovedEmail,
   JoinRequestEmail,
+  MARKETING_EMAIL_KINDS,
   MemberInviteEmail,
   NotificationsEmail,
   WorkspaceDeletedEmail,
@@ -74,13 +76,32 @@ function templateContext(context: Omit<EmailContext, 'preferencesUrl'>): Templat
   };
 }
 
+/** A queued kind drawn: its parts, and RFC 8058's one click address when the email carries a guest's way out. */
+export interface RenderedKindEmail extends RenderedEmail {
+  /**
+   * The absolute one click unsubscribe address (`GuestUnsubscribe.oneClickPath` on the app's origin), for the
+   * sender's `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers.
+   */
+  readonly listUnsubscribe?: string;
+}
+
+/** The way out a kind's params carry, if its schema has one (`GuestUnsubscribe`, parsed already). */
+function unsubscribeOf(parsed: unknown): GuestUnsubscribe | undefined {
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const found = GuestUnsubscribe.safeParse((parsed as { readonly unsubscribe?: unknown }).unsubscribe);
+  return found.success ? found.data : undefined;
+}
+
 /**
  * Draws one email of a kind with a template: its params parsed again by the
  * kind's schema (a shape the template doesn't know throws), then its words
  * drawn as HTML and plain text. An optional kind must have the reader's
- * preferences link, so its footer can always offer it.
+ * preferences link, so its footer can always offer it. A guest's email that
+ * carries a way out (`unsubscribe`) gets the footer's Unsubscribe link and
+ * the one click address for its headers, and a marketing kind
+ * (`MARKETING_EMAIL_KINDS`) must carry one.
  */
-export async function renderEmail(kind: EmailKind, params: unknown, context: EmailContext): Promise<RenderedEmail> {
+export async function renderEmail(kind: EmailKind, params: unknown, context: EmailContext): Promise<RenderedKindEmail> {
   const entry = CATALOG[kind];
   // Parsed by this kind's own schema, so the params are exactly what its template takes.
   const parsed: unknown = EMAIL_PARAMS[kind].parse(params);
@@ -88,15 +109,23 @@ export async function renderEmail(kind: EmailKind, params: unknown, context: Ema
   if (optional && context.preferencesUrl === undefined) {
     throw new Error(`A ${kind} email is optional, so it needs the reader's preferences link.`);
   }
+  const unsubscribe = unsubscribeOf(parsed);
+  if (unsubscribe === undefined && MARKETING_EMAIL_KINDS.includes(kind)) {
+    throw new Error(`A ${kind} email is marketing, so it needs the guest's unsubscribe link.`);
+  }
+  const unsubscribeUrl = unsubscribe === undefined ? undefined : appUrl(context.appOrigin, unsubscribe.pagePath);
+  const listUnsubscribe = unsubscribe === undefined ? undefined : appUrl(context.appOrigin, unsubscribe.oneClickPath);
   const template = entry.template as Template<unknown>;
-  return renderDocument(template(parsed, templateContext(context)), {
+  const drawn = await renderDocument(template(parsed, templateContext(context)), {
     appOrigin: context.appOrigin,
     medium: entry.medium,
     // The public pages' own origin, where one is configured: a booking email's manage button and Book again
     // are served from there, and without this the whole email throws rather than linking to it (3 November).
     ...(context.publicOrigin === undefined ? {} : { publicOrigins: [context.publicOrigin] }),
     ...(optional && context.preferencesUrl !== undefined ? { preferencesUrl: context.preferencesUrl } : {}),
+    ...(unsubscribeUrl === undefined ? {} : { unsubscribeUrl }),
   });
+  return listUnsubscribe === undefined ? drawn : { ...drawn, listUnsubscribe };
 }
 
 /** The sign in code email (spec 0005), sent in its request: the code, how long it works, and the shared footer. */

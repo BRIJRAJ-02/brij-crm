@@ -1429,6 +1429,13 @@
       "when": 1795700024000,
       "tag": "0203_page_handover",
       "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "7",
+      "when": 1795700025000,
+      "tag": "0204_news_unsubscribe",
+      "breakpoints": true
     }
   ]
 }

@@ -462,10 +462,11 @@ describe('news and offers by double opt-in, and the durable limits (9 November 2
     ).toBe(403);
     expect((await guest(`${key}/news`, { method: 'POST', body: { token: `${token}x` } })).status).toBe(404);
     expect((await guest(`${key}/news`, { method: 'POST', body: {} })).status).toBe(400);
-    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toEqual({
+    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toMatchObject({
       status: 'confirmed',
+      unsubscribeToken: expect.stringMatching(/^nu1\./) as unknown,
     });
-    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toEqual({
+    expect(await (await guest(`${key}/news`, { method: 'POST', body: { token } })).json()).toMatchObject({
       status: 'already',
     });
     const consents = await testQuery<{ granted: boolean; source_type: string }>(
@@ -474,6 +475,114 @@ describe('news and offers by double opt-in, and the durable limits (9 November 2
       [m.workspace.id],
     );
     expect(consents).toEqual([{ granted: true, source_type: 'appointment' }]);
+  });
+
+  /** A public news route, as a mail service or the page sends it: no Origin unless named. */
+  function news(
+    path: string,
+    init: { method?: string; body?: string; type?: string; ip?: string; origin?: string } = {},
+  ) {
+    return app.request(`/api/public/news/${path}`, {
+      method: init.method ?? 'POST',
+      headers: {
+        [EDGE_HEADER]: TEST_EDGE_SECRET,
+        'x-forwarded-for': init.ip ?? newIp(),
+        ...(init.type === undefined ? {} : { 'content-type': init.type }),
+        ...(init.origin === undefined ? {} : { [ORIGIN_HEADER]: init.origin, origin: init.origin }),
+      },
+      ...(init.body === undefined ? {} : { body: init.body }),
+    });
+  }
+
+  it('unsubscribes by RFC 8058’s one click with no Origin, says the same every time, and subscribes again by email', async () => {
+    const { m, key } = await taking();
+    const email = `out-${newId().slice(-8)}@example.com`;
+    await guest(`${key}/reserve`, { method: 'POST', body: reservation({ email, marketing: true }) });
+    const [mail] = await testQuery<{ confirm: string; page: string; one_click: string }>(
+      ownerUrl,
+      `select params->>'confirmPath' as confirm, params->'unsubscribe'->>'pagePath' as page,
+         params->'unsubscribe'->>'oneClickPath' as one_click
+       from emails where workspace_id = $1 and kind = 'reservation_news'`,
+      [m.workspace.id],
+    );
+    const confirm = new URLSearchParams((mail?.confirm ?? '').split('#')[1] ?? '').get('news') ?? '';
+    await guest(`${key}/news`, { method: 'POST', body: { token: confirm } });
+    const oneClick = (mail?.one_click ?? '').replace(/^\/api\/public\/news\//, '');
+    const token = new URLSearchParams(oneClick.split('?')[1]).get('t') ?? '';
+    expect(token).not.toBe('');
+    // A browser opening the address is sent to the page, which asks first; a GET changes nothing.
+    const opened = await news(oneClick, { method: 'GET' });
+    expect(opened.status).toBe(303);
+    expect(opened.headers.get('location')).toBe(mail?.page);
+    // The mail service's one click: a form body, no Origin, no login.
+    const body = 'List-Unsubscribe=One-Click';
+    const type = 'application/x-www-form-urlencoded';
+    const first = await news(oneClick, { body, type });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ status: 'unsubscribed' });
+    // A repeat, or the page's press with the token in the body, answers the same and writes nothing more.
+    expect(await (await news(oneClick, { body, type })).json()).toEqual({ status: 'unsubscribed' });
+    const pressed = await news('unsubscribe', {
+      body: JSON.stringify({ token }),
+      type: 'application/json',
+      origin: APP_URL,
+    });
+    expect(await pressed.json()).toEqual({ status: 'unsubscribed' });
+    const rows = await testQuery<{ granted: boolean; source_type: string }>(
+      ownerUrl,
+      `select granted, source_type from consent_records where workspace_id = $1 order by at, id`,
+      [m.workspace.id],
+    );
+    expect(rows).toEqual([
+      { granted: true, source_type: 'appointment' },
+      { granted: false, source_type: 'email_link' },
+    ]);
+    // A forged token opens nothing.
+    expect((await news(`unsubscribe?t=${token}x`, { body, type })).status).toBe(404);
+    expect((await news(`unsubscribe?t=${token}x`, { method: 'GET' })).status).toBe(404);
+    // Subscribe again: only from our origins, never a yes by itself, one email to the Person's own address.
+    expect(
+      (
+        await news('subscribe', {
+          body: JSON.stringify({ token }),
+          type: 'application/json',
+          origin: 'https://evil.example',
+        })
+      ).status,
+    ).toBe(403);
+    const again = await news('subscribe', {
+      body: JSON.stringify({ token }),
+      type: 'application/json',
+      origin: APP_URL,
+    });
+    expect(await again.json()).toEqual({ status: 'check_email' });
+    const mails = await testQuery<{ to_address: string }>(
+      ownerUrl,
+      `select to_address from emails where workspace_id = $1 and kind = 'reservation_news' order by created_at, id`,
+      [m.workspace.id],
+    );
+    expect(mails.map((each) => each.to_address)).toEqual([email, email]);
+    const latest = await testQuery<{ granted: boolean }>(
+      ownerUrl,
+      `select granted from consent_records where workspace_id = $1 order by at desc, id desc limit 1`,
+      [m.workspace.id],
+    );
+    expect(latest).toEqual([{ granted: false }]);
+  });
+
+  it('limits one Person’s one clicks, however many addresses they come from', async () => {
+    const { m, key } = await taking();
+    await guest(`${key}/reserve`, { method: 'POST', body: reservation({ marketing: true }) });
+    const [mail] = await testQuery<{ one_click: string }>(
+      ownerUrl,
+      `select params->'unsubscribe'->>'oneClickPath' as one_click from emails
+       where workspace_id = $1 and kind = 'reservation_news'`,
+      [m.workspace.id],
+    );
+    const oneClick = (mail?.one_click ?? '').replace(/^\/api\/public\/news\//, '');
+    const statuses: number[] = [];
+    for (let index = 0; index < 6; index += 1) statuses.push((await news(oneClick, { body: '' })).status);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
   });
 
   it('holds a reservation’s per address window across instances, where each one’s memory starts empty', async () => {

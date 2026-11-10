@@ -628,6 +628,46 @@ export const FailedWithLink: Story = {
   },
 };
 
+/** One thing to do instead (10 November 2026): the unsubscribed page's Subscribe again, beside a way on. */
+export const WithPress: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="You’re unsubscribed"
+        press={{ label: 'Subscribe again', onPress: fn() }}
+        action={{ label: 'Reserve a table', href: '/r/somewhere' }}
+        page="booking_manage"
+      >
+        Somewhere won’t email you news and offers any more.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'You’re unsubscribed' })).toHaveFocus();
+    await expect(canvas.getByRole('button', { name: 'Subscribe again' })).toBeInTheDocument();
+  },
+};
+
+/** The same press while it is out: its pending words, and presses ignored. */
+export const WithPressPending: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingMessage
+        title="You’re unsubscribed"
+        press={{ label: 'Subscribe again', onPress: fn(), isPending: true, pendingLabel: 'Sending' }}
+        page="booking_manage"
+      >
+        Somewhere won’t email you news and offers any more.
+      </BookingMessage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Sending/ })).toBeInTheDocument();
+  },
+};
+
 /** A profile's address that names nobody: the same message, its Timefix link tagged as the profile's. */
 export const ProfileNotFound: Story = {
   parameters: { crm: { screenshot: false } },
