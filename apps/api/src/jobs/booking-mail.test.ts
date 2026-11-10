@@ -8,6 +8,7 @@ import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import { systemScope } from '@crm/core/system';
 import { testScope } from '@crm/core/testing';
 import { createDatabase, type Database } from '@crm/db';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { bookingEmail } from '../mail/booking.ts';
 import type { Mailer, MailMessage } from '../mail/mailer.ts';
@@ -99,6 +100,50 @@ describe('the booking email task', () => {
     const again = fakeMailer();
     await runBookingMail(depsWith(again), { workspaceId: b.workspaceId, bookingId: b.bookingId, kind: 'guests' });
     expect(again.sent).toEqual([]);
+  });
+
+  it('takes an orphan event off the calendar after a raced cancel, warning and never throwing when that fails', async () => {
+    const b = await booked();
+    const meetingId = newId();
+    // Cancelled while its event was being written: it holds the event, and its status is no longer confirmed.
+    await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute(
+        sql`update bookings set status = 'cancelled', cancelled_by = 'host', cancelled_at = now(), meeting_id = ${meetingId}::uuid where id = ${b.bookingId}::uuid`,
+      ),
+    );
+    const warned: unknown[] = [];
+    let tries = 0;
+    const deps = {
+      ...depsWith(fakeMailer()),
+      reseat: {
+        calendar: {
+          busy: NO_CALENDAR.busy,
+          existing: {
+            cancel: () => {
+              tries += 1;
+              return Promise.reject(new Error('down'));
+            },
+            move: () => Promise.resolve(),
+          },
+        },
+      },
+      log: {
+        info: () => undefined,
+        warn: (message: string, fields?: Record<string, unknown>) => warned.push({ message, ...fields }),
+      },
+    } as Parameters<typeof runBookingMail>[0];
+    await expect(
+      runBookingMail(deps, { workspaceId: b.workspaceId, bookingId: b.bookingId, kind: 'approved' }),
+    ).resolves.toBeUndefined();
+    expect(tries).toBe(3);
+    expect(warned).toEqual(
+      [1, 2, 3].map((attempt) => ({
+        message: 'booking.event_cancel_failed',
+        bookingId: b.bookingId,
+        attempt,
+        error: 'Error',
+      })),
+    );
   });
 
   it('throws plainly only when every send fails, so Graphile tries again', async () => {

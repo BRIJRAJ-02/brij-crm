@@ -85,8 +85,24 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
       );
     }
     const { orphan } = await queueConfirmation(scope, bookingId);
-    // Cancelled while its event was being written: the event comes off again, and no confirmation goes.
-    if (orphan !== undefined && calendar?.existing !== undefined) await calendar.existing.cancel(orphan);
+    // Cancelled while its event was being written: the event comes off again, and no confirmation goes. As
+    // `remakeEvent` cancels: three tries, each failure a warning in the log, never a rerun of the job (which would
+    // write the event again and queue nothing new).
+    if (orphan !== undefined && calendar?.existing !== undefined) {
+      const { cancel } = calendar.existing;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          await cancel(orphan);
+          break;
+        } catch (error) {
+          deps.log.warn('booking.event_cancel_failed', {
+            bookingId,
+            attempt,
+            error: error instanceof Error ? error.name : 'unknown',
+          });
+        }
+      }
+    }
     return;
   }
   if (kind === 'pending_expire') {
