@@ -54,10 +54,18 @@ export function AvailabilityTab({ state, dispatch, onReassignMany }: Availabilit
         <div className="tf-bkf-sections tf-bkf__avail-main">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div>
         <div className="tf-bkf-sections tf-bkf__avail-side">
           <TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} />
-          <CalendarsSection state={state} dispatch={dispatch} />
         </div>
         <div className="tf-bkf-sections tf-bkf__avail-wide"><TeamWeek state={state} /></div>
       </div>
+    </div>
+  );
+}
+
+/** The Calendars page: connected accounts, which ones are checked for conflicts, and where new bookings land. */
+export function CalendarsTab({ state, dispatch }: { readonly state: BookingsState; readonly dispatch: (a: BookingsAction) => void }) {
+  return (
+    <div className="tf-bkf__tab">
+      <div className="tf-bkf__narrow"><CalendarsSection state={state} dispatch={dispatch} /></div>
     </div>
   );
 }
@@ -209,7 +217,7 @@ function CalendarsSection({ state, dispatch }: { readonly state: BookingsState; 
   });
   const targets = state.calendars.filter((c) => c.status === 'connected').flatMap((c) => (c.provider === 'Google' ? [{ id: 'work', label: 'Work', description: `Google · ${c.email}` }, { id: 'personal', label: 'Personal', description: `Google · ${c.email}` }] : [{ id: c.id, label: 'Calendar', description: `${c.provider} · ${c.email}` }]));
   return (
-    <Section title="Calendars" description="Times you're busy there are never offered to guests.">
+    <Section title="Connected accounts" description="Times you're busy there are never offered to guests.">
       <div className="tf-bkf__stack">
         {state.calendars.length === 0 && <Callout tone="warning">Connect a calendar so guests never book over your meetings. Your pages work without one.</Callout>}
         {skippedIn.map(([id, n]) => (

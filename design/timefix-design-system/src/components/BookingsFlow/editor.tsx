@@ -1,7 +1,7 @@
 // Step 5: the page editor. One scroll of sections with live summaries, the guest's view beside it, Save changes at the foot.
 import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { AlertTriangle, ArrowRight, CalendarDays, Check, Eye, MessageSquareText, Palette, Play, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, Settings2, Users } from 'lucide-react';
 import { TopBar } from '../AppShell/AppShell.tsx';
 import { Breadcrumbs } from '../Breadcrumbs/Breadcrumbs.tsx';
 import { Callout } from '../Callout/Callout.tsx';
@@ -94,7 +94,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
   return (
     <>
       <TopBar
-        title={<Breadcrumbs size="title" items={[{ id: 'bookings', label: 'Bookings', icon: <CalendarDays {...i16} /> }, { id: 'pages', label: 'Pages' }, { id: 'page', label: page.name }]} onAction={(id) => { if (id !== 'page') onBack(); }} />}
+        title={<Breadcrumbs size="title" items={[{ id: 'pages', label: 'Booking pages', icon: <Link2 {...i16} /> }, { id: 'page', label: page.name }]} onAction={(id) => { if (id !== 'page') onBack(); }} />}
         actions={<>
           <OnSwitch page={page} onChange={onToggle} />
           <Button size="sm" variant="ghost" icon={<Play {...i14} />} onPress={onGuest}>See it as a guest</Button>

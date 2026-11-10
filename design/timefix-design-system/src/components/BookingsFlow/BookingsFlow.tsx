@@ -1,9 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, CalendarDays, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CalendarDays, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TopBar } from '../AppShell/AppShell.tsx';
-import { Sidebar, WorkspaceSwitcher, NavItem, PersonRow } from '../Sidebar/Sidebar.tsx';
-import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
+import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
 import { useToast, ACTION_TOAST_TIMEOUT_MS } from '../Toast/Toast.tsx';
@@ -21,7 +20,7 @@ import { MeetingsTab, NewMeetingDialog, DeclineDialog, HoldDialog, meetingFrom, 
 import { MeetingDrawer, RescheduleDialog, ReassignDialog } from './drawer.tsx';
 import { PagesTab } from './pages.tsx';
 import { PageEditor, type EditorSection } from './editor.tsx';
-import { AvailabilityTab } from './availability.tsx';
+import { CalendarsTab, AvailabilityTab } from './availability.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
 import { GuestMode, GUEST_SCENARIOS, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, northwind, uniqueSlug } from './seed.ts';
@@ -46,6 +45,15 @@ const readWhose = (workspace: string): Whose => { try { return window.localStora
 const saveWhose = (workspace: string, w: Whose) => { try { window.localStorage.setItem(`tf-bkf-whose:${workspace}`, w); } catch { /* storage may be off */ } };
 
 /** The whole Bookings module as one live flow over a dummy workspace: Meetings, Pages, Availability and Routing, plus the guest's side. Built only from the system's components. */
+/** Bookings' own pages in the sidebar: one job each, no tabs. */
+const SECTIONS = [
+  { id: 'meetings', label: 'Meetings', icon: <CalendarDays {...i16} /> },
+  { id: 'pages', label: 'Booking pages', icon: <Link2 {...i16} /> },
+  { id: 'availability', label: 'Availability', icon: <Clock {...i16} /> },
+  { id: 'calendars', label: 'Calendars', icon: <CalendarCheck {...i16} /> },
+  { id: 'routing', label: 'Routing', icon: <Route {...i16} /> },
+] as const;
+
 export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
@@ -234,10 +242,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       </PersonRow>}>
       <NavItem label="Home" icon={<Home {...i16} />} onPress={() => undefined} />
       <NavItem label="Inbox" icon={<Inbox {...i16} />} badge={unread} onPress={() => undefined} />
-      <NavItem label="Bookings" icon={<CalendarDays {...i16} />} count={upcoming} isCurrent onPress={() => { setEditor(undefined); setTab('meetings'); }} />
-      <NavItem label="Links" icon={<Link2 {...i16} />} onPress={() => undefined} />
-      <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
       <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
+      <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
+      <NavSection title="Bookings">
+        {SECTIONS.filter((x) => x.id !== 'routing' || isTeam).map((x) => (
+          <NavItem key={x.id} label={x.label} icon={x.icon} count={x.id === 'meetings' ? upcoming : undefined} isCurrent={tab === x.id} onPress={() => { setEditor(undefined); setTab(x.id); }} />
+        ))}
+      </NavSection>
     </Sidebar>
   );
 
@@ -293,17 +304,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
           onMeetings={() => { setEditor(undefined); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} />
       ) : (
         <>
-          <TopBar title={<Breadcrumbs size="title" items={[{ id: 'bookings', label: 'Bookings', icon: <CalendarDays {...i16} /> }]} />}
+          <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: SECTIONS.find((x) => x.id === tab)?.label ?? 'Bookings', icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
             actions={<>{demoMenu}{bell}</>} />
           <div className="tf-bkf__body">
-            <Tabs aria-label="Bookings" className="tf-bkf__tabs" selectedKey={tab} onSelectionChange={setTab}
-              items={[
-                { id: 'meetings', label: 'Meetings', icon: <CalendarDays {...i16} /> },
-                { id: 'pages', label: 'Pages', icon: <Link2 {...i16} />, count: state.pages.length || undefined },
-                { id: 'availability', label: 'Availability', icon: <Clock {...i16} /> },
-                ...(isTeam ? [{ id: 'routing', label: 'Routing', icon: <Route {...i16} /> }] : []),
-              ]}>
-              <TabPanel id="meetings" className="tf-bkf__panel">
+              {tab === 'meetings' && (<div className="tf-bkf__panel">
                 <MeetingsTab state={state} view={view} onView={(v) => { setView(v); if (v === 'list') setFocusHour(undefined); }} whose={whose} onWhose={setWhose}
                   week={week} onWeek={(w) => { setWeek(w); setFocusHour(undefined); }} focusHour={focusHour} fresh={freshMeeting}
                   onOpen={setMeetingId} onCancel={cancelNow} onUndoCancel={(m) => { const x = meetingById(m.id); if (x) update({ ...x, status: 'confirmed' }, 'Cancel undone'); }}
@@ -323,21 +327,17 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onMoveBlock={(block) => { dispatch({ type: 'block/remove', id: block.id }); dispatch({ type: 'block/add', block }); }}
                   onMove={(id, day, startMin) => { const m = meetingById(id); if (m) move(m, at(day, startMin), 'is emailed the new time'); }}
                   onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
-              </TabPanel>
-              <TabPanel id="pages" className="tf-bkf__panel">
+              </div>)}
+              {tab === 'pages' && (<div className="tf-bkf__panel">
                 <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: p }); }}
                   onFix={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: p, section: 'who' }); }}
                   onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} />
-              </TabPanel>
-              <TabPanel id="availability" className="tf-bkf__panel">
+              </div>)}
+              {tab === 'availability' && (<div className="tf-bkf__panel">
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list) => reassignMany(list)} />
-              </TabPanel>
-              {isTeam && (
-                <TabPanel id="routing" className="tf-bkf__panel">
-                  <RoutingTab state={state} dispatch={dispatch} />
-                </TabPanel>
-              )}
-            </Tabs>
+              </div>)}
+              {tab === 'calendars' && (<div className="tf-bkf__panel"><CalendarsTab state={state} dispatch={dispatch} /></div>)}
+              {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>
       )}

@@ -4,8 +4,7 @@
 .tf-bkf-demo { height: 100dvh; min-height: 760px; padding: 0; }
 .tf-bkf { height: 100%; }
 .tf-bkf__body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 var(--space-24); }
-.tf-bkf__tabs { flex: 1; min-height: 0; }
-.tf-bkf__panel { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: var(--space-32); container: tf-bkf-panel / inline-size; }
+.tf-bkf__panel { flex: 1; min-height: 0; overflow-y: auto; padding-top: var(--space-20); padding-bottom: var(--space-32); container: tf-bkf-panel / inline-size; }
 
 /* One page grammar for every tab: the toolbar (view or scope, a quiet count, one ink action), then the tab's sections. */
 .tf-bkf__tab, .tf-bkf__meetings { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
@@ -144,7 +143,8 @@
 .tf-bkf__meetings { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
 .tf-bkf__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); }
 .tf-bkf__count { color: var(--text-secondary); font: 500 13px/20px var(--font-sans); }
-.tf-bkf-next { display: flex; flex-direction: column; gap: var(--space-8); max-width: calc(var(--size-dialog) + var(--space-64)); margin-bottom: var(--space-12); }
+.tf-bkf-next { display: flex; flex-direction: column; gap: var(--space-8); padding-left: var(--space-8); max-width: calc(var(--size-dialog) + var(--space-64)); margin-bottom: var(--space-12); }
+.tf-bkf__narrow { max-width: calc(var(--size-dialog-wide) - var(--space-64)); }
 .tf-bkf__whose { width: calc(var(--size-menu) - var(--space-64)); }
 .tf-bkf__weeknav { display: inline-flex; align-items: center; gap: var(--space-4); font: 500 13px/20px var(--font-sans); }
 .tf-bkf__picked { position: sticky; bottom: 0; z-index: var(--z-sticky); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
