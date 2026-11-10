@@ -1,0 +1,39 @@
+/* SegmentedControl's quiet count (Meetings' Requests 2), apart from the control's own styles so the pages that never
+   show a count (the booking page's Month, List or Book by chat) never load it: SegmentedControl loads it with the
+   first segment that has one. */
+@layer components {
+  /* A quiet count after the label; a new number rolls up into place (the rolling count), and only fades under reduced
+     motion. Clipped to one line so the roll stays inside the segment. */
+  .count {
+    position: relative;
+    display: inline-flex;
+    overflow: clip;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+  }
+
+  .countValue[data-roll] {
+    animation: count-roll var(--duration-popover) var(--ease-out);
+  }
+
+  @keyframes count-roll {
+    from {
+      opacity: 0;
+      translate: 0 60%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .countValue[data-roll] {
+      animation-name: count-fade;
+    }
+
+    @keyframes count-fade {
+      from {
+        opacity: 0;
+      }
+    }
+  }
+}
