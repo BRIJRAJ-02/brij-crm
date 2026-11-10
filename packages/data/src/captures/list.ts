@@ -130,6 +130,9 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
     // Moves on every write sent and landed; a read that saw it move lands nothing.
     let epoch = 0;
     let writing = 0;
+    // What each write on its way shows at once: a first read landing meanwhile shows its items with these on top, so
+    // a change made before the list was ever read (a delete with Undo from an editor) isn't undone by that read.
+    const shown = new Set<ItemsChange<Item>>();
     let isStale = false;
     const listeners = new Set<() => void>();
     const set = (next: CaptureListState<Item>) => {
@@ -147,7 +150,9 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
             // It may miss a write: a list already shown keeps what it shows, a first one shows it for now.
             // Either way it is read again once the writes are in.
             isStale = true;
-            if (state.status !== 'ready') set({ status: 'ready', items, pendingIds: NONE });
+            if (state.status !== 'ready') {
+              set({ status: 'ready', items: [...shown].reduce((each, run) => run(each), items), pendingIds: NONE });
+            }
             if (writing === 0) return read();
             return undefined;
           }
@@ -234,10 +239,14 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
         writing += 1;
         // A write while nothing is known: the next read asks the server, which has it.
         if (state.status !== 'ready') isStale = true;
-        if (write.show !== undefined)
-          change(write.show, { ...(write.pendingId === undefined ? {} : { add: write.pendingId }) });
+        const show = write.show;
+        if (show !== undefined) {
+          shown.add(show);
+          change(show, { ...(write.pendingId === undefined ? {} : { add: write.pendingId }) });
+        }
         try {
           const answer = await write.send();
+          if (show !== undefined) shown.delete(show);
           const land = write.land;
           change(land === undefined ? (items) => items : (items) => land(items, answer), {
             ...(write.pendingId === undefined ? {} : { remove: write.pendingId }),
@@ -245,6 +254,7 @@ export function createCaptureList<Item extends { readonly id: string }>(deps: Ca
           settle();
           return answer;
         } catch (error) {
+          if (show !== undefined) shown.delete(show);
           if (write.undo !== undefined)
             change(write.undo, { ...(write.pendingId === undefined ? {} : { remove: write.pendingId }) });
           settle();
