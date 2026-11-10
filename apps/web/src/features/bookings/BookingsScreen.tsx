@@ -595,8 +595,16 @@ export function BookingCard({
   }, []);
   const [isChatOpen, setChatOpen] = useState(false);
   const chatId = useId();
-  // The popup's ⋯: where focus goes when a control in the popup goes with its change (the linked record's ×).
+  // The popup's ⋯: where focus goes when a control in the popup goes with its change (the linked record's ×), and
+  // where it lands as the popup opens again after the week's dialog its menu asked for was dismissed.
   const popupMore = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (variant === 'popup' && focusOnMount !== undefined && focusOnMount !== 'reassignAway') {
+      focusLater(() => popupMore.current);
+    }
+    // Only as the popup opens again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const footer = useBookingActions({
     booking,
     actions: actions ?? NO_ACTIONS,
@@ -2457,33 +2465,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
                     ask({ kind: 'remove', turn: openTurn, pieceId: open.piece.id, dayKey: open.piece.dayKey });
                   }}
                 />
-              ) : openBooking === undefined ? (
-                openEvent === undefined ? undefined : (
-                  <EventCard
-                    event={openEvent}
-                    connection={connections.find((connection) => connection.id === openEvent.connectionId)}
-                    locale={locale}
-                  />
-                )
-              ) : (
-                <BookingCard
-                  booking={openBooking}
-                  personHref={personHref(openBooking)}
+              ) : openBooking === undefined && openEvent !== undefined ? (
+                <EventCard
+                  event={openEvent}
+                  connection={connections.find((connection) => connection.id === openEvent.connectionId)}
                   locale={locale}
-                  actions={props.actions}
-                  {...(open === undefined
-                    ? {}
-                    : {
-                        onAsk: (kind: BookingAsk, seats: readonly BookingAssignment[]) => {
-                          ask({ kind, booking: openBooking, seats, pieceId: open.piece.id, dayKey: open.piece.dayKey });
-                        },
-                        focusOnMount:
-                          refocus?.pieceId === open.piece.id && refocus.button !== 'remove'
-                            ? refocus.button
-                            : undefined,
-                      })}
                 />
-              )
+              ) : // A booking opens the meeting popup, as from the list (below), not a popover beside its block.
+              undefined
             }
             onOpen={(id) => {
               setDraft(undefined);
@@ -2605,6 +2594,26 @@ function WeekView(props: BookingsCalendarScreenProps) {
           {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
           <VisuallyHidden>{strings.weekSummary(live)}</VisuallyHidden>
         </>,
+      )}
+      {/* A booking's block opens the meeting popup, the one the list opens (the redesign of 9 November 2026). Closed,
+          focus goes back to the block, as the Modal returns it to what had it. */}
+      {openBooking !== undefined && open !== undefined && (
+        <BookingCard
+          key={openBooking.id}
+          variant="popup"
+          booking={openBooking}
+          personHref={personHref(openBooking)}
+          locale={locale}
+          actions={props.actions}
+          onAsk={(kind: BookingAsk, seats: readonly BookingAssignment[]) => {
+            ask({ kind, booking: openBooking, seats, pieceId: open.piece.id, dayKey: open.piece.dayKey });
+          }}
+          focusOnMount={refocus?.pieceId === open.piece.id && refocus.button !== 'remove' ? refocus.button : undefined}
+          onClose={() => {
+            setRefocus(undefined);
+            setOpenId(undefined);
+          }}
+        />
       )}
       {/* The dialogs a card asked for, each mounted afresh per question and kept while it closes. */}
       {lastAsked?.kind === 'remove' && (

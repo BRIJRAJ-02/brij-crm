@@ -343,8 +343,9 @@ describe('cancelling a booking', () => {
   it('asks first, naming the booking; Esc and Keep booking change nothing', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Ada Lovelace,/);
-    // Cancel sits beside Reschedule (B-06), not in More.
-    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
+    // The week opens the meeting popup (as the list does): Cancel meeting is in its ⋯, apart, in the danger tone.
+    await userEvent.click(page.getByRole('button', { name: 'More for Ada Lovelace' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel meeting' }));
     await confirmAlone();
     // The one compact confirm (the redesign's ruling): the question, an optional note, Keep / Cancel meeting.
     expect(alert()?.textContent).toContain('Cancel meeting with Ada?');
@@ -353,22 +354,24 @@ describe('cancelling a booking', () => {
     expect(labels.at(-1)).toBe('Cancel meeting');
     await userEvent.keyboard('{Escape}');
     await expect.poll(alert).toBeNull();
-    // The card is back, and focus with it on Cancel, the button that asked.
+    // The popup is back, and focus with it on its ⋯, the menu that asked.
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
-    // Enter asks again, from the keyboard.
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for Ada Lovelace');
+    // Asked again from the keyboard: the menu, then Cancel meeting.
     await userEvent.keyboard('{Enter}');
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel meeting' }));
     await confirmAlone();
     await userEvent.click(page.getByRole('button', { name: /^Keep/ }));
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Cancel booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for Ada Lovelace');
     expect(week.actions.cancel).not.toHaveBeenCalled();
   });
 
   it('stays busy while the booking already shows cancelled, cancels once, and keeps a refusal inside', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Ada Lovelace,/);
-    await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for Ada Lovelace' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Cancel meeting' }));
     await userEvent.fill(page.getByRole('textbox', { name: /^Note to Ada/ }), 'Ill today');
     await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Cancel meeting' }));
     await expect.poll(() => alert()?.textContent).toContain('Cancelling');
@@ -382,7 +385,7 @@ describe('cancelling a booking', () => {
     week.cancels[1]?.resolve(undefined);
     await expect.poll(alert).toBeNull();
     expect(week.notify).toHaveBeenCalledWith('success', 'Meeting cancelled. Ada has been told.');
-    // Its Cancel booking went with the cancel: focus goes to the booking, still on the week, drawn cancelled.
+    // The popup went with the cancel: focus goes to the booking, still on the week, drawn cancelled.
     await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Ada Lovelace,/);
   });
 });
@@ -391,7 +394,8 @@ describe('rescheduling a booking', () => {
   it('moves it to another day, and focus follows the booking to its new day (Q56)', async () => {
     const week = await renderWeek([], [bookingOf()]);
     await openCard(/^Ada Lovelace,/);
-    await userEvent.click(page.getByRole('button', { name: /^Reschedule/ }));
+    await userEvent.click(page.getByRole('button', { name: 'More for Ada Lovelace' }));
+    await userEvent.click(page.getByRole('menuitem', { name: 'Reschedule' }));
     await expect.poll(() => openDialog('dialog')?.textContent ?? '').toContain('Reschedule with Ada');
     await userEvent.click(page.getByRole('dialog').getByText('2:00 pm', { exact: true }));
     await userEvent.click(page.getByRole('button', { name: /^Reschedule to/ }));
@@ -423,10 +427,10 @@ const heading = (dialog: Element) =>
   dialog.querySelector('h1, h2, h3')?.textContent ?? dialog.getAttribute('aria-label') ?? '';
 
 describe('reassigning a booking', () => {
-  it('closes the card first, so the dialog is on top and alone; Esc opens the card again, focus on More', async () => {
+  it('closes the popup first, so the dialog is on top and alone; Esc opens the popup again, focus on ⋯', async () => {
     await renderWeek([], [bookingOf()], undefined, ['booking.admin']);
     await openCard(/^Ada Lovelace,/);
-    await userEvent.click(page.getByRole('button', { name: 'More for this booking' }));
+    await userEvent.click(page.getByRole('button', { name: 'More for Ada Lovelace' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Reassign' }));
     // One dialog open, the Reassign one: the card's popover is gone, not drawn over it.
     await expect.poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading)).toEqual([REASSIGN]);
@@ -444,7 +448,7 @@ describe('reassigning a booking', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading)).not.toContain(REASSIGN);
     await expect.poll(card).not.toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for this booking');
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for Ada Lovelace');
   });
 });
 
