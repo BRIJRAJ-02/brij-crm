@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
 import { AlertTriangle, BarChart3, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
-import { AppShell, TopBar } from '../AppShell/AppShell.tsx';
+import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
@@ -56,6 +56,8 @@ const SECTIONS = [
   { id: 'routing', label: 'Routing', icon: <Route {...i16} /> },
   { id: 'insights', label: 'Insights', icon: <BarChart3 {...i16} /> },
 ] as const;
+/** One word each under the phone tab bar's icons. */
+const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights' };
 
 export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
@@ -92,6 +94,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const pageById = (id: string | undefined) => state.pages.find((p) => p.id === id);
   const meetingById = (id: string | undefined) => state.meetings.find((m) => m.id === id);
   const upcoming = state.meetings.filter((m) => m.status !== 'cancelled' && m.end > now && m.host === HOST).length;
+  const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
   const unread = state.notifications.filter((n) => !n.read).length;
   const flash = (setter: (v: string | undefined) => void, id: string) => { setter(id); window.setTimeout(() => setter(undefined), 1600); };
   const setWhose = (w: Whose) => { setWhoseState(w); saveWhose(state.workspace, w); };
@@ -294,7 +297,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
         onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled' }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
         onGuestMove={(m, start) => update({ ...m, start, end: new Date(start.getTime() + (m.end.getTime() - m.start.getTime())) }, `Moved by ${m.invitee.name} to ${formatDay(start)}`)} />
     ) : (
-    <AppShell sidebar={sidebar} className="tf-bkf">
+    <AppShell sidebar={sidebar} className="tf-bkf"
+      mobileNav={<TabBar aria-label="Bookings" current={tab}
+        items={SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => ({ id: x.id, label: SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
+        onChange={(id) => { setEditor(undefined); setTab(id); }} />}>
       {editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
           onBack={() => {

@@ -4,10 +4,10 @@ import {
 } from 'react-aria-components';
 import type { CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarClock, Plus, CalendarDays, LayoutList, MessageCircle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Globe, MapPin, Phone, UserPlus, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarClock, Plus, CalendarDays, LayoutList, MessageCircle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ArrowUpRight, Globe, MapPin, Phone, UserPlus, Video, X } from 'lucide-react';
 import { Avatar, AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
-import { Logo } from '../Logo/Logo.tsx';
+import { LogoMark } from '../Logo/Logo.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { cx } from '../../lib/cx.ts';
@@ -132,6 +132,20 @@ function TimeZoneSelect({ zones, value, onChange }: { readonly zones: ReadonlyAr
 
 const CLOCKS = [{ id: '12', label: '12h' }, { id: '24', label: '24h' }] as const;
 
+/** The Timefix card at the foot of the rail: who made the page, and an invitation to make one. One link, so one tab stop. */
+export function BrandCard({ className }: { readonly className?: string }) {
+  return (
+    <a className={cx('tf-booking__brand', className)} href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">
+      <span className="tf-booking__brand-mark"><LogoMark size={28} /></span>
+      <span className="tf-booking__brand-text">
+        <span className="tf-booking__brand-by">Powered by <strong>Timefix</strong></span>
+        <span className="tf-booking__brand-cta">Get a free booking page</span>
+      </span>
+      <ArrowUpRight className="tf-booking__brand-go" size={16} strokeWidth={1.75} aria-hidden />
+    </a>
+  );
+}
+
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
 export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat }: BookingFlowProps) {
   const [known, setKnown] = useState(prefill !== undefined);
@@ -144,15 +158,30 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
   const [guestText, setGuestText] = useState('');
   const [guestList, setGuestList] = useState<ReadonlyArray<string>>([]);
   const [guestError, setGuestError] = useState<string>();
-  /** Adds what was typed as a guest: a real-looking address, not the guest's own, not twice, ten at most. */
-  const addGuest = () => {
-    const v = guestText.trim().replace(/,$/, '').toLowerCase();
-    if (!v) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { setGuestError('That doesn’t look like an email address.'); return; }
-    if (v === guest.email.trim().toLowerCase()) { setGuestError('That’s you. Add someone else.'); return; }
-    if (guestList.includes(v)) { setGuestError('Already added.'); return; }
-    if (guestList.length >= 10) { setGuestError('Ten guests at most.'); return; }
-    setGuestList((l) => [...l, v]); setGuestText('');
+  const [leavingGuest, setLeavingGuest] = useState<string>();
+  const [shake, setShake] = useState(0);
+  /** Adds what was typed as guests: one address or several pasted at once (commas, spaces or new lines). Each must look real, not be the guest's own, not twice, ten at most. */
+  const addGuest = (raw: string = guestText) => {
+    const parts = raw.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    if (parts.length === 0) return;
+    const own = guest.email.trim().toLowerCase();
+    let list = guestList;
+    let error: string | undefined;
+    const rest: string[] = [];
+    for (const v of parts) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { error = 'That doesn’t look like an email address.'; rest.push(v); continue; }
+      if (v === own) { error = 'That’s you. Add someone else.'; continue; }
+      if (list.includes(v)) { error = 'Already added.'; continue; }
+      if (list.length >= 10) { error = 'Ten guests at most.'; rest.push(v); continue; }
+      list = [...list, v];
+    }
+    setGuestList(list); setGuestText(rest.join(', ')); setGuestError(error);
+    if (error) setShake((n) => n + 1);
+  };
+  /** A removed guest folds away first (150ms), then leaves the list. */
+  const removeGuest = (g: string) => {
+    setLeavingGuest(g);
+    window.setTimeout(() => { setGuestList((l) => l.filter((x) => x !== g)); setLeavingGuest(undefined); }, 150);
   };
   const [date, setDate] = useState<CalendarDate | undefined>(() => firstOpen(today, isDayOpen));
   const [focused, setFocused] = useState<CalendarDate>(() => date ?? today);
@@ -164,6 +193,8 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
   // After booking: manage it here (add guests, move it, cancel it), the same card, no new page.
   const [after, setAfter] = useState<'idle' | 'guests' | 'cancel' | 'cancelled' | 'moving' | 'moved'>('idle');
   const [extra, setExtra] = useState('');
+  /** The booked time as written on the done screen; kept while the guest looks for a new time, so going back never blanks it. */
+  const [bookedWhen, setBookedWhen] = useState('');
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [guest, setGuest] = useState<BookingGuest>({ name: prefill?.name ?? '', email: prefill?.email ?? '', notes: '' });
@@ -195,7 +226,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     if (!date || time === undefined) return;
     setPending(true); setFailed(false);
     const guests = guestList;
-    try { await onBook({ ...guest, guests, date, minutes: time, timeZone: tz }); setLastGuests(guests); setStep('done'); }
+    try { await onBook({ ...guest, guests, date, minutes: time, timeZone: tz }); setLastGuests(guests); setBookedWhen(when); setStep('done'); }
     catch { setFailed(true); }
     finally { setPending(false); }
   };
@@ -221,6 +252,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
           : <span>{location.label}</span>}</li>
         <li className="tf-booking__tz-row"><TimeZoneSelect zones={timeZones} value={tz} onChange={setTz} /></li>
       </ul>
+      <BrandCard />
     </aside>
   );
 
@@ -250,7 +282,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
                   {formatClock(m, hour12)}{!chosen && busy && <span className="tf-booking__mark">You’re busy</span>}{!chosen && best && <span className="tf-booking__mark tf-booking__mark--best">Best</span>}
                 </AriaButton>
                 <span className="tf-booking__next-wrap" inert={!chosen}>
-                  <AriaButton className="tf-booking__next" onPress={() => { if (after === 'moving') { setAfter('moved'); setStep('done'); } else setStep('details'); }}>{after === 'moving' ? 'Move here' : 'Next'}</AriaButton>
+                  <AriaButton className="tf-booking__next" onPress={() => { if (after === 'moving') { setAfter('moved'); setBookedWhen(when); setStep('done'); } else setStep('details'); }}>{after === 'moving' ? 'Move here' : 'Next'}</AriaButton>
                 </span>
               </li>
             );
@@ -330,25 +362,41 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
         <TextField label="Name" size="lg" isRequired autoComplete="name" value={guest.name} onChange={(name) => setGuest((g) => ({ ...g, name }))} errorMessage="Add your name." />
         <TextField label="Email" size="lg" isRequired type="email" autoComplete="email" value={guest.email} onChange={(email) => setGuest((g) => ({ ...g, email }))} errorMessage="Add an email we can send the invite to." />
       </>}
-      {guestsOpen ? (
-        <div className="tf-booking__guests">
-          <TextField label="Guests" aside={`${guestList.length} of 10`} size="lg" type="email" autoComplete="off" autoFocus value={guestText} onChange={(v) => { setGuestText(v); setGuestError(undefined); }}
-            placeholder="name@company.com" description="Press Enter or + to add. They get the invite too." isInvalid={guestError !== undefined} errorMessage={guestError}
-            suffix={<IconButton size="sm" label="Add this guest" isDisabled={!guestText.trim() || guestList.length >= 10} onPress={addGuest}><Plus size={16} strokeWidth={2} /></IconButton>}
-            isDisabled={guestList.length >= 10}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addGuest(); } }} onBlur={() => { if (guestText.trim()) addGuest(); }} />
-          {guestList.length > 0 && (
-            <ul className="tf-booking__guest-list" aria-label="Guests added">
-              {guestList.map((g) => (
-                <li key={g} className="tf-booking__guest-chip">
-                  <Avatar name={g} size={20} /><span>{g}</span>
-                  <AriaButton className="tf-booking__guest-x" aria-label={`Remove ${g}`} onPress={() => setGuestList((l) => l.filter((x) => x !== g))}><X size={12} strokeWidth={2} /></AriaButton>
-                </li>
-              ))}
-            </ul>
+      {/* Add guests opens in place: the button folds as the field grows (accordion, 0fr to 1fr); chips pop in and fold away. */}
+      <div className="tf-booking__guestbox" data-open={guestsOpen || undefined}>
+        <AriaButton className="tf-booking__addguests" aria-expanded={guestsOpen} isDisabled={guestsOpen} onPress={() => setGuestsOpen(true)}>
+          <UserPlus {...i16} aria-hidden />Add guests<span className="tf-booking__addguests-hint">They get the invite too</span>
+        </AriaButton>
+        <div className="tf-booking__guests-clip">
+          {guestsOpen && (
+            <div className="tf-booking__guests">
+              <div key={shake} className={shake ? 'tf-booking__guests-field is-shaking' : 'tf-booking__guests-field'}>
+                <TextField label="Guests" aside={guestList.length ? `${guestList.length} of 10` : 'Up to 10'} size="lg" type="email" autoComplete="off" autoFocus value={guestText}
+                  onChange={(v) => { if (/[\s,;]/.test(v) && v.includes('@')) { addGuest(v); } else { setGuestText(v); setGuestError(undefined); } }}
+                  placeholder="name@company.com" description="Press Enter to add. Paste several at once." isInvalid={guestError !== undefined} errorMessage={guestError}
+                  suffix={<IconButton size="sm" variant={guestText.trim() ? 'primary' : 'ghost'} label="Add this guest" isDisabled={!guestText.trim() || guestList.length >= 10} onPress={() => addGuest()}><Plus size={16} strokeWidth={2} /></IconButton>}
+                  isDisabled={guestList.length >= 10}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); addGuest(); }
+                    if (e.key === 'Backspace' && guestText === '' && guestList.length > 0) { const last = guestList[guestList.length - 1]; if (last) removeGuest(last); }
+                    if (e.key === 'Escape' && guestText === '' && guestList.length === 0) setGuestsOpen(false);
+                  }}
+                  onBlur={() => { if (guestText.trim()) addGuest(); else if (guestList.length === 0) setGuestsOpen(false); }} />
+              </div>
+              {guestList.length > 0 && (
+                <ul className="tf-booking__guest-list" aria-label="Guests added">
+                  {guestList.map((g) => (
+                    <li key={g} className="tf-booking__guest-chip" data-leaving={leavingGuest === g || undefined}>
+                      <Avatar name={g} size={20} /><span>{g}</span>
+                      <AriaButton className="tf-booking__guest-x" aria-label={`Remove ${g}`} onPress={() => removeGuest(g)}><X size={12} strokeWidth={2} /></AriaButton>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
-      ) : <AriaButton className="tf-booking__addguests" onPress={() => setGuestsOpen(true)}><UserPlus {...i16} aria-hidden />Add guests</AriaButton>}
+      </div>
       <TextArea label="Anything to share before the call?" aside="Optional" size="lg" rows={3} value={guest.notes} onChange={(notes) => setGuest((g) => ({ ...g, notes }))} />
       {failed && (
         <div className="tf-booking__failed" role="alert">
@@ -385,19 +433,30 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
           {after !== 'cancelled' && (
             <dl className="tf-booking__summary tf-booking__reveal-line">
               <dt>What</dt><dd>{title} with {host.name}</dd>
-              <dt>When</dt><dd className="tf-num">{when}</dd>
+              <dt>When</dt><dd className="tf-num">{bookedWhen || when}</dd>
               <dt>Where</dt><dd>{location.label}</dd>
               <dt>Time zone</dt><dd>{tzLabel}</dd>
-              {lastGuests.length > 0 && <><dt>Guests</dt><dd>{lastGuests.join(', ')}</dd></>}
+              {lastGuests.length > 0 && after !== 'guests' && <><dt>Guests</dt><dd>{lastGuests.join(', ')}</dd></>}
             </dl>
           )}
           {after === 'guests' && (
-            <div className="tf-booking__inline tf-booking__reveal-line">
-              <TextField label="Add a guest" size="lg" type="email" autoFocus value={extra} onChange={setExtra} placeholder="name@company.com"
-                suffix={<IconButton size="sm" label="Add this guest" isDisabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(extra.trim())} onPress={() => { setLastGuests((g) => [...g, extra.trim().toLowerCase()].slice(0, 10)); setExtra(''); }}><Plus size={16} strokeWidth={2} /></IconButton>}
-                onKeyDown={(e) => { if (e.key === 'Enter' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(extra.trim())) { e.preventDefault(); setLastGuests((g) => [...g, extra.trim().toLowerCase()].slice(0, 10)); setExtra(''); } }}
-                description="They get the invite at once." />
-              <Button size="sm" variant="secondary" onPress={() => setAfter('idle')}>Done</Button>
+            <div className="tf-booking__more tf-booking__reveal-line">
+              <TextField label="Add guests" aside={`${lastGuests.length} of 10`} size="lg" type="email" autoFocus value={extra} placeholder="name@company.com"
+                onChange={(v) => { if (/[\s,;]/.test(v) && v.includes('@')) { const ok = v.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)); setLastGuests((g) => [...new Set([...g, ...ok])].slice(0, 10)); setExtra(''); } else setExtra(v); }}
+                suffix={<IconButton size="sm" variant={extra.trim() ? 'primary' : 'ghost'} label="Add this guest" isDisabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(extra.trim())} onPress={() => { setLastGuests((g) => [...new Set([...g, extra.trim().toLowerCase()])].slice(0, 10)); setExtra(''); }}><Plus size={16} strokeWidth={2} /></IconButton>}
+                onKeyDown={(e) => { if (e.key === 'Enter' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(extra.trim())) { e.preventDefault(); setLastGuests((g) => [...new Set([...g, extra.trim().toLowerCase()])].slice(0, 10)); setExtra(''); } if (e.key === 'Escape') setAfter('idle'); }}
+                description="Each one gets the invite at once." />
+              {lastGuests.length > 0 && (
+                <ul className="tf-booking__guest-list" aria-label="Guests on this booking">
+                  {lastGuests.map((g) => (
+                    <li key={g} className="tf-booking__guest-chip">
+                      <Avatar name={g} size={20} /><span>{g}</span>
+                      <AriaButton className="tf-booking__guest-x" aria-label={`Remove ${g}`} onPress={() => setLastGuests((l) => l.filter((x) => x !== g))}><X size={12} strokeWidth={2} /></AriaButton>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button variant="primary" className="tf-booking__more-done" onPress={() => { setExtra(''); setAfter('idle'); }}>Done</Button>
             </div>
           )}
           {after === 'cancel' && (
@@ -444,11 +503,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
           done,
         ]} />
       </div>
-      <p className="tf-booking__foot">
-        <a className="tf-booking__foot-brand" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
-        <span className="tf-booking__foot-dot" aria-hidden="true">·</span>
-        <a className="tf-booking__foot-cta" href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">Create your own booking page, free</a>
-      </p>
+      <div className={cx('tf-booking__foot', step !== 'done' && 'tf-booking__foot--railed')}><BrandCard className="tf-booking__brand--solo" /></div>
     </div>
   );
 }

@@ -84,6 +84,14 @@
   .tf-meetings__main, .tf-meetings__skel-row { grid-template-columns: 80px minmax(0, 1fr) auto auto; }
   .tf-meetings__skel-person { display: none; }
 }
+/* Phone: time beside the title, then status and actions on their own line under the title, so nothing is cut. */
+@container (max-width: 28rem) {
+  .tf-meetings__main { grid-template-columns: 76px minmax(0, 1fr); row-gap: var(--space-4); column-gap: var(--space-12); align-items: start; }
+  .tf-meetings__status:empty { display: none; }
+  .tf-meetings__status, .tf-meetings__actions { grid-column: 2; }
+  .tf-meetings__actions { justify-self: start; opacity: 1; transform: none; }
+  .tf-meetings__title { white-space: normal; }
+}
 
 /* MeetingCard: a shell holding a white card, with an optional tinted strip under it. */
 .tf-meetcard { display: flex; flex-direction: column; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--surface-shell); font: 400 14px/20px var(--font-sans); color: var(--text); min-width: 0; }

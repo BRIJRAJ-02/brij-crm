@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CalendarDate } from '@internationalized/date';
 import { ArrowLeft, CalendarClock, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
 import type { BookingRequest } from '../BookingFlow/BookingFlow.tsx';
+import { BrandCard } from '../BookingFlow/BookingFlow.tsx';
 import { BookingChat, type BookingChatLine, type BookingChatBooked } from '../BookingChat/BookingChat.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
-import { Logo } from '../Logo/Logo.tsx';
 import { Button as AriaButton } from 'react-aria-components';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
@@ -79,13 +79,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
 
 /** "Powered by Timefix" under the guest pages Timefix draws itself (BookingFlow and the chat carry their own). */
 function PoweredBy() {
-  return (
-    <p className="tf-bkf__powered-row">
-      <a className="tf-bkf__powered" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
-      <span aria-hidden="true">·</span>
-      <a className="tf-bkf__powered tf-bkf__powered--cta" href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">Create your own booking page, free</a>
-    </p>
-  );
+  return <div className="tf-bkf__powered-row"><BrandCard className="tf-booking__brand--solo" /></div>;
 }
 /** A guest card centred on the page, with the foot. */
 function GuestCard({ children, align = 'center' }: { readonly children: ReactNode; readonly align?: 'center' | 'start' }) {

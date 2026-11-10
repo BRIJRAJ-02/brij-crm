@@ -39,5 +39,11 @@ Every request from the design session, checked in the prototype (light and dark)
 | Timefix mark on bookings in the dashboard calendar | Week and Team day |
 | Bookings analytics | Insights page: five numbers, trend, funnel, sources, each page or host, when people book, how meetings ended |
 | Phone layout for the guest pages | compact header, one row of controls, a month that fits, two times a row |
+| Phone layout for the dashboard | tab bar of the Bookings pages instead of the sidebar, icon-only top bar buttons, two-row toolbars, meeting rows with actions underneath, Week scrolls sideways, routing and insights fold to fit |
+| Smoother add guest | opens in place, paste several at once, Backspace removes the last, a wrong address shakes, chips fold away; the same chips after booking, with Done on its own line |
+| Powered by Timefix, better message and look | a card at the foot of the details panel: mark, "Powered by Timefix", "Get a free booking page"; a pill on the other guest screens |
+| Chat full height, UI fixes | the chat fills the card and its composer sits at the bottom; smaller suggestion chips; the booked card matches the success screen |
+| Card height | back to a fixed height (the full-window height was too tall) |
+| Blank "When" after keeping the old time | fixed: the booked time is kept while you look for a new one |
 
 Not built: shifts with roles or places, labour cost and painting cells by drag (main doesn't have them either).

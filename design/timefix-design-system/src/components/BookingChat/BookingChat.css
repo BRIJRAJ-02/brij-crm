@@ -87,3 +87,16 @@
 .tf-chat--bare { align-items: stretch; height: 100%; }
 .tf-chat--bare .tf-chat__card { flex: 1; max-width: none; border-color: var(--border-subtle); box-shadow: none; border-radius: var(--radius-lg); }
 .tf-chat__foot--cta { margin-top: calc(var(--space-12) * -1); color: var(--link); font-weight: 500; }
+/* Bare (inside the booking card): the thread takes all the height the card gives, so the composer sits on the floor; chips match the card's 14px controls. */
+.tf-chat--bare .tf-chat__card { min-height: 0; }
+.tf-chat--bare .tf-chat__thread { flex: 1; height: auto; min-height: 0; padding: var(--space-20); }
+.tf-chat--bare { font-size: 15px; line-height: 22px; }
+.tf-chat--bare .tf-chat__chip, .tf-chat--bare .tf-chat__time { height: var(--size-control); padding: 0 var(--space-12); font-size: 14px; line-height: 20px; }
+/* The booked card reads like the booking page's success screen: a soft green wash from the top, a solid green check in a ring, a larger title, the summary on a bordered card. */
+.tf-chat__booked { position: relative; overflow: hidden; gap: var(--space-12); padding: var(--space-32) var(--space-24) var(--space-24); border-color: var(--border); box-shadow: var(--shadow-xs); }
+.tf-chat__booked::before { content: ""; position: absolute; inset: 0 0 auto; height: calc(var(--size-row) * 3); background: linear-gradient(to bottom, var(--success-soft), transparent); pointer-events: none; }
+.tf-chat__booked > * { position: relative; }
+.tf-chat__booked > .tf-chat__check { width: calc(var(--size-control-lg) * 1.3); height: calc(var(--size-control-lg) * 1.3); background: var(--success); color: var(--on-accent); box-shadow: 0 0 0 var(--space-6) var(--success-soft); }
+.tf-chat__booked-title { font-size: 22px; line-height: 30px; }
+.tf-chat__booked > .tf-chat__summary { max-width: 30rem; padding: var(--space-16) var(--space-20); gap: var(--space-8) var(--space-20); background: var(--surface); border: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-chat__thread > * { flex-shrink: 0; }

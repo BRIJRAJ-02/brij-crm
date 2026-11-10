@@ -188,7 +188,21 @@
 .tf-booking__guest-x { display: grid; place-items: center; width: var(--space-20); height: var(--space-20); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none; }
 .tf-booking__guest-x[data-hovered] { background: var(--surface-hover); color: var(--text); }
 .tf-booking__guest-x[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
-@media (prefers-reduced-motion: reduce) { .tf-booking__guest-chip { animation: none; } }
+/* Add guests: the link folds up as the field opens beneath it (21 accordion, grid rows 1fr 0fr to 0fr 1fr). */
+.tf-booking__guestbox { display: grid; grid-template-rows: 1fr 0fr; transition: grid-template-rows var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__guestbox[data-open] { grid-template-rows: 0fr 1fr; }
+.tf-booking__guestbox > .tf-booking__addguests { min-height: 0; overflow: hidden; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-booking__guestbox[data-open] > .tf-booking__addguests { opacity: 0; pointer-events: none; }
+.tf-booking__guests-clip { min-height: 0; overflow: clip; overflow-clip-margin: var(--space-16); }
+.tf-booking__guestbox[data-open] .tf-booking__guests { animation: tf-booking-settle var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-booking__addguests-hint { margin-left: var(--space-4); color: var(--text-tertiary); font-weight: 400; }
+/* A wrong address nudges the field side to side (12 error shake). */
+.tf-booking__guests-field.is-shaking { animation: tf-booking-shake calc(var(--duration-micro) * 4) var(--ease-smooth-out); }
+@keyframes tf-booking-shake { 20% { transform: translateX(calc(var(--distance-base) * -1)); } 40% { transform: translateX(var(--distance-base)); } 60% { transform: translateX(calc(var(--distance-small) * -1)); } 80% { transform: translateX(var(--distance-micro)); } }
+/* A removed chip shrinks and fades before it leaves. */
+.tf-booking__guest-chip { transition: opacity var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
+.tf-booking__guest-chip[data-leaving] { opacity: 0; transform: scale(var(--scale-large)); }
+@media (prefers-reduced-motion: reduce) { .tf-booking__guest-chip, .tf-booking__guests-field.is-shaking, .tf-booking__guestbox, .tf-booking__guestbox .tf-booking__guests { animation: none; transition: none; } }
 
 
 /* The time went while they typed: say so plainly, keep their details, one way back. */
@@ -334,3 +348,41 @@
   .tf-booking__done-title { font-size: 22px; line-height: 30px; }
   .tf-booking__inline { flex-direction: column; align-items: stretch; }
 }
+
+/* Powered by: a quiet card pinned to the foot of the rail. Mark in a soft well, two lines, an arrow that leans out on hover. */
+.tf-booking__brand {
+  display: flex; align-items: center; gap: var(--space-12); width: 100%; margin-top: auto; padding: var(--space-12); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--text); text-decoration: none; outline: none; box-shadow: var(--shadow-xs);
+  transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out);
+}
+.tf-booking__rail > .tf-booking__brand { margin-top: auto; }
+.tf-booking__rail > .tf-booking__facts { margin-bottom: var(--space-32); }
+.tf-booking__brand:hover { border-color: var(--border); box-shadow: var(--shadow-sm); }
+.tf-booking__brand:active { transform: scale(var(--scale-small)); }
+.tf-booking__brand:focus-visible { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-booking__brand-mark { display: grid; place-items: center; flex: none; }
+.tf-booking__brand-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tf-booking__brand-by { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
+.tf-booking__brand-by strong { color: var(--text); font-weight: 600; }
+.tf-booking__brand-cta { color: var(--link); font: 500 13px/18px var(--font-sans); }
+.tf-booking__brand-go { flex: none; color: var(--text-tertiary); transition: transform var(--duration-quick) var(--ease-smooth-out), color var(--duration-quick) var(--ease-out); }
+.tf-booking__brand:hover .tf-booking__brand-go { color: var(--link); transform: translate(var(--space-2), calc(var(--space-2) * -1)); }
+@media (prefers-reduced-motion: reduce) { .tf-booking__brand, .tf-booking__brand-go { transition: none; } }
+/* With the card in the rail, the line under the card only shows where the rail is not (the booked screen, and phones). */
+@container tf-booking (min-width: 34.01rem) { .tf-booking__foot--railed { display: none; } }
+@container tf-booking (max-width: 34rem) { .tf-booking__rail > .tf-booking__brand { display: none; } }
+
+/* The card can be told how tall to stand (--tf-booking-h); the chat fills what the card leaves. */
+.tf-booking { --tf-booking-h: calc(var(--size-row) * 14); }
+.tf-booking__card, .tf-booking__flow { min-height: var(--tf-booking-h); }
+.tf-booking__chatview { height: calc(var(--tf-booking-h) - var(--space-48) * 2 - var(--size-control-lg) - var(--space-16) - var(--space-20)); }
+@container tf-booking (max-width: 34rem) {
+  .tf-booking__card, .tf-booking__flow { min-height: 0; }
+  .tf-booking__rail > .tf-booking__facts { margin-bottom: 0; }
+  .tf-booking__chatview { height: calc(var(--size-row) * 11); }
+}
+.tf-booking__brand--solo { width: auto; max-width: 100%; margin: 0 auto; padding: var(--space-8) var(--space-12) var(--space-8) var(--space-8); border-radius: var(--radius-full); }
+.tf-booking__brand--solo .tf-booking__brand-text { flex: none; }
+/* Adding guests after booking: the field, the chips under it, then Done on its own line at the end. Same width as the summary. */
+.tf-booking__more { display: flex; flex-direction: column; gap: var(--space-12); width: 100%; max-width: 30rem; text-align: left; }
+.tf-booking__more-done { align-self: flex-end; min-width: calc(var(--size-control-lg) * 2); }

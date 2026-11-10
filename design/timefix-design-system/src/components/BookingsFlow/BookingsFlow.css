@@ -453,9 +453,6 @@
 .tf-bkf__guest-icon { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); }
 .tf-bkf__guest-icon--ok { background: var(--success-soft); color: var(--success); }
 .tf-bkf__guest-title { margin: 0; font: 600 18px/26px var(--font-sans); }
-.tf-bkf__powered { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
-.tf-bkf__powered:hover { background: var(--surface-hover); }
-.tf-bkf__powered:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .tf-bkf__textbtn, .tf-bkf__reveal, .tf-bkf__reveal-clip, .tf-bkf__swapicon > svg, .tf-bkf__scaled, .tf-bkf__slide.is-resizing, .tf-bkf__slide-page, .tf-bkf__pagerow, .tf-bkf__pagerow-inner,
@@ -491,7 +488,6 @@
 .tf-bkf__guest-card > .tf-bkf__answers > div { grid-template-columns: calc(var(--size-control-lg) * 2) minmax(0, 1fr); gap: var(--space-16); }
 
 .tf-bkf__powered-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-8); margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
-.tf-bkf__powered--cta { color: var(--link); font-weight: 500; }
 
 /* Insights: five numbers, then cards in two columns (the trend and the tables span both). */
 .tf-bkf-insights { display: flex; flex-direction: column; gap: var(--space-16); }
@@ -526,3 +522,34 @@
   .tf-bkf-guestmode__page[data-device='phone'] { padding: var(--space-12) 0; }
 }
 .tf-bkf-guestmode__frame[data-device='phone'] { padding: var(--space-16) 0; }
+
+/* Phone (dashboard): 16px page edges, toolbars in two tidy rows, one column everywhere, wide grids scroll sideways. */
+@media (max-width: 40rem) {
+  .tf-bkf__body { padding: 0 var(--space-16); }
+  .tf-bkf__panel { padding-top: var(--space-16); padding-bottom: var(--space-24); }
+  .tf-bkf .tf-topbar__title { overflow: hidden; }
+  .tf-bkf .tf-crumbs__item:not(:last-child), .tf-bkf .tf-crumbs__sep { display: none; }
+  /* Top bar buttons go icon-only; their names stay for screen readers. */
+  .tf-bkf .tf-topbar__actions .tf-btn:not(.tf-btn--icon) .tf-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tf-bkf .tf-topbar__actions .tf-btn:not(.tf-btn--icon) { padding-inline: var(--space-8); }
+}
+@container tf-bkf-panel (max-width: 34rem) {
+  .tf-bkf__toolbar { gap: var(--space-8); }
+  .tf-bkf__toolbar > .tf-seg { flex: 1 0 100%; }
+  .tf-bkf__toolbar > .tf-seg .tf-seg__item { flex: 1; justify-content: center; }
+  .tf-bkf__toolbar > .tf-bkf__whose, .tf-bkf__toolbar > .tf-bkf__inline-select { flex: 1 1 0; width: auto; min-width: 0; }
+  .tf-bkf__toolbar > .tf-bkf__spacer { display: none; }
+  /* New meeting and other end actions shrink to their icon. */
+  .tf-bkf__toolbar > .tf-btn--primary .tf-btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tf-bkf__toolbar > .tf-btn--primary { flex: none; width: var(--size-control); padding: 0; justify-content: center; }
+  /* Week: each day keeps a readable width; the grid scrolls sideways under the fixed hour labels. */
+  .tf-bkf__meetings .tf-week { overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+  .tf-bkf__meetings .tf-week__head, .tf-bkf__meetings .tf-week__scroll { min-width: calc(var(--size-control-lg) + var(--space-8) + var(--tf-week-days) * var(--space-48) * 2); }
+  /* Routing outcome: the kind on its own line, the choices under it. */
+  .tf-bkf-flow__then { flex-wrap: wrap; }
+  .tf-bkf-flow__then > .tf-bkf-flow__kind { flex: 1 0 100%; width: auto; }
+  .tf-bkf-flow__then > .tf-bkf__inline-select { max-width: none; }
+  /* Insights: two numbers a row. */
+  .tf-bkf-insights__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+}
+
