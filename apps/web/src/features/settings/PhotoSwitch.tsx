@@ -1,5 +1,6 @@
 // Brief
-// Purpose: whether the person's Google photo shows on their booking pages and profile (owner ask A124, 23 Oct 2026).
+// Purpose: whether the person's account photo shows on their booking pages and profile (owner ask A124, 23 Oct 2026);
+// the account photo only (10 Nov 2026): a photo set on a link page always shows on it and its booking pages.
 // Main task: turn it off (their initials show instead) or on again; it saves at once, with a quiet toast and Undo.
 // Leaves out: changing the photo itself (Google's, or initials), and the photo inside the app, which stays as it is.
 import type { DataLayer } from '@crm/data';
@@ -18,8 +19,9 @@ export interface PhotoSwitchProps {
 }
 
 /**
- * "Show my photo on booking pages", a row in Profile's details card under the photo. On (the default), the person's
- * Google photo shows on their booking pages and profile; off, their initials. It saves at once through the data
+ * "Show my account photo on my pages", a row in Profile's details card under the photo. On (the default), the
+ * person's account photo shows on their booking pages and profile; off, their initials. A photo set on a link page
+ * isn't the account's: it shows on that page and its booking pages either way, as the hint says. It saves at once through the data
  * layer, which puts it back with a toast and Try again if refused; once it lands, a quiet toast says so, with Undo.
  */
 export function PhotoSwitch({ data, slug, hasPhoto }: PhotoSwitchProps) {
@@ -69,11 +71,11 @@ export function PhotoSwitch({ data, slug, hasPhoto }: PhotoSwitchProps) {
 
   // No photo yet (critic B, 5 November 2026: the switch stood on with nothing to show): off and disabled, with the
   // reason in the row; the choice they made is kept for when a photo comes.
-  const reason = !choice.canChange ? strings.readOnly : hasPhoto ? undefined : strings.noPhoto;
+  const reason = !choice.canChange ? strings.readOnly : hasPhoto ? strings.hint : strings.noPhoto;
   return (
     <SettingsRow
       title={strings.title}
-      {...(reason === undefined ? {} : { description: reason })}
+      description={reason}
       {...(isSlow ? { meta: <Spinner size="xs" label={strings.saving} /> } : {})}
     >
       <Switch

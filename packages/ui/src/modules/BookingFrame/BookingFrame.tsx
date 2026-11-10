@@ -751,9 +751,10 @@ export interface BookingMessageProps {
   readonly onRetry?: () => void;
   /**
    * A way on beside Try again: the reservation page's manage link that opens nothing offers "Find your reservation"
-   * (spec 0066 B7), so a bad link is never a dead end.
+   * (spec 0066 B7), so a bad link is never a dead end. `icon` is the search glass unless named; `null` draws none,
+   * for a quiet way back out ("Changed your mind? Unsubscribe", 10 November 2026).
    */
-  readonly link?: { readonly label: string; readonly href: string };
+  readonly link?: { readonly label: string; readonly href: string; readonly icon?: IconName | null };
   /** While the page's facts load: a skeleton in the card. */
   readonly isLoading?: boolean;
   /** Which public page shows the message, for the wordmark link's tags: the booking page (the default), a profile, or the guest's page. */
@@ -762,6 +763,16 @@ export interface BookingMessageProps {
   readonly host?: { readonly name: string; readonly image?: string };
   /** Somewhere to go instead: the host's link page ("See Ada's page"). */
   readonly action?: { readonly href: string; readonly label: string };
+  /**
+   * One thing to do instead, a secondary button beside Try again: the unsubscribed page's "Subscribe again"
+   * (10 November 2026). `pendingLabel` shows while `isPending`, when presses are ignored.
+   */
+  readonly press?: {
+    readonly label: string;
+    readonly onPress: () => void;
+    readonly isPending?: boolean;
+    readonly pendingLabel?: string;
+  };
 }
 
 /**
@@ -778,6 +789,7 @@ export function BookingMessage({
   page = 'booking_page',
   host,
   action,
+  press,
 }: BookingMessageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -819,15 +831,24 @@ export function BookingMessage({
                   </ButtonLink>
                 </div>
               )}
-              {(onRetry !== undefined || link !== undefined) && (
+              {(onRetry !== undefined || link !== undefined || press !== undefined) && (
                 <div className={styles.messageActions}>
+                  {press !== undefined && (
+                    <Button isPending={press.isPending === true} onPress={press.onPress}>
+                      {press.isPending === true && press.pendingLabel !== undefined ? press.pendingLabel : press.label}
+                    </Button>
+                  )}
                   {onRetry !== undefined && (
                     <Button icon="refresh-cw" onPress={onRetry}>
                       {strings.retry}
                     </Button>
                   )}
                   {link !== undefined && (
-                    <ButtonLink href={link.href} variant="ghost" icon="search">
+                    <ButtonLink
+                      href={link.href}
+                      variant="ghost"
+                      {...(link.icon === null ? {} : { icon: link.icon ?? 'search' })}
+                    >
                       {link.label}
                     </ButtonLink>
                   )}

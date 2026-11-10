@@ -98,6 +98,8 @@ export const strings = {
   /** The editor's last card: who the page is from, and how it shows when shared or searched. */
   details: 'Details',
   identityFailed: 'That didn’t save. Try again.',
+  /** Once a name, title or Show under my name saves (owner, 10 Nov 2026): live at once, with no Publish to wait for. */
+  identityLive: 'Saved. It’s on the page now.',
   /** The name at the top of the page, changed here as on Linktree (9 Nov 2026); the same one Profile changes. */
   name: 'Name',
   /** The line under the name: the job title Profile holds, shown once one is typed here. */
@@ -150,7 +152,7 @@ export const strings = {
   coverPhoto: 'Cover photo',
   coverPhotoHint: 'The wide photo at the top',
   avatarPhoto: 'Profile photo',
-  avatarPhotoHint: 'The small photo above the name',
+  avatarPhotoHint: 'Above the name, also on booking pages',
   groundPhoto: 'Background photo',
   groundPhotoHint: 'Fills the page behind everything',
   coverAlt: 'The cover photo on this page',
@@ -166,7 +168,7 @@ export const strings = {
   coverRemoving: 'Remove the cover photo?',
   coverRemoveText: 'The page shows no banner.',
   avatarRemoving: 'Remove the profile photo?',
-  avatarRemoveText: 'The page goes back to the usual photo, or initials.',
+  avatarRemoveText: 'The page goes back to the account photo, or initials.',
   groundRemoving: 'Remove the background photo?',
   groundRemoveText: 'The page goes back to its template’s background.',
   photoUnreadable: 'That picture couldn’t be read. Try a JPEG, PNG or WebP.',

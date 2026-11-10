@@ -497,7 +497,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      return await servePicture(c, await readPagePicture(entry, services.pictures));
+      const picture = await readPagePicture(entry, services.pictures);
+      // A link page's own photo (10 Nov 2026) shows here only while that page is Live, and this route has no handle
+      // to tag for its Private switch: the browser keeps it, never the edge, so Private stops it at once.
+      const isPagePhoto = picture?.kind === 'stored' && picture.path.startsWith('profile-images/');
+      return await servePicture(c, picture, isPagePhoto ? PRIVATE_PICTURE_CACHE_CONTROL : undefined);
     } catch (error) {
       return refusalAnswer(error);
     }

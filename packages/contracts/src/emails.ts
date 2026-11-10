@@ -151,6 +151,32 @@ export const FormResumeEmail = z.strictObject({
 /** The resume link a visitor asked for. */
 export type FormResumeEmail = z.infer<typeof FormResumeEmail>;
 
+/** The one click unsubscribe route (RFC 8058) on the app's origin, which a guest's `oneClickPath` must name. */
+export const GUEST_UNSUBSCRIBE_PATH = '/api/public/news/unsubscribe';
+
+/**
+ * A guest's way out of a business's marketing email (10 November 2026, GDPR,
+ * CAN-SPAM and the Gmail and Yahoo bulk sender rules): the footer's visible
+ * Unsubscribe link (`pagePath`, a page that asks first, its token in the
+ * fragment) and RFC 8058's one click address (`oneClickPath`, which a mail
+ * service posts `List-Unsubscribe=One-Click` to with no login and no page).
+ * Both carry one signed token naming the workspace, the place, the person and
+ * a hash of the address, never the address. An email that carries this gets
+ * the footer link and the `List-Unsubscribe` headers; a kind listed in
+ * `MARKETING_EMAIL_KINDS` must carry it.
+ */
+export const GuestUnsubscribe = z.strictObject({
+  /** The page the footer's Unsubscribe link opens. */
+  pagePath: AppPath,
+  /** The one click address the `List-Unsubscribe` header names: only ever the one click route, with its token. */
+  oneClickPath: AppPath.refine(
+    (path) => path.startsWith(`${GUEST_UNSUBSCRIBE_PATH}?t=`),
+    'The one click unsubscribe route, with its token.',
+  ),
+});
+/** A guest's way out of a business's marketing email. */
+export type GuestUnsubscribe = z.infer<typeof GuestUnsubscribe>;
+
 /**
  * The double opt-in for news and offers (9 November 2026): a guest ticked the
  * box on a reservation page, and the tick counts only once they confirm from
@@ -168,6 +194,8 @@ export const ReservationNewsEmail = z.strictObject({
   /** When the link stops working, so the email can say so. */
   expiresAt: Instant,
   timeZone: EmailTimeZone.optional(),
+  /** The footer's Unsubscribe link and the one click headers; absent on one queued before 10 November 2026. */
+  unsubscribe: GuestUnsubscribe.optional(),
 });
 /** The double opt-in for news and offers. */
 export type ReservationNewsEmail = z.infer<typeof ReservationNewsEmail>;
@@ -557,6 +585,15 @@ export const QUEUED_EMAIL_KINDS = [
   'editor_added',
   'managed_page',
 ] as const satisfies readonly EmailKind[];
+/**
+ * The kinds that are a business's marketing to its guests (news, offers, a
+ * campaign): each must carry `unsubscribe` (`GuestUnsubscribe`) in its params,
+ * so `renderEmail` refuses one without it, and every one goes out with the
+ * footer link and the one click headers. None sends yet (10 November 2026):
+ * the first marketing kind joins this list and gets the unsubscribe for free.
+ */
+export const MARKETING_EMAIL_KINDS: readonly EmailKind[] = [];
+
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);
 /** A kind that goes through the workspace email queue. */

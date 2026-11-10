@@ -82,6 +82,7 @@ import { isMediaRef, mediaFrameSrc } from '../profile/embeds.ts';
 import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
 import { identityOf, jobTitleOf } from '../profile/identity.ts';
+import { publishedPagePhoto } from '../profile/page-photo.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseAll, refuseOn } from '../engine/refusals.ts';
@@ -299,7 +300,7 @@ export async function getPublicBookingPage(
   asDraft = false,
 ): Promise<PublicBookingPage> {
   checkEntry(entry);
-  const { facts, pictureUser } = await inWorkspace(entry.scope, async (tx) => {
+  const { facts, host } = await inWorkspace(entry.scope, async (tx) => {
     const page = await livePage(tx, entry, asDraft);
     const shut = await formOnlyShut(tx, page, link);
     const team = await loadTeam(tx, page);
@@ -333,10 +334,10 @@ export async function getPublicBookingPage(
       ...(page.requiresConfirmation ? { requiresConfirmation: true as const } : {}),
       ...(await linkFacts(tx, page, oneOff)),
     };
-    return { facts, pictureUser: pictures === undefined ? undefined : await shownPictureOwner(tx, page) };
+    return { facts, host: pictures === undefined ? undefined : await shownHostPicture(tx, page) };
   });
-  if (pictures === undefined || pictureUser === undefined) return facts;
-  const picture = personPicture(pictureUser, await pictures.pictureOf(pictureUser));
+  if (pictures === undefined || host === undefined) return facts;
+  const picture = 'page' in host ? host.page : personPicture(host.owner, await pictures.pictureOf(host.owner));
   return picture === undefined ? facts : { ...facts, hostImage: bookingPicturePath(facts.publicKey, picture.version) };
 }
 
@@ -382,6 +383,23 @@ async function shownPictureOwner(tx: WorkspaceTx, page: PageRecord): Promise<str
 }
 
 /**
+ * A personal page's host picture (owner, 10 Nov 2026): the published photo of the owner's link page in this workspace
+ * while that page is Live (`publishedPagePhoto`; their choice for everything at their address, whatever the account
+ * photo switch says), else the account picture's owner by `shownPictureOwner`'s rules. A team page has none (AC-754).
+ */
+async function shownHostPicture(
+  tx: WorkspaceTx,
+  page: PageRecord,
+): Promise<{ readonly page: PersonPicture } | { readonly owner: string } | undefined> {
+  const owner = page.kind === 'personal' ? (page.ownerUserId ?? undefined) : undefined;
+  if (owner === undefined) return undefined;
+  const photo = await publishedPagePhoto(tx, owner, page.workspaceId);
+  if (photo !== undefined) return { page: photo };
+  const shown = await shownPictureOwner(tx, page);
+  return shown === undefined ? undefined : { owner: shown };
+}
+
+/**
  * A personal page's host picture to serve (23 Oct 2026): the owner's picture, their upload or Google's
  * (`personPicture`), when they show it, else undefined; a team page has none (AC-754). The same door and liveness as
  * the page's facts, so a picture shows only where the page does.
@@ -391,8 +409,9 @@ export async function readPagePicture(
   pictures: PublicPictureDeps,
 ): Promise<PersonPicture | undefined> {
   checkEntry(entry);
-  const owner = await inWorkspace(entry.scope, async (tx) => shownPictureOwner(tx, await livePage(tx, entry)));
-  return owner === undefined ? undefined : personPicture(owner, await pictures.pictureOf(owner));
+  const host = await inWorkspace(entry.scope, async (tx) => shownHostPicture(tx, await livePage(tx, entry)));
+  if (host === undefined) return undefined;
+  return 'page' in host ? host.page : personPicture(host.owner, await pictures.pictureOf(host.owner));
 }
 
 /**

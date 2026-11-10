@@ -34,7 +34,7 @@ import {
   type PublicSocialLink,
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
-import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
+import { lockupLogoOf, memberNameOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { parsePartnerAccessToken } from '../partners/tokens.ts';
@@ -1218,11 +1218,22 @@ async function draftOwner(db: Database, owner: HandleOwner): Promise<HandleOwner
 export async function findHandleOwner(
   deps: { readonly db: Database },
   handle: string,
-  options: LinkPageViewer = {},
+  options: LinkPageViewer & {
+    /**
+     * The name the page shows (10 Nov 2026): the member's own in the page's workspace, which its editor changes,
+     * read in that workspace's transaction; the account's name while the row has none. For what carries the name
+     * (the wallet pass), not the picture routes, which never need it.
+     */
+    readonly withPageName?: boolean;
+  } = {},
 ): Promise<HandleOwner> {
-  const owner = await shownOwner(deps.db, handle, options);
+  const owner = await shownOwner(deps.db, handle, options.viewer === undefined ? {} : { viewer: options.viewer });
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
-  return owner;
+  if (options.withPageName !== true) return owner;
+  const name = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    memberNameOf(tx, owner.userId, owner.workspaceId),
+  );
+  return name === undefined ? owner : { ...owner, name };
 }
 
 /**
@@ -1648,11 +1659,24 @@ export async function enterLinkPage(
   );
   // Read in the owner's own workspace, under its row level security: their job title and its name are its own, and
   // so are the places a Menu or Reserve block names (spec 0065, AC-6528), read only from what was published.
-  const [identity, placeBlocks] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
+  // The name too (owner, 10 Nov 2026): the member's own in this workspace, which the page's editor changes, live on
+  // save like the title under it; the account's name only while the row has none.
+  const [identity, placeBlocks, name] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
     await publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
     await publicPlaceBlocks(tx, owner.workspaceId, rows),
+    await memberNameOf(tx, owner.userId, owner.workspaceId),
   ]);
-  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft, placeBlocks };
+  return {
+    owner: name === undefined ? owner : { ...owner, name },
+    rows: found.rows,
+    pages,
+    forms,
+    skipped,
+    pictures,
+    identity,
+    isDraft,
+    placeBlocks,
+  };
 }
 
 /**
@@ -2089,4 +2113,45 @@ export async function enterTablePage(deps: { readonly db: Database }, key: strin
     access: bookingAccess(row.place_id, [people, companies]),
   });
   return { scope, placeId: row.place_id, key, installed: row.installed };
+}
+
+/**
+ * A news unsubscribe link's entry (10 November 2026): the place a signed link names, by its workspace and id, as the
+ * reservation page's own door would enter it (`enterTablePage` by the place's current key). The caller has verified
+ * the link's signature: the ids are ours, never typed. A consent is the workspace's, not the place's, so a place
+ * since deleted must never strand a guest's way out (GDPR, CAN-SPAM): while the workspace is live, its link still
+ * enters as that place's same narrow `booking` actor, with no key (`key: ''`) and nothing installed, which serves a
+ * withdrawal and nothing else. A deleted workspace, or one without its standard objects, is NOT_FOUND.
+ */
+export async function enterNewsPlace(
+  deps: { readonly db: Database },
+  link: { readonly workspaceId: string; readonly placeId: string },
+): Promise<TableEntry> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!isUuid(link.workspaceId) || !isUuid(link.placeId)) throw missing();
+  const found = await deps.db.withWorkspace(link.workspaceId, async (tx) => {
+    const place = await tx.execute<{ public_key: string | null }>(
+      sql`select public_key from places where id = ${link.placeId}::uuid limit 1`,
+    );
+    const live = await tx.execute<{ live: boolean }>(
+      sql`select exists (select 1 from workspaces where id = ${link.workspaceId}::uuid and deleted_at is null) as live`,
+    );
+    const standard = await tx
+      .select({ id: objects.id, key: objects.standardKey })
+      .from(objects)
+      .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt)));
+    return { key: place.rows[0]?.public_key ?? undefined, live: live.rows[0]?.live === true, standard };
+  });
+  if (!found.live) throw missing();
+  if (found.key !== undefined) return enterTablePage(deps, found.key);
+  const people = found.standard.find((object) => object.key === 'people')?.id;
+  const companies = found.standard.find((object) => object.key === 'companies')?.id;
+  if (people === undefined || companies === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: link.workspaceId,
+    actor: { type: 'booking', id: link.placeId },
+    access: bookingAccess(link.placeId, [people, companies]),
+  });
+  return { scope, placeId: link.placeId, key: '', installed: false };
 }

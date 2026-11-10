@@ -32,5 +32,5 @@ export async function touchLinkPage(
     return;
   }
   // A change no editor of the page makes (search engines on or off, the QR's style) never shows it.
-  if (change === 'blocks' || change === 'look') await showLinkPage(tx, owner, workspace);
+  if (change === 'blocks' || change === 'look' || change === 'photo') await showLinkPage(tx, owner, workspace);
 }

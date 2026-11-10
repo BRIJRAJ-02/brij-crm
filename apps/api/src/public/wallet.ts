@@ -119,7 +119,7 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     if (!HANDLE_PATTERN.test(handle)) return nothing();
     let owner;
     try {
-      owner = await findHandleOwner({ db: deps.db }, handle);
+      owner = await findHandleOwner({ db: deps.db }, handle, { withPageName: true });
     } catch {
       return nothing();
     }
@@ -150,7 +150,7 @@ export function mountWalletPass(app: Hono<{ Variables: WalletVariables }>, deps:
     }
     let owner;
     try {
-      owner = await findHandleOwner({ db: deps.db }, handle);
+      owner = await findHandleOwner({ db: deps.db }, handle, { withPageName: true });
     } catch {
       return nothing();
     }

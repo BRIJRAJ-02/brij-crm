@@ -35,7 +35,7 @@ import {
 } from '@crm/contracts';
 import { outboxHook, type BusyReader, type ManageLinkKey, type SlotCache } from '@crm/core';
 import {
-  confirmNews,
+  confirmNewsLink,
   enterTablePage,
   guestCancel,
   guestChange,
@@ -468,13 +468,17 @@ export function mountPublicTables(app: Hono<{ Variables: Variables }>, services:
     if (!input.success) return answer('INPUT_INVALID', 'This link isn’t complete. Open it from the email again.');
     try {
       const entry = await enterTablePage({ db }, key);
-      const status = await confirmNews(
+      const confirmed = await confirmNewsLink(
         entry,
         { linkKey: services.linkKey, ...(services.now === undefined ? {} : { now: services.now }) },
         input.data.token,
       );
-      log.info('tables.news_confirmed', { requestId: c.get('requestId'), status });
-      return ok({ status });
+      log.info('tables.news_confirmed', { requestId: c.get('requestId'), status: confirmed.status });
+      // The signed up page's "Changed your mind? Unsubscribe" link carries this token (10 Nov 2026).
+      return ok({
+        status: confirmed.status,
+        ...(confirmed.unsubscribeToken === undefined ? {} : { unsubscribeToken: confirmed.unsubscribeToken }),
+      });
     } catch (error) {
       return refusalAnswer(error);
     }

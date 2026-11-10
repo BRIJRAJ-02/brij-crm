@@ -28,6 +28,7 @@ import type { AddableKind } from './registry.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { HeaderActions } from './LinkPageScreen.tsx';
 import { LinkPublishBar } from './LinkPublishBar.tsx';
+import { PagePhotos } from './PagePhotos.tsx';
 import { LiveSwitch, useLinkPageLive } from './private-page.tsx';
 
 let shown: InApp | undefined;
@@ -395,20 +396,13 @@ describe('Crop again (spec 0068, AC-6809)', () => {
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     const extras = {
       look: { cover: 'v1', workspaceAccent: '#1f5fd6' },
-      colours: () => undefined,
-      variables: [],
-      quickPicks: [],
       photoSrc: () => cover,
-      onAccent: () => undefined,
-      onPreviewAccent: () => undefined,
       onPhoto,
       onRemovePhoto: () => undefined,
     } as const;
-    await render({}, () => (
-      <AppearanceCard theme={{ ...DEFAULT_PAGE_THEME, header: 'cover' }} onChange={() => undefined} extras={extras} />
-    ));
-    // The cover picker sits on the Design card itself since the templates (spec 0068, AC-6802), as one row: its
-    // picture, Change, Adjust crop and Remove.
+    await render({}, () => <PagePhotos slots={['avatar', 'cover']} extras={extras} />);
+    // The cover sits in Profile with the profile photo (owner, 10 Nov 2026), as one row: its picture, Change,
+    // Adjust crop and Remove.
     await expect.element(page.getByRole('button', { name: 'Change cover photo' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Remove cover photo' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Adjust crop' }).first());
@@ -416,7 +410,7 @@ describe('Crop again (spec 0068, AC-6809)', () => {
   });
 });
 
-describe('Design’s three photos (9 Nov 2026)', () => {
+describe('the page’s three photos (9 Nov 2026; Profile first, 10 Nov 2026)', () => {
   const pixel =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   const extras = (look: Readonly<Record<string, string>>, onRemovePhoto: (slot: string) => void = () => undefined) =>
@@ -432,12 +426,19 @@ describe('Design’s three photos (9 Nov 2026)', () => {
       onRemovePhoto,
     }) as const;
 
-  it('names each by where it shows, in the page’s order, with one line saying where', async () => {
+  it('puts the profile photo and the cover in Profile, the background in Design, each saying where', async () => {
     await render({}, () => (
-      <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={() => undefined} extras={extras({})} />
+      <>
+        <PagePhotos slots={['avatar', 'cover']} extras={extras({})} />
+        <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={() => undefined} extras={extras({})} />
+      </>
     ));
-    const uploads = ['Upload cover photo', 'Upload profile photo', 'Upload background photo'];
-    const hints = ['The wide photo at the top', 'The small photo above the name', 'Fills the page behind everything'];
+    const uploads = ['Upload profile photo', 'Upload cover photo', 'Upload background photo'];
+    const hints = [
+      'Above the name, also on booking pages',
+      'The wide photo at the top',
+      'Fills the page behind everything',
+    ];
     for (const [index, name] of uploads.entries()) {
       await expect.element(page.getByRole('button', { name })).toHaveAccessibleDescription(hints[index] ?? '');
     }
@@ -445,17 +446,19 @@ describe('Design’s three photos (9 Nov 2026)', () => {
       .map((button) => button.getAttribute('aria-label') ?? '')
       .filter((label) => uploads.includes(label));
     expect(order).toEqual(uploads);
+    shown?.unmount();
+    // Design alone holds only the background now; the shape of the profile photo stays with the look.
+    await render({}, () => (
+      <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={() => undefined} extras={extras({})} />
+    ));
+    await expect.element(page.getByRole('button', { name: 'Upload background photo' })).toBeVisible();
+    expect(page.getByRole('button', { name: 'Upload profile photo' }).query()).toBeNull();
+    expect(page.getByRole('button', { name: 'Upload cover photo' }).query()).toBeNull();
+    await expect.element(page.getByRole('radiogroup', { name: 'Profile photo shape' })).toBeVisible();
   });
 
   it('shows the account picture the page uses until it has its own, with nothing to remove', async () => {
-    await render({}, () => (
-      <AppearanceCard
-        theme={DEFAULT_PAGE_THEME}
-        onChange={() => undefined}
-        extras={extras({})}
-        profile={{ name: 'Ada Lovelace', picture: pixel }}
-      />
-    ));
+    await render({}, () => <PagePhotos slots={['avatar', 'cover']} extras={extras({})} avatarStandIn={pixel} />);
     await expect.element(page.getByRole('button', { name: 'Change profile photo' })).toBeVisible();
     await expect.element(page.getByRole('button', { name: 'Remove profile photo' })).not.toBeInTheDocument();
   });
@@ -463,9 +466,8 @@ describe('Design’s three photos (9 Nov 2026)', () => {
   it('asks before a photo goes, naming that photo, and keeps its words as it closes', async () => {
     const onRemovePhoto = vi.fn();
     await render({}, () => (
-      <AppearanceCard
-        theme={DEFAULT_PAGE_THEME}
-        onChange={() => undefined}
+      <PagePhotos
+        slots={['avatar', 'cover', 'ground']}
         extras={extras({ cover: 'v1', avatar: 'v2', ground: 'v3' }, onRemovePhoto)}
       />
     ));
@@ -478,6 +480,7 @@ describe('Design’s three photos (9 Nov 2026)', () => {
     await expect.element(page.getByText('Remove the background photo?')).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Remove profile photo' }));
     await expect.element(page.getByText('Remove the profile photo?')).toBeVisible();
+    await expect.element(page.getByText('The page goes back to the account photo, or initials.')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Cancel' }));
     expect(onRemovePhoto).toHaveBeenCalledTimes(1);
   });

@@ -15,7 +15,10 @@ export interface LinkSnapshot {
   readonly items: readonly LinkSnapshotItem[];
 }
 
-/** The drafted columns, in the order the Changes list names them. */
+/**
+ * The drafted columns, in the order the Changes list names them. The name, the title and whether it shows under the
+ * name are profile data, live on save (owner, 10 Nov 2026; migration 0205), so none of them is here.
+ */
 const FIELDS = [
   'bio',
   'theme',
@@ -24,7 +27,6 @@ const FIELDS = [
   'cover_path',
   'ground_path',
   'avatar_path',
-  'show_job_title',
   'site_url',
   'foot_line',
 ] as const;
@@ -164,9 +166,6 @@ export function diffLinkPage(published: LinkSnapshot, draft: LinkSnapshot): read
   if (cover !== undefined) lines.push(cover);
   const ground = photoSentence('Background photo', before.ground_path, after.ground_path);
   if (ground !== undefined) lines.push(ground);
-  if ((before.show_job_title === true) !== (after.show_job_title === true)) {
-    lines.push(after.show_job_title === true ? 'Job title shown' : 'Job title hidden');
-  }
   if (!same(before.site_url, after.site_url)) lines.push('Website changed');
   if (!same(before.foot_line, after.foot_line)) lines.push('Foot line changed');
   const old = new Map(published.items.map((item) => [item.id, item]));

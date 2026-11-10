@@ -36,12 +36,18 @@ describe('a link page’s changes', () => {
       'Colour changed',
       'Profile photo added',
       'Cover photo removed',
-      'Job title shown',
       'Changed “Shop, renamed”',
       'Added “New”',
       'Removed “Old”',
       'Order changed',
     ]);
+  });
+
+  // Owner, 10 Nov 2026 (migration 0205): the title under the name is live on save, never an unpublished change; an
+  // older snapshot still holding the switch says nothing either.
+  it('never counts the title switch as a change', () => {
+    expect(diffLinkPage(page({ show_job_title: false }), page({ show_job_title: true }))).toEqual([]);
+    expect(diffLinkPage(page({ show_job_title: true }), page({}))).toEqual([]);
   });
 
   it('reads a page never published as empty, so each block reads as added', () => {

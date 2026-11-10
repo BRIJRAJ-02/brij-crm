@@ -20,6 +20,7 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope, publishLinkPageForTest, publishPageOwnerForTest } from '../testing.ts';
+import { discardLinkDraft, publishLinkPage, readLinkPagePublication } from './link-publish.ts';
 
 const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
 // Spec 0068: a link page's edits are a draft until Publish. A visitor's read here is of the page as its owner
@@ -258,5 +259,36 @@ describe('who a link page is from', () => {
     const facts = await getPublicBookingPage(await enterBookingPage({ db }, team.publicKey));
     expect(facts.team).toBeDefined();
     expect(facts.hostRole).toBeUndefined();
+  });
+});
+
+// Owner, 10 Nov 2026 (migration 0205): the name, the title and whether it shows are profile data, live on save; the
+// site and the closing line keep the Publish model, and no Discard or Restore takes the title back.
+describe('the name and title, live on save', () => {
+  /** The page as a visitor reads it now, with nothing published first. */
+  const live = (handle: string) => liveEnterLinkPage({ db }, handle, { max: 21 }).then((found) => readLinkPage(found));
+
+  it('shows a new name and title at once, while a new site waits for Publish', async () => {
+    const ada = await person('Ada Lovelace');
+    await publishLinkPage(ada.scope);
+    await updateMyMemberProfile(ada.scope, { name: 'Ada King', jobTitle: 'Founder', showJobTitle: true });
+    await updateMyMemberProfile(ada.scope, { site: 'northwind.com' });
+    const now = await live(ada.handle);
+    expect(now.name).toBe('Ada King');
+    expect(now.role).toBe('Founder');
+    expect(now).not.toHaveProperty('brand');
+    // The editor's Changes list names the site, never the title.
+    expect((await readLinkPagePublication(ada.scope)).changes).toEqual(['Website changed']);
+    // Their personal booking pages show the title at once too.
+    const mine = await createBookingPage(ada.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    expect((await liveGetPublicBookingPage(await enterBookingPage({ db }, mine.publicKey))).hostRole).toBe('Founder');
+
+    // Discarding the draft takes back the site, never the title shown since.
+    await discardLinkDraft(ada.scope);
+    const after = await live(ada.handle);
+    expect(after.role).toBe('Founder');
+    expect((await getMyProfile(ada.scope)).showJobTitle).toBe(true);
+    await updateMyMemberProfile(ada.scope, { showJobTitle: false });
+    expect(await live(ada.handle)).not.toHaveProperty('role');
   });
 });
