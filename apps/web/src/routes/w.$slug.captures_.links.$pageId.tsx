@@ -16,10 +16,10 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // theirs; a colleague's, once the page names its owner. Either way the page shows: a failed read of the schedules
 // leaves the card with the hours the page books by now.
 export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
-  // The tab shown (22 Oct 2026): Page unless `?tab=` names another.
+  // The section shown: Details unless `?tab=` names another (an old tab's name lands on its section).
   validateSearch: (search: Record<string, unknown>): { readonly tab?: PageTab } => {
     const tab = pageTabOf(search.tab);
-    return tab === 'page' ? {} : { tab };
+    return tab === 'details' ? {} : { tab };
   },
   // Moving between tabs keeps the page as it is: the loader runs on arriving, not on each tab.
   shouldReload: ({ cause }) => cause !== 'stay',
@@ -105,7 +105,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
 
 /** The editor while its page loads: its sections and preview, so they stand where the editor's will. */
 function PageEditorPending() {
-  const { tab = 'page' } = Route.useSearch();
+  const { tab = 'details' } = Route.useSearch();
   return <TabsPending tab={tab} />;
 }
 
@@ -152,7 +152,7 @@ function Missing({
 function EditorRoute() {
   const { page, mayRead, ownerMember, people, sharingPeople, fields, targets, objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { tab = 'page' } = Route.useSearch();
+  const { tab = 'details' } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data, toasts } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
@@ -174,7 +174,7 @@ function EditorRoute() {
       onNotice={(message) => toasts.toast({ tone: 'success', message })}
       tab={tab}
       // A tab change replaces the entry: Back leaves the editor rather than stepping through its tabs.
-      onTabChange={(next) => void navigate({ search: next === 'page' ? {} : { tab: next }, replace: true })}
+      onTabChange={(next) => void navigate({ search: next === 'details' ? {} : { tab: next }, replace: true })}
     />
   );
 }

@@ -189,7 +189,58 @@ export const strings = {
   // The Team link (spec 0037, AC-1353): a form in front of the team pages.
   teamLinkName: 'Book a call',
   createTeamLink: 'Create team link',
-  everyoneSwitch: 'Everyone in the workspace, including people who join later',
+  everyoneSwitch: 'Include everyone in the workspace',
+  /** The editor's Hosts, as the owner's mock of 9 November 2026 words it. */
+  peopleCount: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  host: {
+    whoMeets: 'Who meets the guest',
+    inTurns: 'One host, in turns',
+    together: 'All hosts together',
+    /** "Each booking goes to Priya, and one person from Sales." */
+    summary: (fixed: readonly string[], teams: readonly string[]) => {
+      const parts = [
+        ...(fixed.length === 0 ? [] : [fixed.join(', ')]),
+        ...teams.map((team) => `one person from ${team}`),
+      ];
+      return parts.length === 0
+        ? 'Each booking goes to nobody yet. Add a team or a host below.'
+        : `Each booking goes to ${parts.join(', and ')}.`;
+    },
+    teams: 'Teams',
+    teamsLine: 'One person from each team joins every booking. Up to 3 teams.',
+    noTeams: 'No teams yet. Guests won’t see any times until you add a team or a host.',
+    addTeam: 'Add team',
+    manageTeams: 'Manage teams',
+    bookable: (on: number, all: number) => `${String(on)} of ${String(all)} bookable`,
+    teamAt: (index: number) => `Team ${String(index + 1)}`,
+    stopTeam: (name: string) => `Stop booking from ${name}`,
+    stopTeamTip: 'Stop booking from it',
+    always: 'Always included',
+    alwaysLine: 'These people join every meeting, whoever’s turn it is. Up to 7.',
+    noOne: 'No one yet.',
+    addHost: 'Add host',
+    hostActions: (name: string) => `More for ${name}`,
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    remove: 'Remove',
+    you: (name: string) => `${name} (you)`,
+    turns: 'How turns work',
+    nextGoesTo: 'Next booking goes to',
+    fewest: 'Whoever has had fewest',
+    fewestLine: 'Keeps bookings even across the team',
+    free: 'Whoever is free',
+    freeLine: 'Shows guests the most times',
+    priority: 'In priority order',
+    setByTeam: 'Set on the team, in Bookings settings › Teams',
+    ifReschedules: 'If a guest reschedules',
+    keepSame: 'Keep the same host',
+    keepSameLine: 'If they’re free at the new time',
+    pickAgain: 'Pick from the team again',
+    formOnly: 'Only book through a routing form',
+    formOnlyHelp: 'Guests can’t open this page directly. They reach it by answering a routing form.',
+    rules: 'Routing rules',
+    rulesLine: 'Send guests to the right people based on their answers. The first rule that matches wins.',
+  },
   everyoneSwitchOn: (on: number) => `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns.`,
   switchOffRefused: (name: string) => `Switch ${name} off`,
   rosterSummary: (on: number, pages: number) =>
