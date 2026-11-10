@@ -31,6 +31,8 @@ export interface ConnectedCalendarDeps {
   readonly now?: () => Date;
   /** The api's one events service, when it keeps one (its kept answers are forgotten on a member's change). */
   readonly events?: CalendarEvents;
+  /** Where a calendar read past is reported for operators, when no events service is passed in. */
+  readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
 }
 
 /** The busy times and the event writer over a workspace's connected calendars. */
@@ -44,6 +46,7 @@ export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar 
       hooks: deps.hooks ?? [],
       isFreeDomain: deps.isFreeDomain ?? ((domain) => FREE_EMAIL_DOMAINS.has(domain)),
       ...(deps.now === undefined ? {} : { now: deps.now }),
+      ...(deps.log === undefined ? {} : { log: deps.log }),
     });
   return {
     async busy({ workspaceId, memberId, from, to }): Promise<BusyAnswer> {

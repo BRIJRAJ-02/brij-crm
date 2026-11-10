@@ -195,6 +195,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
           tokenKey: env.calendar.tokenKey,
           hooks: backgroundHooks(),
           isFreeDomain: createFreeDomains(),
+          log,
         });
   // A reservation's guest emails (spec 0066 B7 lite): the same links, the same mailer.
   const visitMail = (payload: unknown) =>

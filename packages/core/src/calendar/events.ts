@@ -319,11 +319,14 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
       // Stored tokens that won't open (another key, a damaged row) are a grant gone until the member reconnects: the
       // account's calendars are skipped as refused, so the closed rule still holds, and the read never fails.
       if (isUnreadableTokens(error)) {
-        deps.log?.warn('calendar.busy.tokens_unreadable', {
-          workspaceId: scope.workspaceId,
-          connectionId: connection.id,
-          memberId: connection.member_id,
-        });
+        // Said once, when the warning is first written, not on every read until the member reconnects.
+        if (calendars.some((calendar) => calendar.busy_error !== 'CALENDAR_AUTH_REVOKED')) {
+          deps.log?.warn('calendar.busy.tokens_unreadable', {
+            workspaceId: scope.workspaceId,
+            connectionId: connection.id,
+            memberId: connection.member_id,
+          });
+        }
         return failAll('CALENDAR_AUTH_REVOKED');
       }
       if (!isProviderError(error)) throw error;
@@ -347,7 +350,10 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
             failing_since = coalesce(k.failing_since, now())
           from jsonb_to_recordset(${JSON.stringify(skipped.map((each) => ({ id: each.calendarId, code: each.code })))}::jsonb)
             as x(id uuid, code text)
-          where k.id = x.id
+          -- A warning already standing for the same failure is left as it is: a calendar that stays broken costs a
+          -- public slots read no write.
+          where k.id = x.id and (k.last_error is null or k.last_error ->> 'source' is distinct from 'busy'
+            or k.last_error ->> 'code' is distinct from x.code)
         `);
       }
       if (answered.length > 0) {
