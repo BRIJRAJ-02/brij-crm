@@ -262,8 +262,8 @@ export function NewPageDialog({
           id,
           title: title.trim(),
           timeZone: memberZone(data, slug),
-          // A draft until its first Publish, as a form is (the bookings area, 4 November 2026).
-          isDraft: true,
+          // Live at once, as a Calendly event type is (the owner, 9 November 2026: no draft or Publish); Hidden is the
+          // editor's and the card's Live or Hidden menu.
           // A one on one page follows the default schedule (AC-17); a round robin page books by each host's own hours.
           settings: {
             ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),

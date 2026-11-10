@@ -124,7 +124,6 @@ describe('New booking page', () => {
       'acme',
       expect.objectContaining({
         title: 'Intro call',
-        isDraft: true,
         settings: { durations: [45], scheduleId: null },
       }),
     );
@@ -203,7 +202,7 @@ describe('New booking page', () => {
     expect(page.getByText(rotationStrings.rotationRequired).elements()).toEqual([]);
     expect(create).toHaveBeenCalledWith(
       'acme',
-      expect.objectContaining({ kind: 'round_robin', isDraft: true, hosts: { fixed: [], rotations: [SALES.id] } }),
+      expect.objectContaining({ kind: 'round_robin', hosts: { fixed: [], rotations: [SALES.id] } }),
     );
   });
 });
