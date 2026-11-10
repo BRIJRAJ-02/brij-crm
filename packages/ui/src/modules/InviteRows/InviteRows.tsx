@@ -50,6 +50,33 @@ export interface InviteRowsProps {
   /** Focus the first row's email as it mounts: a dialog opened to invite starts typing at once. */
   readonly autoFocus?: boolean;
   readonly ref?: Ref<InviteRowsHandle>;
+  /**
+   * A booking's guests (the owner, 9 November 2026: "one email a row, each removable"), every word the screen's own:
+   * the rows may run down to none (each row ends in its ×, and with none only the add button shows, under `first`),
+   * the column is named `label` with `aside` quietly beside it ("Guests (up to 10)"), and the add button says
+   * `another` once a row is there. Left out, the invite form's rows, as before.
+   */
+  readonly guests?: InviteRowsGuests;
+  /** `lg`: the public pages' taller fields (Field's `lg`), the remove button level with them. */
+  readonly fieldSize?: 'md' | 'lg';
+}
+
+/** The words and rules of InviteRows' guest variant (see `guests`). */
+export interface InviteRowsGuests {
+  /** The column's name over the rows: "Guests". */
+  readonly label: string;
+  /** Quietly beside it: "(up to 10)". */
+  readonly aside?: string;
+  /** The add button with no rows yet: "Add guests". */
+  readonly first: string;
+  /** The add button under a row: "Add another guest". */
+  readonly another: string;
+  /** A row's email, for screen readers: "Guest 2 email". */
+  readonly rowLabel: (row: number) => string;
+  /** In place of the add button once the rows are full: "10 guests is the most." */
+  readonly full: string;
+  /** Drawn at the end of the add button's row: a guest page's Invite, sent from the rows. */
+  readonly action?: ReactNode;
 }
 
 /**
@@ -78,11 +105,19 @@ export function InviteRows({
   onOverflow,
   autoFocus = false,
   ref,
+  guests,
+  fieldSize = 'md',
 }: InviteRowsProps) {
   const fields = useRef(new Map<string, HTMLInputElement>());
   // The row to focus once the rows just changed are drawn (a row added, removed, or filled by a paste).
   const focusNext = useRef<string | undefined>(undefined);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const focusAdd = useRef(false);
   useEffect(() => {
+    if (focusAdd.current) {
+      focusAdd.current = false;
+      addButton.current?.focus();
+    }
     if (focusNext.current === undefined) return;
     fields.current.get(focusNext.current)?.focus();
     focusNext.current = undefined;
@@ -90,6 +125,9 @@ export function InviteRows({
   useImperativeHandle(ref, () => ({ focusRow: (id: string) => fields.current.get(id)?.focus() }), []);
 
   const isFull = rows.length >= max;
+  // Guests: every row ends in its ×, down to none; the invite form keeps one row with none.
+  const isRemovable = guests === undefined ? rows.length > 1 : rows.length > 0;
+  const sized = fieldSize === 'lg' ? { size: 'lg' as const } : {};
   const roleItems = roles?.map((each) => ({ id: each.id, label: each.label }));
   const make = (roleId?: string, email?: string) => createInviteRow(roleId ?? roles?.at(-1)?.id, email);
 
@@ -102,6 +140,8 @@ export function InviteRows({
   const remove = (id: string) => {
     const next = removeRow(rows, id);
     focusNext.current = next.focus?.id;
+    // The last guest row gone: focus goes to the add button that now stands alone.
+    if (next.focus === undefined) focusAdd.current = true;
     onChange(next.rows);
   };
   const type = (row: InviteRow, value: string) => {
@@ -122,19 +162,26 @@ export function InviteRows({
     <div
       className={styles.root}
       data-roles={roleItems === undefined ? undefined : ''}
-      data-removable={rows.length > 1 ? '' : undefined}
+      data-removable={isRemovable ? '' : undefined}
+      data-size={fieldSize === 'lg' ? 'lg' : undefined}
     >
       {/* The columns' names, once: every row's controls carry their own (hidden) names. They stay at full strength
           while the rows are disabled, as plain text over the faded controls keeps its contrast. */}
-      <span className={styles.head}>
-        <FieldLabel label={strings.email} as="text" />
-      </span>
+      {(guests === undefined || rows.length > 0) && (
+        <span className={styles.head}>
+          {guests === undefined ? (
+            <FieldLabel label={strings.email} as="text" />
+          ) : (
+            <FieldLabel label={guests.label} aside={guests.aside} as="text" />
+          )}
+        </span>
+      )}
       {roleItems !== undefined && (
         <span className={styles.head}>
           <FieldLabel label={strings.role} as="text" info={rolesInfo} />
         </span>
       )}
-      {rows.length > 1 && <span className={styles.head} />}
+      {isRemovable && <span className={styles.head} />}
       {rows.map((row, index) => {
         const what = row.email.trim() === '' ? strings.rowName(index + 1) : row.email.trim();
         const error = errors[row.id];
@@ -146,7 +193,8 @@ export function InviteRows({
                   if (element === null) fields.current.delete(row.id);
                   else fields.current.set(row.id, element);
                 }}
-                label={strings.emailFor(index + 1)}
+                label={guests === undefined ? strings.emailFor(index + 1) : guests.rowLabel(index + 1)}
+                {...sized}
                 isLabelHidden
                 // Text, not email: an email input drops the line breaks of a pasted column, which then can't split.
                 // Its own name and autocomplete off, so a browser never fills in the signed in person's address.
@@ -191,7 +239,7 @@ export function InviteRows({
                 />
               </span>
             )}
-            {rows.length > 1 && (
+            {isRemovable && (
               <span className={styles.end}>
                 <Button
                   variant="ghost"
@@ -208,20 +256,42 @@ export function InviteRows({
         );
       })}
       {isFull ? (
-        <span className={styles.limit}>{strings.atMost(max)}</span>
+        <span className={styles.limit}>
+          {guests === undefined ? strings.atMost(max) : guests.full}
+          {guests?.action}
+        </span>
       ) : (
-        <span className={styles.add}>
-          <Button
-            variant="ghost"
-            icon="plus"
-            label={strings.addAnotherName}
-            isDisabled={isDisabled}
-            onPress={() => {
-              add();
-            }}
-          >
-            {strings.addAnother}
-          </Button>
+        <span className={styles.add} data-first={guests !== undefined && rows.length === 0 ? '' : undefined}>
+          {guests === undefined ? (
+            <Button
+              variant="ghost"
+              icon="plus"
+              label={strings.addAnotherName}
+              isDisabled={isDisabled}
+              onPress={() => {
+                add();
+              }}
+            >
+              {strings.addAnother}
+            </Button>
+          ) : (
+            <Button
+              ref={addButton}
+              variant="ghost"
+              icon="user-plus"
+              isDisabled={isDisabled}
+              onPress={() => {
+                if (rows.length === 0) {
+                  const first = make();
+                  focusNext.current = first.id;
+                  onChange([first]);
+                } else add();
+              }}
+            >
+              {rows.length === 0 ? guests.first : guests.another}
+            </Button>
+          )}
+          {guests?.action !== undefined && <span className={styles.action}>{guests.action}</span>}
         </span>
       )}
     </div>

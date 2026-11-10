@@ -13,3 +13,7 @@ BookingReceipt pops its own state mark beside the host, and nothing else in the 
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## The booked moment
+
+`xl` is a public page's booked moment (the v5 mock): a soft green disc inside its ring (the green tag tokens), the tick in the green's ink, landing out of half its size with a fade on `--duration-public-move`, the tick drawing after. Story: BookedMoment.

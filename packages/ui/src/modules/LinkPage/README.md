@@ -152,3 +152,7 @@ Tab reaches each block in reading order, then the foot's links. Enter opens a bl
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## The v5 mock's profile (10 November 2026)
+
+The person's networks sit under the bio, centred with the header, and Share and Save contact are an equal pair of bordered buttons (Share first). A booking page's row is its tile, the title over its lengths ("15, 30 or 60 min"), its next open time quietly at the end ("Next Tue 10 Nov, 3:00 pm", read once the row nears the screen through `onTimesNear`, as a next times block's are; left out under 700px), and the chevron, which nudges on under the pointer as the border steps up; the row eases to 0.99 while held.

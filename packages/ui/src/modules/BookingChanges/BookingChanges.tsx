@@ -1,18 +1,21 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
-import { GuestChips } from '../../molecules/GuestChips/GuestChips.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { InviteRows } from '../InviteRows/InviteRows.tsx';
+import { createInviteRow, type InviteRow } from '../InviteRows/invite-rows.ts';
 import styles from './BookingChanges.module.css';
 import { strings } from './strings.ts';
 
-/** What adding a guest answered, as the page's client words it. */
+/** What inviting guests answered, as the page's client words it. */
 export type GuestsOutcome =
   | { readonly kind: 'done'; readonly added: number }
-  /** The address was refused: the line under the field. */
-  | { readonly kind: 'invalid'; readonly message: string }
+  /** An address was refused: the line under its row (`index`, the place among those sent), else under the first. */
+  | { readonly kind: 'invalid'; readonly message: string; readonly index?: number }
   | { readonly kind: 'failed'; readonly message: string };
 
 /** What removing a guest or cancelling answered: done, or a line to show. */
@@ -72,8 +75,8 @@ export interface BookingChangesProps {
    * party size in Move instead.
    */
   readonly maxGuests?: number;
-  /** Invites one more person by email. */
-  readonly onInvite: (email: string) => Promise<GuestsOutcome>;
+  /** Invites more people by email, every filled row at once. */
+  readonly onInvite: (emails: readonly string[]) => Promise<GuestsOutcome>;
   /** Takes a guest off. */
   readonly onRemove: (email: string) => Promise<CancelOutcome>;
   readonly onCancel: (reason: string) => Promise<CancelOutcome>;
@@ -137,23 +140,36 @@ export function BookingChanges({
   return (
     <section className={styles.root} aria-labelledby={headingId}>
       <div className={styles.head}>
-        <h2 id={headingId} className={styles.heading}>
-          {strings.heading}
-        </h2>
+        {/* The card's foot (the v5 mock): Reschedule, Guests and Cancel as quiet actions, the heading for screen readers. */}
+        <VisuallyHidden>
+          <h2 id={headingId}>{strings.heading}</h2>
+        </VisuallyHidden>
         <div className={styles.actions}>
           {canMove && (
-            <Button icon="calendar-clock" isExpanded={mode === 'move'} controls={panelId} onPress={toggle('move')}>
+            <Button
+              variant="ghost"
+              icon="calendar-clock"
+              isExpanded={mode === 'move'}
+              controls={panelId}
+              onPress={toggle('move')}
+            >
               {labels?.move ?? strings.move}
             </Button>
           )}
           {maxGuests > 0 && (
-            <Button icon="user-plus" isExpanded={mode === 'guests'} controls={panelId} onPress={toggle('guests')}>
-              {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
+            <Button
+              variant="ghost"
+              icon="user-plus"
+              isExpanded={mode === 'guests'}
+              controls={panelId}
+              onPress={toggle('guests')}
+            >
+              {strings.guestsButton}
             </Button>
           )}
           {canCancel && (
             <span className={styles.end}>
-              <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
+              <Button ref={cancelButton} variant="ghost-danger" onPress={() => setCancelOpen(true)}>
                 {labels?.cancel ?? strings.cancelBooking}
               </Button>
             </span>
@@ -209,7 +225,10 @@ export function BookingChanges({
   );
 }
 
-/** Guests: who is on it (each with Remove), then one email field whose Add, or Enter, invites them. */
+/**
+ * Guests: who is on it (each with Remove, which asks first), then "Invite more" as the booking form's rows, one email
+ * a row with its ×, and Invite, live once a row holds an address, which sends every filled row at once.
+ */
 function GuestsPanel({
   titleId,
   guests,
@@ -220,47 +239,59 @@ function GuestsPanel({
   readonly titleId: string;
   readonly guests: readonly string[];
   readonly maxGuests: number;
-  readonly onInvite: (email: string) => Promise<GuestsOutcome>;
+  readonly onInvite: (emails: readonly string[]) => Promise<GuestsOutcome>;
   readonly onRemove: (email: string) => Promise<CancelOutcome>;
 }) {
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
+  const [rows, setRows] = useState<readonly InviteRow[]>(() => [createInviteRow()]);
+  const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [failure, setFailure] = useState('');
   const [status, setStatus] = useState('');
   const [isAdding, setAdding] = useState(false);
   // The guest whose Remove is asking first.
   const [confirming, setConfirming] = useState<string | undefined>(undefined);
-  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  // After an add or a remove: the field when it is there, else (the list full) the panel's title.
-  const refocus = () => globalThis.requestAnimationFrame(() => (field.current ?? title.current)?.focus());
-  const isFull = guests.length >= maxGuests;
+  const room = Math.max(0, maxGuests - guests.length);
+  // The addresses the rows would invite: well formed, not on it already, each once, no more than there is room for.
+  const known = new Set(guests.map((guest) => guest.toLowerCase()));
+  const picked = rows.flatMap((row) => {
+    const email = row.email.trim().toLowerCase();
+    if (!EMAIL.test(email) || known.has(email)) return [];
+    known.add(email);
+    return [{ row, email }];
+  });
+  const toInvite = picked.slice(0, room);
 
-  const add = async () => {
-    const value = email.trim().toLowerCase();
+  const invite = async () => {
     if (isAdding) return;
-    if (!EMAIL.test(value)) {
-      setError(strings.guestInvalid);
+    // A filled row that isn't an address says so under itself, and nothing goes until it is fixed or removed.
+    const wrong = rows.find((row) => row.email.trim() !== '' && !EMAIL.test(row.email.trim()));
+    if (wrong !== undefined) {
+      setErrors({ [wrong.id]: strings.guestInvalid });
       return;
     }
+    if (toInvite.length === 0) return;
     setAdding(true);
-    setError('');
+    setErrors({});
     setFailure('');
     setStatus('');
-    const outcome = await onInvite(value);
+    const emails = toInvite.map((each) => each.email);
+    const outcome = await onInvite(emails);
     setAdding(false);
     if (outcome.kind === 'done') {
-      setEmail('');
-      setStatus(outcome.added === 0 ? strings.alreadyOn(value) : strings.invited(value));
-      refocus();
-    } else if (outcome.kind === 'invalid') setError(outcome.message);
-    else setFailure(outcome.message);
+      setRows([createInviteRow()]);
+      setStatus(outcome.added === 0 ? strings.alreadyOnAll : strings.invitedSome(emails));
+      globalThis.requestAnimationFrame(() => title.current?.focus());
+    } else if (outcome.kind === 'invalid') {
+      const at = toInvite[outcome.index ?? 0] ?? toInvite[0];
+      if (at === undefined) setFailure(outcome.message);
+      else setErrors({ [at.row.id]: outcome.message });
+    } else setFailure(outcome.message);
   };
   const removed = (guest: string) => {
     setConfirming(undefined);
     setStatus(strings.removed(guest));
-    // The row and its Remove are gone: the field, else the panel's title, once the dialog has closed.
-    focusLater(() => field.current ?? title.current);
+    // The row and its Remove are gone: the panel's title, once the dialog has closed.
+    focusLater(() => title.current);
   };
 
   return (
@@ -276,48 +307,64 @@ function GuestsPanel({
           </span>
         </span>
       </div>
-      {/* The same chips the booking form adds guests with (the owner, 2 November 2026): one look for adding and
-          removing guests everywhere. Remove still asks first. */}
-      <GuestChips
-        guests={guests}
-        label={strings.guests}
-        removeLabel={strings.remove}
-        onRemove={(index) => {
-          const guest = guests[index];
-          if (guest === undefined) return;
-          setStatus('');
-          setError('');
-          setFailure('');
-          setConfirming(guest);
-        }}
-      />
-      {isFull ? (
+      {guests.length > 0 && (
+        <ul className={styles.guestList} aria-label={strings.invitedList}>
+          {guests.map((guest) => (
+            <li key={guest} className={styles.guest}>
+              <Avatar name={guest} size="sm" isDecorative />
+              <span className={styles.guestEmail} title={guest}>
+                {guest}
+              </span>
+              <Button
+                variant="ghost"
+                label={strings.remove(guest)}
+                onPress={() => {
+                  setStatus('');
+                  setFailure('');
+                  setConfirming(guest);
+                }}
+              >
+                {strings.removeShort}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {room === 0 ? (
         <p className={styles.text}>{strings.full(maxGuests)}</p>
       ) : (
-        <div className={styles.add}>
-          <span className={styles.addField}>
-            <Field
-              ref={field}
-              label={strings.addGuest}
-              isLabelHidden
-              name="guest"
-              type="email"
-              autoComplete="email"
-              placeholder={strings.guestPlaceholder}
-              maxLength={254}
-              value={email}
-              onChange={(next) => {
-                setEmail(next);
-                setError('');
-              }}
-              onSubmit={() => void add()}
-              {...(error === '' ? {} : { error })}
-            />
-          </span>
-          <Button size="lg" icon="plus" isPending={isAdding} onPress={() => void add()}>
-            {isAdding ? strings.adding : strings.add}
-          </Button>
-        </div>
+        // The booking form's rows (the owner, 9 November 2026: one guest format everywhere).
+        <InviteRows
+          rows={rows}
+          onChange={(next) => {
+            setRows(next);
+            setErrors({});
+          }}
+          max={room}
+          fieldSize="lg"
+          isDisabled={isAdding}
+          errors={errors}
+          onSubmit={() => void invite()}
+          guests={{
+            label: strings.inviteMore,
+            aside: strings.upTo(room),
+            first: strings.addGuests,
+            another: strings.addAnother,
+            rowLabel: strings.newGuestRow,
+            full: strings.full(maxGuests),
+            action: (
+              <Button
+                variant="primary"
+                size="lg"
+                isDisabled={toInvite.length === 0}
+                isPending={isAdding}
+                onPress={() => void invite()}
+              >
+                {isAdding ? strings.adding : strings.invite(toInvite.length)}
+              </Button>
+            ),
+          }}
+        />
       )}
       {failure !== '' && (
         <Callout tone="danger" isAnnounced>
@@ -326,9 +373,11 @@ function GuestsPanel({
       )}
       <p className={styles.status} role="status">
         {/* The region stays put for screen readers; what it says fades in each time it changes. */}
-        <span key={status} className={styles.swap}>
-          {status}
-        </span>
+        {status !== '' && (
+          <span key={status} className={styles.swap}>
+            {status}
+          </span>
+        )}
       </p>
       <p className={styles.note}>{strings.guestsNote}</p>
       {confirming !== undefined && (

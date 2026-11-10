@@ -483,7 +483,7 @@
     overflow: hidden;
   }
 
-  /* Save contact, the page's one action, with Share beside it: a thumb's row, and under it Add to Apple Wallet
+  /* Share and Save contact, an equal pair: a thumb's row, and under it Add to Apple Wallet
      when the page offers one. */
   .actions {
     display: flex;
@@ -523,14 +523,24 @@
     gap: var(--space-8);
   }
 
+  /* The person's own networks under the bio (the v5 mock), centred with the header, at its start in a left header. */
+  .heroSocials {
+    display: flex;
+    align-self: center;
+  }
+
+  .root[data-page-header='left'] .heroSocials {
+    align-self: flex-start;
+  }
+
   /* The address pill under the name, clear of the bio above it. */
   .address {
     display: inline-flex;
     margin-block-start: var(--space-4);
   }
 
-  /* Save contact takes the rest of the row, so Share stays a square beside it. */
-  .actionRow > :first-child {
+  /* Share and Save contact are an equal pair (the v5 mock): each takes half the row. */
+  .actionRow > * {
     flex: 1;
     min-inline-size: 0;
   }
@@ -999,6 +1009,64 @@
     gap: var(--space-2);
     color: var(--page-card-mark);
     transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* A booking page's row eases down a touch while held (the v5 mock's 0.99, a public page's own press). */
+  .block[data-row='page'] {
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- the mock's row press, no token for 0.99 */
+    --row-press: 0.99;
+
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* A booking page's row (the v5 mock): its border a step stronger and its chevron nudged on, under the pointer. */
+  @media (hover: hover) and (pointer: fine) {
+    .block[data-row='page']:hover {
+      border-color: var(--border-strong);
+    }
+
+    .block[data-row='page']:hover .end {
+      translate: var(--space-2) 0;
+    }
+  }
+
+  .block[data-row='page']:active {
+    scale: var(--row-press);
+  }
+
+  .block[data-row='page'] .end {
+    transition:
+      color var(--duration-hover) var(--ease-hover),
+      translate var(--duration-hover) var(--ease-hover);
+  }
+
+  /* Its next open time, quietly at the row's end; a phone leaves it out, keeping the title whole. */
+  .next {
+    flex: none;
+    margin-inline-start: auto;
+    color: var(--page-card-quiet);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  @media (width < 700px) {
+    .next {
+      display: none;
+    }
+  }
+
+  /* Reduced motion: the row neither eases down nor nudges its chevron. */
+  @media (prefers-reduced-motion: reduce) {
+    .block[data-row='page']:active,
+    .block[data-row='page'] .end {
+      scale: none;
+      translate: none;
+    }
   }
 
   /* The blocks arrive with a short fade and rise, only where motion is welcome. Under reduced motion they are simply

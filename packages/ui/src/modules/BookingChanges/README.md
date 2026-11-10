@@ -36,7 +36,9 @@ Tab reaches Move, Guests and Cancel booking; Move and Guests are read as expande
 
 Not in the artifact.
 
-Guests are GuestChips (2 November 2026), the same chips the booking form adds guests with, so adding and removing guests looks one way everywhere. Each chip's remove still asks first, in the remove dialog.
+Guests (v5 mock, 10 November 2026): the invited are listed with an initial and Remove (which still asks first); under them "Invite more (up to N)" is the booking form's rows (InviteRows' `guests` variant), one email a row with its ×, Add another guest, and Invite at the row's end, live only once a row holds a new address and naming how many ("Invite 2"). `onInvite` gets every address at once; an `invalid` answer may name the address's place (`index`) to mark its row.
+
+The row of changes is the card's quiet foot: Reschedule, Guests and Cancel as ghost buttons ("Need a change?" stays as the section's name for screen readers), sharing a phone's row and stacking only on a card under 320px.
 
 ## Cutoffs (spec 0062, AC-6202)
 

@@ -3,9 +3,9 @@
 // refusal on nothing it draws an error on (a time zone, a phone the page never
 // asked for, the note, the guest list) says the answer's sentence in the line
 // above the buttons and keeps what the visitor typed; a guest's error lands on
-// the chip that guest came from. Guests are chips (1 November 2026): what is
-// still typed goes with the booking, a pasted list splits, a bad address stays
-// to fix, and every change is said.
+// the row that guest came from. Guests are rows, one email each (9 November
+// 2026): blank rows are left out, a repeat goes once, a bad address stays to
+// fix, a pasted list fills rows, and a removed row is said.
 // The library's layers and tokens first, as every page loads them: the width test reads the sizes they set.
 import '../../styles/index.css';
 import type { ReactNode } from 'react';
@@ -135,7 +135,7 @@ describe('a refusal on a field the form shows (unchanged)', () => {
     await expect.element(emailBox()).toHaveValue('ada@example.com');
   });
 
-  it('puts a guest’s error on the chip that guest came from', async () => {
+  it('puts a guest’s error on the row that guest came from', async () => {
     const onSubmit = details({
       kind: 'invalid',
       fields: { 'guest-1': 'Give each guest’s email address.' },
@@ -143,110 +143,78 @@ describe('a refusal on a field the form shows (unchanged)', () => {
     });
     await userEvent.fill(nameBox(), 'Ada Lovelace');
     await userEvent.fill(emailBox(), 'ada@example.com');
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com,alan@example.c,');
+    await addGuest('grace@example.com');
+    await addGuest('');
+    await addGuest('alan@example.com');
     await userEvent.click(page.getByRole('button', { name: 'Confirm booking' }));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ guests: ['grace@example.com', 'alan@example.c'] }));
-    await expect.element(guestsBox()).toHaveAttribute('aria-invalid', 'true');
-    await expect.poll(() => chip('alan@example.c').hasAttribute('data-invalid')).toBe(true);
-    await expect.poll(() => chip('grace@example.com').hasAttribute('data-invalid')).toBe(false);
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ guests: ['grace@example.com', 'alan@example.com'] }),
+    );
+    // The second address sent came from the third row: the blank one was left out.
+    await expect.element(guestRow(3)).toHaveAttribute('aria-invalid', 'true');
+    await expect.element(guestRow(1)).not.toHaveAttribute('aria-invalid');
     await expect.poll(() => line().element().textContent).toBe('');
   });
 });
 
-const guestsBox = () => page.getByRole('textbox', { name: /^Guests/ });
-// Each chip's address, without its avatar's initial.
-const chips = () =>
-  [...document.querySelectorAll('ul[aria-label="Guests to invite"] > li .ws-guest-chips-text')].map(
-    (item) => item.textContent,
-  );
-const chip = (email: string) => {
-  const found = [...document.querySelectorAll('ul[aria-label="Guests to invite"] > li')].find((item) =>
-    item.textContent.includes(email),
-  );
-  if (found === undefined) throw new Error(`no chip for ${email}`);
-  return found;
-};
+/** The row a press on Add guests (or Add another guest) opens, filled with `email`. */
+async function addGuest(email: string) {
+  const add = page.getByRole('button', { name: /^Add (guests|another guest)$/ });
+  await userEvent.click(add);
+  if (email !== '') await userEvent.keyboard(email);
+}
+const guestRow = (row: number) => page.getByRole('textbox', { name: `Guest ${String(row)} email` });
 const status = () => [...document.querySelectorAll('[role="status"]')].map((node) => node.textContent).join(' ');
 
-describe('guests as chips', () => {
-  it('sends an address still being typed when Confirm is pressed, never dropping it', async () => {
+describe('guests, one email a row', () => {
+  it('opens a row on Add guests with its own name and the most it takes beside Guests', async () => {
+    details({ kind: 'done' });
+    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
+    await expect.element(guestRow(1)).toHaveFocus();
+    await expect.element(page.getByText('(up to 10)')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Add another guest' })).toBeVisible();
+  });
+
+  it('sends the filled rows in order, each once, leaving out a blank row', async () => {
     const onSubmit = details({ kind: 'done' });
     await userEvent.fill(nameBox(), 'Ada Lovelace');
     await userEvent.fill(emailBox(), 'ada@example.com');
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com');
+    await addGuest('grace@example.com');
+    await addGuest('');
+    await addGuest('Grace@example.com');
+    await addGuest('alan@example.com');
     await userEvent.click(page.getByRole('button', { name: 'Confirm booking' }));
     await expect.poll(() => onSubmit.mock.calls.length).toBe(1);
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ guests: ['grace@example.com'] }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ guests: ['grace@example.com', 'alan@example.com'] }),
+    );
   });
 
-  it('carries an address once when it is taken twice, whichever takes it first', async () => {
+  it('keeps an address that isn’t one in its row to fix, saying why, and sends nothing', async () => {
     const onSubmit = details({ kind: 'done' });
     await userEvent.fill(nameBox(), 'Ada Lovelace');
     await userEvent.fill(emailBox(), 'ada@example.com');
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com{Enter}');
-    await expect.poll(chips).toEqual(['grace@example.com']);
-    // The same address again, still in the field: submit takes it and the blur after it takes it again.
-    await userEvent.type(guestsBox(), 'Grace@example.com');
+    await addGuest('alan@example');
     await userEvent.click(page.getByRole('button', { name: 'Confirm booking' }));
-    await expect.poll(() => onSubmit.mock.calls.length).toBe(1);
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ guests: ['grace@example.com'] }));
-    await expect.poll(chips).toEqual(['grace@example.com']);
-  });
-
-  it('takes an address on Enter without booking, and on leaving the field', async () => {
-    const onSubmit = details({ kind: 'done' });
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com{Enter}');
     expect(onSubmit).not.toHaveBeenCalled();
-    await expect.poll(chips).toEqual(['grace@example.com']);
-    await expect.element(guestsBox()).toHaveValue('');
-    await userEvent.type(guestsBox(), 'alan@example.com');
-    await userEvent.click(noteBox());
-    await expect.poll(chips).toEqual(['grace@example.com', 'alan@example.com']);
+    await expect.element(guestRow(1)).toHaveAttribute('aria-invalid', 'true');
+    await expect.element(guestRow(1)).toHaveValue('alan@example');
   });
 
-  it('splits a pasted list on commas, new lines and spaces, once each', async () => {
+  it('fills rows from a pasted list', async () => {
     details({ kind: 'done' });
     await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
     // A paste lands as one change of the whole value, as fill makes it.
-    await userEvent.fill(guestsBox(), 'grace@example.com, alan@example.com\nkatherine@example.com grace@example.com ');
-    await expect.poll(chips).toEqual(['grace@example.com', 'alan@example.com', 'katherine@example.com']);
+    await userEvent.fill(guestRow(1), 'grace@example.com, alan@example.com\nkatherine@example.com');
+    await expect.element(guestRow(3)).toHaveValue('katherine@example.com');
   });
 
-  it('keeps an address that isn’t one in the field to fix, saying why', async () => {
-    const onSubmit = details({ kind: 'done' });
-    await userEvent.fill(nameBox(), 'Ada Lovelace');
-    await userEvent.fill(emailBox(), 'ada@example.com');
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com, alan@example ');
-    await expect.poll(chips).toEqual(['grace@example.com']);
-    await expect.element(guestsBox()).toHaveValue('alan@example');
-    await expect.element(guestsBox()).toHaveAttribute('aria-invalid', 'true');
-    await userEvent.click(page.getByRole('button', { name: 'Confirm booking' }));
-    expect(onSubmit).not.toHaveBeenCalled();
-    await userEvent.type(guestsBox(), '.com{Enter}');
-    await expect.poll(chips).toEqual(['grace@example.com', 'alan@example.com']);
-    await expect.element(guestsBox()).not.toHaveAttribute('aria-invalid');
-  });
-
-  it('says each chip added and removed, and removes from the keyboard alone', async () => {
+  it('removes a row with its ×, says so, and gives focus back to Add guests when none is left', async () => {
     details({ kind: 'done' });
-    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(guestsBox(), 'grace@example.com alan@example.com{Enter}');
-    await expect.poll(status).toContain('Added alan@example.com.');
-    // Backspace in the empty field takes the last chip off.
-    await userEvent.keyboard('{Backspace}');
-    await expect.poll(chips).toEqual(['grace@example.com']);
-    await expect.poll(status).toContain('Removed alan@example.com.');
-    // Each chip's remove button is reachable by Tab: back from the field to it, and Enter.
-    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect.element(page.getByRole('button', { name: 'Remove grace@example.com' })).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
-    await expect.poll(chips).toEqual([]);
-    await expect.element(guestsBox()).toHaveFocus();
+    await addGuest('grace@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Remove grace@example.com' }));
+    await expect.poll(status).toContain('Removed grace@example.com.');
+    await expect.element(page.getByRole('button', { name: 'Add guests' })).toHaveFocus();
   });
 });
 

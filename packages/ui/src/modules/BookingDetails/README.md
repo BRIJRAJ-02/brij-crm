@@ -48,7 +48,7 @@ Not in the artifact.
 
 Booked: a `done` outcome may carry `next`. Confirm then reads Booked with a tick for one `--duration-move` before `next` runs (the page opens the receipt there), so the visitor sees the booking land (the owner, 1 November 2026). Without `next`, the page has already moved on.
 
-The chips are GuestChips (2 November 2026), shared with the manage page's guests.
+Guests are rows (9 November 2026, the owner: "more guests should be added, instead of just one"): InviteRows' `guests` variant, one email a row with its ×, "Guests (up to 10)" over them, Add guests and then Add another guest under them, as New meeting and the guest's own page add them. Blank rows are left out, a repeat goes once, a row that isn't an address is named under itself and nothing is sent, and a server's `guest-n` lands on the row the n-th address sent came from. GuestChips is no longer drawn here.
 
 ## Bookings fix pass (5 November 2026)
 
@@ -57,3 +57,7 @@ The chips are GuestChips (2 November 2026), shared with the manage page's guests
 - On that held card the last long text box showing (the note, or a long text question when one follows it) takes the spare height, from 1024px up, so the form runs down to the row with no blank band (the owner, 5 November 2026). It is the Field's `isFilling`. The card's height is unchanged; Add guests or an error takes height from the box rather than moving the row; a form taller than the month has nothing spare, so the box keeps its usual size and the card grows as before. Phones and embeds hug, so they look the same.
 - One foot band with Book's (critic C6): Back is a secondary button at Confirm's `lg` size, and Confirm takes the rest of the band, over a hairline.
 - Field outlines are unchanged: critic A12 (the quiet field border faint on a dark card) is the owner's call on the `field-border` token (owner exception, 20 Oct), raised rather than overridden here.
+
+## The booking page's arrangement (v5 mock, 10 November 2026)
+
+`arrangement="paired"` is the booking page's own: Name and Email side by side at Field's `lg` height (stacked again where the card is under 480px), then the number to call, the page's own questions, the guests' rows and the note last (the note is then always the box that fills the held card). Back and Confirm sit in one foot band whose hairline runs to the card's edges (BookingFrame's `--booking-card-inset`), with even padding above and below, and on a phone the band is held to the window's foot. Left out (`stacked`), the order a table reservation asks is unchanged. Story: Paired.

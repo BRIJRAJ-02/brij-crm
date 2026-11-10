@@ -3,6 +3,8 @@ export const strings = {
   welcome: 'You’re booked',
   /** Under "You're booked", right after booking: warm, short, and true whatever the meeting is (AC-21). */
   welcomeLine: (host: string) => `${host} will see you then.`,
+  /** Under it, right after booking: where the details went. */
+  sentTo: (email: string) => `We sent the details to ${email}.`,
   confirmed: 'Your booking',
   cancelled: 'This booking was cancelled',
   past: 'This booking has passed',
@@ -24,6 +26,8 @@ export const strings = {
   google: 'Google',
   outlook: 'Outlook',
   apple: 'Apple / .ics',
+  googleCalendar: 'Google Calendar',
+  appleIcs: 'Apple Calendar (.ics)',
   shareHeading: 'Share this meeting',
   share: 'Share',
   shareVia: 'Share via…',

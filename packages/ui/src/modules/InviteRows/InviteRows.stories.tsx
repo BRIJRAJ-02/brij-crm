@@ -153,3 +153,35 @@ export const Narrow: Story = {
     </Stage>
   ),
 };
+
+/**
+ * A booking's guests (the `guests` variant): none to start, so Add guests stands alone; each row ends in its ×, and
+ * Add another guest follows the rows, "Guests (up to 10)" naming the column.
+ */
+export const BookingGuests: Story = {
+  args: {
+    rows: [],
+    max: 10,
+    fieldSize: 'lg',
+    guests: {
+      label: 'Guests',
+      aside: '(up to 10)',
+      first: 'Add guests',
+      another: 'Add another guest',
+      rowLabel: (row) => `Guest ${String(row)} email`,
+      full: '10 guests is the most.',
+    },
+  },
+  render: (args) => <Held {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('textbox')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 1 email' })).toHaveFocus());
+    await userEvent.keyboard('ada@acme.com');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add another guest' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 2 email' })).toHaveFocus());
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove row 2' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove ada@acme.com' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Add guests' })).toHaveFocus());
+  },
+};

@@ -51,6 +51,94 @@
     text-align: center;
   }
 
+  /* The booked moment's head (the v5 mock): the check, the heading, then its lines close under it. */
+  .head[data-plain] {
+    gap: var(--space-8);
+  }
+
+  .headMark {
+    display: inline-flex;
+    margin-block-end: var(--space-8);
+  }
+
+  /* Where the details went, quietly, after a mail icon that stays with the first word when the line wraps. */
+  .sent {
+    margin: 0;
+    color: var(--text-secondary);
+    animation: text-rise var(--reveal-duration) var(--ease-in-out) var(--duration-hover) backwards;
+  }
+
+  /* A booking that is no longer ahead (cancelled, declined, passed) or still waiting: its state's quiet mark. */
+  .stateMark {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    border-radius: var(--radius-full);
+    background: var(--surface-sunken);
+  }
+
+  /* The booked moment's card: the time as its first line, the zone and how soon under it. */
+  .top {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-24) var(--space-24) 0;
+  }
+
+  .headline {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .sentIcon {
+    display: inline-flex;
+    margin-inline-end: var(--space-6);
+    vertical-align: middle;
+  }
+
+  .top:not([data-state='confirmed'], [data-state='requested']) .headline {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+  }
+
+  .meta {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* What, Who and Where under it, then Join the call across the card and the quiet actions centred under that. */
+  .kvs {
+    padding: var(--space-16) var(--space-24) 0;
+  }
+
+  .go {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-20) var(--space-24) var(--space-16);
+  }
+
+  /* Join the call as tall as the booking page's Book bar: the one thing to do with it. */
+  .go > :first-child {
+    min-block-size: calc(var(--size-row) + var(--space-8));
+  }
+
+  .quiet {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8);
+  }
+
+  /* With nothing to act on (no call, nothing to add), the details close the card's top with its own inset. */
+  .kvs:last-child {
+    padding-block-end: var(--space-24);
+  }
+
   .avatar {
     position: relative;
     display: inline-flex;
@@ -135,6 +223,16 @@
     margin: 0;
     color: var(--text-secondary);
     animation: text-rise var(--reveal-duration) var(--ease-in-out) calc(var(--duration-hover) / 2) backwards;
+  }
+
+  /* The moment's heading at the public pages' large title (the link page's name), its first line in ink. */
+  .head[data-plain] > .title {
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .head[data-plain] > .lead {
+    color: var(--text);
   }
 
   .card {
@@ -392,7 +490,8 @@
     }
 
     .title,
-    .lead {
+    .lead,
+    .sent {
       animation-name: receipt-fade;
     }
 

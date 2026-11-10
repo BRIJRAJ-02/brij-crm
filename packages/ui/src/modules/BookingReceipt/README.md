@@ -50,3 +50,7 @@ and the way to book another time.
 - "Tomorrow morning" (`relative`) reads quietly in the secondary text colour, not the link colour it isn't (critic A26).
 - The pace comes from the `duration-public-*` tokens.
 - `heading` replaces the state's own heading where the page knows more: a long ended booking's link reads "This booking ended" (B-13), with its time and title and no guest details, which the API no longer sends.
+
+## The booked moment (v5 mock, 10 November 2026)
+
+With `headline` the receipt is the v5 booked moment: right after booking (`isWelcome`) SuccessCheck's `xl` lands over a large "You're booked", then "<Host> will see you then." and, with `sentTo`, "We sent the details to <email>."; a booking opened again later shows the same card with no check and "Your booking". The card leads with the whole time (`headline.when`) and the zone and how soon quietly under it (`headline.meta`), then the facts (What, Who, Where, the note), Join the call across the card at Book's height, and Add to calendar (one quiet menu: Google Calendar, Outlook, Apple Calendar (.ics)) and Share centred under it; the changes close the card. A cancelled, declined, past or waiting booking shows its state's quiet mark over the heading. Without `headline`, the date chip layout is unchanged (a table reservation). Stories: BookedMoment, Returning.

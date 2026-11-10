@@ -33,3 +33,7 @@ Each chip's remove button is in the Tab order, named with the address it removes
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Status
+
+Since 10 November 2026 neither the booking form nor the guest page draws it: both add guests as InviteRows' guest rows (the owner's v5 mock). It stays in the library for now.

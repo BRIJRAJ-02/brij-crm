@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
@@ -252,6 +252,67 @@ export const WithPopoverFoot: Story = {
     });
     await settleAnimations();
     await expect(clock).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/**
+ * The booking page's time zone picker (the v5 mock): the clock beside the search (`searchAside`), a placeholder that
+ * says what to type, Suggested over All time zones (`group`), each row's city (`listLabel`), offset and time there now
+ * (`trailing`), and the chosen one filled (`chosenLook="filled"`). The rail keeps "Kolkata time GMT+5:30 · 9:30 am".
+ */
+export const ZonePicker: Story = {
+  args: {
+    items: [
+      {
+        id: 'Asia/Kolkata',
+        label: 'Kolkata time',
+        listLabel: 'Kolkata',
+        description: 'GMT+5:30',
+        trailing: '9:30 am',
+        group: 'Suggested',
+      },
+      {
+        id: 'Europe/London',
+        label: 'London time',
+        listLabel: 'London',
+        description: 'GMT',
+        trailing: '4:00 am',
+        group: 'All time zones',
+      },
+      {
+        id: 'Asia/Dubai',
+        label: 'Dubai time',
+        listLabel: 'Dubai',
+        description: 'GMT+4',
+        trailing: '8:00 am',
+        group: 'All time zones',
+      },
+    ],
+    searchPlaceholder: 'Search a city or GMT+4',
+    chosenLook: 'filled',
+    searchAside: (
+      <SegmentedControl
+        label="Clock"
+        size="compact"
+        value="12"
+        onChange={fn()}
+        segments={[
+          { value: '12', label: '12h' },
+          { value: '24', label: '24h' },
+        ]}
+      />
+    ),
+  },
+  render: (args) => <Held {...args} />,
+  play: async ({ canvasElement, userEvent }) => {
+    await expect(triggerIn(canvasElement)).toHaveTextContent('Kolkata time');
+    await expect(triggerIn(canvasElement)).toHaveTextContent('GMT+5:30 · 9:30 am');
+    await userEvent.click(triggerIn(canvasElement));
+    const list = await listbox();
+    await settleAnimations();
+    await expect(within(list as HTMLElement).getByRole('option', { name: /Dubai/ })).toHaveTextContent('8:00 am');
+    await expect(document.querySelector('input[placeholder="Search a city or GMT+4"]')).not.toBeNull();
     await userEvent.keyboard('{Escape}');
   },
 };

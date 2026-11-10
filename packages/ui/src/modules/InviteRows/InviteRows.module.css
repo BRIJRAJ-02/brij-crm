@@ -43,12 +43,27 @@
   /* "+ Add another" under the email column, its icon in line with the addresses' text. */
   .add {
     display: flex;
+    align-items: center;
+    gap: var(--space-8);
     grid-column: 1 / -1;
     margin-block-start: calc(-1 * var(--space-4));
   }
 
+  /* A booking's guests with none yet: Add guests stands alone, with no rows to tuck under. */
+  .add[data-first] {
+    margin-block-start: 0;
+  }
+
+  /* A guest page's Invite, at the end of the add row. */
+  .action {
+    display: flex;
+    margin-inline-start: auto;
+  }
+
   /* Said in place of "+ Add another" once the rows are full. */
   .limit {
+    display: flex;
+    align-items: center;
     grid-column: 1 / -1;
     color: var(--text-secondary);
     font: var(--text-label);
@@ -61,5 +76,10 @@
     align-items: center;
     justify-content: center;
     block-size: var(--size-input);
+  }
+
+  /* The public pages' taller fields (Field's lg): the remove button stays level with them. */
+  .root[data-size='lg'] .end {
+    block-size: var(--size-row);
   }
 }
