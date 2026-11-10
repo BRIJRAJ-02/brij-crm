@@ -8,11 +8,12 @@ export const strings = {
   /** The trail's short word for this place: Bookings › Settings › Teams. */
   settings: 'Settings',
   bookings: 'Bookings',
-  groups: { connections: 'Connections', people: 'People', guestsSee: 'Guests see' },
+  groups: { connections: 'Connections', people: 'People', meetings: 'Meetings', guestsSee: 'Guests see' },
   calendars: 'Calendars',
   /** Round robin's groups, named as the people who take turns (the mock's ruling). */
   teams: 'Teams',
   access: 'Scheduling access',
+  limits: 'Meeting limits',
   brand: 'Brand',
   /** On a phone, where the sidebar is hidden: the chevron back to Bookings. */
   backToBookings: 'Bookings',

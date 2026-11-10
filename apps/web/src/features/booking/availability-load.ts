@@ -16,7 +16,7 @@ export interface AvailabilityLoad {
 
 /**
  * Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
- * colleague outside it opens the reader's own. The schedules, time off and limits are held before the page draws.
+ * colleague outside it opens the reader's own. The schedules and time off are held before the page draws.
  */
 export async function loadAvailability(
   data: DataLayer,
@@ -38,12 +38,6 @@ export async function loadAvailability(
     data.scheduling
       .loaded()
       ?.timeOff.held(slug, member)
-      .ready()
-      .catch(() => undefined),
-    // Meeting limits (spec 0037, AC-1299), the same way.
-    data.scheduling
-      .loaded()
-      ?.limits.held(slug, member)
       .ready()
       .catch(() => undefined),
   ]);

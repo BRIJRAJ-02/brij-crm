@@ -76,7 +76,7 @@ export const availabilityHref = (slug: string, member?: string) =>
 // (`build.test.ts` counts the files).
 
 /** One page of Bookings settings, by its address's last segment. */
-export type BookingsSettingsPage = 'calendars' | 'teams' | 'access' | 'brand';
+export type BookingsSettingsPage = 'calendars' | 'teams' | 'access' | 'limits' | 'brand';
 
 /** Bookings settings (the gear on Bookings' TopBar), or one of its pages; bare, it opens on Calendars. */
 export const bookingsSettingsHref = (slug: string, page?: BookingsSettingsPage) =>
@@ -93,6 +93,13 @@ export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 
 /** Bookings settings › Teams: the groups a round robin booking is shared out between (spec 0029), their one home. */
 export const roundRobinHref = (slug: string) => bookingsSettingsHref(slug, 'teams');
+
+/**
+ * Bookings settings › Meeting limits (spec 0037, AC-1297 to AC-1299; out of Availability on 10 November 2026, the
+ * mock's Meetings group): the reader's own, or `member`'s, a colleague in their reach.
+ */
+export const meetingLimitsHref = (slug: string, member?: string) =>
+  `${bookingsSettingsHref(slug, 'limits')}${member === undefined ? '' : `?member=${encodeURIComponent(member)}`}`;
 
 /** Bookings settings › Scheduling access: who can see or manage the member's scheduling (spec 0037, AC-1266). */
 export const schedulingAccessHref = (slug: string) => bookingsSettingsHref(slug, 'access');

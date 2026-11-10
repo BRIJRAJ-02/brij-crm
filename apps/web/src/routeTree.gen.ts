@@ -79,6 +79,7 @@ import { Route as WSlugBookingsSettingsIndexRouteImport } from './routes/w.$slug
 import { Route as WSlugBookingsSettingsAccessRouteImport } from './routes/w.$slug.bookings_.settings.access.tsx'
 import { Route as WSlugBookingsSettingsBrandRouteImport } from './routes/w.$slug.bookings_.settings.brand.tsx'
 import { Route as WSlugBookingsSettingsCalendarsRouteImport } from './routes/w.$slug.bookings_.settings.calendars.tsx'
+import { Route as WSlugBookingsSettingsLimitsRouteImport } from './routes/w.$slug.bookings_.settings.limits.tsx'
 import { Route as WSlugBookingsSettingsTeamsRouteImport } from './routes/w.$slug.bookings_.settings.teams.tsx'
 import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
@@ -495,6 +496,12 @@ const WSlugBookingsSettingsCalendarsRoute =
     path: '/calendars',
     getParentRoute: () => WSlugBookingsSettingsRoute,
   } as any)
+const WSlugBookingsSettingsLimitsRoute =
+  WSlugBookingsSettingsLimitsRouteImport.update({
+    id: '/limits',
+    path: '/limits',
+    getParentRoute: () => WSlugBookingsSettingsRoute,
+  } as any)
 const WSlugBookingsSettingsTeamsRoute =
   WSlugBookingsSettingsTeamsRouteImport.update({
     id: '/teams',
@@ -900,6 +907,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/settings/access': typeof WSlugBookingsSettingsAccessRoute
   '/w/$slug/bookings/settings/brand': typeof WSlugBookingsSettingsBrandRoute
   '/w/$slug/bookings/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings/settings/limits': typeof WSlugBookingsSettingsLimitsRoute
   '/w/$slug/bookings/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
@@ -1024,6 +1032,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/settings/access': typeof WSlugBookingsSettingsAccessRoute
   '/w/$slug/bookings/settings/brand': typeof WSlugBookingsSettingsBrandRoute
   '/w/$slug/bookings/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings/settings/limits': typeof WSlugBookingsSettingsLimitsRoute
   '/w/$slug/bookings/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
@@ -1154,6 +1163,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings_/settings/access': typeof WSlugBookingsSettingsAccessRoute
   '/w/$slug/bookings_/settings/brand': typeof WSlugBookingsSettingsBrandRoute
   '/w/$slug/bookings_/settings/calendars': typeof WSlugBookingsSettingsCalendarsRoute
+  '/w/$slug/bookings_/settings/limits': typeof WSlugBookingsSettingsLimitsRoute
   '/w/$slug/bookings_/settings/teams': typeof WSlugBookingsSettingsTeamsRoute
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
@@ -1285,6 +1295,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/settings/access'
     | '/w/$slug/bookings/settings/brand'
     | '/w/$slug/bookings/settings/calendars'
+    | '/w/$slug/bookings/settings/limits'
     | '/w/$slug/bookings/settings/teams'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
@@ -1409,6 +1420,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/settings/access'
     | '/w/$slug/bookings/settings/brand'
     | '/w/$slug/bookings/settings/calendars'
+    | '/w/$slug/bookings/settings/limits'
     | '/w/$slug/bookings/settings/teams'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
@@ -1538,6 +1550,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings_/settings/access'
     | '/w/$slug/bookings_/settings/brand'
     | '/w/$slug/bookings_/settings/calendars'
+    | '/w/$slug/bookings_/settings/limits'
     | '/w/$slug/bookings_/settings/teams'
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
@@ -2105,6 +2118,13 @@ declare module '@tanstack/react-router' {
       path: '/calendars'
       fullPath: '/w/$slug/bookings/settings/calendars'
       preLoaderRoute: typeof WSlugBookingsSettingsCalendarsRouteImport
+      parentRoute: typeof WSlugBookingsSettingsRoute
+    }
+    '/w/$slug/bookings_/settings/limits': {
+      id: '/w/$slug/bookings_/settings/limits'
+      path: '/limits'
+      fullPath: '/w/$slug/bookings/settings/limits'
+      preLoaderRoute: typeof WSlugBookingsSettingsLimitsRouteImport
       parentRoute: typeof WSlugBookingsSettingsRoute
     }
     '/w/$slug/bookings_/settings/teams': {
@@ -2689,6 +2709,7 @@ interface WSlugBookingsSettingsRouteChildren {
   WSlugBookingsSettingsAccessRoute: typeof WSlugBookingsSettingsAccessRoute
   WSlugBookingsSettingsBrandRoute: typeof WSlugBookingsSettingsBrandRoute
   WSlugBookingsSettingsCalendarsRoute: typeof WSlugBookingsSettingsCalendarsRoute
+  WSlugBookingsSettingsLimitsRoute: typeof WSlugBookingsSettingsLimitsRoute
   WSlugBookingsSettingsTeamsRoute: typeof WSlugBookingsSettingsTeamsRoute
   WSlugBookingsSettingsIndexRoute: typeof WSlugBookingsSettingsIndexRoute
 }
@@ -2697,6 +2718,7 @@ const WSlugBookingsSettingsRouteChildren: WSlugBookingsSettingsRouteChildren = {
   WSlugBookingsSettingsAccessRoute: WSlugBookingsSettingsAccessRoute,
   WSlugBookingsSettingsBrandRoute: WSlugBookingsSettingsBrandRoute,
   WSlugBookingsSettingsCalendarsRoute: WSlugBookingsSettingsCalendarsRoute,
+  WSlugBookingsSettingsLimitsRoute: WSlugBookingsSettingsLimitsRoute,
   WSlugBookingsSettingsTeamsRoute: WSlugBookingsSettingsTeamsRoute,
   WSlugBookingsSettingsIndexRoute: WSlugBookingsSettingsIndexRoute,
 }
