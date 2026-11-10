@@ -81,7 +81,8 @@ const PROBE = () => {
       const main = document.querySelector('main');
       probe.frames.push({
         t: performance.now() - probe.start,
-        skeleton: [...document.querySelectorAll('[data-shape][aria-hidden="true"]')].filter(
+        // A Skeleton's parts; an Avatar carries `data-shape` too (a decorative face is hidden the same way), so not those.
+        skeleton: [...document.querySelectorAll('[data-shape][aria-hidden="true"]:not(.ws-avatar-root)')].filter(
           (element) => element.getBoundingClientRect().height > 0,
         ).length,
         body: (main?.textContent ?? '').trim().length,

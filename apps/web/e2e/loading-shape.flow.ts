@@ -77,8 +77,8 @@ const ALL_SCREENS: readonly Screen[] = [
   // List is a view inside the Meetings tab (5 November 2026), on its switch.
   { name: 'bookings list', start: at('bookings/calendar'), target: segment('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
-  // The Roster, Availability's other view (5 November 2026): its week's bar and the grid's skeleton rows.
-  { name: 'bookings roster', start: at('bookings/availability'), target: segment('Roster') },
+  // Team hours (the Roster until the redesign), Availability's other view: its week's bar and the grid's skeleton rows.
+  { name: 'bookings roster', start: at('bookings/availability'), target: segment('Team hours') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
@@ -90,12 +90,12 @@ const ALL_SCREENS: readonly Screen[] = [
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
   { name: 'settings members', start: at('settings/account/preferences'), target: sidebar('Members') },
-  // Calendars and Round robin have one home in Settings (5 November 2026); Bookings links there for setup.
-  { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },
+  // Calendars and Teams (round robin's groups) live in Bookings settings since the redesign (9 November 2026).
+  { name: 'settings calendars', start: at('bookings/settings/access'), target: sidebar('Calendars') },
   {
     name: 'settings round robin',
-    start: at('settings/account/preferences'),
-    target: sidebar('Round robin'),
+    start: at('bookings/settings/access'),
+    target: sidebar('Teams'),
     goesWhenEmpty: 'card1',
   },
   { name: 'settings objects', start: at('settings/account/preferences'), target: sidebar('Objects') },
