@@ -22,6 +22,7 @@ import {
 } from '@crm/data/booking';
 import type {
   BookingDetails as DetailsStep,
+  BookingDetailsDraft,
   BookingDetailsOutcome,
   BookingDetailsValues,
   DayStrip as DayStripType,
@@ -696,7 +697,11 @@ function zoneItems(
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return [
     ...suggested.map((zone) => row(zone, strings.zoneSuggested)),
-    ...listed.filter((zone) => !suggested.includes(zone)).map((zone) => row(zone, strings.zoneAll)),
+    // By the city a person reads, not by the zone's id (which ran all of Africa before America).
+    ...listed
+      .filter((zone) => !suggested.includes(zone))
+      .map((zone) => row(zone, strings.zoneAll))
+      .sort((one, other) => (one.listLabel ?? one.label).localeCompare(other.listLabel ?? other.label, locale)),
   ];
 }
 
@@ -854,6 +859,9 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // What the visitor typed on the details step, kept while Back shows the times, so coming back loses nothing (their
+  // guests' rows included). Only once they have typed: until then a sign in or a form's hand off fills the step.
+  const [typed, setTyped] = useState<BookingDetailsDraft | undefined>(undefined);
   // The shared times, as instants, for the reads to keep only those (Share specific times).
   const shared = useMemo(
     () => (sharedTimes === undefined ? undefined : new Set(sharedTimes.map((each) => Date.parse(each)))),
@@ -1486,6 +1494,17 @@ function Booking({
       setStep({ step: 'pick', attempt: '', back: true });
       setNotice(undefined);
     },
+    onDraft: (draft: BookingDetailsDraft) => {
+      const hasTyped =
+        draft.name !== (known?.name ?? prefill?.name ?? '') ||
+        draft.email !== (known?.email ?? prefill?.email ?? '') ||
+        draft.note !== '' ||
+        draft.phone !== '' ||
+        (draft.guests ?? []).length > 0 ||
+        Object.keys(draft.answers).length > 0;
+      if (hasTyped || typed !== undefined) setTyped(draft);
+    },
+    ...(typed === undefined ? {} : { draft: typed }),
     onSubmit: book,
   };
   const detailsStep = !isDetails ? undefined : LoadedDetails === undefined ? (

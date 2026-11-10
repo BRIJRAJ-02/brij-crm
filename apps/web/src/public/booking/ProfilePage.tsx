@@ -308,26 +308,47 @@ export function ProfilePage({ handle, initial, onMoved, isBusiness }: ProfilePag
       isLive = false;
     };
   }, [client, handle, loaded.state, isBusiness]);
-  // A next times block neared the screen (AC-6110): its times are read once, in the visitor's own zone, and the
+  // A next times block or a booking page row neared the screen (AC-6110, the v5 mock): its times are read once, in the visitor's own zone, and the
   // answer is cached for a minute by the api, so a page of blocks is a handful of light reads at most.
+  // Answers that land together are drawn together: each is held until the next frame, so a page of rows nearing the
+  // screen at once redraws the page once, not once per row (state review, 10 November 2026).
+  const landed = useRef<Map<string, LinkPageTimes>>(new Map());
+  const landedFrame = useRef<number | undefined>(undefined);
+  useEffect(() => () => globalThis.cancelAnimationFrame(landedFrame.current ?? 0), []);
+  const land = useCallback((id: string, read: LinkPageTimes) => {
+    landed.current.set(id, read);
+    if (landedFrame.current !== undefined) return;
+    landedFrame.current = globalThis.requestAnimationFrame(() => {
+      landedFrame.current = undefined;
+      const batch = landed.current;
+      landed.current = new Map();
+      setTimes((kept) => new Map([...kept, ...batch]));
+    });
+  }, []);
+  // Which blocks are booking page rows: their next time is read on its own budget (`row=page`).
+  const pageRows = useRef<ReadonlySet<string>>(new Set());
+  const readyItems = loaded.state === 'ready' ? loaded.items : undefined;
+  useEffect(() => {
+    pageRows.current = new Set((readyItems ?? []).flatMap((item) => (item.kind === 'page' ? [item.id] : [])));
+  }, [readyItems]);
   const readTimes = useCallback(
     (id: string) => {
       // The ids already asked for, in a ref rather than the state, so two blocks nearing the screen in one frame
       // never make the same read twice before the first has settled.
       if (askedTimes.current.has(id)) return;
       askedTimes.current.add(id);
-      setTimes((kept) => (kept.has(id) ? kept : new Map(kept).set(id, { status: 'loading' })));
+      land(id, { status: 'loading' });
       const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      client.times(handle, id, zone).then(
+      client.times(handle, id, zone, undefined, pageRows.current.has(id) ? 'page' : 'times').then(
         (answer) => {
-          setTimes((kept) => new Map(kept).set(id, { status: 'ready', starts: answer.starts }));
+          land(id, { status: 'ready', starts: answer.starts });
         },
         () => {
-          setTimes((kept) => new Map(kept).set(id, { status: 'error' }));
+          land(id, { status: 'error' });
         },
       );
     },
-    [client, handle],
+    [client, handle, land],
   );
   // The back and forward buttons move between open sections, so the page follows the address rather than owning it.
   useEffect(() => {

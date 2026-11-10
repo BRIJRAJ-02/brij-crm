@@ -75,11 +75,11 @@ const compact = (instant: string) =>
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}/, '');
 
-/** Where it happens, as one line. */
 /** How long the booking runs, in minutes. */
 const minutesOf = (booking: PublicManagedBooking): number =>
   Math.round((Date.parse(booking.end) - Date.parse(booking.start)) / 60_000);
 
+/** Where it happens, as one line. */
 function whereOf(booking: PublicManagedBooking): string {
   if (booking.videoUrl !== undefined) return booking.videoUrl;
   switch (booking.location.type) {
@@ -245,21 +245,27 @@ export function ManagePage({
     setLoaded((current) =>
       current.state === 'ready' ? { state: 'ready', booking: { ...current.booking, guests: [...guests] } } : current,
     );
-  const invite = (emails: readonly string[]): Promise<GuestsOutcome> =>
-    changes.addGuests(token, [...emails]).then(
-      (answer): GuestsOutcome => {
+  /**
+   * Invites the rows one address at a time, in order (security review, 10 November 2026): each call checks the page's
+   * daily invite budget before it sends, so a list never runs past it by more than one, as one address a call never
+   * did. The first refusal stops the rest and names its row (`index`).
+   */
+  const invite = async (emails: readonly string[]): Promise<GuestsOutcome> => {
+    let added = 0;
+    for (const [index, email] of emails.entries()) {
+      try {
+        const answer = await changes.addGuests(token, [email]);
         withGuests(answer.guests);
-        return { kind: 'done', added: answer.added };
-      },
-      (error: unknown): GuestsOutcome => {
+        added += answer.added;
+      } catch (error: unknown) {
         const issue = isDataError(error) ? error.data?.issues?.[0] : undefined;
-        // The address it names, by its place among those sent, when the refusal says which.
-        const index = issue?.path.find((part): part is number => typeof part === 'number');
         return issue === undefined
           ? { kind: 'failed', message: messageOf(error) }
-          : { kind: 'invalid', message: issue.message, ...(index === undefined ? {} : { index }) };
-      },
-    );
+          : { kind: 'invalid', message: issue.message, index };
+      }
+    }
+    return { kind: 'done', added };
+  };
   const remove = (email: string): Promise<CancelOutcome> =>
     changes.removeGuest(token, email).then(
       (answer): CancelOutcome => {
