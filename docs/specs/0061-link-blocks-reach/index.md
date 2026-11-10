@@ -25,6 +25,9 @@ Blocks and layout:
 - **AC-6102**: A link may be `featured`: a larger card with its thumbnail across the top and its title and note under it. At most 3 links are featured. Emphasis comes from size and place only, with no animation on the public page's first paint.
 - **AC-6103**: When the page's layout (spec 0060) is `grid`, blocks draw as tiles on a 2 column grid under 768 wide and a 4 column grid from 768. A block is `small` (1 by 1), `wide` (2 by 1) or `large` (2 by 2), picked in the editor from three tiles. Headings, writing, questions, forms, contact cards, testimonials, the banner, next times and the socials row always span the full row. Tiles keep the list order exactly, with no dense packing, so the reading order, the focus order and what you see always match.
 - **AC-6104**: A socials row block draws the person's social links (the ten from `auth.social_links`) as a row of marks, each a real link named by its network for screen readers. At most 1 per page, placed wherever the owner puts it.
+  - Amended 10 Nov 2026 (owner, "Linktree style"): Social icons is never off in the Add modal for want of links. Its editor holds the person's social links themselves (Settings › Profile's `SocialLinksEditor`), and Add or Save saves the set, then adds the block. The old tooltip "Add a social link first, under Social links." is gone.
+  - The set is profile data: live the moment it saves, never part of the page's draft, so the Publish bar doesn't count it. `profile.update` with `socials` now purges the page's edge cache.
+  - On someone else's page, see spec 0070 AC-7049.
 - **AC-6105**: A media block takes a share link from YouTube, Vimeo, Spotify, SoundCloud or Apple Music. The server reads it into a provider and an id with strict patterns; anything else is refused with "Paste a link from YouTube, Vimeo, Spotify, SoundCloud or Apple Music." Its title defaults to the provider's own (read once on save) and the owner may change it. At most 10.
 - **AC-6106**: A visitor first sees a facade: the poster (fetched once on save and served from our origin), the title, the provider's name, a Play button and the line "Plays from YouTube" (or the provider). Nothing is requested from the provider until Play is pressed. Then the provider's player replaces the facade in place, with the same size so nothing jumps, and focus moves into it. YouTube plays from `youtube-nocookie.com`. The frame's address is built only from the parsed provider and id, never from what was pasted.
 - **AC-6107**: The two policies vercel.json sends for handle addresses gain exactly one directive: `frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://open.spotify.com https://w.soundcloud.com https://embed.music.apple.com`. No other directive changes, the app, `/b/` and `/f/` policies are untouched, and `apps/web/csp.test.ts` pins it.
@@ -188,6 +191,8 @@ Approach: Tracer Bullet. One thin thread first (the media block end to end, beca
 - [ ] Commerce blocks (products, tips, paid downloads) wait for the payments decision in spec 0062.
 - [ ] Mailing list integrations for email signup (Mailchimp, Kit) and pixels (GA4, Meta) wait for spec 0064, because each adds an outside origin.
 - [ ] Collections (a group that opens its own sub page) and A/B tests on links are left for later.
+- [ ] The Social icons editor drops changed rows on Cancel without asking, as every block editor does, while Settings' and the booking dialog's Edit social links ask "Discard your changes?" first.
+- [ ] Nothing in the Social icons editor says the links also change the booking pages and the profile, live, the moment Add is pressed.
 
 ## Rationale
 

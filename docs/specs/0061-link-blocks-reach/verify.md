@@ -15,7 +15,7 @@ How `/check verify` proves each criterion on the real app. Screenshots are taken
 | AC-6101 | Browser test: upload a thumbnail, it draws in the row and the grid tile; "Use the site's picture" against a test server with `og:image` stores one; a failing site falls back to the icon order. The picture's address is on our origin with a version. |
 | AC-6102 | Browser test: a fourth featured link is refused; featured draws larger; no animation on first paint (computed style). |
 | AC-6103 | Browser test: grid at 390 has 2 columns and at 1280 has 4; sizes draw as set; full row kinds span; keyboard Tab order equals DOM order equals visual order (compare box positions). |
-| AC-6104 | Story and browser test: socials row draws the person's links with accessible names; a second socials block is refused. |
+| AC-6104 | Story and browser test: socials row draws the person's links with accessible names; a second socials block is refused. A person with no links adds Social icons, types a link in its editor and presses Add: the block appears, the link shows on the public page at once, and the Publish bar counts nothing. |
 | AC-6105 | Unit tests in `packages/core/src/profile/embeds.test.ts` for each provider's accepted and refused links, including look alike hosts and extra query text. |
 | AC-6106 | Browser test: facade first, Play swaps in the player at the same size, focus moves into it; the frame `src` matches the template for the parsed id. |
 | AC-6107 | CSP test as above. |

@@ -47,6 +47,14 @@ The owner (4 Nov 2026): everything public must look professional; customisation 
 - **AC-6815**: Managed pages (0021 templates): publishing the template publishes its locked parts to every member's page at once; a member's own unlocked edits stay in their draft until they publish.
 - **AC-6816**: Publish purges the page's edge cache tags; the published snapshot is what the cache stores.
 
+*Amended 10 November 2026 (owner: "as per industry standard and in favour of Timefix"; built, migration 0205)*
+- **AC-6817**: On a link page, the name, the job title and **Show under my name** are profile data: live on save, never drafted. The Publish bar doesn't count them and Discard doesn't undo them. `crm_profile_identity_public` reads `show_job_title` off the row, `crm_link_page_rows` leaves it out of a snapshot, `crm_restore_link_page` (and Discard) no longer writes it, and `diffLinkPage` has no "Job title shown/hidden" line. A save of any of the three raises one quiet toast, "Saved. It's on the page now." The company site, the closing line, the blocks, the design and the photos stay drafted. Social links are profile data too (spec 0061 AC-6104).
+  - The public link page's name is the member's name in that workspace (`members.name`, what the editor and `teamPages.namePerson` change), read live in `enterLinkPage`. Before, it was the account's `user.name`, so a name changed in the editor never reached the page. The wallet pass reads the same name (`findHandleOwner` with `withPageName`), and the share card follows through the public profile read.
+- **AC-6818**: The link page editor opens on a **Profile** card (profile photo, cover, name, title, Show under my name) above Blocks. Design keeps the templates, colour, photo shape and background photo. Details keeps the company site, the closing line, the share image and search.
+- **AC-6819**: The person's photo switch reads **Show my account photo on my pages**, with the hint "A photo you add to your link page always shows there." It covers the account photo only (`user_prefs.picture_hidden`). A page's own photo always shows on that page, whoever set it.
+  - A personal booking page's host picture is the owner's published link page photo in that workspace while the link page is Live, whatever the switch says. Otherwise it is the account photo, under the switch. It takes the same version as the handle's picture route (`pictureVersion(user, 'page:<path>')`). Built in `packages/core/src/booking/public.ts` (`shownHostPicture`) and `packages/core/src/profile/page-photo.ts`; the booking page editor didn't change.
+  - The booking picture route (`/api/public/booking/:key/picture`) serves a link page photo with browser only caching (`PRIVATE_PICTURE_CACHE_CONTROL`), since it has no handle to tag for the Private switch.
+
 ## Two rules across every phase (owner, 4 Nov 2026)
 
 - **The dashboard stays as it is.** Templates, new looks and new motion are for public pages. Every app screen (settings, editors, calendar, service, menus, imports) uses the current design system exactly as the rest of the app does today: tokens, library components, the same layouts, density and copy style. A lane that needs something new adds a variant to the library, reviewed by the design system guardian; nothing app only.
@@ -63,6 +71,9 @@ Replace configurable themes with four finished templates in the brand kit, and p
 - Rendering: each public entry (`public-booking`, `public-form`, link page, `public-menu`, business and event pages) reads `data-template` on its root from the `look.css` route; the four templates are CSS custom property sets plus a small number of layout variants (Split's two columns, Studio's cover header) in the library's page modules (`LinkPage`, `BookingFrame`, `HostedForm`, `MenuList`). No template code in apps.
 - Drafts: one pattern for all page kinds, `page_versions (workspace_id, page_kind, page_id, version, snapshot jsonb, published_by, published_at)` plus a `draft jsonb` and `draft_changed_at` on each page row; the live columns are filled from the published snapshot on publish (so existing reads keep working while they move to snapshots). Forms keep their own tables.
 - Changes list: a pure `diffPage(kind, published, draft)` in core returning plain sentences, unit tested per kind.
+- Name, title and Show under my name are live, not drafted (AC-6817, 10 Nov 2026). Why: they are who the person is, shared with Settings › Profile, Team day and the roster, so a draft would let the page disagree with every other screen. Linktree saves them at once too.
+- Profile first in the editor (AC-6818). Why: who the page is for is the first thing people look for, as in Linktree.
+- The page photo wins on its own page and on that person's booking pages (AC-6819). Why: a photo someone added to their page is a choice for that page, so the switch covers the account photo only, and one person shows one face across their pages.
 - Page photos (migration 0197): `avatar_*` columns beside the cover's, and `crm_handle_owner` answers `page:<path>` when the page has its own photo. Why a photo of the page's own, not a new account picture: the owner asked for it in the page editor (9 Nov 2026), and the account picture stays the fallback, so no page goes blank.
 
 ## Phase plan (owner: "phase this out, plan it out")
@@ -92,6 +103,7 @@ Each phase lands in cars with full CI, reviews (security, design, UX, state) and
 - More templates only when a vertical needs one, held to the same bar.
 - Scheduled publish (publish at a time).
 - Booking page drafts (`core/src/booking/drafts.ts`) still say "Face" for the avatar shape. Align them with "Photo shape", or keep them on purpose.
-- **Open, not decided (owner)**:
-  - **The page photo and "keep my photo off public pages".** A page's own photo overrides the person's `picture_hidden` switch, and a team page manager can set it on someone else's page (0070). Either (a) honour the switch when someone other than the page's owner set the photo, which needs an "avatar set by" flag, or (b) keep the override and reword the switch so it covers the account photo only. The team change audit could also give the photo its own value (`photo`, not `look`).
-  - **Booking pages under the same handle** still show the account picture, not the page photo. Should they follow it?
+- **Decided (owner, 10 Nov 2026)**, all built:
+  - **The page photo and the photo switch**: option (b). The page photo wins, and the switch is reworded to cover the account photo only (AC-6819). History gives the photo its own value, `photo` (spec 0070 AC-7004).
+  - **Booking pages** use the page photo while the link page is Live (AC-6819).
+  - **Name and title** are live at once (AC-6817), and the **profile comes first** in the editor (AC-6818).

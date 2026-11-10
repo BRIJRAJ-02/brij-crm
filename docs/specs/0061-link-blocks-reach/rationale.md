@@ -62,6 +62,7 @@ Choices made without asking, by industry standard:
 - **Structured data and crawler text** in the shell instead of full server rendering: the page is client drawn by design (spec 0051), and search engines index JSON-LD and the shell's text without a second renderer to maintain.
 - **QR on a light background only**, with a contrast floor of 4.5 to 1 and the highest error correction under a centre picture, because a stylish code that doesn't scan is worse than a plain one.
 - **New public routes under `/api/public/profiles/:handle/`**, because `/api/public/handles/:handle/:slug` already names a booking page.
+- **Social links are edited inside the Social icons block** (10 Nov 2026), as on Linktree: a block that can't be added until you go elsewhere is a dead end. The links stay the person's own, so they save live.
 - **Reuse the existing private file store** with a prefix, so no new account or token is needed from the owner.
 
 ## References

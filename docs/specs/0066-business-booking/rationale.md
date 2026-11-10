@@ -43,6 +43,9 @@ The owner then pointed at Luma: event pages with a cover, date, hosts and one Re
 
 - News and offers from a reservation are double opt in (10 Nov 2026): the address was typed by an anonymous visitor, so only its inbox can say yes. The link lasts 7 days, long enough to find the email and short enough that an old one can't be reused.
 - A confirm from the inbox outweighs an earlier withdrawal, because it is the inbox's owner acting now; a tick alone still never does.
+- Guests leave news in one click (10 Nov 2026, AC-6674), as mail providers now ask of bulk senders. The unsubscribe link never expires, because a guest may open an old email years later and must still be able to leave.
+- Subscribe again goes through the inbox, never the click alone. Anyone holding a forwarded email could press it, so only the inbox's owner can say yes, as with the first ask.
+- A withdrawal answers the same for any signed token, even when the workspace is gone, so the answer never tells a stranger whether a person or a place still exists.
 - Durable reservation limits live in `auth.rate_limit` because the in memory limiter holds per instance and forgets on every restart. The per place limit counts only checked input, so a flood of junk can't close a restaurant's bookings.
 - One engine with presets; Table seating rebuilt as a preset (0065's reservation tables dropped).
 - Staff without login; optional member link.

@@ -106,6 +106,16 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
   - per address on `POST /news`, 20 a minute, every request.
 
   The instance ceiling (50 a second) stays in memory only. Keys are `public-tables:<kind>:<HMAC>` under a key derived from the link key, so no address or email is stored in the clear or can be brute forced back from the table.
+- **AC-6674**: A guest leaves news and offers in one click, and can subscribe again only through their inbox (owner, 10 Nov 2026; built 10 Nov 2026, migration 0204).
+  - Every news email has an "Unsubscribe" link in its footer and the `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers. `GuestUnsubscribe { pagePath, oneClickPath }` in `@crm/contracts/emails` carries both, and `oneClickPath` must start `/api/public/news/unsubscribe?t=`. `reservation_news` carries it (optional for old rows).
+  - Any future marketing email kind must carry it: `MARKETING_EMAIL_KINDS` (empty today) makes `unsubscribe` required for each kind listed. Nothing sends marketing email to guests yet; the only guest news email is the double opt in `reservation_news`.
+  - The token is signed (`nu1`, under a key derived from the link key for `news-unsubscribe`) and never expires (100 years). It carries the workspace, the place, the record, the purpose, and a 22 character HMAC of the lower cased address under its own derived key. No token holds an address. The confirm token (`rn1`) now carries the same address hash, so a confirm can answer an unsubscribe.
+  - `POST /api/public/news/unsubscribe?t=` is the one click (no Origin needed), or the page's post with `{ token }`. It answers `{ status: 'unsubscribed' }` for any signed token, also when the workspace is gone. A forged token answers 404. `GET` on the same address answers 303 to `/r/<key>/manage#unsubscribe=<token>`.
+  - A withdrawal is a new `consent_records` row: granted false, source `email_link`, no source id, wording "Unsubscribe from news and offers from {business}." (or "Unsubscribe from news and offers." once the place is gone). It is written only when the latest row is not already a no, under a lock per workspace, Person and purpose, and lands on the Person a merged record became (following `merged_into_record_id`, at most 10 hops).
+  - The page asks first ("Unsubscribe from {business}?"), then says "You're unsubscribed" with Subscribe again. It works without the place's page loading. The signed up page shows "Changed your mind? Unsubscribe".
+  - **Subscribe again never grants.** `POST /api/public/news/subscribe { token }` (booking or app origin) always answers `{ status: 'check_email' }`. It writes a new `consent_requests` row (source `email_link`, source id the latest withdrawal row), so there is one ask per withdrawal, and emails the confirm only to a live email on the Person whose hash matches the token's. Nothing is sent when the latest row is already a yes or the place is gone.
+  - A place removed in a live workspace still lets a guest withdraw (`enterNewsPlace` mints the place's narrow booking scope with key `''`). The page, the `GET` and Subscribe again need the place.
+  - Limits, in memory and durable (`identity.consumeRateLimit`, HMAC keys): forged tokens 30 a minute per address; unsubscribe 5 a minute per Person and purpose; subscribe again 10 a minute per address and 3 a day per Person; `GET` opens 30 a minute per address.
 
 *B8. Events and classes (after Luma)*
 - **AC-6680**: An event has a title, cover image, description (rich text), start and end in the place's zone (or online with a video link shown only to registered guests), a place or a free address, hosts (staff profiles or members), a capacity (or unlimited), and optional registration questions (the forms question model, 0057). It holds its hosts and its room through the engine's holds (AC-6602), so nobody can book the yoga teacher or the studio during the class.
@@ -238,7 +248,8 @@ Each slice gets the security, design, UX and state reviews, and screenshots in t
 - Classes and group sessions; deposits and no show fees; text messages; waitlist; packages, memberships and gift cards; discovery marketplace; staff day by email; rebook reminders; POS, tips; static map image; converging booking pages into services.
 - `/sync` to add a visits area to AGENTS.md once B0 lands.
 - `book.ts`'s `consent` input, which grants at once, is now unused by tables. Remove it, or route it through `askForNews`, when the visits engine's lane allows.
-- **Open, not decided (owner)**: **how a guest withdraws news consent.** No guest facing unsubscribe exists for these consents yet, and the confirm page promises none. Decide the way out (a link in each news email, the manage page, or both) before any news email is sent from these consents.
+- **Decided (owner, 10 Nov 2026)**: **how a guest withdraws news consent.** In one click, from a link and the headers in every news email, landing on the manage page (AC-6674, built).
+- **A smoke check workspace on each production** (owner, 10 Nov 2026: yes). Not built: the owner creates it on each production, so the live check after a landing has a business page and a reservation page of its own to open.
 
 ## Rationale
 
