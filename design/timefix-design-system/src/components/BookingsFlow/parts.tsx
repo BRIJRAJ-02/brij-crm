@@ -8,6 +8,7 @@ import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
+import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
@@ -228,5 +229,19 @@ export function TabToolbar({ start, count, action }: { readonly start?: ReactNod
       <span className="tf-bkf__spacer" />
       {action}
     </div>
+  );
+}
+
+/** The workspaces the demo can switch between: a team taking meetings, a salon, a restaurant. One app, one Bookings. */
+export type WorkspaceId = 'northwind' | 'lumen' | 'olive';
+const WORKSPACES: ReadonlyArray<{ readonly id: WorkspaceId; readonly name: string; readonly kind: string }> = [
+  { id: 'northwind', name: 'Northwind', kind: 'Team meetings' }, { id: 'lumen', name: 'Lumen Hair Studio', kind: 'Hair salon' }, { id: 'olive', name: 'Olive Kitchen', kind: 'Restaurant' },
+];
+/** The switcher menu's workspace list, the current one ticked. Its keys are `ws:<id>`. */
+export function WorkspaceItems({ current }: { readonly current: WorkspaceId }) {
+  return (
+    <MenuSection title="Workspaces">
+      {WORKSPACES.map((w) => <MenuItem key={w.id} id={`ws:${w.id}`} icon={<Avatar name={w.name} shape="square" size={20} />} description={w.kind}>{w.id === current ? `${w.name} ✓` : w.name}</MenuItem>)}
+    </MenuSection>
   );
 }

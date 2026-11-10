@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { Button as AriaButton, I18nProvider, type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
-import { ArrowLeft, CalendarDays, Eye, FlaskConical, Home, Inbox, LayoutGrid, LogOut, Monitor, Play, RotateCcw, Scissors, Settings, Smartphone, Store, User, Users, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Eye, FileText, FlaskConical, Home, Inbox, LayoutGrid, LogOut, Monitor, Play, RotateCcw, Scissors, Settings, Smartphone, Store, User, Users } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
@@ -13,7 +13,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { BusinessPage, type BookingBase, type BusinessChoice } from '../BusinessPage/BusinessPage.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import { formatDay } from '../../lib/format.ts';
-import { i14, i16 } from '../BookingsFlow/parts.tsx';
+import { WorkspaceItems, i14, i16, type WorkspaceId } from '../BookingsFlow/parts.tsx';
 import { CalendarTab, AppointmentDrawer, ServicesTab, TeamTab } from './salon.tsx';
 import { ReservationsTab, TablesTab } from './restaurant.tsx';
 import { BusinessTab } from './page.tsx';
@@ -32,13 +32,15 @@ export type { BizState };
 export interface BusinessFlowProps {
   /** Where the flow starts: the salon by default. */
   readonly initialState?: BizState;
-  /** Shows the Demo menu: switch business, and see the page as a guest. */
+  /** Shows the Demo menu: see the page as a guest, reload. */
   readonly showDemoMenu?: boolean;
+  /** Switch to another workspace; with it the workspace menu lists Northwind, the salon and the restaurant. */
+  readonly onWorkspace?: (id: WorkspaceId) => void;
 }
 
 const SECTIONS = {
   salon: [
-    { id: 'calendar', label: 'Calendar', short: 'Calendar', icon: <CalendarDays {...i16} /> },
+    { id: 'calendar', label: 'Appointments', short: 'Calendar', icon: <CalendarDays {...i16} /> },
     { id: 'services', label: 'Services', short: 'Services', icon: <Scissors {...i16} /> },
     { id: 'team', label: 'Team', short: 'Team', icon: <Users {...i16} /> },
     { id: 'page', label: 'Business page', short: 'Page', icon: <Store {...i16} /> },
@@ -51,7 +53,7 @@ const SECTIONS = {
 } as const;
 
 /** Business booking as one live flow: a salon books services with a person, a restaurant books tables. The guest's side is the business page. */
-export function BusinessFlow({ initialState, showDemoMenu = false }: BusinessFlowProps) {
+export function BusinessFlow({ initialState, showDemoMenu = false, onWorkspace }: BusinessFlowProps) {
   const [state, dispatch] = useReducer(bizReducer, initialState ?? lumen());
   const { toast } = useToast();
   const kind = state.business.kind;
@@ -91,7 +93,9 @@ export function BusinessFlow({ initialState, showDemoMenu = false }: BusinessFlo
 
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
-      header={<WorkspaceSwitcher name={state.business.name} plan={state.business.kindLabel} mark={<LogoMark size={28} />}>
+      header={<WorkspaceSwitcher name={state.business.name} plan={state.business.kindLabel} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); const me = kind === 'salon' ? 'lumen' : 'olive'; if (id.startsWith('ws:') && onWorkspace && id !== `ws:${me}`) onWorkspace(id.slice(3) as WorkspaceId); }}>
+        {onWorkspace ? <WorkspaceItems current={kind === 'salon' ? 'lumen' : 'olive'} /> : null}
+        {onWorkspace ? <MenuSeparator /> : null}
         <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem>
       </WorkspaceSwitcher>}
       footer={<PersonRow name="Priya Raman" email="priya@northwind.com">
@@ -101,7 +105,9 @@ export function BusinessFlow({ initialState, showDemoMenu = false }: BusinessFlo
       </PersonRow>}>
       <NavItem label="Home" icon={<Home {...i16} />} onPress={() => undefined} />
       <NavItem label="Inbox" icon={<Inbox {...i16} />} onPress={() => undefined} />
-      <NavSection title="Business">
+      <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
+      <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
+      <NavSection title="Bookings">
         {sections.map((x) => <NavItem key={x.id} label={x.label} icon={x.icon} isCurrent={tab === x.id} badge={x.id === 'page' && problems ? problems : undefined} count={x.id === sections[0].id && todayCount ? todayCount : undefined} onPress={() => setTab(x.id)} />)}
       </NavSection>
     </Sidebar>
@@ -114,10 +120,8 @@ export function BusinessFlow({ initialState, showDemoMenu = false }: BusinessFlo
         <MenuSection title="As a guest">
           <MenuItem id="guest" icon={<Play {...i16} />} description={kind === 'salon' ? 'Pick a service, a person, a time' : 'Pick a party size and a time'}>Your business page</MenuItem>
         </MenuSection>
-        <MenuSection title="Business">
-          <MenuItem id="salon" icon={<Scissors {...i16} />} description="Services with staff">Lumen Hair Studio</MenuItem>
-          <MenuItem id="restaurant" icon={<UtensilsCrossed {...i16} />} description="Tables and reservations">Olive Kitchen</MenuItem>
-          <MenuItem id="reload" icon={<RotateCcw {...i16} />}>Reload this one</MenuItem>
+        <MenuSection title="Workspace">
+          <MenuItem id="reload" icon={<RotateCcw {...i16} />} description="Puts back the dummy book">Reload {state.business.name}</MenuItem>
         </MenuSection>
       </Menu>
     </MenuTrigger>
@@ -127,7 +131,7 @@ export function BusinessFlow({ initialState, showDemoMenu = false }: BusinessFlo
     <I18nProvider locale="en-GB">
       {guest ? <GuestView state={state} made={made.current} onClose={closeGuest} /> : (
         <AppShell sidebar={sidebar} className="tf-bkf tf-bzf"
-          mobileNav={<TabBar aria-label="Business" current={tab} items={sections.map((x) => ({ id: x.id, label: x.short, icon: x.icon, badge: x.id === 'page' && problems ? problems : undefined }))} onChange={setTab} />}>
+          mobileNav={<TabBar aria-label="Bookings" current={tab} items={sections.map((x) => ({ id: x.id, label: x.short, icon: x.icon, badge: x.id === 'page' && problems ? problems : undefined }))} onChange={setTab} />}>
           <TopBar title={<Breadcrumbs size="title" items={[{ id: current.id, label: current.label, icon: current.icon }]} />} actions={<>{demoMenu}</>} />
           <div className="tf-bkf__body">
             <div className="tf-bkf__panel">

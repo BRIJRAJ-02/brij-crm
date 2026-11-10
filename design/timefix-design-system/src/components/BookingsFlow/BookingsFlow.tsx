@@ -14,7 +14,7 @@ import { LogoMark } from '../Logo/Logo.tsx';
 import type { Meeting } from '../MeetingList/MeetingList.tsx';
 import { formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay } from '../../lib/format.ts';
-import { i14, i16, type ShareHow } from './parts.tsx';
+import { WorkspaceItems, i14, i16, type ShareHow, type WorkspaceId } from './parts.tsx';
 import { CreateSheet } from './create.tsx';
 import { ShareDialogs, type ShareDialogKind } from './share.tsx';
 import { MeetingsTab, NewMeetingDialog, DeclineDialog, HoldDialog, meetingFrom, type PickedTime, type Whose } from './meetings.tsx';
@@ -44,6 +44,8 @@ export interface BookingsFlowProps {
   readonly initialState?: BookingsState;
   /** Shows the Demo menu in the top bar: start fresh, edge cases and the guest's side. */
   readonly showDemoMenu?: boolean;
+  /** Switch to another workspace (the salon or the restaurant); with it the workspace menu lists them. */
+  readonly onWorkspace?: (id: WorkspaceId) => void;
 }
 
 const readWhose = (workspace: string): Whose => { try { return window.localStorage.getItem(`tf-bkf-whose:${workspace}`) ?? 'mine'; } catch { return 'mine'; } };
@@ -62,7 +64,7 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
@@ -307,7 +309,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
 
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
-      header={<WorkspaceSwitcher name={state.workspace} plan="Team plan · 4 members" mark={<LogoMark size={28} />}>
+      header={<WorkspaceSwitcher name={state.workspace} plan="Team plan · 4 members" mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:') && onWorkspace && id !== 'ws:northwind') onWorkspace(id.slice(3) as WorkspaceId); }}>
+        {onWorkspace ? <WorkspaceItems current="northwind" /> : null}
+        {onWorkspace ? <MenuSeparator /> : null}
         <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem>
       </WorkspaceSwitcher>}
       footer={<PersonRow name={HOST} email="priya@northwind.com">
