@@ -9,7 +9,7 @@
 .tf-feed__marker { display: grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); }
 .tf-feed__well { display: inline-grid; place-items: center; width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); box-shadow: 0 0 0 2px var(--surface); }
 .tf-feed__well svg { width: 12px; height: 12px; }
-.tf-feed__well--time { background: var(--accent-soft); color: var(--accent); }
+.tf-feed__well--time { background: var(--accent-soft); color: var(--accent-text); }
 .tf-feed__main { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 .tf-feed__line { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; font: 400 13px/20px var(--font-sans); color: var(--text-secondary); }
 .tf-feed__text { flex: 1; min-width: 0; }

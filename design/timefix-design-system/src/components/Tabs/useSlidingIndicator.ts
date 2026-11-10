@@ -42,10 +42,17 @@ export function useSlidingIndicator(selectedKey: unknown): RefObject<HTMLDivElem
   return ref;
 }
 
-function place(bar: HTMLElement, animate: boolean): void {
+function place(bar: HTMLElement, animate: boolean, tries = 0): void {
   const sel = bar.querySelector<HTMLElement>('[data-selected]');
+  // Not laid out yet (hidden, or mounting inside a page that is still entering): try again next frame rather than draw a sliver.
+  if (sel && (sel.offsetWidth === 0 || bar.offsetWidth === 0)) {
+    if (tries < 20) requestAnimationFrame(() => place(bar, false, tries + 1));
+    return;
+  }
+  // Offsets ignore transforms (a dialog scaling in); when the bar is not the item's offset parent, take the bar's own offset off.
+  const x = sel ? (sel.offsetParent === bar ? sel.offsetLeft : sel.offsetLeft - bar.offsetLeft) : 0;
   if (!animate) bar.removeAttribute('data-ready');
-  bar.style.setProperty('--tf-ind-x', `${sel ? sel.offsetLeft : 0}px`);
+  bar.style.setProperty('--tf-ind-x', `${x}px`);
   bar.style.setProperty('--tf-ind-w', `${sel ? sel.offsetWidth : 0}px`);
   if (!animate) {
     void bar.offsetWidth;

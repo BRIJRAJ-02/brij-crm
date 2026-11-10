@@ -60,7 +60,7 @@
 .tf-rpanel-demo__attrs { display: flex; flex-direction: column; margin-bottom: var(--space-12); }
 .tf-rpanel-demo__chips { display: flex; flex-wrap: wrap; gap: var(--space-6); }
 .tf-rpanel-demo__meeting { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-6) 0; }
-.tf-rpanel-demo__mwell { display: inline-grid; place-items: center; width: var(--size-avatar); height: var(--size-avatar); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); flex: none; }
+.tf-rpanel-demo__mwell { display: inline-grid; place-items: center; width: var(--size-avatar); height: var(--size-avatar); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); flex: none; }
 .tf-rpanel-demo__mtext { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .tf-rpanel-demo__mtitle { font: 500 14px/20px var(--font-sans); }
 .tf-rpanel-demo__mwhen { font: 400 13px/18px var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }

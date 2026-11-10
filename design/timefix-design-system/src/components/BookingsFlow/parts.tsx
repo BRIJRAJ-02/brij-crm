@@ -183,6 +183,19 @@ export function Section({ title, description, action, children, className }: { r
 }
 
 /** The row under the tabs, the same on every tab: the view or scope on the left, a quiet count, and the tab's one main action (ink) on the right. */
+/** One setting as a row: its name and a line of help on the left, the control on the right. Rows divide with a hairline. */
+export function SettingRow({ title, description, children }: { readonly title: string; readonly description?: ReactNode; readonly children: ReactNode }) {
+  return (
+    <div className="tf-bkf-setting">
+      <div className="tf-bkf-setting__text">
+        <span className="tf-bkf-setting__title">{title}</span>
+        {description !== undefined && <span className="tf-bkf-setting__desc">{description}</span>}
+      </div>
+      <div className="tf-bkf-setting__control">{children}</div>
+    </div>
+  );
+}
+
 export function TabToolbar({ start, count, action }: { readonly start?: ReactNode; readonly count?: ReactNode; readonly action?: ReactNode }) {
   return (
     <div className="tf-bkf__toolbar">

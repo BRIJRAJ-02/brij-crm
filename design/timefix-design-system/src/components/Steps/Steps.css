@@ -13,7 +13,7 @@
   border: 1.5px solid var(--control-border); background: var(--surface); color: var(--text-tertiary); font: 500 12px/16px var(--font-sans);
   transition: background-color var(--duration-fast) var(--ease-smooth-out), border-color var(--duration-fast) var(--ease-smooth-out), color var(--duration-fast) var(--ease-smooth-out);
 }
-.tf-steps__item[data-state='current'] .tf-steps__marker { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-soft); }
+.tf-steps__item[data-state='current'] .tf-steps__marker { border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-soft); }
 .tf-steps__item[data-state='done'] .tf-steps__marker { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 
 .tf-steps__text { display: flex; flex-direction: column; min-width: 0; }

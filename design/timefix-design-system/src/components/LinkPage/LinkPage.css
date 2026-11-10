@@ -74,7 +74,7 @@
 /* Booking block: a card with Book; the booking card opens in place under it. */
 .tf-linkpage__booking { padding: var(--space-12); border-radius: var(--radius-xl); background: var(--tf-lp-card); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--tf-lp-card-edge), var(--tf-lp-shadow); color: var(--tf-lp-text); }
 .tf-linkpage__booking-head { display: flex; align-items: center; gap: var(--space-12); }
-.tf-linkpage__booking-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); }
+.tf-linkpage__booking-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent-text); }
 .tf-linkpage__booking-text { display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left; }
 .tf-linkpage__booking-title { font: 500 16px/24px var(--font-sans); }
 .tf-linkpage__booking-sub { font: 400 13px/20px var(--font-sans); color: var(--tf-lp-muted); }

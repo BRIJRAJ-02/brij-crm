@@ -118,7 +118,7 @@
 .tf-bkf-tile[data-selected] { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--accent); }
 .tf-bkf-tile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-bkf-tile__icon { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
-.tf-bkf-tile[data-selected] .tf-bkf-tile__icon { background: var(--accent-soft); color: var(--accent); }
+.tf-bkf-tile[data-selected] .tf-bkf-tile__icon { background: var(--accent-soft); color: var(--accent-text); }
 .tf-bkf-tile__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/20px var(--font-sans); }
 .tf-bkf-tile__badge { position: absolute; top: var(--space-6); right: var(--space-6); display: grid; place-items: center; width: var(--space-16); height: var(--space-16); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent);
   opacity: 0; transform: scale(var(--scale-medium)); transition: opacity var(--duration-fast) var(--ease-smooth-out), transform var(--duration-fast) var(--ease-bounce); }
@@ -376,6 +376,20 @@
 /* Editor tabs: the tab strip, then one card per tab. */
 .tf-bkf__edtabs { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
 .tf-bkf__edpanel { outline: none; }
+/* Settings rows: name and help on the left, the control on the right; a hairline between rows. */
+.tf-bkf-settings { display: flex; flex-direction: column; }
+.tf-bkf-setting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8) var(--space-24); padding: var(--space-16) 0; }
+.tf-bkf-setting + .tf-bkf-setting, .tf-bkf-setting__more + .tf-bkf-setting { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-settings > .tf-bkf-setting:first-child { padding-top: 0; }
+.tf-bkf-setting__text { display: flex; flex: 1 1 calc(var(--size-menu) - var(--space-16)); flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tf-bkf-setting__title { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-bkf-setting__desc { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+.tf-bkf-setting__control { display: flex; flex: none; justify-content: flex-end; max-width: 100%; }
+.tf-bkf-setting__pair { display: inline-flex; align-items: center; gap: var(--space-8); }
+.tf-bkf-setting__pair > .tf-bkf__inline-select { width: calc(var(--size-menu) * 0.6); }
+/* Something that opens under a row (custom hours) sits full width before the next rule. */
+.tf-bkf-setting__more { padding-bottom: var(--space-16); }
+.tf-bkf-settings--ruled { border-top: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-bkf__editor-preview { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
 .tf-bkf__checks { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-bkf__weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-control-lg) * 4), 1fr)); gap: var(--space-12); }

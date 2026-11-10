@@ -65,7 +65,7 @@
 /* AuthPreview: a workspace's day, the cards settling in one after another. */
 .tf-auth-sketch { display: flex; flex-direction: column; gap: var(--space-16); width: calc(var(--size-panel) + var(--space-64)); }
 .tf-auth-sketch__head { display: flex; align-items: center; gap: var(--space-8); font: 500 14px/20px var(--font-sans); color: var(--text); }
-.tf-auth-sketch__day { margin-inline-start: auto; padding: 0 var(--space-8); border-radius: var(--radius-full); background: var(--accent-soft); color: var(--accent); font: 500 12px/20px var(--font-sans); }
+.tf-auth-sketch__day { margin-inline-start: auto; padding: 0 var(--space-8); border-radius: var(--radius-full); background: var(--accent-soft); color: var(--accent-text); font: 500 12px/20px var(--font-sans); }
 .tf-auth-sketch__cards { display: flex; flex-direction: column; gap: var(--space-12); }
 .tf-auth-sketch__card { animation: tf-auth-reveal var(--duration-very-slow) var(--ease-smooth-out) both; animation-delay: calc(var(--duration-stagger) * (var(--tf-i, 0) + 2)); }
 

@@ -12,7 +12,7 @@ import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { ShowMore } from '../Disclosure/Disclosure.tsx';
 import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
-import { Checkbox, RadioGroup, Radio, Switch } from '../Checkbox/Checkbox.tsx';
+import { Checkbox, Switch } from '../Checkbox/Checkbox.tsx';
 import { HoursEditor } from '../HoursEditor/HoursEditor.tsx';
 import { QuestionBuilder } from '../QuestionList/QuestionList.tsx';
 import { GuestLook } from '../GuestLook/GuestLook.tsx';
@@ -23,10 +23,10 @@ import { Tag } from '../Tag/Tag.tsx';
 import { Button } from '../Button/Button.tsx';
 import { NumberRoll, SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { formatDate } from '../../lib/format.ts';
-import { Eyebrow, GuestView, Section, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
+import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
 import { uniqueSlug } from './seed.ts';
 import {
-  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, dayFrom, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
+  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
   type BookingPage, type BookingsState, type HostMode, type PlaceKind,
 } from './state.ts';
 
@@ -137,45 +137,58 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
               </Section>
               </TabPanel>
                 <TabPanel id="when" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="When" description={whenSummary(draft, state)}>
-                  <div className="tf-bkf__stack" data-section="when">
-                    <RadioGroup label="Hours" value={draft.hoursFrom} onChange={(v) => set({ hoursFrom: v, customHours: v === 'custom' ? draft.customHours ?? hoursFor(draft, state) : draft.customHours })}>
-                      {state.savedHours.map((h) => <Radio key={h.id} value={h.id === state.defaultHoursId ? 'working' : h.id}>{h.id === state.defaultHoursId ? `Your ${h.name.toLowerCase()}` : h.name}</Radio>)}
-                      <Radio value="custom">Hours just for this page</Radio>
-                    </RadioGroup>
-                    {draft.hoursFrom === 'custom' && draft.customHours && <HoursEditor value={draft.customHours} onChange={(h) => set({ customHours: h })} />}
-                    <div className="tf-bkf__pair">
-                      <Select label="Buffer before" items={BUFFERS} value={String(draft.bufferBefore)} onChange={(v) => set({ bufferBefore: Number(v ?? 0) })} />
-                      <Select label="Buffer after" items={BUFFERS} value={String(draft.bufferAfter)} onChange={(v) => set({ bufferAfter: Number(v ?? 0) })} />
-                    </div>
-                    <div className="tf-bkf__pair">
-                      <Select label="Minimum notice" items={NOTICE} value={String(draft.noticeHours)} onChange={(v) => set({ noticeHours: Number(v ?? 0) })} />
-                      <Select label="Book up to" items={AHEAD} value={String(draft.daysAhead)} onChange={(v) => set({ daysAhead: Number(v ?? 60) })} />
-                    </div>
-                    <div className="tf-bkf__pair">
-                      <NumberField label="Most a day" description="0 means no limit" value={draft.perDay} minValue={0} maxValue={20} onChange={(n) => set({ perDay: Number.isFinite(n) ? n : 0 })} />
-                      <NumberField label="Most a week" description="0 means no limit" value={draft.perWeek} minValue={0} maxValue={60} onChange={(n) => set({ perWeek: Number.isFinite(n) ? n : 0 })} />
-                    </div>
-                    <div>
-                      <span className="tf-bkf__label">Time off that applies</span>
-                      {hostOff.length === 0 ? <p className="tf-bkf__muted">None planned. Time off is set under Availability.</p> : (
-                        <ul className="tf-bkf__list-plain">{hostOff.map((t) => <li key={t.id} className="tf-bkf__off"><Avatar name={t.member} size={20} />{t.member}<span className="tf-bkf__muted tf-num">{formatDate(parseDay(t.from))}{t.to !== t.from ? ` – ${formatDate(parseDay(t.to))}` : ''} · {t.note || 'Time off'}</span></li>)}</ul>
-                      )}
-                    </div>
+                  <div className="tf-bkf-settings" data-section="when">
+                    <SettingRow title="Hours" description="Which weekly hours guests can book.">
+                      <Select label="Hours" isLabelHidden className="tf-bkf__inline-select" value={draft.hoursFrom}
+                        onChange={(v) => { if (v) set({ hoursFrom: v, customHours: v === 'custom' ? draft.customHours ?? hoursFor(draft, state) : draft.customHours }); }}
+                        items={[...state.savedHours.map((h) => ({ id: h.id === state.defaultHoursId ? 'working' : h.id, label: h.id === state.defaultHoursId ? `Your ${h.name.toLowerCase()}` : h.name })), { id: 'custom', label: 'Just for this page' }]} />
+                    </SettingRow>
+                    {draft.hoursFrom === 'custom' && draft.customHours && <div className="tf-bkf-setting__more"><HoursEditor value={draft.customHours} onChange={(h) => set({ customHours: h })} /></div>}
+                    <SettingRow title="Gap around meetings" description="Free time kept before and after each one.">
+                      <span className="tf-bkf-setting__pair">
+                        <Select label="Before" isLabelHidden className="tf-bkf__inline-select" items={BUFFERS.map((x) => ({ ...x, label: x.id === '0' ? 'None before' : `${x.label} before` }))} value={String(draft.bufferBefore)} onChange={(v) => set({ bufferBefore: Number(v ?? 0) })} />
+                        <Select label="After" isLabelHidden className="tf-bkf__inline-select" items={BUFFERS.map((x) => ({ ...x, label: x.id === '0' ? 'None after' : `${x.label} after` }))} value={String(draft.bufferAfter)} onChange={(v) => set({ bufferAfter: Number(v ?? 0) })} />
+                      </span>
+                    </SettingRow>
+                    <SettingRow title="Minimum notice" description="How soon before a meeting guests can book.">
+                      <Select label="Minimum notice" isLabelHidden className="tf-bkf__inline-select" items={NOTICE} value={String(draft.noticeHours)} onChange={(v) => set({ noticeHours: Number(v ?? 0) })} />
+                    </SettingRow>
+                    <SettingRow title="How far ahead" description="The latest day guests can pick.">
+                      <Select label="Book up to" isLabelHidden className="tf-bkf__inline-select" items={AHEAD} value={String(draft.daysAhead)} onChange={(v) => set({ daysAhead: Number(v ?? 60) })} />
+                    </SettingRow>
+                    <SettingRow title="Most a day" description="Meetings from this page in one day.">
+                      <span className="tf-bkf-setting__pair">
+                        <Switch aria-label="Limit meetings a day" isSelected={draft.perDay > 0} onChange={(on) => set({ perDay: on ? 4 : 0 })} />
+                        {draft.perDay > 0 && <NumberField aria-label="Most a day" value={draft.perDay} minValue={1} maxValue={20} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ perDay: n }); }} />}
+                      </span>
+                    </SettingRow>
+                    <SettingRow title="Most a week" description="Meetings from this page in one week.">
+                      <span className="tf-bkf-setting__pair">
+                        <Switch aria-label="Limit meetings a week" isSelected={draft.perWeek > 0} onChange={(on) => set({ perWeek: on ? 10 : 0 })} />
+                        {draft.perWeek > 0 && <NumberField aria-label="Most a week" value={draft.perWeek} minValue={1} maxValue={60} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ perWeek: n }); }} />}
+                      </span>
+                    </SettingRow>
+                    <SettingRow title="Time off" description={hostOff.length === 0 ? 'None planned. Time off is set under Availability.' : 'Guests see no times then.'}>
+                      {hostOff.length > 0 ? <span className="tf-bkf__muted tf-num">{hostOff.map((t) => `${first(t.member)} · ${formatDate(parseDay(t.from))}${t.to !== t.from ? ` – ${formatDate(parseDay(t.to))}` : ''}`).join(', ')}</span> : null}
+                    </SettingRow>
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="who" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Who" description={whoSummary(draft, state, now)}
                   action={stuck ? <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} />}>No hosts available</Tag> : undefined}>
                   <div className="tf-bkf__stack" data-section="who">
                     {stuck && <Callout tone="warning">Everyone on this page is away or paused, so guests can't book it. Add a host who's free.</Callout>}
-                    <RadioGroup label="Who hosts" value={draft.hostMode} onChange={(v) => setMode(v as HostMode)}>
-                      <Radio value="one">One person</Radio>
-                      <Radio value="collective">Everyone must be free (they all join)</Radio>
-                      <Radio value="roundrobin">Round robin (one free host takes it, in turn)</Radio>
-                      <Radio value="managed">A copy for each member (each gets their own page)</Radio>
-                    </RadioGroup>
-                    {draft.hostMode === 'one' ? (
-                      <Select label="Host" items={TEAM.map((n) => ({ id: n, label: n === HOST ? `${n} (you)` : n, icon: <Avatar name={n} size={20} /> }))} value={draft.hosts[0] ?? HOST} onChange={(v) => { if (v) set({ hosts: [v] }); }} />
-                    ) : (
+                    <div className="tf-bkf-settings">
+                    <SettingRow title="Who hosts" description={draft.hostMode === 'one' ? 'One person takes every meeting.' : draft.hostMode === 'collective' ? 'Everyone must be free; they all join.' : draft.hostMode === 'roundrobin' ? 'One free host takes it, in turn.' : 'Each member gets their own copy of this page.'}>
+                      <Select label="Who hosts" isLabelHidden className="tf-bkf__inline-select" value={draft.hostMode} onChange={(v) => { if (v) setMode(v as HostMode); }}
+                        items={[{ id: 'one', label: 'One person' }, { id: 'collective', label: 'Everyone together' }, { id: 'roundrobin', label: 'Round robin' }, { id: 'managed', label: 'A copy each' }]} />
+                    </SettingRow>
+                    {draft.hostMode === 'one' && (
+                      <SettingRow title="Host" description="Their hours and calendars decide the times.">
+                        <Select label="Host" isLabelHidden className="tf-bkf__inline-select" items={TEAM.map((n) => ({ id: n, label: n === HOST ? `${n} (you)` : n, icon: <Avatar name={n} size={20} /> }))} value={draft.hosts[0] ?? HOST} onChange={(v) => { if (v) set({ hosts: [v] }); }} />
+                      </SettingRow>
+                    )}
+                    </div>
+                    {draft.hostMode === 'one' ? null : (
                       <div className="tf-bkf__checks" role="group" aria-label="Hosts">
                         {TEAM.map((name) => {
                           const on = draft.hosts.includes(name);
@@ -210,44 +223,45 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         <Button size="sm" variant="secondary" icon={<Settings2 {...i14} />} onPress={onManageGroups}>Manage groups</Button>
                       </div>
                     )}
-                    <RadioGroup label="Who can book" value={draft.whoCanBook} onChange={(v) => set({ whoCanBook: v === 'form' ? 'form' : 'anyone', formName: v === 'form' ? draft.formName || 'Support request' : draft.formName })}>
-                      <Radio value="anyone">Anyone with the link</Radio>
-                      <Radio value="form">Only through a form</Radio>
-                    </RadioGroup>
-                    {draft.whoCanBook === 'form' && <Select label="Form" items={FORMS} value={draft.formName} onChange={(v) => { if (v) set({ formName: v }); }} description="Guests see times after they send the form." />}
+                    <div className="tf-bkf-settings tf-bkf-settings--ruled">
+                    <SettingRow title="Who can book" description={draft.whoCanBook === 'form' ? 'Guests see times after they send the form.' : 'Anyone with the link picks a time.'}>
+                      <SegmentedControl aria-label="Who can book" size="sm" selectedKey={draft.whoCanBook} onSelectionChange={(v) => set({ whoCanBook: v === 'form' ? 'form' : 'anyone', formName: v === 'form' ? draft.formName || 'Support request' : draft.formName })}
+                        items={[{ id: 'anyone', label: 'Anyone' }, { id: 'form', label: 'Through a form' }]} />
+                    </SettingRow>
+                    {draft.whoCanBook === 'form' && (
+                      <SettingRow title="Form" description="The form guests fill in first.">
+                        <Select label="Form" isLabelHidden className="tf-bkf__inline-select" items={FORMS} value={draft.formName} onChange={(v) => { if (v) set({ formName: v }); }} />
+                      </SettingRow>
+                    )}
+                    </div>
                   </div>
                 </Section></TabPanel>
-                <TabPanel id="questions" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Questions" description={questionsSummary(draft)}>
+                <TabPanel id="questions" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Questions for the guest" description="Name and email are always asked. Add anything else you need before the call.">
                   <div className="tf-bkf__stack" data-section="questions">
-                    <p className="tf-bkf__muted">Name and email are always asked. Add anything else here.</p>
-                    <QuestionBuilder questions={draft.questions} onChange={(questions) => set({ questions })} />
+                    <QuestionBuilder questions={draft.questions} onChange={(questions) => set({ questions })} title="Also asked" kinds={['short', 'long', 'phone', 'choice', 'multi', 'dropdown']} />
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="after" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="After booking" description={afterSummary(draft)}>
-                  <div className="tf-bkf__stack" data-section="after">
-                    <RadioGroup label="Confirm" value={draft.confirmFirst ? 'me' : 'auto'} onChange={(v) => set({ confirmFirst: v === 'me' })}>
-                      <Radio value="auto">Confirm at once</Radio>
-                      <Radio value="me">I confirm each one first (bookings arrive as requests)</Radio>
-                    </RadioGroup>
-                    <Select label="Add bookings to" items={CALENDARS} value={draft.calendarId} onChange={(v) => { if (v) set({ calendarId: v }); }} />
-                    <Switch isSelected={draft.addToPeople} onChange={(addToPeople) => set({ addToPeople })}>Add guests to People, and link the meeting to their company</Switch>
-                    <div>
-                      <span className="tf-bkf__label">Reminders to the guest</span>
-                      <div className="tf-bkf__checks">
-                        {[['day', 'A day before'], ['hour', 'An hour before']].map(([id, label]) => (
-                          <Checkbox key={id} isSelected={draft.reminders.includes(id ?? '')} onChange={(v) => set({ reminders: v ? [...draft.reminders, id ?? ''] : draft.reminders.filter((r) => r !== id) })}>{label}</Checkbox>
-                        ))}
-                      </div>
-                    </div>
-                    <ShowMore showLabel="More options" hideLabel="Fewer options">
-                      <div className="tf-bkf__stack">
-                        <RadioGroup label="Then show" value={draft.after} onChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}>
-                          <Radio value="message">A thank-you with the details</Radio>
-                          <Radio value="redirect">Another web page</Radio>
-                        </RadioGroup>
-                        {draft.after === 'redirect' && <TextField label="Web address" value={draft.redirectUrl} onChange={(redirectUrl) => set({ redirectUrl })} placeholder="https://northwind.com/thanks" type="url" />}
-                      </div>
-                    </ShowMore>
+                  <div className="tf-bkf-settings" data-section="after">
+                    <SettingRow title="Confirming" description="Requests wait for you in Meetings, under Needs your OK.">
+                      <SegmentedControl aria-label="Confirming" size="sm" selectedKey={draft.confirmFirst ? 'me' : 'auto'} onSelectionChange={(v) => set({ confirmFirst: v === 'me' })}
+                        items={[{ id: 'auto', label: 'At once' }, { id: 'me', label: 'I confirm first' }]} />
+                    </SettingRow>
+                    <SettingRow title="Calendar" description="Where new bookings are added.">
+                      <Select label="Add bookings to" isLabelHidden className="tf-bkf__inline-select" items={CALENDARS} value={draft.calendarId} onChange={(v) => { if (v) set({ calendarId: v }); }} />
+                    </SettingRow>
+                    <SettingRow title="Add to People" description="Guests become people, linked to their company.">
+                      <Switch aria-label="Add guests to People" isSelected={draft.addToPeople} onChange={(addToPeople) => set({ addToPeople })} />
+                    </SettingRow>
+                    <SettingRow title="Reminders" description="Emails to the guest before the meeting.">
+                      <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.reminders}
+                        items={[{ id: 'day', label: 'A day before' }, { id: 'hour', label: 'An hour before' }]} onSelectionChange={(k) => set({ reminders: [...k] })} />
+                    </SettingRow>
+                    <SettingRow title="After they book" description={draft.after === 'redirect' ? 'They go to your web page.' : 'They see a thank-you with the details.'}>
+                      <SegmentedControl aria-label="After they book" size="sm" selectedKey={draft.after} onSelectionChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}
+                        items={[{ id: 'message', label: 'Thank-you' }, { id: 'redirect', label: 'Web page' }]} />
+                    </SettingRow>
+                    {draft.after === 'redirect' && <TextField label="Web address" value={draft.redirectUrl} onChange={(redirectUrl) => set({ redirectUrl })} placeholder="https://northwind.com/thanks" type="url" />}
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="look" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Look" description={lookSummary(draft)}>

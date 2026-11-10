@@ -25,7 +25,7 @@
 }
 .tf-relationship__card[data-hovered] { background: var(--surface-hover); color: var(--text-secondary); }
 .tf-relationship__card[data-pressed] { transform: scale(var(--scale-small)); }
-.tf-relationship__card[data-selected] { background: var(--accent-soft); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); color: var(--accent); }
+.tf-relationship__card[data-selected] { background: var(--accent-soft); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); color: var(--accent-text); }
 .tf-relationship__card[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-relationship__card[data-disabled] { cursor: default; }
 .tf-relationship__card[data-disabled]:not([data-selected]) { opacity: var(--opacity-disabled); }

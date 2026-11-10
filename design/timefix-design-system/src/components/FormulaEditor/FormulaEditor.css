@@ -20,7 +20,7 @@
 .tf-formulaeditor__input::selection { color: transparent; background: var(--accent-border); }
 
 /* An attribute reads as a chip; its braces are drawn invisible and become its padding, so the caret stays aligned. */
-.tf-formulaeditor__chip { border-radius: var(--radius-xs); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-border); color: var(--accent); }
+.tf-formulaeditor__chip { border-radius: var(--radius-xs); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-border); color: var(--accent-text); }
 .tf-formulaeditor__chip.is-unknown { background: var(--danger-soft); box-shadow: 0 0 0 1px var(--danger-soft); color: var(--danger); text-decoration: underline wavy; text-underline-offset: 3px; }
 .tf-formulaeditor__brace { color: transparent; }
 .tf-formulaeditor__fn { color: var(--text); font-weight: 500; }

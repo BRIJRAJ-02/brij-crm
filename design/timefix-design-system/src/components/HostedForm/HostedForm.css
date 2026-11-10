@@ -156,7 +156,7 @@
 .tf-hq__grip { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); cursor: grab; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
 .tf-hq__grip[data-hovered] { background: var(--surface-selected); color: var(--text); }
 .tf-hq__grip[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; }
-.tf-hq__rank-n { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); font: 500 13px/20px var(--font-sans); }
+.tf-hq__rank-n { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font: 500 13px/20px var(--font-sans); }
 .tf-hq__drop { height: 0; margin: calc(var(--space-4) * -1) 0; outline: none; }
 .tf-hq__drop[data-drop-target] { height: var(--size-control-lg); margin: 0; border: var(--border-width-hairline) dashed var(--border-strong); border-radius: var(--radius-lg); transition: height var(--duration-fast) var(--ease-smooth-out); }
 

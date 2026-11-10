@@ -60,7 +60,7 @@
 .tf-week__event--short .tf-week__conflict { top: 50%; transform: translateY(-50%); padding: 0 var(--space-2); }
 
 /* The range being dragged out: an accent wash with its time. */
-.tf-week__sel { left: var(--space-2); right: var(--space-2); z-index: 3; padding: var(--space-2) var(--space-6); border-radius: var(--radius-sm); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); font: 500 12px/16px var(--font-sans); pointer-events: none; animation: tf-week-sel-in var(--duration-quick) var(--ease-smooth-out); }
+.tf-week__sel { left: var(--space-2); right: var(--space-2); z-index: 3; padding: var(--space-2) var(--space-6); border-radius: var(--radius-sm); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent-text); font: 500 12px/16px var(--font-sans); pointer-events: none; animation: tf-week-sel-in var(--duration-quick) var(--ease-smooth-out); }
 @keyframes tf-week-sel-in { from { opacity: 0; } }
 
 /* Now: an accent line across today with a dot at its start. */

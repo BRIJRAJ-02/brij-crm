@@ -34,15 +34,16 @@ export function questionSummary(q: FormQuestion): string {
 }
 
 /** "+ Add question": a grid of every answer type in the shared Popover (05). The plus turns while it is open. */
-export function QuestionTypePicker({ onPick, label = 'Add question' }: { readonly onPick: (kind: QuestionKind) => void; readonly label?: string }) {
+export function QuestionTypePicker({ onPick, label = 'Add question', only }: { readonly onPick: (kind: QuestionKind) => void; readonly label?: string; /** Offer just these types (a booking page needs a few, a form all). Six or fewer list in one column. */ readonly only?: ReadonlyArray<QuestionKind> }) {
   const [open, setOpen] = useState(false);
-  const kinds = (Object.keys(QUESTION_KINDS) as QuestionKind[]).map((k) => ({ id: k }));
+  const kinds = (only ?? (Object.keys(QUESTION_KINDS) as QuestionKind[])).map((k) => ({ id: k }));
+  const short = kinds.length <= 6;
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
       <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={2} className="tf-qlist__plus" aria-hidden="true" />} className="tf-qlist__add">{label}</Button>
-      <Popover label="Question types" placement="bottom end" offset={6} className="tf-qtypes__pop">
-        <p className="tf-qtypes__head">Pick a type</p>
-        <ListBox aria-label="Question types" layout="grid" items={kinds} className="tf-qtypes" autoFocus="first"
+      <Popover label="Question types" placement="bottom end" offset={6} className={short ? undefined : 'tf-qtypes__pop'}>
+        {!short && <p className="tf-qtypes__head">Pick a type</p>}
+        <ListBox aria-label="Question types" layout={short ? 'stack' : 'grid'} items={kinds} className={short ? 'tf-qtypes tf-qtypes--list' : 'tf-qtypes'} autoFocus="first"
           onAction={(k: Key) => { onPick(String(k) as QuestionKind); setOpen(false); }}>
           {(it) => {
             const info = QUESTION_KINDS[it.id];
@@ -75,13 +76,17 @@ export interface QuestionListProps {
   readonly freshIds?: ReadonlySet<string>;
   /** Something above the cards: the "Deleted · Undo" strip. */
   readonly notice?: ReactNode;
+  /** Offer just these answer types. */
+  readonly kinds?: ReadonlyArray<QuestionKind>;
+  /** The list's heading ("Questions"). */
+  readonly title?: string;
 }
 
 /**
  * A form's questions as cards: grip, type tile, title over its type, a Required switch and a ⋯ menu. Cards reorder by the grip
  * (pointer, or Enter then arrows), the dragged card lifts and the slot opens dashed. Pressing a card opens it in the side panel.
  */
-export function QuestionList({ questions, selectedId, onSelect, onReorder, onRequiredChange, onDuplicate, onDelete, onAdd, freshIds, notice }: QuestionListProps) {
+export function QuestionList({ questions, selectedId, onSelect, onReorder, onRequiredChange, onDuplicate, onDelete, onAdd, freshIds, notice, kinds, title = 'Questions' }: QuestionListProps) {
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) => [...keys].map((k) => ({ 'text/plain': questions.find((q) => q.id === k)?.title ?? String(k) })),
     onReorder: (e) => {
@@ -101,8 +106,8 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
   return (
     <section className="tf-qlist" aria-label="Questions">
       <header className="tf-qlist__head">
-        <h3 className="tf-qlist__title">Questions <Count>{questions.length}</Count></h3>
-        <QuestionTypePicker onPick={onAdd} />
+        <h3 className="tf-qlist__title">{title} <Count>{questions.length}</Count></h3>
+        <QuestionTypePicker onPick={onAdd} only={kinds} />
       </header>
       {notice}
       {questions.length === 0 ? (
@@ -224,10 +229,12 @@ const blank = (kind: QuestionKind): FormQuestion => ({
 export interface QuestionBuilderProps {
   readonly questions: ReadonlyArray<FormQuestion>;
   readonly onChange: (questions: ReadonlyArray<FormQuestion>) => void;
+  readonly kinds?: ReadonlyArray<QuestionKind>;
+  readonly title?: string;
 }
 
 /** The builder's Questions tab: the list beside the selected question's settings. Delete collapses to "Deleted · Undo" for 6s. */
-export function QuestionBuilder({ questions, onChange }: QuestionBuilderProps) {
+export function QuestionBuilder({ questions, onChange, kinds, title }: QuestionBuilderProps) {
   const [selected, setSelected] = useState<string | undefined>(questions[0]?.id);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const [undo, setUndo] = useState<{ readonly question: FormQuestion; readonly index: number }>();
@@ -271,6 +278,8 @@ export function QuestionBuilder({ questions, onChange }: QuestionBuilderProps) {
         onAdd={(kind) => insert(blank(kind), questions.length)}
         freshIds={fresh}
         notice={notice}
+        kinds={kinds}
+        title={title}
       />
       <QuestionSettings question={questions.find((q) => q.id === selected)} onChange={(next) => onChange(questions.map((q) => (q.id === next.id ? next : q)))} onClose={() => setSelected(undefined)} />
     </div>
