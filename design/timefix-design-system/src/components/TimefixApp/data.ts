@@ -27,6 +27,14 @@ export interface Comment { readonly id: string; readonly record: RecordLink; rea
 /** A line on a record's timeline. */
 export interface Activity { readonly id: string; readonly record: RecordLink; readonly kind: 'created' | 'changed' | 'call' | 'meeting' | 'note' | 'task' | 'email' | 'form'; readonly actor: string; readonly text: string; readonly at: Date }
 
+/** A saved way to look at an object: its filters, sorts, columns and layout. Private views are only yours. */
+export interface SavedView {
+  readonly id: string; readonly name: string; readonly layout: 'table' | 'board';
+  readonly filters: ReadonlyArray<{ readonly id: string; readonly field: string; readonly operator: string; readonly values: ReadonlyArray<string> }>;
+  readonly sorts: ReadonlyArray<{ readonly field: string; readonly direction: 'ascending' | 'descending' }>;
+  readonly hidden: ReadonlyArray<string>; readonly isPrivate?: boolean;
+}
+
 /** The CRM side of the app. */
 export interface AppState {
   readonly me: string;
@@ -42,6 +50,7 @@ export interface AppState {
   /** Home's setup steps already done. */
   readonly setupDone: ReadonlyArray<string>;
   readonly setupHidden: boolean;
+  readonly views: Readonly<Record<ObjectId, ReadonlyArray<SavedView>>>;
 }
 
 export type AppAction =
@@ -59,7 +68,8 @@ export type AppAction =
   | { readonly type: 'comment/set'; readonly comment: Comment }
   | { readonly type: 'activity/add'; readonly activity: Activity }
   | { readonly type: 'setup/done'; readonly id: string }
-  | { readonly type: 'setup/hide'; readonly hidden: boolean };
+  | { readonly type: 'setup/hide'; readonly hidden: boolean }
+  | { readonly type: 'views/set'; readonly object: ObjectId; readonly views: ReadonlyArray<SavedView> };
 
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
@@ -86,6 +96,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'activity/add': return { ...state, activity: [a.activity, ...state.activity] };
     case 'setup/done': return state.setupDone.includes(a.id) ? state : { ...state, setupDone: [...state.setupDone, a.id] };
     case 'setup/hide': return { ...state, setupHidden: a.hidden };
+    case 'views/set': return { ...state, views: { ...state.views, [a.object]: a.views } };
   }
 }
 
@@ -184,7 +195,16 @@ export function northwindCrm(now = new Date()): AppState {
     act('a-5', 'people', 'p-pepper', 'form', 'Pepper Potts', 'sent the Contact us form', 11), act('a-6', 'deals', 'd-globex', 'changed', 'Sam Kim', 'changed the amount to ₹9,60,000', 2),
     act('a-7', 'companies', 'c-acme', 'created', 'Priya Raman', 'added Acme Corp', 90),
   ];
-  return { me, members, people, companies, deals, tasks, notes, inbox, comments, activity, setupDone: ['workspace', 'booking', 'link'], setupHidden: false };
+  return { me, members, people, companies, deals, tasks, notes, inbox, comments, activity, setupDone: ['workspace', 'booking', 'link'], setupHidden: false,
+    views: {
+      people: [{ id: 'v-p-all', name: 'All people', layout: 'table', filters: [], sorts: [], hidden: [] },
+        { id: 'v-p-mine', name: 'My people', layout: 'table', filters: [{ id: 'f1', field: 'owner', operator: 'is', values: [me] }], sorts: [{ field: 'lastContact', direction: 'descending' }], hidden: ['owner'], isPrivate: true },
+        { id: 'v-p-dm', name: 'Decision makers', layout: 'table', filters: [{ id: 'f2', field: 'tags', operator: 'contains', values: ['Decision maker'] }], sorts: [], hidden: [] }],
+      companies: [{ id: 'v-c-all', name: 'All companies', layout: 'table', filters: [], sorts: [{ field: 'name', direction: 'ascending' }], hidden: [] }],
+      deals: [{ id: 'v-d-pipe', name: 'Pipeline', layout: 'board', filters: [], sorts: [{ field: 'amount', direction: 'descending' }], hidden: [] },
+        { id: 'v-d-all', name: 'All deals', layout: 'table', filters: [], sorts: [{ field: 'close', direction: 'ascending' }], hidden: [] },
+        { id: 'v-d-mine', name: 'My open deals', layout: 'table', filters: [{ id: 'f3', field: 'owner', operator: 'is', values: [me] }, { id: 'f4', field: 'stage', operator: 'is not', values: ['Won', 'Lost'] }], sorts: [{ field: 'close', direction: 'ascending' }], hidden: ['owner'], isPrivate: true }],
+    } };
 }
 
 /** ₹18,40,000 (Indian grouping). */

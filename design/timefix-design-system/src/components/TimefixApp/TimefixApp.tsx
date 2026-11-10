@@ -11,6 +11,8 @@ import { ToastProvider } from '../Toast/Toast.tsx';
 import { BookingsFlow, type BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { appReducer, northwindCrm, type AppState, type ObjectId } from './data.ts';
 import { HomeScreen } from './home.tsx';
+import { RecordsScreen } from './records.tsx';
+import { RecordPage } from './record.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -47,8 +49,10 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [bookings, setBookings] = useState<BookingsState>();
   const [openTab, setOpenTab] = useState<{ readonly tab: string; readonly n: number }>();
   const [search, setSearch] = useState(false);
+  const [record, setRecord] = useState<{ readonly object: ObjectId; readonly id: string }>();
   useCommandK(() => setSearch(true));
-  const go = (p: AppPage) => setPage(p);
+  const go = (p: AppPage) => { setPage(p); setRecord(undefined); };
+  const openRecord = (object: ObjectId, id: string) => { setPage(`records:${object}`); setRecord({ object, id }); };
   const openBookings = (tab: string) => { setOpenTab((o) => ({ tab, n: (o?.n ?? 0) + 1 })); setPage('bookings'); };
   const unread = state.inbox.filter((x) => !x.read && !x.done).length;
   const myOpen = state.tasks.filter((t) => !t.done && t.assignee === state.me).length;
@@ -68,7 +72,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     setSearch(false);
     const [kind, rest] = id.split(':') as [string, string];
     if (kind === 'go') { if (rest === 'bookings') openBookings('meetings'); else go(rest as AppPage); }
-    else if (kind === 'people' || kind === 'companies' || kind === 'deals') go(`records:${kind}`);
+    else if (kind === 'people' || kind === 'companies' || kind === 'deals') openRecord(kind, rest);
     else if (id === 'new:booking') openBookings('pages');
     else if (id === 'new:person') go('records:people');
     else if (id === 'new:task') go('tasks');
@@ -104,6 +108,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         actions={<Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>} />
       <div className="tf-app__body">
         {page === 'home' ? <HomeScreen state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} />
+          : record ? <RecordPage key={`${record.object}-${record.id}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={() => setRecord(undefined)} onOpen={openRecord} />
+          : page.startsWith('records:') ? <RecordsScreen key={page} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord} />
           : <Rebuilding page={page} onHome={() => go('home')} />}
       </div>
     </>
