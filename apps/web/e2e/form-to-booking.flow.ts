@@ -10,6 +10,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 import { firstRun } from './people.ts';
+import { PICKED_TIME } from './booking-pages.ts';
 
 /** Signs a new person in through Mailpit and names their workspace, patient with a busy machine. */
 async function newWorkspace(page: Page, email: string, slug: string): Promise<void> {
@@ -119,7 +120,7 @@ test.describe('a form that sends its visitor on to book', () => {
       .getByRole('button')
       .first()
       .click();
-    await visitor.getByRole('button', { name: /^Book / }).click();
+    await visitor.getByRole('button', { name: PICKED_TIME }).click();
     await expect(visitor.getByText('Booking as Ada Lovelace.')).toBeVisible();
     // The booking's bot check wants a human's pace too.
     await visitor.waitForTimeout(3_500);

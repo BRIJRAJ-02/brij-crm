@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { chromium, expect, test, webkit, type Browser, type Page } from '@playwright/test';
 import { baseOf, makeOwner, rpc, uuidv7, type Owner } from './forms-qa.ts';
 import { checkScreen } from './people.ts';
+import { PICKED_TIME } from './booking-pages.ts';
 
 const HUMAN_PACE_MS = 3_500;
 let owner: Owner;
@@ -61,7 +62,7 @@ test.describe('the public booking page, accessible', () => {
     await expect(timesList(visitor)).toBeVisible({ timeout: 30_000 });
     await checkScreen(visitor, 'booking-calendar');
     await timesList(visitor).getByRole('button').first().click();
-    await visitor.getByRole('button', { name: /^Book / }).click();
+    await visitor.getByRole('button', { name: PICKED_TIME }).click();
     await expect(visitor.getByLabel('Your name')).toBeVisible();
     await checkScreen(visitor, 'booking-details');
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
@@ -104,8 +105,8 @@ test.describe('the public booking page, accessible', () => {
     await visitor.keyboard.press('Enter');
     steps.push(`after a time: ${await focused(visitor)}`);
     // B-14, fixed (bookings fix lane P): the day's times are one tab stop with the arrows between them, and Enter on
-    // a time picks it and puts focus on Book, as Cal.com moves on at once.
-    const book = visitor.getByRole('button', { name: /^Book / });
+    // a time picks it and puts focus on the bar's Next (it was Book), as Cal.com moves on at once.
+    const book = visitor.getByRole('button', { name: PICKED_TIME });
     await expect(book).toBeFocused();
     steps.push('Tab stops from the chosen time to Book: 0');
     await visitor.keyboard.press('Enter');
@@ -160,7 +161,7 @@ test.describe('the public booking page on a phone', () => {
       await month(page).getByRole('button', { disabled: false }).first().tap();
     }
     await timesList(page).getByRole('button').first().tap();
-    const book = page.getByRole('button', { name: /^Book / });
+    const book = page.getByRole('button', { name: PICKED_TIME });
     if (await book.isVisible()) await book.tap();
     await page.getByLabel('Your name').fill('Pat Phone');
     await page.getByLabel('Email').fill(`pat-${randomUUID().slice(0, 6)}@example.com`);
@@ -205,7 +206,7 @@ test.describe('the public booking page on a phone', () => {
       await month(page).getByRole('button', { disabled: false }).first().tap();
     }
     await timesList(page).getByRole('button').first().tap();
-    const book = page.getByRole('button', { name: /^Book / });
+    const book = page.getByRole('button', { name: PICKED_TIME });
     if (await book.isVisible()) await book.tap();
     await expect(page.getByLabel('Your name')).toBeVisible();
     const sizes = await page

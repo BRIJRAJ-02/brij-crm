@@ -5,6 +5,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
+import { PICKED_TIME, shareAddress } from './booking-pages.ts';
 
 /** The booking page's bot check wants a human's pace before Confirm. */
 const HUMAN_PACE_MS = 3_500;
@@ -36,9 +37,8 @@ async function withBooking(page: Page, kind: string, browser: Browser) {
     timeZone: 'UTC',
     mutationId: randomUUID(),
   });
-  // The live link, as the editor's Share tab opens it (the bookings area, 4 November 2026).
-  await page.goto(`/w/${slug}/captures/links/${made.id}?tab=share`);
-  const address = (await page.getByRole('link', { name: 'Open', exact: true }).getAttribute('href')) ?? '';
+  // The live link, as the editor's Share section shows it (a new page is live at once).
+  const address = await shareAddress(page, `/w/${slug}/captures/links/${made.id}`);
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const visitor = await context.newPage();
   await visitor.goto(address);
@@ -47,7 +47,7 @@ async function withBooking(page: Page, kind: string, browser: Browser) {
     .getByRole('button')
     .first()
     .click();
-  await visitor.getByRole('button', { name: /^Book / }).click();
+  await visitor.getByRole('button', { name: PICKED_TIME }).click();
   await visitor.getByLabel('Your name').fill('Dana Dragger');
   await visitor.getByLabel('Email').fill(`dana-${tag}@example.com`);
   await visitor.waitForTimeout(HUMAN_PACE_MS);
@@ -60,10 +60,10 @@ async function withBooking(page: Page, kind: string, browser: Browser) {
 /** Opens the week holding the booking, and answers its block. */
 async function openWeek(page: Page, slug: string) {
   await page.goto(`/w/${slug}/bookings/calendar`);
-  // The booking may be in a later week: the empty week offers the way to it.
+  // The booking may be in a later week: the empty week offers the way to it. Its block is named by the guest first.
   const next = page.getByRole('button', { name: /^Next booking/ });
   if (await next.isVisible({ timeout: 4_000 }).catch(() => false)) await next.click();
-  const block = page.getByRole('button', { name: /^Intro call/ }).first();
+  const block = page.getByRole('button', { name: /^Dana Dragger, / }).first();
   await expect(block).toBeVisible({ timeout: 15_000 });
   return block;
 }
@@ -90,11 +90,11 @@ test.describe('moving a booking on the week', () => {
     await expect(block).toHaveAttribute('data-moving', 'true');
     await page.mouse.up();
     await expect(page.getByText('Moved. Dana Dragger is emailed the new time.')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /^Intro call/ }).first()).not.toHaveAttribute('aria-label', was);
+    await expect(page.getByRole('button', { name: /^Dana Dragger, / }).first()).not.toHaveAttribute('aria-label', was);
     // One click puts it back, and says the guest is told again.
     await page.getByRole('button', { name: 'Undo' }).click();
     await expect(page.getByText('Put back. Dana Dragger is emailed.')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /^Intro call/ }).first()).toHaveAttribute('aria-label', was);
+    await expect(page.getByRole('button', { name: /^Dana Dragger, / }).first()).toHaveAttribute('aria-label', was);
   });
 
   test('dragging its foot changes the length, and the toast says only the length changed', async ({
@@ -132,7 +132,7 @@ test.describe('moving a booking on the week', () => {
     await expect(page.getByRole('status').filter({ hasText: /^Moving to |isn’t free$/ })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('status').filter({ hasText: 'Put back' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Intro call/ }).first()).toHaveAttribute('aria-label', was);
+    await expect(page.getByRole('button', { name: /^Dana Dragger, / }).first()).toHaveAttribute('aria-label', was);
     // Day later, then Enter: sent, with Undo.
     await page.keyboard.press('Alt+ArrowRight');
     await page.keyboard.press('Enter');
@@ -178,19 +178,22 @@ test.describe('moving a booking on the week', () => {
     const slug = `region-${tag}`;
     await newWorkspace(page, `region-${tag}@example.com`, slug);
     await page.goto(`/w/${slug}/settings/general`);
-    await page.getByRole('button', { name: /^Currency/ }).click();
-    await page.getByRole('searchbox', { name: 'Search currencies' }).fill('rupee');
+    // A Select's button is named by its value, then its label ("Automatic Currency"); its "About" button is not it.
+    const currency = page.getByRole('button', { name: /^(?!About ).*Currency$/ });
+    const country = page.getByRole('button', { name: /^(?!About ).*Country$/ });
+    await currency.click();
+    await page.getByRole('textbox', { name: 'Search currencies' }).fill('rupee');
     await page.getByRole('option', { name: /Indian Rupee/ }).click();
     await expect(page.getByText('Currency is now INR.')).toBeVisible();
-    await page.getByRole('button', { name: /^Country/ }).click();
-    await page.getByRole('searchbox', { name: /^Search country/ }).fill('india');
+    await country.click();
+    await page.getByRole('textbox', { name: /^Search countr/ }).fill('india');
     await page.getByRole('option', { name: /^India/ }).click();
     await expect(page.getByText('Country is now IN.')).toBeVisible();
     // Undo takes the country back to Automatic.
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(page.getByRole('button', { name: /^Country/ })).toContainText('Automatic');
+    await expect(country).toContainText('Automatic');
     // It stays after a reload.
     await page.reload();
-    await expect(page.getByRole('button', { name: /^Currency/ })).toContainText('Indian Rupee');
+    await expect(currency).toContainText('Indian Rupee');
   });
 });

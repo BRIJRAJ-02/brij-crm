@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { codeFor, MAILPIT_URL } from './mailpit.ts';
 import { checkScreen, firstRun } from './people.ts';
+import { PICKED_TIME, setPageStatus, shareAddress } from './booking-pages.ts';
 
 /** The booking page's bot check wants a human's pace before Confirm. */
 const HUMAN_PACE_MS = 3_500;
@@ -108,7 +109,8 @@ test.describe('a team link', () => {
     await dialog.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
 
-    // The draft's phone shows the page, under its own title: never Page not found, never the workspace as a host.
+    const editor = page.url().split('?')[0] ?? '';
+    // The phone shows the page, under its own title: never Page not found, never the workspace as a host.
     const phone = page.frameLocator('iframe[title]');
     await expect(phone.getByRole('heading', { level: 1, name: 'Team Link', exact: true })).toBeVisible({
       timeout: 20_000,
@@ -122,10 +124,12 @@ test.describe('a team link', () => {
     ).toBeVisible();
     await checkScreen(page, 'team-link-editor-draft');
 
-    // Hosts comes straight after Page, and says who can be booked, whose calendar is missing, and nothing to add.
-    const tabs = page.getByRole('tablist').getByRole('tab');
-    await expect(tabs.nth(1)).toHaveText('Hosts');
-    await page.getByRole('tab', { name: 'Hosts', exact: true }).click();
+    // Hosts comes straight after Details, and says who can be booked, whose calendar is missing, and nothing to add.
+    const sections = page.getByRole('navigation', { name: 'Page sections' });
+    await expect(sections.getByRole('link').nth(1)).toHaveText('Hosts');
+    await sections.getByRole('link', { name: 'Hosts', exact: true }).click();
+    // Who can be booked opens under the team's "N of M bookable" (the redesign's Hosts).
+    await page.getByRole('button', { name: '2 of 2 bookable' }).click();
     const who = page.getByRole('grid', { name: 'Who can be booked' });
     await expect(who.getByRole('row', { name: /Brij Raj/ })).toContainText('No calendar');
     await expect(who.getByRole('row', { name: /Grace/ })).toContainText('On');
@@ -134,19 +138,14 @@ test.describe('a team link', () => {
     await checkScreen(page, 'team-link-hosts');
 
     // The rest of a team page says what is true of it.
-    await page.getByRole('tab', { name: 'Availability', exact: true }).click();
+    await sections.getByRole('link', { name: 'Hours and limits', exact: true }).click();
     await expect(page.getByRole('link', { name: 'See everyone’s hours' })).toBeVisible();
-    await page.getByRole('tab', { name: 'Meeting', exact: true }).click();
+    await sections.getByRole('link', { name: 'Details', exact: true }).click();
     await expect(page.getByText('Add bookings to')).toHaveCount(0);
 
-    // Publish, then the link.
-    await page.getByRole('tab', { name: 'Page', exact: true }).click();
-    await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const live = page.getByRole('dialog', { name: /is live$/ });
-    await expect(live).toBeVisible({ timeout: 15_000 });
-    await live.getByRole('button', { name: 'Done' }).click();
-    await expect(page.getByText('Live', { exact: true }).first()).toBeVisible();
-    const address = await page.getByRole('textbox', { name: 'Web address' }).inputValue();
+    // Live at once (no draft or Publish since 9 November 2026), and its Share section has the link.
+    await expect(page.getByRole('button', { name: 'Live, status of Team Link' })).toBeVisible();
+    const address = await shareAddress(page, editor);
 
     // The guest: the page's own title in the rail and the tab.
     const guestContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -163,7 +162,7 @@ test.describe('a team link', () => {
       .getByRole('button')
       .first()
       .click();
-    await guest.getByRole('button', { name: /^Book / }).click();
+    await guest.getByRole('button', { name: PICKED_TIME }).click();
     await guest.getByLabel('Your name').fill('Vera Visitor');
     await guest.getByLabel('Email').fill(`vera-${tag}@example.com`);
     await guest.waitForTimeout(HUMAN_PACE_MS);
@@ -171,7 +170,7 @@ test.describe('a team link', () => {
     await expect(guest).toHaveURL(/\/manage\?/, { timeout: 30_000 });
     await expect(guest.getByText('You’re booked')).toBeVisible();
     await expect(guest.getByText(/with (Brij Raj|Grace)/).first()).toBeVisible();
-    await guest.getByRole('button', { name: 'Move to another time' }).click();
+    await guest.getByRole('button', { name: 'Reschedule' }).click();
     await guest
       .getByRole('list', { name: /^Times on / })
       .getByRole('button')
@@ -181,18 +180,16 @@ test.describe('a team link', () => {
     await expect(guest.getByText('Moved.')).toBeVisible({ timeout: 15_000 });
 
     // The page's own Bookings has it.
-    await page.getByRole('tab', { name: 'Bookings', exact: true }).click();
+    await sections.getByRole('link', { name: 'Bookings', exact: true }).click();
     await expect(page.getByText('Vera Visitor').first()).toBeVisible({ timeout: 15_000 });
 
-    await guest.getByRole('button', { name: 'Cancel booking' }).click();
+    await guest.getByRole('button', { name: 'Cancel', exact: true }).click();
     await guest.getByRole('button', { name: 'Cancel booking' }).last().click();
-    await expect(guest.getByRole('button', { name: 'Move to another time' })).toBeHidden({ timeout: 15_000 });
+    await expect(guest.getByRole('button', { name: 'Reschedule' })).toBeHidden({ timeout: 15_000 });
 
-    // Paused, the guest reads that it isn't taking bookings. A group can only be emptied while its page is paused.
-    const editor = page.url().split('?')[0] ?? '';
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'Pause' }).click();
-    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    // Hidden (the old Pause), the guest reads that it isn't taking bookings. A group can only be emptied while its
+    // page is hidden.
+    await setPageStatus(page, 'Team Link', 'Hidden');
     await guest.goto(address);
     await expect(guest.getByText(/isn’t taking bookings|Nothing is bookable/).first()).toBeVisible();
 
@@ -218,12 +215,14 @@ test.describe('a team link', () => {
 
     // Taking bookings again with nobody to book is refused, and says why.
     await page.goto(editor);
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'Resume' }).click();
+    await page.getByRole('button', { name: 'Hidden, status of Team Link' }).click();
+    await page.getByRole('menuitemradio', { name: /^Live/ }).click();
     await expect(page.getByText('Nobody is switched on in Team Link').first()).toBeVisible();
-    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hidden, status of Team Link' })).toBeVisible();
     await checkScreen(page, 'team-link-resume-refused');
     await guestContext.close();
+    // The refusal stays until dismissed (a danger toast has no timer); dismissed, the next toast shows.
+    await page.getByRole('region', { name: 'Notifications' }).getByRole('button', { name: 'Dismiss' }).click();
 
     // Delete asks nothing (Undo deletes stay one click): back on Pages, the card is gone and Undo brings it back.
     await page.getByRole('button', { name: 'More actions' }).click();
