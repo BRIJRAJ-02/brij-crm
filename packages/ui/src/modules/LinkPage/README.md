@@ -156,3 +156,5 @@ Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
 ## The v5 mock's profile (10 November 2026)
 
 The person's networks sit under the bio, centred with the header, and Share and Save contact are an equal pair of bordered buttons (Share first). A booking page's row is its tile, the title over its lengths ("15, 30 or 60 min"), its next open time quietly at the end ("Next Tue 10 Nov, 3:00 pm", read once the row nears the screen through `onTimesNear`, as a next times block's are; left out under 700px), and the chevron, which nudges on under the pointer as the border steps up; the row eases to 0.99 while held.
+
+The row's press eases to 0.99 (`--row-press`, a literal behind a stylelint note): the owner's approved v5 brief names it for this row, the same public pages' exception to "nothing shrinks on press" that BookingDetails' and BookingFrame's 0.97 carry. A token for it is owed to the artifact. The next time's breakpoint is the page's own viewport (`NEXT_HIDDEN`, 700px): the editor's preview never reads times, so it never shows one.

@@ -15,7 +15,7 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { answerOf, focusQuestion, Question } from '../../public-form/Question.tsx';
 import { prefillAnswer } from '../../public-form/use-hosted-form.ts';
 import { InviteRows } from '../InviteRows/InviteRows.tsx';
-import type { InviteRow } from '../InviteRows/invite-rows.ts';
+import { createInviteRow, type InviteRow } from '../InviteRows/invite-rows.ts';
 import styles from './BookingDetails.module.css';
 import { strings } from './strings.ts';
 
@@ -48,6 +48,8 @@ export interface BookingDetailsDraft {
   readonly note: string;
   /** The page's own questions' answers, by key, as their controls hold them. */
   readonly answers: Readonly<Record<string, unknown>>;
+  /** The guests' rows as typed, blanks too, in order (left out by a page that invites nobody). */
+  readonly guests?: readonly string[];
 }
 
 /** What sending the details answered, as the page's client words it. */
@@ -244,7 +246,9 @@ export function BookingDetails({
   const [phone, setPhone] = useState(draft?.phone ?? '');
   // Guests are rows, one email each with its × (the owner, 9 November 2026: "more guests should be added, instead of
   // just one"), as New meeting and the guest's own page add them. Blank rows are never sent.
-  const [guestRows, setGuestRows] = useState<readonly InviteRow[]>([]);
+  const [guestRows, setGuestRows] = useState<readonly InviteRow[]>(() =>
+    (draft?.guests ?? []).map((email) => createInviteRow(undefined, email)),
+  );
   const [guestNote, setGuestNote] = useState('');
   const [note, setNote] = useState(draft?.note ?? '');
   const [trap, setTrap] = useState('');
@@ -307,8 +311,8 @@ export function BookingDetails({
     draftTo.current = onDraft;
   });
   useEffect(() => {
-    draftTo.current?.({ name, email, phone, note, answers: held });
-  }, [name, email, phone, note, held]);
+    draftTo.current?.({ name, email, phone, note, answers: held, guests: guestRows.map((row) => row.email) });
+  }, [name, email, phone, note, held, guestRows]);
   const form = useRef<HTMLFormElement>(null);
   const headingId = useId();
   const trapId = useId();
@@ -341,6 +345,12 @@ export function BookingDetails({
     });
   })();
   const changeGuests = (next: readonly InviteRow[]) => {
+    // A row's own error goes as that row is typed in.
+    const typedIn = next.findIndex((row, index) => {
+      const before = guestRows[index];
+      return before !== undefined && before.id === row.id && before.email !== row.email;
+    });
+    if (typedIn !== -1) clear(`guest-${String(typedIn)}`);
     if (next.length !== guestRows.length) {
       const gone = guestRows.find((row) => !next.some((each) => each.id === row.id));
       setGuestNote(gone === undefined || gone.email.trim() === '' ? '' : strings.guestRemoved(gone.email.trim()));
@@ -654,10 +664,11 @@ export function BookingDetails({
           onChange={(event) => setTrap(event.target.value)}
         />
       </div>
-      <p className={styles.line} role="alert">
-        {line}
-      </p>
       <div className={styles.actions} data-shake={shakeOf('actions')}>
+        {/* What went wrong rides with the buttons, so on a phone it stays in sight with the held band. */}
+        <p className={styles.line} role="alert">
+          {line}
+        </p>
         {/* One foot band on both steps (critic C6): Back a secondary of Confirm's size, Confirm Book's own bar; a one
             page form (a reservation's) has no Back. */}
         {onBack !== undefined && (

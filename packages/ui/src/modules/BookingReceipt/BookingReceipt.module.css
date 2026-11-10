@@ -98,7 +98,8 @@
     vertical-align: middle;
   }
 
-  .top:not([data-state='confirmed'], [data-state='requested']) .headline {
+  /* Struck through only when it won't happen; a meeting that has simply passed keeps its time plain. */
+  .top:is([data-state='cancelled'], [data-state='declined']) .headline {
     color: var(--text-secondary);
     text-decoration: line-through;
   }

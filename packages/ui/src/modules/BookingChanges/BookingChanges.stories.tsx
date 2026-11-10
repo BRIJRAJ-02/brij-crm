@@ -110,19 +110,23 @@ export const RemoveFailed: Story = {
   },
 };
 
-/** A row that isn't an address is named under itself on Enter, and nothing is sent. */
+/** A row that isn't an address, or someone already on it, is named under itself, and nothing is sent. */
 export const GuestInvalid: Story = {
   parameters: { crm: { screenshot: false } },
+  args: { guests: ['ann@navy.example'] },
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
     // Nothing typed: Invite waits, rather than saying what's missing.
     await expect(canvas.getByRole('button', { name: 'Invite' })).toBeDisabled();
     await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 1 email' }), 'not an email');
-    await userEvent.click(canvas.getByRole('button', { name: 'Add another guest' }));
-    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 2 email' }), 'bob@navy.example');
+    // Any text makes Invite live, so a typo is answered rather than met with a pale button.
     await userEvent.click(canvas.getByRole('button', { name: 'Invite' }));
     await expect(canvas.getByText('Give an email address such as name@example.com.')).toBeInTheDocument();
+    await userEvent.clear(canvas.getByRole('textbox', { name: 'New guest 1 email' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 1 email' }), 'ann@navy.example');
+    await userEvent.click(canvas.getByRole('button', { name: 'Invite' }));
+    await expect(canvas.getByText('Already invited.')).toBeInTheDocument();
     await expect(args.onInvite).not.toHaveBeenCalled();
   },
 };

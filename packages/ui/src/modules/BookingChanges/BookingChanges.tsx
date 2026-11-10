@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { PersonLine } from '../../molecules/PersonLine/PersonLine.tsx';
 import { InviteRows } from '../InviteRows/InviteRows.tsx';
 import { createInviteRow, type InviteRow } from '../InviteRows/invite-rows.ts';
 import styles from './BookingChanges.module.css';
@@ -86,6 +86,9 @@ export interface BookingChangesProps {
    */
   readonly isOnCalendar?: boolean;
 }
+
+/** A guest's line has nothing under the address. */
+const NO_META: readonly string[] = [];
 
 /** A rough email shape; the server checks it properly. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -260,13 +263,28 @@ function GuestsPanel({
     return [{ row, email }];
   });
   const toInvite = picked.slice(0, room);
+  // Invite is live once any row holds text: a row it can't send says why under itself rather than leaving a pale button.
+  const hasText = rows.some((row) => row.email.trim() !== '');
+  /** Each filled row's problem: not an address, or someone already on it (said, never dropped in silence). */
+  const rowProblems = (): Record<string, string> => {
+    const onIt = new Set(guests.map((guest) => guest.toLowerCase()));
+    return Object.fromEntries(
+      rows.flatMap((row): (readonly [string, string])[] => {
+        const email = row.email.trim().toLowerCase();
+        if (email === '') return [];
+        if (!EMAIL.test(email)) return [[row.id, strings.guestInvalid]];
+        if (onIt.has(email)) return [[row.id, strings.alreadyOn]];
+        return [];
+      }),
+    );
+  };
 
   const invite = async () => {
     if (isAdding) return;
-    // A filled row that isn't an address says so under itself, and nothing goes until it is fixed or removed.
-    const wrong = rows.find((row) => row.email.trim() !== '' && !EMAIL.test(row.email.trim()));
-    if (wrong !== undefined) {
-      setErrors({ [wrong.id]: strings.guestInvalid });
+    // A filled row that can't go says so under itself, and nothing goes until it is fixed or removed.
+    const problems = rowProblems();
+    if (Object.keys(problems).length > 0) {
+      setErrors(problems);
       return;
     }
     if (toInvite.length === 0) return;
@@ -283,6 +301,9 @@ function GuestsPanel({
       globalThis.requestAnimationFrame(() => title.current?.focus());
     } else if (outcome.kind === 'invalid') {
       const at = toInvite[outcome.index ?? 0] ?? toInvite[0];
+      // The rows sent before the refused one went: they leave, so only what is still to send stays.
+      const sent = new Set(toInvite.slice(0, outcome.index ?? 0).map((each) => each.row.id));
+      if (sent.size > 0) setRows((current) => current.filter((row) => !sent.has(row.id)));
       if (at === undefined) setFailure(outcome.message);
       else setErrors({ [at.row.id]: outcome.message });
     } else setFailure(outcome.message);
@@ -310,22 +331,27 @@ function GuestsPanel({
       {guests.length > 0 && (
         <ul className={styles.guestList} aria-label={strings.invitedList}>
           {guests.map((guest) => (
-            <li key={guest} className={styles.guest}>
-              <Avatar name={guest} size="sm" isDecorative />
-              <span className={styles.guestEmail} title={guest}>
-                {guest}
-              </span>
-              <Button
-                variant="ghost"
-                label={strings.remove(guest)}
-                onPress={() => {
-                  setStatus('');
-                  setFailure('');
-                  setConfirming(guest);
-                }}
-              >
-                {strings.removeShort}
-              </Button>
+            <li key={guest}>
+              {/* One person as a line (PersonLine): the initial, the address cut with its tooltip, Remove at the end. */}
+              <PersonLine
+                id={guest}
+                name={guest}
+                meta={NO_META}
+                size="sm"
+                end={
+                  <Button
+                    variant="ghost"
+                    label={strings.remove(guest)}
+                    onPress={() => {
+                      setStatus('');
+                      setFailure('');
+                      setConfirming(guest);
+                    }}
+                  >
+                    {strings.removeShort}
+                  </Button>
+                }
+              />
             </li>
           ))}
         </ul>
@@ -338,7 +364,18 @@ function GuestsPanel({
           rows={rows}
           onChange={(next) => {
             setRows(next);
-            setErrors({});
+            // A row's problem goes once that row changes; the others keep theirs.
+            setErrors((current) =>
+              Object.fromEntries(
+                Object.entries(current).filter(([id, _]) =>
+                  next.some((row) => row.id === id && rows.find((each) => each.id === id)?.email === row.email),
+                ),
+              ),
+            );
+          }}
+          onBlurRow={(id) => {
+            const problem = rowProblems()[id];
+            if (problem !== undefined) setErrors((current) => ({ ...current, [id]: problem }));
           }}
           max={room}
           fieldSize="lg"
@@ -351,12 +388,12 @@ function GuestsPanel({
             first: strings.addGuests,
             another: strings.addAnother,
             rowLabel: strings.newGuestRow,
-            full: strings.full(maxGuests),
+            full: strings.roomLeft(room),
             action: (
               <Button
                 variant="primary"
                 size="lg"
-                isDisabled={toInvite.length === 0}
+                isDisabled={!hasText}
                 isPending={isAdding}
                 onPress={() => void invite()}
               >

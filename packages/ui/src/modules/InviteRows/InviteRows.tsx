@@ -258,7 +258,7 @@ export function InviteRows({
       {isFull ? (
         <span className={styles.limit}>
           {guests === undefined ? strings.atMost(max) : guests.full}
-          {guests?.action}
+          {guests?.action !== undefined && <span className={styles.action}>{guests.action}</span>}
         </span>
       ) : (
         <span className={styles.add} data-first={guests !== undefined && rows.length === 0 ? '' : undefined}>

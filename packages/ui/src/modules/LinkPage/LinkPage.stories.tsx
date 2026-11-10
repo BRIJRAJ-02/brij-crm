@@ -220,6 +220,44 @@ export const OneBlock: Story = {
   },
 };
 
+/**
+ * Booking page rows with their next open time (the v5 mock): read once a row nears the screen (`onTimesNear`), shown
+ * quietly at the row's end, left out on a phone; waiting, failed or with no time in two weeks, the row simply has none.
+ */
+export const PageRowNextTime: Story = {
+  args: {
+    person: { name: 'Ada Lovelace', id: 'ada' },
+    onTimesNear: fn(),
+    blocks: [
+      {
+        kind: 'page',
+        id: 'intro',
+        title: 'Intro call',
+        href: '/ada/intro-call',
+        facts: '15, 30 or 60 min',
+        times: { status: 'ready', starts: ['2026-10-09T14:00:00.000Z'] },
+      },
+      { kind: 'page', id: 'demo', title: 'Product demo', href: '/ada/demo', facts: '45 min' },
+      {
+        kind: 'page',
+        id: 'office',
+        title: 'Office hours',
+        href: '/ada/office',
+        facts: '30 min',
+        times: { status: 'ready', starts: [] },
+      },
+    ],
+  },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByText(/^Next /)).toBeInTheDocument();
+    // The row still waiting asks for its times as it nears the screen (not on a phone, which leaves the time out);
+    // the two that have them never ask.
+    if (!globalThis.matchMedia('(width < 700px)').matches)
+      await waitFor(() => expect(args.onTimesNear).toHaveBeenCalledWith('demo'));
+    await expect(args.onTimesNear).not.toHaveBeenCalledWith('intro');
+  },
+};
+
 /** Writing between the rows: the person's own words, with their line breaks kept and nothing to press. */
 export const Writing: Story = {
   args: {

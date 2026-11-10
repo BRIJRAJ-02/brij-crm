@@ -34,6 +34,10 @@ export const strings = {
   invitedSome: (emails: readonly string[]) =>
     emails.length === 1 ? `Invited ${emails[0] ?? ''}.` : `Invited ${String(emails.length)} guests.`,
   alreadyOnAll: 'They’re already invited.',
+  /** Under a row whose address is on the booking already. */
+  alreadyOn: 'Already invited.',
+  /** In place of Add another guest once the rows fill the room left: "One more guest fits." */
+  roomLeft: (room: number) => (room === 1 ? 'One more guest fits.' : `${String(room)} more guests fit.`),
   removed: (email: string) => `Removed ${email}.`,
   removeTitle: (email: string) => `Remove ${email}?`,
   removeText: 'They come off the invite, and you can add them again afterwards.',
