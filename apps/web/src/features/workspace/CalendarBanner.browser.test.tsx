@@ -53,7 +53,7 @@ describe('the stopped calendar banner', () => {
       max: 6,
       connections: [stopped('microsoft')],
     });
-    await expect.element(page.getByText('Your Outlook calendar stopped syncing.')).toBeVisible();
+    await expect.element(page.getByText('Your Outlook calendar needs reconnecting.')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Reconnect' }));
     expect(connectUrl).toHaveBeenCalledWith('acme', 'settings', 'microsoft');
   });
