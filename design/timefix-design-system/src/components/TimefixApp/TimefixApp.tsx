@@ -9,7 +9,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { CommandPalette, ShortcutHelp, useCommandK, type CommandItem } from '../CommandPalette/CommandPalette.tsx';
 import { ToastProvider, useToast } from '../Toast/Toast.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
-import { BookingsFlow, type BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
+import { BookingsFlow, type BookingsAction, type BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
 import { appReducer, liveEntries, newId, northwindCrm, type AppAction, type AppState, type ObjectId } from './data.ts';
 import { HomeScreen } from './home.tsx';
 import { RecordsScreen } from './records.tsx';
@@ -67,8 +67,12 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   }, []);
   const [page, setPage] = useState<AppPage>(start);
   const [bookings, setBookings] = useState<BookingsState>();
+  /** Bookings changes made from Settings, applied inside Bookings in order. */
+  const [bookingsCmds, setBookingsCmds] = useState<ReadonlyArray<{ readonly seq: number; readonly action: BookingsAction }>>([]);
+  const toBookings = (action: BookingsAction) => setBookingsCmds((q) => [...q, { seq: (q[q.length - 1]?.seq ?? 0) + 1, action }]);
   const [openTab, setOpenTab] = useState<{ readonly tab: string; readonly n: number; readonly meetingId?: string }>();
   const [search, setSearch] = useState(false);
+  const searchButton = <Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>;
   const [help, setHelp] = useState(false);
   const [newList, setNewList] = useState(false);
   const [door, setDoor] = useState<Door>();
@@ -141,7 +145,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const pagesToGo: ReadonlyArray<{ readonly id: string; readonly label: string; readonly icon: ReactNode; readonly keywords?: string }> = [
     ...(['home', 'inbox', 'tasks', 'notes'] as const).map((id) => ({ id, label: TITLES[id]?.label ?? id, icon: TITLES[id]?.icon })),
     ...OBJECTS.map((o) => ({ id: `records:${o.id}`, label: o.label, icon: o.icon })),
-    ...state.objects.filter((o) => o.custom).map((o) => ({ id: `object:${o.id}`, label: o.many, icon: <Boxes {...i16} /> })),
+    ...state.objects.filter((o) => o.custom && !o.archived).map((o) => ({ id: `object:${o.id}`, label: o.many, icon: <Boxes {...i16} /> })),
     ...state.lists.filter((l) => !l.archived).map((l) => ({ id: `list:${l.id}`, label: l.name, icon: <ListChecks {...i16} />, keywords: 'list' })),
     ...(['links', 'link', 'forms', 'insights', 'settings'] as const).map((id) => ({ id, label: TITLES[id]?.label ?? id, icon: TITLES[id]?.icon, keywords: id === 'links' ? 'share qr copy' : undefined })),
   ];
@@ -200,7 +204,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       {!hiddenNav.has('notes') && <NavItem label="Notes" icon={<NotebookPen {...i16} />} isCurrent={page === 'notes'} onPress={() => go('notes')} />}
       <NavSection title="Records" addLabel="New object" onAdd={() => openSettings('objects:new')}>
         {OBJECTS.map((o) => <NavItem key={o.id} label={o.label} icon={o.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />)}
-        {state.objects.filter((o) => o.custom).map((o) => <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />)}
+        {state.objects.filter((o) => o.custom && !o.archived).map((o) => <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />)}
       </NavSection>
       {!hiddenNav.has('lists') && <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
         {state.lists.filter((l) => !l.archived).map((l) => <NavItem key={l.id} label={l.name} icon={<ListChecks {...i16} />} count={liveEntries(state, l).length || undefined} isCurrent={page === `list:${l.id}`} onPress={() => go(`list:${l.id}`)} />)}
@@ -224,7 +228,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
     : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} newFor={taskFor} />
     : page === 'notes' ? <NotesScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} openNote={launch?.kind === 'note' ? launch.value : undefined} />
-    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
+    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} bookings={bookings} onBookingsAction={toBookings} onImport={() => { go('records:people'); setSub('import'); }} onLinkPage={() => go('link')} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
     : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} onBack={() => go('links')} />
     : page === 'links' ? <LinksScreen state={state} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
@@ -239,7 +243,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const content: ReactNode = page === 'bookings' ? undefined : (
     <>
       <TopBar title={<span className="tf-app__title">{head?.icon}{head?.label}</span>}
-        actions={<Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>} />
+        actions={searchButton} />
       <div className="tf-app__body">
         {sub === 'import' ? <ImportScreen key={page} state={state} dispatch={dispatch} object={page === 'records:companies' ? 'companies' : 'people'} onDone={() => setSub(undefined)} />
           : sub === 'dupes' ? <DuplicatesScreen state={state} dispatch={dispatch} object={page === 'records:companies' ? 'companies' : 'people'} onDone={() => setSub(undefined)} />
@@ -258,7 +262,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     <>
       {state.previewRole && <div className="tf-app__preview tf-app__preview--fixed" role="status"><span>Previewing as a {state.previewRole.toLowerCase()}: you see what they see and can only do what they can.</span><Button size="sm" variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></div>}
       <div className="tf-app__keep" inert={door !== undefined || undefined}>
-      <BookingsFlow showDemoMenu isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
+      <BookingsFlow showDemoMenu appActions={searchButton} commands={bookingsCmds} isReadOnly={state.previewRole !== undefined} appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
         onAddToLinkPage={(b) => {
           const was = state.linkPage ?? STARTER;
           if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
@@ -307,7 +311,7 @@ function MoreScreen({ state, bookings, kind, unread, onGo, onBookings, onSetting
   return (
     <div className="tf-more">
       {group('You', [...(hide.has('tasks') ? [] : [row('tasks', 'Tasks', <CheckSquare {...i16} />, () => onGo('tasks'), myOpen)]), ...(hide.has('notes') ? [] : [row('notes', 'Notes', <NotebookPen {...i16} />, () => onGo('notes'))])])}
-      {group('Records', [...OBJECTS.map((o) => row(o.id, o.label, o.icon, () => onGo(`records:${o.id}`))), ...state.objects.filter((o) => o.custom).map((o) => row(o.id, o.many, <Boxes {...i16} />, () => onGo(`object:${o.id}`)))])}
+      {group('Records', [...OBJECTS.map((o) => row(o.id, o.label, o.icon, () => onGo(`records:${o.id}`))), ...state.objects.filter((o) => o.custom && !o.archived).map((o) => row(o.id, o.many, <Boxes {...i16} />, () => onGo(`object:${o.id}`)))])}
       {!hide.has('lists') && group('Lists', [...state.lists.filter((l) => !l.archived).map((l) => row(l.id, l.name, <ListChecks {...i16} />, () => onGo(`list:${l.id}`), liveEntries(state, l).length)), row('new-list', 'New list', <Plus {...i16} />, onNewList)])}
       {group('Bookings', [
         row('meetings', kind === 'restaurant' ? 'Reservations' : 'Meetings', <CalendarDays {...i16} />, () => onBookings('meetings')),

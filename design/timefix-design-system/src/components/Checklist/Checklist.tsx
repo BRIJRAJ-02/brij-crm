@@ -1,5 +1,5 @@
 import { Button as AriaButton, Disclosure, DisclosurePanel, Heading } from 'react-aria-components';
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -39,6 +39,9 @@ export function Checklist({ title, steps, onAction, onHide, defaultExpanded = tr
   const done = steps.filter((s) => s.isDone).length;
   const ordered = [...steps.filter((s) => !s.isDone), ...steps.filter((s) => s.isDone)];
   const allDone = done === steps.length;
+  // Done steps fold into one quiet line once there are a few, so what's left stays in view.
+  const [showDone, setShowDone] = useState(false);
+  const foldDone = done >= 2 && !showDone;
   const list = useRef<HTMLOListElement>(null);
   const tops = useRef(new Map<string, number>());
   const order = ordered.map((s) => s.id).join(',');
@@ -79,7 +82,7 @@ export function Checklist({ title, steps, onAction, onHide, defaultExpanded = tr
             </div>
           ) : (
             <ol className="tf-checklist__steps" ref={list}>
-              {ordered.map((s) => (
+              {ordered.filter((s) => !(foldDone && s.isDone)).map((s) => (
                 <li key={s.id} data-step={s.id} className={cx('tf-checklist__step', s.isDone && 'is-done')}>
                   {s.isDone
                     ? <span className="tf-checklist__tick" aria-hidden="true"><SuccessCheck size={14} /></span>
@@ -91,6 +94,9 @@ export function Checklist({ title, steps, onAction, onHide, defaultExpanded = tr
                   {!s.isDone && <Button variant="soft" size="sm" onPress={() => onAction(s.id)}>{s.actionLabel}</Button>}
                 </li>
               ))}
+              {done >= 2 && <li className="tf-checklist__fold"><AriaButton className="tf-checklist__foldbtn" onPress={() => setShowDone((v) => !v)} aria-expanded={showDone}>
+                <span className="tf-checklist__tick" aria-hidden="true"><SuccessCheck size={14} /></span>{showDone ? 'Hide done steps' : `${done} done`}<ChevronDown className="tf-checklist__foldchev" data-open={showDone || undefined} size={14} strokeWidth={1.75} aria-hidden="true" />
+              </AriaButton></li>}
             </ol>
           )}
         </div>

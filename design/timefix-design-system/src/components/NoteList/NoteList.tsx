@@ -42,16 +42,18 @@ export interface NoteListProps {
   readonly onNew?: () => void;
   /** Ids added since the list first drew; they drop in. */
   readonly freshIds?: ReadonlySet<string>;
+  /** Leaves out the "Notes 4 · New note" head, for a screen whose toolbar already says it. */
+  readonly isHeadless?: boolean;
 }
 
 /** A record's notes as a grid of cards, newest first, with New note; an empty list says what notes are for. */
-export function NoteList({ notes, onOpen, onNew, freshIds }: NoteListProps) {
+export function NoteList({ notes, onOpen, onNew, freshIds, isHeadless = false }: NoteListProps) {
   return (
     <section className="tf-notes" aria-label="Notes">
-      <div className="tf-notes__head">
+      {!isHeadless && <div className="tf-notes__head">
         <h3 className="tf-notes__title">Notes <span className="tf-notes__count">{notes.length}</span></h3>
         {onNew && <Button size="sm" variant="secondary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={onNew}>New note</Button>}
-      </div>
+      </div>}
       {notes.length === 0 ? (
         <div className="tf-notes__empty"><StickyNote size={20} strokeWidth={1.75} aria-hidden="true" /><strong>No notes yet</strong><span>Write down what you learned on a call, so the team sees it too.</span></div>
       ) : (

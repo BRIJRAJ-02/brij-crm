@@ -2,6 +2,7 @@
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
+import { SearchField } from '../SearchField/SearchField.tsx';
 import { NotificationList } from '../NotificationList/NotificationList.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -161,6 +162,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
   const [openId, setOpenId] = useState<string | undefined>(openNote);
   const [picking, setPicking] = useState(false);
   const [rec, setRec] = useState('');
+  const [noteQuery, setNoteQuery] = useState('');
   const note = state.notes.find((n) => n.id === openId);
   if (note) {
     const r = recordName(state, note.record);
@@ -174,11 +176,20 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
       </div>
     );
   }
-  const notes = [...state.notes].sort((a, b) => b.updated.getTime() - a.updated.getTime());
+  const all = [...state.notes].sort((a, b) => b.updated.getTime() - a.updated.getTime());
+  const q = noteQuery.trim().toLowerCase();
+  const notes = q ? all.filter((n) => `${n.title} ${n.body} ${recordName(state, n.record).name}`.toLowerCase().includes(q)) : all;
   return (
     <div className="tf-you">
-      {notes.length === 0 ? <EmptyState icon={<NotebookPen size={20} strokeWidth={1.75} />} title="No notes yet" description="Notes sit on a person, company or deal." action={<Button size="sm" variant="primary" onPress={() => setPicking(true)}>New note</Button>} />
-        : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: `${ago(n.updated)} · ${recordName(state, n.record).name}` }))} onOpen={setOpenId} onNew={() => setPicking(true)} />}
+      {all.length > 0 && <div className="tf-you__bar">
+        <SearchField label="Search notes" placeholder="Search notes" size="sm" value={noteQuery} onChange={setNoteQuery} className="tf-rec__search" />
+        <span className="tf-rec__muted tf-num">{q ? `${notes.length} of ${all.length}` : all.length} {all.length === 1 ? 'note' : 'notes'}</span>
+        <span className="tf-rec__spacer" />
+        <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setPicking(true)}>New note</Button>
+      </div>}
+      {all.length > 0 && notes.length === 0 ? <p className="tf-rec__muted">No notes match. <button type="button" className="tf-rec__link" onClick={() => setNoteQuery('')}>Clear search</button></p> : null}
+      {all.length === 0 ? <EmptyState icon={<NotebookPen size={20} strokeWidth={1.75} />} title="No notes yet" description="Notes sit on a person, company or deal." action={<Button size="sm" variant="primary" onPress={() => setPicking(true)}>New note</Button>} />
+        : notes.length === 0 ? null : <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: `${ago(n.updated)} · ${recordName(state, n.record).name}` }))} onOpen={setOpenId} isHeadless />}
       {picking && (
         <Dialog isOpen onOpenChange={(o) => { if (!o) setPicking(false); }} title="New note" description="Every note sits on a record, so the team finds it there too."
           actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!rec} onPress={() => {

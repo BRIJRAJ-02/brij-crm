@@ -118,6 +118,7 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
       else { const id = newId('p'); created.push(id); if (val(r, 'email')) seen.set(val(r, 'email').toLowerCase(), id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
     });
     dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'person', 'people')} from ${file?.name ?? 'a CSV'}` });
+    dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'import' as const, what: `People from ${file?.name ?? 'a CSV'}`, rows: created.length + updated, by: state.me, at: new Date(), name: file?.name }, ...(q.jobs ?? [])] }) });
     setDone({ schemaBefore: people && (newAttrs.length || newTags.length) ? people : undefined, made: created.length, updated, created, newCompanies: newCos, before, skipped: body.filter((r) => !val(r, 'name')).map((r) => r.join(', ')) }); setStep(4);
   };
   return (
@@ -223,7 +224,7 @@ function CompanyImport({ state, dispatch, onDone }: { readonly state: AppState; 
                 updated++; before.push({ id: match.id, patch: Object.fromEntries(Object.keys(fields).map((k) => [k, (match as unknown as Readonly<Record<string, unknown>>)[k]])) }); dispatch({ type: 'records/fields', object: 'companies', changes: [{ id: match.id, patch: fields }] });
               } else { const id = newId('c'); created.push(id); dispatch({ type: 'company/set', company: { id, name: v(r, 'name'), domain: v(r, 'domain'), industry: v(r, 'industry'), size: '', city: v(r, 'city'), owner, created: new Date() } }); }
             });
-            dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'company', 'companies')}` }); setDone({ made: created.length, updated, created, newCompanies: [], before, skipped: [] });
+            dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'company', 'companies')}` }); dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'import' as const, what: 'Companies from a CSV', rows: created.length + updated, by: state.me, at: new Date() }, ...(q.jobs ?? [])] }) }); setDone({ made: created.length, updated, created, newCompanies: [], before, skipped: [] });
           }}>{plan.length === 0 ? 'Nothing to import' : `Import ${plural(plan.length, 'company', 'companies')}`}</Button></div></>}
         {step === 4 && done && <><h2 className="tf-imp__h">Imported</h2><p className="tf-num">{done.made} added · {done.updated} updated</p><p className="tf-rec__muted">Undo takes it back now. Later it shows in Settings › History.</p>
           <div className="tf-imp__go"><Button variant="ghost" icon={<Undo2 size={14} strokeWidth={1.75} />} onPress={() => { undoImport(dispatch, 'companies', done, state.me); toast({ message: 'Import undone' }); onDone(); }}>Undo import</Button><Button variant="primary" onPress={onDone}>See companies</Button></div></>}

@@ -55,6 +55,10 @@ export interface BookingsFlowProps {
    *  its phone tab bar, and a call when a Bookings item is picked. Bookings stays mounted, so its state is kept. */
   readonly appNav?: (bookings: ReactNode) => ReactNode;
   readonly appContent?: ReactNode;
+  /** Inside the app: the top bar's own actions (Search), in place of Bookings' bell; the app's Inbox already carries bookings. */
+  readonly appActions?: ReactNode;
+  /** Inside the app: changes made elsewhere (Settings › Calendars, Scheduling access), in order. Each `seq` is applied once. */
+  readonly commands?: ReadonlyArray<{ readonly seq: number; readonly action: BookingsAction }>;
   readonly appMobileNav?: ReactNode;
   readonly onBookingsNav?: () => void;
   /** Hears every change to Bookings' state, for the app around it (Home's agenda, search). */
@@ -96,12 +100,15 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appActions, commands, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
   const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const readOnlyRef = useRef(isReadOnly); readOnlyRef.current = isReadOnly;
   /** While the app previews another role, Bookings looks but never changes (reading a notice still marks it read). */
   const dispatch = useCallback((a: BookingsAction) => { if (readOnlyRef.current && a.type !== 'note/read') { toast({ message: 'You’re previewing as another role. Nothing changes until you stop previewing.' }); return; } rawDispatch(a); }, [toast]);
+  // A change sent from the app (Settings): applied once per seq, through the same guard as everything else.
+  const lastCmd = useRef(0);
+  useEffect(() => { (commands ?? []).forEach((c) => { if (c.seq > lastCmd.current) { lastCmd.current = c.seq; dispatch(c.action); } }); }, [commands, dispatch]);
   const [tab, setTab] = useState('meetings');
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openTab) { setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -522,7 +529,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       ) : (
         <>
           <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: (() => { const x = SECTIONS.find((y) => y.id === tab); return x ? labelOf(x) : 'Bookings'; })(), icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
-            actions={<>{demoMenu}{bell}</>} />
+            actions={<>{demoMenu}{appActions ?? bell}</>} />
           {brokenCal && (
             <div className="tf-bkf__banner">
               <Callout tone="warning" action={{ label: 'Reconnect', onPress: () => { dispatch({ type: 'calendar/set', calendars: state.calendars.map((c) => (c.id === brokenCal.id ? { ...c, status: 'connected' } : c)) }); toast({ message: `${brokenCal.provider} calendar reconnected`, tone: 'success' }); } }}>

@@ -132,7 +132,7 @@ export function BarChart({ label, points, height = 168, ghostCount = 7, emptyTex
   const bw = Math.min(24, slot * 0.56);
   const max = real ? Math.max(1, ...points.map((p) => p.value)) : 1;
   const heights = useTween(real ? points.map((p) => (p.value / max) * (plotH - 8)) : undefined, ref.current);
-  const showEvery = slot < 30 ? 2 : 1;
+  const showEvery = Math.max(1, Math.ceil(56 / Math.max(1, slot)));
   const a = active !== undefined && real ? points[active] : undefined;
   return (
     <div ref={ref} className="tf-chart" style={{ height }} aria-busy={points === undefined || undefined}>

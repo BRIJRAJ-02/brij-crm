@@ -62,7 +62,11 @@ export interface AppForm {
 }
 
 /** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
-export interface ObjectSchema { readonly id: string; readonly one: string; readonly many: string; readonly custom: boolean; readonly attributes: ReadonlyArray<SchemaAttribute> }
+export interface ObjectSchema { readonly id: string; readonly one: string; readonly many: string; readonly custom: boolean; readonly attributes: ReadonlyArray<SchemaAttribute>;
+  /** Configuration: the name the API uses, its colour, the attribute that names a record, and whether it's archived (out of the sidebar). */
+  readonly apiName?: string; readonly colour?: string; readonly recordName?: string; readonly archived?: boolean;
+  /** Access: what each role may do with these records. */
+  readonly access?: Readonly<Record<string, 'edit' | 'view' | 'none'>> }
 
 /** A deleted record, kept 30 days so it can come back. */
 export interface TrashItem { readonly id: string; readonly object: ObjectId; /** Set when a merge removed it: the record it went into. */ readonly mergedInto?: string; readonly record: Person | Company | Deal; readonly at: Date; readonly by: string }
@@ -87,14 +91,17 @@ export interface RecordFile { readonly id: string; readonly record: RecordLink; 
 
 /** How the workspace and you are set up: everything Settings changes, kept so it sticks and reaches the rest of the app. */
 export interface Prefs {
-  readonly workspace: { readonly name: string; readonly slug: string; readonly currency: string; readonly country: string; readonly colour: string; readonly logo?: string };
-  readonly theme: 'system' | 'light' | 'dark'; readonly timeZone: string; readonly dateFormat: string; readonly weekStart: 'mon' | 'sun'; readonly startPage: string;
+  readonly workspace: { readonly name: string; readonly slug: string; readonly currency: string; readonly country: string; readonly colour: string; readonly logo?: string;
+    /** The workspace's own time zone (bookings, digests); people can set their own in Preferences. */ readonly zone?: string;
+    /** How long form answers are kept: forever, or 12 or 24 months. */ readonly retention?: string;
+    /** Brand: the colour on dark pages, and the look guests see. */ readonly colourDark?: string; readonly template?: string };
+  readonly theme: 'system' | 'light' | 'dark'; readonly timeZone: string; readonly dateFormat: string; readonly weekStart: 'mon' | 'sun' | 'sat'; readonly startPage: string;
   readonly showPhoto: boolean; readonly notify: Readonly<Record<string, boolean>>;
   readonly twoFactor: boolean; readonly devices: ReadonlyArray<{ readonly id: string; readonly what: string; readonly where: string; readonly current?: boolean }>;
   readonly apps: Readonly<Record<'menu' | 'seating' | 'appointments', boolean>>;
   readonly rules: Readonly<Record<'require2fa' | 'google' | 'inviteLink' | 'domainJoin', boolean>>;
   readonly grants: Readonly<Record<string, ReadonlyArray<string>>>;
-  readonly teams: ReadonlyArray<{ readonly id: string; readonly name: string; readonly members: ReadonlyArray<string> }>;
+  readonly teams: ReadonlyArray<{ readonly id: string; readonly name: string; readonly members: ReadonlyArray<string>; /** Records the team sees, per object: all, their own, or the team's. */ readonly access?: Readonly<Record<string, 'all' | 'own' | 'team'>> }>;
   readonly invites: ReadonlyArray<{ readonly id: string; readonly email: string; readonly role: string; readonly at: Date }>;
   readonly joinRequests: ReadonlyArray<{ readonly id: string; readonly name: string; readonly email: string }>;
   readonly apiKeys: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scope: 'read' | 'write'; readonly last4: string; readonly at: Date }>;
@@ -104,9 +111,29 @@ export interface Prefs {
   /** Your photo, shown in the sidebar, on your pages and in Members. */
   readonly photo?: string;
   /** The invite link: the role it gives, how long it lasts, and its code (a new code stops the old link). */
-  readonly inviteLinkOpts?: { readonly role: string; readonly expires: string; readonly code: string };
+  readonly inviteLinkOpts?: { readonly role: string; readonly expires: string; readonly code: string; /** Most people the link lets in; "any" is no cap. */ readonly uses?: string };
   /** Partner hubs that reach the workspace from outside, and what they can see. */
-  readonly partners?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scopes: ReadonlyArray<string>; readonly at: Date }>;
+  readonly partners?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scopes: ReadonlyArray<string>; readonly at: Date; readonly lastCall?: Date }>;
+  /** Sign-ins over the last 90 days, newest first: yours in Security, everyone's in History. */
+  readonly signIns?: ReadonlyArray<{ readonly id: string; readonly who: string; readonly what: string; readonly where: string; readonly at: Date; readonly ok: boolean }>;
+  /** Backup codes left unused; making new ones resets to six. */
+  readonly backupLeft?: number;
+  /** Per calendar account: shown on my week, meetings logged to the CRM, its colour. */
+  readonly calendarOpts?: Readonly<Record<string, { readonly week: boolean; readonly log: boolean; readonly colour: string }>>;
+  /** What teammates see of my calendar: full details or busy only. */
+  readonly teammatesSee?: 'full' | 'busy';
+  /** New people from meeting guests are added to People. */
+  readonly addFromMeetings?: boolean;
+  readonly lastSync?: Date;
+  /** Roles the workspace made beyond Owner, Admin, Member and Guest; new people get the default one. */
+  readonly roles?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  readonly defaultRole?: string;
+  /** How long a sign-in lasts before asking again, in days. */
+  readonly sessionDays?: string;
+  /** Who sees my scheduling (calendar, hours, meetings). */
+  readonly schedSee?: 'everyone' | 'teams' | 'admins';
+  /** Imports and exports, newest first, with the file to download again. */
+  readonly jobs?: ReadonlyArray<{ readonly id: string; readonly kind: 'import' | 'export'; readonly what: string; readonly rows: number; readonly by: string; readonly at: Date; readonly file?: string; readonly name?: string }>;
 }
 
 /** The CRM side of the app. */
@@ -465,6 +492,17 @@ export function northwindCrm(now = new Date()): AppState {
       theme: 'system', timeZone: 'ist', dateFormat: 'dmy', weekStart: 'mon', startPage: 'home', showPhoto: true,
       notify: { mention: true, task: true, booking: true, form: false, digest: true }, twoFactor: false,
       devices: [{ id: 'dv1', what: 'MacBook Pro · Chrome', where: 'Mumbai', current: true }, { id: 'dv2', what: 'iPhone · Safari', where: 'Mumbai · 2h ago' }, { id: 'dv3', what: 'Windows · Edge', where: 'Pune · 3d ago' }],
+      signIns: [
+        { id: 'si1', who: 'Priya Raman', what: 'MacBook Pro · Chrome', where: 'Mumbai', at: dayAt(now, 0, 9), ok: true },
+        { id: 'si2', who: 'Sam Kim', what: 'MacBook Air · Safari', where: 'Bengaluru', at: dayAt(now, 0, 8), ok: true },
+        { id: 'si3', who: 'Priya Raman', what: 'iPhone · Safari', where: 'Mumbai', at: dayAt(now, -1, 19), ok: true },
+        { id: 'si4', who: 'Jo Mendes', what: 'Windows · Edge', where: 'Pune', at: dayAt(now, -2, 10), ok: false },
+        { id: 'si5', who: 'Jo Mendes', what: 'Windows · Edge', where: 'Pune', at: dayAt(now, -2, 10), ok: true },
+        { id: 'si6', who: 'Priya Raman', what: 'Windows · Edge', where: 'Pune', at: dayAt(now, -3, 14), ok: true },
+        { id: 'si7', who: 'Ava Chen', what: 'iPad · Safari', where: 'Delhi', at: dayAt(now, -5, 11), ok: true },
+      ],
+      backupLeft: 6, teammatesSee: 'busy', addFromMeetings: true, sessionDays: '30', schedSee: 'teams',
+      jobs: [{ id: 'jb1', kind: 'import', what: 'People from old-crm.csv', rows: 214, by: 'Sam Kim', at: dayAt(now, -9, 16), name: 'old-crm.csv' }],
       apps: { menu: true, seating: true, appointments: true }, rules: { require2fa: false, google: true, inviteLink: false, domainJoin: true },
       grants: { owner: ['records.edit', 'schema', 'members', 'bookings'], admin: ['records.edit', 'schema', 'members', 'bookings'], member: ['records.edit', 'bookings'], guest: [] },
       teams: [{ id: 'tm1', name: 'Sales', members: ['Priya Raman', 'Sam Kim', 'Jo Mendes'] }, { id: 'tm2', name: 'Customer success', members: ['Ava Chen'] }],

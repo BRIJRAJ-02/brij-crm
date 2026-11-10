@@ -75,6 +75,26 @@ export function RecordHeader({ name, kind, src, sub, tags = [], onRename, isStar
             <Tooltip label="Next record" shortcut="J"><IconButton size="sm" label="Next record" isDisabled={position.index >= position.total} onPress={position.onNext}><ChevronDown size={14} strokeWidth={1.75} /></IconButton></Tooltip>
           </div>
         )}
+          <div className="tf-rh__actions">
+            {onAskAI && <Button size="sm" variant="secondary" aria-expanded={isAskOpen} onPress={onAskAI} icon={<span className="tf-rh__ai"><Sparkles size={14} strokeWidth={1.75} /></span>}>Ask AI</Button>}
+            {onStarChange && (
+              <Tooltip label={isStarred ? 'Remove from favourites' : 'Add to favourites'}>
+                <ToggleButton isSelected={isStarred} onChange={onStarChange} aria-label="Favourite" className="tf-rh__star">
+                  <span className="tf-rh__swap" data-state={isStarred ? 'b' : 'a'} aria-hidden="true">
+                    <Star className="tf-rh__swap-a" size={14} strokeWidth={1.75} />
+                    <Star className="tf-rh__swap-b" size={14} strokeWidth={1.75} />
+                  </span>
+                </ToggleButton>
+              </Tooltip>
+            )}
+            {onEmail && <Tooltip label="Send email" shortcut="E"><Button size="sm" variant="secondary" icon={<Mail size={14} strokeWidth={1.75} />} onPress={onEmail}>Email</Button></Tooltip>}
+            {moreActions !== undefined ? (
+              <MenuTrigger>
+                <Tooltip label="More actions"><IconButton label="More actions" variant="ghost" size="sm"><MoreHorizontal size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+                <Menu aria-label={`Actions for ${name}`} placement="bottom end" onAction={onMoreAction}>{moreActions}</Menu>
+              </MenuTrigger>
+            ) : onMore && <Tooltip label="More actions"><IconButton label="More actions" variant="ghost" size="sm" onPress={onMore}><MoreHorizontal size={14} strokeWidth={1.75} /></IconButton></Tooltip>}
+          </div>
       </div>
 
       {tags.length > 0 && (
@@ -83,29 +103,9 @@ export function RecordHeader({ name, kind, src, sub, tags = [], onRename, isStar
         </ul>
       )}
 
-      <div className="tf-rh__bar">
-        {stage && <div className="tf-rh__stage"><span className="tf-rh__stage-label">{stage.attribute.name}</span><AttributeField attribute={stage.attribute} value={stage.value} onChange={stage.onChange} /></div>}
-        <div className="tf-rh__actions">
-          {onAskAI && <Button size="sm" variant="secondary" aria-expanded={isAskOpen} onPress={onAskAI} icon={<span className="tf-rh__ai"><Sparkles size={14} strokeWidth={1.75} /></span>}>Ask AI</Button>}
-          {onStarChange && (
-            <Tooltip label={isStarred ? 'Remove from favourites' : 'Add to favourites'}>
-              <ToggleButton isSelected={isStarred} onChange={onStarChange} aria-label="Favourite" className="tf-rh__star">
-                <span className="tf-rh__swap" data-state={isStarred ? 'b' : 'a'} aria-hidden="true">
-                  <Star className="tf-rh__swap-a" size={14} strokeWidth={1.75} />
-                  <Star className="tf-rh__swap-b" size={14} strokeWidth={1.75} />
-                </span>
-              </ToggleButton>
-            </Tooltip>
-          )}
-          {onEmail && <Tooltip label="Send email" shortcut="E"><IconButton label="Send email" variant="secondary" size="sm" onPress={onEmail}><Mail size={14} strokeWidth={1.75} /></IconButton></Tooltip>}
-          {moreActions !== undefined ? (
-            <MenuTrigger>
-              <Tooltip label="More actions"><IconButton label="More actions" variant="ghost" size="sm"><MoreHorizontal size={14} strokeWidth={1.75} /></IconButton></Tooltip>
-              <Menu aria-label={`Actions for ${name}`} placement="bottom end" onAction={onMoreAction}>{moreActions}</Menu>
-            </MenuTrigger>
-          ) : onMore && <Tooltip label="More actions"><IconButton label="More actions" variant="ghost" size="sm" onPress={onMore}><MoreHorizontal size={14} strokeWidth={1.75} /></IconButton></Tooltip>}
-        </div>
-      </div>
+      {stage && <div className="tf-rh__bar">
+        <div className="tf-rh__stage"><span className="tf-rh__stage-label">{stage.attribute.name}</span><AttributeField attribute={stage.attribute} value={stage.value} onChange={stage.onChange} /></div>
+      </div>}
     </header>
   );
 }

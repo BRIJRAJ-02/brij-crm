@@ -127,7 +127,8 @@ function AddEntries({ state, list, onClose, onAdd }: { readonly state: AppState;
 }
 
 /** Rename the list and its stages. Stages are rows: renaming one keeps its entries, removing one moves its entries to the first stage. */
-function ListSettings({ list, onClose, onSave }: { readonly list: CrmList; readonly onClose: () => void; readonly onSave: (l: CrmList) => void }) {
+/** A list's settings: its name, its stages, and whether a record can be on it more than once. */
+export function ListSettings({ list, onClose, onSave }: { readonly list: CrmList; readonly onClose: () => void; readonly onSave: (l: CrmList) => void }) {
   const [name, setName] = useState(list.name);
   const [once, setOnce] = useState(list.oncePerRecord);
   const [stages, setStages] = useState<ReadonlyArray<{ readonly key: string; readonly was?: string; readonly label: string }>>(list.stages.map((st, n) => ({ key: `s${n}`, was: st, label: st })));

@@ -2,6 +2,7 @@
 // the Link page editor (beside the phone; Publish keeps it in the workspace), and Insights, one analytics home with two tabs:
 // Pages (what came in through your links, from real bookings and form answers) and Reports (saved CRM charts: new, rename, delete).
 import { useRef, useState, type ReactNode } from 'react';
+import { SearchField } from '../SearchField/SearchField.tsx';
 import { ArrowLeft, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, UtensilsCrossed } from 'lucide-react';
 import { LinkEditor, type LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
@@ -97,6 +98,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
 }) {
   const { toast } = useToast();
   const [qr, setQr] = useState<ShareRow>();
+  const [query, setQuery] = useState('');
   const handle = handleFor(state, bookings);
   const business = bookings?.business;
   const now = new Date();
@@ -110,11 +112,19 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),
     { title: 'Forms', rows: state.forms.map((f) => ({ id: f.id, icon: <FileText {...i16} />, name: f.name, url: `timefix.com/f/${f.slug}`, live: f.status === 'live', off: f.status === 'draft' ? 'Draft' : 'Paused', numbers: `${f.responses.filter((r) => !r.spam).length} responses`, open: () => onForm(f.id, true), edit: () => onForm(f.id, false), editLabel: 'Edit form' })) },
   ].filter((g) => g.rows.length > 0);
+  const q = query.trim().toLowerCase();
+  const total = rows.reduce((n, g) => n + g.rows.length, 0);
+  const live = rows.reduce((n, g) => n + g.rows.filter((r) => r.live).length, 0);
+  const shown = q ? rows.map((g) => ({ ...g, rows: g.rows.filter((r) => `${r.name} ${r.url}`.toLowerCase().includes(q)) })).filter((g) => g.rows.length > 0) : rows;
   const copy = (r: ShareRow) => { void copyText(`https://${r.url}`).then((ok) => toast(ok ? { message: `${r.name} link copied`, tone: 'success' } : { message: `Copy didn’t work. The link is ${r.url}`, tone: 'danger' })); };
   return (
     <div className="tf-links">
-      <p className="tf-rec__muted">Everything people can open: copy a link, print its QR code, or open it as they see it.</p>
-      {rows.map((g) => (
+      <div className="tf-you__bar">
+        <SearchField label="Search links" placeholder="Search links" size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
+        <span className="tf-rec__muted tf-num">{total} links · {live} live</span>
+      </div>
+      {shown.length === 0 && <p className="tf-rec__muted">No links match. <button type="button" className="tf-rec__link" onClick={() => setQuery('')}>Clear search</button></p>}
+      {shown.map((g) => (
         <section key={g.title} className="tf-links__group" aria-label={g.title}>
           <h2 className="tf-links__h">{g.title}</h2>
           <ul className="tf-links__list">
@@ -187,7 +197,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
   ].filter((e) => e.at >= a && e.at < b);
   const cur = events(from, until);
   const prev = events(before, from);
-  const delta = (a: number, b: number) => (range === 'all' ? { value: 'all time', direction: 'flat' as const } : b === 0 ? { value: a ? 'New' : 'None yet', direction: 'flat' as const } : { value: `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`, direction: a > b ? 'up' as const : a < b ? 'down' as const : 'flat' as const, note: 'vs the period before', isGood: a >= b });
+  const delta = (a: number, b: number) => (range === 'all' ? { value: 'all time', direction: 'flat' as const } : b === 0 ? { value: a ? 'up from 0' : 'none yet', direction: 'flat' as const } : { value: `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`, direction: a > b ? 'up' as const : a < b ? 'down' as const : 'flat' as const, note: 'vs the period before', isGood: a >= b });
   const buckets = Math.min(days, 30);
   const step = Math.max(1, Math.round(days / buckets));
   const perDay = Array.from({ length: Math.ceil(days / step) }, (_, i) => { const a = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i * step); const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + step); return { label: a.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), value: cur.filter((e) => e.at >= a && e.at < b).length }; });

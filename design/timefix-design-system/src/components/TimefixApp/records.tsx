@@ -192,7 +192,8 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = [cols.map((c) => esc(c.name)).join(','), ...pick.map((r) => cols.map((c) => esc(r.values[c.id])).join(','))].join('\n');
     const o = await saveFile(`${def.many}.csv`, new Blob([csv], { type: 'text/csv' }));
-    if (o === 'saved') toast({ message: `${pick.length} ${pick.length === 1 ? def.one : def.many} exported`, tone: 'success' });
+    if (o === 'saved') { toast({ message: `${pick.length} ${pick.length === 1 ? def.one : def.many} exported`, tone: 'success' });
+      dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'export' as const, what: `${def.many[0]?.toUpperCase()}${def.many.slice(1)} · ${view.name}`, rows: pick.length, by: state.me, at: new Date(), file: csv, name: `${def.many}.csv` }, ...(q.jobs ?? [])].slice(0, 20) }) }); }
   };
   const byOwner = view.groupBy === 'owner';
   const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = byOwner

@@ -105,3 +105,8 @@ Four reviewers read every screen; their findings and state are in `review-ledger
 - First run asks one question (Meetings, Appointments or Tables) and lands in that workspace; the phone has a More page with every section.
 
 Then a second review round and an improvement pass (10 Nov, late): reasons instead of "busy" when reassigning, deadlines as dates for guests, next free times on staff tiles, totals on the deals board, results per question, a direct Edit on Links and calmer form settings. The details are in `review-ledger.md`.
+
+## Settings tree (10 Nov, night)
+
+Account (Profile, Preferences, Notifications, Sign in and security, Calendars) · Workspace (General, Brand, Members and teams, Roles and access, Apps and connections, History, Imports and exports) · Scheduling (Availability or Opening hours, Round robin, Routing, Scheduling access) · Business, for salons and restaurants (Business page, Services or Table bookings, Staff and shifts, Places and tables, Menu) · Data (Objects, Lists, Trash) · Developer (API keys). Scheduling and Business pages show what's set and open the page in Bookings, where it's used every day; Scheduling access and Calendars change Bookings directly from Settings.
+

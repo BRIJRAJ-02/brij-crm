@@ -37,3 +37,12 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-checklist__trigger, .tf-checklist__chevron, .tf-checklist__panel, .tf-checklist__inner { transition: none; }
 }
+
+/* Done steps folded into one line: "5 done", opening to the struck list. */
+.tf-checklist__fold { display: flex; padding: var(--space-4) var(--space-12); }
+.tf-checklist__foldbtn { display: inline-flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-8); margin-inline: calc(var(--space-8) * -1); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font: 500 13px/20px var(--font-sans); cursor: pointer; }
+.tf-checklist__foldbtn[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-checklist__foldbtn[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-checklist__foldchev { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-checklist__foldchev[data-open] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .tf-checklist__foldchev { transition: none; } }

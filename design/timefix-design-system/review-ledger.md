@@ -301,3 +301,19 @@ Small changes on every screen, inside the current design language:
 - [x] Bookings: Reassign names why someone can't take it (away, not working, at a limit, another meeting, calendar busy); the guest's Manage page gives the change deadline as a date and Add to calendar; a closed venue says when it opens next; floor tiles read "Free until 7:30 PM"; late parties' tables free up after the late hold; the service header shows the busiest start time against pacing; salon staff tiles show their next free time; the salon confirm step states the change policy; the rating has a spoken label.
 - [ ] Home stats that open their screen (StatCard has no press state yet; left for the build)
 
+## UI sweep and every setting (10 Nov, night)
+Owner: "new pages don't look polished as bookings" and "make sure all settings are there".
+- [x] Every page is full width with Bookings' 24px gutter (Home, Inbox, Tasks, Notes, records, record page, Forms, Links, Insights, Import were capped in a centred column).
+- [x] One toolbar on every list page: search, a quiet count, one ink action (Notes and Links gained search; Links lost its intro line). Section labels match Bookings.
+- [x] Bookings pages inside the app use the app's own top bar action (Search); the app's Inbox already carries booking notices, so Bookings' bell is gone there.
+- [x] Record page: a bigger name, Email and More on the name row, no floating icons.
+- [x] Home: finished setup steps fold into "5 done". Insights: chart dates never overlap; "up from 0" instead of "New".
+- [x] Settings now lists every setting the real app has (checked against origin/main's settings routes):
+  - Account: public profile (page link, bio, social links), time zone, date format, week start, a Replies email, backup codes (new set, copy, download), recent sign-ins, and a full Calendars page (connect, reconnect, disconnect with Undo, per calendar: show on my week, log meetings to the CRM, colour; where bookings land, what teammates see, add people from meetings, sync now).
+  - Workspace: time zone, how long form answers are kept, a web address check (taken names) with a confirm before moving; Brand as its own page (logo, colour, dark colour, Classic/Studio/Night/Split look, live preview); invite link "most people" cap; team access per object; custom roles (new, duplicate, delete, default for new people, up to 20), data and scheduling powers, sign-in length, sign out everyone; connected apps show when they last called and can change access; History has a Sign-ins tab; Imports and exports lists every CSV and downloads exports again.
+  - Scheduling: Availability, Round robin, Routing (what's set now, then the page in Bookings) and Scheduling access (who sees mine, who changes each person's hours, applied in Bookings).
+  - Business (salon and restaurant only): business page, services or table bookings, staff and shifts, places and tables, menu.
+  - Data: Objects have Configuration (names, API name, colour, record name, archive) and Access tabs; Lists have Settings (stages, each record once).
+- [ ] Google photo sync on Profile (needs a real Google connection; left for the build).
+- [ ] Member table columns (joined, two factor, calendar): TeamList has no column API yet; left for the build.
+
