@@ -96,7 +96,13 @@ async function refusalOf(call: Promise<unknown>) {
 }
 
 let count = 0;
-async function world(options: { readonly push?: boolean; readonly timeoutMs?: number } = {}) {
+async function world(
+  options: {
+    readonly push?: boolean;
+    readonly timeoutMs?: number;
+    readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
+  } = {},
+) {
   count += 1;
   const created = await createWorkspace(db, {
     name: 'Calendars',
@@ -146,6 +152,7 @@ async function world(options: { readonly push?: boolean; readonly timeoutMs?: nu
     hooks: [outboxHook()],
     isFreeDomain: deps.isFreeDomain,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    ...(options.log === undefined ? {} : { log: options.log }),
   });
   /** The member's calendars by name. */
   const calendars = async (memberId = created.memberId) => {
@@ -560,6 +567,36 @@ describe('free and busy per calendar (AC-994, AC-995)', () => {
     expect((await w.calendar('ada@work.dev')).warning).toBeUndefined();
     // The destination's grant revoked: closed, whatever the other account says.
     await w.query(sql`update calendar_connections set status = 'expired' where id = ${conn.id}::uuid`);
+    expect((await w.events.freeBusy(w.system, ask, { fresh: true }))[0]).toMatchObject({ status: 'blocked' });
+  });
+
+  it('reads past an account whose stored tokens won’t open, logs it, and closes when it holds the destination', async () => {
+    const warned: { message: string; fields: Readonly<Record<string, unknown>> }[] = [];
+    const w = await world({ log: { warn: (message, fields) => warned.push({ message, fields }) } });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    await w.sync(conn.id);
+    const work = await w.connect(w.ownerId, 'ada@work.dev');
+    await w.sync(work.id);
+    w.fake.put('ada@acme.dev', event('main', day(3), []));
+    const ask = { memberIds: [w.ownerId], from: day(0, 0), to: day(7, 0) };
+    // The work account's row no longer opens (another key, a damaged row): skipped as a refused grant, never a crash.
+    await w.query(sql`update calendar_connections set tokens = '\\x01deadbeef'::bytea where id = ${work.id}::uuid`);
+    const [read] = await w.events.freeBusy(w.system, ask, { fresh: true });
+    expect(read).toMatchObject({
+      status: 'read',
+      skipped: [{ connectionId: work.id, code: 'CALENDAR_AUTH_REVOKED', reason: 'blocked' }],
+    });
+    expect(read?.status === 'read' ? read.busy.map((each) => each.start) : []).toEqual([day(3)]);
+    expect((await w.calendar('ada@work.dev')).warning).toMatchObject({ code: 'CALENDAR_AUTH_REVOKED' });
+    // Operators see which connection, and nothing of the tokens or the address.
+    expect(warned).toEqual([
+      {
+        message: 'calendar.busy.tokens_unreadable',
+        fields: { workspaceId: w.workspaceId, connectionId: work.id, memberId: w.ownerId },
+      },
+    ]);
+    // The destination's account doesn't open either: closed, as a revoked grant is (AC-995).
+    await w.query(sql`update calendar_connections set tokens = '\\x01deadbeef'::bytea where id = ${conn.id}::uuid`);
     expect((await w.events.freeBusy(w.system, ask, { fresh: true }))[0]).toMatchObject({ status: 'blocked' });
   });
 });
