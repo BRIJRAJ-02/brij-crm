@@ -1921,8 +1921,8 @@ export async function linkImageSizes(
 }
 
 /**
- * A next times block's booking page (spec 0061, AC-6110): the handle's person, one of their live times blocks inside
- * its window, and its page as the read only `booking` entry the slots read takes, only while the door lists the page
+ * A next times block's booking page (spec 0061, AC-6110), or a booking page block's own (its row's next open time,
+ * the v5 mock): the handle's person, one of their live times or page blocks inside its window, and its page as the read only `booking` entry the slots read takes, only while the door lists the page
  * as one a visitor may book now (Public, live, its owner still an active member of this workspace). Anything else is
  * NOT_FOUND. Exported only from `@crm/core/public`.
  */
@@ -1937,7 +1937,7 @@ export async function enterTimesBlock(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind = 'times'`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind in ('times', 'page')`,
     ),
   );
   const row = found.rows[0];
