@@ -10,7 +10,7 @@ Settings becomes one place with its own grouped navigation, as Attio and Linear 
 ## Requirements
 
 - AC-681: Opening Settings swaps the app sidebar for the settings navigation: a "Settings" heading with a back control that returns to the page you came from (the workspace home when there is none), then groups with small capital labels.
-- AC-682: The groups, in order:
+- AC-682: The groups, in order: **Changed 10 Nov 2026** (owner redesign, Bookings program): Calendars moved out of Account into **Bookings settings** (`/bookings/settings/{calendars,teams,access,brand,limits}`, behind the gear on Bookings' TopBar, grouped Connections · People · Meetings · Guests see). Settings' Scheduling group holds one entry, **Bookings settings**, and the old SchedulingSettingsPage is gone.
   - **Account**: Preferences, Calendars.
   - **Workspace**: Objects, Background jobs.
   - **Scheduling**: Booking pages, Forms (links into Captures until each has workspace wide settings of its own).
@@ -19,7 +19,7 @@ Settings becomes one place with its own grouped navigation, as Attio and Linear 
 - AC-683: Every settings page has the same header: a trail ("Account › Preferences"), the title, a one line description, then a divider. The body is grouped cards under section headings; each row is a title, a muted description and its control on the right.
 - AC-684: Account › Preferences has "Interface theme" as a row with a Select (System preference, Light, Dark). The choice applies the moment it changes, with no Save, and is kept as today's theme choice is kept (this browser, spec 0003 theme).
 - AC-685: The sidebar footer no longer holds the theme switch. The sidebar keeps a Settings entry at its foot (a gear icon and "Settings"), which is how you reach Settings, with ⌘, as its shortcut.
-- AC-686: Settings opens on Account › Preferences. The old addresses (`/settings/objects`, `/settings/jobs`, `/settings/calendar`) keep working; Calendar moves under Account and its old address redirects to the new one.
+- AC-686: Settings opens on Account › Preferences. The old addresses (`/settings/objects`, `/settings/jobs`, `/settings/calendar`) keep working; Calendar moves under Account and its old address redirects to the new one. **Changed 10 Nov 2026** (owner redesign, Bookings program): `/settings/calendar`, `/settings/account/calendars` and `/settings/scheduling/calendars` redirect to Bookings settings › Calendars (keeping `?calendar=`); `/settings/scheduling/access` to Bookings settings › Access; `/settings/scheduling/round-robin` and `/settings/scheduling/rotations` to Bookings settings › Teams; `/settings/scheduling/availability` and `/settings/scheduling/routing` to Bookings' own Availability and Routing tabs.
 - AC-687: The settings navigation works by keyboard (arrow keys inside the list, Tab past it), marks the current page with `aria-current="page"`, and keeps its place when a page loads.
 
 ## Decision

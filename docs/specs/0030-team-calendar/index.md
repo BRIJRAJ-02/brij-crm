@@ -2,6 +2,8 @@
 
 **Date**: 2026-10-20
 **Status**: Proposed
+
+**Changed 10 Nov 2026** (owner redesign, Bookings program): the Meetings view switch and whose meetings show are now List · Day · Week plus a People Select (AC-760). On the week, pressing a booking opens the meeting popup, as a row in the list does (the guest as its title, Reschedule, Reassign and Cancel under its ⋯); busy blocks, closed time and calendar events keep their popover. The week's calendar filter is one All calendars Select (spec 0024, AC-1001).
 **Feature**: #59 Booking pages, polish plan F2 ("timefix's team calendar, one column per member, needs its own spec and permissions"); works with spec 0029 round robin
 
 ## Summary
@@ -46,7 +48,7 @@ Each has my recommendation; answer only where you disagree.
 **Acceptance criteria** (this spec owns AC-760 to AC-784):
 
 *View*
-- **AC-760**: Bookings › Calendar has a **Me | Team** switch beside the week controls (kept in the URL as `view=team`). Team shows one day with one column per visible member, a shared time axis, prev, next and Today moving by a day, and today's tint (F5).
+- **AC-760**: Bookings › Calendar has a **Me | Team** switch beside the week controls (kept in the URL as `view=team`). Team shows one day with one column per visible member, a shared time axis, prev, next and Today moving by a day, and today's tint (F5). **Changed 10 Nov 2026** (owner redesign, Bookings program): Bookings › Meetings switches between **List · Day · Week** (each with its icon), with a **People** Select beside it: "<name> (you)" or "Whole team". These replace the Day · Week · Team · List switch and the Mine · Everyone switch. Whole team is the Team day on Day, and an admin's Everyone on Week and List; for someone who may see the Team day but not everyone's bookings, Whole team opens Day. The phone's View menu is unchanged.
 - **AC-761**: Each column header pins to the top and shows the avatar, name, and a status: "N booked", "Free", "No hours" or "Calendar private"; the member's time zone shows only when it differs from the viewer's. The time axis pins to the left.
 - **AC-762**: Columns are ordered: me first, then by name. Each column shows the member's open hours as the light band, bookings (guest name and page title), blocks and holds (hatched, as today), and synced events, all on the viewer's clock.
 - **AC-763**: The week view gains "Calendar: Me ▾", a member picker listing only members the viewer may see; picking one shows that member's week with the same rules.

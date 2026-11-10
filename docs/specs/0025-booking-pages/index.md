@@ -5,6 +5,8 @@
 **Experience**: the visitor page, the guest page and the host builder follow [0025-experience.md](0025-experience.md); where it differs from this file (for example a month calendar rather than a week of days), it wins.
 **Status**: Proposed
 
+**Changed 10 Nov 2026** (owner redesign, Bookings program): the page list (AC-645), the emails (AC-636) and, in [0025-experience.md](0025-experience.md), the guest steps, the booked moment, the guest page and the time zone picker now follow the built Bookings redesign; each changed AC says how.
+
 ## Summary
 
 A member publishes a booking page. A visitor opens it, sees open slots in their own time zone, answers a few questions and books. The booking puts the event on the host's calendar with a video link, matches or creates the person and their company, shows the meeting on their timelines, can create or move a deal, and sends the visitor a confirmation with links to cancel or reschedule, plus reminders. A team page books a time when every required member is free. Two visitors picking the same slot never both get it. Forms (spec 0023) can send a qualified visitor straight to a booking page with their answers prefilled.
@@ -53,7 +55,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-633**: A booking creates the calendar event (`createEvent`, with a video link for the video location), the visitor and the host as attendees, the visitor's answers in the event's description, and links the meeting to the booking.
 - **AC-634**: The visitor is matched to a person by email, or a person is created (name, email, mapped answers that are empty on an existing person, never overwriting), as the `booking` actor; their company is matched or created by email domain (not for free email domains) and linked.
 - **AC-635**: The meeting shows on the person's and company's timelines at once (spec 0024), and the person's timeline also shows "Booked <page title>".
-- **AC-636**: The visitor sees a confirmation page and gets a confirmation email with the time in their zone, the location or video link, an .ics file, and links to cancel and reschedule.
+- **AC-636**: The visitor sees a confirmation page and gets a confirmation email with the time in their zone, the location or video link, an .ics file, and links to cancel and reschedule. **Changed 10 Nov 2026** (owner redesign, Bookings program): every booking email has one Timefix look (the Timefix logo heading the card, then the heading, the time in bold with its zone under it rather than a When row, a hairline, the facts, one button, then quiet links). The confirmation's heading is "You're booked with <host>". For a calendar, only a calendar file link is offered ("Calendar file (.ics)", on our origin, when no calendar event already invited them); the visitor's booking page link becomes Reschedule and Cancel links.
 - **AC-637**: Reminder emails go 24 hours and 1 hour before the meeting (skipped when booked later than that).
 
 *Changing a booking*
@@ -71,7 +73,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-644**: Public answers never include member emails, other bookings, busy event titles, or internal ids other than the page's public key.
 
 *Managing*
-- **AC-645**: Settings › Booking pages lists the member's pages (admins see all) with their link, status and bookings this month; Copy link, Pause, Duplicate, Delete.
+- **AC-645**: Settings › Booking pages lists the member's pages (admins see all) with their link, status and bookings this month; Copy link, Pause, Duplicate, Delete. **Changed 10 Nov 2026** (owner redesign, Bookings program): the list is Bookings › Pages (also Captures › Links): grouped page cards (Your pages, Workspace, Members' pages, Managed pages), each with its facts, hosts, link and Copy link, and a **Live / Hidden** pill in place of Pause, saved at once with Undo. Delete on a card has no confirm: the card leaves and a toast offers Undo for ten seconds before the page is deleted on the server (Delete booking page in the editor's ⋯ still asks first). Duplicate stays.
 - **AC-646**: A bookings list per page shows upcoming and past bookings with the visitor, time, status and the linked person.
 - **AC-647**: Everything the builder offers is keyboard usable and meets WCAG AA in both themes; the public page meets WCAG AA at 375 px and up.
 - **AC-648**: Deleting a page keeps its past bookings and their meetings; its link answers "This page is no longer available".
@@ -127,12 +129,12 @@ In the forms public bundle (spec 0023's second Vite entry), so booking adds no n
 
 ### Emails
 
-Jobs `booking.confirmation`, `booking.reminder`, `booking.cancelled`, `booking.rescheduled`, `booking.host_notice` render React Email templates (the `react-email` skill is installed) and send through Resend (`RESEND_API_KEY`, `BOOKING_FROM_EMAIL`), with an .ics attachment on confirmation and reschedule. Without the key, each job logs that it skipped and completes.
+Jobs `booking.confirmation`, `booking.reminder`, `booking.cancelled`, `booking.rescheduled`, `booking.host_notice` render React Email templates (the `react-email` skill is installed) and send through Resend (`RESEND_API_KEY`, `BOOKING_FROM_EMAIL`), with an .ics attachment on confirmation and reschedule. Without the key, each job logs that it skipped and completes. **Changed 10 Nov 2026** (owner redesign, Bookings program): one Timefix look for every booking email (`packages/emails`), the words in `packages/core/src/booking/mail.ts`; see AC-636.
 
 ### Screens (members)
 
-- **Settings › Booking pages**: the list (AC-645), New booking page.
-- **The page builder**: sections for Details, Availability (weekly hours per day with add range, overrides, time zone), Limits (buffers, notice, window, daily limit, step), Questions (reusing the forms builder's question list), On booking (deal), Members (collective), and a live preview of the public page. Save as you go (debounced), with a Live / Paused switch.
+- **Settings › Booking pages**: the list (AC-645), New booking page. **Changed 10 Nov 2026** (owner redesign, Bookings program): Bookings › Pages, see AC-645.
+- **The page builder**: sections for Details, Availability (weekly hours per day with add range, overrides, time zone), Limits (buffers, notice, window, daily limit, step), Questions (reusing the forms builder's question list), On booking (deal), Members (collective), and a live preview of the public page. Save as you go (debounced), with a Live / Paused switch. **Changed 10 Nov 2026** (owner redesign, Bookings program): one Save changes makes edits live, with a Live / Hidden pill, a leave guard and Version history under ⋯ (spec 0068's amended AC-6811).
 - **Bookings**: per page, upcoming and past, with Cancel and Reschedule (opens the public reschedule flow for the host).
 - All from the component library; new variants reviewed by `design-system-guardian` when testing resumes.
 

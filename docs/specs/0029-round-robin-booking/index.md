@@ -51,7 +51,7 @@ Each has my recommendation; answer only where you disagree.
 **Acceptance criteria** (this spec owns AC-728 to AC-759):
 
 *Rotations*
-- **AC-728**: A member with `booking.admin` creates a rotation in Settings › Booking pages › Rotations: a name, 2 to 20 members, each with a weight (1 to 100, default 100), a priority (lowest, low, medium, high, highest; default medium), an optional daily cap, and an on or off switch. The strategy is **Fair** (default) or **Priority**; the window is 7, 30 (default) or 90 days.
+- **AC-728**: A member with `booking.admin` creates a rotation in Settings › Booking pages › Rotations: a name, 2 to 20 members, each with a weight (1 to 100, default 100), a priority (lowest, low, medium, high, highest; default medium), an optional daily cap, and an on or off switch. The strategy is **Fair** (default) or **Priority**; the window is 7, 30 (default) or 90 days. **Changed 10 Nov 2026** (owner redesign, Bookings program): rotations (round robin groups) live in **Bookings settings › Teams** (`/bookings/settings/teams`); the old Settings › Scheduling › Round robin and Rotations addresses redirect there.
 - **AC-729**: Only active workspace members can be added. A member with neither a connected calendar nor their own hours can't be added ("Set hours or connect a calendar first"); one without a calendar is added with a warning badge.
 - **AC-730**: A member added to a rotation starts at the pool's current average weighted count (calibration), so they are not flooded with every booking until they catch up.
 - **AC-731**: A member switched off, at their daily cap, or on a day off is skipped by the rotation until they are back; their existing bookings stay theirs.
@@ -87,7 +87,7 @@ Each has my recommendation; answer only where you disagree.
 
 *Visibility and access*
 - **AC-751**: Creating, editing and deleting rotations and round robin pages needs `booking.admin`, checked at the access door; members without it get 403 and see no Rotations section.
-- **AC-752**: A pool member sees the rotation's name, members and their own share (count in the window) on Settings › Booking pages; only `booking.admin` sees everyone's counts and reasons.
+- **AC-752**: A pool member sees the rotation's name, members and their own share (count in the window) on Settings › Booking pages; only `booking.admin` sees everyone's counts and reasons. **Changed 10 Nov 2026** (owner redesign, Bookings program): that is Bookings settings › Teams (AC-728).
 - **AC-753**: A round robin booking is visible to its assigned host and to `booking.admin`, through the same `visibleTo` rule bookings use today (spec 0030 widens this for the team calendar).
 - **AC-754**: Public answers never include member names before booking, member emails, counts, weights, or which member was busy (spec 0025, AC-644, still holds).
 
