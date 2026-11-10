@@ -400,3 +400,5 @@
 }
 .tf-booking__slot-list { gap: var(--space-8); max-height: calc(var(--tf-booking-day) * 7 + var(--space-8) * 6); }
 .tf-booking__slots .tf-booking__time { min-height: var(--size-control-lg); }
+.tf-booking__toolate { display: flex; align-items: flex-start; gap: var(--space-8); max-width: 30rem; margin: 0; padding: var(--space-12) var(--space-16); border-radius: var(--radius-lg); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); text-align: left; }
+.tf-booking__toolate svg { flex: none; margin-top: var(--space-2); }

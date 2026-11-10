@@ -1,14 +1,19 @@
 // Insights: how bookings are going. The numbers that matter on top, then the trend, the funnel from a page view to a
 // meeting that happened, each page and host, when people book, and where they come from. Private to the workspace.
 import { useMemo, useState, type CSSProperties } from 'react';
-import { CalendarCheck, CalendarX2, Clock, Eye, UserX } from 'lucide-react';
+import { CalendarCheck, CalendarX2, Clock, Download, Eye, Link2, Link2Off, Share2, UserX } from 'lucide-react';
+import type { Key } from 'react-aria-components';
+import { Button } from '../Button/Button.tsx';
+import { Tag } from '../Tag/Tag.tsx';
+import { MenuTrigger, Menu, MenuItem } from '../Menu/Menu.tsx';
+import { useToast } from '../Toast/Toast.tsx';
 import { StatCard } from '../Card/Card.tsx';
 import { BarChart, BarList, DonutChart } from '../Chart/Chart.tsx';
 import { Select } from '../Select/Select.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
-import { Section, TabToolbar, i16 } from './parts.tsx';
-import { TEAM, dayFrom, first, type BookingsState } from './state.ts';
+import { Section, TabToolbar, i14, i16 } from './parts.tsx';
+import { TEAM, dayFrom, first, type BookingsAction, type BookingsState } from './state.ts';
 
 const PERIODS = [{ id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -18,9 +23,17 @@ const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 const noise = (seed: number) => { const x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
 
 /** The Insights page. */
-export function InsightsTab({ state }: { readonly state: BookingsState }) {
+export function InsightsTab({ state, pageId: only, dispatch }: {
+  readonly state: BookingsState;
+  /** Set inside a page's editor: the numbers are that page's only, and the page picker goes. */
+  readonly pageId?: string;
+  /** Without it, sharing is not offered (inside the editor). */
+  readonly dispatch?: (a: BookingsAction) => void;
+}) {
+  const { toast } = useToast();
   const [period, setPeriod] = useState('30');
-  const [pageId, setPageId] = useState('all');
+  const [picked, setPageId] = useState('all');
+  const pageId = only ?? picked;
   const [by, setBy] = useState<'page' | 'host'>('page');
   const days = Number(period);
   const pages = state.pages.filter((p) => pageId === 'all' || p.id === pageId);
@@ -83,9 +96,24 @@ export function InsightsTab({ state }: { readonly state: BookingsState }) {
       <TabToolbar
         start={<>
           <Select label="Period" isLabelHidden className="tf-bkf__inline-select" items={PERIODS} value={period} onChange={(v) => { if (v) setPeriod(v); }} />
-          <Select label="Pages" isLabelHidden className="tf-bkf__inline-select" items={[{ id: 'all', label: 'All pages' }, ...state.pages.map((p) => ({ id: p.id, label: p.name }))]} value={pageId} onChange={(v) => setPageId(v ?? 'all')} />
+          {only === undefined && <Select label="Pages" isLabelHidden className="tf-bkf__inline-select" items={[{ id: 'all', label: 'All pages' }, ...state.pages.map((p) => ({ id: p.id, label: p.name }))]} value={pageId} onChange={(v) => setPageId(v ?? 'all')} />}
         </>}
-        count={<span className="tf-bkf__muted">Only your workspace sees these numbers.</span>} />
+        count={state.insightsShared && dispatch ? <Tag size="sm" hue="blue" icon={<Link2 size={12} strokeWidth={2} />}>Shared by link</Tag> : <span className="tf-bkf__muted">Only your workspace sees these numbers.</span>}
+        action={<span className="tf-row">
+          <Button size="sm" variant="secondary" icon={<Download {...i14} />} onPress={() => toast({ message: `Exported ${PERIODS.find((x) => x.id === period)?.label.toLowerCase() ?? ''} as insights.csv`, tone: 'success' })}>Export CSV</Button>
+          {dispatch && (
+            <MenuTrigger>
+              <Button size="sm" variant="secondary" icon={<Share2 {...i14} />}>Share</Button>
+              <Menu aria-label="Share insights" placement="bottom end" onAction={(k: Key) => {
+                if (k === 'link') { dispatch({ type: 'insights/share', on: true }); toast({ message: 'View-only link copied. Anyone with it sees these numbers, not the people behind them.' }); }
+                else { dispatch({ type: 'insights/share', on: false }); toast({ message: 'The link stops working now', action: { label: 'Undo', onAction: () => dispatch({ type: 'insights/share', on: true }) } }); }
+              }}>
+                <MenuItem id="link" icon={<Link2 {...i16} />} description="Read-only: numbers and charts, no names">{state.insightsShared ? 'Copy view-only link' : 'Share a view-only link'}</MenuItem>
+                {state.insightsShared ? <MenuItem id="stop" icon={<Link2Off {...i16} />}>Stop sharing</MenuItem> : null}
+              </Menu>
+            </MenuTrigger>
+          )}
+        </span>} />
 
       <div className="tf-bkf-insights">
         <div className="tf-bkf-insights__stats">

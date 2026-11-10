@@ -123,7 +123,27 @@ export interface BookingPage {
   readonly stats: { readonly views: number; readonly bookings: number; readonly showRate: number };
   readonly links: ReadonlyArray<OneTimeLink>;
   readonly offers: ReadonlyArray<OfferedTimes>;
+  /** Start times every this many minutes; 0 or unset is every 15 (under 30 min) or 30. */
+  readonly slotStep?: number;
+  /** 'public' shows on your profile page; 'link' is reached only by its link. */
+  readonly visibility?: 'public' | 'link';
+  /** Link-only: guests book inside your held time, and minimum notice is skipped. */
+  readonly inHeldTime?: boolean;
+  /** Guests can't cancel or move online this many hours before the start (0 is up to the start). */
+  readonly cancelCutoff?: number;
+  readonly moveCutoff?: number;
+  /** What a guest sees when it's too late to change online. */
+  readonly tooLateMessage?: string;
+  /** Round robin, when a meeting moves: keep the same host if free, or ask the rotation again. */
+  readonly rrReschedule?: 'same' | 'rotate';
+  /** Where answers are filed in the CRM: matched by email. */
+  readonly fileTo?: 'people' | 'companies' | 'deals' | 'none';
+  /** Published versions, newest first. */
+  readonly versions?: ReadonlyArray<PageVersion>;
 }
+
+/** One published version of a page, kept so it can be restored. */
+export interface PageVersion { readonly id: string; readonly at: Date; readonly by: string; readonly changes: ReadonlyArray<string>; readonly page: BookingPage }
 
 /* ------------------------------------------------------------------ Meetings and time */
 
@@ -214,11 +234,23 @@ export interface BookingsState {
   readonly blocks: ReadonlyArray<TimeBlock>;
   readonly groups: ReadonlyArray<RoundRobinGroup>;
   readonly routing: Routing;
+  /** Unpublished changes per page: guests still see the live version. */
+  readonly drafts?: Readonly<Record<string, BookingPage>>;
+  /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
+  readonly memberCalendars?: Readonly<Record<string, MemberCalendar>>;
+  /** Insights shared by a read-only link. */
+  readonly insightsShared?: boolean;
 }
+
+/** A teammate's calendar health, as their colleagues see it. */
+export type MemberCalendar = 'ok' | 'skipped' | 'reconnect' | 'none';
 
 /** Every change the flow can make. */
 export type BookingsAction =
   | { readonly type: 'page/upsert'; readonly page: BookingPage }
+  | { readonly type: 'draft/set'; readonly id: string; readonly draft: BookingPage | undefined }
+  | { readonly type: 'member/calendar'; readonly name: string; readonly calendar: MemberCalendar }
+  | { readonly type: 'insights/share'; readonly on: boolean }
   | { readonly type: 'page/delete'; readonly id: string }
   | { readonly type: 'page/restore'; readonly page: BookingPage; readonly index: number }
   | { readonly type: 'meeting/add'; readonly meeting: BookedMeeting; readonly notification?: Notification }
@@ -272,6 +304,13 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
       Object.entries(action.patch).forEach(([k, v]) => { if (v) next[k] = v; else delete next[k]; });
       return { ...state, overrides: next };
     }
+    case 'draft/set': {
+      const drafts = { ...(state.drafts ?? {}) };
+      if (action.draft) drafts[action.id] = action.draft; else delete drafts[action.id];
+      return { ...state, drafts };
+    }
+    case 'member/calendar': return { ...state, memberCalendars: { ...(state.memberCalendars ?? {}), [action.name]: action.calendar } };
+    case 'insights/share': return { ...state, insightsShared: action.on };
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
@@ -429,8 +468,9 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   if (page.perDay > 0 && mine.filter((m) => m.start.toDateString() === date.toDateString()).length >= page.perDay) return [];
   const monday = mondayOf(date).getTime();
   if (page.perWeek > 0 && mine.filter((m) => mondayOf(m.start).getTime() === monday).length >= page.perWeek) return [];
-  const earliest = ahead === 0 ? minutesOf(now) + page.noticeHours * 60 : ahead * 1440 < page.noticeHours * 60 ? Infinity : -1;
-  const step = length < 30 ? 15 : 30;
+  const notice = page.visibility === 'link' && page.inHeldTime ? 0 : page.noticeHours;
+  const earliest = ahead === 0 ? minutesOf(now) + notice * 60 : ahead * 1440 < notice * 60 ? Infinity : -1;
+  const step = page.slotStep && page.slotStep > 0 ? page.slotStep : length < 30 ? 15 : 30;
   const out: number[] = [];
   day.ranges.forEach((r) => {
     for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && hostFor(state, page, date, m, m + length)) out.push(m);
@@ -483,7 +523,14 @@ export const ROUTING_FIELDS: ReadonlyArray<Attribute> = [
   // Hidden fields: filled from the link or the CRM, never asked.
   { id: 'source', name: 'Came from', type: 'select', options: [{ id: 'web', label: 'Website', hue: 'gray' }, { id: 'email', label: 'Email', hue: 'blue' }, { id: 'linkedin', label: 'LinkedIn', hue: 'sky' }, { id: 'ads', label: 'Ads', hue: 'orange' }] },
   { id: 'known', name: 'Known in CRM', type: 'select', options: [{ id: 'yes', label: 'Yes', hue: 'green' }, { id: 'no', label: 'No', hue: 'gray' }] },
+  // CRM record fields, read from the person, their company and their open deal (matched by email).
+  { id: 'person.owner', name: 'Person · Owner', type: 'select', options: [{ id: 'Priya Raman', label: 'Priya Raman', hue: 'gray' }, { id: 'Sam Kim', label: 'Sam Kim', hue: 'gray' }, { id: 'Jo Mendes', label: 'Jo Mendes', hue: 'gray' }, { id: 'Ava Chen', label: 'Ava Chen', hue: 'gray' }] },
+  { id: 'company.industry', name: 'Company · Industry', type: 'select', options: [{ id: 'saas', label: 'Software', hue: 'blue' }, { id: 'health', label: 'Health', hue: 'green' }, { id: 'retail', label: 'Retail', hue: 'orange' }, { id: 'logistics', label: 'Logistics', hue: 'purple' }] },
+  { id: 'company.employees', name: 'Company · Employees', type: 'number' },
+  { id: 'deal.stage', name: 'Deal · Stage', type: 'select', options: [{ id: 'lead', label: 'Lead', hue: 'gray' }, { id: 'qualified', label: 'Qualified', hue: 'blue' }, { id: 'proposal', label: 'Proposal', hue: 'purple' }, { id: 'won', label: 'Won', hue: 'green' }, { id: 'lost', label: 'Lost', hue: 'red' }] },
 ];
+/** Fields that come from the CRM record rather than the form. */
+export const isRecordField = (id: string): boolean => id.includes('.');
 /** The answers a test (or a guest) gives the routing form. */
 export type RoutingAnswers = Readonly<Record<string, string | number | undefined>>;
 function holds(c: Condition, answers: RoutingAnswers): boolean {
@@ -502,4 +549,22 @@ function holds(c: Condition, answers: RoutingAnswers): boolean {
 /** The first rule the answers match, or undefined for the fallback. */
 export function routeFor(routing: Routing, answers: RoutingAnswers): RoutingRule | undefined {
   return routing.rules.find((r) => r.conditions.length > 0 && (r.conjunction === 'and' ? r.conditions.every((c) => holds(c, answers)) : r.conditions.some((c) => holds(c, answers))));
+}
+
+/** Days in the next two months a guest could book this page (0 means it can't be booked). */
+export function openDaysAhead(page: BookingPage, state: BookingsState, now: Date, days = 60): number {
+  let n = 0;
+  for (let i = 0; i <= days; i += 1) if (openTimes(page, state, dayFrom(now, i), now).length > 0) n += 1;
+  return n;
+}
+/** What changed between two versions of a page, in a few words each. */
+export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyArray<string> {
+  const names: Readonly<Record<string, string>> = {
+    name: 'Name', slug: 'Link', durations: 'Lengths', places: 'Places', description: 'Description', hoursFrom: 'Hours', customHours: 'Hours', bufferBefore: 'Gap', bufferAfter: 'Gap',
+    noticeHours: 'Notice', daysAhead: 'How far ahead', perDay: 'Most a day', perWeek: 'Most a week', hostMode: 'Who hosts', hosts: 'Hosts', shareOut: 'Round robin', questions: 'Questions',
+    confirmFirst: 'Confirming', reminders: 'Reminders', emails: 'Emails', look: 'Look', socials: 'Social links', slotStep: 'Start times', visibility: 'Who can find it',
+    cancelCutoff: 'Cancel cut-off', moveCutoff: 'Move cut-off', fileTo: 'Filed to', after: 'After they book', whoCanBook: 'Who can book',
+  };
+  const keys = Object.keys(names) as Array<keyof BookingPage>;
+  return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];
 }

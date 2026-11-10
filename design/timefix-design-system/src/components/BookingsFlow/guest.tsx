@@ -111,7 +111,7 @@ function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onG
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
 function Profile({ owner, state, onBooked }: { readonly owner: string; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
   const [open, setOpen] = useState<string>();
-  const pages = state.pages.filter((p) => p.isOn && p.whoCanBook === 'anyone' && (p.owner === owner || p.hosts.includes(owner)) && p.hostMode !== 'collective');
+  const pages = state.pages.filter((p) => p.isOn && p.visibility !== 'link' && p.whoCanBook === 'anyone' && (p.owner === owner || p.hosts.includes(owner)) && p.hostMode !== 'collective');
   const chosen = pages.find((p) => p.id === open);
   if (chosen) {
     return (

@@ -2,11 +2,11 @@
 import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Clock, Code2, Copy, CopyPlus, LayoutList, Link2, MoreHorizontal, Pencil, Share2, Ticket, Trash2 } from 'lucide-react';
+import { Clock, Code2, Copy, CopyPlus, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2 } from 'lucide-react';
 import { BookingFlow, type BookingFlowProps, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
-import { MenuTrigger, Menu, MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
+import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu/Menu.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
@@ -83,6 +83,7 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
       prefill={page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined}
       guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}
       defaultView={page.defaultView ?? 'month'} chat={chat} chatBooked={chatBooked}
+      changeCutoff={(page.cancelCutoff ?? 0) > 0 || (page.moveCutoff ?? 0) > 0 ? { cancelHours: page.cancelCutoff ?? 0, moveHours: page.moveCutoff ?? 0, message: page.tooLateMessage } : undefined}
       durations={page.durations} onDurationChange={onLength} places={page.places.map((k) => ({ id: k, label: PLACES[k].label }))} placeId={place ?? placeOf(page)} onPlaceChange={onPlace ? (k) => onPlace(k as PlaceKind) : undefined} />
   );
 }
@@ -102,18 +103,28 @@ export function PagePicture({ page, state }: { readonly page: BookingPage; reado
 }
 
 /** The ways to share a page. */
-export type ShareHow = 'copy' | 'times' | 'once' | 'embed' | 'linkpage';
+export type ShareHow = 'copy' | 'times' | 'once' | 'embed' | 'linkpage' | 'qr' | 'email' | 'whatsapp' | 'more';
 /** One Share button for a page: one menu, ordered by how often each is used. */
 export function ShareMenu({ page, onShare, size = 'sm' }: { readonly page: BookingPage; readonly onShare: (page: BookingPage, how: ShareHow) => void; readonly size?: 'sm' | 'md' }) {
   return (
     <MenuTrigger>
       <Button size={size} variant="secondary" icon={<Share2 {...i14} />} aria-label={`Share ${page.name}`}>Share</Button>
       <Menu aria-label={`Share ${page.name}`} placement="bottom end" onAction={(k: Key) => onShare(page, String(k) as ShareHow)}>
-        <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy link</MenuItem>
-        <MenuItem id="times" icon={<Clock {...i16} />} description="Pick 2 to 5 times for one guest">Offer specific times</MenuItem>
-        <MenuItem id="once" icon={<Ticket {...i16} />} description={page.links.filter((l) => !l.revoked).length ? `${page.links.filter((l) => !l.revoked).length} active` : 'Works a set number of times'}>One-time links</MenuItem>
-        <MenuItem id="embed" icon={<Code2 {...i16} />}>Embed on a website</MenuItem>
-        <MenuItem id="linkpage" icon={<LayoutList {...i16} />}>Add to link page</MenuItem>
+        <MenuSection>
+          <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy link</MenuItem>
+          <MenuItem id="times" icon={<Clock {...i16} />} description="Pick 2 to 5 times for one guest">Offer specific times</MenuItem>
+          <MenuItem id="once" icon={<Ticket {...i16} />} description={page.links.filter((l) => !l.revoked).length ? `${page.links.filter((l) => !l.revoked).length} active` : 'Works a set number of times'}>One-time links</MenuItem>
+        </MenuSection>
+        <MenuSection title="Send">
+          <MenuItem id="email" icon={<Mail {...i16} />}>Email</MenuItem>
+          <MenuItem id="whatsapp" icon={<MessageCircle {...i16} />}>WhatsApp</MenuItem>
+          <MenuItem id="qr" icon={<QrIcon {...i16} />} description="For print, slides or a desk">QR code</MenuItem>
+          <MenuItem id="more" icon={<Share {...i16} />}>More…</MenuItem>
+        </MenuSection>
+        <MenuSection title="Put it somewhere">
+          <MenuItem id="embed" icon={<Code2 {...i16} />}>Embed on a website</MenuItem>
+          <MenuItem id="linkpage" icon={<LayoutList {...i16} />}>Add to link page</MenuItem>
+        </MenuSection>
       </Menu>
     </MenuTrigger>
   );

@@ -2,7 +2,7 @@
 // several people's usual hours set at once; each day's totals at the foot; search and a team filter.
 import { useState } from 'react';
 import { Button as AriaButton, DialogTrigger, type Key } from 'react-aria-components';
-import { ChevronLeft, ChevronRight, Copy, Globe, MoreHorizontal, RotateCcw, Settings2, Users } from 'lucide-react';
+import { CalendarX2, ChevronLeft, ChevronRight, Copy, Globe, MoreHorizontal, RotateCcw, Settings2, Users } from 'lucide-react';
 import { HoursEditor, summarizeHours, HOURS_DAYS, type DayHours, type WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -53,6 +53,9 @@ function useSetHours(state: BookingsState, dispatch: (a: BookingsAction) => void
 }
 
 /** The Roster page (team workspaces only). */
+/** How a teammate's calendar stands, in words; nothing when it's fine. */
+const CAL_WORDS: Readonly<Record<string, string>> = { ok: '', skipped: 'Calendars skipped', reconnect: 'Reconnect calendar', none: 'No calendar' };
+
 export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: RosterTabProps) {
   const { toast } = useToast();
   const [week, setWeek] = useState(0);
@@ -110,7 +113,7 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
         </>} />
       <div className="tf-bkf-roster" role="table" aria-label="Roster">
         <div className="tf-bkf-roster__row tf-bkf-roster__row--head" role="row">
-          <span role="columnheader" className="tf-bkf-roster__corner">{plural(people.length, 'person', 'people')}</span>
+          <span role="columnheader" className="tf-bkf-roster__corner">{plural(people.length, 'person', 'people')}<span className="tf-bkf-roster__cover tf-num"> · {people.filter((n) => days.some((d) => !isOff(state, n, d) && dayMinutes(hoursOn(state, n, d).hours) > 0)).length} bookable this week</span></span>
           {days.map((d) => (
             <span key={isoDay(d)} role="columnheader" className={cx('tf-bkf-roster__day', d.toDateString() === now.toDateString() && 'is-today')}>
               <span>{formatDay(d).split(' ')[0]}</span><span className="tf-num">{d.getDate()}</span>
@@ -130,12 +133,17 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
                     {state.access?.[name] === 'admins' && <span className="tf-bkf-roster__total">Admins only</span>}
                     {state.memberZones?.[name] && <span className="tf-bkf-roster__total"><Globe size={12} strokeWidth={1.75} aria-hidden="true" /> {state.memberZones[name]} time</span>}
                     <span className="tf-bkf-roster__total tf-num">{Math.round(days.reduce((s, d) => s + (isOff(state, name, d) ? 0 : dayMinutes(hoursOn(state, name, d).hours)), 0) / 60)} h this week</span>
+                    {CAL_WORDS[state.memberCalendars?.[name] ?? 'ok'] && <span className={cx('tf-bkf-roster__cal', state.memberCalendars?.[name] === 'reconnect' && 'is-bad')}><CalendarX2 size={12} strokeWidth={1.75} aria-hidden="true" /> {CAL_WORDS[state.memberCalendars?.[name] ?? 'ok']}</span>}
                   </span>
                 </AriaButton>
                 <MenuTrigger>
                   <IconButton size="sm" label={`More for ${name}`}><MoreHorizontal {...i16} /></IconButton>
-                  <Menu aria-label={`${name} actions`} placement="bottom start" onAction={(k: Key) => { if (k === 'copy') copyWeek([name]); else if (k === 'setup') setPerson(name); }}>
+                  <Menu aria-label={`${name} actions`} placement="bottom start" onAction={(k: Key) => {
+                    if (k === 'copy') copyWeek([name]); else if (k === 'setup') setPerson(name);
+                    else if (k === 'ask') toast({ message: `${first(name)} is asked by email to reconnect their calendar`, tone: 'success' });
+                  }}>
                     <MenuItem id="copy" icon={<Copy {...i16} />}>Copy this week to next</MenuItem>
+                    {name !== HOST && (state.memberCalendars?.[name] ?? 'ok') !== 'ok' ? <MenuItem id="ask" icon={<CalendarX2 {...i16} />} description={CAL_WORDS[state.memberCalendars?.[name] ?? 'ok']}>Ask to reconnect</MenuItem> : null}
                     <MenuItem id="setup" icon={<Settings2 {...i16} />}>Usual hours and time off</MenuItem>
                   </Menu>
                 </MenuTrigger>

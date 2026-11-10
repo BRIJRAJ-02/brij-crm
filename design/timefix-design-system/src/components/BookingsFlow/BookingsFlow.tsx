@@ -8,6 +8,7 @@ import { MenuTrigger, Menu, MenuItem, MenuSection, MenuSeparator } from '../Menu
 import { useToast, ACTION_TOAST_TIMEOUT_MS } from '../Toast/Toast.tsx';
 import { NotificationBell, NotificationList } from '../NotificationList/NotificationList.tsx';
 import { Breadcrumbs } from '../Breadcrumbs/Breadcrumbs.tsx';
+import { Callout } from '../Callout/Callout.tsx';
 import { Button } from '../Button/Button.tsx';
 import { LogoMark } from '../Logo/Logo.tsx';
 import type { Meeting } from '../MeetingList/MeetingList.tsx';
@@ -27,7 +28,7 @@ import { RoutingTab, GroupsDialog } from './routing.tsx';
 import { GuestMode, GUEST_SCENARIOS, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, northwind, uniqueSlug } from './seed.ts';
 import {
-  HOST, PLACES, TEAM, at, bookingsReducer, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
+  HOST, PLACES, TEAM, at, bookingsReducer, dayFrom, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
@@ -94,6 +95,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const pageById = (id: string | undefined) => state.pages.find((p) => p.id === id);
   const meetingById = (id: string | undefined) => state.meetings.find((m) => m.id === id);
   const upcoming = state.meetings.filter((m) => m.status !== 'cancelled' && m.end > now && m.host === HOST).length;
+  /** Changes to a teammate's hours made by someone else: they get an email and an inbox notice ten minutes later (changes in those ten minutes go in one email). */
+  const tellOthers = (a: BookingsAction) => {
+    dispatch(a);
+    const who = a.type === 'member/hours' ? a.name : a.type === 'overrides/merge' ? Object.keys(a.patch).map((k) => k.split('|')[0] ?? '').find((n) => n && n !== HOST) : undefined;
+    if (who && who !== HOST) toast({ message: `${first(who)} gets an email about this change in 10 minutes` });
+  };
+  const brokenCal = state.calendars.find((c) => c.status === 'reconnect');
   const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
   const unread = state.notifications.filter((n) => !n.read).length;
   const flash = (setter: (v: string | undefined) => void, id: string) => { setter(id); window.setTimeout(() => setter(undefined), 1600); };
@@ -128,6 +136,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
     if (how === 'copy') {
       void navigator.clipboard?.writeText(url).catch(() => undefined);
       toast({ message: p.isOn ? 'Link copied' : "Link copied. The page is hidden, so guests see it isn't taking bookings.", tone: 'success' });
+    } else if (how === 'email' || how === 'whatsapp') {
+      // Opens the guest's own mail or WhatsApp with the link written in; nothing is sent from here.
+      const text = `Pick a time that suits you: ${url}`;
+      window.open(how === 'email' ? `mailto:?subject=${encodeURIComponent(p.name)}&body=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    } else if (how === 'more') {
+      if (typeof navigator.share === 'function') void navigator.share({ title: p.name, url }).catch(() => undefined);
+      else { void navigator.clipboard?.writeText(url).catch(() => undefined); toast({ message: 'Link copied', tone: 'success' }); }
     } else if (how === 'linkpage') {
       toast({ message: `${p.name} added to your link page`, tone: 'success', action: { label: 'Undo', onAction: () => toast({ message: `${p.name} taken off your link page` }) } });
     } else setShare({ kind: how === 'once' ? 'once' : how, id: p.id });
@@ -206,6 +221,20 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
     const pick = (pred: (p: BookingPage) => boolean) => state.pages.find(pred) ?? state.pages[0];
     // Only these two replace the workspace, and each asks first.
     if (key === 'fresh' || key === 'northwind') { setResetTo(key); return; }
+    if (key === 'arrival') {
+      // A guest books while Bookings is open: the meeting appears and a toast says so.
+      const p = pick((x) => x.isOn && x.hostMode === 'one');
+      const day = dayFrom(new Date(), 2);
+      const start = at(day, 10 * 60);
+      const id = nextId('m');
+      const len = p.durations[0] ?? 30;
+      dispatch({ type: 'meeting/add', meeting: {
+        id, pageId: p.id, host: p.hosts[0] ?? HOST, start, end: new Date(start.getTime() + len * 60_000), title: p.name, invitee: { name: 'Ada Brooks', email: 'ada@lumen.io' }, place: PLACES[p.places[0] ?? 'meet'].meeting, placeLabel: placeLabel(p, p.places[0] ?? 'meet'),
+        status: p.confirmFirst ? 'pending' : 'confirmed', notes: '', answers: [], guestZone: 'Europe/London', activity: [{ id: nextId('a'), text: 'Booked by Ada Brooks', at: new Date() }],
+      }, notification: { id, actor: 'Ada Brooks', action: 'booked', object: `${p.name} · ${len} min`, excerpt: `${formatDay(start)}, ${formatClockRange(600, 600 + len)}`, time: 'Just now', group: 'Today', read: false } });
+      toast({ message: `Ada booked ${p.name} for ${formatDay(start)}, ${formatClockRange(600, 600 + len)}`, action: { label: 'Open', onAction: () => setMeetingId(id) } });
+      return;
+    }
     if (key === 'team') {
       const group = state.groups[0];
       if (!group) { toast({ message: 'Start from Northwind first: it has a round robin team.' }); return; }
@@ -279,6 +308,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
         </MenuSection>
         <MenuSection title="Edge cases">
           <MenuItem id="team" icon={<PauseCircle {...i16} />} description="Everyone on a round robin is paused">A team page no one can take</MenuItem>
+          <MenuItem id="arrival" icon={<CalendarDays {...i16} />} description="As if someone books while you watch">A guest books now</MenuItem>
           <MenuItem id="clash" icon={<AlertTriangle {...i16} />} description="Busy time lands on two meetings">A clash with booked meetings</MenuItem>
         </MenuSection>
         <MenuSection title="Workspace">
@@ -306,15 +336,38 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
           onBack={() => {
             const kept = editor;
             setEditor(undefined); setTab('pages');
-            if (JSON.stringify({ ...kept.draft, isOn: editing.isOn }) !== JSON.stringify(editing)) toast({ message: 'Changes not saved', action: { label: 'Go back', onAction: () => setEditor(kept) } });
+            // Leaving with changes keeps them as a draft; guests still see the live page.
+            if (JSON.stringify({ ...kept.draft, isOn: editing.isOn }) !== JSON.stringify(editing)) {
+              dispatch({ type: 'draft/set', id: editing.id, draft: { ...kept.draft, isOn: editing.isOn } });
+              toast({ message: 'Kept as a draft. Guests still see the live page.', action: { label: 'Open', onAction: () => setEditor(kept) } });
+            }
           }}
-          onSave={(d) => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'page/upsert', page: d }); setEditor({ id: d.id, draft: d }); toast({ message: 'Changes saved', tone: 'success' }); resolve(); }, 700); })}
+          onKeepDraft={(d) => {
+            const same = JSON.stringify(d) === JSON.stringify(editing);
+            dispatch({ type: 'draft/set', id: editing.id, draft: same ? undefined : d });
+            if (!same) toast({ message: 'Kept as a draft. Publish when it’s ready.' });
+          }}
+          onSave={(d) => new Promise<void>((resolve) => { window.setTimeout(() => {
+            // Publishing keeps the page before as a version, so it can be restored.
+            const { versions: _old, ...before } = editing;
+            const versions = [{ id: nextId('v'), at: new Date(), by: HOST, changes: pageChanges(editing, d), page: before }, ...(editing.versions ?? [])].slice(0, 10);
+            const page = { ...d, versions };
+            dispatch({ type: 'page/upsert', page }); dispatch({ type: 'draft/set', id: d.id, draft: undefined });
+            setEditor({ id: d.id, draft: page }); toast({ message: 'Published. Guests see it now.', tone: 'success' }); resolve();
+          }, 700); })}
           onToggle={(on) => toggle(editing.id, on)} onShare={onShare} onMore={onMore} onGuest={() => setGuest({ scenario: 'book', pageId: editing.id })}
           onMeetings={() => { setEditor(undefined); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} />
       ) : (
         <>
           <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: SECTIONS.find((x) => x.id === tab)?.label ?? 'Bookings', icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
             actions={<>{demoMenu}{bell}</>} />
+          {brokenCal && (
+            <div className="tf-bkf__banner">
+              <Callout tone="warning" action={{ label: 'Reconnect', onPress: () => { dispatch({ type: 'calendar/set', calendars: state.calendars.map((c) => (c.id === brokenCal.id ? { ...c, status: 'connected' } : c)) }); toast({ message: `${brokenCal.provider} calendar reconnected`, tone: 'success' }); } }}>
+                Your {brokenCal.provider} calendar stopped syncing. Busy times on it aren’t checked, so guests could book over them.
+              </Callout>
+            </div>
+          )}
           <div className="tf-bkf__body">
               {tab === 'meetings' && (<div className="tf-bkf__panel">
                 <MeetingsTab state={state} view={view} onView={(v) => { setView(v); if (v === 'list') setFocusHour(undefined); }} whose={whose} onWhose={setWhose}
@@ -341,15 +394,15 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
               </div>)}
               {tab === 'pages' && (<div className="tf-bkf__panel">
-                <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: p }); }}
-                  onFix={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: p, section: 'who' }); }}
+                <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: state.drafts?.[id] ?? p }); }}
+                  onFix={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: state.drafts?.[id] ?? p, section: 'who' }); }}
                   onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} />
               </div>)}
               {tab === 'availability' && (<div className="tf-bkf__panel">
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} />
               </div>)}
-              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
-              {tab === 'insights' && (<div className="tf-bkf__panel"><InsightsTab state={state} /></div>)}
+              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={tellOthers} onReassignMany={(list, pool) => reassignMany(list, pool)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
+              {tab === 'insights' && (<div className="tf-bkf__panel"><InsightsTab state={state} dispatch={dispatch} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>

@@ -58,6 +58,8 @@ export interface BookingFlowProps {
   readonly defaultView?: 'month' | 'list' | 'chat';
   /** Book by chat, drawn in the same box when Chat is chosen. Without it there is no Chat view. */
   readonly chat?: ReactNode;
+  /** Guests can't cancel or move online this many hours before the start; then they see the message. */
+  readonly changeCutoff?: { readonly cancelHours: number; readonly moveHours: number; readonly message?: string };
   /** Set when the chat has booked: the card moves to the same success screen a booking by the calendar shows. */
   readonly chatBooked?: { readonly name: string; readonly email: string; readonly date: CalendarDate; readonly minutes: number };
 }
@@ -149,7 +151,7 @@ export function BrandCard({ className }: { readonly className?: string }) {
 }
 
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
-export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat, chatBooked }: BookingFlowProps) {
+export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat, chatBooked, changeCutoff }: BookingFlowProps) {
   const [known, setKnown] = useState(prefill !== undefined);
   const [layout, setLayout] = useState<'month' | 'list' | 'chat'>(defaultView === 'chat' && !chat ? 'month' : defaultView ?? 'month');
   const [listWeek, setListWeek] = useState(0);
@@ -490,11 +492,27 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
                   ))}
                 </span>
               </div>
-              <div className="tf-booking__manage tf-booking__reveal-line" aria-label="Change this booking">
-                <Button size="sm" variant="ghost" icon={<UserPlus size={14} strokeWidth={1.75} />} onPress={() => setAfter('guests')}>Add guests</Button>
-                <Button size="sm" variant="ghost" icon={<CalendarClock size={14} strokeWidth={1.75} />} onPress={() => { setAfter('moving'); setTime(undefined); if (layout === 'chat') setLayout('month'); setStep('pick'); }}>Reschedule</Button>
-                <Button size="sm" variant="ghost" icon={<X size={14} strokeWidth={1.75} />} onPress={() => setAfter('cancel')}>Cancel</Button>
-              </div>
+              {(() => {
+                // Too close to the start: the page's cut-offs hide Cancel or Reschedule and say why.
+                const hoursLeft = date && time !== undefined ? (asDate(date).getTime() + time * 60_000 - Date.now()) / 3_600_000 : Infinity;
+                const canMove = !changeCutoff || hoursLeft > changeCutoff.moveHours;
+                const canCancel = !changeCutoff || hoursLeft > changeCutoff.cancelHours;
+                return (
+                  <>
+                    <div className="tf-booking__manage tf-booking__reveal-line" aria-label="Change this booking">
+                      <Button size="sm" variant="ghost" icon={<UserPlus size={14} strokeWidth={1.75} />} onPress={() => setAfter('guests')}>Add guests</Button>
+                      {canMove && <Button size="sm" variant="ghost" icon={<CalendarClock size={14} strokeWidth={1.75} />} onPress={() => { setAfter('moving'); setTime(undefined); if (layout === 'chat') setLayout('month'); setStep('pick'); }}>Reschedule</Button>}
+                      {canCancel && <Button size="sm" variant="ghost" icon={<X size={14} strokeWidth={1.75} />} onPress={() => setAfter('cancel')}>Cancel</Button>}
+                    </div>
+                    {(!canMove || !canCancel) && (
+                      <p className="tf-booking__toolate tf-booking__reveal-line" role="note">
+                        <Clock size={14} strokeWidth={1.75} aria-hidden />
+                        <span>{changeCutoff?.message || `It’s too close to the meeting to ${!canMove && !canCancel ? 'change or cancel' : !canMove ? 'move' : 'cancel'} it here. Reply to your invite instead.`}</span>
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
           {after === 'cancelled' && <Button variant="secondary" onPress={() => { setAfter('idle'); restart(); }}>Book another time</Button>}

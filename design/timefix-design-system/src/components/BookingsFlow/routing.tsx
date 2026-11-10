@@ -18,8 +18,7 @@ import { Button, IconButton } from '../Button/Button.tsx';
 import { Section, TabToolbar, i14, i16 } from './parts.tsx';
 import {
   ROUTING_FIELDS, TEAM, first, nextId, plural, routeFor,
-  type BookedMeeting, type BookingsAction, type BookingsState, type RouteOutcome, type RouteTag, type Routing, type RoutingAnswers, type RoutingRule,
-} from './state.ts';
+  type BookedMeeting, type BookingsAction, type BookingsState, type RouteOutcome, type RouteTag, type Routing, type RoutingAnswers, type RoutingRule, isRecordField } from './state.ts';
 
 const SKILLS = ['Sales', 'Support', 'Onboarding', 'Partnerships'];
 const WON = [{ id: 'won', label: 'The deal moves to Won' }, { id: 'created', label: 'A deal is created' }, { id: 'held', label: 'The meeting happens' }];
@@ -172,8 +171,12 @@ export function RoutingTab({ state, dispatch }: { readonly state: BookingsState;
             <div className="tf-bkf-try__fields">
               <NumberField label="Team size" value={typeof answers.size === 'number' ? answers.size : Number.NaN} minValue={1} onChange={(n) => setAnswers((a) => ({ ...a, size: Number.isFinite(n) ? n : undefined }))} />
               {ROUTING_FIELDS.filter((f) => f.type === 'select').map((f) => (
-                <Select key={f.id} label={f.name} description={f.id === 'source' || f.id === 'known' ? 'Hidden field' : undefined} items={(f.options ?? []).map((o) => ({ id: o.id, label: o.label }))}
+                <Select key={f.id} label={f.name} description={isRecordField(f.id) ? 'From their CRM record' : f.id === 'source' || f.id === 'known' ? 'Hidden field' : undefined} items={(f.options ?? []).map((o) => ({ id: o.id, label: o.label }))}
                   value={typeof answers[f.id] === 'string' ? (answers[f.id] as string) : null} onChange={(v) => setAnswers((a) => ({ ...a, [f.id]: v ?? undefined }))} />
+              ))}
+              {ROUTING_FIELDS.filter((f) => f.type === 'number' && isRecordField(f.id)).map((f) => (
+                <NumberField key={f.id} label={f.name} description="From their CRM record" value={typeof answers[f.id] === 'number' ? (answers[f.id] as number) : Number.NaN} minValue={1}
+                  onChange={(n) => setAnswers((a) => ({ ...a, [f.id]: Number.isFinite(n) ? n : undefined }))} />
               ))}
             </div>
             <div className="tf-bkf-try__result" role="status" aria-live="polite">

@@ -45,5 +45,8 @@ Every request from the design session, checked in the prototype (light and dark)
 | Chat full height, UI fixes | the chat fills the card and its composer sits at the bottom; smaller suggestion chips; the booked card matches the success screen |
 | Card height | back to a fixed height (the full-window height was too tall) |
 | Blank "When" after keeping the old time | fixed: the booked time is kept while you look for a new one |
+| Chat booking goes to the success screen | yes, the same screen as a calendar booking |
+| Check every feature against main (10 Nov audit) | built: draft, publish and versions; link-only pages and booking inside held time; "can't be booked" warnings; start-time interval; guest cancel and move cut-offs with a message; round robin host on reschedule; QR code, email, WhatsApp and system share; workspace and team links; calendar-stopped-syncing banner, teammate calendar health and Ask to reconnect; email to a teammate when someone else changes their hours; live toast when a guest books; Insights export, view-only share link and Insights per page; filing answers to People, Companies or Deals; routing on CRM record fields |
+| Left for their own products | business booking (services, staff, business page, reservations) and the onboarding steps |
 
 Not built: shifts with roles or places, labour cost and painting cells by drag (main doesn't have them either).

@@ -1,6 +1,7 @@
 // Step 4, Share: Offer specific times, One-time links and Embed, each a short dialog over the page.
 import { useEffect, useMemo, useState } from 'react';
-import { Link2, Plus } from 'lucide-react';
+import { Download, Link2, Plus } from 'lucide-react';
+import { QrCode } from '../QrCode/QrCode.tsx';
 import { Dialog, ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { TextField } from '../Field/Field.tsx';
@@ -17,7 +18,7 @@ import { CopyButton, i14 } from './parts.tsx';
 import { dayFrom, hoursFor, isoDay, lengthOf, lengthsText, nextId, openTimes, pageUrl, parseDay, plural, type BookingPage, type BookingsState, type OneTimeLink } from './state.ts';
 
 /** Which share dialog is open. */
-export type ShareDialogKind = 'times' | 'once' | 'embed';
+export type ShareDialogKind = 'times' | 'once' | 'embed' | 'qr';
 
 /** Props for ShareDialogs. */
 export interface ShareDialogsProps {
@@ -41,6 +42,7 @@ export function ShareDialogs({ kind, page, state, onUpdate, onClose }: ShareDial
             url={`https://${pageUrl(page.slug)}`} accent={page.look.accent} site="northwind.com/contact" />
         </Dialog>
       )}
+      {page && <QrDialog isOpen={kind === 'qr'} page={page} onClose={onClose} />}
     </>
   );
 }
@@ -155,5 +157,24 @@ function OneTimeLinksDialog({ isOpen, page, onUpdate, onClose }: { readonly isOp
         consequence="The link stops working at once. Meetings already booked through it stay booked." confirmLabel="Revoke link"
         onConfirm={() => { if (revoking) onUpdate({ ...page, links: page.links.map((l) => (l.id === revoking.id ? { ...l, revoked: true } : l)) }); setRevoking(undefined); }} />
     </>
+  );
+}
+
+/** A QR code for the page's link, to print or put on a slide; download as PNG or SVG. */
+function QrDialog({ isOpen, page, onClose }: { readonly isOpen: boolean; readonly page: BookingPage; readonly onClose: () => void }) {
+  const { toast } = useToast();
+  const url = `https://${pageUrl(page.slug)}`;
+  const file = page.slug || 'booking-page';
+  return (
+    <Dialog isOpen={isOpen} onOpenChange={(o) => { if (!o) onClose(); }} title="QR code" description={`Scanning it opens ${page.name}.`}
+      actions={<>
+        <Button variant="secondary" icon={<Download {...i14} />} onPress={() => toast({ message: `${file}.svg downloaded`, tone: 'success' })}>SVG</Button>
+        <Button variant="primary" icon={<Download {...i14} />} onPress={() => toast({ message: `${file}.png downloaded`, tone: 'success' })}>PNG</Button>
+      </>}>
+      <div className="tf-bkf-qr">
+        <QrCode value={url} label={`QR code for ${page.name}`} withLogo frameLabel="Book a time" />
+        <span className="tf-bkf__muted tf-num">{pageUrl(page.slug)}</span>
+      </div>
+    </Dialog>
   );
 }
