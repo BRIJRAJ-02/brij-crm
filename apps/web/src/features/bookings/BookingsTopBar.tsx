@@ -21,7 +21,8 @@ import { weekRange } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
 import { useCan, useWorkspaceObjects } from '../workspace/WorkspacePage.tsx';
 import { peopleSearchOf } from './people.ts';
-import { bookingsSettingsHref, pageEditorHref } from '../booking/links.ts';
+import { bookingsSettingsHref, managedPageHref, pageEditorHref } from '../booking/links.ts';
+import { formHref } from '../forms/paths.ts';
 
 /** Props for BookingsTopBar. */
 export interface BookingsTopBarProps {
@@ -35,8 +36,11 @@ export interface BookingsTopBarProps {
    * meeting, so the screen has one primary (the owner, 22 October 2026).
    */
   readonly actionSlot?: ((element: HTMLElement | null) => void) | undefined;
-  /** New booking page is open: the layout holds it, so Pages and the Calendar's empty state open the same dialog. */
-  readonly isAddingPage: boolean;
+  /**
+   * New booking page is open, and as what (a page, or Pages' New workspace link or New team link): the layout holds
+   * it, so Pages and the Calendar's empty state open the same dialog. Undefined while closed.
+   */
+  readonly addingPage: 'page' | 'workspace' | 'team-link' | undefined;
   /** New › Booking page. */
   readonly onAddPage: () => void;
   /** The dialog closed, made or not. */
@@ -53,7 +57,7 @@ export function BookingsTopBar({
   tabs,
   scope,
   actionSlot,
-  isAddingPage,
+  addingPage,
   onAddPage,
   onAddPageClose,
 }: BookingsTopBarProps) {
@@ -190,7 +194,16 @@ export function BookingsTopBar({
         data={data}
         slug={slug}
         canBookTeams={canBookTeams}
-        isOpen={isAddingPage}
+        isOpen={addingPage !== undefined}
+        kind={addingPage ?? 'page'}
+        onTeamLink={(formId) => {
+          onAddPageClose();
+          void navigate({ href: formHref(slug, formId) });
+        }}
+        onManaged={(templateId) => {
+          onAddPageClose();
+          void navigate({ href: managedPageHref(slug, templateId) });
+        }}
         onClose={onAddPageClose}
         onCreated={(page) => {
           onAddPageClose();

@@ -36,6 +36,21 @@ export function useWorkspaceName(): string | undefined {
   });
 }
 
+/** The signed in person's name and id, as `me` says them (known before the frame loads); undefined until then. */
+export function useMyName(): { readonly id: string; readonly name: string } | undefined {
+  const id = useMatch({
+    from: '/w/$slug',
+    shouldThrow: false,
+    select: (frame) => (frame.context.me as Me | undefined)?.user.id,
+  });
+  const name = useMatch({
+    from: '/w/$slug',
+    shouldThrow: false,
+    select: (frame) => (frame.context.me as Me | undefined)?.user.name,
+  });
+  return id === undefined || name === undefined ? undefined : { id, name };
+}
+
 /** The open workspace's objects, as the frame loaded them; undefined while they load. */
 export function useWorkspaceObjects() {
   return useMatch({ from: '/w/$slug', shouldThrow: false, select: (frame) => frame.loaderData?.objects });

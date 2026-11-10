@@ -43,6 +43,8 @@ export interface CapturesListProps {
   readonly toolbarActions?: ReactNode;
   /** The cards carry pictures: the loading cards draw their stage too. */
   readonly hasPictures?: boolean;
+  /** The cards are LinkCard's `page` variant (Bookings › Pages): the loading cards draw its shape. */
+  readonly cardVariant?: 'default' | 'page';
 }
 
 /**
@@ -62,6 +64,7 @@ export function CapturesList({
   dialogs,
   toolbarActions,
   hasPictures = false,
+  cardVariant = 'default',
 }: CapturesListProps) {
   const slot = useCapturesToolbarSlot();
   const [query, setQuery] = useState('');
@@ -104,6 +107,7 @@ export function CapturesList({
             errorTitle={errorTitle}
             onRetry={onRetry}
             hasPictures={hasPictures}
+            cardVariant={cardVariant}
           />
         </>
       )}

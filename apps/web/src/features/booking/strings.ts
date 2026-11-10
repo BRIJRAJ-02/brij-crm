@@ -43,7 +43,12 @@ export const strings = {
   workspaceLinkCopied: 'Workspace link copied.',
   copyFailed: 'Couldn’t copy the link. Try again.',
   teamLink: 'Team link',
-  teamLinkLine: 'A form asks what they want, then books the right team page.',
+  teamLinkLine: 'Asks what they need, then books the right team',
+  editHoursAndHosts: 'Edit hours and hosts',
+  teamsSection: 'Teams',
+  /** Bookings › Pages' actions at the TopBar's end, as a group. */
+  pagesActions: 'Pages actions',
+  manageTeams: 'Manage teams',
   addTeamLink: 'New team link',
   /** A workspace link a member may copy and open, not change. */
   viewOnly: 'View only',
@@ -70,6 +75,9 @@ export const strings = {
   duplicateFailed: (title: string) => `Couldn’t duplicate ${title}.`,
   notYours: 'Only its owner or a workspace admin can change it',
   deleted: (title: string) => `Deleted “${title}”.`,
+  deleteFailed: (title: string) => `Couldn’t delete ${title}. It’s back.`,
+  /** The ⋯ button's tooltip on a card. */
+  moreTip: 'More',
   duplicate: 'Duplicate',
   hours: 'Hours',
   delete: 'Delete',
@@ -83,6 +91,26 @@ export const strings = {
     return all.length === 1 ? `${last} min` : `${all.slice(0, -1).join(', ')} or ${last} min`;
   },
   locationChip: { phone: 'Phone', address: 'In person', custom: 'Custom place' },
+  /** A page's card in Bookings › Pages (the mock of 9 November 2026): its facts, who it books with, its status menu. */
+  pageCard: {
+    video: 'Video call',
+    place: { phone: 'Phone call', address: 'In person', custom: 'Custom place' },
+    kind: { personal: 'One-on-one', collective: 'Team, all together', round_robin: 'Team, taking turns' },
+    hosts: (count: number) => `${String(count)} hosts`,
+    everyone: (count: number) => `Everyone, ${String(count)} ${count === 1 ? 'person' : 'people'}`,
+    /** The Live or Hidden menu: its name on the trigger, then each choice with what it means. */
+    statusName: (title: string, status: string) => `${status}, status of ${title}`,
+    statusMenu: (title: string) => `${title} status`,
+    live: 'Live',
+    liveLine: 'Anyone with the link can book',
+    hidden: 'Hidden',
+    hiddenLine: 'Guests can’t book',
+    madeLive: (title: string) => `${title} is live`,
+    madeHidden: (title: string) => `${title} is hidden`,
+    viewLive: 'View live page',
+    embed: 'Embed',
+    newPage: 'New page',
+  },
   emptyTitle: 'No booking pages yet',
   failedTitle: 'Booking pages didn’t load',
   failedText: 'Check your connection and try again.',
@@ -145,6 +173,32 @@ export const strings = {
   /** The look of the page in a tab of its own (T21): how it opens, and the brand it wears. */
   appearanceTab: 'Appearance',
   layoutSection: 'Layout',
+  /** The editor (the owner's mock of 9 November 2026): its sections' list, grouped, and its header. */
+  sectionsLabel: 'Page sections',
+  sectionGroups: { meeting: 'Meeting', guests: 'Guests', page: 'Page', activity: 'Activity' },
+  hoursAndLimits: 'Hours and limits',
+  afterBookingTab: 'After booking',
+  lookTab: 'Look',
+  bookingsCrumb: 'Bookings',
+  pagesCrumb: 'Pages',
+  lengths: 'Lengths',
+  lengthsAside: 'guests pick one',
+  previewTip: 'Preview your page',
+  saveChanges: 'Save changes',
+  noChangesYet: 'No changes yet',
+  changesSaved: 'Changes saved',
+  notSaved: 'Not saved',
+  discardChanges: 'Discard changes',
+  versionHistory: 'Version history',
+  versionRestored: (version: number) => `Version ${String(version)} is back. Save changes to put it live.`,
+  goTo: (section: string) => `Go to ${section}`,
+  leaveTitle: (title: string) => `Save changes to ${title} before leaving?`,
+  leaveText: 'You have edits that aren’t saved yet. Discard drops them; Save makes them live for guests.',
+
+  /** Look's theme (the mock of 9 November 2026): Classic or Night, the workspace's own. */
+  themeSection: 'Theme',
+  themeLine: 'Logo and colour come from your brand. Every booking page wears it.',
+  themeSaved: (name: string) => `Booking pages now wear ${name}.`,
   shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */

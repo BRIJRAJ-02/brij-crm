@@ -39,7 +39,9 @@ export const useBookingsHosts = () => useContext(BookingsHosts);
  * Opens New booking page, held by the Bookings layout (its dialog sits with the TopBar's New): the TopBar's New menu,
  * Pages' empty list and the Calendar's empty state all open the one dialog. Undefined outside the layout.
  */
-export const BookingsNewPage = createContext<(() => void) | undefined>(undefined);
+export const BookingsNewPage = createContext<((kind?: 'page' | 'workspace' | 'team-link') => void) | undefined>(
+  undefined,
+);
 
 /** The layout's New booking page, or undefined outside Bookings. */
 export const useBookingsNewPage = () => useContext(BookingsNewPage);

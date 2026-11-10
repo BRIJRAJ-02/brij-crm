@@ -2366,7 +2366,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         title={strings.noPagesTitle}
         actions={
           <>
-            <Button variant="primary" icon="plus" onPress={newPage}>
+            <Button variant="primary" icon="plus" onPress={() => newPage()}>
               {strings.makeBookingPage}
             </Button>
             {canConnectCalendar && hasNoCalendar && (
