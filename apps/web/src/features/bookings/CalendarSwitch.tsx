@@ -8,6 +8,7 @@
 import type { CalendarAccountView } from '@crm/data';
 import { Select, type Hue } from '@crm/ui';
 import { useState } from 'react';
+import { calendarOptions } from '../calendars/calendar-options.ts';
 import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings } from './strings.ts';
 
@@ -43,7 +44,7 @@ export interface SwitchCalendar {
   readonly id: string;
   readonly name: string;
   readonly hue: Hue;
-  /** Its account's address, which tells two calendars of the same name apart in the list. */
+  /** Its account's address. */
   readonly account: string;
 }
 
@@ -94,35 +95,32 @@ export function showsOf(choice: string): {
 }
 
 /**
- * All calendars ▾, then each connected calendar by its name in its colour, as one Select (the mock, 10 November
- * 2026: a row of segments grew with every calendar and pushed the week's tools off the bar). With one calendar or
- * none there is nothing to choose, and it draws nothing. Two calendars of the same name say their account under it.
+ * All calendars ▾, then each connected calendar by its name, its dot in its colour, as one Select (the mock, 10
+ * November 2026: a row of segments grew with every calendar and pushed the week's tools off the bar). The options are
+ * every calendar picker's (`calendarOptions`): an account with two or more sits under its address. With one calendar
+ * or none there is nothing to choose, and it draws nothing.
  */
 export function CalendarSwitch({
+  accounts,
   calendars,
   choice,
   onChoose,
 }: {
+  /** The member's accounts on the week, each with its calendars: the options' source. */
+  readonly accounts: readonly Pick<CalendarAccountView, 'accountEmail' | 'calendars'>[];
+  /** The calendars the week may show (`switchCalendars`), which decide whether there is a choice. */
   readonly calendars: readonly SwitchCalendar[];
   readonly choice: string;
   readonly onChoose: (next: string) => void;
 }) {
   if (calendars.length < FEWEST_TO_SWITCH) return undefined;
-  const isShared = (name: string) => calendars.filter((calendar) => calendar.name === name).length > 1;
   return (
     <Select
       label={strings.calendars}
       isLabelHidden
       size="sm"
-      items={[
-        { id: ALL_CALENDARS, label: strings.allCalendars },
-        ...calendars.map((calendar) => ({
-          id: calendar.id,
-          label: calendar.name,
-          hue: calendar.hue,
-          ...(isShared(calendar.name) ? { description: calendar.account } : {}),
-        })),
-      ]}
+      optionStyle="dot"
+      items={calendarOptions({ accounts, lead: [{ id: ALL_CALENDARS, label: strings.allCalendars }] })}
       value={choice}
       onChange={(next) => {
         if (next !== null && next !== choice) onChoose(next);

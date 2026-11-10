@@ -53,7 +53,7 @@ function MeetingLimitsError({ error }: ErrorComponentProps) {
     <SettingsFailed
       title={strings.title}
       heading={strings.loadFailed}
-      text={isDataError(error) ? error.message : strings.loadFailed}
+      text={isDataError(error) ? error.message : strings.loadFailedText}
       onRetry={() => void router.invalidate()}
     />
   );

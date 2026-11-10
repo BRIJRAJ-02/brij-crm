@@ -57,7 +57,8 @@ function BookingsRoute() {
     [],
   );
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
-  // screen): Availability's New schedule, the Roster's Set usual hours, Round robin's New group, Calendars' Connect.
+  // screen): the Team hours' Set usual hours, Pages' New page. Availability keeps the end empty, as the mock does: its
+  // New schedule is the schedules list's last option (10 November 2026).
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   // Pages' search and Routing's views, in the TopBar before whose bookings show: no second bar under the header.
   const [toolsSlot, setToolsSlot] = useState<HTMLElement | null>(null);

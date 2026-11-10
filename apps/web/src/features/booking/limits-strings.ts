@@ -1,4 +1,4 @@
-// The words of Availability's Limits section (spec 0037, AC-1297 to AC-1299).
+// The words of Meeting limits (spec 0037, AC-1297 to AC-1299), Bookings settings' page since 10 November 2026.
 
 /** The ranges the server takes (spec 0037's Numbers): 1 to 50 a day, 1 to 200 a week. */
 export const LIMIT_RANGES = { day: { min: 1, max: 50 }, week: { min: 1, max: 200 } } as const;
@@ -47,6 +47,6 @@ export const limitsStrings = {
   whose: 'Whose limits',
   whoseMine: 'My limits',
   whoseTheirs: (name: string) => `${name}’s limits`,
-  seeOnlyShort: 'See only',
   loadFailed: 'Meeting limits didn’t load.',
+  loadFailedText: 'Check your connection, then try again.',
 } as const;

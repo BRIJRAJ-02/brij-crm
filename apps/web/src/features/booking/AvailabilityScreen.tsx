@@ -23,7 +23,7 @@ import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
-import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
+import { availabilityHref, bookingsHref, meetingLimitsHref, scheduleHref } from './links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
@@ -31,6 +31,7 @@ import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
 import type { StandinChoice } from './TimeOffDialog.tsx';
 import type { DaysOffSlot } from './DaysOff.tsx';
 import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
+import { WhoseSelect } from './WhoseSelect.tsx';
 import { SCHEDULES_MAX, showsViewing } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
@@ -201,6 +202,8 @@ export function AvailabilityScreen({
         // New schedule is the list's last option (the mock, 10 November 2026), not a primary in the TopBar; read
         // only, there is nothing to make, and the Callout above the week says why.
         {...(canChange && memberId !== undefined ? { onNew: () => setCreating(true) } : {})}
+        // The person's meeting limits, which left this tab for Bookings settings: one item away, for whoever is shown.
+        limitsHref={meetingLimitsHref(slug, member)}
       />
     );
   // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
@@ -219,7 +222,10 @@ export function AvailabilityScreen({
       end={
         <>
           {hasColleagues && (
-            <Viewing
+            <WhoseSelect
+              label={scheduleStrings.viewing}
+              mine={scheduleStrings.viewingMine}
+              theirs={scheduleStrings.viewingTheirs}
               members={members}
               me={me}
               value={member ?? me}
@@ -386,45 +392,6 @@ function SwitcherPending() {
       items={[{ id: 'loading', label: scheduleStrings.schedule }]}
       value="loading"
       onChange={() => undefined}
-    />
-  );
-}
-
-/**
- * The Viewing Select (AC-971; spec 0037, AC-1268): the reader's own schedules or a colleague's in their See reach, by
- * name, each at its own address, the ones they may only See marked so. `members.visible` answers the choices.
- */
-function Viewing({
-  members,
-  me,
-  value,
-  onChange,
-  isDisabled = false,
-}: {
-  readonly members: readonly VisibleMember[];
-  readonly me: string;
-  readonly value: string;
-  readonly onChange: (id: string) => void;
-  readonly isDisabled?: boolean;
-}) {
-  return (
-    <Select
-      label={scheduleStrings.viewing}
-      isLabelHidden
-      size="sm"
-      isSearchable
-      isDisabled={isDisabled}
-      // A colleague the reader may only See says so in the list, before they open them (AC-1268).
-      showsDescription
-      items={members.map((each) => ({
-        id: each.id,
-        label: each.id === me ? scheduleStrings.viewingMine : scheduleStrings.viewingTheirs(each.name),
-        ...(each.id === me || each.canManage ? {} : { description: scheduleStrings.seeOnlyShort }),
-      }))}
-      value={value}
-      onChange={(id) => {
-        if (id !== null && id !== value) onChange(id);
-      }}
     />
   );
 }

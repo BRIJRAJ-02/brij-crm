@@ -24,12 +24,38 @@ const FIVE = [
   calendar('trips', 'Trips'),
 ];
 
+/** A calendar shown on the week: in use, so every picker lists it. */
+const inUse = {
+  connectionId: 'c1',
+  accessRole: 'owner' as const,
+  isPrimary: false,
+  checkConflicts: false,
+  showInWeek: true,
+  sync: false,
+  isDestination: false,
+  canBeDestination: false,
+};
+
+/** The calendars' accounts, as the week passes them: each calendar in use, under its account's address. */
+const accountsOf = (calendars: readonly SwitchCalendar[]) =>
+  [...new Set(calendars.map((each) => each.account))].map((accountEmail) => ({
+    accountEmail,
+    calendars: calendars
+      .filter((each) => each.account === accountEmail)
+      .map((each) => ({ ...inUse, id: each.id, name: each.name, hue: each.hue })),
+  }));
+
 /** The switch and the choice it makes, as the week reads it. */
 function Harness({ calendars }: { readonly calendars: readonly SwitchCalendar[] | undefined }) {
   const { choice, choose } = useCalendarChoice('acme', calendars);
   return (
     <>
-      <CalendarSwitch calendars={calendars ?? []} choice={choice} onChoose={choose} />
+      <CalendarSwitch
+        accounts={accountsOf(calendars ?? [])}
+        calendars={calendars ?? []}
+        choice={choice}
+        onChoose={choose}
+      />
       <p>{`Showing ${choice}`}</p>
     </>
   );
@@ -64,11 +90,13 @@ describe('the calendar switch', () => {
     expect(globalThis.localStorage.getItem(KEY)).toBe('gym');
   });
 
-  it('tells two calendars of the same name apart by their account', async () => {
-    await render([calendar('work', 'Calendar'), calendar('home', 'Calendar')]);
+  it('lists an account with two calendars under its address, as every calendar picker does', async () => {
+    await render([
+      { ...calendar('work', 'Calendar'), account: 'ada@example.com' },
+      { ...calendar('home', 'Home'), account: 'ada@example.com' },
+    ]);
     await userEvent.click(page.getByRole('button', { name: /All calendars/ }));
-    await expect.element(page.getByRole('option', { name: /work@example\.com/ })).toBeVisible();
-    await expect.element(page.getByRole('option', { name: /home@example\.com/ })).toBeVisible();
+    await expect.element(page.getByText('ada@example.com')).toBeVisible();
   });
 
   it('hides itself with one calendar or none, and then shows everything', async () => {
