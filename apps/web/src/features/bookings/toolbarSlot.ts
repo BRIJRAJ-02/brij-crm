@@ -20,7 +20,7 @@ export const BookingsActionSlot = createContext<HTMLElement | null>(null);
 /** The TopBar's end for the tab's own primary action, or null where the TopBar keeps New meeting. */
 export const useBookingsActionSlot = () => useContext(BookingsActionSlot);
 
-/** Whose bookings an admin sees, and how they change it (HostsSwitch, on the strip); absent for anyone else. */
+/** Whose bookings an admin sees, and how they change it (Meetings' People picker); absent for anyone else. */
 export interface HostsChoice {
   readonly value: BookingHosts;
   readonly onChange: (next: BookingHosts) => void;

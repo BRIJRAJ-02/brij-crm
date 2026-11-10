@@ -23,8 +23,6 @@ import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/Worksp
 // frame. The layout owns New, so it never moves or remounts as the tabs change. Bare `/bookings` (and
 // `/bookings/meetings`) goes to the calendar, or the list for an old `?view=list` link (`bookings.index`). Calendars,
 // Teams (round robin's groups) and Scheduling access are Bookings settings, behind the gear.
-/** The views that read bookings, where an admin's Mine · Everyone shows. */
-const READS_BOOKINGS = new Set<string>(['calendar', 'list']);
 /** The tabs that put their own primary action where New meeting sits, rather than letting the TopBar keep it. */
 const OWN_ACTION = new Set<string>(['availability', 'roster', 'pages']);
 
@@ -58,8 +56,6 @@ function BookingsRoute() {
       },
     [],
   );
-  // The Team day (spec 0030) shows everyone the reader may see, whatever Mine or Everyone says: the switch steps aside.
-  const isTeamDay = useLocation({ select: (location) => view === 'calendar' && location.search.v === 'team' });
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
   // screen): Availability's New schedule, the Roster's Set usual hours, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
@@ -67,8 +63,7 @@ function BookingsRoute() {
   const [toolsSlot, setToolsSlot] = useState<HTMLElement | null>(null);
   const hasTools = viewHasTools(view);
   // Mine or Everyone (the owner's ask of 29 October 2026): an admin's choice, and anyone's whose scheduling reach
-  // sees a colleague (spec 0037, AC-1262), kept here so Calendar and List share it and its switch stands still on
-  // the strip as they swap.
+  // sees a colleague (spec 0037, AC-1262), kept here so Calendar and List share it; Meetings' People picker sets it.
   const access = useMyAccess();
   const seesOthers = access?.scheduling?.seesOthers === true;
   const isAdmin = useCan('booking.admin') || seesOthers;
@@ -103,13 +98,7 @@ function BookingsRoute() {
                     scope={
                       <>
                         {hasTools && <div ref={setToolsSlot} />}
-                        <BookingsScope
-                          slug={slug}
-                          tab={tab}
-                          view={view}
-                          hasRoster={hasRoster}
-                          hosts={READS_BOOKINGS.has(view) && !isTeamDay ? hosts : undefined}
-                        />
+                        <BookingsScope slug={slug} tab={tab} view={view} hasRoster={hasRoster} />
                       </>
                     }
                     actionSlot={ownsAction ? setActionSlot : undefined}

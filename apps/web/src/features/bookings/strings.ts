@@ -13,7 +13,9 @@ export const strings = {
   },
   /** Availability's two views, on the strip's end for whoever sees a colleague's scheduling (as Cal.com's toggle). */
   availabilityViewsLabel: 'Whose hours',
-  availabilityViews: { availability: 'My hours', roster: 'Roster' },
+  // The team's week was "Roster"; "Team hours" pairs with My hours, and stays apart from Settings' Teams (round
+  // robin's groups) and Members › Teams (10 November 2026).
+  availabilityViews: { availability: 'My hours', roster: 'Team hours' },
   /** The gear at the TopBar's end, and the name of the page it opens. */
   settingsLabel: 'Bookings settings',
   tabsLabel: 'Which bookings',
@@ -84,8 +86,13 @@ export const strings = {
   viewMenuLabel: (view: string) => `View: ${view}`,
   dayView: 'Day',
   weekView: 'Week',
-  /** Meetings' list, the last of its views (D, W, Team, List), on the same switch. */
+  /** Meetings' list, the first of its views on the switch (List, Day, Week). */
   listView: 'List',
+  /** Whose meetings show (the mock's People picker, 10 November 2026): the reader, or the whole team. */
+  peopleLabel: 'People',
+  peopleYou: (name: string) => `${name} (you)`,
+  peopleMe: 'You',
+  peopleTeam: 'Whole team',
   /** An empty week's way on: the day of the reader's next booking after it. */
   nextBooking: (day: string) => `Next booking: ${day}`,
   weekLabel: (range: string) => `Bookings, ${range}`,
@@ -120,7 +127,7 @@ export const strings = {
   allLinks: 'All links',
   calendars: 'Calendars',
   allCalendars: 'All calendars',
-  /** Whose bookings an admin sees (HostsSwitch). */
+  /** Whose bookings an admin sees (the phone's View menu; the People picker on a wider page). */
   hostsLabel: 'Whose bookings',
   hosts: { mine: 'Mine', all: 'Everyone' },
   /** A colleague's booking on the week (an admin's Everyone): the guest, then whose it is. */
@@ -128,8 +135,6 @@ export const strings = {
   /** A colleague's booking's card: whose it is. */
   hostRow: 'Host',
   bookingsOnly: 'Bookings',
-  moreCalendars: 'More calendars',
-  moreCount: (count: number) => (count === 1 ? '1 more calendar' : `${String(count)} more calendars`),
   calendarsFailed: 'Couldn’t load your calendars.',
   connectCalendar: 'Connect a calendar',
   connectCalendarShort: 'Connect calendar',

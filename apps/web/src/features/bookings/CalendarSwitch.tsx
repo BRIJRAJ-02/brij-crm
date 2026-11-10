@@ -1,12 +1,12 @@
 // Brief
 // Purpose: the Bookings week's calendar switch (the owner, 22 October 2026): one calendar at a time, or all of them,
-// in the week's own controls bar, in place of the Calendars panel's boxes.
+// in the week's own controls bar, in place of the Calendars panel's boxes, as one All calendars ▾ Select.
 // Main task: pick All calendars or one connected calendar; bookings always show, and the pick filters only the
 // calendars' events and busy time (the owner, 22 October 2026: "the tab should be only for no of calendar connected").
 // Leaves out: several calendars at once (the List tab's panel still does that), and the calendars' own settings
 // (Settings › Calendars).
 import type { CalendarAccountView } from '@crm/data';
-import { Button, Menu, MenuItem, MenuTrigger, SegmentedControl, type Hue, type Segment } from '@crm/ui';
+import { Select, type Hue } from '@crm/ui';
 import { useState } from 'react';
 import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings } from './strings.ts';
@@ -16,9 +16,6 @@ export const ALL_CALENDARS = 'all';
 
 /** The fewest calendars there is a choice between: with one or none the switch is hidden. */
 const FEWEST_TO_SWITCH = 2;
-
-/** The most segments a SegmentedControl holds; the rest of the calendars fold into More. */
-const MOST_SEGMENTS = 5;
 
 /** Where the choice is kept, per workspace, in this browser. */
 const keyOf = (slug: string) => `crm.bookings.weekCalendar.${slug}`;
@@ -46,7 +43,7 @@ export interface SwitchCalendar {
   readonly id: string;
   readonly name: string;
   readonly hue: Hue;
-  /** Its account's address, which tells two calendars of the same name apart in More. */
+  /** Its account's address, which tells two calendars of the same name apart in the list. */
   readonly account: string;
 }
 
@@ -97,10 +94,9 @@ export function showsOf(choice: string): {
 }
 
 /**
- * All calendars, then each connected calendar by its name in its colour, as one SegmentedControl (arrow keys move
- * and choose), each segment as wide as its name. With one calendar or none there is nothing to choose, and it draws
- * nothing. Past five segments the rest fold into a More menu, which marks the chosen one and names it on its button;
- * the segments never move, so nothing jumps under the pointer.
+ * All calendars ▾, then each connected calendar by its name in its colour, as one Select (the mock, 10 November
+ * 2026: a row of segments grew with every calendar and pushed the week's tools off the bar). With one calendar or
+ * none there is nothing to choose, and it draws nothing. Two calendars of the same name say their account under it.
  */
 export function CalendarSwitch({
   calendars,
@@ -112,44 +108,25 @@ export function CalendarSwitch({
   readonly onChoose: (next: string) => void;
 }) {
   if (calendars.length < FEWEST_TO_SWITCH) return undefined;
-  const room = MOST_SEGMENTS - 1;
-  const shown = calendars.length <= room ? calendars : calendars.slice(0, room - 1);
-  const folded = calendars.slice(shown.length);
-  const chosenFolded = folded.find((calendar) => calendar.id === choice);
-  const segments: Segment[] = [
-    { value: ALL_CALENDARS, label: strings.allCalendars },
-    ...shown.map((calendar) => ({ value: calendar.id, label: calendar.name, hue: calendar.hue })),
-  ];
+  const isShared = (name: string) => calendars.filter((calendar) => calendar.name === name).length > 1;
   return (
-    <>
-      <SegmentedControl
-        label={strings.calendars}
-        size="compact"
-        isFitted
-        segments={segments}
-        value={choice}
-        onChange={onChoose}
-      />
-      {folded.length > 0 && (
-        <MenuTrigger>
-          {/* Its name is its words: the chosen calendar's, else how many more there are. */}
-          <Button variant={chosenFolded === undefined ? 'ghost' : 'secondary'} iconRight="chevron-down">
-            {chosenFolded === undefined ? strings.moreCount(folded.length) : chosenFolded.name}
-          </Button>
-          <Menu
-            label={strings.moreCalendars}
-            selectionMode="single"
-            selectedKeys={chosenFolded === undefined ? [] : [chosenFolded.id]}
-            onAction={(key) => onChoose(String(key))}
-          >
-            {folded.map((calendar) => (
-              <MenuItem key={calendar.id} id={calendar.id} description={calendar.account}>
-                {calendar.name}
-              </MenuItem>
-            ))}
-          </Menu>
-        </MenuTrigger>
-      )}
-    </>
+    <Select
+      label={strings.calendars}
+      isLabelHidden
+      size="sm"
+      items={[
+        { id: ALL_CALENDARS, label: strings.allCalendars },
+        ...calendars.map((calendar) => ({
+          id: calendar.id,
+          label: calendar.name,
+          hue: calendar.hue,
+          ...(isShared(calendar.name) ? { description: calendar.account } : {}),
+        })),
+      ]}
+      value={choice}
+      onChange={(next) => {
+        if (next !== null && next !== choice) onChoose(next);
+      }}
+    />
   );
 }

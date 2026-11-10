@@ -28,6 +28,7 @@ import {
 } from '@crm/data';
 import { useBookingsCalendar, useCalendarList, useMeetings } from '@crm/data/react';
 import {
+  Avatar,
   BookingList,
   Button,
   ButtonLink,
@@ -48,6 +49,7 @@ import {
   VisuallyHidden,
   SectionBar,
   SegmentedControl,
+  Select,
   MenuSeparator,
   useFormatSettings,
   useKeyboardPlatform,
@@ -93,7 +95,7 @@ import type { NewMeeting, NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { AwayReassignDialog, MonthCalendar, NewMeetingDialog, ReassignDialog, TimeOffDialog } from './lazy-parts.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch, MeetingsTab } from './search.ts';
-import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
+import { useCan, useMyAccess, useMyName } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import {
   BookingDialog,
@@ -363,10 +365,17 @@ const VIEW_LABEL: Record<MeetingsViewName, string> = {
 const isMeetingsView = (value: unknown): value is MeetingsViewName =>
   value === 'day' || value === 'week' || value === 'team' || value === 'list';
 
+/** The desk switch's views, in the mock's order: the list, then the calendar's day and week (10 November 2026). */
+const SWITCH_VIEWS: readonly Exclude<MeetingsViewName, 'team'>[] = ['list', 'day', 'week'];
+
+/** Each switch view's icon, as the mock draws them. */
+const VIEW_ICON = { list: 'list', day: 'calendar', week: 'calendar-days' } as const;
+
 /**
- * Day · Week · Team · List, Meetings' one switch (as Cal.com's bookings swap List and Calendar in place): the same
- * compact SegmentedControl on the calendar's bar and the list's, so the views read as one place. D and W teach
- * their keys. On a phone it is the View menu instead.
+ * List · Day · Week, Meetings' one switch (as Cal.com's bookings swap List and Calendar in place), each with its icon:
+ * the same compact SegmentedControl on the calendar's bar and the list's, so the views read as one place. D and W
+ * teach their keys. The Team day is Day with the Whole team picked (`PeoplePicker`), so it lights Day here. On a
+ * phone it is the View menu instead.
  */
 function MeetingsViewSwitch({
   view,
@@ -377,21 +386,96 @@ function MeetingsViewSwitch({
   readonly views: readonly MeetingsViewName[];
   readonly onView: (next: MeetingsViewName) => void;
 }) {
+  const shown = view === 'team' ? 'day' : view;
   return (
     <SegmentedControl
       label={strings.calendarView}
       size="compact"
-      value={view}
+      value={shown}
       onChange={(next) => {
-        if (isMeetingsView(next) && next !== view) onView(next);
+        if (isMeetingsView(next) && next !== shown) onView(next);
       }}
-      segments={views.map((each) => ({
+      segments={SWITCH_VIEWS.filter((each) => views.includes(each)).map((each) => ({
         value: each,
         label: VIEW_LABEL[each],
+        icon: VIEW_ICON[each],
         ...(each === 'day' || each === 'week' ? { kbd: WEEK_KEYS[each] } : {}),
       }))}
     />
   );
+}
+
+/** Whose meetings show: the reader's own, or the whole team's. */
+type PeopleChoice = 'me' | 'team';
+
+/**
+ * The People picker (the mock, 10 November 2026), beside the views: the reader by name, or the Whole team. It takes
+ * the place of Mine · Everyone on the TopBar and of the Team segment: an admin's Whole team is Everyone's bookings
+ * on the week and the list, and on Day it is the Team day; for someone who sees the Team day but not everyone's
+ * bookings, Whole team opens the Team day. Shown only where there is a choice.
+ */
+function PeoplePicker({
+  value,
+  onChange,
+}: {
+  readonly value: PeopleChoice;
+  readonly onChange: (next: PeopleChoice) => void;
+}) {
+  const me = useMyName();
+  const name = me === undefined ? strings.peopleMe : strings.peopleYou(me.name);
+  return (
+    <Select
+      label={strings.peopleLabel}
+      isLabelHidden
+      size="sm"
+      items={[
+        {
+          id: 'me',
+          label: name,
+          ...(me === undefined
+            ? { icon: 'user' as const }
+            : { leading: <Avatar name={me.name} id={me.id} size="xs" isDecorative /> }),
+        },
+        { id: 'team', label: strings.peopleTeam, icon: 'users', isApart: true },
+      ]}
+      value={value}
+      onChange={(next) => {
+        if ((next === 'me' || next === 'team') && next !== value) onChange(next);
+      }}
+    />
+  );
+}
+
+/**
+ * Whose meetings a Meetings bar shows, and how a pick moves the views: `hosts` is an admin's Mine or Everyone, and
+ * `hasTeam` whether the Team day is offered. Picking Whole team on Day (or anywhere, for someone without Everyone)
+ * opens the Team day; picking yourself from the Team day goes back to Day. Undefined when there is nothing to pick.
+ */
+function peopleChoiceOf({
+  view,
+  hosts,
+  hasTeam,
+  onView,
+}: {
+  readonly view: MeetingsViewName;
+  readonly hosts: HostsChoice | undefined;
+  readonly hasTeam: boolean;
+  readonly onView: (next: MeetingsViewName) => void;
+}) {
+  if (hosts === undefined && !hasTeam) return undefined;
+  const value: PeopleChoice = view === 'team' || hosts?.value === 'all' ? 'team' : 'me';
+  const choose = (next: PeopleChoice) => {
+    if (next === 'team') {
+      hosts?.onChange('all');
+      if (hasTeam && (view === 'day' || hosts === undefined)) onView('team');
+    } else {
+      hosts?.onChange('mine');
+      if (view === 'team') onView('day');
+    }
+  };
+  // Day with the Whole team picked is the Team day, so the switch's Day keeps the team.
+  const pick = (next: MeetingsViewName) => onView(next === 'day' && value === 'team' && hasTeam ? 'team' : next);
+  return { value, choose, pick };
 }
 
 /**
@@ -1897,6 +1981,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
     if (next === 'list') props.onList?.();
     else onSearch({ view: next });
   };
+  // Whose meetings show, beside the views: the reader, or the Whole team (Everyone's bookings, or the Team day).
+  const people = peopleChoiceOf({ view, hosts: hostsChoice, hasTeam: calendarViews.includes('team'), onView: setView });
   const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
   const range =
     view !== 'week'
@@ -2224,11 +2310,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
               />
             </>
           )}
-          {/* Filter and Calendars, then the views: one order on every Meetings bar, so the switch never moves. */}
+          {/* Filter and Calendars, then People and the views: one order on every Meetings bar, so the switch never
+              moves. */}
           {isPhone ? (
             <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
           ) : (
-            <MeetingsViewSwitch view={view} views={views} onView={setView} />
+            <>
+              {people !== undefined && <PeoplePicker value={people.value} onChange={people.choose} />}
+              <MeetingsViewSwitch view={view} views={views} onView={people?.pick ?? setView} />
+            </>
           )}
         </>
       }
@@ -3001,6 +3091,13 @@ function ListBar({
     if (next !== 'list') onCalendarView?.(next);
   };
   const views: readonly MeetingsViewName[] = [...(calendarViews ?? []), 'list'];
+  // Whose meetings show, beside the views: an admin's Whole team is Everyone's; anyone else's opens the Team day.
+  const people = peopleChoiceOf({
+    view: 'list',
+    hosts,
+    hasTeam: calendarViews?.includes('team') === true,
+    onView,
+  });
   return (
     <SectionBar
       start={
@@ -3038,7 +3135,10 @@ function ListBar({
             (isPhone ? (
               <ViewMenu view="list" views={views} onView={onView} hosts={hosts} />
             ) : (
-              <MeetingsViewSwitch view="list" views={views} onView={onView} />
+              <>
+                {people !== undefined && <PeoplePicker value={people.value} onChange={people.choose} />}
+                <MeetingsViewSwitch view="list" views={views} onView={people?.pick ?? onView} />
+              </>
             ))}
         </>
       }
