@@ -108,7 +108,7 @@ export interface InviteWriteOptions {
 }
 
 /** The actor's role as the invitation rules judge it: a member's own, the system as an owner. */
-function actingRole(scope: EngineScope): Role | undefined {
+export function actingRole(scope: EngineScope): Role | undefined {
   const { principal } = scope.access;
   if (principal.kind === 'system') return 'owner';
   return principal.kind === 'member' ? principal.role : undefined;
@@ -170,9 +170,13 @@ function isVouchedFor(sent: {
   /** A page's hand over (Team pages), and what the sender's custom role grants beside their role. */
   readonly isPage?: boolean;
   readonly senderGrants?: readonly string[] | null;
+  /** The person it names sent it themselves: a partner's person asking for their own login (spec 0070, AC-7023). */
+  readonly isSelf?: boolean;
 }): boolean {
   if (sent.sentByType === 'system') return true;
   if (sent.sentByType !== 'member' || sent.senderStatus !== 'active') return false;
+  // Their own login, asked for by themselves: it stands while they are still here.
+  if (sent.isPage === true && sent.isSelf === true) return true;
   const senderRole = sent.senderRole ?? '';
   if (!isRole(senderRole)) return false;
   if (sent.role === 'owner') return senderRole === 'owner';
@@ -750,6 +754,7 @@ export async function readInvitation(
       usedBy: invitations.usedByMemberId,
       memberId: invitations.memberId,
       sentByType: invitations.updatedByType,
+      sentByMember: invitations.updatedByMemberId,
       inviterName: inviter.name,
       senderStatus: inviter.status,
       senderRole: inviter.role,
@@ -804,6 +809,7 @@ export async function readInvitation(
       senderRole: row.senderRole,
       isPage: row.memberId !== null,
       senderGrants: row.senderGrants,
+      isSelf: row.memberId !== null && row.sentByMember === row.memberId,
     }),
     workspaceName: row.workspaceName,
     slug: row.slug,
@@ -818,7 +824,14 @@ export async function readInvitation(
  * invitation now (malformed, unknown, expired, revoked or used) answers the
  * same `INVITE_INVALID`. The caller limits it to 20 a minute per IP.
  */
-export async function peekInvite(deps: { readonly db: Database }, token: string): Promise<InvitePeek> {
+export async function peekInvite(
+  deps: {
+    readonly db: Database;
+    /** A partner's name by its id, from the registry (spec 0070): a login claim's page says which app keeps them. */
+    readonly partnerName?: (partnerId: string) => Promise<string | undefined>;
+  },
+  token: string,
+): Promise<InvitePeek> {
   const { scope, ...entered } = await enterInvitation(deps, token);
   const { held, page, isClaimed } = await inWorkspace(scope, async (tx) => {
     const found = await readInvitation(tx, scope.workspaceId, entered, false);
@@ -834,15 +847,22 @@ export async function peekInvite(deps: { readonly db: Database }, token: string)
       isClaimed: false,
     };
   });
-  // A page's hand over whose person is no page only person here any more opens nothing.
+  // A page's hand over whose person is no page only person here any more opens nothing; nor does a login claim whose
+  // person the partner removed, or who claimed it another way.
   if (held.memberId !== undefined && page === undefined) throw inviteInvalid();
+  const partnerId = page?.partnerId;
+  // A failed read of the name still opens the page; it then names no app.
+  const app = partnerId === undefined ? undefined : await deps.partnerName?.(partnerId).catch(() => undefined);
   return {
     workspaceName: held.workspaceName,
     inviterName: held.inviterName ?? '',
     role: held.role,
     roleLabel: held.customRole?.name ?? ROLE_LABELS[held.role],
     ...(held.kind === 'email' ? { invitedEmailMasked: maskEmail(held.email) } : {}),
-    ...(page === undefined ? {} : { page }),
+    ...(page === undefined
+      ? {}
+      : { page: { name: page.name, ...(page.handle === undefined ? {} : { handle: page.handle }) } }),
+    ...(partnerId === undefined ? {} : { login: app === undefined ? {} : { app } }),
     ...(isClaimed ? { isClaimed: true } : {}),
   };
 }

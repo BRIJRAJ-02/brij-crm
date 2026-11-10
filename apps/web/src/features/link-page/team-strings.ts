@@ -107,6 +107,28 @@ export const teamStrings = {
     `The link sent to ${email} stops working. Their page stays as it is, and you can invite them again.`,
   keepInvite: 'Keep invitation',
   inviteRevoked: (email: string) => `Invitation to ${email} revoked.`,
+  /**
+   * A connected app's person's own Timefix login (spec 0070, AC-7023, 10 Nov 2026): asked for by a manager on Team
+   * pages, or by the person on their own page inside the app's frame. The app keeps them either way.
+   */
+  loginInvite: 'Set up their Timefix login',
+  loginTitle: (name: string) => `Set up a Timefix login for ${firstOf(name)}`,
+  loginText: (app: string | undefined) =>
+    `${app === undefined ? 'The app that added them' : app} keeps managing them. They can also sign in to Timefix directly, to the same page. The invitation works for 7 days.`,
+  ownLoginTitle: 'Timefix login',
+  ownLoginText: (app: string | undefined) =>
+    `Keep using ${app ?? 'this app'} as before. You can also sign in to Timefix directly.`,
+  ownLoginAction: 'Set up your Timefix login',
+  ownLoginDialogText: 'We’ll email you a link to finish. It works for 7 days.',
+  ownLoginInvited: (email: string) => `Invitation sent to ${email}. Open the link in it to finish.`,
+  ownLoginExpired: (email: string) => `The invitation to ${email} ran out. Send a new one.`,
+  ownLoginResend: 'Send again',
+  ownLoginCancel: 'Cancel invitation',
+  ownLoginCancelTitle: 'Cancel your invitation?',
+  ownLoginCancelText: (email: string) => `The link sent to ${email} stops working. You can send a new one later.`,
+  ownLoginKeep: 'Keep it',
+  ownLoginCancelled: 'Invitation cancelled.',
+  ownLoginReady: 'You can also sign in to Timefix directly, with your own login.',
   /** The member's page, opened by a manager. */
   memberTitle: (name: string) => `${firstOf(name)}’s page`,
   /** The page card's title on someone else's page, where "Your page" would be wrong. */

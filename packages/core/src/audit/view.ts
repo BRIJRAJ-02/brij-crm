@@ -276,7 +276,14 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...base,
         action,
         target: invitationTarget(),
-        params: after.page === true ? { page: true as const } : made === undefined ? {} : { role: made },
+        params:
+          after.login === true
+            ? { login: true as const }
+            : after.page === true
+              ? { page: true as const }
+              : made === undefined
+                ? {}
+                : { role: made },
         changes: change('role', undefined, role(after.role)),
       };
     }
@@ -287,7 +294,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         ...base,
         action,
         target: invitationTarget(),
-        params: { ...(changed ? { role: now } : {}), ...(after.page === true ? { page: true as const } : {}) },
+        params: {
+          ...(changed ? { role: now } : {}),
+          ...(after.login === true ? { login: true as const } : after.page === true ? { page: true as const } : {}),
+        },
         changes: changed ? change('role', role(before.role), role(after.role)) : [],
       };
     }
@@ -310,8 +320,8 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         action,
         target: memberTarget(),
         params:
-          after.via === 'page'
-            ? { via: 'page' }
+          after.via === 'page' || after.via === 'login'
+            ? { via: after.via }
             : { via: after.via === 'link' ? 'link' : 'email', ...(joined === undefined ? {} : { role: joined }) },
         changes: change('role', undefined, role(after.role)),
       };
@@ -430,6 +440,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         params: after.pageOnly === true ? { pageOnly: true } : {},
         changes: [],
       };
+    // A connected app stopped managing someone who has their own login (spec 0070, AC-7023): they stay a member.
+    case 'member.app_released':
+      return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'member.left':
     case 'account.deleted':
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };

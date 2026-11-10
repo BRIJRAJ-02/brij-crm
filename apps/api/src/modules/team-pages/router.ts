@@ -1,13 +1,16 @@
 import { linkPageCacheTags } from '@crm/contracts';
 import {
   addPageOnlyPerson,
+  cancelLoginInvite,
   cancelPageInvite,
+  inviteToClaimLogin,
   inviteToManagePage,
   checkTeamHandle,
   claimTeamHandle,
   listTeamLinkPages,
   namePageOnlyPerson,
   readLinkPageEditedBy,
+  readMyLogin,
   removePageOnlyPerson,
   suggestTeamHandle,
   type PageInviteToSend,
@@ -28,6 +31,8 @@ import { limitSends, NO_INVITER } from '../invitations/router.ts';
 async function mailHandover(
   context: Pick<RequestContext, 'mailer' | 'appUrl' | 'requestId'>,
   sent: PageInviteToSend,
+  /** A connected app's person's own login (spec 0070, AC-7023): the app that keeps them, by name when known. */
+  login?: { readonly app?: string },
 ): Promise<boolean> {
   try {
     const message = await renderMemberInvite(
@@ -37,6 +42,7 @@ async function mailHandover(
         acceptPath: `/invite/${sent.token}`,
         expiresAt: sent.invite.expiresAt,
         page: sent.page.handle === undefined ? {} : { handle: sent.page.handle },
+        ...(login === undefined ? {} : { login }),
       },
       { appOrigin: new URL(context.appUrl).origin, workspaceName: sent.workspaceName },
     );
@@ -120,6 +126,29 @@ export const teamPagesRouter = member.teamPages.router({
       cancelPageInvite(context.scope, { member: input.member }, hooks, sourceOf(context)),
     ),
   ),
+  // A connected app's person's own Timefix login (spec 0070, AC-7023): asked for by themselves inside the app's frame,
+  // or by a manager; counted against the same send limits as any invitation, and mailed once it committed, naming the
+  // app that keeps them (a failed read of its name leaves it out, never the email).
+  inviteLogin: member.teamPages.inviteLogin.handler(async ({ context, input }) => {
+    const { scope } = context;
+    const sent = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      inviteToClaimLogin(scope, { member: input.member, email: input.email }, hooks, {
+        source: sourceOf(context),
+        limit: (sends) => limitSends(context, scope.workspaceId, context.user.id, sends),
+      }),
+    );
+    const app = await context.partners.partnerById(sent.partnerId).then(
+      (partner) => partner?.name,
+      () => undefined,
+    );
+    return { invite: sent.invite, sent: await mailHandover(context, sent, app === undefined ? {} : { app }) };
+  }),
+  cancelLoginInvite: member.teamPages.cancelLoginInvite.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      cancelLoginInvite(context.scope, { member: input.member }, hooks, sourceOf(context)),
+    ),
+  ),
+  myLogin: member.teamPages.myLogin.handler(({ context }) => readMyLogin(context.scope)),
   checkHandle: member.teamPages.checkHandle.handler(({ context, input }) =>
     checkTeamHandle(context.scope, { handle: input.handle }),
   ),

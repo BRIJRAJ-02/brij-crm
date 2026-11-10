@@ -93,25 +93,30 @@ const moduleList = (modules: readonly string[], lead: string) =>
 const SENTENCES: SentenceTemplates = {
   'invitation.created': (entry, w) =>
     actor(
-      entry.params.page === true
-        ? `invited ${w.invitation(entry.target)} to manage their link page`
-        : entry.params.role === undefined
-          ? `invited ${w.invitation(entry.target)}`
-          : `invited ${w.invitation(entry.target)} as ${w.role(entry.params.role)}`,
+      entry.params.login === true
+        ? `invited ${w.invitation(entry.target)} to set up their own Timefix login`
+        : entry.params.page === true
+          ? `invited ${w.invitation(entry.target)} to manage their link page`
+          : entry.params.role === undefined
+            ? `invited ${w.invitation(entry.target)}`
+            : `invited ${w.invitation(entry.target)} as ${w.role(entry.params.role)}`,
     ),
   'invitation.resent': (entry, w) =>
     actor(
-      entry.params.page === true
-        ? `resent the invitation to ${w.invitation(entry.target)} to manage their link page`
-        : entry.params.role === undefined
-          ? `resent the invitation to ${w.invitation(entry.target)}`
-          : `resent the invitation to ${w.invitation(entry.target)}, now as ${w.role(entry.params.role)}`,
+      entry.params.login === true
+        ? `resent the invitation to ${w.invitation(entry.target)} to set up their own Timefix login`
+        : entry.params.page === true
+          ? `resent the invitation to ${w.invitation(entry.target)} to manage their link page`
+          : entry.params.role === undefined
+            ? `resent the invitation to ${w.invitation(entry.target)}`
+            : `resent the invitation to ${w.invitation(entry.target)}, now as ${w.role(entry.params.role)}`,
     ),
   'invitation.revoked': (entry, w) => actor(`cancelled the invitation to ${w.invitation(entry.target)}`),
   'invitation.accepted': (entry, w) => {
     const as = entry.params.role === undefined ? '' : ` as ${w.role(entry.params.role)}`;
     if (entry.params.via === 'link') return actor(`joined through the invite link${as}`);
     if (entry.params.via === 'page') return actor('set up a login and took over their link page');
+    if (entry.params.via === 'login') return actor('set up their own Timefix login');
     if (entry.params.via === 'already_member' && entry.target.type === 'invitation') {
       return actor(`used the invitation to ${w.invitation(entry.target)} and was already a member`);
     }
@@ -174,6 +179,8 @@ const SENTENCES: SentenceTemplates = {
     ];
     return actor(`limited ${w.person(entry.target.person)} to ${parts.join(' and ')}`);
   },
+  'member.app_released': (entry, w) =>
+    actor(`stopped managing ${w.person(entry.target.person)}, who keeps their Timefix login`),
   'member.removed': (entry, w) =>
     actor(
       entry.params.pageOnly === true

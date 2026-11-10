@@ -14,10 +14,13 @@ const iso = (column: SQL) => sql<string>`to_char(${column} at time zone 'UTC', '
 
 /** The UTC midnight a day starts at. */
 const startOf = (day: string) => sql`(${day}::date)::timestamp at time zone 'UTC'`;
-/** `u` signed up themselves: not an identity a partner made for a managed member (spec 0070), counted apart. */
-const signedUp = sql`not exists (select 1 from auth.managed_users mu where mu.user_id = u.id)`;
-/** Whether `u` is a partner's managed member's identity (spec 0070). */
-const isManaged = sql<boolean>`exists (select 1 from auth.managed_users mu where mu.user_id = u.id)`;
+/**
+ * `u` signed up themselves: not an identity a partner made for a managed member (spec 0070), counted apart. A partner's
+ * person who claimed their own login (AC-7023, migration 0206) signs in like anyone, so counts as signed up.
+ */
+const signedUp = sql`not exists (select 1 from auth.managed_users mu where mu.user_id = u.id and mu.claimed_at is null)`;
+/** Whether `u` is a partner's managed member's identity (spec 0070) with no login of its own yet. */
+const isManaged = sql<boolean>`exists (select 1 from auth.managed_users mu where mu.user_id = u.id and mu.claimed_at is null)`;
 
 /** The days a read covers: `from` inclusive, `to` exclusive, UTC; `before` starts the same length earlier. */
 export interface DayRange {
@@ -245,7 +248,7 @@ export function createOperatorIdentity(db: NodePgDatabase<Record<string, unknown
       }>(sql`
         select
           (select count(*)::int from auth.user u where ${signedUp}) as total,
-          (select count(*)::int from auth.managed_users) as managed,
+          (select count(*)::int from auth.managed_users where claimed_at is null) as managed,
           (select count(*)::int from auth.user u
             where u.created_at >= ${startOf(range.from)} and u.created_at < ${startOf(range.to)} and ${signedUp}) as made,
           (select count(*)::int from auth.user u

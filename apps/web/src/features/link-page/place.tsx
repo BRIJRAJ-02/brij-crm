@@ -13,6 +13,8 @@ export interface EmbeddedPlace {
   readonly theme?: 'light' | 'dark';
   readonly canManageTeam: boolean;
   readonly workspaceName: string;
+  /** The partner app the frame sits in, by name: the words about a Timefix login name it (AC-7023). */
+  readonly appName?: string;
 }
 
 const Place = createContext<EmbeddedPlace | undefined>(undefined);
@@ -42,6 +44,8 @@ export interface LinkPagePlace {
   readonly href: (view?: LinkPageView) => string;
   readonly canManageTeam: boolean;
   readonly workspaceName: string | undefined;
+  /** Inside a partner's frame, the partner app's name. */
+  readonly appName: string | undefined;
 }
 
 /** The place the link page screens are drawn in, for the workspace `slug`. */
@@ -65,5 +69,6 @@ export function useLinkPagePlace(slug: string): LinkPagePlace {
     },
     canManageTeam: embedded?.canManageTeam ?? canInApp,
     workspaceName: embedded?.workspaceName ?? nameInApp,
+    appName: embedded?.appName,
   };
 }

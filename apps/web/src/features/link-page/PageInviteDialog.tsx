@@ -1,8 +1,9 @@
 // Brief
 // Purpose: hand a page only person their own page (9 Nov 2026): Taylor invites Nick, who sets up a login and keeps
-// timefix.com/nick, its blocks and its history.
+// timefix.com/nick, its blocks and its history. The same dialog sets up a Timefix login for a connected app's person
+// (spec 0070, AC-7023): the person themselves, or their manager, and the app keeps managing them.
 // Main task: check or type their email, then Send invitation; or, with one already out, cancel it after a confirm.
-// Leaves out: the role (they stay a Member), anything about the page itself, and partner people (their app's to give).
+// Leaves out: the role (they keep theirs), and anything about the page itself.
 import { isDataError, type DataLayer, type TeamLinkPage } from '@crm/data';
 import { Button, Callout, Field, Modal, sharedStrings } from '@crm/ui';
 import { useRef, useState } from 'react';
@@ -11,12 +12,23 @@ import { teamStrings as strings } from './team-strings.ts';
 /** A loose address check before anything is sent; the server checks it properly. */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Props for Invite to manage their page. */
+/**
+ * What the invitation sets up: a page only person's hand over (`page`), or a connected app's person's own Timefix
+ * login, for someone else (`login`, with the app's name) or for the caller (`own`).
+ */
+export type InviteKind =
+  | { readonly kind: 'page' }
+  | { readonly kind: 'login'; readonly appName?: string | undefined }
+  | { readonly kind: 'own' };
+
+/** Props for Invite to manage their page, and Set up a Timefix login. */
 export interface PageInviteDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
-  /** The page only person, while the dialog is open. */
-  readonly page: TeamLinkPage;
+  /** The person, while the dialog is open: their member id, name, the address they were given and any open invite. */
+  readonly page: Pick<TeamLinkPage, 'memberId' | 'name' | 'email' | 'invite'>;
+  /** A page's hand over when left out. */
+  readonly kind?: InviteKind;
   readonly onClose: () => void;
   /** It went out (or stands unsent): the row's new invite, and whether its email left. */
   readonly onSent: (invite: NonNullable<TeamLinkPage['invite']>, sent: boolean) => void;
@@ -26,7 +38,14 @@ export interface PageInviteDialogProps {
  * A Modal with one Email field, filled from their open invitation, else the address they were given. Send invitation
  * sends once; a refusal on the address lands on the field, anything else above it. Mount it afresh for each opening.
  */
-export function PageInviteDialog({ data, slug, page, onClose, onSent }: PageInviteDialogProps) {
+export function PageInviteDialog({
+  data,
+  slug,
+  page,
+  kind = { kind: 'page' },
+  onClose,
+  onSent,
+}: PageInviteDialogProps) {
   const [email, setEmail] = useState(page.invite?.email ?? page.email ?? '');
   // Once the address is edited, only Cancel or Esc throws it away (a stray click outside doesn't), as Add a page.
   const [isEdited, setEdited] = useState(false);
@@ -47,7 +66,11 @@ export function PageInviteDialog({ data, slug, page, onClose, onSent }: PageInvi
     setBusy(true);
     setProblem(undefined);
     setFailure(undefined);
-    data.teamPages.invitePerson(slug, page.memberId, wanted).then(
+    const sending =
+      kind.kind === 'page'
+        ? data.teamPages.invitePerson(slug, page.memberId, wanted)
+        : data.teamPages.inviteLogin(slug, page.memberId, wanted);
+    sending.then(
       (answer) => {
         setBusy(false);
         onSent(answer.invite, answer.sent);
@@ -66,8 +89,20 @@ export function PageInviteDialog({ data, slug, page, onClose, onSent }: PageInvi
   };
   return (
     <Modal
-      title={strings.inviteTitle(page.name)}
-      description={strings.inviteText}
+      title={
+        kind.kind === 'page'
+          ? strings.inviteTitle(page.name)
+          : kind.kind === 'login'
+            ? strings.loginTitle(page.name)
+            : strings.ownLoginAction
+      }
+      description={
+        kind.kind === 'page'
+          ? strings.inviteText
+          : kind.kind === 'login'
+            ? strings.loginText(kind.appName)
+            : strings.ownLoginDialogText
+      }
       isOpen
       isDismissable={!isEdited}
       isBusy={isBusy}
@@ -122,12 +157,15 @@ export function CancelPageInvite({
   data,
   slug,
   page,
+  kind = 'page',
   onClose,
   onCancelled,
 }: {
   readonly data: DataLayer;
   readonly slug: string;
   readonly page: TeamLinkPage | undefined;
+  /** A page only person's hand over (`page`), or a connected app's person's login invitation (`login`). */
+  readonly kind?: 'page' | 'login';
   readonly onClose: () => void;
   readonly onCancelled: (page: TeamLinkPage) => void;
 }) {
@@ -141,7 +179,11 @@ export function CancelPageInvite({
     if (isBusy) return;
     setBusy(true);
     setFailure(undefined);
-    data.teamPages.cancelInvite(slug, shown.memberId).then(
+    const cancelling =
+      kind === 'page'
+        ? data.teamPages.cancelInvite(slug, shown.memberId)
+        : data.teamPages.cancelLoginInvite(slug, shown.memberId);
+    cancelling.then(
       () => {
         setBusy(false);
         onCancelled(shown);

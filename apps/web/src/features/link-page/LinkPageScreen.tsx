@@ -80,6 +80,7 @@ import { reachStrings } from './reach-strings.ts';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
+import { TimefixLoginCard } from './TimefixLoginCard.tsx';
 import { LiveSwitch, useLinkPageLive, useWalletLink, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
@@ -491,7 +492,7 @@ function Blocks({
   const navigate = useNavigate();
   // Embedded in a partner's frame (spec 0070, AC-7033): only Link pages is shared, so no block of another module
   // (booking pages, forms, places) is offered, and none opens that module's editor.
-  const { isEmbedded } = useLinkPagePlace(slug);
+  const { isEmbedded, appName } = useLinkPagePlace(slug);
   const held = linkPage.view(slug);
   const state = useLinkPage(held);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
@@ -1232,6 +1233,7 @@ function Blocks({
           personImage={faceImage}
           editedBy={editedBy}
           {...(isTeam ? { title: teamStrings.theirPage } : {})}
+          {...(isEmbedded && !isTeam ? { login: <TimefixLoginCard data={data} slug={slug} appName={appName} /> } : {})}
         />
       </PreviewLayout>
     );

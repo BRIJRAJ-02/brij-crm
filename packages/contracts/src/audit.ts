@@ -200,14 +200,21 @@ const booking = AuditTarget.options[7];
  * names; `changes` the fields it changed, for the details (milestone 2).
  */
 export const AuditEntryView = z.discriminatedUnion('action', [
-  /** `page`: a page's hand over from Team pages (Invite to manage their page, 9 Nov 2026). */
+  /**
+   * `page`: a page's hand over from Team pages (Invite to manage their page, 9 Nov 2026). `login`: a partner's person
+   * invited to set up their own Timefix login (spec 0070, AC-7023, 10 Nov 2026).
+   */
   entry(
     ['invitation.created'],
     invitation,
-    z.strictObject({ role: Role.optional(), page: z.literal(true).optional() }),
+    z.strictObject({ role: Role.optional(), page: z.literal(true).optional(), login: z.literal(true).optional() }),
   ),
   /** `role` only when the resend changed it. */
-  entry(['invitation.resent'], invitation, z.strictObject({ role: Role.optional(), page: z.literal(true).optional() })),
+  entry(
+    ['invitation.resent'],
+    invitation,
+    z.strictObject({ role: Role.optional(), page: z.literal(true).optional(), login: z.literal(true).optional() }),
+  ),
   entry(['invitation.revoked', 'invitation.link_revoked'], invitation, NoParams),
   /**
    * Joined by an email invitation or the invite link (the actor joined, the target is their member row), or an
@@ -216,8 +223,9 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['invitation.accepted'],
     z.discriminatedUnion('type', [member, invitation]),
-    // `page`: a page only person took over their page from its hand over, as the same member (9 Nov 2026).
-    z.strictObject({ via: z.enum(['email', 'link', 'already_member', 'page']), role: Role.optional() }),
+    // `page`: a page only person took over their page from its hand over, as the same member (9 Nov 2026). `login`: a
+    // partner's person set up their own Timefix login, as the same member, still the partner's (10 Nov 2026).
+    z.strictObject({ via: z.enum(['email', 'link', 'already_member', 'page', 'login']), role: Role.optional() }),
   ),
   /** The link made, made again (the old one stopped working), or its settings changed. */
   entry(
@@ -264,6 +272,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     }),
   ),
   entry(['member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
+  /** A connected app removed someone who had claimed their own login (spec 0070, AC-7023): they stay a member. */
+  entry(['member.app_released'], member, NoParams),
   /** `pageOnly`: a page only person removed from Team pages (9 Nov 2026). */
   entry(['member.removed'], member, z.strictObject({ pageOnly: z.literal(true).optional() })),
   /**

@@ -75,6 +75,7 @@ export type {
 export type {
   ManagedPerson,
   PageOnlyClaim,
+  ManagedClaim,
   PageOnlyPerson,
   NewPartner,
   PartnerAudit,

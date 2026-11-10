@@ -107,6 +107,7 @@ export async function loadEmail(scope: EngineScope, emailId: string): Promise<Lo
         m.email as member_email, m.status = 'active' as member_active,
         exists (
           select 1 from managed_members mm where mm.workspace_id = e.workspace_id and mm.member_id = e.to_member_id
+            and mm.claimed_at is null
         ) as member_managed,
         r.email as reply_email, r.status = 'active' as reply_active,
         w.name as workspace_name, w.slug as workspace_slug, w.deleted_at is not null as workspace_deleted,

@@ -107,6 +107,23 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, actor: bea, action: 'invitation.accepted', target: member(bea), params: { via: 'page' } },
     'Bea Rao set up a login and took over their link page',
   ],
+  // A connected app's person's own Timefix login (spec 0070, AC-7023).
+  [
+    { ...base, action: 'invitation.created', target: invite, params: { login: true } },
+    'Ada Lovelace invited grace@example.com to set up their own Timefix login',
+  ],
+  [
+    { ...base, action: 'invitation.resent', target: invite, params: { login: true } },
+    'Ada Lovelace resent the invitation to grace@example.com to set up their own Timefix login',
+  ],
+  [
+    { ...base, actor: bea, action: 'invitation.accepted', target: member(bea), params: { via: 'login' } },
+    'Bea Rao set up their own Timefix login',
+  ],
+  [
+    { ...base, action: 'member.app_released', target: member(bea), params: {} },
+    'Ada Lovelace stopped managing Bea Rao, who keeps their Timefix login',
+  ],
   [
     { ...base, action: 'invitation.accepted', target: invite, params: { via: 'already_member' } },
     'Ada Lovelace used the invitation to grace@example.com and was already a member',

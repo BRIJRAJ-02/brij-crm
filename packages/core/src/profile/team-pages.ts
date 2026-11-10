@@ -65,8 +65,8 @@ interface ViewsRow extends Record<string, unknown> {
 
 /**
  * The rows of `people`, each with their handle, Live or not, this month's views, and whether they are a page only
- * person (9 Nov 2026), with the address they were given and their open hand over; three statements, four with a page
- * only person among them.
+ * person (9 Nov 2026) or a connected app's (spec 0070), with the address they were given and their open invitation;
+ * three statements, four with a managed person among them who has no login yet.
  */
 export async function pagesOf(
   tx: WorkspaceTx,
@@ -85,36 +85,55 @@ export async function pagesOf(
     for (const row of counted.rows) views.set(row.user_id, Number(row.views));
   }
   const memberIds = people.map((person) => person.id);
-  // Page only people, with the address they were given (never their identity's made up one), for Invite to manage
-  // their page to start from.
-  const pageOnly = new Map(
+  // Page only people and a connected app's people (spec 0070), with the address they were given (never an identity's
+  // made up one): Invite to manage their page, or Set up their Timefix login, starts from it.
+  const managed =
     memberIds.length === 0
       ? []
-      : (
-          await tx
-            .select({ memberId: managedMembers.memberId, email: members.email })
-            .from(managedMembers)
-            .innerJoin(
-              members,
-              and(eq(members.workspaceId, managedMembers.workspaceId), eq(members.id, managedMembers.memberId)),
-            )
-            .where(
-              and(
-                eq(managedMembers.workspaceId, workspaceId),
-                inArray(managedMembers.memberId, memberIds),
-                isNull(managedMembers.partnerId),
-                isNull(managedMembers.removedAt),
-              ),
-            )
-        ).map((row) => [row.memberId, isManagedAddress(row.email) ? undefined : row.email] as const),
+      : await tx
+          .select({
+            memberId: managedMembers.memberId,
+            partnerId: managedMembers.partnerId,
+            claimedAt: managedMembers.claimedAt,
+            email: members.email,
+          })
+          .from(managedMembers)
+          .innerJoin(
+            members,
+            and(eq(members.workspaceId, managedMembers.workspaceId), eq(members.id, managedMembers.memberId)),
+          )
+          .where(
+            and(
+              eq(managedMembers.workspaceId, workspaceId),
+              inArray(managedMembers.memberId, memberIds),
+              isNull(managedMembers.removedAt),
+            ),
+          );
+  const byMember = new Map(
+    managed.map(
+      (row) =>
+        [
+          row.memberId,
+          {
+            isPageOnly: row.partnerId === null,
+            hasLogin: row.claimedAt !== null,
+            email: isManagedAddress(row.email) ? undefined : row.email,
+          },
+        ] as const,
+    ),
   );
-  // Their open hand overs, when any of them is page only.
-  const handovers = pageOnly.size === 0 ? undefined : await openHandoversOf(tx, workspaceId);
+  // Their open invitations (a hand over, or a login), when any of them may have one.
+  const handovers = managed.some((row) => row.claimedAt === null) ? await openHandoversOf(tx, workspaceId) : undefined;
   return people.map((person) => {
     const page = person.userId === null ? undefined : held.get(person.userId);
     const image = safeImage(person.avatarUrl);
-    const email = pageOnly.get(person.id);
-    const invite = pageOnly.has(person.id) ? handovers?.get(person.id) : undefined;
+    const kind = byMember.get(person.id);
+    const isPageOnly = kind?.isPageOnly === true;
+    const isFromApp = kind !== undefined && !kind.isPageOnly;
+    const hasLogin = kind?.hasLogin === true;
+    // A claimed person's address is their login's: theirs, so no screen here starts anything from it.
+    const email = hasLogin ? undefined : kind?.email;
+    const invite = kind === undefined || hasLogin ? undefined : handovers?.get(person.id);
     return {
       memberId: person.id,
       name: person.name,
@@ -123,7 +142,9 @@ export async function pagesOf(
       isLive: page?.isShown === true,
       views: person.userId === null ? 0 : (views.get(person.userId) ?? 0),
       isSelf: person.id === self,
-      ...(pageOnly.has(person.id) ? { isPageOnly: true } : {}),
+      ...(isPageOnly ? { isPageOnly: true } : {}),
+      ...(isFromApp ? { isFromApp: true } : {}),
+      ...(hasLogin ? { hasLogin: true } : {}),
       ...(email === undefined ? {} : { email }),
       ...(invite === undefined ? {} : { invite }),
     };

@@ -54,7 +54,11 @@ async function limitLookups(context: Pick<RequestContext, 'identity' | 'clientIp
 export const invitationsPublic = {
   peek: pub.invitations.peek.handler(async ({ context, input }) => {
     await limitLookups(context);
-    return peekInvite({ db: context.db }, input.token);
+    // A connected app's person's own login names the app that keeps them (spec 0070, AC-7023).
+    return peekInvite(
+      { db: context.db, partnerName: async (partnerId) => (await context.partners.partnerById(partnerId))?.name },
+      input.token,
+    );
   }),
   // A page's hand over taken (9 Nov 2026): no session, as the token is the invited inbox's; counted with the peeks,
   // since a token is tried here the same way. Core makes the page's identity a login through the identity store's two

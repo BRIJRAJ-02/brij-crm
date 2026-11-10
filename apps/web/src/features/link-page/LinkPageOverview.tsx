@@ -8,7 +8,7 @@
 import type { LinkPageStore, ProfileItem } from '@crm/data';
 import { Button, ButtonGroup, Card, EmptyState, QrCode, SpotIllustration } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Insights } from './Insights.tsx';
 import { drawnQrStyle, useQrStyle } from './ShareTools.tsx';
 import { qrPng, saveFile } from './qr-png.ts';
@@ -44,6 +44,8 @@ export interface LinkPageOverviewProps {
   readonly title?: string;
   /** Who last changed this page when it wasn't its owner (spec 0070, AC-7004): a quiet line on Your page. */
   readonly editedBy?: { readonly name: string } | undefined;
+  /** Under the page's card, inside a connected app's frame: the person's own Timefix login (spec 0070, AC-7023). */
+  readonly login?: ReactNode;
 }
 
 /** Your page (Edit page and the code), then, while the page holds nothing, its first empty moment, else Insights. */
@@ -60,6 +62,7 @@ export function LinkPageOverview({
   items,
   personImage,
   editedBy,
+  login,
   title = strings.yourPage,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
@@ -128,6 +131,7 @@ export function LinkPageOverview({
         </Card>
       )}
       {!isEmpty && <Insights linkPage={linkPage} slug={slug} items={items} />}
+      {login}
     </>
   );
 }

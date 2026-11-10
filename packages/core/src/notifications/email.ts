@@ -102,8 +102,9 @@ export async function prepareNotificationEmail(
       select name, slug from workspaces where id = ${input.workspaceId}::uuid
     `);
     // A partner's managed member (spec 0070, AC-7023) gets only what their page's visitors trigger.
+    // One who set up their own Timefix login (migration 0206) is a member like any other.
     const managed = await tx.execute<{ managed: boolean }>(sql`
-      select exists (select 1 from managed_members where member_id = ${input.memberId}::uuid) as managed
+      select exists (select 1 from managed_members where member_id = ${input.memberId}::uuid and claimed_at is null) as managed
     `);
     return {
       members: members.rows,

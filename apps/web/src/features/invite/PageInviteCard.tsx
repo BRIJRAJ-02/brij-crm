@@ -5,6 +5,8 @@
 // Sign in with that address, which is filled in for him.
 // Leaves out: joining as a new member (the invitation is for the person who already has the page), roles, and any
 // other account: one already signed in signs out first, since a page never moves into another login.
+// The same card sets up a connected app's person's own Timefix login (spec 0070, AC-7023), in that case's words: the
+// app keeps managing them.
 import { isDataError, type DataLayer, type InvitePeek, type SignedInUser } from '@crm/data';
 import { AuthLayout, Button, Callout, sharedStrings } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -56,6 +58,7 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
   const masked = invitation.invitedEmailMasked;
   const handle = invitation.page.handle;
   const address = handle === undefined ? undefined : `${publicBookingHost()}/${handle}`;
+  const login = invitation.login;
 
   const claim = () => {
     if (standing.kind === 'busy') return;
@@ -105,7 +108,7 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
         productName={strings.product}
         logo={PRODUCT_LOGO}
         title={strings.pageReadyTitle}
-        description={strings.pageReadyText(masked)}
+        description={login === undefined ? strings.pageReadyText(masked) : strings.loginReadyText(masked)}
         {...signInFrame()}
       >
         <Button
@@ -128,7 +131,9 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
   const isBusy = standing.kind === 'busy';
   // Whose page, from whom, and (signed out) the address it was sent to: the title says what to do.
   const about = [
-    strings.pageInvited(invitation.inviterName, address, invitation.workspaceName),
+    login === undefined
+      ? strings.pageInvited(invitation.inviterName, address, invitation.workspaceName)
+      : strings.loginInvited(invitation.inviterName, invitation.workspaceName, login.app),
     user === undefined ? strings.forAddress(masked) : '',
   ];
   return (
@@ -136,7 +141,7 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
       <AuthLayout
         productName={strings.product}
         logo={PRODUCT_LOGO}
-        title={strings.pageTitle}
+        title={login === undefined ? strings.pageTitle : strings.loginTitle}
         description={about.filter((line) => line !== '').join(' ')}
         {...signInFrame()}
       >
@@ -149,7 +154,7 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
           )
         ) : (
           <>
-            <p>{strings.pageSignedIn(user.email)}</p>
+            <p>{login === undefined ? strings.pageSignedIn(user.email) : strings.loginSignedIn(user.email)}</p>
             <Button
               variant="primary"
               size="lg"

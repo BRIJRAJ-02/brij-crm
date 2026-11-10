@@ -50,6 +50,23 @@ describe('the invitation email', () => {
     expect(analyst.text).toContain('as an Analyst.');
   });
 
+  it('asks a connected app’s person to set up their own login, keeping the app (spec 0070, AC-7023)', async () => {
+    const email = await renderMemberInvite(
+      { ...PARAMS, role: 'member', page: { handle: 'grace' }, login: { app: 'Hub' } },
+      { appOrigin: ORIGIN, workspaceName: 'Acme' },
+    );
+    expect(email.subject).toBe('Set up your Timefix login');
+    expect(email.text).toContain(
+      'Ada Lovelace asked for a Timefix login for you, so you can manage your link page, /grace in Acme. Keep using Hub as before. You can also sign in to Timefix directly.',
+    );
+    expect(email.text).toContain(`Set up your login: ${ORIGIN}/invite/0123456789abcdefghijklmnopqrstuv`);
+    const unnamed = await renderMemberInvite(
+      { ...PARAMS, role: 'member', login: {} },
+      { appOrigin: ORIGIN, workspaceName: 'Acme' },
+    );
+    expect(unnamed.text).toContain('Keep using the app you use now as before.');
+  });
+
   it('refuses an accept link off the app, and params it doesn’t know', async () => {
     const context = { appOrigin: ORIGIN, workspaceName: 'Acme' };
     await expect(renderMemberInvite({ ...PARAMS, acceptPath: '//evil.example/invite' }, context)).rejects.toThrow();

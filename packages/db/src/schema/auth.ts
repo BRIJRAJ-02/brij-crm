@@ -1099,11 +1099,18 @@ export const managedUsers = auth.table(
     partnerId: uuid('partner_id'),
     externalId: text('external_id').notNull(),
     createdAt: createdAt(),
+    /**
+     * When a partner's person claimed their own login here (spec 0070, AC-7023, migration 0206): the identity is then a
+     * login like any other, and the row stays only so the partner's PUT keyed by its external id finds it again.
+     */
+    claimedAt: timestamptz('claimed_at'),
   },
   (t) => [
     foreignKey({ name: 'managed_users_user', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     // NULLS NOT DISTINCT in migration 0196 (a page only person has no partner); Drizzle's index builder can't say it.
     uniqueIndex('managed_users_external').on(t.workspaceId, t.partnerId, t.externalId),
     check('managed_users_external_id', sql`${t.externalId} ~ '^[A-Za-z0-9._~:@+=|-]{1,128}$'`),
+    // Only a partner's person claims a login and stays managed; a page only identity's row goes on a hand over.
+    check('managed_users_claimed', sql`${t.claimedAt} is null or ${t.partnerId} is not null`),
   ],
 );

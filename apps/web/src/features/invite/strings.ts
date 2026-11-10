@@ -46,6 +46,23 @@ export const strings = {
     masked === undefined
       ? 'Sign in with the address this invitation was sent to.'
       : `Sign in with ${masked} to manage your page.`,
+  /**
+   * A connected app's person's own Timefix login (spec 0070, AC-7023): the app keeps managing them, and they can also
+   * sign in to Timefix directly.
+   */
+  loginTitle: 'Set up your Timefix login',
+  loginInvited: (inviter: string, workspace: string, app: string | undefined) => {
+    const asked =
+      inviter === ''
+        ? `You’re invited to set up a Timefix login in ${workspace}.`
+        : `${inviter} asked for a Timefix login for you in ${workspace}.`;
+    return `${asked} Keep using ${app ?? 'the app you use now'} as before. You can also sign in to Timefix directly.`;
+  },
+  loginSignedIn: (email: string) => `You’re signed in as ${email}. Sign out first to set up your own login.`,
+  loginReadyText: (masked: string | undefined) =>
+    masked === undefined
+      ? 'Sign in with the address this invitation was sent to.'
+      : `Sign in with ${masked} to open your page.`,
 } as const;
 
 /** "an Admin", "a Member". */

@@ -262,6 +262,8 @@ export {
   type PageClaimUsers,
   type PageInviteToSend,
 } from './members/page-handover.ts';
+// A connected app's person's own Timefix login (spec 0070, AC-7023): asked for, cancelled, and their own status.
+export { cancelLoginInvite, inviteToClaimLogin, readMyLogin } from './members/partner-claim.ts';
 export {
   discardLinkDraft,
   listLinkPageVersions,

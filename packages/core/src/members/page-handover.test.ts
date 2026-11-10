@@ -62,6 +62,8 @@ const claimers = {
   claimPageOnlyUser: (claim: Parameters<IdentityStore['claimPageOnlyUser']>[0]) => identity.claimPageOnlyUser(claim),
   unclaimPageOnlyUser: (claim: Parameters<IdentityStore['unclaimPageOnlyUser']>[0]) =>
     identity.unclaimPageOnlyUser(claim),
+  claimManagedUser: (claim: Parameters<IdentityStore['claimManagedUser']>[0]) => identity.claimManagedUser(claim),
+  unclaimManagedUser: (claim: Parameters<IdentityStore['unclaimManagedUser']>[0]) => identity.unclaimManagedUser(claim),
 };
 const claim = (token: string) => claimPageInvite({ db, users: claimers }, token);
 
