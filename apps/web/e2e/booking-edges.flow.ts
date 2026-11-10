@@ -6,6 +6,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
+import { openBookingPopup, PICKED_TIME, popupAction, setPageStatus, shareAddress } from './booking-pages.ts';
 
 /** The booking page's bot check wants a human's pace before Confirm. */
 const HUMAN_PACE_MS = 3_500;
@@ -40,19 +41,9 @@ async function withPage(page: Page, kind: string): Promise<{ slug: string; pageI
   return { slug, pageId: made.id };
 }
 
-/** The page's public address as its editor's Share tab opens it (the bookings area, 4 November 2026). */
-async function sharedAddress(page: Page): Promise<string> {
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
-  const href = await page.getByRole('link', { name: 'Open', exact: true }).getAttribute('href');
-  await page.getByRole('tab', { name: 'Page', exact: true }).click();
-  expect(href).not.toBeNull();
-  return href ?? '';
-}
-
-/** The page's public address, from its editor, which is then left on its Page tab. */
+/** The page's public address, from its editor's Share section, where the editor is then left. */
 async function publicAddress(page: Page, slug: string, pageId: string): Promise<string> {
-  await page.goto(`/w/${slug}/captures/links/${pageId}`);
-  return sharedAddress(page);
+  return shareAddress(page, `/w/${slug}/captures/links/${pageId}`);
 }
 
 /** A visitor, signed in to nothing, in a browser of their own. */
@@ -72,7 +63,7 @@ async function book(visitor: Page, address: string, name: string, email: string)
     .getByRole('button')
     .first()
     .click();
-  await visitor.getByRole('button', { name: /^Book / }).click();
+  await visitor.getByRole('button', { name: PICKED_TIME }).click();
   await visitor.getByLabel('Your name').fill(name);
   await visitor.getByLabel('Email').fill(email);
   await visitor.waitForTimeout(HUMAN_PACE_MS);
@@ -94,20 +85,19 @@ test.describe('the booking journey’s edges', () => {
     await book(visitor, address, 'Vera Visitor', `vera-${pageId.slice(-6)}@example.com`);
 
     await page.goto(`/w/${slug}/bookings/list`);
-    await page.getByText('Intro call').first().click();
-    const panel = page.getByRole('dialog', { name: /Booking/ });
-    // Cancel sits beside Reschedule (B-06).
-    await panel.getByRole('button', { name: 'Cancel booking' }).click();
+    // The meeting popup's ⋯ holds Cancel meeting (the redesign: every change but the one primary).
+    await openBookingPopup(page, 'Vera Visitor');
+    await popupAction(page, 'Vera Visitor', 'Cancel meeting');
     // Asked first, in a dialog, naming who it is with.
-    const confirm = page.getByRole('alertdialog', { name: 'Cancel Intro call with Vera Visitor?' });
+    const confirm = page.getByRole('alertdialog', { name: 'Cancel meeting with Vera?' });
     await expect(confirm).toBeVisible();
-    await confirm.getByLabel('Reason').fill('Double booked');
-    await confirm.getByRole('button', { name: 'Cancel booking' }).click();
-    await expect(page.getByText('Cancelled. Vera Visitor is emailed.')).toBeVisible();
+    await confirm.getByLabel(/^Note to Vera/).fill('Double booked');
+    await confirm.getByRole('button', { name: 'Cancel meeting' }).click();
+    await expect(page.getByText('Meeting cancelled. Vera has been told.')).toBeVisible();
 
     // The visitor's own page no longer offers a move.
     await visitor.reload();
-    await expect(visitor.getByRole('button', { name: 'Move to another time' })).toBeHidden({ timeout: 15_000 });
+    await expect(visitor.getByRole('button', { name: 'Reschedule' })).toBeHidden({ timeout: 15_000 });
     await visitor.context().close();
   });
 
@@ -123,36 +113,28 @@ test.describe('the booking journey’s edges', () => {
     const was = await visitor.locator('body').innerText();
 
     await page.goto(`/w/${slug}/bookings/list`);
-    await page.getByText('Intro call').first().click();
-    await page
-      .getByRole('dialog', { name: /Booking/ })
-      .getByRole('button', { name: 'Reschedule' })
-      .click();
-    const move = page.getByRole('dialog', { name: 'Reschedule Intro call with Mo Mover' });
+    await openBookingPopup(page, 'Mo Mover');
+    await popupAction(page, 'Mo Mover', 'Reschedule');
+    const move = page.getByRole('dialog', { name: 'Reschedule with Mo' });
     await expect(move).toBeVisible();
     // The time the booking holds isn't offered: any time shown is a real move.
-    await move
-      .getByRole('list', { name: /^Times on / })
-      .getByRole('button')
-      .last()
-      .click();
-    await move.getByRole('button', { name: /^Move to / }).click();
+    await move.getByRole('list').last().getByRole('button').last().click();
+    await move.getByRole('button', { name: /^Reschedule to / }).click();
     await expect(page.getByText('Moved. Mo Mover is emailed the new time.')).toBeVisible();
 
     await visitor.reload();
     await expect.poll(async () => (await visitor.locator('body').innerText()) !== was).toBe(true);
-    await expect(visitor.getByRole('button', { name: 'Move to another time' })).toBeVisible();
+    await expect(visitor.getByRole('button', { name: 'Reschedule' })).toBeVisible();
     await visitor.context().close();
   });
 
-  test('a paused page tells its visitor so, and takes bookings again once resumed', async ({ page, browser }) => {
+  test('a hidden page tells its visitor so, and takes bookings again once live', async ({ page, browser }) => {
     test.setTimeout(180_000);
     const { slug, pageId } = await withPage(page, 'pause');
     const address = await publicAddress(page, slug, pageId);
 
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: /^Pause/ }).click();
-    await expect(page.getByText(/Paused\. Visitors see it closed\./)).toBeVisible();
+    // Live or Hidden, from the editor's status pill (Hidden is the old Pause).
+    await setPageStatus(page, 'Intro call', 'Hidden');
 
     // Not a blank page or a bare error: it says why.
     const visitor = await visitorAt(browser);
@@ -160,9 +142,7 @@ test.describe('the booking journey’s edges', () => {
     await expect(visitor.getByText(/isn’t taking bookings|Nothing is bookable here right now/).first()).toBeVisible();
     await expect(visitor.getByRole('list', { name: /^Times on / })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: /^Resume/ }).click();
-    await expect(page.getByText(/Visitors see it closed/)).toBeHidden();
+    await setPageStatus(page, 'Intro call', 'Live');
     await visitor.reload();
     await expect(visitor.getByRole('list', { name: /^Times on / })).toBeVisible();
     await visitor.context().close();
@@ -176,8 +156,8 @@ test.describe('the booking journey’s edges', () => {
     const field = page.getByRole('textbox', { name: /Web address/ });
     await field.fill('first-call');
     await page.getByRole('button', { name: /^Save/ }).click();
-    await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
-    const after = await sharedAddress(page);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled({ timeout: 10_000 });
+    const after = await publicAddress(page, slug, pageId);
     expect(after).toMatch(/\/first-call$/);
 
     const visitor = await visitorAt(browser);
@@ -210,24 +190,24 @@ test.describe('the booking journey’s edges', () => {
       .getByRole('button')
       .first()
       .click();
-    await visitor.getByRole('button', { name: /^Book / }).click();
+    await visitor.getByRole('button', { name: PICKED_TIME }).click();
     await visitor.getByLabel('Your name').fill('Gus Host');
     await visitor.getByLabel('Email').fill(`gus-${pageId.slice(-6)}@example.com`);
     await visitor.getByRole('button', { name: /Add guests?/ }).click();
     // A guest's address is checked before anything is sent: one that isn't an address stays in the field to fix.
-    const guests = visitor.getByRole('textbox', { name: /^Guests/ });
+    // The guests are one email a row (the v5 mock's details step).
+    const guests = visitor.getByRole('textbox', { name: 'Guest 1 email' });
     await guests.fill('notanemail');
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
-    await expect(visitor.getByText(/isn’t an email address/).first()).toBeVisible();
+    await expect(visitor.getByText(/isn’t an email address|Give each guest’s email address/).first()).toBeVisible();
     // Typed and not yet a chip, the fixed address still goes with the booking.
     await guests.fill(`guest-${pageId.slice(-6)}@example.com`);
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
     await expect(visitor).toHaveURL(/\/manage\?/, { timeout: 30_000 });
 
     await page.goto(`/w/${slug}/bookings/list`);
-    await page.getByText('Intro call').first().click();
-    await expect(page.getByRole('dialog', { name: /Booking/ })).toContainText(`guest-${pageId.slice(-6)}@example.com`);
+    await expect(await openBookingPopup(page, 'Gus Host')).toContainText(`guest-${pageId.slice(-6)}@example.com`);
     await visitor.context().close();
   });
 
@@ -242,8 +222,8 @@ test.describe('the booking journey’s edges', () => {
     // Said before Save: the address people already have stops working.
     await expect(page.getByText(/Old address stops working on save/)).toBeVisible();
     await page.getByRole('button', { name: /^Save/ }).click();
-    await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
-    const after = await sharedAddress(page);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled({ timeout: 10_000 });
+    const after = await publicAddress(page, slug, pageId);
     expect(after).toMatch(/\/b\/[A-Za-z0-9_-]+$/);
 
     const visitor = await visitorAt(browser);
@@ -285,8 +265,7 @@ test.describe('the booking journey’s edges', () => {
   test('an object a booking can’t file answers onto is shown off in the picker, with the reason', async ({ page }) => {
     test.setTimeout(120_000);
     const { slug, pageId } = await withPage(page, 'answers');
-    await page.goto(`/w/${slug}/captures/links/${pageId}`);
-    await page.getByRole('tab', { name: /Questions/ }).click();
+    await page.goto(`/w/${slug}/captures/links/${pageId}?tab=questions`);
     await page.getByRole('button', { name: /Where the answers go/ }).click();
     // A booking knows its guest by email alone: Deals has no unique email field, so it is offered but can't be picked.
     const deals = page.getByRole('option', { name: /^Deals/ });

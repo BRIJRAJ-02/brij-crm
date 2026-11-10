@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { codeFor, MAILPIT_URL } from './mailpit.ts';
 import { newWorkspace } from './people.ts';
+import { pickPeople, PICKED_TIME, popupAction, shareAddress } from './booking-pages.ts';
 
 /** The booking page's bot check wants a human's pace before Confirm. */
 const HUMAN_PACE_MS = 3_500;
@@ -98,26 +99,22 @@ test.describe('round robin', () => {
     await create.getByText('Round robin', { exact: true }).click();
     await create.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
-    // A new page is a draft (the bookings area, 4 November 2026): Publish puts it live and ends on its link.
-    await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const live = page.getByRole('dialog', { name: /is live$/ });
-    const address = await live.getByRole('link', { name: 'Open' }).getAttribute('href');
-    await live.getByRole('button', { name: 'Done' }).click();
-    expect(address).not.toBeNull();
+    // A new page is live at once (no draft or Publish since 9 November 2026): its Share section has the link.
+    const address = await shareAddress(page, page.url());
 
     // Three visitors, three hosts: the fewest meetings goes first, so nobody gets two.
     const hosts: string[] = [];
     for (let visit = 0; visit < 3; visit += 1) {
       const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
       const visitor = await context.newPage();
-      await visitor.goto(address ?? '');
+      await visitor.goto(address);
       await expect(visitor.getByRole('group', { name: 'Team of 3' })).toBeVisible();
       await visitor
         .getByRole('list', { name: /^Times on / })
         .getByRole('button')
         .nth(visit)
         .click();
-      await visitor.getByRole('button', { name: /^Book / }).click();
+      await visitor.getByRole('button', { name: PICKED_TIME }).click();
       await visitor.getByLabel('Your name').fill(`Visitor ${String(visit)}`);
       await visitor.getByLabel('Email').fill(`visitor-${String(visit)}-${tag}@example.com`);
       await visitor.waitForTimeout(HUMAN_PACE_MS);
@@ -131,22 +128,24 @@ test.describe('round robin', () => {
 
     // The Team calendar holds each host's meeting inside their hours: no "Outside hours" on a team in its own zone.
     await page.goto(`/w/${slug}/bookings/calendar`);
-    await page.getByRole('radio', { name: 'Team' }).click({ force: true });
+    // Meetings' People picker: the Whole team, on the Day view, is the Team day.
+    await pickPeople(page, 'Whole team');
+    await page.getByRole('radio', { name: 'Day' }).click({ force: true });
     const team = page.getByRole('region', { name: /^Team, / });
     // The first free times may be on a later day than today (late in the afternoon): step to the day they are on.
     for (let day = 0; day < 7; day += 1) {
       await page.waitForTimeout(1_000);
-      if ((await team.getByRole('button', { name: /^Sales intro, / }).count()) > 0) break;
+      if ((await team.getByRole('button', { name: /^Visitor \d, / }).count()) > 0) break;
       await page.getByRole('button', { name: 'Next day' }).click();
     }
-    await expect(team.getByRole('button', { name: /^Sales intro, / })).toHaveCount(3);
+    await expect(team.getByRole('button', { name: /^Visitor \d, / })).toHaveCount(3);
     await expect(team.getByRole('button', { name: /Outside hours/ })).toHaveCount(0);
 
     // Reassign a teammate's meeting to the next in the group: Bookings › List and its panel show the new host at once.
     const moved = hosts.findIndex((host) => host !== 'Ada Lovelace');
     const was = hosts[moved] ?? '';
     await page.goto(`/w/${slug}/bookings/list`);
-    await page.getByRole('radio', { name: 'Everyone' }).click({ force: true });
+    await pickPeople(page, 'Whole team');
     // The meetings list, not the panel's Who list, which names the visitor too.
     const row = page
       .getByRole('region', { name: /^Upcoming meetings/ })
@@ -154,9 +153,8 @@ test.describe('round robin', () => {
       .filter({ hasText: `Visitor ${String(moved)}` });
     // A colleague's booking names its host beside the page ("Sales intro · Sam").
     await expect(row).toContainText(`· ${was}`);
-    await row.getByRole('button', { name: `Visitor ${String(moved)}` }).click();
-    await page.getByRole('button', { name: 'More for this booking' }).click();
-    await page.getByRole('menuitem', { name: 'Reassign' }).click();
+    await row.getByRole('button', { name: `Visitor ${String(moved)}`, exact: true }).click();
+    await popupAction(page, `Visitor ${String(moved)}`, 'Reassign');
     await page
       .getByRole('dialog', { name: /^Reassign / })
       .getByRole('button', { name: 'Reassign', exact: true })
