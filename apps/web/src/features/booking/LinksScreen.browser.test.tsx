@@ -1,10 +1,7 @@
-// Captures › Links in Chromium: deleting a booking page asks first (the house
-// rule in Modal's README). The card's menu opens the confirm; Esc and Cancel
-// change nothing and hand focus back; the commit deletes once and stays busy
-// until the server answers while the card has already left; a refusal shows
-// inside the confirm with the card back; and with its card gone, focus goes to
-// the page's title rather than falling to the page. Turning a page off with its
-// card's switch says "Paused …" with Undo, as a form's switch does (Q73).
+// Bookings › Pages (and Captures › Links) in Chromium, as the owner set them on 9 November 2026: deleting a booking
+// page asks nothing; its card leaves at once and a toast offers Undo, which brings it back without a delete ever
+// sent; with no Undo the delete is sent once the toast's time is up, and a refusal brings the card back and says why.
+// Hiding a page from its card's Live or Hidden menu says so with Undo.
 import {
   dataError,
   type BookingPageView,
@@ -120,89 +117,70 @@ async function renderLinks(
   return held;
 }
 
-const alert = () => openDialog('alertdialog');
-
 /** Opens the card's menu and chooses Delete. */
 async function chooseDelete(title: string) {
   await userEvent.click(page.getByRole('button', { name: `More for ${title}` }));
   await userEvent.click(page.getByRole('menuitem', { name: 'Delete' }));
-  await expect.poll(alert).not.toBeNull();
 }
 
 describe('deleting a booking page', () => {
-  it('asks first, naming the page; Esc and Cancel change nothing and give focus back', async () => {
-    const held = await renderLinks([pageOf('p1', 'Quick chat'), pageOf('p2', 'Demo')]);
-    await chooseDelete('Quick chat');
-    expect(alert()?.textContent).toContain('Delete “Quick chat”?');
-    expect(alert()?.textContent).toContain('Its link stops working. Bookings already made stay.');
-    const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
-    expect(labels[0]).toMatch(/^Cancel/);
-    expect(labels.at(-1)).toBe('Delete booking page');
-
-    await userEvent.keyboard('{Escape}');
-    await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('More for Quick chat');
-
-    await chooseDelete('Quick chat');
-    await userEvent.click(page.getByRole('button', { name: /^Cancel/ }));
-    await expect.poll(alert).toBeNull();
-    expect(held.remove).not.toHaveBeenCalled();
+  it('asks nothing: the card leaves, and Undo brings it back with no delete sent', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const held = await renderLinks([pageOf('p1', 'Quick chat'), pageOf('p2', 'Demo')]);
+      await chooseDelete('Quick chat');
+      expect(openDialog('alertdialog')).toBeNull();
+      await expect.poll(() => document.querySelector('[aria-label="More for Quick chat"]')).toBeNull();
+      await expect.element(page.getByText('Deleted “Quick chat”.')).toBeVisible();
+      await userEvent.click(page.getByRole('button', { name: 'Undo' }));
+      await expect.poll(() => document.querySelector('[aria-label="More for Quick chat"]')).not.toBeNull();
+      vi.advanceTimersByTime(20_000);
+      expect(held.remove).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('deletes once, busy until the server answers, then gives focus to the title', async () => {
-    const held = await renderLinks([pageOf('p1', 'Quick chat'), pageOf('p2', 'Demo')]);
-    await chooseDelete('Quick chat');
-    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
-    // The card left at once; the confirm waits, busy, and a second press sends nothing.
-    await expect.poll(() => alert()?.textContent).toContain('Deleting');
-    await userEvent.click(page.getByRole('button', { name: /Deleting/ }), { force: true });
-    expect(held.remove).toHaveBeenCalledTimes(1);
-    expect(held.remove).toHaveBeenCalledWith('acme', 'p1');
-    expect(document.body.textContent).not.toContain('More for Quick chat');
-    held.answers[0]?.resolve({ pageId: 'p1' });
-    await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Captures');
-  });
-
-  it('keeps a refusal inside the confirm, with the card back, and tries again from there', async () => {
-    const held = await renderLinks([pageOf('p1', 'Quick chat')]);
-    await chooseDelete('Quick chat');
-    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
-    held.answers[0]?.reject(dataError('FORBIDDEN', 'Only its owner can delete it.'));
-    await expect.poll(() => alert()?.textContent).toContain('Only its owner can delete it.');
-    expect(alert()).not.toBeNull();
-    // The last card left and came back while the confirm stayed open over it.
-    expect(document.querySelector('[aria-label="More for Quick chat"]')).not.toBeNull();
-    await userEvent.click(page.getByRole('button', { name: 'Delete booking page' }));
-    expect(held.remove).toHaveBeenCalledTimes(2);
-    held.answers[1]?.resolve({ pageId: 'p1' });
-    await expect.poll(alert).toBeNull();
+  it('deletes once the Undo has gone, and a refusal brings the card back and says why', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const held = await renderLinks([pageOf('p1', 'Quick chat')]);
+      await chooseDelete('Quick chat');
+      vi.advanceTimersByTime(10_000);
+      expect(held.remove).toHaveBeenCalledTimes(1);
+      expect(held.remove).toHaveBeenCalledWith('acme', 'p1');
+      held.answers[0]?.reject(dataError('FORBIDDEN', 'Only its owner can delete it.'));
+      await expect.element(page.getByText(/Only its owner can delete it\./)).toBeVisible();
+      await expect.poll(() => document.querySelector('[aria-label="More for Quick chat"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
-/** Turns a card's switch off from the keyboard, as a person tabbing to it would. */
-async function turnOff(title: string) {
-  (page.getByRole('switch', { name: `${title} is live` }).element() as HTMLElement).focus();
-  await userEvent.keyboard(' ');
+/** Opens the card's Live or Hidden menu and picks Hidden. */
+async function hide(title: string) {
+  await userEvent.click(page.getByRole('button', { name: `Live, status of ${title}` }));
+  await userEvent.click(page.getByRole('menuitemradio', { name: /^Hidden/ }));
 }
 
-describe('turning a booking page off from its card', () => {
-  it('says Paused with Undo, and Undo turns it back on', async () => {
+describe('hiding a booking page from its card', () => {
+  it('says it is hidden with Undo, and Undo makes it live again', async () => {
     const update = vi.fn(() => Promise.resolve({}));
     await renderLinks([pageOf('p1', 'Quick chat')], update);
-    await turnOff('Quick chat');
+    await hide('Quick chat');
     expect(update).toHaveBeenCalledWith('acme', 'p1', { status: 'paused' });
-    await expect.element(page.getByText('Paused “Quick chat”.')).toBeVisible();
+    await expect.element(page.getByText('Quick chat is hidden')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
     expect(update).toHaveBeenLastCalledWith('acme', 'p1', { status: 'live' });
-    await expect.element(page.getByText('“Quick chat” is live again.')).toBeVisible();
+    await expect.element(page.getByText('Quick chat is live')).toBeVisible();
   });
 
-  it('says a refusal, and no Paused', async () => {
+  it('says a refusal, and nothing about hidden', async () => {
     const update = vi.fn(() => Promise.reject(dataError('FORBIDDEN', 'Only its owner can change it.')));
     await renderLinks([pageOf('p1', 'Quick chat')], update);
-    await turnOff('Quick chat');
+    await hide('Quick chat');
     await expect.element(page.getByText(/Only its owner can change it\./)).toBeVisible();
-    expect(document.body.textContent).not.toContain('Paused “Quick chat”.');
+    expect(document.body.textContent).not.toContain('Quick chat is hidden');
   });
 });
