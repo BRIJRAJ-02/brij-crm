@@ -313,4 +313,67 @@ describe('a managed person’s social links', () => {
       message: 'This person is an owner or admin now, so their social links aren’t changed from Team pages.',
     });
   });
+
+  it('hands a disconnected app’s people to Timefix’s managers, and back to the app when it connects again', async () => {
+    const hub = await connected();
+    const pat = await partnerPerson(hub);
+    const page = await enterTeamLinkPage(hub.owner, pat);
+    await testQuery(ownerUrl, `update partner_connections set disconnected_at = now() where id = $1`, [
+      hub.connectionId,
+    ]);
+    // Disconnected: kept here like a page only person, with no app's line.
+    const handed = await getMyProfile(page, { partnerName: HUB_NAME });
+    expect(handed).toMatchObject({ socialsByManager: true });
+    expect(handed).not.toHaveProperty('managedByApp');
+    await setManagedSocials(hub.owner, { member: pat, socials: [LINKEDIN] }, [], {}, { partnerName: HUB_NAME });
+    expect((await getMyProfile(page)).socials).toHaveLength(1);
+    const history = (await listAuditEvents(hub.owner, {})).entries.filter(
+      (entry) => entry.action === 'member.profile_updated',
+    );
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ params: { isOwn: false, fields: ['socials'] } });
+    // Like a page only person, from any frame of the workspace too.
+    const elsewhere = randomUUID();
+    expect(await getMyProfile(page, { fromConnection: elsewhere })).toMatchObject({ socialsByManager: true });
+    await setManagedSocials(
+      hub.owner,
+      { member: pat, socials: [LINKEDIN, SITE] },
+      [],
+      {},
+      { fromConnection: elsewhere },
+    );
+    expect((await getMyProfile(page)).socials).toHaveLength(2);
+    // Connected again (a new connection row, as the exchange makes after a disconnect): the app's once more.
+    const [again] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `insert into partner_connections (workspace_id, id, partner_id, modules, approved_by_member_id, token_hash)
+       select workspace_id, gen_random_uuid(), partner_id, modules, approved_by_member_id, decode(repeat('ab', 32), 'hex')
+         from partner_connections where id = $1
+       returning id`,
+      [hub.connectionId],
+    );
+    const reconnected = again?.id ?? '';
+    const back = await getMyProfile(page, { partnerName: HUB_NAME });
+    expect(back).not.toHaveProperty('socialsByManager');
+    expect(back.managedByApp).toEqual({ name: 'Hub' });
+    expect(
+      await refusalOf(setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { partnerName: HUB_NAME })),
+    ).toEqual({ code: 'FORBIDDEN', message: 'Hub manages this person’s social links.' });
+    // From the app's frame on its new connection, theirs to keep; from the old one's id or another app's frame, not.
+    expect(await getMyProfile(page, { fromConnection: hub.connectionId })).not.toHaveProperty('socialsByManager');
+    expect(await getMyProfile(page, { fromConnection: elsewhere })).not.toHaveProperty('socialsByManager');
+    expect(
+      await refusalOf(
+        setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: elsewhere }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await getMyProfile(page, { fromConnection: reconnected })).toMatchObject({ socialsByManager: true });
+    await setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: reconnected });
+    expect((await getMyProfile(page)).socials).toEqual([]);
+    expect(
+      await refusalOf(
+        setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: hub.connectionId }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+  });
 });

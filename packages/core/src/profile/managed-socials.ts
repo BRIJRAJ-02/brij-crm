@@ -6,14 +6,16 @@
 // - Who: someone with `link_pages.manage_team`, from a member. The system that owns a person's profile controls it (10
 //   Nov 2026, the owner, as with directory synced accounts): a connected app's person is that app's to keep, so only
 //   from inside that app's own frame (spec 0070); in Timefix itself they are `FORBIDDEN`, with the app's name, and
-//   from another app's frame `NOT_FOUND`. The workspace's page only people are kept from either. Anyone with a login,
+//   from another app's frame `NOT_FOUND`. Once the app is disconnected, its people are kept like page only people
+//   (the source of truth is gone, so Timefix takes over) until it connects again. The workspace's page only people
+//   are kept from either. Anyone with a login,
 //   anyone removed, and anyone in another workspace is `NOT_FOUND`. One made an owner or admin is `FORBIDDEN`: theirs
 //   to keep.
 // - Like a name or a title, the set is live the moment it saves (it is profile data, never a page's draft), so the
 //   page's Publish bar has nothing to read; the api clears the edge's copies of their page once it commits.
 import type { ManagedSocialsSaved, SocialLink } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import { publicProfilesOf } from '../booking/handles.ts';
 import { checkedSocialLinks, sameSocialLinks, saveSocialLinks, socialLinksOfUser } from '../booking/socials.ts';
@@ -22,7 +24,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 
-const { managedMembers, members } = schema;
+const { managedMembers, members, partnerConnections } = schema;
 
 /** Where the manager stands: in Timefix, or inside a connected app's frame on that connection. */
 export interface ManagerPlace {
@@ -58,8 +60,9 @@ async function partnerKeepsSocials(place: ManagerPlace, partnerId: string): Prom
 /**
  * The person `memberId` whose social links a manager may keep, or undefined: an active managed person of this
  * workspace with no login (`claimed_at` null), not removed, whose identity is their member row's, and, from a frame,
- * a page only person or one of that frame's connection. A connected app's person read outside a frame comes back
- * with `byPartner`: the app keeps them. With `lock`, both rows are locked for the write.
+ * a page only person, one whose app is no longer connected here, or one of that frame's own app. A connected app's
+ * person read outside a frame while the app is connected comes back with `byPartner`: the app keeps them. With
+ * `lock`, the person's rows are locked for the write and the app's live connection shared.
  */
 async function keptPerson(
   tx: WorkspaceTx,
@@ -69,11 +72,7 @@ async function keptPerson(
   lock: boolean,
 ): Promise<Kept | undefined> {
   const managedQuery = tx
-    .select({
-      userId: managedMembers.userId,
-      partnerId: managedMembers.partnerId,
-      connectionId: managedMembers.connectionId,
-    })
+    .select({ userId: managedMembers.userId, partnerId: managedMembers.partnerId })
     .from(managedMembers)
     .where(
       and(
@@ -86,22 +85,43 @@ async function keptPerson(
     .limit(1);
   const [managed] = lock ? await managedQuery.for('update') : await managedQuery;
   if (managed === undefined) return undefined;
-  // Inside an app's frame, another app's people are not this frame's to reach.
-  if (
-    place.fromConnection !== undefined &&
-    managed.partnerId !== null &&
-    managed.connectionId !== place.fromConnection
-  ) {
-    return undefined;
+  // The app that added them keeps them only while it is connected here (10 Nov 2026): its one live connection in this
+  // workspace, whichever row that is (connecting again after a disconnect makes a new one). Locked for the write, so a
+  // disconnect waits until the write has decided; and a reconnect, which makes its new row under the exchange's lock on
+  // this partner and workspace, waits on that same lock shared, so a write that found no live row commits first.
+  if (lock && managed.partnerId !== null) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock_shared(hashtextextended(${`partner_connection:${workspaceId}:${managed.partnerId}`}, 0))`,
+    );
   }
+  const liveQuery =
+    managed.partnerId === null
+      ? undefined
+      : tx
+          .select({ id: partnerConnections.id })
+          .from(partnerConnections)
+          .where(
+            and(
+              eq(partnerConnections.workspaceId, workspaceId),
+              eq(partnerConnections.partnerId, managed.partnerId),
+              isNull(partnerConnections.disconnectedAt),
+            ),
+          )
+          .limit(1);
+  const [live] = liveQuery === undefined ? [] : lock ? await liveQuery.for('share') : await liveQuery;
+  // Inside an app's frame, a live app's people are that app's frame's alone to reach.
+  if (place.fromConnection !== undefined && live !== undefined && live.id !== place.fromConnection) return undefined;
   const personQuery = tx
     .select({ userId: members.userId, role: members.role })
     .from(members)
     .where(and(eq(members.workspaceId, workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
   const [person] = lock ? await personQuery.for('update') : await personQuery;
   if (person === undefined || person.userId !== managed.userId || person.role === 'guest') return undefined;
-  // In Timefix itself, a connected app's person is the app's to keep (10 Nov 2026).
-  const byPartner = place.fromConnection === undefined && managed.partnerId !== null ? managed.partnerId : undefined;
+  // In Timefix itself, a connected app's person is the app's to keep (10 Nov 2026), while it is connected.
+  const byPartner =
+    place.fromConnection === undefined && managed.partnerId !== null && live !== undefined
+      ? managed.partnerId
+      : undefined;
   return { userId: managed.userId, role: person.role, ...(byPartner === undefined ? {} : { byPartner }) };
 }
 
@@ -109,7 +129,7 @@ async function keptPerson(
  * Who keeps `memberId`'s social links, for a team page manager's editor (`MyProfile.socialsByManager` and
  * `managedByApp`): `manager` when the manager may change them here, `{ partnerId }` when a connected app keeps them
  * and the manager stands outside that app's frame, undefined when the person keeps their own or isn't reachable from
- * here. The same rule `setManagedSocials` writes by, read without a lock. One or two statements.
+ * here. The same rule `setManagedSocials` writes by, read without a lock. One to three statements.
  */
 export async function socialsKeeperOf(
   tx: WorkspaceTx,
