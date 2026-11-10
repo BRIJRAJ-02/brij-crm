@@ -17,6 +17,8 @@ import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
 import { ListScreen, NewListDialog } from './lists.tsx';
 import { FormsScreen } from './forms.tsx';
 import { InsightsScreen, LinkPageScreen } from './grow.tsx';
+import { SettingsScreen } from './settings.tsx';
+import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -54,6 +56,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [openTab, setOpenTab] = useState<{ readonly tab: string; readonly n: number }>();
   const [search, setSearch] = useState(false);
   const [newList, setNewList] = useState(false);
+  const [door, setDoor] = useState<Door>();
   const [record, setRecord] = useState<{ readonly object: ObjectId; readonly id: string }>();
   useCommandK(() => setSearch(true));
   const go = (p: AppPage) => { setPage(p); setRecord(undefined); };
@@ -72,10 +75,12 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     { id: 'new:person', label: 'New person', group: 'Actions', kind: 'action' as const, icon: <UserPlus {...i16} />, keywords: 'create contact' },
     { id: 'new:task', label: 'New task', group: 'Actions', kind: 'action' as const, icon: <CheckSquare {...i16} />, keywords: 'create todo' },
     { id: 'new:booking', label: 'New booking page', group: 'Actions', kind: 'action' as const, icon: <Plus {...i16} />, keywords: 'create link meeting' },
+    ...DOORS.map((d) => ({ id: `door:${d.id}`, label: d.label, group: 'Screens', kind: 'action' as const, icon: <IdCard {...i16} />, keywords: 'auth login onboarding public' })),
   ], [state.people, state.companies, state.deals]);
   const onCommand = (id: string) => {
     setSearch(false);
     const [kind, rest] = id.split(':') as [string, string];
+    if (kind === 'door') { setDoor(rest as Door); return; }
     if (kind === 'go') { if (rest === 'bookings') openBookings('meetings'); else go(rest as AppPage); }
     else if (kind === 'people' || kind === 'companies' || kind === 'deals') openRecord(kind, rest);
     else if (id === 'new:booking') openBookings('pages');
@@ -118,6 +123,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
           : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'tasks' ? <TasksScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'notes' ? <NotesScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+          : page === 'settings' ? <SettingsScreen state={state} onBookings={openBookings} />
           : page === 'link' ? <LinkPageScreen />
           : page === 'insights' ? <InsightsScreen state={state} />
           : page === 'forms' ? <FormsScreen state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onBookings={openBookings} />
@@ -136,6 +142,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
             { id: 'bookings', label: 'Bookings', icon: <CalendarDays {...i16} /> }, { id: 'settings', label: 'More', icon: <Settings {...i16} /> }]}
           onChange={(id) => (id === 'records' ? go('records:people') : id === 'bookings' ? openBookings('meetings') : go(id as AppPage))} />} />
       {newList && <NewListDialog onClose={() => setNewList(false)} onCreate={(l) => { dispatch({ type: 'list/set', list: l }); setNewList(false); go(`list:${l.id}`); }} />}
+      {door && <DoorScreen door={door} onDone={() => setDoor(undefined)} onDoor={setDoor} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={commands} onAction={onCommand} placeholder="Search people, companies, deals, or type a command…" />
     </>
   );

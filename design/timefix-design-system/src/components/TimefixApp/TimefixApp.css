@@ -126,3 +126,27 @@
 .tf-grow__url { color: var(--text); font: 600 15px/22px var(--font-sans); }
 .tf-grow__see { display: flex; flex-direction: column; gap: var(--space-16); }
 .tf-grow__qr { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); font: 500 14px/20px var(--font-sans); }
+/* Settings: the shared layout, a find box over the nav, rows of switches and lists. */
+.tf-app__body:has(> .tf-set) { padding-top: 0; }
+.tf-set { width: 100%; }
+.tf-set__nav { display: flex; flex-direction: column; gap: var(--space-12); padding-top: var(--space-24); }
+.tf-set__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-16); }
+.tf-set__grow { flex: 1; min-width: 0; }
+.tf-set__narrow { max-width: calc(var(--size-dialog) + var(--space-32)); }
+.tf-set__switch { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); min-height: var(--size-row); padding: var(--space-8) 0; }
+.tf-set__switch + .tf-set__switch { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-set__switch > span { display: flex; flex-direction: column; min-width: 0; }
+.tf-set__switch strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-set__list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-set__list li { display: flex; justify-content: space-between; gap: var(--space-12); padding: var(--space-12) 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-set__list li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-set__list strong { font-weight: 500; }
+.tf-set__links { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-set__codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); margin: 0; padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface-subtle); list-style: none; font: 500 15px/22px var(--font-mono); }
+/* The doors: full screen over the app, with a way back. */
+.tf-door { position: fixed; inset: 0; z-index: 40; overflow-y: auto; background: var(--canvas); }
+.tf-door__back { position: absolute; top: var(--space-16); right: var(--space-16); z-index: 2; }
+.tf-door__card { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); text-align: center; }
+.tf-door__card--left { align-items: stretch; text-align: left; }
+.tf-door__card--left > .tf-rec__link { align-self: flex-start; }
+.tf-door__icon { display: grid; place-items: center; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); }

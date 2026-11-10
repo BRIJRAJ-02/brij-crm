@@ -88,3 +88,7 @@ Members can hide or reorder items, and the rail mode stays. The Records and List
 9. Auth (sign in, verify, two factor), first run, invite and join, the deleted workspace, the public extras.
 
 Bookings slots into the shell as the Bookings section. Every module gets one pass with the design skills (journey, ux-heuristics, subtractive-design, impeccable, interaction-design) before it's built.
+
+## Built so far (10 Nov, the Timefix artifact)
+All nine steps have a first pass: the shell, ⌘K and Home; Records (views, table and board, filters, bulk, the record panel, the record page with its tabs); Lists; Inbox, Tasks and Notes; Forms (gallery, builder and preview, settings, share, responses, results, the public form); the Link page; Insights and Reports; Settings (the whole tree with "Find a setting"); the doors (sign in, two factor, first run, invitation, join request, deleted workspace, email preferences, all from ⌘K › Screens).
+Not built yet: CSV import and the duplicates merge (Records › ⋯ says so), custom objects and attribute editing in Settings › Objects, the guest's Manage booking page for meetings. Bookings' own Insights still shows under Bookings; it moves into Insights in the next pass.
