@@ -32,13 +32,35 @@ export interface RequestsHeld {
   readonly retain: () => () => void;
   /** Reads it again from nothing shown (Try again). */
   readonly reload: () => void;
+  /** Reads it again in place while held (an answer whose outcome is unknown); unheld, the next hold reads. */
+  readonly refresh: () => void;
   /** Takes one request away at once (answered here); answers how to put it back on a refusal. */
   readonly hide: (bookingId: string) => () => void;
 }
 
+/** Whether two answers list the same requests, field for field, in the same order. */
+function sameItems(a: readonly WaitingRequestView[], b: readonly WaitingRequestView[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((item, index) => {
+      const other = b[index];
+      return (
+        other !== undefined &&
+        item.bookingId === other.bookingId &&
+        item.pageId === other.pageId &&
+        item.start === other.start &&
+        item.end === other.end &&
+        item.visitorName === other.visitorName &&
+        item.visitorEmail === other.visitorEmail &&
+        item.expiresAt === other.expiresAt
+      );
+    })
+  );
+}
+
 /** The requests store: one held list per workspace. */
 export function createRequestsStore(deps: RequestsDeps) {
-  type Made = RequestsHeld & { readonly refresh: () => void };
+  type Made = RequestsHeld;
   const lists = new Map<string, Made>();
 
   function make(workspace: string): Made {
@@ -68,7 +90,10 @@ export function createRequestsStore(deps: RequestsDeps) {
           landedAt = (deps.now ?? Date.now)();
           // A request answered here and gone from the answer is answered for good: nothing left to hide.
           const present = new Set(items.map((item) => item.bookingId));
-          hidden = new Set([...hidden].filter((id) => present.has(id)));
+          const kept = new Set([...hidden].filter((id) => present.has(id)));
+          // The same answer as shown (most reads: a burst's refresh, a return, the minute): nothing re-renders.
+          if (read.status === 'ready' && kept.size === hidden.size && sameItems(read.items, items)) return true;
+          hidden = kept;
           read = { status: 'ready', items };
           show();
           return true;

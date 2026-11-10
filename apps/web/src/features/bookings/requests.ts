@@ -36,6 +36,7 @@ const NO_REQUESTS: RequestsHeld = {
   getSnapshot: () => READY_NONE,
   retain: () => () => undefined,
   reload: () => undefined,
+  refresh: () => undefined,
   hide: () => () => undefined,
 };
 
@@ -62,6 +63,9 @@ export function useMeetingRequests(source: MeetingRequestsSource | undefined, pa
     const restore = held.hide(bookingId);
     return call().catch((error: unknown) => {
       restore();
+      // A refusal, or an answer that timed out after the server took it: read what is true now (this tab skips its
+      // own echo, so nothing else would).
+      held.refresh();
       throw error;
     });
   };

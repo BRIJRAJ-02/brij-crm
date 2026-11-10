@@ -1623,7 +1623,7 @@ export interface PageToCheck {
 /**
  * Which pages the reader may change, for a read across pages (Meetings › Requests), with the same rule
  * `editablePage` applies to one page (`booking.manage`, then `mayChange` with the reach and the editors): `where`
- * narrows `booking_pages` in SQL to a superset of them (undefined for `booking.admin`, every page; `false` without
+ * narrows `booking_pages` in SQL to them (exactly, so a LIMIT after it never runs short) (undefined for `booking.admin`, every page; `false` without
  * `booking.manage`, none), and `changeable` answers exactly which of the rows read through it the reader may change.
  * A fixed number of queries, whatever the rows.
  */
@@ -1645,7 +1645,14 @@ export async function pagesToChange(
       ? []
       : [...reach.members.keys()].filter((id) => canActFor(reach, id, 'manage'));
   const notRotation = sql`${bookingPages.kind} <> 'round_robin'`;
-  const personal = and(eq(bookingPages.scope, 'member'), notRotation);
+  // Someone else's personal page, through the reach only while its owner is an active member who isn't a guest (as
+  // `changeable` checks), so the prefilter is exact and a page the reach can't open never takes a row of a LIMIT.
+  const personal = and(
+    eq(bookingPages.scope, 'member'),
+    notRotation,
+    sql`exists (select 1 from members o where o.workspace_id = ${bookingPages.workspaceId}
+      and o.id = ${bookingPages.ownerMemberId} and o.status = 'active' and o.role::text <> 'guest')`,
+  );
   const where = can(scope.access, 'booking.admin')
     ? undefined
     : (or(

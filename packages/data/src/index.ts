@@ -3344,6 +3344,7 @@ export function createDataLayer({
     onSynced: (workspace) => {
       bookingsLists.refreshHeld(workspace);
       meetings.refreshHeld(workspace);
+      requests.refreshHeld(workspace);
     },
   });
 
@@ -5137,6 +5138,8 @@ export function createDataLayer({
         ).then((done) => {
           rotationLists.view(workspace).reload();
           bookingsLists.reloadAll(workspace);
+          // The requests' hosts moved too: whose requests each person sees as their own.
+          requests.refreshHeld(workspace);
           return done;
         }),
       /** Undoes an adjustment (AC-1329); the rotations read again. */
