@@ -1,6 +1,6 @@
 // Brief
 // Purpose: Settings › Business › Page (spec 0066, B4 lite): the business's public page, its address and what it shows.
-// Main task: claim the address, add photos and About, then Publish; every change waits in a draft until then.
+// Main task: claim the address, add a cover, photos and About, then Publish; every change waits in a draft until then.
 // Leaves out: the name, kind, one line and contact (Business), the hours and address (each place), the menu (the Menu
 // app), the look (Settings › Brand), reviews and services (later slices).
 //
@@ -9,7 +9,8 @@
 // before they are shared); photos, About, amenities and search listing are the draft. An empty workspace's address
 // starts as the business's name. Typed text saves a moment after the typing stops (and when the field is left, and
 // when the screen goes), each change made on the draft as it stands, and Publish sends what is still being typed first
-// and goes out behind it. Removing a photo offers Undo.
+// and goes out behind it. Removing a photo or the cover offers Undo. The cover (AC-6513) is the business's own photo,
+// cropped to a shared link's shape; without one, the gallery's first photo leads, as before.
 import type {
   BusinessAmenity,
   BusinessPageContent,
@@ -498,7 +499,10 @@ function AddressSection({
   );
 }
 
-/** The gallery: add, describe, order and remove photos; the preview draws it as guests will see it. */
+/**
+ * The cover and the gallery: add, crop and remove the cover; add, describe, order and remove photos; the preview draws
+ * them as guests will see them, the cover first.
+ */
 function PhotosSection({
   store,
   slug,
@@ -515,9 +519,67 @@ function PhotosSection({
   readonly onChange: (edit: (draft: BusinessPageContent) => BusinessPageContent) => Promise<void>;
 }) {
   const [sending, setSending] = useState(0);
+  // The cover's upload apart from the gallery's, so only the control that is sending says so.
+  const [coverSending, setCoverSending] = useState(0);
   const cropping = usePhotoCrop();
   const photos = view.draft.gallery;
+  const { cover } = view.draft;
   const room = PHOTOS_MAX - photos.length;
+  /** What guests see, in order: the cover, then the gallery, the cover never twice. */
+  const shown = cover === undefined ? photos : [cover, ...photos.filter((photo) => photo.id !== cover.id)];
+  /** Sets or clears the cover on the draft as it stands when the change goes out. */
+  const changeCover = (next: BusinessPhoto | undefined) =>
+    void onChange((draft) => {
+      const { cover: _was, ...rest } = draft;
+      return next === undefined ? rest : { ...rest, cover: next };
+    });
+  /**
+   * Crops and uploads a cover: a file just picked (a new picture, so no description yet), or the cover there now cropped
+   * again (`kept`, its description kept).
+   */
+  const pickCover = async (source: File | string, kept?: BusinessPhoto) => {
+    // Framed freely, as the gallery's photos are: the page and the shared link each fit it to their own shape.
+    const crop = await cropping.crop(source, 'free', { title: words.cover });
+    if (crop === undefined) return;
+    setCoverSending((was) => was + 1);
+    try {
+      const prepared = await pickGalleryPhoto(source, crop).catch(() => undefined);
+      if (prepared === undefined) {
+        toasts.toast({ tone: 'danger', message: words.photoUnreadable });
+        return;
+      }
+      const uploaded = await store.uploadPhoto(slug, prepared);
+      if (!uploaded.ok) {
+        toasts.toast({ tone: 'danger', message: uploaded.error.message || words.photoFailed });
+        return;
+      }
+      const alt = kept?.alt;
+      changeCover({ ...uploaded.photo, ...(alt === undefined ? {} : { alt }) });
+    } finally {
+      setCoverSending((was) => was - 1);
+    }
+  };
+  /** Takes the cover away, with Undo putting it back while no other cover took its place. */
+  const removeCover = (shown: BusinessPhoto) => {
+    // The cover as the draft holds it when the removal goes out (a description typed a moment ago included).
+    let was = shown;
+    void onChange((draft) => {
+      if (draft.cover !== undefined) was = draft.cover;
+      const { cover: _gone, ...rest } = draft;
+      return rest;
+    });
+    toasts.toast(
+      {
+        tone: 'info',
+        message: words.coverRemoved,
+        action: {
+          label: words.undo,
+          onAction: () => void onChange((draft) => (draft.cover === undefined ? { ...draft, cover: was } : draft)),
+        },
+      },
+      { timeout: UNDO_MS },
+    );
+  };
   /** Changes the gallery as it stands when the change goes out. */
   const changeGallery = (edit: (gallery: readonly BusinessPhoto[]) => readonly BusinessPhoto[]) =>
     void onChange((draft) => ({ ...draft, gallery: [...edit(draft.gallery)] }));
@@ -608,10 +670,45 @@ function PhotosSection({
   return (
     <SettingsSection title={words.photos} description={words.photosText}>
       <Card>
-        {photos.length > 0 && (
+        {shown.length > 0 && (
           <BusinessGallery
             name={words.howItLooks}
-            photos={photos.map((photo) => ({ ...photo, src: store.photoSrc(slug, photo.id) }))}
+            photos={shown.map((photo) => ({ ...photo, src: store.photoSrc(slug, photo.id) }))}
+          />
+        )}
+        <FileDrop
+          variant="row"
+          label={words.cover}
+          description={words.coverText}
+          acceptedTypes={PHOTO_TYPES}
+          typesText={words.photoTypes}
+          maxSize={PHOTO_PICK_MAX_BYTES}
+          isPending={coverSending > 0}
+          {...(cover === undefined
+            ? {}
+            : {
+                preview: { src: store.photoSrc(slug, cover.id), alt: cover.alt ?? words.coverAlt },
+                onAdjust: () => void pickCover(store.photoSrc(slug, cover.id), cover),
+                onRemove: () => removeCover(cover),
+              })}
+          onFiles={(files) => {
+            const [file] = files;
+            if (file !== undefined) void pickCover(file);
+          }}
+        />
+        {cover !== undefined && (
+          <CoverAlt
+            // A new cover starts its description afresh.
+            key={cover.id}
+            alt={cover.alt ?? ''}
+            texts={texts}
+            onAlt={(alt) =>
+              void onChange((draft) => {
+                if (draft.cover?.id !== cover.id) return draft;
+                const { alt: _was, ...rest } = draft.cover;
+                return { ...draft, cover: alt === '' ? rest : { ...rest, alt } };
+              })
+            }
           />
         )}
         <FileDrop
@@ -633,6 +730,7 @@ function PhotosSection({
             src={store.photoSrc(slug, photo.id)}
             at={at}
             count={photos.length}
+            leads={at === 0 && cover === undefined}
             texts={texts}
             onAlt={(alt) =>
               changeGallery((gallery) =>
@@ -654,6 +752,32 @@ function PhotosSection({
   );
 }
 
+/** The cover's description, for people who can't see it, saved as typed like each photo's. */
+function CoverAlt({
+  alt,
+  texts,
+  onAlt,
+}: {
+  readonly alt: string;
+  readonly texts: DraftTexts;
+  readonly onAlt: (alt: string) => void;
+}) {
+  const typed = useDraftText(alt, onAlt, texts);
+  return (
+    <Field
+      label={words.coverAltLabel}
+      isLabelHidden
+      placeholder={words.coverAltPlaceholder}
+      name="alt-cover"
+      autoComplete="off"
+      maxLength={120}
+      value={typed.text}
+      onChange={typed.onChange}
+      onBlur={typed.onBlur}
+    />
+  );
+}
+
 /**
  * One photo: its thumbnail, so the description is written looking at the picture, the description (saved as typed),
  * and its move and remove buttons.
@@ -669,11 +793,14 @@ function PhotoRow({
   onAdjust,
   isSending,
   onRemove,
+  leads,
 }: {
   readonly photo: BusinessPhoto;
   readonly src: string;
   readonly at: number;
   readonly count: number;
+  /** Whether this photo leads the page (the first, while there is no cover). */
+  readonly leads: boolean;
   readonly texts: DraftTexts;
   readonly onAlt: (alt: string) => void;
   readonly onMove: (by: -1 | 1) => void;
@@ -686,7 +813,7 @@ function PhotoRow({
   return (
     <SettingsRow
       title={words.photoTitle(at + 1)}
-      description={at === 0 ? words.photoLeads : undefined}
+      description={leads ? words.photoLeads : undefined}
       leading={<Avatar name={words.photoTitle(at + 1)} src={src} shape="square" size="title" isDecorative />}
       leadingAlign="center"
       control="field"

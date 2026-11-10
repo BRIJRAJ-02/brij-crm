@@ -112,6 +112,31 @@ describe('the page editor (B4 lite)', () => {
     expect((await claimBusinessHandle(w.owner, { handle: `sn-${run}-a` })).view.handle).toBe(`sn-${run}-a`);
   });
 
+  it('counts a new address against the person’s own daily budget, never an old one of their own (10 Nov 2026)', async () => {
+    const w = await business();
+    let asked = 0;
+    const spent = { handleBudget: { take: () => Promise.resolve((asked += 1) < 0) } };
+    const open = { handleBudget: { take: () => Promise.resolve(true) } };
+    // Past the budget, a new address is refused in the one error shape, and nothing is held.
+    expect(await refusalOf(claimBusinessHandle(w.owner, { handle: `sn-${run}-p1` }, spent))).toBe('LIMIT_REACHED');
+    expect(asked).toBe(1);
+    expect((await getBusinessPage(w.owner)).handle).toBeUndefined();
+    // Within it, the claim says it made a new address.
+    const made = await claimBusinessHandle(w.owner, { handle: `sn-${run}-p1` }, open);
+    expect(made.madeHandle).toBe(true);
+    expect((await claimBusinessHandle(w.owner, { handle: `sn-${run}-p2` }, open)).madeHandle).toBe(true);
+    // Its own old address is free again, budget or not, and asks nothing of it.
+    asked = 0;
+    const back = await claimBusinessHandle(w.owner, { handle: `sn-${run}-p1` }, spent);
+    expect(back.view.handle).toBe(`sn-${run}-p1`);
+    expect(back.madeHandle).toBeUndefined();
+    expect(asked).toBe(0);
+    // Someone else's address is refused as taken, never counted.
+    const other = await business();
+    expect(await refusalOf(claimBusinessHandle(other.owner, { handle: `sn-${run}-p2` }, spent))).toBe('SLUG_TAKEN');
+    expect(asked).toBe(0);
+  });
+
   it('suggests a free address from the business’s name until it has one', async () => {
     const card = { ...CARD, name: `Café Ünique ${run}` };
     const w = await business(card);
@@ -156,7 +181,7 @@ describe('the page editor (B4 lite)', () => {
       placeId: w.placeId,
       reserve: 'soon',
       indexable: true,
-      tags: [`business:${businessCacheId(w.workspaceId)}`, `place:${w.placeId}`],
+      tags: [`business:${businessCacheId(w.workspaceId, entry.propertyId)}`, `place:${w.placeId}`],
     });
     // The public answer never names the workspace: its business tag is an opaque id.
     expect(JSON.stringify(entry.page)).not.toContain(w.workspaceId);
@@ -243,6 +268,66 @@ describe('the page editor (B4 lite)', () => {
     );
     const published = await publishBusinessPage(w.owner);
     expect(published.unusedPaths).toEqual([`business-page/${w.workspaceId}/${dropped}.webp`]);
+  });
+
+  it('keeps a cover of the business’s own apart from the gallery, leading the public page (AC-6513)', async () => {
+    const w = await business();
+    const handle = `sn-${run}-cover`;
+    await claimBusinessHandle(w.owner, { handle });
+    await updatePlace(w.owner, { placeId: w.placeId, hours: OPEN_WEEK });
+    const [first, cover, swapped] = [randomUUID(), randomUUID(), randomUUID()];
+    for (const id of [first, cover, swapped]) {
+      await addBusinessPhoto(w.owner, { id, type: 'image/png', bytes: 10, width: 10, height: 10 });
+    }
+    const gallery = [{ id: first, width: 10, height: 10 }];
+    // No cover yet: the page answers none, and the gallery's first leads as before.
+    await saveBusinessPage(w.owner, { draft: { gallery, amenities: [], hiddenPlaces: [] } });
+    await publishBusinessPage(w.owner);
+    expect((await enterBusinessPage({ db }, handle)).page.cover).toBeUndefined();
+    // A cover of its own: a change the editor lists, live on Publish, served from our origin under the handle.
+    const view = await saveBusinessPage(w.owner, {
+      draft: {
+        gallery,
+        cover: { id: cover, width: 10, height: 10, alt: 'The terrace' },
+        amenities: [],
+        hiddenPlaces: [],
+      },
+    });
+    expect(view.changes).toContain('Cover photo added');
+    expect((await enterBusinessPage({ db }, handle)).page.cover).toBeUndefined();
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update business_photos set created_at = now() - interval '11 minutes'`),
+    );
+    // Publish keeps the cover: it is in use, though in no gallery.
+    expect((await publishBusinessPage(w.owner)).unusedPaths).toEqual([`business-page/${w.workspaceId}/${swapped}.png`]);
+    const page = (await enterBusinessPage({ db }, handle)).page;
+    expect(page.cover).toEqual({
+      id: cover,
+      width: 10,
+      height: 10,
+      alt: 'The terrace',
+      src: `/api/public/business/${handle}/photos/${cover}`,
+    });
+    expect(page.gallery.map((photo) => photo.id)).toEqual([first]);
+    expect((await publicBusinessPhoto({ db }, handle, cover))?.path).toBe(
+      `business-page/${w.workspaceId}/${cover}.png`,
+    );
+    // Only one of the business's own pictures can be its cover.
+    const elsewhere = await business();
+    const theirs = randomUUID();
+    await addBusinessPhoto(elsewhere.owner, { id: theirs, type: 'image/png', bytes: 10, width: 10, height: 10 });
+    expect(
+      await refusalOf(
+        saveBusinessPage(w.owner, {
+          draft: { gallery, cover: { id: theirs, width: 10, height: 10 }, amenities: [], hiddenPlaces: [] },
+        }),
+      ),
+    ).toBe('INPUT_INVALID');
+    // Removed and published, the gallery's first leads again.
+    const cleared = await saveBusinessPage(w.owner, { draft: { gallery, amenities: [], hiddenPlaces: [] } });
+    expect(cleared.changes).toContain('Cover photo removed');
+    await publishBusinessPage(w.owner);
+    expect((await enterBusinessPage({ db }, handle)).page.cover).toBeUndefined();
   });
 
   it('gives a place a new slug with its old one still finding it, refusing reserved words and another place’s', async () => {

@@ -27,6 +27,7 @@ import {
 import { addResources } from './floor.ts';
 import { createPlace, getBusiness } from './places.ts';
 import { createProperty, removeProperty } from './property.ts';
+import { businessEdgeTags } from './edge-tags.ts';
 import { enterBusinessPage, listSitemapBusinesses, publicBusinessBrand, publicBusinessPhoto } from './public-page.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -133,6 +134,48 @@ describe('a page per business (AC-6592)', () => {
     const firstSlug = firstPage.places[0]?.slug ?? '';
     expect(await refusalOf(enterBusinessPage({ db }, wish, firstSlug))).toBe('NOT_FOUND');
     expect((await enterBusinessPage({ db }, first, firstSlug)).page.placeId).toBe(w.firstPlace);
+    // Separate brands stay unlinkable (owner decision, 10 Nov 2026): each answer files under its own business tag, which
+    // no other business of the workspace shares, and neither names the other's business, places or workspace.
+    const secondPage = (await enterBusinessPage({ db }, wish)).page;
+    const businessTag = (tags: readonly string[]) => tags.filter((tag) => tag.startsWith('business:'));
+    expect(businessTag(firstPage.tags)).toHaveLength(1);
+    expect(businessTag(secondPage.tags)).toHaveLength(1);
+    expect(firstPage.tags.some((tag) => secondPage.tags.includes(tag))).toBe(false);
+    for (const [page, other] of [
+      [firstPage, secondPage],
+      [secondPage, firstPage],
+    ] as const) {
+      const json = JSON.stringify(page);
+      expect(json).not.toContain(w.workspaceId);
+      expect(json).not.toContain(other.handle);
+      expect(json).not.toContain(other.placeId);
+    }
+    // A write purges each business it changed, by its own tags: one place names its business only.
+    const placeTags = await businessEdgeTags(w.owner, { places: [w.secondPlace] });
+    expect(placeTags).toEqual(expect.arrayContaining([...secondPage.tags]));
+    expect(placeTags).not.toContain(businessTag(firstPage.tags)[0]);
+    const every = await businessEdgeTags(w.owner, { every: true });
+    expect(every).toEqual(expect.arrayContaining([...businessTag(firstPage.tags), ...businessTag(secondPage.tags)]));
+    const firstOnly = await businessEdgeTags(w.owner, { properties: [undefined] });
+    expect(firstOnly).toContain(businessTag(firstPage.tags)[0]);
+    expect(firstOnly).not.toContain(businessTag(secondPage.tags)[0]);
+    // A cover is the business's own: another business's picture, of the same workspace, is refused.
+    const theirs = randomUUID();
+    await addBusinessPhoto(w.owner, {
+      id: theirs,
+      type: 'image/png',
+      bytes: 10,
+      width: 10,
+      height: 10,
+      propertyId: w.second,
+    });
+    expect(
+      await refusalOf(
+        saveBusinessPage(w.owner, {
+          draft: { gallery: [], cover: { id: theirs, width: 10, height: 10 }, amenities: [], hiddenPlaces: [] },
+        }),
+      ),
+    ).toBe('INPUT_INVALID');
     // Both are listed for search engines, each at its own handle.
     const listed = (await listSitemapBusinesses({ db }, { max: 50_000 })).map((row) => row.handle);
     expect(listed).toEqual(expect.arrayContaining([first, wish]));

@@ -3,7 +3,7 @@
 // (Rules settled: Routes), and a photo goes up at two widths, Manage hospitality only, cleaned, and is served only as
 // the live snapshot names it (AC-6527). Real sessions, real Postgres, an in memory store.
 import { menuCacheTags, type MenuDraft, type PublicMenu } from '@crm/contracts';
-import { menuWorkspaceCacheTags, newId } from '@crm/core';
+import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -136,7 +136,6 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
     tagged.length = 0;
     const read = await send(`/api/public/menu/${place.menuKey}`);
-    expect(tagged.flat()).toContain(menuWorkspaceCacheTags(m.workspace.id)[0]);
     expect(read.status).toBe(200);
     expect(read.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=86400');
     expect(tagged.flat()).toContain(`menu:${place.id}`);
@@ -167,8 +166,8 @@ describe('the guest menu read (AC-6528, AC-6531)', () => {
     forgotten.length = 0;
     await m.client.hospitality.remove({ workspace: m.slug, app: 'menu', withDependents: true, mutationId: newId() });
     expect(forgotten).toContainEqual([...menuCacheTags(place.id)]);
-    // Every answer carries the workspace's own tag too, which a deleted workspace forgets.
-    expect(tagged.flat()).toContain(menuWorkspaceCacheTags(m.workspace.id)[0]);
+    // Every menu answer carries its business's own tag too, which a deleted workspace forgets.
+    expect(tagged.flat().some((tag) => /^menu-ws:[0-9a-f]{32}$/.test(tag))).toBe(true);
     const gone = await send(`/api/public/menu/${place.menuKey}`);
     expect(gone.status).toBe(404);
     expect(gone.headers.get('cache-control')).toBe('no-store');
@@ -454,11 +453,15 @@ describe('Live or Hidden', () => {
   });
 });
 
-describe('the workspace’s own menu tag (security review)', () => {
+describe('each business’s own menu tag (security review; owner decision, 10 Nov 2026)', () => {
   it('is forgotten when the workspace is deleted', async () => {
-    const { m } = await menuWorkspace();
+    const { m, place } = await menuWorkspace();
+    await m.client.menu.publish({ workspace: m.slug, mutationId: newId() });
+    const { cacheId } = (await (await send(`/api/public/menu/${place.menuKey}`)).json()) as PublicMenu;
     forgotten.length = 0;
     await m.client.workspace.delete({ workspace: m.slug, confirmName: m.workspace.name, mutationId: newId() });
-    expect(forgotten).toContainEqual([...menuWorkspaceCacheTags(m.workspace.id)]);
+    expect(forgotten.flat()).toContain(`menu-ws:${cacheId}`);
+    // Never the workspace's id, in the tag or the body.
+    expect(cacheId).not.toContain(m.workspace.id.replace(/-/g, ''));
   });
 });

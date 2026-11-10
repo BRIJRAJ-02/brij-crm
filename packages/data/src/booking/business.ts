@@ -6,6 +6,7 @@ import { publicCaller, type PublicClientOptions } from './public.ts';
 
 export {
   AMENITY_LABELS,
+  businessPhotosOf,
   directionsLinks,
   placeAddressLine,
   type BusinessAmenity,

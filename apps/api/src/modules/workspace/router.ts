@@ -1,6 +1,5 @@
 import {
-  businessCacheTags,
-  menuWorkspaceCacheTags,
+  businessEdgeTags,
   countSubmissionsBeyond,
   deleteWorkspace,
   getWorkspaceSettings,
@@ -128,14 +127,15 @@ export const workspaceRouter = member.workspace.router({
     return updated.settings;
   }),
   delete: member.workspace.delete.handler(async ({ context, input }) => {
+    // Its guest menus leave the edge at once (spec 0065, H1; the security review), and its business pages answer 404
+    // now, so the edge's copies go too (spec 0066, AC-6816): each business's own tags, read before the delete, so a
+    // read that fails refuses the delete rather than leaving the public copies up.
+    const tags = await businessEdgeTags(context.scope, { every: true, menus: true });
     const deletion = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       deleteWorkspace(context.scope, { confirmName: input.confirmName }, hooks, sourceOf(context)),
     );
     await followInDirectory('delete', () => context.directory.setWorkspaceDeleted(context.scope.workspaceId, true));
-    // Its guest menus leave the edge at once (spec 0065, H1; the security review).
-    await forgetAfterCommit(context.edgeCache, menuWorkspaceCacheTags(context.scope.workspaceId));
-    // Its business page answers 404 now: the edge's copies go too (spec 0066, AC-6816).
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId));
+    await forgetAfterCommit(context.edgeCache, tags);
     // Each member is told (AC-823), after the commit and without holding up the answer; on Vercel the instance stays
     // up until the last one is sent.
     context.keepAlive(tellMembersDeleted(context, deletion));

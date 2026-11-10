@@ -1,11 +1,12 @@
 // The handle shell for a business (spec 0066, B4 lite, AC-6644): `/<company-handle>` and `/<company-handle>/<slug>`
-// answer the built shell with the business's own meta block (title, description, canonical, the first photo as the
-// share image), its structured data (JSON-LD of its schema.org type with its address and opening hours) and the page
+// answer the built shell with the business's own meta block (title, description, canonical, the cover (else the first
+// photo) as the share image), its structured data (JSON-LD of its schema.org type with its address and opening hours) and the page
 // as text inside the root for a crawler that runs no script, plus the boot block so the page draws without asking
 // again. Plain functions over a read the caller passes in, so the Node tests run it; `handle-shell.ts` calls it once a
 // handle names no person.
 import {
   AMENITY_LABELS,
+  businessCoverOf,
   businessJsonLd,
   placeAddressLine,
   type PublicBusinessPage,
@@ -36,6 +37,19 @@ export function businessOf(value: unknown): PublicBusinessPage | undefined {
   }
   if (!Array.isArray(page.gallery) || !Array.isArray(page.amenities) || !Array.isArray(page.tags)) return undefined;
   if (!Object.hasOwn(KIND_WORDS, String(page.kind))) return undefined;
+  // The cover (AC-6513) is optional; one that isn't a picture's shape is left out rather than trusted.
+  const cover = page.cover as Record<string, unknown> | null | undefined;
+  if (
+    cover !== undefined &&
+    (typeof cover !== 'object' ||
+      cover === null ||
+      typeof cover.src !== 'string' ||
+      typeof cover.width !== 'number' ||
+      typeof cover.height !== 'number')
+  ) {
+    const { cover: _dropped, ...rest } = page;
+    return rest as unknown as PublicBusinessPage;
+  }
   return value as PublicBusinessPage;
 }
 
@@ -121,7 +135,8 @@ export interface BusinessBoot {
  */
 export function businessShell(shell: string, page: PublicBusinessPage, origin: string, readAt: number): string {
   const canonical = businessCanonical(page, origin);
-  const card = page.gallery[0];
+  // The business's own cover, else the gallery's first photo (AC-6513): the share image and the image preloaded.
+  const card = businessCoverOf(page);
   const source: MetaSource = {
     name: page.name,
     title: businessTitle(page),

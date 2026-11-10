@@ -100,10 +100,11 @@ async function isLive(tx: WorkspaceTx, workspaceId: string): Promise<boolean> {
   return workspace !== undefined && (await installedHospitalityApps(tx, workspaceId)).size > 0;
 }
 
-/** What the public page's entry found: the page, its workspace (for the cache tags and the brand), and its brand. */
+/** What the public page's entry found: the page, its workspace and business (for the cache tags), and its brand. */
 export interface BusinessPageEntry {
   readonly page: PublicBusinessPage;
   readonly workspaceId: string;
+  readonly propertyId: string;
   readonly brand: PageBrand;
 }
 
@@ -205,6 +206,10 @@ export async function enterBusinessPage(
       gallery: content.gallery
         .filter((photo) => kept.has(photo.id))
         .map((photo) => ({ ...photo, src: businessPhotoSrc(current, photo.id) })),
+      // The business's own cover (AC-6513), while its picture is still kept; absent, the gallery's first leads.
+      ...(content.cover === undefined || !kept.has(content.cover.id)
+        ? {}
+        : { cover: { ...content.cover, src: businessPhotoSrc(current, content.cover.id) } }),
       amenities: content.amenities,
       places: shown.map((place) => ({
         id: place.id,
@@ -233,9 +238,10 @@ export async function enterBusinessPage(
       ...(brand.answer === undefined ? {} : { brand: brand.answer }),
       indexable: !content.hiddenPlaces.includes(placeId),
       publishedAt: new Date(row.publishedAt).toISOString(),
-      tags: businessCacheTags(workspaceId, [placeId]),
+      // This business's own tags (owner decision, 10 Nov 2026): never one another business of the workspace shares.
+      tags: businessCacheTags(workspaceId, property.id, [placeId]),
     };
-    return { page, workspaceId, brand };
+    return { page, workspaceId, propertyId: property.id, brand };
   });
   if (entry === undefined) throw noPage();
   return entry;
@@ -269,7 +275,10 @@ export async function publicBusinessPhoto(
   deps: { readonly db: Database },
   handle: string,
   photoId: string,
-): Promise<{ readonly path: string; readonly type: string; readonly workspaceId: string } | undefined> {
+): Promise<
+  | { readonly path: string; readonly type: string; readonly workspaceId: string; readonly propertyId: string }
+  | undefined
+> {
   if (!isUuid(photoId)) return undefined;
   return openHandle(deps.db, handle, async (tx, workspaceId, propertyId) => {
     if (!(await isLive(tx, workspaceId))) return undefined;
@@ -278,7 +287,8 @@ export async function publicBusinessPhoto(
       .from(businessPages)
       .where(thePage(workspaceId, propertyId));
     if (row === undefined || row.published === null) return undefined;
-    if (!businessContentOf(row.published).gallery.some((photo) => photo.id === photoId)) return undefined;
+    const published = businessContentOf(row.published);
+    if (published.cover?.id !== photoId && !published.gallery.some((photo) => photo.id === photoId)) return undefined;
     // Only this business's own picture: another business's, even of the same workspace, is none.
     const [photo] = await tx
       .select({ path: businessPhotos.path, type: businessPhotos.type })
@@ -290,7 +300,7 @@ export async function publicBusinessPhoto(
           eq(businessPhotos.id, photoId),
         ),
       );
-    return photo === undefined ? undefined : { ...photo, workspaceId };
+    return photo === undefined ? undefined : { ...photo, workspaceId, propertyId };
   });
 }
 
@@ -298,14 +308,14 @@ export async function publicBusinessPhoto(
 export async function publicBusinessBrand(
   deps: { readonly db: Database },
   handle: string,
-): Promise<{ readonly brand: PageBrand; readonly workspaceId: string } | undefined> {
+): Promise<{ readonly brand: PageBrand; readonly workspaceId: string; readonly propertyId: string } | undefined> {
   return openHandle(deps.db, handle, async (tx, workspaceId, propertyId) => {
     const [row] = await tx
       .select({ published: businessPages.publishedAt })
       .from(businessPages)
       .where(thePage(workspaceId, propertyId));
     if (row === undefined || row.published === null || !(await isLive(tx, workspaceId))) return undefined;
-    return { brand: await businessBrandOf(tx, workspaceId, propertyId), workspaceId };
+    return { brand: await businessBrandOf(tx, workspaceId, propertyId), workspaceId, propertyId };
   });
 }
 

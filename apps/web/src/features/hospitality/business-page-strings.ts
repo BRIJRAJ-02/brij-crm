@@ -48,7 +48,14 @@ export const pageStrings = {
   fixShifts: 'Open Shifts',
   /** Photos. */
   photos: 'Photos',
-  photosText: 'Up to 20. The first one leads the page and shows when the link is shared.',
+  photosText: 'A cover and up to 20 photos.',
+  /** The cover photo (AC-6513). */
+  cover: 'Cover photo',
+  coverText: 'Leads the page and shared links. Without one, your first photo does.',
+  coverAlt: 'Your cover photo',
+  coverAltLabel: 'Cover photo description',
+  coverAltPlaceholder: 'Describe the cover photo',
+  coverRemoved: 'Cover photo removed.',
   addPhotos: 'Add photos',
   addFirstPhoto: 'Add your first photo',
   photoTypes: 'JPEG, PNG or WebP',

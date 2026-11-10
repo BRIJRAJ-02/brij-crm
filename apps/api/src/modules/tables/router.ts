@@ -1,6 +1,6 @@
 import { menuCacheTags } from '@crm/contracts';
 import {
-  businessCacheTags,
+  businessEdgeTags,
   freeTables,
   getTableSetup,
   listServiceDay,
@@ -12,7 +12,7 @@ import {
   setReservationAlert,
   setVisitStatus,
 } from '@crm/core';
-import { forgetAfterCommit } from '../../edge-cache.ts';
+import { forgetAfterCommit, forgetReadAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -32,10 +32,8 @@ export const tablesRouter = t.router({
     );
     // The business page's Reserve opens or closes with the setup's online switch (spec 0066, AC-6642), and so does a
     // hidden menu's Reserve a table (spec 0065): both pages' copies go.
-    await forgetAfterCommit(context.edgeCache, [
-      ...businessCacheTags(context.scope.workspaceId, [input.placeId]),
-      ...menuCacheTags(input.placeId),
-    ]);
+    await forgetAfterCommit(context.edgeCache, menuCacheTags(input.placeId));
+    await forgetReadAfterCommit(context.edgeCache, () => businessEdgeTags(context.scope, { places: [input.placeId] }));
     return saved;
   }),
   places: t.places.handler(({ context, input }) =>

@@ -4,6 +4,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { formatFileSize } from '../FileItem/FileItem.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import styles from './FileDrop.module.css';
 import { strings } from './strings.ts';
@@ -147,6 +148,8 @@ export function FileDrop({
   // `photo` takes a picture pasted anywhere in its own dialog: nothing to focus first. Text pasted into a field stays
   // that field's, and a dialog opened over this one (the cropper) keeps its own paste.
   const ownRef = useRef<HTMLDivElement>(null);
+  // The row's Upload or Change button, which stays as the picture goes: Remove hands focus to it, never to the page.
+  const pickRef = useRef<HTMLButtonElement>(null);
   const takesPaste = variant === 'photo' && !isDisabled && !isReadOnly && !isPending;
   // The listener goes on once per opening, reading the latest checks through a ref, not again after every render.
   const takeRef = useRef(take);
@@ -364,6 +367,7 @@ export function FileDrop({
               }}
             >
               <Button
+                ref={pickRef}
                 isPending={isPending}
                 isDisabled={isDisabled}
                 label={hasPicture ? strings.changeNamed(label) : strings.uploadNamed(label)}
@@ -384,7 +388,11 @@ export function FileDrop({
                 icon="x"
                 label={strings.remove(label)}
                 isDisabled={isDisabled || isPending}
-                onPress={onRemove}
+                onPress={() => {
+                  onRemove();
+                  // The remove button goes with the picture: focus moves to Upload, so the keyboard keeps its place.
+                  focusLater(() => pickRef.current);
+                }}
               />
             )}
           </span>

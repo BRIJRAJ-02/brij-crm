@@ -123,6 +123,11 @@ export interface BusinessPhotoShape {
 /** What the editor drafts and Publish freezes (spec 0068's draft and snapshot): the page's own content. */
 export interface BusinessPageContentShape {
   readonly gallery: readonly BusinessPhotoShape[];
+  /**
+   * The business's own cover photo (AC-6513, owner decision 10 Nov 2026: Airbnb, Google Business and Fresha keep
+   * one apart from the gallery). Absent, the gallery's first photo is the cover, as before.
+   */
+  readonly cover?: BusinessPhotoShape | undefined;
   readonly amenities: readonly BusinessAmenity[];
   readonly about?: string | undefined;
   /** Places search engines are told not to list (AC-6644): `noindex`, and out of the sitemap. */
@@ -185,6 +190,11 @@ export interface PublicBusinessPage {
     /** The picture's address on our own origin, versioned. */
     readonly src: string;
   })[];
+  /**
+   * The business's own cover photo (AC-6513), leading the page and its share image; absent, the gallery's first photo
+   * does. Use `businessCoverOf` rather than reading it, so the fallback is the same everywhere.
+   */
+  readonly cover?: (BusinessPhotoShape & { readonly src: string }) | undefined;
   readonly amenities: readonly BusinessAmenity[];
   readonly places: readonly PublicBusinessPlace[];
   /** The place this address shows: the one its slug names, else the first. */
@@ -358,7 +368,9 @@ export function businessJsonLd(page: PublicBusinessPage, origin: string): Record
     place === undefined || page.places.length <= 1
       ? `${origin}/${page.handle}`
       : `${origin}/${page.handle}/${place.slug}`;
-  const images = page.gallery.slice(0, 6).map((photo) => `${origin}${photo.src}`);
+  const images = businessPhotosOf(page)
+    .slice(0, 6)
+    .map((photo) => `${origin}${photo.src}`);
   const telephone = place?.phone ?? page.phone;
   const hours = place === undefined ? [] : openingHoursSpecification(place.hours);
   return {
@@ -397,18 +409,43 @@ export function businessJsonLd(page: PublicBusinessPage, origin: string): Record
   };
 }
 
+/** One stored picture read leniently: a malformed one is none. */
+function photoOf(entry: unknown): BusinessPhotoShape[] {
+  if (typeof entry !== 'object' || entry === null) return [];
+  const { id, width, height, alt } = entry as Record<string, unknown>;
+  if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') return [];
+  return [{ id, width, height, ...(typeof alt === 'string' && alt !== '' ? { alt } : {}) }];
+}
+
+/**
+ * The picture a business page leads with and shares as its preview (AC-6513): its own cover, else the gallery's
+ * first photo, else none. The one rule the page, its share image and its structured data follow.
+ */
+export function businessCoverOf<T extends BusinessPhotoShape>(page: {
+  readonly cover?: T | undefined;
+  readonly gallery: readonly T[];
+}): T | undefined {
+  return page.cover ?? page.gallery[0];
+}
+
+/**
+ * The page's pictures in the order guests see them: the cover first (when it is its own photo), then the gallery,
+ * the cover never twice.
+ */
+export function businessPhotosOf<T extends BusinessPhotoShape>(page: {
+  readonly cover?: T | undefined;
+  readonly gallery: readonly T[];
+}): readonly T[] {
+  const { cover } = page;
+  return cover === undefined ? page.gallery : [cover, ...page.gallery.filter((photo) => photo.id !== cover.id)];
+}
+
 /** The page's content read leniently: anything malformed reads as empty, so an old draft never breaks a read. */
 export function businessContentOf(value: unknown): BusinessPageContentShape {
   if (typeof value !== 'object' || value === null) return EMPTY_BUSINESS_PAGE;
   const given = value as Record<string, unknown>;
-  const gallery = Array.isArray(given.gallery)
-    ? (given.gallery as unknown[]).flatMap((entry) => {
-        if (typeof entry !== 'object' || entry === null) return [];
-        const { id, width, height, alt } = entry as Record<string, unknown>;
-        if (typeof id !== 'string' || typeof width !== 'number' || typeof height !== 'number') return [];
-        return [{ id, width, height, ...(typeof alt === 'string' && alt !== '' ? { alt } : {}) }];
-      })
-    : [];
+  const gallery = Array.isArray(given.gallery) ? (given.gallery as unknown[]).flatMap(photoOf) : [];
+  const [cover] = photoOf(given.cover);
   const amenities = Array.isArray(given.amenities)
     ? (given.amenities as unknown[]).filter((each): each is BusinessAmenity =>
         (BUSINESS_AMENITIES as readonly unknown[]).includes(each),
@@ -419,6 +456,7 @@ export function businessContentOf(value: unknown): BusinessPageContentShape {
     : [];
   return {
     gallery: gallery.slice(0, BUSINESS_PAGE_LIMITS.photos),
+    ...(cover === undefined ? {} : { cover }),
     amenities,
     ...(typeof given.about === 'string' && given.about !== '' ? { about: given.about } : {}),
     hiddenPlaces,
@@ -445,6 +483,17 @@ export function businessPageChanges(
   const removed = before.gallery.filter((photo) => !draftIds.has(photo.id)).length;
   if (added > 0) changes.push(`Gallery: ${counted(added, 'photo', 'photos')} added`);
   if (removed > 0) changes.push(`Gallery: ${counted(removed, 'photo', 'photos')} removed`);
+  if (before.cover?.id !== draft.cover?.id) {
+    changes.push(
+      draft.cover === undefined
+        ? 'Cover photo removed'
+        : before.cover === undefined
+          ? 'Cover photo added'
+          : 'Cover photo changed',
+    );
+  } else if (draft.cover !== undefined && (before.cover?.alt ?? '') !== (draft.cover.alt ?? '')) {
+    changes.push('Cover photo: description changed');
+  }
   const kept = draft.gallery.filter((photo) => beforeIds.has(photo.id)).map((photo) => photo.id);
   const keptBefore = before.gallery.filter((photo) => draftIds.has(photo.id)).map((photo) => photo.id);
   if (kept.join() !== keptBefore.join()) changes.push('Gallery: photos reordered');
