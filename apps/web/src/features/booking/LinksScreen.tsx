@@ -1,8 +1,10 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273), pages they edit with an Editor badge (AC-1332).
-// Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
-// Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
-import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView, type RotationView } from '@crm/data';
+// Purpose: Bookings › Pages and Captures › Links (spec 0025, AC-645; the owner's mock of 9 November 2026): the booking
+// pages as cards in groups, Your pages, Workspace, Members' pages (whose scheduling the reader Manages; an admin's,
+// everyone's, AC-1273) and Managed pages, each card saying its facts, who it books with and its link once.
+// Main task: open a page (the whole card), copy its link, make it Live or Hidden from its pill, or delete it with Undo.
+// Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings › Meetings).
+import { isDataError, type BookingPageView, type DataLayer, type ManagedPageView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
@@ -12,63 +14,53 @@ import {
   MenuSeparator,
   MenuTrigger,
   Modal,
+  sharedStrings,
   Tooltip,
   type LinkGridCard,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
-import { DeletePageDialog } from './DeletePageDialog.tsx';
+import { useMyName } from '../workspace/WorkspacePage.tsx';
 import { managedStrings } from './managed-strings.ts';
-import { managedPageHref, pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
+import { managedPageHref, pageEditorHref, publicBookingUrl, type PageTab } from './links.ts';
+import { cardFacts, cardIcon, cardPeople } from './page-card.ts';
+import { setPageLive } from './page-status.ts';
+import { PageStatusMenu } from './PageStatusMenu.tsx';
 import { sharingStrings } from './sharing-strings.ts';
-import { publishStrings } from './publish-strings.ts';
-import { isDraftPage } from './draft-page.ts';
-import { pagePicture } from './page-picture.tsx';
 import { strings } from './strings.ts';
-import { followsEveryone, hasNoHostsOn } from './team-readiness.ts';
+import { hasNoHostsOn } from './team-readiness.ts';
 
-/** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
+/** The groups, in the mock's order: the reader's own, the workspace's links, colleagues' pages, managed pages. */
+const MINE_GROUP = 'mine';
 const WORKSPACE_GROUP = 'workspace';
+const MEMBERS_GROUP = 'members';
 /** The managed pages an admin sets up (spec 0037, AC-1333): templates, not bookable pages, so a group of their own. */
 const MANAGED_GROUP = 'managed';
-const MINE_GROUP = 'mine';
-const memberGroup = (memberId: string) => `member:${memberId}`;
 
-/** A page's group: the workspace's, someone else's by their name (AC-1273), or the reader's own. */
+/** How long a deleted page waits for Undo before it is deleted on the server: the Undo toast's life. */
+const UNDO_MS = 10_000;
+
+/** A page's group: the workspace's, a colleague's (AC-1273), or the reader's own. */
 const groupOf = (page: BookingPageView) =>
-  page.scope === 'workspace'
-    ? WORKSPACE_GROUP
-    : page.ownerName === undefined
-      ? MINE_GROUP
-      : memberGroup(page.ownerMemberId);
+  page.scope === 'workspace' ? WORKSPACE_GROUP : page.ownerName === undefined ? MINE_GROUP : MEMBERS_GROUP;
 
 /**
- * The list's groups, once it holds more than the reader's own: Workspace, then Your pages, then each colleague by
- * name (AC-1273). Undefined while every page is the reader's own, so a lone list draws no heading.
+ * The list's groups, once it holds more than the reader's own: Your pages, Workspace, Members' pages, then Managed
+ * pages, each only when it has a card. Undefined while every page is the reader's own, so a lone list draws no heading.
  */
 function groupsOf(pages: readonly BookingPageView[], templates: readonly ManagedPageView[]) {
-  const people = new Map<string, string>();
-  for (const page of pages) {
-    if (page.scope === 'member' && page.ownerName !== undefined) people.set(page.ownerMemberId, page.ownerName);
-  }
-  const hasWorkspace = pages.some((page) => page.scope === 'workspace');
-  if (!hasWorkspace && people.size === 0 && templates.length === 0) return undefined;
+  const hasWorkspace = pages.some((page) => groupOf(page) === WORKSPACE_GROUP);
+  const hasMembers = pages.some((page) => groupOf(page) === MEMBERS_GROUP);
+  if (!hasWorkspace && !hasMembers && templates.length === 0) return undefined;
   return [
-    // The templates first: they are what the other cards were made from.
-    ...(templates.length === 0
-      ? []
-      : [{ id: MANAGED_GROUP, label: managedStrings.group, description: managedStrings.groupLine }]),
-    ...(hasWorkspace
-      ? [{ id: WORKSPACE_GROUP, label: strings.workspaceGroup, description: strings.workspaceGroupLine }]
-      : []),
-    { id: MINE_GROUP, label: people.size === 0 ? strings.membersGroup : strings.yourGroup },
-    ...[...people]
-      .sort(([, left], [, right]) => left.localeCompare(right))
-      .map(([memberId, name]) => ({ id: memberGroup(memberId), label: name })),
+    { id: MINE_GROUP, label: strings.yourGroup },
+    ...(hasWorkspace ? [{ id: WORKSPACE_GROUP, label: strings.workspaceGroup }] : []),
+    ...(hasMembers ? [{ id: MEMBERS_GROUP, label: strings.membersGroup }] : []),
+    ...(templates.length === 0 ? [] : [{ id: MANAGED_GROUP, label: managedStrings.group }]),
   ];
 }
 
@@ -78,54 +70,36 @@ export interface LinksScreenProps {
   readonly slug: string;
 }
 
-/**
- * A page's facts: its lengths, its kind, the schedule it names when it doesn't follow the default (spec 0035), and
- * a location that isn't video ("30 or 60 min · One on one · Evenings").
- */
-function factsOf(page: BookingPageView, rotations: readonly RotationView[]): readonly string[] {
-  return [
-    ...(page.durations.length === 0 ? [] : [strings.minutesChoice(page.durations)]),
-    // Workspace link only while it books everyone: a team page on one group reads as what it is.
-    followsEveryone(page, rotations) ? strings.workspaceLink : strings.kindLabel[page.kind],
-    ...(page.scheduleId === null ? [] : [page.scheduleName]),
-    ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
-  ];
-}
-
-/** The cards, New booking page, and each card's switch, Copy link, Open and menu, read from the data layer's held list. */
+/** The cards, each with its pill, Copy link and ⋯, read from the data layer's held list. */
 export function LinksScreen({ data, slug }: LinksScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const me = useMyName();
   const list = useCaptureList(data.bookingPages.view(slug));
-  // The groups, to say what a team page books and whether anyone is on it; while they read, nothing is said.
+  // The groups, to say who a team page books and whether anyone is on it; while they read, nothing is said.
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
   // The managed pages the reader may change (AC-1333): an empty list for anyone who isn't an admin or an editor.
   const templateList = useCaptureList(data.managedPages.view(slug));
   const [deletingTemplate, setDeletingTemplate] = useState<ManagedPageView | undefined>(undefined);
   const create = useCapturesCreate();
-  const [deleting, setDeleting] = useState<BookingPageView | undefined>(undefined);
+  const removal = useUndoableRemove(data, slug);
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.somethingWrong}` });
   };
   const open = (pageId: string, tab?: PageTab) => void navigate({ href: pageEditorHref(slug, pageId, tab) });
-  // Each change shows in the list at once; a refusal puts it back there, and the toast says why. Pause and Resume
-  // say theirs with Undo, as a form's switch and both editors do (Q73).
-  const setStatus = (page: BookingPageView, status: 'live' | 'paused') => {
-    data.bookingPages.update(slug, page.id, { status }).then(
+  // Live or Hidden shows on the card at once; a refusal puts it back and the toast says why. Each says theirs with Undo.
+  const setStatus = (page: BookingPageView, isLive: boolean) => {
+    setPageLive(data, slug, page, isLive).then(
       () => {
         toasts.toast({
           tone: 'success',
-          message:
-            status === 'live' ? capturesStrings.resumedToast(page.title) : capturesStrings.pausedToast(page.title),
-          action: {
-            label: capturesStrings.undo,
-            onAction: () => setStatus(page, status === 'live' ? 'paused' : 'live'),
-          },
+          message: isLive ? strings.pageCard.madeLive(page.title) : strings.pageCard.madeHidden(page.title),
+          action: { label: capturesStrings.undo, onAction: () => setStatus(page, !isLive) },
         });
       },
-      failed(status === 'paused' ? strings.turnOffFailed(page.title) : strings.turnOnFailed(page.title)),
+      failed(isLive ? strings.turnOnFailed(page.title) : strings.turnOffFailed(page.title)),
     );
   };
   const duplicate = (page: BookingPageView) => {
@@ -136,20 +110,14 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       failed(strings.duplicateFailed(page.title)),
     );
   };
-  // The card leaves at once and comes back on a refusal; the confirm waits for the answer and says a refusal itself.
-  const remove = (page: BookingPageView) =>
-    data.bookingPages.remove(slug, page.id).then(() => {
-      setDeleting(undefined);
-      toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
-      // The card's menu went with it: focus goes to the page's title rather than falling to the page.
-      focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
-    });
-  const pages = list.status === 'ready' ? list.items : [];
+  const pages = list.status === 'ready' ? list.items.filter((page) => !removal.leaving.has(page.id)) : [];
   const templates = templateList.status === 'ready' ? templateList.items : [];
-  // A template is not a bookable page: no switch, no Copy link, no Open. Its card opens its editor, and its menu
-  // holds the one ending that is its own (deleting it keeps every member page, AC-1335).
+  // A template is not a bookable page: no pill and no Copy link. Its card opens its editor, and its menu holds the
+  // one ending that is its own (deleting it keeps every member page, AC-1335).
   const templateCards: readonly LinkGridCard[] = templates.map((template) => ({
     id: template.id,
+    variant: 'page',
+    icon: 'copy',
     groupId: MANAGED_GROUP,
     title: template.title,
     href: managedPageHref(slug, template.id),
@@ -158,7 +126,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     isPending: templateList.status === 'ready' && templateList.pendingIds.has(template.id),
     actions: (
       <MenuTrigger>
-        <Button variant="ghost" size="lg" icon="ellipsis" label={managedStrings.more(template.title)} />
+        <Button variant="ghost" icon="ellipsis" label={managedStrings.more(template.title)} />
         <Menu
           label={managedStrings.more(template.title)}
           onAction={(key) => {
@@ -174,127 +142,103 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   }));
   const cards: readonly LinkGridCard[] = pages.map((page) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
-    const isOff = page.status === 'paused';
-    // A member sees the workspace's links to copy and open (owner, 30 Oct 2026): no editor, switch or menu.
+    const isLive = page.status === 'live';
+    // A member sees the workspace's links to copy and open (owner, 30 Oct 2026): no editor or menu, and the pill
+    // shows the state without changing it.
     const isViewOnly = page.scope === 'workspace' && !page.canChange;
-    // Made as a draft and never published (the bookings area): its editor's Publish puts it live, not a switch.
-    const isDraft = isDraftPage(page);
+    const people = cardPeople(page, rotationList, me);
+    // One badge at most: what the pill can't say.
+    const badge = isPending
+      ? strings.copying
+      : isViewOnly
+        ? strings.viewOnly
+        : page.pausedReason === 'host_removed'
+          ? strings.hostRemoved
+          : isLive && hasNoHostsOn(page, rotations.status === 'ready' ? rotationList : undefined)
+            ? strings.cantBookShort
+            : page.isPrivate
+              ? strings.linkOnly
+              : page.isEditor === true
+                ? sharingStrings.editorBadge
+                : undefined;
     return {
       id: page.id,
+      variant: 'page',
       groupId: groupOf(page),
       title: page.title,
+      icon: cardIcon(page, rotationList),
       ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
-      // No colour dot (the bookings critique, A22, B-16): a dot before the title read as a status. The state is a
-      // badge, as on a form's card, and the switch.
-      // What the page looks like to a guest, small: its month, its open days in its colour.
-      // Its picture on the card (5 November 2026, the forms list's new card worn here too), drawn as its embed card draws it.
-      picture: pagePicture(page),
-      facts: factsOf(page, rotationList),
-      // The link Copy link copies, as a path.
-      ...(isDraft ? {} : { address: publicBookingPath(page) }),
-      // Off shows in the muted title, the switch and a Paused badge (as a paused form's); the rest are what they can't say.
-      ...(isPending
-        ? { badge: strings.copying }
-        : isDraft
-          ? { badge: publishStrings.statusDraft }
-          : isViewOnly
-            ? { badge: strings.viewOnly }
-            : page.pausedReason === 'host_removed'
-              ? { badge: strings.hostRemoved }
-              : isOff
-                ? { badge: strings.notTakingBookings }
-                : hasNoHostsOn(page, rotations.status === 'ready' ? rotationList : undefined)
-                  ? { badge: strings.cantBookShort }
-                  : page.isPrivate
-                    ? { badge: strings.linkOnly }
-                    : page.isEditor === true
-                      ? { badge: sharingStrings.editorBadge }
-                      : {}),
-      isOff,
+      facts: cardFacts(page, rotationList),
+      ...(people === undefined ? {} : { people: { people: people.people, label: people.label } }),
+      // The link, once: shown as an address, copied whole.
+      address: publicBookingUrl(page).replace(/^https?:\/\//, ''),
+      ...(badge === undefined ? {} : { badge }),
+      isOff: !isLive,
       isPending,
-      ...(isViewOnly || isDraft
-        ? {}
-        : {
-            toggle: {
-              label: strings.isOn(page.title),
-              isSelected: page.status === 'live',
-              onChange: (isOn: boolean) => {
-                setStatus(page, isOn ? 'live' : 'paused');
-              },
-              isDisabled: !page.canChange,
-              disabledReason: strings.notYours,
-              hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
-            },
-          }),
-      ...(isDraft ? {} : { copyValue: publicBookingUrl(page) }),
-      // Beside the link it copies, an icon: the foot holds the address, Copy, Open and ⋯ on one quiet line.
-      isCopyQuiet: true,
-      actions: (
-        <>
-          {/* Off, there is nothing to open: the muted title and the switch say why. */}
-          {!isOff && (
-            <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
-              <Button
-                variant="ghost"
-                size="lg"
-                icon="external-link"
-                label={strings.openPage(page.title)}
-                isDisabled={isPending}
-                onPress={() => {
-                  globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
-                }}
-              />
-            </Tooltip>
-          )}
-          {page.canChange && (
-            <MenuTrigger>
-              <Button
-                variant="ghost"
-                size="lg"
-                icon="ellipsis"
-                label={strings.more(page.title)}
-                isDisabled={isPending}
-              />
-              <Menu
-                label={strings.more(page.title)}
-                onAction={(key) => {
-                  if (key === 'duplicate') duplicate(page);
-                  if (key === 'hours') open(page.id, 'hours');
-                  if (key === 'delete') setDeleting(page);
-                }}
-              >
-                {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's,
-                    nor one they only edit (spec 0037, AC-1331). */}
-                {page.ownerName === undefined && page.isEditor !== true && (
-                  <MenuItem id="duplicate" icon="copy">
-                    {strings.duplicate}
-                  </MenuItem>
-                )}
-                <MenuItem id="hours" icon="clock">
-                  {strings.hours}
-                </MenuItem>
-                {/* An editor changes a page but never deletes it (AC-1331). */}
-                {page.isEditor !== true && <MenuSeparator />}
-                {page.isEditor !== true && (
-                  <MenuItem id="delete" icon="trash" isDanger>
-                    {strings.delete}
-                  </MenuItem>
-                )}
-              </Menu>
-            </MenuTrigger>
-          )}
-        </>
+      copyValue: publicBookingUrl(page),
+      footEnd: (
+        <PageStatusMenu
+          title={page.title}
+          isLive={isLive}
+          isPending={isPending}
+          onChange={(next) => setStatus(page, next)}
+          {...(page.canChange ? {} : { lockedReason: strings.notYours })}
+        />
       ),
+      ...(page.canChange
+        ? {
+            actions: (
+              <MenuTrigger>
+                <Tooltip content={strings.moreTip}>
+                  <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
+                </Tooltip>
+                <Menu
+                  label={strings.more(page.title)}
+                  onAction={(key) => {
+                    if (key === 'view') globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
+                    if (key === 'duplicate') duplicate(page);
+                    if (key === 'hours') open(page.id, 'hours');
+                    if (key === 'embed') open(page.id, 'share');
+                    if (key === 'delete') removal.remove(page);
+                  }}
+                >
+                  <MenuItem id="view" icon="external-link" isDisabled={!isLive}>
+                    {strings.pageCard.viewLive}
+                  </MenuItem>
+                  {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's,
+                      nor one they only edit (spec 0037, AC-1331). */}
+                  {page.ownerName === undefined && page.isEditor !== true && (
+                    <MenuItem id="duplicate" icon="copy">
+                      {strings.duplicate}
+                    </MenuItem>
+                  )}
+                  <MenuItem id="hours" icon="clock">
+                    {strings.hours}
+                  </MenuItem>
+                  <MenuItem id="embed" icon="code">
+                    {strings.pageCard.embed}
+                  </MenuItem>
+                  {/* An editor changes a page but never deletes it (AC-1331). */}
+                  {page.isEditor !== true && <MenuSeparator />}
+                  {page.isEditor !== true && (
+                    <MenuItem id="delete" icon="trash" isDanger>
+                      {strings.delete}
+                    </MenuItem>
+                  )}
+                </Menu>
+              </MenuTrigger>
+            ),
+          }
+        : {}),
     };
   });
-  // Grouped only once the list holds more than the reader's own pages.
   const groups = groupsOf(pages, templates);
   return (
     <CapturesList
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status={list.status}
-      cards={[...templateCards, ...cards]}
+      cards={[...cards, ...templateCards]}
       {...(groups === undefined ? {} : { groups })}
       // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
       {...(create?.create === undefined
@@ -307,56 +251,117 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             ),
           })}
       empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
-      hasPictures
+      cardVariant="page"
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.bookingPages.view(slug).reload();
       }}
       dialogs={
-        <>
-          <DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />
-          {/* Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the
-              question says so in as many words, since getting these two the wrong way round loses people's pages. */}
-          <Modal
-            title={managedStrings.deleteTitle(deletingTemplate?.title ?? '')}
-            variant="confirm"
-            tone="danger"
-            isOpen={deletingTemplate !== undefined}
-            onOpenChange={(open) => {
-              if (!open) setDeletingTemplate(undefined);
-            }}
-            actions={
-              <>
-                <Button slot="close">{managedStrings.deleteKeep}</Button>
-                <Button
-                  variant="danger-solid"
-                  onPress={() => {
-                    const gone = deletingTemplate;
-                    setDeletingTemplate(undefined);
-                    if (gone === undefined) return;
-                    data.managedPages.remove(slug, gone.id).then(
-                      () => {
-                        toasts.toast({ tone: 'success', message: managedStrings.deleted(gone.title) });
-                        // The card's menu went with it: focus goes to the page's title rather than falling to the page.
-                        focusLater(() =>
-                          document.activeElement === document.body ? pageHeading(document) : undefined,
-                        );
-                      },
-                      failed(managedStrings.deleteFailed(gone.title)),
-                    );
-                  }}
-                >
-                  {managedStrings.deleteAction}
-                </Button>
-              </>
-            }
-          >
-            <p>{managedStrings.deleteText(deletingTemplate?.members.length ?? 0)}</p>
-          </Modal>
-        </>
+        // Deleting a managed page KEEPS every page made from it, the opposite of taking someone off it: the question
+        // says so in as many words, since getting these two the wrong way round loses people's pages.
+        <Modal
+          title={managedStrings.deleteTitle(deletingTemplate?.title ?? '')}
+          variant="confirm"
+          tone="danger"
+          isOpen={deletingTemplate !== undefined}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setDeletingTemplate(undefined);
+          }}
+          actions={
+            <>
+              <Button slot="close">{managedStrings.deleteKeep}</Button>
+              <Button
+                variant="danger-solid"
+                onPress={() => {
+                  const gone = deletingTemplate;
+                  setDeletingTemplate(undefined);
+                  if (gone === undefined) return;
+                  data.managedPages.remove(slug, gone.id).then(
+                    () => {
+                      toasts.toast({ tone: 'success', message: managedStrings.deleted(gone.title) });
+                      // The card's menu went with it: focus goes to the page's title rather than falling to the page.
+                      focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
+                    },
+                    failed(managedStrings.deleteFailed(gone.title)),
+                  );
+                }}
+              >
+                {managedStrings.deleteAction}
+              </Button>
+            </>
+          }
+        >
+          <p>{managedStrings.deleteText(deletingTemplate?.members.length ?? 0)}</p>
+        </Modal>
       }
     />
   );
+}
+
+/**
+ * Delete with Undo and no confirm (the owner, 9 November 2026): the card leaves at once and a toast offers Undo for
+ * ten seconds; only then is the page deleted on the server. Leaving the screen deletes what is still waiting, so
+ * nothing is left half deleted. A refusal brings the card back and says why.
+ */
+function useUndoableRemove(data: DataLayer, slug: string) {
+  const { toasts } = useRouteContext({ from: '__root__' });
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  const waiting = useRef(
+    new Map<string, { readonly timer: ReturnType<typeof setTimeout>; readonly send: () => void }>(),
+  );
+  const back = (pageId: string) => setLeaving((current) => new Set([...current].filter((each) => each !== pageId)));
+  const send = (page: BookingPageView) => () => {
+    waiting.current.delete(page.id);
+    data.bookingPages.remove(slug, page.id).then(
+      () => back(page.id),
+      (error: unknown) => {
+        back(page.id);
+        toasts.toast({
+          tone: 'danger',
+          message: `${strings.deleteFailed(page.title)} ${isDataError(error) ? error.message : strings.somethingWrong}`,
+        });
+      },
+    );
+  };
+  // Whatever still waits when the screen goes is deleted then.
+  useEffect(() => {
+    const pending = waiting.current;
+    return () => {
+      for (const each of pending.values()) {
+        clearTimeout(each.timer);
+        each.send();
+      }
+      pending.clear();
+    };
+  }, []);
+  const remove = (page: BookingPageView) => {
+    setLeaving((current) => new Set([...current, page.id]));
+    const go = send(page);
+    waiting.current.set(page.id, { timer: setTimeout(go, UNDO_MS), send: go });
+    toasts.toast(
+      {
+        tone: 'success',
+        message: strings.deleted(page.title),
+        action: {
+          label: capturesStrings.undo,
+          onAction: () => {
+            const held = waiting.current.get(page.id);
+            if (held === undefined) {
+              toasts.toast({ tone: 'danger', message: sharedStrings.undoStale });
+              return;
+            }
+            clearTimeout(held.timer);
+            waiting.current.delete(page.id);
+            back(page.id);
+          },
+        },
+      },
+      { timeout: UNDO_MS },
+    );
+    // The card's menu went with it: focus goes to the page's title rather than falling to the page.
+    focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
+  };
+  return { leaving, remove };
 }
 
 /** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape. */
@@ -368,7 +373,7 @@ export function LinksPending() {
       status="loading"
       cards={[]}
       empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
-      hasPictures
+      cardVariant="page"
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}
     />

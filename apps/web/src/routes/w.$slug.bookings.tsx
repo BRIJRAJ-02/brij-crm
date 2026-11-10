@@ -26,7 +26,7 @@ import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/Worksp
 /** The views that read bookings, where an admin's Mine · Everyone shows. */
 const READS_BOOKINGS = new Set<string>(['calendar', 'list']);
 /** The tabs that put their own primary action where New meeting sits, rather than letting the TopBar keep it. */
-const OWN_ACTION = new Set<string>(['availability', 'roster']);
+const OWN_ACTION = new Set<string>(['availability', 'roster', 'pages']);
 
 /** Whether an address is Bookings' own (a tab, or bare `/bookings`), not the page the router is leaving for. */
 const isUnderBookings = (pathname: string) => /\/bookings(\/|$)/.test(pathname);
@@ -49,11 +49,13 @@ function BookingsRoute() {
   const view = named ?? lastView;
   const tab = tabOfView(view);
   // New › Booking page, held here so the TopBar's menu, Pages' empty list and the Calendar's empty state open one dialog.
-  const [isAddingPage, setAddingPage] = useState(false);
+  // Which dialog it opens as: a page, the workspace link or a team link (Pages' Team links menu).
+  const [addingPage, setAddingPage] = useState<'page' | 'workspace' | 'team-link' | undefined>(undefined);
   const addPage = useMemo(
-    () => () => {
-      setAddingPage(true);
-    },
+    () =>
+      (kind: 'page' | 'workspace' | 'team-link' = 'page') => {
+        setAddingPage(kind);
+      },
     [],
   );
   // The Team day (spec 0030) shows everyone the reader may see, whatever Mine or Everyone says: the switch steps aside.
@@ -111,10 +113,10 @@ function BookingsRoute() {
                       </>
                     }
                     actionSlot={ownsAction ? setActionSlot : undefined}
-                    isAddingPage={isAddingPage}
+                    addingPage={addingPage}
                     onAddPage={addPage}
                     onAddPageClose={() => {
-                      setAddingPage(false);
+                      setAddingPage(undefined);
                     }}
                   />
                 ),
