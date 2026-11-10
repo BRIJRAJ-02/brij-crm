@@ -37,6 +37,7 @@ import { touched } from '../engine/definitions.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
+import { liveConnectionOf, managerKeepsName } from '../profile/app-connection.ts';
 import { socialsKeeperOf } from '../profile/managed-socials.ts';
 import { touchLinkPage } from '../profile/page-touch.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
@@ -149,12 +150,12 @@ async function readProfileKept(
       : (await profileHandlesOf(tx, userId)).flatMap((each) =>
           each.workspaceId === scope.workspaceId ? [] : [{ workspaceId: each.workspaceId }],
         );
-  // Who keeps the person's name and title, for the manager's editor only (9 Nov 2026): a page only person's are the
-  // manager's to change, a partner's person's are the partner's. Never read for anyone's own page.
+  // Whether they are a managed person, for the manager's editor only (9 Nov 2026), and who added them. Never read for
+  // anyone's own page.
   const managed = forTeam
     ? (
         await tx
-          .select({ partnerId: managedMembers.partnerId })
+          .select({ partnerId: managedMembers.partnerId, claimedAt: managedMembers.claimedAt })
           .from(managedMembers)
           .where(
             and(
@@ -173,11 +174,24 @@ async function readProfileKept(
       ? await socialsKeeperOf(tx, scope.workspaceId, memberId, { fromConnection: extras.fromConnection })
       : undefined;
   const socialsByManager = keeper === 'manager';
+  // Who keeps their name and title (10 Nov 2026): the manager for a page only person, and, from Timefix itself, for a
+  // connected app's person with no login whose app is disconnected here; else the app, or the person.
+  const namesKept =
+    managed !== undefined &&
+    managerKeepsName({
+      partnerId: managed.partnerId,
+      claimed: managed.claimedAt !== null,
+      live:
+        managed.partnerId === null || managed.claimedAt !== null || extras.fromConnection !== undefined
+          ? undefined
+          : await liveConnectionOf(tx, scope.workspaceId, managed.partnerId, false),
+      fromConnection: extras.fromConnection,
+    });
   const byApp = typeof keeper === 'object' ? keeper.partnerId : undefined;
   const profile: MyProfile = {
     memberId,
     name: row.name,
-    ...(managed === undefined ? {} : { managedBy: managed.partnerId === null ? 'team' : 'partner' }),
+    ...(managed === undefined ? {} : { managedBy: namesKept ? 'team' : 'partner' }),
     ...(socialsByManager ? { socialsByManager: true as const } : {}),
     ...(byApp === undefined ? {} : { managedByApp: {} }),
     email: row.email,

@@ -321,7 +321,7 @@ describe('a managed person’s social links', () => {
     await testQuery(ownerUrl, `update partner_connections set disconnected_at = now() where id = $1`, [
       hub.connectionId,
     ]);
-    // Disconnected: kept here like a page only person, with no app's line.
+    // Disconnected: kept by Timefix's managers, with no app's line.
     const handed = await getMyProfile(page, { partnerName: HUB_NAME });
     expect(handed).toMatchObject({ socialsByManager: true });
     expect(handed).not.toHaveProperty('managedByApp');
@@ -332,17 +332,15 @@ describe('a managed person’s social links', () => {
     );
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ params: { isOwn: false, fields: ['socials'] } });
-    // Like a page only person, from any frame of the workspace too.
+    // From Timefix only: no frame, of any app, reaches them while the app is away; not even its old connection's.
     const elsewhere = randomUUID();
-    expect(await getMyProfile(page, { fromConnection: elsewhere })).toMatchObject({ socialsByManager: true });
-    await setManagedSocials(
-      hub.owner,
-      { member: pat, socials: [LINKEDIN, SITE] },
-      [],
-      {},
-      { fromConnection: elsewhere },
-    );
-    expect((await getMyProfile(page)).socials).toHaveLength(2);
+    for (const frame of [elsewhere, hub.connectionId]) {
+      expect(await getMyProfile(page, { fromConnection: frame })).not.toHaveProperty('socialsByManager');
+      expect(
+        await refusalOf(setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: frame })),
+      ).toMatchObject({ code: 'NOT_FOUND' });
+    }
+    expect((await getMyProfile(page)).socials).toHaveLength(1);
     // Connected again (a new connection row, as the exchange makes after a disconnect): the app's once more.
     const [again] = await testQuery<{ id: string }>(
       ownerUrl,

@@ -99,7 +99,8 @@ export const teamPagesRouter = member.teamPages.router({
       ),
     ),
   ),
-  // A page only person's name and the title under it (9 Nov 2026), from their page's editor. Their page draws both,
+  // A page only person's name and the title under it (9 Nov 2026), from their page's editor; or, from Timefix itself, a
+  // disconnected app's person's (10 Nov 2026, core checks the connection). Their page draws both,
   // so the edge's copies of it are deleted once the change has committed.
   namePerson: member.teamPages.namePerson.handler(async ({ context, input }) => {
     const { handle, ...named } = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
@@ -108,6 +109,7 @@ export const teamPagesRouter = member.teamPages.router({
         { member: input.member, name: input.name, jobTitle: input.jobTitle },
         hooks,
         sourceOf(context),
+        { fromConnection: context.embed?.connectionId },
       ),
     );
     if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));

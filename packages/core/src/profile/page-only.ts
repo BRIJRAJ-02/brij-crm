@@ -38,6 +38,7 @@ import { checkSeats } from '../members/invitations.ts';
 import { runRemovalEffects } from '../members/removal.ts';
 import { emailClash, emailTaken } from '../partners/members.ts';
 import { recordJoinReach } from '../scheduling/delegations.ts';
+import { liveConnectionOf, managerKeepsName } from './app-connection.ts';
 import { identityOf, saveIdentity } from './identity.ts';
 import { monthOf, pagesOf, selfOf } from './team-pages.ts';
 
@@ -308,9 +309,10 @@ const NOT_ONE_LINE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 /**
  * Changes a page only person's name, the title under it on their page, or both (9 Nov 2026, the owner: "an option to
  * change the name and an option to add title below the name"), from their page's editor. `link_pages.manage_team`,
- * from a member, as Add a page. Only a page only person active in this workspace, whom no partner added: anyone with
- * a login changes their own in Profile, and a partner's person is the partner's, so either is `NOT_FOUND`, as is
- * anyone elsewhere; one made an owner or admin is `FORBIDDEN`. A first title given turns it on under their name (a
+ * from a member, as Add a page. Only a page only person active in this workspace, or (from Timefix itself, never a
+ * frame) a connected app's person with no login whose app is disconnected here (10 Nov 2026): anyone with a login
+ * changes their own in Profile, and a live app's person is the app's, so either is `NOT_FOUND`, as is anyone
+ * elsewhere; one made an owner or admin is `FORBIDDEN`. A first title given turns it on under their name (a
  * title typed for their page is meant to show); one cleared turns it off; one reworded leaves the choice alone. A change that changes nothing writes nothing; otherwise, in one transaction, their member row
  * (and their page's choice), one `member.profile_updated` History row with the manager as actor, and a `members`
  * outbox row. Answers what was saved.
@@ -320,6 +322,7 @@ export async function namePageOnlyPerson(
   input: { readonly member: string; readonly name?: string | undefined; readonly jobTitle?: string | undefined },
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
+  place: { readonly fromConnection?: string | undefined } = {},
 ): Promise<PageOnlyNamed & { readonly handle?: string }> {
   requirePermission(scope, 'link_pages.manage_team');
   if (scope.actor.type !== 'member') throw refuse('FORBIDDEN', NOT_A_MEMBER);
@@ -336,19 +339,44 @@ export async function namePageOnlyPerson(
     scope,
     async (context) => {
       const { tx } = context;
-      const [found] = await tx
-        .select({ userId: managedMembers.userId })
+      const foundQuery = tx
+        .select({
+          userId: managedMembers.userId,
+          partnerId: managedMembers.partnerId,
+          claimedAt: managedMembers.claimedAt,
+        })
         .from(managedMembers)
         .where(
           and(
             eq(managedMembers.workspaceId, scope.workspaceId),
             eq(managedMembers.memberId, input.member),
-            isNull(managedMembers.partnerId),
             isNull(managedMembers.removedAt),
           ),
-        )
-        .for('update');
+        );
+      // Read first, and locked only after an app's connection: the order a partner's PUT and the exchange lock in.
+      const [found] = await foundQuery;
       if (found === undefined) throw refuse('NOT_FOUND', NOT_PAGE_ONLY_NAMED);
+      // A connected app's person is the app's while it is connected; once it is disconnected, Timefix's (from Timefix
+      // only) until it connects again (10 Nov 2026). The same read and locks as their social links.
+      const live =
+        found.partnerId === null || found.claimedAt !== null
+          ? undefined
+          : await liveConnectionOf(tx, scope.workspaceId, found.partnerId, true);
+      const keeps = managerKeepsName({
+        partnerId: found.partnerId,
+        claimed: found.claimedAt !== null,
+        live,
+        fromConnection: place.fromConnection,
+      });
+      if (!keeps) throw refuse('NOT_FOUND', NOT_PAGE_ONLY_NAMED);
+      const [locked] = await foundQuery.for('update');
+      if (
+        locked?.partnerId !== found.partnerId ||
+        locked.userId !== found.userId ||
+        (locked.claimedAt === null) !== (found.claimedAt === null)
+      ) {
+        throw refuse('NOT_FOUND', NOT_PAGE_ONLY_NAMED);
+      }
       const [person] = await tx
         .select({ name: members.name, jobTitle: members.jobTitle, role: members.role, userId: members.userId })
         .from(members)

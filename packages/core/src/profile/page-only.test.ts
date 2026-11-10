@@ -509,4 +509,56 @@ describe('naming a page only person', () => {
     const page = await enterTeamLinkPage(hub.owner, theirs.member.memberId);
     expect((await getMyProfile(page)).managedBy).toBe('partner');
   });
+
+  it('hands a disconnected app’s person’s name and title to Timefix, and back to the app when it connects again', async () => {
+    const hub = await connected();
+    const theirs = await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: `ext-${tag()}`,
+        person: { name: 'Pat', email: `${tag()}@example.com`, role: 'member' },
+      },
+      partnerUsers,
+    );
+    const pat = theirs.member.memberId;
+    const page = await enterTeamLinkPage(hub.owner, pat);
+    await testQuery(ownerUrl, `update partner_connections set disconnected_at = now() where id = $1`, [
+      hub.connectionId,
+    ]);
+    // Disconnected: Timefix's, from Timefix only.
+    expect((await getMyProfile(page)).managedBy).toBe('team');
+    expect(await namePageOnlyPerson(hub.owner, { member: pat, name: 'Pat Page', jobTitle: 'Barista' })).toMatchObject({
+      name: 'Pat Page',
+      jobTitle: 'Barista',
+    });
+    const elsewhere = randomUUID();
+    expect((await getMyProfile(page, { fromConnection: elsewhere })).managedBy).toBe('partner');
+    for (const frame of [elsewhere, hub.connectionId]) {
+      expect(
+        await refusalOf(
+          namePageOnlyPerson(hub.owner, { member: pat, name: 'Framed' }, [], {}, { fromConnection: frame }),
+        ),
+      ).toMatchObject({ code: 'NOT_FOUND' });
+    }
+    // Connected again (a new row, as the exchange makes after a disconnect): the app's, read only here once more.
+    const [again] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `insert into partner_connections (workspace_id, id, partner_id, modules, approved_by_member_id, token_hash)
+       select workspace_id, gen_random_uuid(), partner_id, modules, approved_by_member_id, decode(repeat('ab', 32), 'hex')
+         from partner_connections where id = $1
+       returning id`,
+      [hub.connectionId],
+    );
+    expect((await getMyProfile(page)).managedBy).toBe('partner');
+    expect(await refusalOf(namePageOnlyPerson(hub.owner, { member: pat, name: 'Renamed' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(
+      await refusalOf(
+        namePageOnlyPerson(hub.owner, { member: pat, name: 'Renamed' }, [], {}, { fromConnection: again?.id }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect((await getMyProfile(page)).name).toBe('Pat Page');
+  });
 });

@@ -237,8 +237,9 @@ export const MyProfile = z.object({
   indexable: z.boolean().optional(),
   /**
    * Read by a team page manager for someone else's page only (spec 0070; 9 Nov 2026): who keeps the person's name and
-   * title. `team` is a page only person, whose name and title the manager may change here (`teamPages.namePerson`);
-   * `partner` is a partner's person, kept by the partner's app. Absent for anyone with a login, who changes their own.
+   * title. `team` is a page only person, or, read from Timefix itself, a connected app's person with no login whose app
+   * is disconnected here (10 Nov 2026): the manager may change their name and title here (`teamPages.namePerson`);
+   * `partner` is any other partner's person, kept by the partner's app. Absent for anyone who isn't managed.
    */
   managedBy: z.enum(['team', 'partner']).optional(),
   /**
