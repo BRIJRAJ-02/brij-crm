@@ -841,6 +841,8 @@ export const ACCESS_TABLE = {
   listOneOffLinks: { bookingPages: true },
   revokeOneOffLink: { bookingPages: true },
   listRequests: { bookingPages: true },
+  // Meetings › Requests: the same rule across the pages, plus the requests the reader hosts.
+  listWaitingRequests: { bookingPages: true },
   // Round robin (spec 0029): anyone with booking.manage lists the rotations they're in (their own count only);
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },
