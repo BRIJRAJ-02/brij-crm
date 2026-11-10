@@ -1,10 +1,13 @@
 import { useId, useRef, type ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
+import { AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
@@ -26,8 +29,29 @@ export interface LinkCardToggle {
   readonly hint?: string;
 }
 
+/** Who a link books with, on a `page` card: a few faces and a word for them all ("4 hosts", "Brij Raj"). */
+export interface LinkCardPeople {
+  readonly people: readonly AvatarStackPerson[];
+  /** How many there are when `people` holds only the first few. */
+  readonly total?: number;
+  /** The words beside the faces, which also name the stack ("Everyone, 5 people"). */
+  readonly label: string;
+}
+
 /** Props for LinkCard. */
 export interface LinkCardProps {
+  /**
+   * `page` (Bookings › Pages, the owner's mock of 9 November 2026): a head with the link's icon tile, its title and
+   * its ⋯ (`actions`), an inset with one line of facts, who it books with (`people`) and the link once (`address`),
+   * then a foot band with a labelled Copy link at its start and `footEnd` (its Live or Hidden menu) at its end.
+   */
+  readonly variant?: 'default' | 'page';
+  /** `page` only: the link's kind as an icon on a quiet tile before the title. */
+  readonly icon?: IconName;
+  /** `page` only: who it books with, as faces and a word. */
+  readonly people?: LinkCardPeople;
+  /** `page` only: the foot band's end, a control of the card's own (a page's Live or Hidden menu). */
+  readonly footEnd?: ReactNode;
   readonly title: string;
   /**
    * Where the card goes: the link's editor. The whole card opens it. Left out (a copy still on its way), the
@@ -88,7 +112,12 @@ export interface LinkCardProps {
  * and Copy link and the card's actions at its end. The controls sit above the card's link, so each does its own
  * thing and stays in the tab order after the title.
  */
-export function LinkCard({
+export function LinkCard(props: LinkCardProps) {
+  return props.variant === 'page' ? <PageCard {...props} /> : <PlainCard {...props} />;
+}
+
+/** The default card: dot, title and switch, the facts, then the footer line. */
+function PlainCard({
   title,
   href,
   hue,
@@ -206,6 +235,101 @@ export function LinkCard({
   );
 }
 
+/**
+ * The `page` card (Bookings › Pages): the head (icon tile, title over the whole card, badge, ⋯), an inset of one
+ * facts line, who it books with and the link, then a foot band of Copy link and the card's own control.
+ */
+function PageCard({
+  title,
+  href,
+  titleLevel = 3,
+  facts,
+  address,
+  badge,
+  isOff = false,
+  isPending = false,
+  copyValue,
+  actions,
+  icon,
+  people,
+  footEnd,
+}: LinkCardProps) {
+  const titleId = useId();
+  const addressRef = useRef<HTMLParagraphElement>(null);
+  const Heading = titleLevel === 2 ? 'h2' : 'h3';
+  const safe = href === undefined || isPending ? undefined : safeHref(href);
+  const hasActions = actions !== undefined && actions !== null && actions !== false;
+  return (
+    <article
+      className={styles.root}
+      data-variant="page"
+      aria-labelledby={titleId}
+      data-off={isOff || undefined}
+      data-pending={isPending || undefined}
+    >
+      <div className={styles.pageHead}>
+        {icon !== undefined && (
+          <span className={styles.tile} aria-hidden="true">
+            <Icon name={icon} size="sm" />
+          </span>
+        )}
+        <Heading className={styles.pageHeading}>
+          {safe === undefined ? (
+            <span id={titleId} className={styles.title}>
+              {title}
+            </span>
+          ) : (
+            <AriaLink id={titleId} className={styles.title} href={safe}>
+              {title}
+            </AriaLink>
+          )}
+        </Heading>
+        {badge !== undefined && <Badge text={badge} isWhole />}
+        {hasActions && <div className={styles.headActions}>{actions}</div>}
+      </div>
+      <div className={styles.inset}>
+        {facts.length > 0 && <p className={styles.pageFacts}>{facts.join(' · ')}</p>}
+        {people !== undefined && people.people.length > 0 && (
+          <p className={styles.people}>
+            <AvatarStack
+              people={people.people}
+              size="sm"
+              max={4}
+              label={people.label}
+              {...(people.total === undefined ? {} : { total: people.total })}
+            />
+            <span className={styles.peopleLabel} aria-hidden="true">
+              {people.label}
+            </span>
+          </p>
+        )}
+        {address !== undefined && (
+          <p ref={addressRef} className={styles.pageAddress}>
+            {address}
+          </p>
+        )}
+      </div>
+      {(copyValue !== undefined || footEnd !== undefined) && (
+        <div className={styles.band} role="group" aria-label={strings.actionsFor(title)}>
+          {copyValue !== undefined && (
+            <span className={styles.control}>
+              <CopyButton
+                value={copyValue}
+                label={strings.copyLink}
+                announcement={strings.linkCopied}
+                isDisabled={isPending}
+                sourceRef={addressRef}
+              />
+            </span>
+          )}
+          <span className={styles.spacer} />
+          {footEnd !== undefined && <span className={styles.control}>{footEnd}</span>}
+        </div>
+      )}
+    </article>
+  );
+}
+
 /** The card's switch, with the reason it is off limits in a tooltip when it is. */
 function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; readonly isPending: boolean }) {
   const isDisabled = isPending || toggle.isDisabled === true;
@@ -229,7 +353,35 @@ function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; re
 }
 
 /** A card standing in while the grid loads: the same shape, its lines as skeletons, with the picture's stage when the cards have one. */
-export function LinkCardSkeleton({ hasPicture = false }: { readonly hasPicture?: boolean }) {
+export function LinkCardSkeleton({
+  hasPicture = false,
+  variant = 'default',
+}: {
+  readonly hasPicture?: boolean;
+  readonly variant?: 'default' | 'page';
+}) {
+  if (variant === 'page') {
+    return (
+      <div className={styles.root} data-variant="page" data-loading="" aria-hidden="true">
+        <div className={styles.pageHead}>
+          <span className={styles.tile} />
+          <span className={styles.skeletonTitle}>
+            <Skeleton width="medium" />
+          </span>
+        </div>
+        <div className={styles.inset}>
+          <Skeleton width="long" />
+          <Skeleton width="short" />
+          <Skeleton width="medium" />
+        </div>
+        <div className={styles.band}>
+          <span className={styles.skeletonButton}>
+            <Skeleton width="short" />
+          </span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={styles.root} data-loading="" aria-hidden="true">
       {hasPicture && <div className={styles.stage} />}

@@ -462,6 +462,11 @@ interface NavItemFace {
   readonly meta?: string;
   /** A count that needs action (tasks due), never a total. */
   readonly badge?: number;
+  /**
+   * Something there needs a fix: a small red dot after the name, named by these words for screen readers ("Needs a
+   * fix"). An editor's own section list (the booking page editor's Details with a title missing).
+   */
+  readonly alert?: string;
   /** The keyboard shortcut that goes there too (`⌘,` for Settings), shown as a keycap after the name (not on the rail, where the tooltip names the item). */
   readonly kbd?: string;
   /** Its key inside a `NavSection` that reorders (`onReorder`): what the move names. */
@@ -488,7 +493,7 @@ function TipWithKeys({ kbd, ...props }: TooltipProps & { readonly kbd: string | 
 
 /** One size-nav-item row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
 export function NavItem(props: NavItemProps) {
-  const { children, icon, hue, leading, meta, badge, kbd } = props;
+  const { children, icon, hue, leading, meta, badge, kbd, alert } = props;
   const { isCollapsed } = useContext(SidebarContext);
   // On the rail the meta has no room, so it joins the name and the tooltip ("Booking pages · In Captures"); the
   // tooltip shows the shortcut as its keycap too ("Settings ⌘,"), as the row's keycap has no room either.
@@ -529,6 +534,7 @@ export function NavItem(props: NavItemProps) {
       {leading ?? (hue === undefined || isCollapsed ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}
       {isCollapsed ? <VisuallyHidden>{railName}</VisuallyHidden> : <span className={styles.label}>{children}</span>}
       {meta !== undefined && !isCollapsed && <span className={styles.meta}>{meta}</span>}
+      {alert !== undefined && <span className={styles.alert} role="img" aria-label={alert} />}
       {badge !== undefined && badge > 0 && (
         <span className={styles.badge}>
           <Badge count={badge} tone="accent" />

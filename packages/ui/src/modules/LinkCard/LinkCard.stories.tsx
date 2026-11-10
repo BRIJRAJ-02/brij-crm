@@ -317,3 +317,57 @@ export const LoadingPictured: Story = {
     </Stage>
   ),
 };
+
+/**
+ * `page` (Bookings › Pages, the mock of 9 November 2026): the kind's tile, the title and ⋯; one facts line, who it books
+ * with and the link; a foot band with Copy link and the card's own control (its Live or Hidden menu).
+ */
+export const PageVariant: Story = {
+  args: {
+    variant: 'page',
+    icon: 'refresh-cw',
+    facts: ['45 min', 'Zoom', 'Team, taking turns'],
+    address: 'timefix.com/brij/product-demo',
+    people: {
+      people: [
+        { id: 'p1', name: 'Priya Nair' },
+        { id: 'p2', name: 'Oliver Brown' },
+        { id: 'p3', name: 'Arjun Mehta' },
+      ],
+      label: '3 hosts',
+    },
+    footEnd: (
+      <Button dot="green" iconRight="chevron-down" label="Live, status of Intro call">
+        Live
+      </Button>
+    ),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <LinkCard {...args} actions={<Button variant="ghost" icon="ellipsis" label={`More for ${args.title}`} />} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Intro call' })).toBeInTheDocument();
+    await expect(canvas.getByText('45 min · Zoom · Team, taking turns')).toBeInTheDocument();
+    await expect(canvas.getByText('timefix.com/brij/product-demo')).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: '3 hosts' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Live, status of Intro call' })).toBeInTheDocument();
+  },
+};
+
+/** `page`, hidden: the title and the inset read quieter; Copy link stays. */
+export const PageHidden: Story = {
+  args: { ...PageVariant.args, isOff: true, footEnd: <Button dot="gray" iconRight="chevron-down">Hidden</Button> },
+  render: PageVariant.render,
+};
+
+/** `page`, loading. */
+export const PageLoading: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <LinkCardSkeleton variant="page" />
+    </Stage>
+  ),
+};

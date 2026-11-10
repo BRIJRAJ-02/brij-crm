@@ -49,6 +49,8 @@ export interface LinkGridProps {
   readonly groups?: readonly LinkGridGroup[];
   /** The cards carry a picture (LinkCard's `picture`): the loading cards draw its stage too, so nothing jumps. */
   readonly hasPictures?: boolean;
+  /** The cards are LinkCard's `page` variant: the loading cards draw its shape. */
+  readonly cardVariant?: 'default' | 'page';
 }
 
 /** How many skeleton cards stand in while the grid loads. */
@@ -80,6 +82,7 @@ export function LinkGrid({
   emptyState,
   groups,
   hasPictures = false,
+  cardVariant = 'default',
 }: LinkGridProps) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
@@ -103,7 +106,7 @@ export function LinkGrid({
       <div className={styles.grid} aria-busy="true">
         {showSkeleton &&
           Array.from({ length: SKELETON_CARDS }, (_, index) => (
-            <LinkCardSkeleton key={index} hasPicture={hasPictures} />
+            <LinkCardSkeleton key={index} hasPicture={hasPictures} variant={cardVariant} />
           ))}
         <VisuallyHidden>{strings.loading(label)}</VisuallyHidden>
       </div>

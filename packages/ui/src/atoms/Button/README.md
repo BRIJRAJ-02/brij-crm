@@ -95,4 +95,4 @@ A label that changes after the first paint resolves in over `--label-swap` (a 2p
 
 ## Status dot
 
-`dot` on Button draws a status dot before the label, as ToggleButton's does, in the label's type and colour: where something stands, on the control that changes it (a menu's Live or Hidden, 6 November 2026). Decorative: the label says it too. With a label only.
+`dot` on Button draws a status dot before the label, as ToggleButton's does, in the label's type and colour: where something stands, on the control that changes it (a menu's Live or Hidden, 6 November 2026). Decorative: the label says it too. With a label only. With `animateLabel` the dot's colour fades and the word swaps when it changes (StatusDot's `isAnimated`): Bookings › Pages' Live or Hidden pill, 9 November 2026.

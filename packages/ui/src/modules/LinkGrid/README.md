@@ -30,6 +30,7 @@ New on 20 October 2026, with LinkCard, when the owner swapped Captures' one line
 - **`emptyState`:** shows with no cards at all.
 - **`groups`:** draws the cards in titled groups, in order, each under a SectionBar heading (an h2, with an optional quiet line) over its own grid, and each card's title then an h3. A card names its group by `groupId`; one naming no group the grid knows sits in a last grid with no heading, so it is never lost; a group the search empties is left out. Why a prop (30 October 2026): Captures › Links shows the workspace's own links apart from members' pages, and a screen can't draw a heading between grids itself. A variant of this grid, not a new module, since each group is the same grid of the same cards.
 - **`hasPictures`:** the cards carry a picture (LinkCard's `picture`), so the loading cards draw its stage too and nothing jumps when they land.
+- **`cardVariant`:** `page` when the cards are LinkCard's `page` variant (Bookings › Pages), so the loading cards draw that shape.
 
 ## States
 
