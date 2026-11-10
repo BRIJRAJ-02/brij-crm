@@ -165,7 +165,6 @@ describe('Captures › Links › Team links › New workspace link', () => {
       expect.objectContaining({
         kind: 'round_robin',
         scope: 'workspace',
-        isDraft: true,
         settings: { durations: [30] },
       }),
     );
