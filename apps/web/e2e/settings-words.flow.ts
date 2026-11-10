@@ -65,7 +65,8 @@ test.describe('the settings pages that say less', () => {
     await expect(page.getByText(/Each browser and app signed in to your account/)).toHaveCount(0);
     await expect(page.getByText('Last 90 days.')).toHaveCount(0);
 
-    // Calendars: a provider button where sync is on, or the plain note where it is off. Never a paragraph of why.
+    // Calendars: one Connect calendar (its popup offers Google or Outlook) where sync is on, or the plain note where it
+    // is off. Never a paragraph of why, and never Apple.
     await page.goto(`/w/${slug}/bookings/settings/calendars`);
     await expect(page.getByRole('heading', { level: 1, name: 'Calendars' })).toBeVisible();
     await expect(page.getByText(/Connect your calendar so bookings avoid your busy times/)).toHaveCount(0);
@@ -73,7 +74,9 @@ test.describe('the settings pages that say less', () => {
     const none = page.getByText('No calendar connected');
     await expect(off.or(none)).toBeVisible();
     if (await none.isVisible()) {
-      await expect(page.getByRole('button', { name: /^Connect (Google|Outlook) calendar$/ }).first()).toBeVisible();
+      await page.getByRole('button', { name: 'Connect calendar' }).click();
+      await expect(page.getByRole('button', { name: /^Connect (Google Calendar|Outlook)$/ }).first()).toBeVisible();
+      await expect(page.getByText(/Apple/)).toHaveCount(0);
     } else {
       await expect(page.getByText('Booking pages still use your hours.')).toBeVisible();
     }
