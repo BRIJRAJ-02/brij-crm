@@ -990,6 +990,14 @@ export type {
 } from './email-preferences.ts';
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
+/** A booking page deleted with Undo and still waiting (`bookingPages.removeLater`). */
+export interface PendingPageRemoval {
+  /** Puts the page back and sends nothing; `false` once the delete was sent (too late to undo). */
+  readonly undo: () => boolean;
+  /** `deleted` once the server has it, `undone` after `undo`; rejects with the server's refusal (the page is back). */
+  readonly done: Promise<'deleted' | 'undone'>;
+}
+
 export type { MeetingsHeld, MeetingsQuery, MeetingsState } from './bookings/meetings.ts';
 export type { RequestsHeld, RequestsState } from './bookings/requests.ts';
 export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
@@ -3385,6 +3393,18 @@ export function createDataLayer({
   const bookingPageLists = createCaptureList<BookingPageView>({
     read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
   });
+  // Booking pages deleted with Undo and still waiting (`bookingPages.removeLater`), by workspace and page: each one's
+  // send, so a tab closing or reloading sends them rather than leaving them half deleted. The `pagehide` listener is
+  // added with the first such delete, never in the first load.
+  const pageRemovals = new Map<string, () => void>();
+  let isRemovalFlushHooked = false;
+  const hookRemovalFlush = () => {
+    if (isRemovalFlushHooked || typeof globalThis.addEventListener !== 'function') return;
+    isRemovalFlushHooked = true;
+    globalThis.addEventListener('pagehide', () => {
+      for (const send of [...pageRemovals.values()]) send();
+    });
+  };
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
@@ -5031,6 +5051,56 @@ export function createDataLayer({
           undo: dropItem<BookingPageView>(id),
           land: (items, copy) => upsertFirst(copy)(items),
         });
+      },
+      /**
+       * Deletes a page after `waitMs` unless undone first (Delete with Undo, no confirm: the owner, 9 November 2026):
+       * gone from every list at once, back on `undo` or a refusal. The wait is the data layer's, so it outlasts the
+       * screen that asked (the editor's Delete goes back to Pages and its toast's Undo still works there); a tab
+       * closing or reloading sends what still waits. `undo` answers `false` once the delete was sent. `done` settles
+       * `deleted` or `undone`, and rejects with the server's refusal.
+       */
+      removeLater: (workspace: string, pageId: string, waitMs: number): PendingPageRemoval => {
+        hookRemovalFlush();
+        const key = `${workspace}:${pageId}`;
+        const undone = new Error('undone');
+        let cancel: () => void = () => undefined;
+        const done = bookingPageLists
+          .write(workspace, {
+            send: () =>
+              new Promise<'deleted'>((resolve, reject) => {
+                const timer = setTimeout(() => {
+                  send();
+                }, waitMs);
+                const send = () => {
+                  clearTimeout(timer);
+                  pageRemovals.delete(key);
+                  call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options))
+                    .then(usedBy(workspace))
+                    .then(() => {
+                      resolve('deleted');
+                    }, reject);
+                };
+                cancel = () => {
+                  clearTimeout(timer);
+                  pageRemovals.delete(key);
+                  reject(undone);
+                };
+                pageRemovals.set(key, send);
+              }),
+            ...shownDrop(bookingPageLists.items(workspace), pageId),
+          })
+          .catch((error: unknown) => {
+            if (error === undone) return 'undone' as const;
+            throw error;
+          });
+        return {
+          undo: () => {
+            if (!pageRemovals.has(key)) return false;
+            cancel();
+            return true;
+          },
+          done,
+        };
       },
       /** Deletes a page, gone from the list at once and back on a refusal: its link stops working, its bookings stay. */
       remove: (workspace: string, pageId: string): Promise<{ pageId: string }> =>

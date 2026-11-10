@@ -114,13 +114,7 @@ export const strings = {
   emptyTitle: 'No booking pages yet',
   failedTitle: 'Booking pages didn’t load',
   failedText: 'Check your connection and try again.',
-  deleteTitle: (title: string) => `Delete “${title}”?`,
-  /** Someone else's page (spec 0037, AC-1273): whose it is, said in the confirm. */
-  deleteTitleFor: (owner: string, title: string) => `Delete ${firstOf(owner)}’s “${title}”?`,
-  deleteText: 'Its link stops working. Bookings already made stay.',
-  deleteAction: 'Delete booking page',
   deletePage: 'Delete booking page',
-  deleting: 'Deleting',
   cancel: 'Cancel',
   somethingWrong: 'Something went wrong. Try again.',
   // New booking page.

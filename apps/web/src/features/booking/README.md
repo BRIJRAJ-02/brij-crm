@@ -3,10 +3,10 @@
 ## Captures › Links (`/w/$slug/captures/links`; the old `/settings/booking-pages` redirects here)
 
 - Purpose: the member's booking pages (an admin sees everyone's) with their status and bookings this month (AC-645).
-- Main task: make a page and open its builder; copy a link, pause or take bookings again, delete one after a confirm.
+- Main task: make a page and open its builder; copy a link, pause or take bookings again, delete one with Undo (no confirm: the house rule, Undo deletes stay one click).
 - Leaves out: a page's settings (its builder), the bookings list (milestone 2) and team pages (milestone 3).
 
-Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete confirm with `tone="danger"`: Delete page stays busy until the server answers while the card has already left, a refusal shows inside it with the card back, and once deleted focus goes to the page's title), Field, Callout and EmptyState. Pause shows at once and rolls back on a refusal.
+Built from Table, Badge, CopyButton, Button, Modal (new page), Field, Callout and EmptyState. Delete, from a card or the builder's ⋯ (which goes back to Pages), takes the page out of every list at once and shows a toast with Undo for ten seconds (`delete-page.ts`, through `bookingPages.removeLater`, whose wait outlasts the screen); only then is it deleted on the server, a refusal brings it back and says why, and focus goes to the page's title (or, on Undo, to the card that came back). Pause shows at once and rolls back on a refusal.
 
 ## The builder (`/w/$slug/captures/links/$pageId`; the old `/settings/booking-pages/$pageId` redirects here)
 

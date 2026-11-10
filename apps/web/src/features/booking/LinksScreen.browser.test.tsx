@@ -43,8 +43,9 @@ function pageOf(id: string, title: string): BookingPageView {
 }
 
 /**
- * The held list of pages, deleting as the data layer does: the card leaves at once, comes back on a refusal.
- * `answer` settles each delete when the test says.
+ * The held list of pages, deleting with Undo as the data layer does (`removeLater`): the card leaves at once, the
+ * delete is sent (`remove`, the spy) once the wait is up, and the card comes back on Undo or a refusal. `answers`
+ * settle each delete sent when the test says.
  */
 function pagesOf(pages: readonly BookingPageView[]) {
   let items = pages;
@@ -66,17 +67,44 @@ function pagesOf(pages: readonly BookingPageView[]) {
     reload: () => undefined,
   };
   const answers: ReturnType<typeof deferred<{ pageId: string }>>[] = [];
-  const remove = vi.fn((_workspace: string, pageId: string) => {
-    const before = items;
-    show(items.filter((each) => each.id !== pageId));
+  const remove = vi.fn((_workspace: string, _pageId: string) => {
     const answer = deferred<{ pageId: string }>();
     answers.push(answer);
-    return answer.promise.catch((error: unknown) => {
-      show(before);
-      throw error;
-    });
+    return answer.promise;
   });
-  return { view, remove, answers };
+  const removeLater = (workspace: string, pageId: string, waitMs: number) => {
+    const before = items;
+    show(items.filter((each) => each.id !== pageId));
+    let isWaiting = true;
+    const undone = deferred<'undone'>();
+    const timer = setTimeout(() => {
+      isWaiting = false;
+      sent.resolve(remove(workspace, pageId));
+    }, waitMs);
+    const sent = deferred<Promise<{ pageId: string }>>();
+    const done = Promise.race([
+      undone.promise,
+      sent.promise.then(
+        () => 'deleted' as const,
+        (error: unknown) => {
+          show(before);
+          throw error;
+        },
+      ),
+    ]);
+    return {
+      undo: () => {
+        if (!isWaiting) return false;
+        isWaiting = false;
+        clearTimeout(timer);
+        show(before);
+        undone.resolve('undone');
+        return true;
+      },
+      done,
+    };
+  };
+  return { view, remove, removeLater, answers };
 }
 
 /** The managed pages the screen also reads: none, and one view for every render (a new one would loop). */
@@ -101,7 +129,7 @@ async function renderLinks(
   const held = pagesOf(pages);
   // No managed pages here: these tests are about the member's own cards, and Links reads the templates too.
   const data = {
-    bookingPages: { view: () => held.view, remove: held.remove, update },
+    bookingPages: { view: () => held.view, removeLater: held.removeLater, update },
     managedPages: { view: () => noTemplates, remove: vi.fn() },
     rotations: { view: () => noTemplates },
   } as unknown as DataLayer;

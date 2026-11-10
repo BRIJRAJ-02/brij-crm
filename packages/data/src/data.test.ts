@@ -190,6 +190,9 @@ interface Behaviour {
     readonly pageId: string;
     readonly routing?: { readonly rules: readonly RoutingRule[] } | undefined;
   }) => BookingPageView | Promise<BookingPageView>;
+  /** The booking pages list, and what a page's delete answers. */
+  bookingPagesList: () => BookingPageView[];
+  bookingPagesDelete: (pageId: string) => { pageId: string };
   /** What `account.deletion.confirm` answers (spec 0033). */
   deleteAccount: () => Promise<{ deleted: true }>;
   /** What `bookings.calendar` answers: Bookings' week (spec 0025). */
@@ -251,6 +254,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     recents: () => [],
     bookingPagesGet: notServed,
     bookingPagesUpdate: notServed,
+    bookingPagesList: notServed,
+    bookingPagesDelete: notServed,
     bookingsCalendar: notServed,
     ...overrides,
   };
@@ -983,14 +988,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       decline: os.bookingFlow.decline.handler(notServed),
     },
     bookingPages: {
-      list: os.bookingPages.list.handler(notServed),
+      list: os.bookingPages.list.handler(() => behaviour.bookingPagesList()),
       get: os.bookingPages.get.handler(({ input }) => behaviour.bookingPagesGet(input.pageId)),
       create: os.bookingPages.create.handler(notServed),
       update: os.bookingPages.update.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         return behaviour.bookingPagesUpdate(input);
       }),
-      delete: os.bookingPages.delete.handler(notServed),
+      delete: os.bookingPages.delete.handler(({ input }) => behaviour.bookingPagesDelete(input.pageId)),
       reorderProfile: os.bookingPages.reorderProfile.handler(notServed),
       attributes: os.bookingPages.attributes.handler(notServed),
       saveDraft: os.bookingPages.saveDraft.handler(notServed),
@@ -3628,6 +3633,41 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     answers[1]?.settle('refuse');
     expect((await failure(cleared)).code).toBe('CONFIG_INVALID');
     expect(held.getSnapshot()?.map((each) => each.id)).toEqual(['large', 'huge']);
+    release();
+  });
+
+  it('deletes a page with Undo: gone at once, back on Undo with nothing sent, else sent once the wait is up', async () => {
+    const page = teamPage([]);
+    const deleted: string[] = [];
+    const api = fakeApi({
+      bookingPagesList: () => [page],
+      bookingPagesDelete: (pageId) => {
+        deleted.push(pageId);
+        return { pageId };
+      },
+    });
+    const { data } = layer(api);
+    const view = data.bookingPages.view('acme');
+    const release = view.retain();
+    await view.ready();
+    const ids = () => {
+      const state = view.getSnapshot();
+      return state.status === 'ready' ? state.items.map((each) => each.id) : [];
+    };
+    expect(ids()).toEqual([page.id]);
+    const first = data.bookingPages.removeLater('acme', page.id, 20);
+    expect(ids()).toEqual([]);
+    expect(first.undo()).toBe(true);
+    expect(await first.done).toBe('undone');
+    expect(ids()).toEqual([page.id]);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(deleted).toEqual([]);
+    const second = data.bookingPages.removeLater('acme', page.id, 20);
+    expect(ids()).toEqual([]);
+    expect(await second.done).toBe('deleted');
+    expect(second.undo()).toBe(false);
+    expect(deleted).toEqual([page.id]);
+    expect(ids()).toEqual([]);
     release();
   });
 
