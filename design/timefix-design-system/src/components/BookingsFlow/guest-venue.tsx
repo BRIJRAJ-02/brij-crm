@@ -6,15 +6,15 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button } from '../Button/Button.tsx';
 import { TextField, TextArea } from '../Field/Field.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
-import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { Select } from '../Select/Select.tsx';
+import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { SuccessCheck } from '../Motion/Motion.tsx';
 import { VenuePage, VenueCheckout, PersonTile, type Venue } from '../VenuePage/VenuePage.tsx';
 import { dishPrice } from '../MenuPage/MenuPage.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
-import { BrandCard } from '../BookingFlow/BookingFlow.tsx';
+import { BrandCard, DayTimes } from '../BookingFlow/BookingFlow.tsx';
 import { HOST, PLACES, at, dayFrom, first, isoDay, lengthOf, lengthsText, openTimes, placeOf, plural, priceText, turnFor, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
 import { saveFile } from '../../lib/saveFile.ts';
 import { useToast } from '../Toast/Toast.tsx';
@@ -65,6 +65,7 @@ export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu
   const [length, setLength] = useState<number>();
   const [party, setParty] = useState(2);
   const [dayId, setDayId] = useState(isoDay(now));
+  const [weekAt, setWeekAt] = useState(0);
   const [time, setTime] = useState<number>();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -135,7 +136,7 @@ export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu
       </div>
       <div className="tf-bkf-venue-sum__lines">
         <span className="tf-bkf-venue-sum__line"><span>{page.kind === 'table' ? `${waitMode ? 'Waitlist, t' : 'T'}able for ${party}` : page.name}<span className="tf-bkf__muted tf-num">{page.kind === 'table' ? (time !== undefined ? ` · ${formatLongDay(day)}, ${formatClock(time)}` : ` · ${formatLongDay(day)}`) + (areaPick ? ` · ${areaPick}` : '') + (occasion ? ` · ${occasion}` : '') : ` · ${len} min${who !== 'any' ? ` with ${first(who)}` : ''}`}</span></span><span className="tf-num">{page.kind === 'service' ? priceText(page) : ''}</span></span>
-        {page.kind !== 'table' && time !== undefined && <span className="tf-bkf__muted tf-num">{formatLongDay(day)}, {formatClockRange(time, time + len)}</span>}
+        {page.kind !== 'table' && (time !== undefined ? <span className="tf-bkf-venue-sum__when tf-num">{formatLongDay(day)}, {formatClockRange(time, time + len)}</span> : step >= timeStep && <span className="tf-bkf__muted">Pick a day and time</span>)}
       </div>
       {page.kind === 'service' && <span className="tf-bkf-venue-sum__total"><span>Total</span><strong className="tf-num">{priceText(page)}</strong></span>}
       {!done && (step < confirmStep
@@ -167,27 +168,33 @@ export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu
   const title = step === 0 ? 'Select service' : page.kind === 'table' ? 'Your details' : steps[step] === 'Professional' ? 'Select professional' : steps[step] === 'Time' ? 'Select time' : 'Confirm';
   return (
     <VenueCheckout steps={steps} step={page.kind === 'table' ? 1 : step} title={waitMode ? 'Join the waitlist' : title} onBack={() => (step <= 1 ? setPageId(undefined) : setStep(step - 1))} summary={summary}>
-      {page.durations.length > 1 && steps[step] !== 'Confirm' && steps[step] !== 'Details' && (
-        <ChoiceChips label="Length" selectionMode="single" size="sm" selectedKeys={[String(len)]} onSelectionChange={(k) => { const v = [...k][0]; if (v) { setLength(Number(v)); setTime(undefined); } }}
-          items={page.durations.map((d) => ({ id: String(d), label: `${d} min` }))} />
-      )}
       {steps[step] === 'Professional' && (
         <div className="tf-bkf-venue-tiles">
           <PersonTile any name="Any professional" title="For the most times" isSelected={who === 'any'} onPress={() => { setWho('any'); setTime(undefined); }} />
           {people.map((n) => <PersonTile key={n} name={n} title={b?.titles?.[n] ?? ''} isSelected={who === n} onPress={() => { setWho(n); setTime(undefined); }} />)}
         </div>
       )}
-      {steps[step] === 'Time' && (
-        <>
-          <DayStrip label="Day" days={strip.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: effective ? openTimes(effective, state, d, now, len).length : 0, dots: (() => { const c = effective ? openTimes(effective, state, d, now, len).length : 0; return c === 0 ? 0 : c < 6 ? 1 : c < 14 ? 2 : 3; })(), isToday: isoDay(d) === isoDay(now) }))}
-            value={dayId} onChange={(v) => { setDayId(v); setTime(undefined); }} unit={['time', 'times']} />
-          {times.length === 0 ? <p className="tf-bkf__muted">Nothing free that day{who !== 'any' ? ` with ${first(who)}` : ''}. Pick another day{who !== 'any' ? ' or Any professional' : ''}.</p> : (
-            <div className="tf-bkf-venue-times" role="radiogroup" aria-label="Time">
-              {times.map((m) => <button key={m} type="button" role="radio" aria-checked={time === m} className="tf-bkf-venue-time tf-num" onClick={() => setTime(m)}>{formatClock(m)}</button>)}
-            </div>
-          )}
-        </>
-      )}
+      {steps[step] === 'Time' && (() => {
+        // The same List view a meeting page has: a week strip, the day with 12h / 24h, the times as pills; Next sits on the chosen one.
+        const week = strip.slice(weekAt * 7, weekAt * 7 + 7);
+        const lastWeek = Math.ceil(strip.length / 7) - 1;
+        const goWeek = (w: number) => { setWeekAt(w); const d = strip[w * 7]; if (d) { setDayId(isoDay(d)); setTime(undefined); } };
+        const next = times.length === 0 ? strip.find((d) => d > day && effective && openTimes(effective, state, d, now, len).length > 0) : undefined;
+        return (
+          <>
+            {page.durations.length > 1 && (
+              <SegmentedControl aria-label="How long" size="sm" selectedKey={String(len)} onSelectionChange={(k) => { setLength(Number(k)); setTime(undefined); }}
+                items={page.durations.map((d) => ({ id: String(d), label: `${d} min` }))} />
+            )}
+            <DayTimes days={week.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: effective ? openTimes(effective, state, d, now, len).length : 0, isToday: isoDay(d) === isoDay(now) }))}
+              dayId={dayId} onDay={(v) => { setDayId(v); setTime(undefined); }} onPrevious={weekAt > 0 ? () => goWeek(weekAt - 1) : undefined} onNext={weekAt < lastWeek ? () => goWeek(weekAt + 1) : undefined}
+              dayTitle={<>{formatDay(day).split(' ')[0]} <span className="tf-bkf__muted tf-num">{day.getDate()}</span></>}
+              times={times} value={time} onTime={setTime} onNextStep={() => setStep(step + 1)}
+              empty={<span className="tf-bkf-venue-next"><span>Nothing free on {formatLongDay(day)}{who !== 'any' ? ` with ${first(who)}` : ''}.</span>
+                {next && <Button size="sm" variant="secondary" onPress={() => { setDayId(isoDay(next)); setWeekAt(Math.floor(strip.indexOf(next) / 7)); setTime(undefined); }}>Next free: {formatLongDay(next)}</Button>}</span>} />
+          </>
+        );
+      })()}
       {(steps[step] === 'Confirm' || steps[step] === 'Details') && (isTable ? (
         <div className="tf-bkf__stack">
           <div className="tf-bkf__pair">

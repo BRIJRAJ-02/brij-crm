@@ -9,7 +9,7 @@ import { Avatar, AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { LogoMark } from '../Logo/Logo.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
-import { DayStrip } from '../DayStrip/DayStrip.tsx';
+import { DayStrip, type StripDay } from '../DayStrip/DayStrip.tsx';
 import { cx } from '../../lib/cx.ts';
 import { formatClock, formatClockRange } from '../WeekCalendar/clock.ts';
 import { MenuTrigger, Menu, MenuItem } from '../Menu/Menu.tsx';
@@ -25,6 +25,57 @@ export interface BookingTimeZone { readonly id: string; readonly label: string }
 export interface BookingGuest { readonly name: string; readonly email: string; readonly notes: string; /** Other people to invite, up to 10. */ readonly guests?: ReadonlyArray<string> }
 /** The booking the flow hands to `onBook`. */
 export interface BookingRequest extends BookingGuest { readonly date: CalendarDate; readonly minutes: number; readonly timeZone: string }
+
+/** Props for DayTimes. */
+export interface DayTimesProps {
+  /** A week of days for the strip; `count` is how many times each has. */
+  readonly days: ReadonlyArray<StripDay>;
+  readonly dayId: string;
+  readonly onDay: (id: string) => void;
+  readonly onPrevious?: () => void;
+  readonly onNext?: () => void;
+  /** "Wed 11" over the times. */
+  readonly dayTitle: ReactNode;
+  readonly times: ReadonlyArray<number>;
+  readonly value?: number;
+  readonly onTime: (m: number) => void;
+  /** The chosen time grows a button beside it ("Next"). */
+  readonly onNextStep?: () => void;
+  readonly nextLabel?: string;
+  /** What the empty day says, and what it offers. */
+  readonly empty?: ReactNode;
+}
+
+/** The booking page's List view on its own: a week strip, the day with a 12h / 24h switch, and the times as pills four to a row.
+ *  Any page that books a time draws it the same way (a meeting, a salon service). */
+export function DayTimes({ days, dayId, onDay, onPrevious, onNext, dayTitle, times, value, onTime, onNextStep, nextLabel = 'Next', empty }: DayTimesProps) {
+  const [hour12, setHour12] = useState(true);
+  return (
+    <div className="tf-booking__bare">
+      <div className="tf-booking__listview">
+        <DayStrip label="Day" unit={['open time', 'open times']} value={dayId} days={days} onChange={onDay} onPrevious={onPrevious} onNext={onNext} />
+        <div className="tf-booking__slots">
+          <div className="tf-booking__slots-head">
+            <h3 className="tf-booking__slots-day" key={dayId} tabIndex={-1}>{dayTitle}</h3>
+            <SegmentedControl aria-label="Clock" size="sm" items={CLOCKS} selectedKey={hour12 ? '12' : '24'} onSelectionChange={(k) => setHour12(k === '12')} />
+          </div>
+          <ul className="tf-booking__slot-list" key={dayId} aria-label="Open times">
+            {times.map((m, i) => {
+              const chosen = m === value;
+              return (
+                <li key={m} className="tf-booking__slot" data-chosen={(chosen && onNextStep !== undefined) || undefined} style={{ '--tf-i': Math.min(i, 8) } as CSSProperties}>
+                  <AriaButton className="tf-booking__time" aria-pressed={chosen} onPress={() => onTime(m)}>{formatClock(m, hour12)}</AriaButton>
+                  {onNextStep && <span className="tf-booking__next-wrap" inert={!chosen}><AriaButton className="tf-booking__next" onPress={onNextStep}>{nextLabel}</AriaButton></span>}
+                </li>
+              );
+            })}
+            {times.length === 0 && <li className="tf-booking__none">{empty ?? 'No times left on this day.'}</li>}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Props for BookingFlow. Times are minutes from midnight in the chosen time zone; nothing here fetches. */
 export interface BookingFlowProps {
