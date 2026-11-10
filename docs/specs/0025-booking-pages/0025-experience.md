@@ -7,6 +7,8 @@
 
 How a booking page looks and behaves for the visitor who books, the guest who later changes the booking, and the member who sets it up. It follows a design proven in production in the owner's earlier product: a calm two column page, a month calendar with times beside it, one commit bar, a short details step, and a guest page that can move, add guests or cancel without an account. The data, slot and no double booking rules in [index.md](index.md) still hold; this file decides the screens, interactions and copy. Where they differ, this file wins. Look comes from our tokens; where the earlier product had its own sizes, the nearest token is used.
 
+**Changed 10 Nov 2026** (owner redesign, Bookings program): the visitor's steps, the booked moment, the guest page and the builder's list and saving changed with the built Bookings redesign. The changed ACs below (AC-667, AC-668, AC-674 to AC-677) and the notes in each section say how; where a section's prose and its note differ, the note wins.
+
 ## The visitor's booking page (`/b/<publicKey>`)
 
 ### Layout
@@ -26,16 +28,16 @@ How a booking page looks and behaves for the visitor who books, the guest who la
 - **List view**: a horizontal strip of chips for days that have openings only (weekday over date), above a grid of times: 2 columns on a phone, 3 on a wide phone, 4 on desktop.
 - **The first open day is chosen on arrival**, so times show at once.
 - **Times** are 44px tall buttons with tabular numbers. Chosen: primary border and a faint primary fill. Picking a time does not move on.
-- **Commit bar**: a full width pill under the times, always visible, disabled until a time is picked. It reads "Book" and then "Book 9:30 AM" (the label crossfades on each new time). Only the bar moves to details.
-- **Time zone**: defaults to the browser's, shown in the rail as "Dubai time (GMT+4)". Pressing it opens a searchable list ("Search city or GMT offset"); arrows move, Enter picks, Esc closes, focus returns to the row. 12h or 24h defaults from the locale and is remembered. Changing either regroups the times by day in that zone at once.
+- **Commit bar**: a full width pill under the times, always visible, disabled until a time is picked. It reads "Book" and then "Book 9:30 AM" (the label crossfades on each new time). Only the bar moves to details. **Changed 10 Nov 2026** (owner redesign, Bookings program): once a time is picked it reads "Next · <day> at <time>" ("Next · Tue, Oct 20 at 9:30 AM"), or "Request · <day> at <time>" on a page that confirms each booking first.
+- **Time zone**: defaults to the browser's, shown in the rail as "Dubai time (GMT+4)". Pressing it opens a searchable list ("Search city or GMT offset"); arrows move, Enter picks, Esc closes, focus returns to the row. 12h or 24h defaults from the locale and is remembered. Changing either regroups the times by day in that zone at once. **Changed 10 Nov 2026** (owner redesign, Bookings program): the zone list has a search ("Search a city or GMT+4"), the 12h / 24h switch beside the search, and two groups, **Suggested** (the zone in use, and the visitor's own when it differs) then **All time zones**; each row names its city, its offset and the time there now.
 
 ### Step 2: Your details
 
 - Header row: a back arrow named "Change time", the slot ("Tue, Aug 19, 9:30 AM") and the zone under it. Back returns focus to the chosen day.
-- Fields, labels above: **Your name**, **Email** (placeholder "you@example.com") with **+ Add guest** beside it (each guest one more email row, up to 10), the host's questions (forms answer types and cards, [0023-experience.md](../0023-forms/0023-experience.md); "optional" after optional labels), then **Anything else the host should know?** (optional).
+- Fields, labels above: **Your name**, **Email** (placeholder "you@example.com") with **+ Add guest** beside it (each guest one more email row, up to 10; **Changed 10 Nov 2026** (owner redesign, Bookings program): guests are rows under "Guests (up to 10)", each email a row with its ×, added with Add guests then Add another guest), the host's questions (forms answer types and cards, [0023-experience.md](../0023-forms/0023-experience.md); "optional" after optional labels), then **Anything else the host should know?** (optional).
 - **Prefill**: arriving from a form (the signed hand off) fills name and email, still editable, with the line "Booking as Asha. Not you?"; "Not you?" clears both.
 - A legal line in small text: "By booking you agree to {workspace}'s terms and privacy policy." with links only when the workspace has set them.
-- Button **Confirm booking**, then "Booking…" while sending.
+- Button **Confirm booking**, then "Booking…" while sending. (**Changed 10 Nov 2026** (owner redesign, Bookings program): the button still reads Confirm booking, beside Back in one band at the card's foot.)
 - **Errors** sit in one reserved line above the button (`aria-live`), so the button never moves: "Someone just took that time. Pick another.", "That time is no longer available. Pick another.", "Too many attempts just now. Wait a moment and try again.", "This page isn't taking bookings any more." A taken time sends the visitor back to step 1 with the day kept and the times refreshed.
 - On success the visitor lands on the guest page with the welcome state.
 
@@ -57,11 +59,11 @@ How a booking page looks and behaves for the visitor who books, the guest who la
 
 The manage token (index.md) is the only key; no account. Destructive actions always confirm, so a mail scanner opening the link changes nothing.
 
-- **Title by state**: "You're booked" (on arrival from booking), "Your booking", "This booking was cancelled", "This booking has passed", with a state mark (Confirmed, Cancelled, Finished).
+- **Title by state** (**Changed 10 Nov 2026** (owner redesign, Bookings program): right after booking, "You're booked" is a whole page, the booked moment, with a success check over the heading and the time leading the card; a returning guest sees "Your booking" with the card and no check): "You're booked" (on arrival from booking), "Your booking", "This booking was cancelled", "This booking has passed", with a state mark (Confirmed, Cancelled, Finished).
 - **Time card**: a date block (weekday, day, month), the time range, "Thursday, 20 August 2026 · Dubai time", and a relative line ("Tomorrow morning", "In 3 minutes").
 - **Facts**: What, Who (the host marked), Where (the video link or address), Your note.
 - **Add to calendar**: Google, Outlook, Apple / .ics.
-- **Need a change?**
+- **Need a change?** (**Changed 10 Nov 2026** (owner redesign, Bookings program): the foot reads **Reschedule**, **Guests** and **Cancel**. Guests lists the invited, each with Remove, which asks first, then **Invite more** as the booking form's rows, "(up to N)", sent by Invite or "Invite 2". Cancel still confirms first, "Cancel <title> with <host>?", with Cancel booking and Keep booking.)
   - **Move to another time** opens the same picker under "Pick a new time" with "Times in Dubai time"; the bar reads "Move to 2:00 PM on Thu 20 Aug", then "Moving…". Empty: "{Host} has no free times in the next three weeks. Cancelling and booking again later may be easier."
   - **Add guests** ("Guests (2)" once there are some): email rows and **Send invitations**; the result line "Invited 2 people." or "They were already on it."
   - "Can't make it at all? **Cancel booking**" opens a confirm: "Cancel this booking?", "{Host} will be told and it comes off both calendars. You can always book again afterwards.", **Yes, cancel it** and **Keep it**.
@@ -75,7 +77,7 @@ The manage token (index.md) is the only key; no account. Destructive actions alw
 ### The list
 
 - Rows, not a table: the page's title, a "Private" tag when unlisted, the address (`/b/…`), chips for durations, custom hours and a non video location, and a **Copy link** button that also opens in a new tab from its menu.
-- Row menu: **Visibility** (Public: on your page; Unlisted: link only; Off: the link stops working), Duplicate, Hours, Delete ("The link stops working. This cannot be undone.").
+- Row menu: **Visibility** (Public: on your page; Unlisted: link only; Off: the link stops working), Duplicate, Hours, Delete ("The link stops working. This cannot be undone."). **Changed 10 Nov 2026** (owner redesign, Bookings program): pages are cards in Bookings › Pages with a Live / Hidden pill, and Delete on a card goes at once with Undo (index.md AC-645).
 - **New booking page** opens a side Panel, "Add a booking page": Title (placeholder "Quick chat"), Address (suggested from the title), **Duration** as chips (15, 30, 45, 60, 90, more than one allowed), **Hours** ("Same as my hours", "Any time", "Custom"), and a **Make it private** Switch. **Continue** ("Creating…") opens the page's editor; Esc closes.
 
 ### The editor
@@ -88,7 +90,7 @@ The manage token (index.md) is the only key; no account. Destructive actions alw
   - **Limits**: buffer before and after, minimum notice, how far ahead, a daily limit. (The earlier product had these with no screen; ours shows them, closed in a Disclosure by default.)
   - **Questions**: "Questions for {title}". Name, Email and Notes are fixed rows marked Required or Optional. Custom questions use the forms question cards and answer types; Where it goes files an answer on the person.
   - **On booking**: the deal step from index.md.
-- **Saving**: each group saves on its own. A sticky "Unsaved changes" bar with **Save** ("Saving…") appears only while something is unsaved, and leaving with unsaved changes asks first. A Live or Paused Switch sits in the header.
+- **Saving**: each group saves on its own. A sticky "Unsaved changes" bar with **Save** ("Saving…") appears only while something is unsaved, and leaving with unsaved changes asks first. A Live or Paused Switch sits in the header. **Changed 10 Nov 2026** (owner redesign, Bookings program): one Save changes in the header makes every edit live at once, a Live / Hidden pill replaces the Switch, and Version history is under ⋯ (spec 0068, amended AC-6811 to AC-6813).
 
 ### Weekly hours and days off
 
@@ -102,17 +104,17 @@ The manage token (index.md) is the only key; no account. Destructive actions alw
 
 - **AC-665**: The first open day is chosen on arrival and its times show at once.
 - **AC-666**: Month and List views both exist; the choice is remembered on that browser.
-- **AC-667**: Picking a time never moves on; only the commit bar does, and it names the time.
-- **AC-668**: Changing the time zone or 12h/24h regroups every time at once.
+- **AC-667**: Picking a time never moves on; only the commit bar does, and it names the time. **Changed 10 Nov 2026** (owner redesign, Bookings program): the bar reads "Next · <day> at <time>" (or "Request · <day> at <time>").
+- **AC-668**: Changing the time zone or 12h/24h regroups every time at once. **Changed 10 Nov 2026** (owner redesign, Bookings program): the zone picker searches, holds the 12h / 24h switch, groups Suggested then All time zones, and shows the time there now on each row.
 - **AC-669**: The month grid works by keyboard as specified, with one tabbable day, and announces the day's count.
 - **AC-670**: Details show the slot with Change time; going back keeps the day and returns focus to it.
 - **AC-671**: A prefilled visitor sees "Booking as {name}. Not you?", and Not you clears both fields.
 - **AC-672**: Booking errors appear in a fixed line above the button; a taken time returns to step 1 with fresh times.
 - **AC-673**: Loading, no times, unreachable calendar, paused and not found each have their state as written.
-- **AC-674**: The guest page shows the title by state, the time card, the facts and Add to calendar.
-- **AC-675**: Move to another time uses the same picker and updates both calendars.
-- **AC-676**: Add guests invites new addresses only and says how many.
-- **AC-677**: Cancel always confirms first.
+- **AC-674**: The guest page shows the title by state, the time card, the facts and Add to calendar. **Changed 10 Nov 2026** (owner redesign, Bookings program): "You're booked" is a whole page right after booking; a returning guest sees "Your booking".
+- **AC-675**: Move to another time uses the same picker and updates both calendars. **Changed 10 Nov 2026** (owner redesign, Bookings program): the action is labelled **Reschedule**.
+- **AC-676**: Add guests invites new addresses only and says how many. **Changed 10 Nov 2026** (owner redesign, Bookings program): the action is labelled **Guests**: guests are rows, and new ones are added with **Invite more** rows.
+- **AC-677**: Cancel always confirms first. **Changed 10 Nov 2026** (owner redesign, Bookings program): the action is labelled **Cancel**; it still confirms first.
 - **AC-678**: New booking page opens a side panel with title, address, durations, hours and private, then the editor.
 - **AC-679**: The editor's preview follows the edits, switches width, and pressing a region scrolls to its group.
 - **AC-680**: Weekly hours support several windows a day, all days start and end, Copy times to, and days off.

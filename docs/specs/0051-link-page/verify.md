@@ -30,7 +30,7 @@ Run with a test account that has a handle, two workspaces, and at least one Publ
 | AC-5129, AC-5130 | After the backfill, every page that was on the profile is an item in its old order, each workspace's group a heading named after it; the page editor's Section control renames that item's heading | |
 | AC-5131 | `/b/:key` and `/<handle>/<slug>` load with the same requests and the same headers as before; `pnpm boundaries` and the guard test pass | |
 | AC-5132 | `pnpm --filter @crm/db test guards profile`: a direct select as `crm_app` is refused, and each new definer is owned by `crm_handle` with a fixed `search_path` | |
-| AC-5133 | With more than eight rows, the search finds a link by its note and a booking page by its title, shows the matches flat with a count, and a slow earlier answer never replaces a newer one | |
+| AC-5133 | With more than five rows (changed from eight, 10 Nov 2026, owner redesign, Bookings program), the search finds a link by its note and a booking page by its title, shows the matches flat with a count, and a slow earlier answer never replaces a newer one | |
 | AC-5137 | On a person with no title, typing "Head chef" in the editor's Title shows it under the name on the page at once, with no Publish and the toast "Saved. It's on the page now.", with Show under my name on; clearing it turns the switch off and hides the switch; rewording leaves the switch where it was; an empty Name is refused on the field with no request sent; the new name shows in Settings › Profile | |
 
 Also run: `pnpm check`, `pnpm test`, and the two browser flow tests for the editor and the public page.

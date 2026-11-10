@@ -45,7 +45,7 @@ The public booking page (`/b/:key`) is frozen by the owner: nothing here changes
 - **AC-968**: A change to a schedule applies to the next slot read of every page using it; bookings already made never move or cancel because of it.
 
 *Screens*
-- **AC-969**: Scheduling › Availability lists the member's schedules: name, "Default" badge, a one line summary of the weekly hours in 12 or 24 hour time by locale ("Mon to Fri, 9:00am to 5:00pm"), the time zone, and "Used by N booking pages" (a link listing them). New schedule sits in the header. The default comes first, then by name.
+- **AC-969**: Scheduling › Availability lists the member's schedules: name, "Default" badge, a one line summary of the weekly hours in 12 or 24 hour time by locale ("Mon to Fri, 9:00am to 5:00pm"), the time zone, and "Used by N booking pages" (a link listing them). New schedule sits in the header. The default comes first, then by name. **Changed 10 Nov 2026** (owner redesign, Bookings program): New schedule is the last option of the schedule Select on Bookings › Availability, not a primary button in the header; the Select lists the schedules with their quiet facts ("Default · 4 pages"), and the tab opens the chosen schedule's editor (the schedules have not been rows since 22 Oct 2026).
 - **AC-970**: Opening a schedule shows its editor: the name (rename in place, Enter saves, Esc cancels), the time zone Select, the weekly hours and the date overrides from the Availability redesign, and its SaveBar. Leaving with unsaved changes asks first. A menu holds Set as default, Duplicate and Delete.
 - **AC-971**: A member with `booking.admin` can switch the screen to another member ("Viewing: Bea's schedules") and edit or create theirs; everyone else sees and edits only their own. A member viewing a team page's settings can read the names and summaries of the schedules it uses.
 - **AC-972**: Both screens work fully by keyboard, every control is labelled, errors are said on their row, and contrast meets WCAG AA.
@@ -107,7 +107,7 @@ Errors are `{ code, message }` with plain messages ("Another schedule is called 
 
 ### Screens
 
-- **Availability** (`/w/$slug/availability`; `/bookings/availability` until spec 0034): a TopBar "Availability" with New schedule; a list of schedule rows (Card rows: name, Default Badge, summary, zone, usage link, a `…` menu). New schedule opens a Modal with one Field (Name) and Create.
+- **Availability** (`/w/$slug/availability`; `/bookings/availability` until spec 0034): a TopBar "Availability" with New schedule; a list of schedule rows (Card rows: name, Default Badge, summary, zone, usage link, a `…` menu). New schedule opens a Modal with one Field (Name) and Create. **Changed 10 Nov 2026** (owner redesign, Bookings program): New schedule is the schedule Select's last option (AC-969).
 - **Schedule** (`/w/$slug/availability/$scheduleId`): the header with the name (rename in place) and the menu; "Used by" line; then the redesigned editor unchanged: time zone Select, HoursEditor (weekly), DaysOff (date overrides), SaveBar. Built from the library only; no new component.
 - **Page editor**: the hours card swaps the own or mine SegmentedControl for a Select of the owner's schedules ("Default schedule (Working hours)" first), the chosen schedule's summary, and "Edit hours" (opens the schedule in a new route, returning to the page). The page's inline hours editor goes away.
 - **Admin view**: a member Select in the Availability header for `booking.admin` (AC-971).

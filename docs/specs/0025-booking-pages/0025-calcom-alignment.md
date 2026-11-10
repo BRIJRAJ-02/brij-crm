@@ -5,6 +5,8 @@
 
 The owner asked on 19 October 2026 to study Cal.com (through Mobbin) and align the booking pages, availability and bookings screens to it. This file is the study, kept as the design target. Where it differs from `0025-experience.md`, this file wins for layout and interaction; the experience file still owns the contract and the acceptance criteria.
 
+**Changed 10 Nov 2026** (owner redesign, Bookings program): where this study and the built Bookings redesign differ (the editor's one Save changes with a Live / Hidden pill, the page cards, the guest steps and the confirmation), the amended ACs in [index.md](index.md) and [0025-experience.md](0025-experience.md) win.
+
 Calls made with it:
 
 - Cal.com's layouts and density, in Timefix's tokens: the one blue marks the primary action and the selection, never Cal.com's black.
