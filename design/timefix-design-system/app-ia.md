@@ -31,7 +31,7 @@
 
 **Forms**: the form list. Each form opens its editor (Questions, Share, Responses, Results).
 
-**Link page**: the editor with the phone preview.
+**Links**: everything you share in one place (your link or business page, booking pages, the menu, forms), each with Copy, QR code, Open and its numbers. **Link page** is its editor, opened from Links.
 
 **Insights** (one analytics home):
 - **Pages**: forms, booking pages, the link page.
@@ -92,3 +92,14 @@ Bookings slots into the shell as the Bookings section. Every module gets one pas
 ## Built so far (10 Nov, the Timefix artifact)
 All nine steps have a first pass: the shell, ⌘K and Home; Records (views, table and board, filters, bulk, the record panel, the record page with its tabs); Lists; Inbox, Tasks and Notes; Forms (gallery, builder and preview, settings, share, responses, results, the public form); the Link page; Insights and Reports; Settings (the whole tree with "Find a setting"); the doors (sign in, two factor, first run, invitation, join request, deleted workspace, email preferences, all from ⌘K › Screens).
 Then (10 Nov night): CSV import into People (match, fix values, check, Undo import), Find duplicates with a side-by-side merge and a banner on People, Settings › Objects with the full attribute editor and New object (it shows under Records), and one Insights home (Bookings' own Insights leaves the app sidebar). The guest's Manage booking page was already in Bookings. The prototype now covers every module and flow in app-inventory.md; next is building it into the app in phases.
+
+## Bullet-proof pass (10 Nov night)
+
+Four reviewers read every screen; their findings and state are in `review-ledger.md`. This pass:
+- Settings stores everything in the app's data (members, invitations, teams, two factor, devices, apps, API keys, theme, workspace name and address) and it reaches the sidebar, doors and links.
+- Records, lists, merges and imports undo only their own change; deleting a record hides its list entries until it is restored; the record page has Owner, Company and Lists, each edit with Undo.
+- Inbox, Tasks and Notes: nothing lost when leaving mid-undo or mid-typing; empty notes are discarded; mentions open the comments.
+- Forms file answers by email (no duplicate person), preview of a draft records nothing, Results show real answers, and "Book a meeting" hands the visitor to the booking page with their name filled in.
+- Links hub; Insights from real bookings and answers; Reports saved, renamed and deleted.
+- Bookings: the guest's own bookings hold their time and table, cut-offs hold on Manage, moves check the host is free, Confirm re-checks, walk-ins outside services show, sold out applies at once, table QR codes are unique and safe.
+- First run asks one question (Meetings, Appointments or Tables) and lands in that workspace; the phone has a More page with every section.

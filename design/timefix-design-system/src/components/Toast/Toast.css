@@ -1,6 +1,6 @@
 /* The region sits bottom centre. Its padding-top catches the pointer over the peeking toasts; hovered or focused, it grows to hold them spread out. */
 .tf-toasts {
-  position: fixed; z-index: var(--z-toast); left: 0; right: 0; bottom: var(--space-24); margin-inline: auto;
+  position: fixed; z-index: var(--z-toast); left: 0; right: 0; bottom: calc(var(--space-24) + var(--tf-toast-lift, 0px)); margin-inline: auto;
   width: min(var(--size-dialog), calc(100% - var(--space-32)));
   height: calc(var(--size-control-lg) + var(--space-24)); outline: none;
 }
@@ -51,5 +51,3 @@
   .tf-toast { transition: none; }
   .tf-toast[data-depth] { filter: none; }
 }
-/* On a phone with a tab bar, toasts rise above it so they never cover the tabs. */
-@media (max-width: 40rem) { body:has(.tf-shell--tabbed) .tf-toasts { bottom: calc(var(--space-64) + env(safe-area-inset-bottom, 0px)); } }

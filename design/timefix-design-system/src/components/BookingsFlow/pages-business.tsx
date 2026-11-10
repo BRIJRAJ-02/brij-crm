@@ -152,7 +152,9 @@ function EditPageDrawer({ state, business, onClose, onSave }: { readonly state: 
           <div className="tf-bkf__stack">
             <div className="tf-bkf__pair">
               <TextField label="What you are" value={b.kindLabel} onChange={(kindLabel) => setB({ ...b, kindLabel })} />
-              <TextField label="Link" value={b.handle} icon={<span className="tf-bkf__prefix">timefix.com/</span>} onChange={(v) => setB({ ...b, handle: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} />
+              <TextField label="Link" value={b.handle} icon={<span className="tf-bkf__prefix">timefix.com/</span>} onChange={(v) => setB({ ...b, handle: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                isInvalid={!b.handle.replace(/-/g, '')} errorMessage={!b.handle.replace(/-/g, '') ? 'Your page needs an address' : undefined}
+                description="Shared links and printed table codes use this. If you change it, the old address keeps working for 30 days." />
             </div>
             <TextField label="Address" value={b.address} onChange={(address) => setB({ ...b, address })} />
             <div className="tf-bkf__pair">

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
 import { AlertTriangle, BarChart3, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
@@ -34,7 +34,7 @@ import { lumen, olive } from './seed-business.ts';
 import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
-  HOST, PLACES, TEAM, at, handleOf, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
+  HOST, PLACES, TEAM, at, handleOf, placeOf, lengthOf, heldTables, memberFree, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
@@ -69,6 +69,10 @@ export interface BookingsFlowProps {
   /** Workspace name and logo from the app's settings, when it has its own. */
   readonly workspaceName?: string;
   /** Opens the guest's booking page from outside (a form's "Book a meeting"), their name and email filled in; bump `n` to open it again. */
+  /** Adds a booking page to the app's link page; returns its Undo, or undefined when it's already there. */
+  readonly onAddToLinkPage?: (p: { readonly name: string; readonly minutes: number; readonly place: string }) => (() => void) | undefined;
+  /** Switches the workspace from outside (the first run's answer); bump `n` to switch again. */
+  readonly switchWorkspace?: { readonly id: WorkspaceId; readonly n: number };
   readonly openGuest?: { readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number };
 }
 
@@ -89,7 +93,7 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
@@ -122,6 +126,12 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const [onboarding, setOnboarding] = useState(false);
   /** Bookings made in the guest view; the host side plays them when it closes, so the badge, the row and the count move in view. */
   const pending = useRef<Array<Extract<BookingsAction, { type: 'meeting/add' }>>>([]);
+  /** Bumps when the guest books, so the guest's own view counts what they just booked as taken. */
+  const [booked, setBooked] = useState(0);
+  /** The workspace as the guest sees it: their bookings this visit already hold their times and tables. */
+  const guestState = useMemo(() => ({ ...state, meetings: [...state.meetings, ...pending.current.map((e) => e.meeting)] }), [state, booked]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Each cancelled meeting as it was, so Undo puts back its own status (a request stays a request). */
+  const before = useRef(new Map<string, BookedMeeting>());
   /** Meetings whose cancel was undone, so "Guest emailed" is skipped. */
   const undone = useRef(new Set<string>());
 
@@ -147,6 +157,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     setTab('meetings'); setView(id === 'lumen' ? 'team' : 'list'); setMeetingId(undefined);
     onWorkspace?.(id);
   };
+  useEffect(() => { if (switchWorkspace) switchTo(switchWorkspace.id); }, [switchWorkspace?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
   const unread = state.notifications.filter((n) => !n.read).length;
   const flash = (setter: (v: string | undefined) => void, id: string) => { setter(id); window.setTimeout(() => setter(undefined), 1600); };
@@ -169,14 +180,14 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   };
 
   /* Pages */
-  const remove = (p: BookingPage) => {
+  const remove = (p: BookingPage, undoMore?: () => void) => {
     const index = state.pages.findIndex((x) => x.id === p.id);
     if (editor?.id === p.id) { setEditor(undefined); setTab('pages'); }
     setLeaving((s) => new Set(s).add(p.id));
     window.setTimeout(() => {
       setLeaving((s) => { const n = new Set(s); n.delete(p.id); return n; });
       dispatch({ type: 'page/delete', id: p.id });
-      toast({ message: `${p.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'page/restore', page: p, index }); flash(setFreshPage, p.id); } } });
+      toast({ message: `${p.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'page/restore', page: p, index }); undoMore?.(); flash(setFreshPage, p.id); } } });
     }, 250);
   };
   /** Routing that sends people to this page: rules, or Otherwise. */
@@ -205,7 +216,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       if (typeof navigator.share === 'function') void navigator.share({ title: p.name, url }).catch(() => undefined);
       else { void navigator.clipboard?.writeText(url).catch(() => undefined); toast({ message: 'Link copied', tone: 'success' }); }
     } else if (how === 'linkpage') {
-      toast({ message: `${p.name} added to your link page`, tone: 'success', action: { label: 'Undo', onAction: () => toast({ message: `${p.name} taken off your link page` }) } });
+      const undo = onAddToLinkPage?.({ name: p.name, minutes: lengthOf(p), place: placeLabel(p, placeOf(p)) });
+      if (!onAddToLinkPage) toast({ message: 'Your link page lives in the Timefix app, under Links.' });
+      else if (!undo) toast({ message: `${p.name} is already on your link page` });
+      else toast({ message: `${p.name} added to your link page`, tone: 'success', action: { label: 'Undo', onAction: undo } });
     } else setShare({ kind: how === 'once' ? 'once' : how, id: p.id });
   };
   const toggle = (id: string, isOn: boolean) => {
@@ -218,13 +232,15 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   /* Guest bookings */
   const book = (p: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly guests?: ReadonlyArray<string>; readonly date: { readonly year: number; readonly month: number; readonly day: number }; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: keyof typeof PLACES; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => {
     const day = new Date(r.date.year, r.date.month - 1, r.date.day);
+    // Count what this guest already booked on this visit, so a second booking never lands on the same table or host.
+    const now = guestState;
     // A table booking takes the best-fitting tables then; a service or meeting takes a free host.
-    const tables = p.kind === 'table' ? (fitTables(state, r.party ?? 2, day, r.minutes, r.length, true, r.area) ?? fitTables(state, r.party ?? 2, day, r.minutes, r.length))?.map((t) => t.id) : undefined;
+    const tables = p.kind === 'table' ? (fitTables(now, r.party ?? 2, day, r.minutes, r.length, true, r.area) ?? fitTables(now, r.party ?? 2, day, r.minutes, r.length))?.map((t) => t.id) : undefined;
     const tableText = tables ? tables.map((tid) => state.tables?.find((t) => t.id === tid)?.name ?? '').join(' + ') : '';
     const start = at(day, r.minutes);
     const id = nextId('m');
     const name = r.name.trim() || 'Guest';
-    const host = hostFor(state, p, day, r.minutes, r.minutes + r.length) ?? p.hosts[0] ?? HOST;
+    const host = hostFor(now, p, day, r.minutes, r.minutes + r.length) ?? p.hosts[0] ?? HOST;
     pending.current.push({
       type: 'meeting/add',
       meeting: {
@@ -235,6 +251,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       },
       notification: { id, actor: name, action: p.confirmFirst ? 'asked to book' : 'booked', object: p.kind === 'table' ? `a table for ${r.party ?? 2}` : `${p.name} · ${r.length} min`, excerpt: `${formatDay(start)}, ${formatClockRange(r.minutes, r.minutes + r.length)}`, time: 'Just now', group: 'Today', read: false },
     });
+    setBooked((n) => n + 1);
   };
   /** The guest changed the booking they just made: the queued booking takes the change before the host side sees it. */
   const changeLastBooked = (c: BookedChange) => {
@@ -248,6 +265,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       : { ...m, guests: c.guests.length ? c.guests : undefined };
     const note = e.notification && (c.kind === 'cancel' ? { ...e.notification, action: 'booked, then cancelled' } : c.kind === 'move' ? { ...e.notification, excerpt: `${formatDay(next.start)}, ${formatClockRange(minutesOf(next.start), minutesOf(next.end))}` } : e.notification);
     pending.current[i] = { ...e, meeting: next, notification: note };
+    setBooked((n) => n + 1);
   };
   const closeGuest = () => {
     setGuest(undefined);
@@ -267,18 +285,30 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   /* Meetings */
   const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) cancelFromDrawer(x); };
-  const cancelFromDrawer = (m: BookedMeeting) => {
+  const cancelFromDrawer = (m: BookedMeeting, inline = false) => {
     setMeetingId(undefined);
     update({ ...m, status: 'cancelled' }, `Cancelled by ${HOST}`);
-    undone.current.delete(m.id);
-    toast({ message: 'Cancelled', action: { label: 'Undo', onAction: () => { undone.current.add(m.id); update(m); } } });
+    undone.current.delete(m.id); before.current.set(m.id, m);
+    toast(inline ? { message: 'Cancelled' } : { message: 'Cancelled', action: { label: 'Undo', onAction: () => { undone.current.add(m.id); const now = meetingById(m.id); update(now ? { ...now, status: m.status } : m); } } });
     window.setTimeout(() => { if (!undone.current.has(m.id)) toast({ message: 'Cancelled · Guest emailed' }); }, ACTION_TOAST_TIMEOUT_MS);
+  };
+  /** Who can take a meeting at a new time: its host if they're free, else (round robin) whoever the rotation picks; undefined when nobody can. */
+  const hostAt = (m: BookedMeeting, start: Date, end: Date, rotate: boolean): string | undefined => {
+    const others = { ...state, meetings: state.meetings.filter((x) => x.id !== m.id) };
+    const p = m.pageId ? pageById(m.pageId) : undefined;
+    const s = minutesOf(start); const e = minutesOf(end);
+    const clash = (h: string) => others.meetings.some((x) => x.host === h && x.status !== 'cancelled' && x.start < end && x.end > start) || isOff(state, h, start, s, e) !== undefined;
+    const free = (h: string) => (p ? memberFree(others, p, h, start, s, e) : true) && !clash(h);
+    if (p?.hostMode === 'roundrobin' && (rotate || !free(m.host))) return hostFor(others, p, start, s, e) ?? (free(m.host) ? m.host : undefined);
+    return free(m.host) ? m.host : undefined;
   };
   const move = (m: BookedMeeting, start: Date, how: string) => {
     const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime()));
-    // A round robin set to ask the rotation again picks the host afresh for the new time.
+    if (start < new Date()) { toast({ message: 'That time has passed. Pick a time ahead.', tone: 'danger' }); return; }
+    // A round robin set to ask the rotation again picks the host afresh for the new time; anyone else must be free then.
     const p = m.pageId ? pageById(m.pageId) : undefined;
-    const host = p?.hostMode === 'roundrobin' && p.rrReschedule === 'rotate' ? hostFor({ ...state, meetings: state.meetings.filter((x) => x.id !== m.id) }, p, start, minutesOf(start), minutesOf(end)) ?? m.host : m.host;
+    const host = hostAt(m, start, end, p?.hostMode === 'roundrobin' && p.rrReschedule === 'rotate');
+    if (!host) { toast({ message: `${first(m.host)} isn’t free then (another meeting, time off or outside hours). Pick another time.`, tone: 'danger' }); return; }
     update({ ...m, start, end, host }, `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}${host !== m.host ? `; ${host} takes it` : ''}`);
     toast({ message: `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}. ${first(m.invitee.name)} ${how}.`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } });
   };
@@ -290,7 +320,11 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     list.forEach((m) => { const to = freeTeammate(m, pool, given); if (to) { given.push({ ...m, host: to }); update({ ...m, host: to }, `Reassigned from ${m.host} to ${to}`); } });
     return given.length;
   };
-  const confirm = (id: string) => { const m = meetingById(id); if (!m) return; update({ ...m, status: 'confirmed' }, `Confirmed by ${HOST}`); dispatch({ type: 'note/read', id, read: true }); toast({ message: `Confirmed · ${first(m.invitee.name)} gets an invitation`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } }); };
+  const confirm = (id: string) => { const m = meetingById(id); if (!m) return;
+    // Confirming checks again: the tables or the host may have been taken since they asked.
+    if (m.tables?.length) { const held = heldTables(state, m.start, minutesOf(m.start), minutesOf(m.end) - minutesOf(m.start), m.id); const taken = m.tables.filter((t) => held.has(t)); if (taken.length) { toast({ message: `${taken.map((t) => state.tables?.find((x) => x.id === t)?.name ?? t).join(' + ')} is taken then. Edit the booking to give ${first(m.invitee.name)} another table first.`, tone: 'danger' }); return; } }
+    else if (!m.tables && hostAt(m, m.start, m.end, false) === undefined) { toast({ message: `${first(m.host)} isn’t free then any more. Move it or decline.`, tone: 'danger' }); return; }
+    update({ ...m, status: 'confirmed' }, `Confirmed by ${HOST}`); dispatch({ type: 'note/read', id, read: true }); toast({ message: `Confirmed · ${first(m.invitee.name)} gets an invitation`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } }); };
   const seeConflict = (m: Meeting) => {
     setView('week');
     setWeek(Math.round((mondayOf(m.start).getTime() - mondayOf(now).getTime()) / (7 * 86_400_000)));
@@ -437,10 +471,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       <Onboarding account="priya@northwind.com" owner={HOST} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo', 'northwind-sales'].includes(slug)), 400); })}
         onFinish={finishSetup} onSignOut={() => { setOnboarding(false); dispatch({ type: 'reset', state: northwind() }); }} />
     ) : guest ? (
-      <GuestMode play={guest} state={state} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
+      <GuestMode play={guest} state={guestState} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
         onWaitlist={(w) => dispatch({ type: 'waitlist/set', waitlist: [...(state.waitlist ?? []), { id: nextId('w'), name: w.name, phone: w.phone, party: w.party, day: w.day, wanted: w.wanted, added: new Date(), online: true }] })}
         onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled' }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
-        onGuestMove={(m, start) => update({ ...m, start, end: new Date(start.getTime() + (m.end.getTime() - m.start.getTime())) }, `Moved by ${m.invitee.name} to ${formatDay(start)}`)} />
+        onGuestMove={(m, start) => { const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime())); const host = hostAt(m, start, end, false) ?? m.host; update({ ...m, start, end, host }, `Moved by ${m.invitee.name} to ${formatDay(start)}${host !== m.host ? `; ${host} takes it` : ''}`); }} />
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
       mobileNav={appMobileNav ?? <TabBar aria-label="Bookings" current={tab}
@@ -483,7 +517,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
               {tab === 'meetings' && !restaurant && (<div className="tf-bkf__panel">
                 <MeetingsTab state={state} view={view} onView={(v) => { setView(v); if (v === 'list') setFocusHour(undefined); }} whose={whose} onWhose={setWhose}
                   week={week} onWeek={(w) => { setWeek(w); setFocusHour(undefined); }} focusHour={focusHour} fresh={freshMeeting}
-                  onOpen={setMeetingId} onCancel={cancelNow} onUndoCancel={(m) => { const x = meetingById(m.id); if (x) update({ ...x, status: 'confirmed' }, 'Cancel undone'); }}
+                  onOpen={setMeetingId} onCancel={cancelNow} onUndoCancel={(m) => { const x = meetingById(m.id); if (!x) return; undone.current.add(x.id); update({ ...x, status: before.current.get(x.id)?.status ?? 'confirmed' }, 'Cancel undone'); }}
                   onReschedule={setRescheduleId} onNoShow={(id) => { const m = meetingById(id); if (m) { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); } }}
                   onConfirm={confirm} onDecline={setDeclineId}
                   onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn) ?? state.pages[0]; if (p) onShare(p, 'copy'); }}
@@ -577,8 +611,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         confirmLabel="Delete page" onConfirm={() => {
           if (!toDelete) return;
           const to = repointTo(toDelete.id)?.id ?? '';
-          if (routedTo(toDelete.id)) dispatch({ type: 'routing/set', routing: { ...state.routing, rules: state.routing.rules.map((r) => (r.pageId === toDelete.id ? { ...r, pageId: to } : r)), fallbackPageId: state.routing.fallbackPageId === toDelete.id ? to : state.routing.fallbackPageId } });
-          remove(toDelete);
+          const gone = toDelete.id; const moved = state.routing.rules.filter((r) => r.pageId === gone).map((r) => r.id); const fallback = state.routing.fallbackPageId === gone;
+          if (routedTo(gone)) dispatch({ type: 'routing/set', routing: { ...state.routing, rules: state.routing.rules.map((r) => (r.pageId === gone ? { ...r, pageId: to } : r)), fallbackPageId: fallback ? to : state.routing.fallbackPageId } });
+          // Undo puts the routing back too: only the rules this delete re-pointed.
+          remove(toDelete, moved.length || fallback ? () => dispatch({ type: 'routing/patch', ids: moved, pageId: gone, fallback }) : undefined);
         }} />
     </AppShell>
     )}

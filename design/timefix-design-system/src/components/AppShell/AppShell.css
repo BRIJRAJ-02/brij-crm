@@ -90,3 +90,6 @@
   .tf-shell-demo__row { grid-template-columns: minmax(0, 1fr) auto; }
   .tf-shell-demo__row > :nth-child(n + 3) { display: none; }
 }
+
+/* A phone tab bar lifts toasts above it (Toast reads --tf-toast-lift), so they never cover the tabs. */
+@media (max-width: 40rem) { body:has(.tf-shell--tabbed) { --tf-toast-lift: calc(var(--space-48) + env(safe-area-inset-bottom, 0px)); } }

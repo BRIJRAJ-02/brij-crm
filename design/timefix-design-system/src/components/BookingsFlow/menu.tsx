@@ -24,7 +24,7 @@ import { saveFile } from '../../lib/saveFile.ts';
 import { cx } from '../../lib/cx.ts';
 import { ALLERGENS, DIETS, MenuPage, dishPrice, type Diet, type Menu as MenuT, type MenuAddOn, type MenuDish, type MenuSection } from '../MenuPage/MenuPage.tsx';
 import { ScaledPreview, TabToolbar, i14, i16 } from './parts.tsx';
-import { menuChanges, nextId, plural, tableMenuUrl, type BookingsAction, type BookingsState, type MenuBook, type Table } from './state.ts';
+import { menuChanges, nextId, plural, tableMenuUrl, type BookingsAction, type BookingsState, type MenuBook, type Table, tableCode } from './state.ts';
 import { plate } from './menu-seed.ts';
 
 const hm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -192,7 +192,7 @@ export function MenuTab({ state, dispatch, onGuest, onTables }: MenuTabProps) {
         </div>
       ) : <EmptyState icon={<UtensilsCrossed size={20} strokeWidth={1.75} />} title="No menus" description="Make one for each time you serve: Lunch, Dinner, Drinks." action={<Button variant="primary" onPress={() => setNaming(true)}>New menu</Button>} />}
 
-      {dish && <DishDrawer book={book} dish={dish.dish} where={dish.dish ? where(dish.dish.id) : []} onClose={() => setDish(undefined)}
+      {dish && <DishDrawer book={book} dish={dish.dish} where={dish.dish ? where(dish.dish.id) : []} onClose={() => setDish(undefined)} onSoldOut={soldOut}
         onSave={(d) => {
           const isNew = !book.dishes.some((x) => x.id === d.id);
           const dishes = isNew ? [...book.dishes, d] : book.dishes.map((x) => (x.id === d.id ? d : x));
@@ -247,7 +247,9 @@ function SectionDialog({ section, onClose, onSave }: { readonly section?: MenuSe
 }
 
 /** One dish: what guests read first, then allergens, add-ons and calories behind a fold. */
-function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns }: {
+function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns, onSoldOut }: {
+  /** Sold out applies at once, like the row's switch; it never waits for Publish. */
+  readonly onSoldOut?: (d: MenuDish, out: boolean) => void;
   readonly book: MenuBook; readonly dish?: MenuDish; readonly where: ReadonlyArray<string>; readonly onClose: () => void; readonly onSave: (d: MenuDish) => void; readonly onDelete?: () => void; readonly onAddOns: () => void;
 }) {
   const blank: MenuDish = { id: nextId('dish'), name: '', price: undefined, diet: [], allergens: [], addOnIds: [] };
@@ -309,7 +311,7 @@ function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns }: 
               }} />
             <span className="tf-bkf-setting__pair">
               <Switch isSelected={Boolean(d.popular)} onChange={(popular) => patch({ popular })}>Mark as popular</Switch>
-              <Switch isSelected={!d.soldOut} onChange={(on) => patch({ soldOut: !on })}>Available today</Switch>
+              <Switch isSelected={!d.soldOut} onChange={(on) => { patch({ soldOut: !on }); if (dish && onSoldOut) onSoldOut(dish, !on); }}>Available today</Switch>
             </span>
             {clash && <Callout tone="warning">{clash} Check the marks or the allergens.</Callout>}
             <ShowMore showLabel="Allergens, add-ons and calories" hideLabel="Fewer details" defaultExpanded={Boolean(dish && (d.allergens.length || d.addOnIds.length))}>
@@ -448,7 +450,7 @@ function QrCodes({ state, dispatch, onGuest, onTables }: { readonly state: Booki
       {renew && (
         <Dialog isOpen onOpenChange={(o) => { if (!o) setRenew(undefined); }} title={`New code for ${renew.name}?`} description="The printed code on this table stops working. Print the new one before you put it out."
           actions={<><Button variant="ghost" slot="close">Keep this code</Button><Button variant="danger" onPress={() => {
-            dispatch({ type: 'tables/set', tables: tables.map((x) => (x.id === renew.id ? { ...x, code: `${x.name.toLowerCase()}-${Math.random().toString(36).slice(2, 7)}` } : x)) });
+            dispatch({ type: 'tables/set', tables: tables.map((x) => (x.id === renew.id ? { ...x, code: tableCode(x.name) } : x)) });
             setRenew(undefined); toast({ message: `${renew.name} has a new code. Download it to print.`, tone: 'success' });
           }}>Make a new code</Button></>} />
       )}

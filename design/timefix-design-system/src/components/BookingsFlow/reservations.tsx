@@ -171,6 +171,18 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
           </section>
         );
       })}
+      {(() => {
+        // Anyone seated or booked outside a service (a walk-in at 4:30, a private booking) still shows, never lost between groups.
+        const rows = todays.filter((m) => m.status !== 'pending' && m.status !== 'cancelled' && !services.some((s) => minutesOf(m.start) >= s.start && minutesOf(m.start) < s.end));
+        if (rows.length === 0) return null;
+        const c = rows.filter((m) => m.status !== 'no-show').reduce((n, m) => n + (m.party ?? 0), 0);
+        return (
+          <section className="tf-bkf-res-group" aria-label="Outside service hours">
+            <h3 className="tf-bkf-res-group__h"><span>Outside service hours</span><span className="tf-bkf__muted tf-num">{plural(c, 'cover')} · {plural(rows.length, 'table')}</span></h3>
+            <ul className="tf-bkf-res-rows">{rows.map(row)}</ul>
+          </section>
+        );
+      })()}
       {services.length === 0 && <EmptyState icon={<CalendarPlus size={20} strokeWidth={1.75} />} title="Closed this day" description="No service in your opening hours. You can still add a private booking." />}
       {(() => { const n = todays.filter((m) => m.status === 'cancelled').length; return n > 0 ? <p className="tf-bkf__muted">{plural(n, 'cancellation')} this day.</p> : null; })()}
     </div>

@@ -9,7 +9,7 @@ import { Select } from '../Select/Select.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { Section, SettingRow, i14 } from './parts.tsx';
-import { nextId, plural, type BookingsAction, type BookingsState, type Table } from './state.ts';
+import { nextId, plural, type BookingsAction, type BookingsState, type Table, tableCode } from './state.ts';
 
 /** The Tables card. Add several at once by typing a run ("T10 to T14"). */
 export function TablesSection({ state, dispatch }: { readonly state: BookingsState; readonly dispatch: (a: BookingsAction) => void }) {
@@ -44,7 +44,7 @@ export function TablesSection({ state, dispatch }: { readonly state: BookingsSta
       ))}
       <Dialog isOpen={adding} onOpenChange={setAdding} title="Add tables" description="One name, or a run like T10 to T14."
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={names.length === 0} onPress={() => {
-          dispatch({ type: 'tables/set', tables: [...tables, ...names.map((n) => ({ id: nextId('t'), name: n, seats, area, online: true, joinable: false }))] });
+          dispatch({ type: 'tables/set', tables: [...tables, ...names.map((n) => ({ id: nextId('t'), name: n, seats, area, online: true, joinable: false, code: tableCode(n) }))] });
           setAdding(false); toast({ message: `${plural(names.length, 'table')} added`, tone: 'success' });
         }}>{names.length > 1 ? `Add ${names.length} tables` : 'Add table'}</Button></>}>
         <div className="tf-bkf__stack">

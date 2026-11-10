@@ -351,6 +351,7 @@ export type BookingsAction =
   | { readonly type: 'block/add'; readonly block: TimeBlock }
   | { readonly type: 'block/remove'; readonly id: string }
   | { readonly type: 'groups/set'; readonly groups: ReadonlyArray<RoundRobinGroup> }
+  | { readonly type: 'routing/patch'; readonly ids: ReadonlyArray<string>; readonly pageId: string; readonly fallback: boolean }
   | { readonly type: 'routing/set'; readonly routing: Routing }
   | { readonly type: 'reset'; readonly state: BookingsState };
 
@@ -411,6 +412,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'block/remove': return { ...state, blocks: state.blocks.filter((b) => b.id !== action.id) };
     case 'groups/set': return { ...state, groups: action.groups };
     case 'routing/set': return { ...state, routing: action.routing };
+    case 'routing/patch': return { ...state, routing: { ...state.routing, rules: state.routing.rules.map((r) => (action.ids.includes(r.id) ? { ...r, pageId: action.pageId } : r)), fallbackPageId: action.fallback ? action.pageId : state.routing.fallbackPageId } };
     case 'reset': return action.state;
   }
 }
@@ -514,7 +516,8 @@ export function atLimit(state: BookingsState, member: string, date: Date): 'day'
   if (l.perWeek > 0 && theirs.filter((m) => mondayOf(m.start).getTime() === monday).length >= l.perWeek) return 'week';
   return undefined;
 }
-function memberFree(state: BookingsState, page: BookingPage | undefined, member: string, date: Date, start: number, end: number): boolean {
+/** Whether someone can take a meeting then: not off, not at their limit, no clash (with buffers) and not busy in a calendar. */
+export function memberFree(state: BookingsState, page: BookingPage | undefined, member: string, date: Date, start: number, end: number): boolean {
   if (isOff(state, member, date, start, end)) return false;
   if (atLimit(state, member, date)) return false;
   const before = page?.bufferBefore ?? 0;
@@ -570,7 +573,9 @@ export function heldTables(state: BookingsState, date: Date, start: number, leng
   const held = new Set<string>();
   state.meetings.forEach((m) => {
     if (m.id === skip || !m.tables || m.status === 'cancelled' || m.status === 'no-show' || m.seating === 'left' || m.start.toDateString() !== date.toDateString()) return;
-    const a = minutesOf(m.start); const b = minutesOf(m.end);
+    // A party still seated past its end keeps the table until they leave (counted as at least 15 more minutes).
+    const today = new Date(); const overrun = m.seating === 'seated' && date.toDateString() === today.toDateString();
+    const a = minutesOf(m.start); const b = overrun ? Math.max(minutesOf(m.end), minutesOf(today) + 15) : minutesOf(m.end);
     if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
   });
   return held;
@@ -723,4 +728,6 @@ export function menuChanges(state: BookingsState): ReadonlyArray<string> {
   return [...menus, ...gone, ...(dishes ? [plural(dishes, 'dish', 'dishes')] : []), ...(addOns ? [plural(addOns, 'add-on')] : [])];
 }
 /** A table's menu link, as its QR opens it. */
-export const tableMenuUrl = (state: BookingsState, t: Table) => `timefix.com/${state.business?.handle ?? 'priya'}/menu?t=${t.code ?? t.name.toLowerCase()}`;
+/** A table's own code for its QR: its name made safe for a link, plus a random tail so two tables with one name never share a link. */
+export const tableCode = (name: string) => `${slugify(name) || 'table'}-${Math.random().toString(36).slice(2, 7)}`;
+export const tableMenuUrl = (state: BookingsState, t: Table) => `timefix.com/${handleOf(state)}/menu?t=${encodeURIComponent(t.code ?? slugify(t.name))}`;

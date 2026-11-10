@@ -102,7 +102,7 @@ export function olive(now = new Date()): BookingsState {
   };
   res(12, 30, 2, ['t1'], 'Anika Desai', { tags: ['Regular'] }); res(13, 0, 4, ['t3'], 'Rohan Gupta'); res(13, 15, 2, ['t6'], 'Meera Pillai', { area: 'Terrace' }); res(14, 0, 3, ['t4'], 'Tom Walsh', { status: 'no-show' });
   res(19, 0, 2, ['t2'], 'Aarav Nair', { occasion: 'Date night' }); res(19, 30, 2, ['t6'], 'Sara Fernandes', { area: 'Terrace', occasion: 'Anniversary' }); res(19, 30, 4, ['t8'], 'Neha Kapoor', { tags: ['VIP'], note: 'Owner’s guest. Send the octopus.' });
-  res(20, 0, 6, ['t5'], 'Vikram Shetty', { occasion: 'Birthday', note: 'Bringing a cake, candles at dessert.' }); res(20, 0, 4, ['t3'], 'Leela Menon', { status: 'pending' });
+  res(20, 0, 6, ['t5'], 'Vikram Shetty', { occasion: 'Birthday', note: 'Bringing a cake, candles at dessert.' }); res(18, 30, 4, ['t3'], 'Leela Menon', { status: 'pending' });
   res(20, 30, 8, ['t3', 't4'], 'Dev Malhotra', { tags: ['Allergy'], note: 'One guest allergic to tree nuts.' }); res(21, 0, 2, ['t2'], 'Priya Joshi'); res(21, 15, 2, ['t7'], 'Kabir Rao', { area: 'Terrace' });
   res(20, 0, 4, ['t3'], 'Kiran Bose', { offset: 1, tags: ['VIP'] }); res(13, 0, 2, ['t6'], 'Lara Dias', { offset: 2 }); res(20, 30, 6, ['t5'], 'Ishaan Mehta', { offset: 2, occasion: 'Birthday' });
   const book = oliveMenus();

@@ -25,7 +25,7 @@ import { STAGES, inr, newId, type AppAction, type AppState, type Report } from '
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 /** The starter page until someone publishes their own. */
-const STARTER: LinkPageDraft = { profile: demoProfile, socials: demoSocials, blocks: demoBlocks, look: 'calm', accent: '#0F766E' };
+export const STARTER: LinkPageDraft = { profile: demoProfile, socials: demoSocials, blocks: demoBlocks, look: 'calm', accent: '#0F766E' };
 /** Copies text, and says honestly whether it worked. */
 const copyText = (text: string) => navigator.clipboard.writeText(text).then(() => true, () => false);
 /** Whose address the links live under: the business's handle, or the host's own name on a team. */

@@ -112,15 +112,15 @@ function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, on
   if (scenario === 'manage') return <Manage page={page} state={state} meeting={state.meetings.find((m) => m.id === meetingId) ?? state.meetings.find((m) => m.pageId === page.id && m.status === 'confirmed' && m.start > new Date())} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} />;
   if (scenario === 'offered') return <Offered page={page} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
-  if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} />;
-  if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} startOnMenu table={table} />;
+  if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />;
+  if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} startOnMenu table={table} />;
   // A table page's own link opens the restaurant's page with the table card, as booking sites do.
-  if (page.kind === 'table') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} />;
+  if (page.kind === 'table') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />;
   return <Book page={page} state={state} onBooked={onBooked} onBookedChange={onBookedChange} failFirst={scenario === 'taken'} prefill={prefill} />;
 }
 
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
-function Profile({ owner, state, onBooked, onWaitlist, startOnMenu = false, table }: { readonly owner: string; readonly state: BookingsState; readonly startOnMenu?: boolean; readonly table?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onWaitlist'>) {
+function Profile({ owner, state, onBooked, onBookedChange, onWaitlist, startOnMenu = false, table }: { readonly owner: string; readonly state: BookingsState; readonly startOnMenu?: boolean; readonly table?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onBookedChange' | 'onWaitlist'>) {
   const [open, setOpen] = useState<string>();
   // The menu link and the venue page lead to each other: "See the full menu" one way, "Book a table" the other.
   const [onMenu, setOnMenu] = useState(startOnMenu);
@@ -129,7 +129,7 @@ function Profile({ owner, state, onBooked, onWaitlist, startOnMenu = false, tabl
     return (
       <div className="tf-bkf__profile-back-wrap">
         <AriaButton className="tf-bkf__textbtn tf-bkf__profile-back" onPress={() => setOpen(undefined)}><ArrowLeft {...i14} aria-hidden="true" />All of {first(owner)}’s meetings</AriaButton>
-        <Book page={chosen} state={state} onBooked={onBooked} />
+        <Book page={chosen} state={state} onBooked={onBooked} onBookedChange={onBookedChange} />
       </div>
     );
   }
@@ -223,12 +223,18 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
           <TextArea label="Anything to tell them?" aside="Optional" rows={2} value={reason} onChange={setReason} size="lg" />
           <div className="tf-bkf__row"><Button variant="ghost" onPress={() => setMode('view')}>Keep it</Button><Button variant="danger" onPress={() => { onGuestCancel(meeting, reason.trim()); setMode('cancelled'); }}>Cancel booking</Button></div>
         </div>
-      ) : (
-        <div className="tf-bkf__row">
-          <Button variant="secondary" icon={<CalendarClock {...i14} />} onPress={() => setMode('move')}>Reschedule</Button>
-          <Button variant="ghost" onPress={() => setMode('cancel')}>Cancel booking</Button>
-        </div>
-      )}
+      ) : (() => {
+        // The page's cut-offs hold here too: too close to the time, the guest is told who to contact instead.
+        const hoursLeft = (meeting.start.getTime() - Date.now()) / 3_600_000;
+        const canMove = !page.moveCutoff || hoursLeft >= page.moveCutoff; const canCancel = !page.cancelCutoff || hoursLeft >= page.cancelCutoff;
+        return (<>
+          {(!canMove || !canCancel) && <p className="tf-bkf__muted">{!canMove && !canCancel ? `It’s too close to change online` : !canMove ? 'It’s too close to move online' : 'It’s too close to cancel online'} (within {Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0)} hours). Reply to your confirmation email to reach {first(meeting.host)}.</p>}
+          <div className="tf-bkf__row">
+            {canMove && <Button variant="secondary" icon={<CalendarClock {...i14} />} onPress={() => setMode('move')}>Reschedule</Button>}
+            {canCancel && <Button variant="ghost" onPress={() => setMode('cancel')}>Cancel booking</Button>}
+          </div>
+        </>);
+      })()}
     </GuestCard>
   );
 }

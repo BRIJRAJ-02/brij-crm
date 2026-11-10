@@ -1,5 +1,7 @@
 # Prototype review ledger (10 Nov night)
 
+State at 22:15 IST: blockers all fixed; open items below are majors and minors still to do (zones K6/K7, offered times K9, Reports per tab, more form templates and layouts, link page blocks, Bookings' own sidebar outside the app).
+
 The owner wants a foolproof, full prototype: every screen and every flow, each format (team, salon, restaurant) from onboarding, easy to understand, links integrated. Four reviewers read the prototype; their findings are listed here with their state. `[ ]` means open and `[x]` means fixed.
 
 ## Known before the review
@@ -11,8 +13,8 @@ The owner wants a foolproof, full prototype: every screen and every flow, each f
 - [ ] Custom objects: a records table
 - [x] Links hub: everything you share in one place (your page, booking pages, forms, menu), with copy, QR, open and numbers
 - [x] Insights read real data (form responses, meetings)
-- [ ] First run picks the format (team / salon / restaurant) and lands in the right workspace
-- [ ] Phone walk of every module
+- [x] First run picks the format (team / salon / restaurant) and lands in the right workspace
+- [x] Phone walk of every module (More page, Settings list then page, each format)
 
 ## Shell, Settings, doors (reviewer 3)
 Blockers:
@@ -230,23 +232,23 @@ Missing flows:
 ## Bookings, restaurant, salon, menu (reviewer 4)
 Blockers:
 - [x] K1 Share links and QR use handle "priya" for every workspace (share, embed, offered times, one-time links, create)
-- [ ] K2 Several guest bookings in one session double-book (pending only reaches state on close; same table; host[0] fallback)
+- [x] K2 Several guest bookings in one session double-book (pending only reaches state on close; same table; host[0] fallback)
 
 Major:
-- [ ] K3 Profile page bookings: guest changes never reach the host
-- [ ] K4 Manage booking ignores cut-offs
-- [ ] K5 Reschedule keeps the old round robin host even if busy
+- [x] K3 Profile page bookings: guest changes never reach the host
+- [x] K4 Manage booking ignores cut-offs
+- [x] K5 Reschedule keeps the old round robin host even if busy
 - [ ] K6 Cut-offs wrong when the guest picks another time zone
 - [ ] K7 Chat booking shows the wrong time in another zone; minutes can pass 1440
-- [ ] K8 Week view drag ignores other meetings, time off, busy and past
+- [x] K8 Week view drag ignores other meetings, time off, busy and past
 - [ ] K9 Offered times can be booked twice
-- [ ] K10 Walk-in offered a table whose party has run over
+- [x] K10 Walk-in offered a table whose party has run over
 - [x] K11 Olive seed double-books T3; Confirm doesn't re-check
-- [ ] K12 Walk-ins between services vanish from the List
-- [ ] K13 Sold out from the dish drawer waits for Publish
-- [ ] K14 New tables get no QR code; names unencoded; handle change breaks printed codes silently; empty handle
-- [ ] K15 Inline Undo of a cancel still says "Guest emailed"; two Undos
-- [ ] K16 Undo of a page delete leaves routing re-pointed
+- [x] K12 Walk-ins between services vanish from the List
+- [x] K13 Sold out from the dish drawer waits for Publish
+- [x] K14 New tables get no QR code; names unencoded; handle change breaks printed codes silently; empty handle
+- [x] K15 Inline Undo of a cancel still says "Guest emailed"; two Undos
+- [x] K16 Undo of a page delete leaves routing re-pointed
 
 Dead or fake:
 - [x] Add to link page (toast only)

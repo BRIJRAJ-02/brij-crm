@@ -17,7 +17,7 @@ import { RecordPage } from './record.tsx';
 import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
 import { ListScreen, NewListDialog } from './lists.tsx';
 import { FormsScreen } from './forms.tsx';
-import { InsightsScreen, LinkPageScreen, LinksScreen, handleFor } from './grow.tsx';
+import { InsightsScreen, LinkPageScreen, LinksScreen, STARTER, handleFor } from './grow.tsx';
 import { SettingsScreen } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
 import { ImportScreen } from './importer.tsx';
@@ -73,6 +73,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   /** A screen opened straight into an action from ⌘K: New person, New task, a note or a task. */
   const [launch, setLaunch] = useState<{ readonly kind: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit'; readonly value?: string; readonly n: number }>();
   const [recent, setRecent] = useState<ReadonlyArray<string>>([]);
+  const [switchWs, setSwitchWs] = useState<{ readonly id: 'northwind' | 'lumen' | 'olive'; readonly n: number }>();
   const [bookGuest, setBookGuest] = useState<{ readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number }>();
   const kind = bookings?.business?.kind ?? 'team';
   const me = state.members.find((m) => m.name === state.me);
@@ -236,7 +237,13 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
 
   return (
     <>
-      <BookingsFlow showDemoMenu appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest}
+      <BookingsFlow showDemoMenu appNav={nav} appContent={content} onBookingsNav={() => { setPage('bookings'); setRecord(undefined); setTrail([]); }} onState={setBookings} openTab={openTab} openGuest={bookGuest} switchWorkspace={switchWs}
+        onAddToLinkPage={(b) => {
+          const was = state.linkPage ?? STARTER;
+          if (was.blocks.some((x) => x.kind === 'booking' && x.title === b.name)) return undefined;
+          dispatch({ type: 'link/publish', page: { ...was, blocks: [...was.blocks, { kind: 'booking', id: newId('lb'), title: b.name, durationMinutes: b.minutes, location: { kind: 'video', label: b.place } }] } });
+          return () => dispatch({ type: 'link/publish', page: was });
+        }}
         hiddenSections={state.prefs.apps.menu ? [] : ['menu']} person={{ name: state.me, email: me?.email ?? '' }} workspaceName={state.prefs.workspace.name}
         onMenu={(id) => { if (id === 'signout') setSigningOut(true); else openSettings(id === 'profile' ? 'profile' : 'general'); }}
         appMobileNav={<TabBar aria-label="Timefix" current={tabCurrent}
@@ -249,6 +256,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       {door && <DoorScreen door={door} onDoor={setDoor}
         ctx={{ workspace: state.prefs.workspace.name, slug: state.prefs.workspace.slug, name: state.me, email: me?.email ?? '', twoFactor: state.prefs.twoFactor }}
         onDone={() => { const signed = door === 'signin' || door === 'twofactor'; setDoor(undefined); if (signed) goStart(); }}
+        onFormat={(k) => { setSwitchWs((w) => ({ id: k === 'salon' ? 'lumen' : k === 'restaurant' ? 'olive' : 'northwind', n: (w?.n ?? 0) + 1 }));
+          if (k !== 'team') { openBookings('meetings'); toast({ message: k === 'salon' ? 'Here’s a salon set up with services, staff and a booking page. Change anything.' : 'Here’s a restaurant set up with tables, services and a menu. Change anything.', tone: 'success' }); } }}
         onRestore={() => { dispatch({ type: 'history/add', text: `${state.me} restored ${state.prefs.workspace.name}` }); toast({ message: `${state.prefs.workspace.name} is back. Everyone has access again.`, tone: 'success' }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); }} />}
