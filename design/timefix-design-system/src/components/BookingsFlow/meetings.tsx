@@ -71,6 +71,8 @@ export interface MeetingsTabProps {
   readonly onMove: (id: string, day: Date, start: number, end: number) => void;
   readonly onSeeConflict: (m: Meeting) => void;
   readonly onJoin: (id: string) => void;
+  /** Hands meetings to whoever is free; returns how many moved. */
+  readonly onReassignMany: (meetings: ReadonlyArray<BookedMeeting>) => number;
 }
 
 /** "Starting now", "In 25 min", "In 3 hr", "Tomorrow at 10:00 AM". */
@@ -152,7 +154,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
         </>
       )}
       {view === 'week' && <WeekView {...props} scoped={scoped} />}
-      {view === 'team' && <TeamDay state={state} week={props.week} onWeek={props.onWeek} onOpen={props.onOpen}
+      {view === 'team' && <TeamDay state={state} week={props.week} onWeek={props.onWeek} onOpen={props.onOpen} onReassignMany={props.onReassignMany}
         menu={(p, close) => <PickedMenu picked={p} close={close} onBook={() => props.onNewMeeting(p)}
           onBlock={() => props.onBlock({ id: nextId('blk'), member: p.member, day: isoDay(p.day), start: p.start, end: p.end, kind: 'block', label: 'Blocked' })}
           onHold={() => props.onHold(p)} onTimeOff={() => props.onTimeOff(p)} />} />}
@@ -256,7 +258,7 @@ const HOUR_FROM = 8;
 const HOUR_TO = 20;
 
 /** Team day: members side by side for one day, with their hours, time off, busy time and meetings. Drag (or Enter) on empty time picks it. */
-function TeamDay({ state, week, onWeek, menu, onOpen }: { readonly state: BookingsState; readonly week: number; readonly onWeek: (w: number) => void; readonly menu: (p: PickedTime, close: () => void) => ReactNode; readonly onOpen: (id: string) => void }) {
+function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readonly state: BookingsState; readonly week: number; readonly onWeek: (w: number) => void; readonly menu: (p: PickedTime, close: () => void) => ReactNode; readonly onOpen: (id: string) => void; readonly onReassignMany: (meetings: ReadonlyArray<BookedMeeting>) => number }) {
   const [held, setHeld] = useState<PickedTime>();
   const heldRef = useRef<HTMLSpanElement>(null);
   const onPick = (p: PickedTime) => setHeld(p);
@@ -281,6 +283,17 @@ function TeamDay({ state, week, onWeek, menu, onOpen }: { readonly state: Bookin
     <div className="tf-bkf__stack tf-bkf__stack--12">
       <DayStrip label="Day" days={days.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: counts(d), isToday: d.toDateString() === now.toDateString() }))}
         value={dayId} onChange={setDayId} onPrevious={() => onWeek(week - 1)} onNext={() => onWeek(week + 1)} />
+      {(() => {
+        // Meetings this day whose host is away: they need someone else.
+        const orphans = state.meetings.filter((m) => m.status !== 'cancelled' && m.start.toDateString() === day.toDateString() && isOff(state, m.host, day, minutesOf(m.start), minutesOf(m.end)));
+        if (!orphans.length) return null;
+        const away = [...new Set(orphans.map((m) => first(m.host)))].join(' and ');
+        return (
+          <Callout tone="warning" action={{ label: 'Find hosts', onPress: () => onReassignMany(orphans) }}>
+            {plural(orphans.length, 'meeting needs', 'meetings need')} a host: {away} {orphans.length === 1 && !away.includes(' and ') ? 'is' : 'are'} away.
+          </Callout>
+        );
+      })()}
       <div className="tf-bkf-team" style={{ '--tf-bkf-cols': TEAM.length, '--tf-bkf-hours': HOUR_TO - HOUR_FROM } as React.CSSProperties}>
         <div className="tf-bkf-team__head">
           <span />

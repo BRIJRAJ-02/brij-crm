@@ -327,6 +327,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   }}
                   onMoveBlock={(block) => { dispatch({ type: 'block/remove', id: block.id }); dispatch({ type: 'block/add', block }); }}
                   onMove={(id, day, startMin) => { const m = meetingById(id); if (m) move(m, at(day, startMin), 'is emailed the new time'); }}
+                  onReassignMany={(list) => {
+                    // Each meeting goes to whoever covers its host's time off first, then whoever is free.
+                    const n = list.reduce((sum, m) => { const off = state.timeOff.find((t) => t.member === m.host && t.from <= isoDay(m.start) && isoDay(m.start) <= t.to); return sum + reassignMany([m], off?.cover ? [off.cover, ...TEAM] : undefined); }, 0); toast({ message: n === list.length ? `${plural(n, 'meeting')} handed on` : `${n} of ${list.length} handed on; no one was free for the rest`, tone: n ? 'success' : undefined }); return n; }}
                   onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
               </div>)}
               {tab === 'pages' && (<div className="tf-bkf__panel">

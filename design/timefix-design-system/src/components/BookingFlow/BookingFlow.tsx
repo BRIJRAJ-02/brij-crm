@@ -130,6 +130,7 @@ const CLOCKS = [{ id: '12', label: '12h' }, { id: '24', label: '24h' }] as const
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
 export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy }: BookingFlowProps) {
   const [known, setKnown] = useState(prefill !== undefined);
+  const [layout, setLayout] = useState<'month' | 'list'>('month');
   const [calendar, setCalendar] = useState<'off' | 'connecting' | 'on'>('off');
   const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
   const [lastGuests, setLastGuests] = useState<ReadonlyArray<string>>([]);
@@ -202,7 +203,29 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     </aside>
   );
 
-  const pick = (
+  // List: the next open days, each with its times; picking one goes straight to details.
+  const listDays = (() => {
+    if (layout !== 'list') return [];
+    const out: Array<{ d: CalendarDate; times: ReadonlyArray<number> }> = [];
+    for (let n = 0; n < 45 && out.length < 6; n += 1) { const d = today.add({ days: n }); if (isDayOpen(d)) { const t = slotsFor(d); if (t.length) out.push({ d, times: t.slice(0, 8) }); } }
+    return out;
+  })();
+  const layoutSwitch = <SegmentedControl aria-label="Show" size="sm" items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }]} selectedKey={layout} onSelectionChange={(k) => setLayout(k === 'list' ? 'list' : 'month')} />;
+  const list = (
+    <div className="tf-booking__list">
+      <header className="tf-booking__list-head"><h3 className="tf-booking__month">Next open days</h3>{layoutSwitch}</header>
+      {listDays.length === 0 && <p className="tf-booking__none">No open times in the next six weeks.</p>}
+      {listDays.map(({ d, times }) => (
+        <section key={d.toString()} className="tf-booking__list-day" aria-label={dayLabel(d, { weekday: 'long', day: 'numeric', month: 'long' })}>
+          <h4 className="tf-booking__list-date tf-num">{dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' })}</h4>
+          <div className="tf-booking__list-times">
+            {times.map((m) => <AriaButton key={m} className="tf-booking__time tf-booking__time--sm" onPress={() => { setDate(d); setTime(m); setStep('details'); }}>{formatClock(m, hour12)}</AriaButton>)}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+  const pick = layout === 'list' ? list : (
     <div className="tf-booking__pick">
       <Calendar aria-label="Date" value={date ?? null} onChange={pickDay} focusedValue={focused} onFocusChange={onFocus}
         minValue={today} isDateUnavailable={(d) => !isDayOpen(d as CalendarDate)} className="tf-booking__cal">
@@ -211,6 +234,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
             {dayLabel(focused, { month: 'long' })} <span className="tf-booking__year">{focused.year}</span>
           </h3>
           <span className="tf-booking__arrows">
+            {layoutSwitch}
             <IconButton slot="previous" label="Previous month" size="sm"><ChevronLeft {...i16} /></IconButton>
             <IconButton slot="next" label="Next month" size="sm"><ChevronRight {...i16} /></IconButton>
           </span>

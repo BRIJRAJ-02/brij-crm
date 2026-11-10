@@ -2,7 +2,7 @@
 // a hidden page, a page offering only picked times, and the booking chat.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CalendarDate } from '@internationalized/date';
-import { ArrowLeft, CalendarClock, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
 import type { BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BookingChat, type BookingChatLine, type BookingChatBooked } from '../BookingChat/BookingChat.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
@@ -21,10 +21,10 @@ import { GuestView, i14 } from './parts.tsx';
 import { PLACES, at, dayFrom, first, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
 
 /** What the guest view plays. */
-export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat';
+export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile';
 /** Each scenario's name in the Demo menu. */
 export const GUEST_SCENARIOS: ReadonlyArray<{ readonly id: GuestScenario; readonly label: string }> = [
-  { id: 'book', label: 'Book a time' }, { id: 'pending', label: 'A request waiting' }, { id: 'manage', label: 'Manage a booking' },
+  { id: 'book', label: 'Book a time' }, { id: 'profile', label: 'Your profile page' }, { id: 'pending', label: 'A request waiting' }, { id: 'manage', label: 'Manage a booking' },
   { id: 'offered', label: 'Picked times only' }, { id: 'chat', label: 'Book by chat' }, { id: 'expired', label: 'An expired one-time link' }, { id: 'hidden', label: 'A hidden page' },
 ];
 
@@ -64,7 +64,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
         <span className="tf-bkf-guestmode__label"><Eye {...i14} aria-hidden="true" />Viewing as a guest</span>
         <SegmentedControl aria-label="Device" size="sm" selectedKey={device} onSelectionChange={(k) => setDevice(k === 'phone' ? 'phone' : 'desktop')}
           items={[{ id: 'desktop', label: 'Desktop', icon: <Monitor {...i14} /> }, { id: 'phone', label: 'Phone', icon: <Smartphone {...i14} /> }]} />
-        <span className="tf-bkf-guestmode__url">{pageUrl(page.slug)}</span>
+        <span className="tf-bkf-guestmode__url">{play?.scenario === 'profile' ? `timefix.com/${first(page.owner).toLowerCase()}` : pageUrl(page.slug)}</span>
         <span className="tf-bkf__spacer" />
         <AriaButton ref={back} className="tf-bkf-guestmode__back" onPress={onClose}><ArrowLeft {...i14} aria-hidden="true" />Back to Bookings</AriaButton>
       </header>
@@ -104,7 +104,43 @@ function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onG
   if (scenario === 'manage') return <Manage page={page} state={state} meeting={state.meetings.find((m) => m.id === meetingId) ?? state.meetings.find((m) => m.pageId === page.id && m.status === 'confirmed' && m.start > new Date())} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} />;
   if (scenario === 'offered') return <Offered page={page} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
+  if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} />;
   return <Book page={page} state={state} onBooked={onBooked} />;
+}
+
+/** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
+function Profile({ owner, state, onBooked }: { readonly owner: string; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
+  const [open, setOpen] = useState<string>();
+  const pages = state.pages.filter((p) => p.isOn && p.whoCanBook === 'anyone' && (p.owner === owner || p.hosts.includes(owner)) && p.hostMode !== 'collective');
+  const chosen = pages.find((p) => p.id === open);
+  if (chosen) {
+    return (
+      <div className="tf-bkf__profile-back-wrap">
+        <AriaButton className="tf-bkf__textbtn tf-bkf__profile-back" onPress={() => setOpen(undefined)}><ArrowLeft {...i14} aria-hidden="true" />All of {first(owner)}’s meetings</AriaButton>
+        <Book page={chosen} state={state} onBooked={onBooked} />
+      </div>
+    );
+  }
+  return (
+    <GuestCard align="start">
+      <div className="tf-bkf-profile">
+        <Avatar name={owner} size={56} />
+        <h1 className="tf-bkf-profile__name">{owner}</h1>
+        <p className="tf-bkf__muted">Pick a meeting to see open times.</p>
+        <ul className="tf-bkf__list-plain tf-bkf-profile__list">
+          {pages.map((p) => (
+            <li key={p.id}>
+              <AriaButton className="tf-bkf-profile__row" onPress={() => setOpen(p.id)}>
+                <span className="tf-bkf-profile__dot" data-hue={p.accent} aria-hidden="true" />
+                <span className="tf-bkf-profile__text"><strong>{p.name}</strong><span className="tf-bkf__muted tf-num">{p.durations.map((d) => `${d} min`).join(' or ')} · {PLACES[placeOf(p)].label}</span></span>
+                <ChevronRight {...i14} aria-hidden="true" />
+              </AriaButton>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </GuestCard>
+  );
 }
 
 /** The booking page, with a length or place choice first when the page offers several. */

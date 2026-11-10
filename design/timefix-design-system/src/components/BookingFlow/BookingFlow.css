@@ -51,7 +51,7 @@
 .tf-booking__cal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); margin-bottom: var(--space-12); }
 .tf-booking__month, .tf-booking__slots-day { margin: 0; font: 500 16px/24px var(--font-sans); color: var(--text); outline: none; }
 .tf-booking__year { color: var(--text-secondary); font-weight: 400; }
-.tf-booking__arrows { display: inline-flex; gap: var(--space-2); }
+.tf-booking__arrows { display: inline-flex; align-items: center; gap: var(--space-4); }
 .tf-booking__month[data-dir='forward'] { animation: tf-booking-name-up var(--duration-fast) var(--ease-in-out) both; }
 .tf-booking__month[data-dir='back'] { animation: tf-booking-name-down var(--duration-fast) var(--ease-in-out) both; }
 @keyframes tf-booking-name-up { from { opacity: 0; transform: translateY(var(--distance-micro)); filter: blur(var(--blur-small)); } }
@@ -172,3 +172,11 @@
 .tf-booking__as-label { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
 .tf-booking__as-text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-booking__as-email { overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+
+/* List: the next open days, each a date over a wrap of its times. */
+.tf-booking__list { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+.tf-booking__list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+.tf-booking__list-day { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-booking__list-date { margin: 0; color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-booking__list-times { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tf-booking__time--sm { width: auto; min-width: calc(var(--size-control-lg) * 2); height: var(--size-control); padding: 0 var(--space-12); }

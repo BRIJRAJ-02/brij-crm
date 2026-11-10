@@ -54,7 +54,9 @@ export interface OfferedTimes { readonly id: string; readonly slots: ReadonlyArr
 /** Who takes a page's meetings. */
 export type HostMode = 'one' | 'collective' | 'roundrobin' | 'managed';
 /** How round robin shares meetings out. */
-export type ShareOut = 'equal' | 'weighted' | 'priority';
+export type ShareOut = 'equal' | 'even' | 'weighted' | 'priority';
+/** Parts of a managed page members can't change on their copy. */
+export type LockedPart = 'length' | 'where' | 'questions' | 'look';
 
 /** One booking page. Every page is born bookable: the host's hours, 30 minutes, Google Meet. */
 export interface BookingPage {
@@ -88,6 +90,19 @@ export interface BookingPage {
   readonly shareOut: ShareOut;
   /** Weights (weighted) or order (priority) per host. */
   readonly weights: Readonly<Record<string, number>>;
+  /** Round robin counts meetings from the last this many days (0: this month). */
+  readonly countDays?: number;
+  /** Even: a host waits when they are this many meetings ahead of the least busy. */
+  readonly evenGap?: number;
+  /** Round robin caps: most meetings a day from this page, per host (0 none). */
+  readonly caps?: Readonly<Record<string, number>>;
+  /** Managed: what members can't change on their copy, and what each copy has changed. */
+  readonly locked?: ReadonlyArray<LockedPart>;
+  readonly drift?: Readonly<Record<string, ReadonlyArray<LockedPart>>>;
+  /** Which emails go out (guest: confirm, change, cancel, after; host: booked, cancelled). Undefined is all of them. */
+  readonly emails?: ReadonlyArray<string>;
+  /** Who besides admins may edit this page. */
+  readonly editors?: ReadonlyArray<string>;
   readonly groupId?: string;
   readonly whoCanBook: 'anyone' | 'form';
   readonly formName: string;
@@ -184,6 +199,10 @@ export interface BookingsState {
   readonly memberHours: Readonly<Record<string, WeekHours>>;
   /** One person's hours on one date only ("Name|YYYY-MM-DD"); the usual week applies everywhere else. */
   readonly overrides?: Readonly<Record<string, DayHours>>;
+  /** Where someone works when it isn't your time zone ("London"). */
+  readonly memberZones?: Readonly<Record<string, string>>;
+  /** Who may change a person's schedule: themselves and admins, or admins only. */
+  readonly access?: Readonly<Record<string, 'self' | 'admins'>>;
   /** Per person meeting limits across all pages. */
   readonly limits?: Readonly<Record<string, MeetingLimits>>;
   readonly timeOff: ReadonlyArray<TimeOff>;
@@ -210,6 +229,7 @@ export type BookingsAction =
   | { readonly type: 'timeoff/set'; readonly timeOff: ReadonlyArray<TimeOff> }
   | { readonly type: 'member/hours'; readonly name: string; readonly hours: WeekHours }
   /** Sets (or, with null, clears) date-only hours; keys are "Name|YYYY-MM-DD". */
+  | { readonly type: 'access/set'; readonly name: string; readonly access: 'self' | 'admins' }
   | { readonly type: 'limits/set'; readonly name: string; readonly limits: MeetingLimits }
   | { readonly type: 'overrides/merge'; readonly patch: Readonly<Record<string, DayHours | null>> }
   | { readonly type: 'calendar/set'; readonly calendars: ReadonlyArray<CalendarAccount>; readonly health?: CalendarHealth }
@@ -243,6 +263,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'hours/saved': return { ...state, savedHours: action.savedHours, defaultHoursId: action.defaultHoursId };
     case 'timeoff/set': return { ...state, timeOff: action.timeOff };
     case 'member/hours': return { ...state, memberHours: { ...state.memberHours, [action.name]: action.hours } };
+    case 'access/set': return { ...state, access: { ...(state.access ?? {}), [action.name]: action.access } };
     case 'limits/set': return { ...state, limits: { ...(state.limits ?? {}), [action.name]: action.limits } };
     case 'overrides/merge': {
       const next: Record<string, DayHours> = { ...(state.overrides ?? {}) };
@@ -364,10 +385,18 @@ function memberFree(state: BookingsState, page: BookingPage | undefined, member:
 }
 /** Who would take a slot: for round robin, the free host with the fewest meetings this month (or by weight or priority). */
 export function hostFor(state: BookingsState, page: BookingPage, date: Date, start: number, end: number): string | undefined {
-  const free = activeHosts(state, page).filter((h) => memberFree(state, page, h, date, start, end));
+  // A host at their daily cap on this page sits the day out.
+  const capped = (h: string) => { const cap = page.caps?.[h] ?? 0; return cap > 0 && state.meetings.filter((m) => m.pageId === page.id && m.host === h && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString()).length >= cap; };
+  const free = activeHosts(state, page).filter((h) => memberFree(state, page, h, date, start, end) && !(page.hostMode === 'roundrobin' && capped(h)));
   if (page.hostMode === 'collective') return free.length === activeHosts(state, page).length ? page.hosts[0] : undefined;
   if (page.hostMode !== 'roundrobin') return free[0];
   const spread = monthSpread(state, page, date);
+  if (page.shareOut === 'even') {
+    // Even: whoever is ahead by the gap waits, so turns stay level.
+    const least = Math.min(...activeHosts(state, page).map((h) => spread[h] ?? 0));
+    const ok = free.filter((h) => (spread[h] ?? 0) - least < Math.max(1, page.evenGap ?? 1));
+    return [...(ok.length ? ok : free)].sort((a, b) => (spread[a] ?? 0) - (spread[b] ?? 0))[0];
+  }
   const score = (h: string) => (page.shareOut === 'priority' ? (page.weights[h] ?? 9) * 1000 + (spread[h] ?? 0)
     : page.shareOut === 'weighted' ? (spread[h] ?? 0) / Math.max(1, page.weights[h] ?? 1) : spread[h] ?? 0);
   return [...free].sort((a, b) => score(a) - score(b))[0];
@@ -376,8 +405,12 @@ export function hostFor(state: BookingsState, page: BookingPage, date: Date, sta
 export function monthSpread(state: BookingsState, page: BookingPage, now: Date): Readonly<Record<string, number>> {
   const out: Record<string, number> = {};
   page.hosts.forEach((h) => { out[h] = 0; });
+  // The count window: this month, or the last N days (and anything already booked ahead).
+  const since = page.countDays ? now.getTime() - page.countDays * 86_400_000 : undefined;
   state.meetings.forEach((m) => {
-    if (m.pageId === page.id && m.status !== 'cancelled' && m.start.getMonth() === now.getMonth() && m.start.getFullYear() === now.getFullYear()) out[m.host] = (out[m.host] ?? 0) + 1;
+    if (m.pageId !== page.id || m.status === 'cancelled') return;
+    const inside = since !== undefined ? m.start.getTime() >= since : m.start.getMonth() === now.getMonth() && m.start.getFullYear() === now.getFullYear();
+    if (inside) out[m.host] = (out[m.host] ?? 0) + 1;
   });
   return out;
 }

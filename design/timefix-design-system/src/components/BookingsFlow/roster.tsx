@@ -2,7 +2,7 @@
 // several people's usual hours set at once; each day's totals at the foot; search and a team filter.
 import { useState } from 'react';
 import { Button as AriaButton, DialogTrigger, type Key } from 'react-aria-components';
-import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, RotateCcw, Settings2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Globe, MoreHorizontal, RotateCcw, Settings2, Users } from 'lucide-react';
 import { HoursEditor, summarizeHours, HOURS_DAYS, type DayHours, type WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
@@ -20,7 +20,7 @@ import { useToast } from '../Toast/Toast.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
-import { Section, TabToolbar, i14, i16 } from './parts.tsx';
+import { Section, SettingRow, TabToolbar, i14, i16 } from './parts.tsx';
 import { LimitsSection, TimeOffSection } from './availability.tsx';
 import { weekdays } from './seed.ts';
 import {
@@ -127,6 +127,8 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
                   <Avatar name={name} size={28} />
                   <span className="tf-bkf-roster__whotext">
                     <span className="tf-bkf-roster__name">{name === HOST ? `${first(name)} (you)` : first(name)}</span>
+                    {state.access?.[name] === 'admins' && <span className="tf-bkf-roster__total">Admins only</span>}
+                    {state.memberZones?.[name] && <span className="tf-bkf-roster__total"><Globe size={12} strokeWidth={1.75} aria-hidden="true" /> {state.memberZones[name]} time</span>}
                     <span className="tf-bkf-roster__total tf-num">{Math.round(days.reduce((s, d) => s + (isOff(state, name, d) ? 0 : dayMinutes(hoursOn(state, name, d).hours)), 0) / 60)} h this week</span>
                   </span>
                 </AriaButton>
@@ -252,13 +254,24 @@ function PersonDrawer({ name, state, dispatch, onReassignMany, onClose }: { read
   const groups = state.groups.filter((g) => g.members.some((m) => m.name === name));
   const setPaused = (gid: string, paused: boolean) => dispatch({ type: 'groups/set', groups: state.groups.map((g) => (g.id === gid ? { ...g, members: g.members.map((m) => (m.name === name ? { ...m, paused } : m)) } : g)) });
   return (
-    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={name} subtitle={`${summarizeHours(hours)}, India time · ${Math.round(weekMinutes(hours) / 60)} h a week`} leading={<Avatar name={name} size={32} />} width="lg">
+    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={name} subtitle={`${summarizeHours(hours)}, ${state.memberZones?.[name] ?? 'India'} time · ${Math.round(weekMinutes(hours) / 60)} h a week`} leading={<Avatar name={name} size={32} />} width="lg">
       <div className="tf-bkf-cards">
         <Section title="Usual week" description="When guests can book them, every week." className="tf-bkf-card">
           <HoursEditor value={hours} onChange={(h) => setHours(name, h)} />
         </Section>
         <div className="tf-bkf-card"><LimitsSection state={state} dispatch={dispatch} name={name} /></div>
         <div className="tf-bkf-card"><TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} only={name} /></div>
+        <Section title="Access" description="Admins can always change anyone's schedule." className="tf-bkf-card">
+          <div className="tf-bkf-settings">
+            <SettingRow title="Who can change this" description={name === HOST ? 'Your own schedule.' : `${first(name)}'s hours, time off and limits.`}>
+              <Select label="Who can change this" isLabelHidden className="tf-bkf__inline-select" value={state.access?.[name] ?? 'self'} onChange={(v) => { if (v) dispatch({ type: 'access/set', name, access: v === 'admins' ? 'admins' : 'self' }); }}
+                items={[{ id: 'self', label: name === HOST ? 'You and admins' : `${first(name)} and admins` }, { id: 'admins', label: 'Admins only' }]} />
+            </SettingRow>
+            <SettingRow title="Time zone" description="Hours are kept in their own time.">
+              <span className="tf-bkf__muted">{state.memberZones?.[name] ?? 'India'} time</span>
+            </SettingRow>
+          </div>
+        </Section>
         <Section title="Round robin" description="Paused people are skipped for new meetings." className="tf-bkf-card">
           {groups.length === 0 ? <p className="tf-bkf__muted">Not in any round robin.</p> : (
             <ul className="tf-bkf__list-plain">

@@ -68,7 +68,10 @@ export function northwind(now: Date = new Date()): BookingsState {
     questions: [q('q-co2', 'Company', 'short', { required: true }), q('q-size', 'Team size', 'dropdown', { options: ['1–10', '11–50', '51–200', '200+'] })],
     offers: [{ id: 'off-1', slots: [{ day: isoDay(wd(3)), start: 10 * 60 }, { day: isoDay(wd(3)), start: 14 * 60 }, { day: isoDay(wd(4)), start: 11 * 60 }], created: isoDay(dayFrom(now, -1)) }] });
   const onboarding = add({ id: 'p-onboarding', name: 'Onboarding', durations: [60], owner: 'Sam Kim', hostMode: 'roundrobin', hosts: ['Sam Kim', 'Jo Mendes', 'Ava Chen'], groupId: 'g-onboard',
-    shareOut: 'equal', weights: { 'Sam Kim': 1, 'Jo Mendes': 1, 'Ava Chen': 1 }, accent: 'green', stats: { views: 190, bookings: 27, showRate: 95 } });
+    shareOut: 'even', evenGap: 2, countDays: 30, caps: { 'Jo Mendes': 3 }, weights: { 'Sam Kim': 1, 'Jo Mendes': 1, 'Ava Chen': 1 }, accent: 'green', stats: { views: 190, bookings: 27, showRate: 95 } });
+  // A managed page: each member has their own copy; length and questions are locked.
+  add({ id: 'p-intro', name: 'Intro call', durations: [20], hostMode: 'managed', hosts: ['Priya Raman', 'Sam Kim', 'Ava Chen'], shareOut: 'equal', weights: {}, accent: 'purple',
+    locked: ['length', 'questions'], drift: { 'Sam Kim': ['where'], 'Ava Chen': ['length'] }, editors: ['Sam Kim'], stats: { views: 74, bookings: 9, showRate: 94 } });
   add({ id: 'p-quick', name: 'Quick chat', durations: [15, 30], isOn: false, places: ['meet', 'phone'], accent: 'orange', stats: { views: 33, bookings: 4, showRate: 100 } });
   const site = add({ id: 'p-site', name: 'Site visit', durations: [60], places: ['in-person'], address: 'Northwind office, 12 Harbour Street', accent: 'sky', bufferBefore: 30, bufferAfter: 30, perDay: 1, stats: { views: 58, bookings: 6, showRate: 100 } });
   const support = add({ id: 'p-support', name: 'Support call', owner: 'Jo Mendes', hosts: ['Jo Mendes'], whoCanBook: 'form', formName: 'Support request', places: ['phone'], accent: 'yellow',
@@ -107,6 +110,8 @@ export function northwind(now: Date = new Date()): BookingsState {
   book(discovery, wd(3), 12, HOST, 'cancelled'); book(onboarding, wd(4), 13, 'Ava Chen'); book(demo, wd(4), 10.5, HOST, 'pending');
   book(discovery, wd(5), 10, HOST); book(discovery, wd(6), 16, HOST); book(onboarding, wd(7), 11, 'Sam Kim', 'cancelled');
   book(discovery, wd(8), 14, HOST); book(site, wd(9), 10, HOST);
+  // Booked before Jo took the Thursday off: it needs a host now.
+  book(support, next(4), 11, 'Jo Mendes');
   meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
 
   // Google holds lunch every weekday and one dentist visit that lands on a booked call.
@@ -133,6 +138,8 @@ export function northwind(now: Date = new Date()): BookingsState {
     defaultHoursId: 'working',
     memberHours: { 'Sam Kim': weekdays(8, 16, 's'), 'Ava Chen': weekdays(10, 18, 'a') },
     timeOff: [{ id: 'off-jo', member: 'Jo Mendes', from: isoDay(thu), to: isoDay(fri), allDay: true, start: 0, end: 0, note: 'Family trip', reason: 'vacation', cover: 'Ava Chen' }],
+    memberZones: { 'Ava Chen': 'London' },
+    access: { 'Jo Mendes': 'admins' },
     // Ava covers the afternoon while Jo is away: a change for that date only.
     overrides: { [`Ava Chen|${isoDay(thu)}`]: { on: true, ranges: r('ov-a', 12, 20) } },
     calendars: [

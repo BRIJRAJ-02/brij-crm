@@ -27,7 +27,7 @@ import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, Scaled
 import { uniqueSlug } from './seed.ts';
 import {
   HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
-  type BookingPage, type BookingsState, type HostMode, type PlaceKind,
+  type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut,
 } from './state.ts';
 
 const LENGTHS = [15, 30, 45, 60, 90];
@@ -59,6 +59,17 @@ export interface PageEditorProps {
 }
 
 /** The page editor. */
+const ALL_EMAILS: ReadonlyArray<string> = ['confirm', 'change', 'cancel', 'after', 'host-booked', 'host-cancel'];
+const SHARE_HELP: Readonly<Record<ShareOut, string>> = {
+  equal: 'The free host with the fewest meetings takes it.',
+  even: 'Everyone takes a turn; whoever is ahead waits.',
+  weighted: 'Some hosts take a bigger share.',
+  priority: 'The first free host in your order takes it.',
+};
+const LOCKABLE: ReadonlyArray<{ readonly id: LockedPart; readonly label: string }> = [
+  { id: 'length', label: 'Length' }, { id: 'where', label: 'Where' }, { id: 'questions', label: 'Questions' }, { id: 'look', label: 'Look' },
+];
+
 export function PageEditor({ page, draft, state, section, onDraft, onBack, onSave, onToggle, onShare, onMore, onGuest, onMeetings, onManageGroups }: PageEditorProps) {
   const [save, setSave] = useState<SaveState>('idle');
   const now = new Date();
@@ -204,29 +215,77 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       </div>
                     )}
                     {draft.hostMode === 'roundrobin' && (
-                      <div className="tf-bkf__stack tf-bkf__stack--12">
-                        <span className="tf-bkf__label">How it's shared out</span>
-                        <SegmentedControl aria-label="How it's shared out" size="sm" selectedKey={draft.shareOut} onSelectionChange={(k) => set({ shareOut: k === 'weighted' ? 'weighted' : k === 'priority' ? 'priority' : 'equal' })}
-                          items={[{ id: 'equal', label: 'Equally' }, { id: 'weighted', label: 'Weighted' }, { id: 'priority', label: 'By priority' }]} />
-                        {draft.shareOut !== 'equal' && (
-                          <div className="tf-bkf__weights">
+                      <div className="tf-bkf-settings tf-bkf-settings--ruled">
+                        <SettingRow title="How it's shared out" description={SHARE_HELP[draft.shareOut]}>
+                          <Select label="How it's shared out" isLabelHidden className="tf-bkf__inline-select" value={draft.shareOut} onChange={(k) => { if (k) set({ shareOut: k as ShareOut }); }}
+                            items={[{ id: 'equal', label: 'Fewest first' }, { id: 'even', label: 'Strict turns' }, { id: 'weighted', label: 'Weighted' }, { id: 'priority', label: 'By priority' }]} />
+                        </SettingRow>
+                        {draft.shareOut === 'even' && (
+                          <SettingRow title="Waits when ahead by" description="Someone this many meetings ahead sits out until the rest catch up.">
+                            <NumberField aria-label="Waits when ahead by" value={draft.evenGap ?? 1} minValue={1} maxValue={5} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ evenGap: n }); }} />
+                          </SettingRow>
+                        )}
+                        {(draft.shareOut === 'weighted' || draft.shareOut === 'priority') && (
+                          <div className="tf-bkf-setting__more tf-bkf__weights">
                             {draft.hosts.map((h) => (
                               <NumberField key={h} label={h} description={draft.shareOut === 'weighted' ? 'Share of meetings' : '1 goes first'} value={draft.weights[h] ?? 1} minValue={1} maxValue={draft.shareOut === 'weighted' ? 10 : draft.hosts.length}
                                 onChange={(n) => set({ weights: { ...draft.weights, [h]: Number.isFinite(n) ? n : 1 } })} />
                             ))}
                           </div>
                         )}
-                        <div className="tf-bkf__spread">
-                          <span className="tf-bkf__label">This month so far</span>
+                        <SettingRow title="Count meetings from" description="Who is ahead is judged over this window.">
+                          <Select label="Count meetings from" isLabelHidden className="tf-bkf__inline-select" value={String(draft.countDays ?? 0)} onChange={(k) => set({ countDays: Number(k ?? 0) })}
+                            items={[{ id: '0', label: 'This month' }, { id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }]} />
+                        </SettingRow>
+                        <SettingRow title="Most a day, each" description="Someone at their cap sits the day out. Empty is no cap.">
+                          <span className="tf-bkf-caps">
+                            {draft.hosts.map((h) => (
+                              <NumberField key={h} label={first(h)} showSteppers={false} value={(draft.caps?.[h] ?? 0) || Number.NaN} minValue={1} maxValue={20} placeholder="No cap"
+                                onChange={(n) => set({ caps: { ...(draft.caps ?? {}), [h]: Number.isFinite(n) ? n : 0 } })} />
+                            ))}
+                          </span>
+                        </SettingRow>
+                        <div className="tf-bkf-setting__more tf-bkf__spread">
+                          <span className="tf-bkf__label">{draft.countDays ? `Last ${draft.countDays} days` : 'This month so far'}</span>
                           {draft.hosts.map((h) => <Meter key={h} label={h} value={spread[h] ?? 0} maxValue={maxSpread} valueLabel={plural(spread[h] ?? 0, 'meeting')} warnAt={2} dangerAt={2} />)}
+                          <Button size="sm" variant="secondary" icon={<Settings2 {...i14} />} onPress={onManageGroups}>Manage groups</Button>
                         </div>
-                        <Button size="sm" variant="secondary" icon={<Settings2 {...i14} />} onPress={onManageGroups}>Manage groups</Button>
+                      </div>
+                    )}
+                    {draft.hostMode === 'managed' && (
+                      <div className="tf-bkf-settings tf-bkf-settings--ruled">
+                        <SettingRow title="Locked for members" description="Members can't change these on their copy. Saving here updates every copy.">
+                          <ChoiceChips label="Locked for members" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.locked ?? ['length', 'questions']}
+                            items={LOCKABLE} onSelectionChange={(k) => set({ locked: [...k] as LockedPart[] })} />
+                        </SettingRow>
+                        <div className="tf-bkf-setting__more">
+                          <ul className="tf-bkf__list-plain tf-bkf-copies">
+                            {draft.hosts.map((h) => {
+                              const changed = (draft.drift?.[h] ?? []).filter((x) => !(draft.locked ?? ['length', 'questions']).includes(x));
+                              const stale = (draft.drift?.[h] ?? []).filter((x) => (draft.locked ?? ['length', 'questions']).includes(x));
+                              return (
+                                <li key={h} className="tf-bkf-copies__row">
+                                  <Avatar name={h} size={24} />
+                                  <span className="tf-bkf-copies__text"><strong>{first(h)}’s copy</strong><span className="tf-bkf__muted tf-num">timefix.com/{first(h).toLowerCase()}/{draft.slug}</span></span>
+                                  {stale.length > 0 ? <Tag size="sm" hue="orange">Behind on {stale.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
+                                    : changed.length > 0 ? <Tag size="sm" hue="gray">Changed {changed.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
+                                    : <Tag size="sm" hue="green">In sync</Tag>}
+                                  {stale.length > 0 && <Button size="sm" variant="ghost" onPress={() => set({ drift: { ...(draft.drift ?? {}), [h]: changed } })}>Update copy</Button>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
                       </div>
                     )}
                     <div className="tf-bkf-settings tf-bkf-settings--ruled">
                     <SettingRow title="Who can book" description={draft.whoCanBook === 'form' ? 'Guests see times after they send the form.' : 'Anyone with the link picks a time.'}>
                       <SegmentedControl aria-label="Who can book" size="sm" selectedKey={draft.whoCanBook} onSelectionChange={(v) => set({ whoCanBook: v === 'form' ? 'form' : 'anyone', formName: v === 'form' ? draft.formName || 'Support request' : draft.formName })}
                         items={[{ id: 'anyone', label: 'Anyone' }, { id: 'form', label: 'Through a form' }]} />
+                    </SettingRow>
+                    <SettingRow title="Who can edit" description="Admins always can. Others you pick here can change this page too.">
+                      <ChoiceChips label="Who can edit" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.editors ?? []}
+                        items={TEAM.filter((n) => n !== draft.owner).map((n) => ({ id: n, label: first(n) }))} onSelectionChange={(k) => set({ editors: [...k] })} />
                     </SettingRow>
                     {draft.whoCanBook === 'form' && (
                       <SettingRow title="Form" description="The form guests fill in first.">
@@ -256,6 +315,16 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     <SettingRow title="Reminders" description="Emails to the guest before the meeting.">
                       <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.reminders}
                         items={[{ id: 'day', label: 'A day before' }, { id: 'hour', label: 'An hour before' }]} onSelectionChange={(k) => set({ reminders: [...k] })} />
+                    </SettingRow>
+                    <SettingRow title="Emails to the guest" description="Each one goes from your address, with the meeting details.">
+                      <ChoiceChips label="Emails to the guest" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.emails ?? ALL_EMAILS}
+                        items={[{ id: 'confirm', label: 'Confirmation' }, { id: 'change', label: 'Changes' }, { id: 'cancel', label: 'Cancellations' }, { id: 'after', label: 'Thank-you after' }]}
+                        onSelectionChange={(k) => set({ emails: [...(draft.emails ?? ALL_EMAILS).filter((e) => e.startsWith('host-')), ...k] })} />
+                    </SettingRow>
+                    <SettingRow title="Emails to you" description="Your hosts get the same.">
+                      <ChoiceChips label="Emails to you" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={(draft.emails ?? ALL_EMAILS).filter((e) => e.startsWith('host-'))}
+                        items={[{ id: 'host-booked', label: 'New bookings' }, { id: 'host-cancel', label: 'Cancellations' }]}
+                        onSelectionChange={(k) => set({ emails: [...(draft.emails ?? ALL_EMAILS).filter((e) => !e.startsWith('host-')), ...k] })} />
                     </SettingRow>
                     <SettingRow title="After they book" description={draft.after === 'redirect' ? 'They go to your web page.' : 'They see a thank-you with the details.'}>
                       <SegmentedControl aria-label="After they book" size="sm" selectedKey={draft.after} onSelectionChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}
