@@ -9,8 +9,8 @@ const hours = (minutes: number): string => {
 
 /** The Team week's words. */
 export const teamWeekStrings = {
-  title: 'Roster',
-  grid: (range: string) => `Roster, ${range}`,
+  title: 'Team hours',
+  grid: (range: string) => `Team hours, ${range}`,
   /** A day's column heading: the weekday first, then the date ("Mon 2"). */
   dayShort: (weekday: string, date: string) => `${weekday} ${date}`,
   person: 'Team member',

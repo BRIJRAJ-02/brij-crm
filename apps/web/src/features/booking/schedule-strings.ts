@@ -4,6 +4,8 @@ export const scheduleStrings = {
   schedules: 'Schedules',
   schedule: 'Schedule',
   newSchedule: 'New schedule',
+  /** New schedule's note in the schedules list once the member holds as many as they may. */
+  newScheduleFull: 'At the limit of 20',
   createSchedule: 'Create schedule',
   creatingSchedule: 'Creating',
   name: 'Name',

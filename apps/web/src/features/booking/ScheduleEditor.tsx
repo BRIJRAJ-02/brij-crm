@@ -212,10 +212,12 @@ function ZoneSelect({
     return zoneItems(value, at).map((zone) => ({ ...zone, label: zoneLabel(zone.id, at.getTime()) }));
   }, [value]);
   return (
+    // A line of text at the card's head, as the mock names it ("India time (GMT+5:30)"), that still opens the zone
+    // search: the inline variant, the one a booking page's rail names the visitor's zone with.
     <Select
       label={strings.timeZone}
       isLabelHidden
-      size="sm"
+      variant="inline"
       items={zones}
       filter={zoneMatches}
       isSearchable
