@@ -225,11 +225,13 @@ test.describe('a team link', () => {
     await checkScreen(page, 'team-link-resume-refused');
     await guestContext.close();
 
-    // Delete asks first.
+    // Delete asks nothing (Undo deletes stay one click): back on Pages, the card is gone and Undo brings it back.
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Delete booking page' }).click();
-    await expect(page.getByRole('alertdialog', { name: 'Delete “Team Link”?' })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/bookings\/pages$/);
+    await expect(page.getByText('Deleted “Team Link”.')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Team Link/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByRole('link', { name: /Team Link/ }).first()).toBeVisible();
   });
 });

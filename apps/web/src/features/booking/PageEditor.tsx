@@ -94,12 +94,11 @@ import { useScheduleDraft } from './scheduleDraft.ts';
 import { changed, draftAfterSave } from './pageDraft.ts';
 import { bookingsTabHref } from '../bookings/tabs.ts';
 import { strings as capturesStrings } from '../captures/strings.ts';
-import { DeletePageDialog } from './DeletePageDialog.tsx';
+import { deletePageWithUndo } from './delete-page.ts';
 import {
   availabilityHref,
   calendarsHref,
   isNotOlder,
-  linksHref,
   PAGE_TABS,
   pageEditorHref,
   pagePreviewHref,
@@ -563,7 +562,13 @@ export function PageEditor({
       () => toasts.toast({ tone: 'danger', message: strings.duplicateFailed(page.title) }),
     );
   };
-  const [isDeleting, setDeleting] = useState(false);
+  // Delete with Undo, no confirm, as a card's Delete on Pages (the house rule: Undo deletes stay one click): back to
+  // Pages, where the page is already gone and the toast offers Undo for ten seconds. Its unsaved changes go with it,
+  // so leaving never asks.
+  const deletePage = () => {
+    deletePageWithUndo(data, toasts, slug, page);
+    void navigate({ href: bookingsTabHref(slug, 'pages'), ignoreBlocker: true });
+  };
 
   // The questions Save gives a People attribute, with no prompt (spec 0057, AC-5707): the same planning a form's
   // publish uses, offered only to someone who may add attributes, while the page files into the CRM.
@@ -1118,7 +1123,7 @@ export function PageEditor({
                     readVersions();
                   }
                   if (key === 'discard') discardChanges();
-                  if (key === 'delete') setDeleting(true);
+                  if (key === 'delete') deletePage();
                 }}
               >
                 {!isLocked && page.ownerName === undefined && page.isEditor !== true && (
@@ -1191,18 +1196,6 @@ export function PageEditor({
                 />
               )}
             </Modal>
-            <DeletePageDialog
-              page={isDeleting ? page : undefined}
-              onClose={() => setDeleting(false)}
-              onDelete={(gone) =>
-                data.bookingPages.remove(slug, gone.id).then(() => {
-                  setDeleting(false);
-                  toasts.toast({ tone: 'success', message: strings.deleted(gone.title) });
-                  // The page is gone, so its unsaved changes are too: going back to Links never asks.
-                  void navigate({ href: linksHref(slug), ignoreBlocker: true });
-                })
-              }
-            />
             <Modal
               title={strings.versionHistory}
               isOpen={isVersionsOpen}

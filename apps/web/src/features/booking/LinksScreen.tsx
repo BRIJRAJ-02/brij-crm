@@ -14,12 +14,11 @@ import {
   MenuSeparator,
   MenuTrigger,
   Modal,
-  sharedStrings,
   Tooltip,
   type LinkGridCard,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { useCapturesCreate } from '../captures/create.tsx';
@@ -32,6 +31,7 @@ import { liveRefusal, setPageLive } from './page-status.ts';
 import { PageStatusMenu } from './PageStatusMenu.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { strings } from './strings.ts';
+import { deletePageWithUndo } from './delete-page.ts';
 import { hasNoHostsOn } from './team-readiness.ts';
 
 /** The groups, in the mock's order: the reader's own, the workspace's links, colleagues' pages, managed pages. */
@@ -40,9 +40,6 @@ const WORKSPACE_GROUP = 'workspace';
 const MEMBERS_GROUP = 'members';
 /** The managed pages an admin sets up (spec 0037, AC-1333): templates, not bookable pages, so a group of their own. */
 const MANAGED_GROUP = 'managed';
-
-/** How long a deleted page waits for Undo before it is deleted on the server: the Undo toast's life. */
-const UNDO_MS = 10_000;
 
 /** A page's group: the workspace's, a colleague's (AC-1273), or the reader's own. */
 const groupOf = (page: BookingPageView) =>
@@ -118,7 +115,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       failed(strings.duplicateFailed(page.title)),
     );
   };
-  const pages = list.status === 'ready' ? list.items.filter((page) => !removal.leaving.has(page.id)) : [];
+  const pages = list.status === 'ready' ? list.items : [];
   const templates = templateList.status === 'ready' ? templateList.items : [];
   // A template is not a bookable page: no pill and no Copy link. Its card opens its editor, and its menu holds the
   // one ending that is its own (deleting it keeps every member page, AC-1335).
@@ -309,77 +306,16 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
 
 /**
  * Delete with Undo and no confirm (the owner, 9 November 2026): the card leaves at once and a toast offers Undo for
- * ten seconds; only then is the page deleted on the server. Leaving the screen deletes what is still waiting, so
- * nothing is left half deleted. A refusal brings the card back and says why.
+ * ten seconds (`deletePageWithUndo`, the editor's Delete too); only then is the page deleted on the server.
  */
 function useUndoableRemove(data: DataLayer, slug: string) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
-  const waiting = useRef(
-    new Map<string, { readonly timer: ReturnType<typeof setTimeout>; readonly send: () => void }>(),
-  );
-  const back = (pageId: string) => setLeaving((current) => new Set([...current].filter((each) => each !== pageId)));
-  const send = (page: BookingPageView) => () => {
-    waiting.current.delete(page.id);
-    data.bookingPages.remove(slug, page.id).then(
-      () => back(page.id),
-      (error: unknown) => {
-        back(page.id);
-        // Someone else deleted it meanwhile: gone either way, as the toast said.
-        if (isDataError(error) && error.code === 'NOT_FOUND') return;
-        toasts.toast({
-          tone: 'danger',
-          message: `${strings.deleteFailed(page.title)} ${isDataError(error) ? error.message : strings.somethingWrong}`,
-        });
-      },
-    );
-  };
-  // Whatever still waits when the screen goes, or the tab closes or reloads, is deleted then: never left half deleted.
-  useEffect(() => {
-    const pending = waiting.current;
-    const flush = () => {
-      for (const each of pending.values()) {
-        clearTimeout(each.timer);
-        each.send();
-      }
-      pending.clear();
-    };
-    globalThis.addEventListener('pagehide', flush);
-    return () => {
-      globalThis.removeEventListener('pagehide', flush);
-      flush();
-    };
-  }, []);
   const remove = (page: BookingPageView) => {
-    setLeaving((current) => new Set([...current, page.id]));
-    const go = send(page);
-    waiting.current.set(page.id, { timer: setTimeout(go, UNDO_MS), send: go });
-    toasts.toast(
-      {
-        tone: 'success',
-        message: strings.deleted(page.title),
-        action: {
-          label: capturesStrings.undo,
-          onAction: () => {
-            const held = waiting.current.get(page.id);
-            if (held === undefined) {
-              toasts.toast({ tone: 'danger', message: sharedStrings.undoStale });
-              return;
-            }
-            clearTimeout(held.timer);
-            waiting.current.delete(page.id);
-            back(page.id);
-            // Focus goes to the card that came back, rather than falling to the page with the toast.
-            focusLater(() => document.querySelector<HTMLElement>(`a[href$="/captures/links/${page.id}"]`) ?? undefined);
-          },
-        },
-      },
-      { timeout: UNDO_MS },
-    );
+    deletePageWithUndo(data, toasts, slug, page);
     // The card's menu went with it: focus goes to the page's title rather than falling to the page.
     focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
   };
-  return { leaving, remove };
+  return { remove };
 }
 
 /** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape. */
