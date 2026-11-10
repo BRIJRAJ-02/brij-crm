@@ -165,7 +165,12 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
         const c = rows.filter((m) => m.status !== 'no-show').reduce((n, m) => n + (m.party ?? 0), 0);
         return (
           <section key={s.name} className="tf-bkf-res-group" aria-label={s.name}>
-            <h3 className="tf-bkf-res-group__h"><span>{s.name}<span className="tf-bkf__muted tf-num"> · {formatClockRange(s.start, s.end)}</span></span><span className="tf-bkf__muted tf-num">{plural(c, 'cover')} · {plural(rows.length, 'table')}</span></h3>
+            <h3 className="tf-bkf-res-group__h"><span>{s.name}<span className="tf-bkf__muted tf-num"> · {formatClockRange(s.start, s.end)}</span></span><span className="tf-bkf__muted tf-num">{plural(c, 'cover')} · {plural(rows.length, 'table')}{(() => {
+              // Pacing: the busiest start time against the page's cap, so the host sees a rush coming.
+              const cap = page.pacing ?? 0; if (!cap) return null;
+              const at0 = [...rows.filter((m) => m.status !== 'no-show').reduce((mp, m) => mp.set(minutesOf(m.start), (mp.get(minutesOf(m.start)) ?? 0) + (m.party ?? 0)), new Map<number, number>())].sort((x, y) => y[1] - x[1])[0];
+              return at0 ? ` · busiest ${formatClock(at0[0])}, ${at0[1]} of ${cap}` : null;
+            })()}</span></h3>
             {rows.length === 0 ? <p className="tf-bkf__muted tf-bkf-res-group__empty">No reservations yet.</p> : <ul className="tf-bkf-res-rows">{rows.map(row)}</ul>}
           </section>
         );
@@ -327,7 +332,7 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
               return (
                 <li key={t.id}>
                   <MenuTrigger>
-                    <AriaButton className="tf-bkf-floor__table" data-state={state_} data-seats={t.seats > 4 ? 'big' : t.seats > 2 ? 'mid' : 'small'} aria-label={`${t.name}, ${t.seats} seats, ${sat ? `seated, ${sat.invitee.name}` : 'free'}`}>
+                    <AriaButton className="tf-bkf-floor__table" data-state={state_} data-seats={t.seats > 4 ? 'big' : t.seats > 2 ? 'mid' : 'small'} aria-label={`${t.name}, ${t.seats} seats, ${sat ? `seated, ${sat.invitee.name}` : next ? `free until ${formatClock(minutesOf(next.start))}, then ${next.invitee.name}` : 'free'}`}>
                       <span className="tf-bkf-floor__name">{t.name}<span className="tf-bkf__muted tf-num"> · {t.seats}</span></span>
                       {sat ? (
                         <>
@@ -336,7 +341,7 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                           <span className="tf-bkf__muted tf-num">{satFor} of {turn} min</span>
                         </>
                       ) : next ? (
-                        <span className="tf-bkf__muted tf-num">{isToday ? 'Free · next ' : ''}{formatClock(minutesOf(next.start))} {first(next.invitee.name)} ({next.party})</span>
+                        <span className="tf-bkf__muted tf-num">{isToday && next.start > now ? `Free until ${formatClock(minutesOf(next.start))} · ${first(next.invitee.name)} (${next.party})` : `${formatClock(minutesOf(next.start))} · ${first(next.invitee.name)} (${next.party})`}</span>
                       ) : <span className="tf-bkf__muted">{t.online ? 'Free' : 'Free · staff only'}</span>}
                     </AriaButton>
                     <Menu aria-label={`${t.name} actions`} placement="bottom start" onAction={(k) => {

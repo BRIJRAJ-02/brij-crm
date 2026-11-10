@@ -72,7 +72,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
         <h1 className="tf-venue__name">{venue.name}</h1>
         <p className="tf-venue__line">
           {[
-            venue.rating !== undefined ? <span key="r" className="tf-venue__rating"><span className="tf-num">{venue.rating.toFixed(1)}</span><span className="tf-venue__stars" aria-hidden="true">{Array.from({ length: 5 }, (_, n) => <Star key={n} size={13} strokeWidth={0} fill="currentColor" />)}</span>{venue.reviews !== undefined && <span className="tf-venue__muted tf-num">({venue.reviews.toLocaleString('en-IN')})</span>}</span> : null,
+            venue.rating !== undefined ? <span key="r" className="tf-venue__rating" role="img" aria-label={`Rated ${venue.rating.toFixed(1)} out of 5${venue.reviews !== undefined ? ` from ${venue.reviews.toLocaleString('en-IN')} reviews` : ''}`}><span className="tf-num">{venue.rating.toFixed(1)}</span><span className="tf-venue__stars" aria-hidden="true">{Array.from({ length: 5 }, (_, n) => <Star key={n} size={13} strokeWidth={0} fill="currentColor" />)}</span>{venue.reviews !== undefined && <span className="tf-venue__muted tf-num">({venue.reviews.toLocaleString('en-IN')})</span>}</span> : null,
             <StatusDot key="s" hue={venue.isOpen ? 'green' : 'gray'}>{venue.status}</StatusDot>,
             <span key="a" className="tf-venue__muted">{venue.area ?? venue.address}</span>,
           ].filter(Boolean).flatMap((el, n) => (n === 0 ? [el] : [<span key={`d${n}`} aria-hidden="true">·</span>, el]))}
@@ -165,7 +165,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
         <aside className="tf-venue__aside" aria-label={`Book at ${venue.name}`}>
           <div className="tf-venue__card">
             <strong className="tf-venue__card-name">{venue.name}</strong>
-            {venue.rating !== undefined && <span className="tf-venue__rating"><span className="tf-num">{venue.rating.toFixed(1)}</span><span className="tf-venue__stars" aria-hidden="true">{Array.from({ length: 5 }, (_, n) => <Star key={n} size={13} strokeWidth={0} fill="currentColor" />)}</span>{venue.reviews !== undefined && <span className="tf-venue__muted tf-num">({venue.reviews.toLocaleString('en-IN')})</span>}</span>}
+            {venue.rating !== undefined && <span className="tf-venue__rating" role="img" aria-label={`Rated ${venue.rating.toFixed(1)} out of 5${venue.reviews !== undefined ? ` from ${venue.reviews.toLocaleString('en-IN')} reviews` : ''}`}><span className="tf-num">{venue.rating.toFixed(1)}</span><span className="tf-venue__stars" aria-hidden="true">{Array.from({ length: 5 }, (_, n) => <Star key={n} size={13} strokeWidth={0} fill="currentColor" />)}</span>{venue.reviews !== undefined && <span className="tf-venue__muted tf-num">({venue.reviews.toLocaleString('en-IN')})</span>}</span>}
             {aside ?? (onBookNow && <Button variant="primary" size="lg" className="tf-venue__cta" onPress={onBookNow}>{bookLabel}</Button>)}
             <hr className="tf-venue__rule" />
             <span className="tf-venue__cardline"><Clock size={16} strokeWidth={1.75} aria-hidden="true" /><StatusDot hue={venue.isOpen ? 'green' : 'gray'}>{venue.status}</StatusDot></span>

@@ -20,7 +20,7 @@ import { cx } from '../../lib/cx.ts';
 import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
-import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, personFree, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, busyReason, personFree, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
 export interface MeetingDrawerProps {
@@ -192,14 +192,15 @@ export function ReassignDialog({ meeting, state, onClose, onReassign }: { readon
   const e = minutesOf(meeting.end);
   const nextUp = page?.hostMode === 'roundrobin' ? hostFor(others, { ...page, hosts: page.hosts.filter((h) => h !== meeting.host) }, meeting.start, s, e) : undefined;
   // Free means working, not away, no other meeting and nothing busy on their calendar.
-  const free = (name: string) => personFree(state, name, meeting.start, s, e, meeting.id);
+  const why = (name: string) => busyReason(state, page, name, meeting.start, s, e, meeting.id);
   const pick = to === 'next' ? nextUp : to;
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} size="md" title={`Reassign ${meeting.title}`} description={`${meeting.invitee.name} keeps the same time; the new host gets the invitation.`}
       actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!pick} onPress={() => { if (pick) onReassign(meeting, pick); }}>Reassign</Button></>}>
       <RadioGroup label="Give it to" value={to} onChange={setTo}>
         {nextUp && <Radio value="next">Next in rotation · {nextUp}</Radio>}
-        {TEAM.filter((n) => n !== meeting.host).map((n) => <Radio key={n} value={n} isDisabled={!free(n)}>{n}{free(n) ? '' : ' · busy then'}</Radio>)}
+        {TEAM.filter((n) => n !== meeting.host).map((n) => { const r = why(n); return <Radio key={n} value={n} isDisabled={Boolean(r)}>{n}{r ? <span className="tf-bkf__muted"> · {r}</span> : ''}</Radio>; })}
+        {TEAM.filter((n) => n !== meeting.host).every((n) => why(n)) && !nextUp ? <p className="tf-bkf__muted">No one else is free then. Reschedule instead, or ask {meeting.invitee.name.split(' ')[0]} for another time.</p> : null}
       </RadioGroup>
       {page?.hostMode === 'roundrobin' && <p className={cx('tf-bkf__muted', 'tf-bkf__gap-top')}>{page.name} is shared by {plural(page.hosts.length, 'host')}.</p>}
     </Dialog>

@@ -38,7 +38,11 @@ function venueOf(state: BookingsState, now: Date): Venue {
   const m = minutesOf(now);
   const openRange = today?.on ? today.ranges.find((r) => r.start <= m && m < r.end) : undefined;
   const next = today?.on ? today.ranges.find((r) => r.start > m) : undefined;
-  const status = !b ? (openRange || next ? 'Taking bookings today' : 'Next times from tomorrow') : openRange ? `Open now · closes at ${formatClock(openRange.end)}` : next ? `Closed · opens at ${formatClock(next.start)}` : 'Closed today';
+  const status = !b ? (openRange || next ? 'Taking bookings today' : 'Next times from tomorrow') : openRange ? `Open now · closes at ${formatClock(openRange.end)}` : next ? `Closed · opens at ${formatClock(next.start)}` : (() => {
+    // Closed for the rest of today: say when it next opens, so a guest isn't left guessing.
+    for (let n = 1; n <= 7; n++) { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n); const h = venueDay(state, d); const r = h?.on ? h.ranges[0] : undefined; if (r) return `Closed · opens ${n === 1 ? 'tomorrow' : DAY_NAMES[(d.getDay() + 6) % 7]?.slice(0, 3) ?? ''} at ${formatClock(r.start)}`; }
+    return 'Closed today';
+  })();
   return {
     name: b ? state.workspace : HOST, kind: b?.kindLabel ?? 'Meetings', rating: b?.rating, reviews: b?.reviews, address: b?.address ?? 'Online, by video call', area: b?.area,
     phone: b?.phone, status, isOpen: b ? Boolean(openRange) : Boolean(openRange || next), isOnline: !b,
@@ -139,7 +143,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
     <>
       <div className="tf-bkf-venue-sum__head">
         {venue.photos[0] ? <img src={venue.photos[0]} alt="" className="tf-bkf-venue-sum__img" /> : <Avatar name={venue.name} size={44} shape="square" />}
-        <span className="tf-bkf-venue-sum__text"><strong>{venue.name}</strong>{venue.rating !== undefined && <span className="tf-bkf__muted tf-num">{venue.rating.toFixed(1)} ★ ({venue.reviews?.toLocaleString('en-IN')})</span>}<span className="tf-bkf__muted">{venue.area ?? venue.address}</span></span>
+        <span className="tf-bkf-venue-sum__text"><strong>{venue.name}</strong>{venue.rating !== undefined && <span className="tf-bkf__muted tf-num" role="img" aria-label={`Rated ${venue.rating.toFixed(1)} out of 5${venue.reviews !== undefined ? ` from ${venue.reviews.toLocaleString('en-IN')} reviews` : ''}`}>{venue.rating.toFixed(1)} ★{venue.reviews !== undefined ? ` (${venue.reviews.toLocaleString('en-IN')})` : ''}</span>}<span className="tf-bkf__muted">{venue.area ?? venue.address}</span></span>
       </div>
       <div className="tf-bkf-venue-sum__lines">
         <span className="tf-bkf-venue-sum__line"><span>{page.kind === 'table' ? `${waitMode ? 'Waitlist, t' : 'T'}able for ${party}` : page.name}<span className="tf-bkf__muted tf-num">{page.kind === 'table' ? (time !== undefined ? ` · ${formatLongDay(day)}, ${formatClock(time)}` : ` · ${formatLongDay(day)}`) + (areaPick ? ` · ${areaPick}` : '') + (occasion ? ` · ${occasion}` : '') : ` · ${len} min${who !== 'any' ? ` with ${first(who)}` : ''}`}</span></span><span className="tf-num">{page.kind === 'service' ? priceText(page) : ''}</span></span>
@@ -179,7 +183,14 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
       {steps[step] === 'Professional' && (
         <div className="tf-bkf-venue-tiles">
           <PersonTile any name="Any professional" title="For the most times" isSelected={who === 'any'} onPress={() => { setWho('any'); setTime(undefined); }} />
-          {people.map((n) => <PersonTile key={n} name={n} title={b?.titles?.[n] ?? ''} isSelected={who === n} onPress={() => { setWho(n); setTime(undefined); }} />)}
+          {people.map((n) => {
+            // Their first open time in the next two weeks, so a guest can choose by when, not just by who.
+            const theirs = page ? { ...page, hosts: [n], hostMode: 'one' as const } : undefined;
+            const d = theirs ? strip.find((x) => openTimes(theirs, state, x, now, len).length > 0) : undefined;
+            const first0 = d && theirs ? openTimes(theirs, state, d, now, len)[0] : undefined;
+            const when = d && first0 !== undefined ? `Next free ${isoDay(d) === isoDay(now) ? 'today' : isoDay(d) === isoDay(dayFrom(now, 1)) ? 'tomorrow' : formatDay(d)}, ${formatClock(first0)}` : 'No times in the next two weeks';
+            return <PersonTile key={n} name={n} title={[b?.titles?.[n], when].filter(Boolean).join(' · ')} isSelected={who === n} onPress={() => { setWho(n); setTime(undefined); }} />;
+          })}
         </div>
       )}
       {steps[step] === 'Time' && (() => {
@@ -223,6 +234,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
             <TextField label="Email" size="lg" type="email" value={email} onChange={setEmail} isRequired autoComplete="email" />
           </div>
           <TextArea label="Notes for your visit" aside="Optional" rows={3} size="lg" value={notes} onChange={setNotes} />
+          {page && <p className="tf-bkf__muted">{(page.cancelCutoff ?? 0) > 0 || (page.moveCutoff ?? 0) > 0 ? `Free to change or cancel up to ${plural(Math.max(page.cancelCutoff ?? 0, page.moveCutoff ?? 0), 'hour')} before, from the link in your email.` : 'Free to change or cancel any time, from the link in your email.'}</p>}
         </div>
       ))}
     </VenueCheckout>

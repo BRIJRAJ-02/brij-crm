@@ -104,6 +104,9 @@
 .tf-forms__row:hover, .tf-forms__row[aria-current] { background: var(--surface-hover); }
 .tf-forms__row:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
 .tf-forms__answer { display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-forms__sum { display: flex; flex-direction: column; gap: var(--space-8); padding-block: var(--space-12); border-top: 1px solid var(--border); }
+.tf-forms__sum:first-of-type { border-top: 0; padding-top: 0; }
+.tf-forms__sumq { margin: 0; display: flex; align-items: baseline; gap: var(--space-8); font: 500 14px/20px var(--font-sans); color: var(--text); }
 .tf-forms__drop { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
 .tf-forms__drop li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto; align-items: center; gap: var(--space-12); font: 400 14px/20px var(--font-sans); }
 .tf-forms__bar { height: var(--space-8); border-radius: var(--radius-full); background: var(--surface-subtle); overflow: hidden; }
@@ -250,3 +253,4 @@
 .tf-app__preview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-8) var(--space-16); background: var(--accent-soft); color: var(--text); font: 500 13px/18px var(--font-sans); }
 .tf-app__preview--fixed { position: fixed; z-index: 30; top: 0; left: 0; right: 0; justify-content: center; box-shadow: 0 1px 0 var(--border-subtle); }
 .tf-forms__rule-bad { color: var(--danger); font: 500 13px/18px var(--font-sans); }
+.tf-set__photo { border-radius: var(--radius-full); object-fit: cover; }

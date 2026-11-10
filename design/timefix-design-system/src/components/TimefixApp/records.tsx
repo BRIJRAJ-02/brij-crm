@@ -198,8 +198,8 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = byOwner
     ? state.members.map((m) => ({ id: m.name, title: m.name, status: 'draft' as const, hue: 'gray' as const, field: 'owner' }))
     : STAGES.map((stage) => ({ id: stage, title: stage, status: STAGE_LOOK[stage].status, hue: STAGE_LOOK[stage].hue, field: 'stage' }));
-  const board: ReadonlyArray<BoardColumn> = groups.map((g) => ({ id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id),
-    cards: sorted.filter((r) => r.values[g.field] === g.id).map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }));
+  const board: ReadonlyArray<BoardColumn> = groups.map((g) => { const inCol = sorted.filter((r) => r.values[g.field] === g.id); const sum = inCol.reduce((n, r) => n + Number(r.values.amount ?? 0), 0); return { id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id), meta: sum ? inr(sum) : undefined,
+    cards: inCol.map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }; });
   const peekIndex = peek ? sorted.findIndex((r) => r.id === peek) : -1;
   const peekGone = peek !== undefined && !all.some((r) => r.id === peek);
   const pairs = pairCount;
@@ -249,11 +249,12 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
           </span>
         )}
         <MenuTrigger>
-          <IconButton label="Import or export" size="md"><MoreHorizontal {...i16} /></IconButton>
-          <Menu aria-label="Import or export" placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'export-all') void exportCsv(undefined, true); else if (k === 'import') onImport?.(); else if (k === 'dupes') onDuplicates?.(); else if (k === 'attrs') onAttributes?.(); }}>
+          <IconButton label={`More for ${def.many}`} size="md"><MoreHorizontal {...i16} /></IconButton>
+          <Menu aria-label={`More for ${def.many}`} placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'export-all') void exportCsv(undefined, true); else if (k === 'import') onImport?.(); else if (k === 'dupes') onDuplicates?.(); else if (k === 'attrs') onAttributes?.(); }}>
             {onImport && canEdit ? <MenuItem id="import" icon={<Upload {...i16} />}>Import {def.many}</MenuItem> : null}
             <MenuItem id="export" icon={<Download {...i16} />} description={`${sorted.length} rows, ${columns.length} columns`}>Export this view</MenuItem>
             {columns.length < def.columns.length ? <MenuItem id="export-all" icon={<Download {...i16} />} description={`${sorted.length} rows, all ${def.columns.length} columns`}>Export with hidden columns</MenuItem> : null}
+            {onDuplicates || (onAttributes && canEdit) ? <MenuSeparator /> : null}
             {onDuplicates ? <MenuItem id="dupes" icon={<Users {...i16} />}>Find duplicates</MenuItem> : null}
             {onAttributes && canEdit ? <MenuItem id="attrs" icon={<Plus {...i16} />}>Add or change attributes</MenuItem> : null}
           </Menu>
@@ -279,7 +280,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined}
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
             onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${def.one}`}
-            emptyState={q || view.filters.length ? <span>No {def.many} match. <button type="button" className="tf-rec__link" onClick={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</button></span> : `No ${def.many} yet.`} />
+            emptyState={q || view.filters.length ? <span>No {def.many} match. <button type="button" className="tf-rec__link" onClick={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</button></span> : <span>No {def.many} yet.{canEdit ? <>{' '}<button type="button" className="tf-rec__link" onClick={() => setCreating(true)}>Add one</button>{onImport ? <> or <button type="button" className="tf-rec__link" onClick={() => onImport()}>import a CSV</button></> : null}.</> : null}</span>} />
         </div>
       )}
       {peek !== undefined && !peekGone && <RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={def.one[0]?.toUpperCase() + def.one.slice(1)} recordKey={peek ?? ''}
@@ -393,14 +394,20 @@ function NewRecord({ state, object, one, initialName = '', onClose, onCreate }: 
   const set = (k: string, v: string) => setExtra((e) => ({ ...e, [k]: v }));
   // A likely duplicate: say so under the field, never block.
   const twin = name.trim().length > 2 ? (object === 'people' ? state.people : object === 'companies' ? state.companies : state.deals).find((x) => x.name.toLowerCase() === name.trim().toLowerCase()) : undefined;
-  const go = () => { if (!name.trim()) return; onCreate(name.trim(), extra, more); setName(''); setExtra({}); };
+  const mail = (extra.email ?? '').trim().toLowerCase();
+  const [mailLeft, setMailLeft] = useState(false);
+  const badMail = mail !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+  const mailTwin = mail && !badMail ? state.people.find((p) => p.email.toLowerCase() === mail) : undefined;
+  const domain = (extra.domain ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  const domainTwin = object === 'companies' && domain ? state.companies.find((c) => c.domain.toLowerCase() === domain) : undefined;
+  const go = () => { if (!name.trim() || badMail) return; onCreate(name.trim(), domain ? { ...extra, domain } : extra, more); setName(''); setExtra({}); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`New ${one}`}
-      actions={<><Checkbox isSelected={more} onChange={setMore}>Create more</Checkbox><span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || (object === 'deals' && !extra.company)} onPress={go}>Create {one}</Button></>}>
+      actions={<><Checkbox isSelected={more} onChange={setMore}>Create more</Checkbox><span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || badMail || (object === 'deals' && !extra.company)} onPress={go}>Create {one}</Button></>}>
       <form className="tf-rec__form" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <TextField label={object === 'deals' ? 'Deal name' : 'Name'} value={name} onChange={setName} autoFocus isRequired description={twin ? `There's already a ${one} called ${twin.name}.` : undefined} />
-        {object === 'people' && <><TextField label="Email" type="email" value={extra.email ?? ''} onChange={(v) => set('email', v)} /><TextField label="Job title" value={extra.title ?? ''} onChange={(v) => set('title', v)} /></>}
-        {object === 'companies' && <TextField label="Domain" value={extra.domain ?? ''} onChange={(v) => set('domain', v)} placeholder="acme.com" />}
+        {object === 'people' && <><TextField label="Email" type="email" value={extra.email ?? ''} onChange={(v) => set('email', v)} onBlur={() => setMailLeft(true)} isInvalid={badMail && mailLeft} errorMessage="Check the email: it needs an @ and a domain." description={mailTwin ? `${mailTwin.name} already has this email.` : undefined} /><TextField label="Job title" value={extra.title ?? ''} onChange={(v) => set('title', v)} /></>}
+        {object === 'companies' && <TextField label="Domain" value={extra.domain ?? ''} onChange={(v) => set('domain', v)} placeholder="acme.com" description={domainTwin ? `${domainTwin.name} already uses ${domain}.` : undefined} />}
         {(object === 'people' || object === 'deals') && <Select label="Company" searchable value={extra.company ?? null} onChange={(v) => set('company', v ?? '')} placeholder="Pick a company" description={object === 'deals' ? 'Every deal is with a company.' : 'Optional'} items={state.companies.map((c) => ({ id: c.id, label: c.name }))} />}
         {object === 'deals' && <TextField label="Amount (₹)" value={extra.amount ?? ''} onChange={(v) => set('amount', v.replace(/[^\d]/g, ''))} />}
         <button type="submit" hidden />

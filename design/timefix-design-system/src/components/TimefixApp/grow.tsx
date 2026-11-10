@@ -2,7 +2,7 @@
 // the Link page editor (beside the phone; Publish keeps it in the workspace), and Insights, one analytics home with two tabs:
 // Pages (what came in through your links, from real bookings and form answers) and Reports (saved CRM charts: new, rename, delete).
 import { useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Copy, Download, ExternalLink, FileText, IdCard, Pencil, Plus, QrCode as QrIcon, Share2, Store, Trash2, UtensilsCrossed } from 'lucide-react';
 import { LinkEditor, type LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
 import { demoBlocks, demoBooking, demoProfile, demoSocials } from '../LinkPage/LinkPage.demo.tsx';
@@ -16,11 +16,10 @@ import { Select } from '../Select/Select.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
-import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { STAGES, dayFrom, inr, newId, type AppAction, type AppState, type Report } from './data.ts';
+import { STAGES, dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type Report } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -129,10 +128,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
                   <Button size="sm" variant="ghost" icon={<Copy {...i14} />} isDisabled={!r.live} onPress={() => copy(r)}>Copy</Button>
                   <IconButton size="sm" label={`QR code for ${r.name}`} isDisabled={!r.live} onPress={() => setQr(r)}><QrIcon {...i14} /></IconButton>
                   <IconButton size="sm" label={`Open ${r.name}`} onPress={r.open}><ExternalLink {...i14} /></IconButton>
-                  <MenuTrigger>
-                    <IconButton size="sm" label={`More for ${r.name}`}><MoreHorizontal {...i14} /></IconButton>
-                    <Menu aria-label={r.name} placement="bottom end" onAction={() => r.edit()}><MenuItem id="edit" icon={<Pencil {...i16} />}>{r.editLabel}</MenuItem></Menu>
-                  </MenuTrigger>
+                  <IconButton size="sm" label={`${r.editLabel}: ${r.name}`} onPress={r.edit}><Pencil {...i14} /></IconButton>
                 </span>
               </li>
             ))}
@@ -223,7 +219,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
             </>}
             <span className="tf-rec__spacer" />
             <Button variant="ghost" icon={<Download {...i14} />} onPress={() => { void exportCsv(); }}>Export CSV</Button>
-            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => { void copyText(`https://timefix.com/insights/${state.prefs.workspace.slug}-${range}`).then((ok) => toast(ok ? { message: 'View-only link copied. It shows numbers, never names.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}>Share</Button>
+            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => { void copyText(`https://timefix.com/insights/${state.prefs.workspace.slug}?${new URLSearchParams({ tab, show: kind, ...(range === 'custom' ? { from: ymdOf(from), to: ymdOf(new Date(until.getTime() - 86_400_000)) } : { days: range }) }).toString()}`).then((ok) => toast(ok ? { message: 'View-only link copied, with these filters. It shows numbers, never names.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}>Share</Button>
           </div>
           <div className="tf-home__stats">
             <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />

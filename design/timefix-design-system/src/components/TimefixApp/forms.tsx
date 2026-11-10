@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Copy, ExternalLink, FileText, MoreHorizontal, Pause, Play, Plus, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
 import { FormCard, FormStatusTag, HostedFormPreview } from '../FormPicture/FormPicture.tsx';
+import { ShowMore } from '../Disclosure/Disclosure.tsx';
 import { QuestionBuilder } from '../QuestionList/QuestionList.tsx';
 import { HostedForm, SentAnswers } from '../HostedForm/HostedForm.tsx';
 import type { FormQuestion } from '../HostedForm/answers.ts';
@@ -219,8 +220,8 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
         <TabPanel id="questions" className="tf-forms__panel">
           <div className="tf-forms__build">
             <div className="tf-forms__builder"><QuestionBuilder questions={form.questions} onChange={(questions) => { if (questions.length > MAX_QUESTIONS) { toast({ message: `A form holds up to ${MAX_QUESTIONS} questions. Split it into two forms.`, tone: 'danger' }); return; } set({ questions }); }} />
-              <p className="tf-rec__muted tf-num">{form.questions.length} of {MAX_QUESTIONS} questions</p></div>
-            <div className="tf-forms__preview"><HostedFormPreview title={form.name} description={form.subtitle} questions={form.questions} mode={form.mode} address={url} onSubmit={() => Promise.resolve()} /></div>
+              {form.questions.length >= MAX_QUESTIONS - 10 ? <p className="tf-rec__muted tf-num">{form.questions.length} of {MAX_QUESTIONS} questions</p> : null}</div>
+            <div className="tf-forms__preview"><HostedFormPreview title={form.name} description={form.subtitle} questions={form.questions} mode={form.mode} logic={form.mode === 'one' ? form.logic : undefined} address={url} onSubmit={() => Promise.resolve()} /></div>
           </div>
         </TabPanel>
         <TabPanel id="settings" className="tf-forms__panel">
@@ -232,8 +233,10 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
               isInvalid={state.forms.some((f) => f.id !== form.id && f.slug === form.slug)} errorMessage={state.forms.some((f) => f.id !== form.id && f.slug === form.slug) ? 'Another form uses this link' : undefined} description="The address of the form. Change it before you share it." />
             <Select label="Save answers to" value={form.saveTo} onChange={(v) => set({ saveTo: v === 'none' ? 'none' : 'people' })}
               items={[{ id: 'people', label: 'People', description: 'Matched by email; new people are added' }, { id: 'none', label: 'Keep answers only' }]} />
-            {form.saveTo === 'people' && <MappingEditor form={form} state={state} onChange={(mapping) => set({ mapping })} />}
-            {form.mode === 'one' && <LogicEditor form={form} onChange={(logic) => set({ logic })} />}
+            {(form.saveTo === 'people' || form.mode === 'one') && <ShowMore showLabel="More options" hideLabel="Fewer options" defaultExpanded={Boolean(form.logic?.length) || Object.keys(form.mapping ?? {}).length > 0}>
+              {form.saveTo === 'people' && <MappingEditor form={form} state={state} onChange={(mapping) => set({ mapping })} />}
+              {form.mode === 'one' && <LogicEditor form={form} onChange={(logic) => set({ logic })} />}
+            </ShowMore>}
             <Select label="Owner" value={form.owner} onChange={(v) => set({ owner: v ?? form.owner })} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
             <div className="tf-bkf__group"><span className="tf-bkf__label">After they send</span>
               <SegmentedControl aria-label="After they send" selectedKey={form.after.kind} onSelectionChange={(k) => set({ after: { ...form.after, kind: k === 'booking' ? 'booking' : 'thanks' } })} items={[{ id: 'thanks', label: 'Say thanks' }, { id: 'booking', label: 'Book a meeting' }]} />
@@ -306,15 +309,20 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
           </div>
           {finishes === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No answers to sum up yet" description="Once people answer, each choice question shows how they answered." /> : (
             <section className="tf-recp__sec"><h3>How people answered</h3>
-              <ul className="tf-forms__drop">
-                {questions.filter((q) => q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating').flatMap((q) => {
-                  const got = form.responses.filter((r) => !r.spam).map((r) => r.answers[q.id]).filter((v): v is string => Boolean(v));
-                  const counts = [...got.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>())].sort((x, y) => y[1] - x[1]);
-                  return counts.map(([v, n]) => { const pct = Math.round((n / Math.max(1, got.length)) * 100); return (
-                    <li key={`${q.id}-${v}`}><span>{q.title}: <strong>{v}</strong></span><span className="tf-forms__bar" aria-hidden><span data-w={Math.round(pct / 10) * 10} /></span><span className="tf-num tf-rec__muted">{n} · {pct}%</span></li>
-                  ); });
-                })}
-              </ul>
+              {questions.filter((q) => q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating').map((q) => {
+                const got = form.responses.filter((r) => !r.spam).map((r) => r.answers[q.id]).filter((v): v is string => Boolean(v));
+                const counts = [...got.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>())].sort((x, y) => y[1] - x[1]);
+                return (
+                  <div key={q.id} className="tf-forms__sum">
+                    <h4 className="tf-forms__sumq">{q.title} <span className="tf-rec__muted tf-num">{got.length} {got.length === 1 ? 'answer' : 'answers'}</span></h4>
+                    {counts.length === 0 ? <p className="tf-rec__muted">No one has answered this yet.</p> : <ul className="tf-forms__drop">
+                      {counts.map(([v, n]) => { const pct = Math.round((n / Math.max(1, got.length)) * 100); return (
+                        <li key={v}><span>{v}</span><span className="tf-forms__bar" aria-hidden><span data-w={Math.round(pct / 10) * 10} /></span><span className="tf-num tf-rec__muted">{n} · {pct}%</span></li>
+                      ); })}
+                    </ul>}
+                  </div>
+                );
+              })}
               {questions.every((q) => !['choice', 'dropdown', 'rating'].includes(q.kind)) && <p className="tf-rec__muted">This form has no choice questions to sum up. Read each answer in Responses.</p>}
             </section>
           )}

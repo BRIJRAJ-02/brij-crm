@@ -2,7 +2,7 @@
 // a hidden page, a page offering only picked times, and the booking chat.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CalendarDate } from '@internationalized/date';
-import { ArrowLeft, CalendarClock, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CalendarPlus, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
 import type { BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BrandCard } from '../BookingFlow/BookingFlow.tsx';
 import { VenueGuest, type OnWaitlist } from './guest-venue.tsx';
@@ -19,8 +19,10 @@ import { Button } from '../Button/Button.tsx';
 import { SuccessCheck } from '../Motion/Motion.tsx';
 import { formatClock, formatClockRange } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
+import { icsFor } from '../../lib/ics.ts';
+import { saveFile } from '../../lib/saveFile.ts';
 import { GuestView, i14 } from './parts.tsx';
-import { PLACES, at, dayFrom, first, homeUrl, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
+import { PLACES, at, dayFrom, first, homeUrl, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, plural, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
 
 /** What the guest view plays. */
 export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile' | 'taken' | 'menu';
@@ -235,10 +237,21 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
         const hoursLeft = (meeting.start.getTime() - Date.now()) / 3_600_000;
         const canMove = !page.moveCutoff || hoursLeft > page.moveCutoff; const canCancel = !page.cancelCutoff || hoursLeft > page.cancelCutoff;
         return (<>
-          {(!canMove || !canCancel) && <p className="tf-bkf__muted">{!canMove && !canCancel ? `It’s too close to change online` : !canMove ? 'It’s too close to move online' : 'It’s too close to cancel online'} (within {Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0)} hours). {page.tooLateMessage ?? `Reply to your confirmation email to reach ${first(meeting.host)}.`}</p>}
+          {(() => {
+            // One plain line: what they can still do online and until when, then what's too late and who to reach.
+            const until = (h: number) => { const by = new Date(meeting.start.getTime() - h * 3_600_000); return `${formatDay(by)}, ${formatClock(by.getHours() * 60 + by.getMinutes())}`; };
+            // The owner's own "too late" message covers the case where nothing can be changed online; a partial block gets the plain line.
+            const reach = `Reply to your confirmation email to reach ${first(meeting.host)}.`;
+            if (!canMove && !canCancel) return <p className="tf-bkf__muted">It’s too close to change online (within {plural(Math.min(page.moveCutoff ?? 0, page.cancelCutoff ?? 0) || Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0), 'hour')}). {page.tooLateMessage ?? reach}</p>;
+            if (!canMove) return <p className="tf-bkf__muted tf-num">You can cancel this online{page.cancelCutoff ? ` until ${until(page.cancelCutoff)}` : ''}. It’s too close to move it online (within {plural(page.moveCutoff ?? 0, 'hour')}). {reach}</p>;
+            if (!canCancel) return <p className="tf-bkf__muted tf-num">You can move this online{page.moveCutoff ? ` until ${until(page.moveCutoff)}` : ''}. It’s too close to cancel online (within {plural(page.cancelCutoff ?? 0, 'hour')}). {reach}</p>;
+            const h = Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0);
+            return h ? <p className="tf-bkf__muted tf-num">You can change or cancel this online until {until(h)}.</p> : null;
+          })()}
           <div className="tf-bkf__row">
             {canMove && <Button variant="secondary" icon={<CalendarClock {...i14} />} onPress={() => setMode('move')}>Reschedule</Button>}
             {canCancel && <Button variant="ghost" onPress={() => setMode('cancel')}>Cancel booking</Button>}
+            <Button variant="ghost" icon={<CalendarPlus {...i14} />} onPress={() => { void saveFile(`${meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`, new Blob([icsFor(meeting.title, meeting.placeLabel, meeting.start, Math.round((meeting.end.getTime() - meeting.start.getTime()) / 60_000))], { type: 'text/calendar' })); }}>Add to calendar</Button>
           </div>
         </>);
       })()}

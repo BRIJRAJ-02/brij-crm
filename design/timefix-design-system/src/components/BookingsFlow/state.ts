@@ -586,7 +586,10 @@ export function heldTables(state: BookingsState, date: Date, start: number, leng
   state.meetings.forEach((m) => {
     if (m.id === skip || !m.tables || m.status === 'cancelled' || m.status === 'no-show' || m.seating === 'left' || m.start.toDateString() !== date.toDateString()) return;
     // A party still seated past its end keeps the table until they leave (counted as at least 15 more minutes).
-    const today = new Date(); const overrun = m.seating === 'seated' && date.toDateString() === today.toDateString();
+    const today = new Date(); const isToday = date.toDateString() === today.toDateString(); const overrun = m.seating === 'seated' && isToday;
+    // A party that hasn't come once the page's late hold is up gives its table back, from now on.
+    const hold = state.pages.find((p) => p.id === m.pageId)?.holdLate ?? 15;
+    if (isToday && m.seating !== 'seated' && today.getTime() > m.start.getTime() + hold * 60_000 && start >= minutesOf(today)) return;
     const a = minutesOf(m.start); const b = overrun ? Math.max(minutesOf(m.end), minutesOf(today) + 15) : minutesOf(m.end);
     if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
   });
@@ -722,6 +725,19 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
 }
 
 /** Whether one person can take a meeting then: working, not away, no other meeting, nothing busy on their calendar. */
+/** Why someone can't take a meeting then, in a few words, or undefined when they're free. Checks the same things as memberFree, in the order a person would ask. */
+export function busyReason(state: BookingsState, page: BookingPage | undefined, name: string, day: Date, start: number, end: number, skipId?: string): string | undefined {
+  if (isOff(state, name, day, start, end)) return 'away then';
+  const h = hoursOn(state, name, day).hours;
+  if (!h.on || !h.ranges.some((r) => r.start <= start && end <= r.end)) return 'not working then';
+  const others = { ...state, meetings: state.meetings.filter((m) => m.id !== skipId) };
+  const limit = atLimit(others, name, day);
+  if (limit) return limit === 'day' ? 'at their daily limit' : 'at their weekly limit';
+  const before = page?.bufferBefore ?? 0; const after = page?.bufferAfter ?? 0;
+  if (others.meetings.some((m) => m.host === name && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString() && overlap(start - before, end + after, minutesOf(m.start), minutesOf(m.end)))) return 'has another meeting';
+  if (busyOn(state, name, day).some((b) => overlap(start, end, b.start, b.end))) return 'busy in their calendar';
+  return undefined;
+}
 export function personFree(state: BookingsState, name: string, day: Date, start: number, end: number, skipId?: string): boolean {
   const at0 = (m: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(m / 60), m % 60);
   const s = at0(start); const e = at0(end);

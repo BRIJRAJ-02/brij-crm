@@ -43,10 +43,12 @@ export interface SettingsScreenProps {
   /** Sign out, delete account or workspace: leaves for that screen. */ readonly onDoor?: (d: Door) => void;
   /** The workspace's kind, from Bookings: decides which apps and Bookings links fit. */ readonly kind?: 'team' | 'salon' | 'restaurant';
   /** Opens a list from Settings › Lists. */ readonly onOpenList?: (id: string) => void;
+  /** Bookings' connected calendars, shown in Settings › Calendars. */ readonly calendars?: ReadonlyArray<{ readonly id: string; readonly provider: string; readonly email: string; readonly calendars: number; readonly status: string }>;
+  /** Opens a restored record. */ readonly onOpenRecord?: (object: 'people' | 'companies' | 'deals', id: string) => void;
 }
 
 /** Settings. */
-export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList }: SettingsScreenProps) {
+export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList, calendars = [], onOpenRecord }: SettingsScreenProps) {
   const [page, setPage] = useState<Page>(((start ?? '').split(':')[0] as Page | '') || 'profile');
   const [find, setFind] = useState('');
   /** Phone: the list of settings first, then one page with a way back (a start page opens straight on it). */
@@ -62,7 +64,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
-        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} onGoPage={(x) => { setPage(x); setPicked(true); }} />
+        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={freshObject && page === 'objects'} onGoPage={(x) => { setPage(x); setPicked(true); }} calendars={calendars} onOpenRecord={onOpenRecord} />
       </SettingsLayout>
     </div>
   );
@@ -83,7 +85,7 @@ const APPS = [
   { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'] },
 ] as const;
 
-function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, onOpenList, onGoPage }: { readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
+function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, onOpenList, onGoPage, calendars = [], onOpenRecord }: { readonly calendars?: SettingsScreenProps['calendars']; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord']; readonly onGoPage?: (p: Page) => void; readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
   const { toast } = useToast();
   const p = state.prefs;
   const ws = p.workspace;
@@ -111,7 +113,10 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
   if (state.previewRole && ADMIN_ONLY.includes(page)) return <SettingsSection title="Only owners and admins open this" description={`A ${state.previewRole.toLowerCase()} sees their own settings: profile, preferences, notifications, sign in and calendars.`}><Button variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></SettingsSection>;
   switch (page) {
     case 'profile': body = <>
-      <SettingsSection title="You"><div className="tf-set__row"><Avatar name={state.me} size={56} /><div className="tf-rec__form tf-set__grow">
+      <SettingsSection title="You"><div className="tf-set__row">{p.photo ? <img className="tf-set__logo tf-set__photo" src={p.photo} alt="Your photo" /> : <Avatar name={state.me} size={56} />}
+        <div className="tf-set__grow"><FileDrop variant="compact" label={p.photo ? 'Replace photo' : 'Add a photo'} description="Square works best, up to 2 MB" acceptedFileTypes={['image/png', 'image/jpeg', 'image/webp']} allowsMultiple={false}
+          onFiles={(files) => { const f = files[0]; if (!f) return; if (f.size > 2_000_000) { toast({ message: `${f.name} is over 2 MB. Pick a smaller file.`, tone: 'danger' }); return; } const was = p.photo; dispatch({ type: 'prefs/update', fn: () => ({ photo: URL.createObjectURL(f) }) }); toast({ message: 'Photo saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/update', fn: () => ({ photo: was }) }) } }); }} /></div>
+        <div className="tf-rec__form tf-set__grow">
         <CommitField label="Name" value={state.me} onCommit={(v) => { dispatch({ type: 'me/rename', name: v }); toast({ message: 'Name saved', tone: 'success' }); }} />
         <TextField label="Email" value={me?.email ?? ''} isReadOnly description="You sign in with this." /></div></div>
         {sw('Show my photo on my booking and link pages', p.showPhoto, (on) => set({ showPhoto: on }))}</SettingsSection>
@@ -142,8 +147,12 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       </SettingsSection>
       <SettingsSection title="Sign out" description="Of this device only." action={<Button variant="secondary" onPress={() => setAsk({ kind: 'signout' })}>Sign out</Button>}><span /></SettingsSection>
     </>; break;
-    case 'calendars': body = <SettingsSection title="Connected calendars" description="These are the calendars Bookings checks and writes to.">
-      <div className="tf-set__links"><Button variant="secondary" onPress={() => onBookings('availability')}>Open calendars in Availability</Button></div></SettingsSection>; break;
+    case 'calendars': body = <SettingsSection title="Connected calendars" description="Bookings checks these so nobody books over busy time, and adds new bookings to one of them."
+      action={<Button variant="secondary" onPress={() => onBookings('availability')}>Manage in Availability</Button>}>
+      {calendars.length === 0 ? <EmptyState size="sm" icon={<CalendarDays size={20} strokeWidth={1.75} />} title="No calendar connected" description="Connect Google or Outlook in Availability." />
+        : <ul className="tf-set__list">{calendars.map((c) => <li key={c.id}><span><strong>{c.provider}</strong> <span className="tf-rec__muted">{c.email} · {c.calendars} {c.calendars === 1 ? 'calendar' : 'calendars'}</span></span>
+          <Tag size="sm" hue={c.status === 'connected' ? 'green' : 'orange'}>{c.status === 'connected' ? 'Connected' : 'Needs signing in again'}</Tag></li>)}</ul>}
+    </SettingsSection>; break;
     case 'general': body = <>
       <SettingsSection title="Workspace"><div className="tf-rec__form tf-set__narrow">
         <CommitField label="Name" value={ws.name} onCommit={(v) => set({ workspace: { ...ws, name: v } }, `${state.me} renamed the workspace to ${v}`, 'Name saved')} />
@@ -235,7 +244,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       <ul className="tf-set__list">{state.history.slice(0, 60).map((h) => <li key={h.id}><span>{h.text}</span><span className="tf-rec__muted tf-num">{h.at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, {h.at.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}</span></li>)}</ul></SettingsSection>; break;
     case 'objects': body = <ObjectsPage state={state} dispatch={dispatch} startMaking={newObject} />; break;
     case 'lists': body = <ListsPage state={state} dispatch={dispatch} onOpenList={onOpenList} />; break;
-    case 'trash': body = <TrashPage state={state} dispatch={dispatch} />; break;
+    case 'trash': body = <TrashPage state={state} dispatch={dispatch} onOpenRecord={onOpenRecord} />; break;
     case 'bookings': body = <SettingsSection title="Bookings" description="These live in Bookings, where you use them.">
       <div className="tf-set__links">{(kind === 'team' ? [['Availability and hours', 'availability'], ['Booking pages', 'pages'], ['Round robin and routing', 'routing'], ['Team roster', 'roster']] : [['Opening hours', 'availability'], ['Your business page', 'pages'], ...(kind === 'restaurant' ? [['Menu', 'menu']] : [])])
         .map(([a, t]) => <Button key={t} variant="secondary" onPress={() => onBookings(t ?? 'meetings')}>{a}</Button>)}</div></SettingsSection>; break;
@@ -260,7 +269,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" isDisabled={(ask.kind === 'account' && otherOwners === 0) || typed.trim().toLowerCase() !== (ask.kind === 'account' ? (me?.email ?? '') : ws.slug)}
             onPress={() => { const k = ask.kind; close(); if (k === 'workspace') { dispatch({ type: 'history/add', text: `${state.me} deleted ${ws.name}` }); onDoor?.('deleted'); } else onDoor?.('signin'); }}>{ask.kind === 'account' ? 'Delete account' : 'Delete workspace'}</Button></>}>
           {(ask.kind === 'workspace' || otherOwners > 0) && <TextField label={ask.kind === 'account' ? `Type ${me?.email ?? 'your email'} to confirm` : `Type ${ws.slug} to confirm`} value={typed} onChange={setTyped} autoFocus />}
-          {ask.kind === 'account' && otherOwners === 0 && <Button variant="secondary" onPress={() => { close(); onGoPage?.('members'); }}>Go to Members</Button>}
+          {ask.kind === 'account' && otherOwners === 0 && <Button variant="secondary" onPress={() => setAsk({ kind: 'transfer' })}>Make someone else owner</Button>}
         </Dialog>
       )}
       {ask?.kind === 'guest' && (() => { const m = state.members.find((x) => x.id === ask.id); if (!m) return null; const n = state.people.filter((x) => x.owner === m.name).length + state.deals.filter((x) => x.owner === m.name).length + state.companies.filter((x) => x.owner === m.name).length; return (
@@ -271,7 +280,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         toast({ message: `${target.name} is the owner now. You’re an admin.`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'member/set', member: target }); dispatch({ type: 'member/set', member: me }); } } }); }} />}
       {ask?.kind === 'leave' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Leave ${ws.name}?`}
         description={otherOwners === 0 && me?.role === 'Owner' ? `You’re the only owner. Make someone else owner first, or delete the workspace.` : 'You lose access straight away. Your records stay with the workspace; someone can invite you back.'}
-        actions={<><Button variant="ghost" slot="close">Stay</Button><Button variant="danger" isDisabled={otherOwners === 0 && me?.role === 'Owner'} onPress={() => { close(); dispatch({ type: 'history/add', text: `${state.me} left ${ws.name}` }); onDoor?.('signin'); }}>Leave workspace</Button></>} />}
+        actions={<><Button variant="ghost" slot="close">Stay</Button>{otherOwners === 0 && me?.role === 'Owner' && <Button variant="secondary" onPress={() => setAsk({ kind: 'transfer' })}>Make someone else owner</Button>}<Button variant="danger" isDisabled={otherOwners === 0 && me?.role === 'Owner'} onPress={() => { close(); dispatch({ type: 'history/add', text: `${state.me} left ${ws.name}` }); onDoor?.('signin'); }}>Leave workspace</Button></>} />}
       {ask?.kind === 'partner' && <PartnerDialog onClose={close} onConnect={(name, scopes) => { close(); set({ partners: [...(p.partners ?? []), { id: newId('pt'), name, scopes, at: new Date() }] }, `${state.me} connected ${name}`, `${name} is connected`); }} />}
       {ask?.kind === 'unpartner' && (() => { const x = (p.partners ?? []).find((y) => y.id === ask.id); if (!x) return null; return (
         <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Disconnect ${x.name}?`} description="It stops reaching your workspace straight away. Pages it shows go blank until you connect again."
@@ -283,7 +292,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
       {ask?.kind === '2fa-off' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title="Turn off two factor?" description="Type a code from your authenticator app. Signing in then needs only the code we email you."
         actions={<><Button variant="ghost" slot="close">Keep it on</Button><Button variant="danger" isDisabled={code.replace(/\s/g, '').length !== 6} onPress={() => { close(); set({ twoFactor: false }, `${state.me} turned off two factor`, 'Two factor is off'); }}>Turn off</Button></>}>
         <TextField label="Code" inputMode="numeric" autoComplete="one-time-code" placeholder="123 456" value={code} onChange={(v) => setCode(v.replace(/[^\d ]/g, '').slice(0, 7))} autoFocus description="In the prototype any six digits work." /></Dialog>}
-      {ask?.kind === 'signout' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title="Sign out?" description="You can sign back in with your email."
+      {ask?.kind === 'signout' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title="Sign out?" description={`You can sign back in to ${ws.name} with your email.`}
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => { close(); onDoor?.('signin'); }}>Sign out</Button></>} />}
       {removing && owns && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Remove ${removing.name}?`}
         description={`They lose access straight away. They own ${owns.people} ${owns.people === 1 ? 'person' : 'people'} and ${owns.deals} ${owns.deals === 1 ? 'deal' : 'deals'}, and have ${owns.tasks} open ${owns.tasks === 1 ? 'task' : 'tasks'}.`}
@@ -396,7 +405,7 @@ function ObjectsPage({ state, dispatch, startMaking = false }: { readonly state:
 }
 
 /** Settings › Trash: deleted records for 30 days. Restore is one click; deleting for good asks first. */
-function TrashPage({ state, dispatch }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void }) {
+function TrashPage({ state, dispatch, onOpenRecord }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onOpenRecord?: SettingsScreenProps['onOpenRecord'] }) {
   const { toast } = useToast();
   const [purge, setPurge] = useState<ReadonlyArray<string>>();
   const days = (d: Date) => Math.max(0, 30 - Math.floor((Date.now() - d.getTime()) / 86_400_000));
@@ -409,7 +418,7 @@ function TrashPage({ state, dispatch }: { readonly state: AppState; readonly dis
           {state.trash.map((t) => (
             <li key={t.id}><span><strong>{t.record.name}</strong> <span className="tf-rec__muted">{kind[t.object]} · deleted by {t.by} · {days(t.at) === 0 ? 'goes today' : `${days(t.at)} ${days(t.at) === 1 ? 'day' : 'days'} left`}</span></span>
               <span className="tf-set__row">
-                <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'trash/restore', id: t.id }); toast({ message: `${t.record.name} restored`, tone: 'success' }); }}>Restore</Button>
+                <Button size="sm" variant="secondary" onPress={() => { dispatch({ type: 'trash/restore', id: t.id }); toast({ message: `${t.record.name} restored`, tone: 'success', action: onOpenRecord ? { label: 'Open', onAction: () => onOpenRecord(t.object, t.record.id) } : undefined }); }}>Restore</Button>
                 <Button size="sm" variant="ghost" onPress={() => setPurge([t.id])}>Delete for good</Button>
               </span></li>
           ))}

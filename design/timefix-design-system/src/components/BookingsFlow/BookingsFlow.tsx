@@ -64,7 +64,7 @@ export interface BookingsFlowProps {
   /** Bookings pages the app has turned off (Settings › Apps), hidden from the sidebar. */
   readonly hiddenSections?: ReadonlyArray<string>;
   /** Who is signed in, for the sidebar's person row. */
-  readonly person?: { readonly name: string; readonly email: string };
+  readonly person?: { readonly name: string; readonly email: string; readonly src?: string };
   /** The workspace and person menus' own items: Workspace settings, Profile, Sign out. */
   readonly onMenu?: (id: 'settings' | 'profile' | 'signout' | 'create') => void;
   /** Workspace name and logo from the app's settings, when it has its own. */
@@ -418,7 +418,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         {onMenu ? <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem> : null}
         {onMenu ? <MenuItem id="create" icon={<Plus {...i16} />}>Create a workspace</MenuItem> : null}
       </WorkspaceSwitcher>}
-      footer={<PersonRow name={person?.name ?? HOST} email={person?.email ?? 'priya@northwind.com'} onAction={(k) => { const id = String(k); if (id === 'profile' || id === 'signout') onMenu?.(id); }}>
+      footer={<PersonRow name={person?.name ?? HOST} email={person?.email ?? 'priya@northwind.com'} src={person?.src} onAction={(k) => { const id = String(k); if (id === 'profile' || id === 'signout') onMenu?.(id); }}>
         {onMenu ? <MenuItem id="profile" icon={<User {...i16} />}>Profile</MenuItem> : <MenuItem id="none" isDisabled>Your profile is in the Timefix app</MenuItem>}
         {onMenu ? <MenuSeparator /> : null}
         {onMenu ? <MenuItem id="signout" icon={<LogOut {...i16} />}>Sign out</MenuItem> : null}

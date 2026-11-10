@@ -280,7 +280,7 @@ Accessibility:
 - [ ] menu reorder only via menu items
 
 
-## Second pass (11 Nov)
+## Second pass (10 Nov)
 Everything above is closed except these, kept on purpose or left for the build:
 - [ ] Forms "Steps" layout (Classic and One at a time are built)
 - [ ] Team members' own link pages (needs per-person data; the workspace link page is built)
@@ -290,3 +290,14 @@ Everything above is closed except these, kept on purpose or left for the build:
 - [ ] Home loading skeleton (records lists have one)
 
 A second review round (four reviewers) ran after this; its findings and the improvement pass follow.
+
+## Improvement pass (10 Nov, late)
+Small changes on every screen, inside the current design language:
+- [x] Shell and settings: profile photo (with Undo), the Calendars page lists real calendars, the only owner is offered "Make someone else owner" before leaving or deleting, sign-out names the workspace, a restored item opens from its toast.
+- [x] Tasks: an empty "Mine" offers "See everyone's tasks"; New task from a record links it.
+- [x] Records: board columns show their total value; one "More" menu with separators; an empty table offers Add or Import; New person checks the email and warns about a known email or domain.
+- [x] Forms: the builder preview follows the logic; mapping and logic sit behind "More options" (open when set); the question count shows only near the 50 limit; Results are grouped per question with answer counts.
+- [x] Links: each row has a direct Edit button. Insights: Share copies the current tab, range and filter.
+- [x] Bookings: Reassign names why someone can't take it (away, not working, at a limit, another meeting, calendar busy); the guest's Manage page gives the change deadline as a date and Add to calendar; a closed venue says when it opens next; floor tiles read "Free until 7:30 PM"; late parties' tables free up after the late hold; the service header shows the busiest start time against pacing; salon staff tiles show their next free time; the salon confirm step states the change policy; the rating has a spoken label.
+- [ ] Home stats that open their screen (StatCard has no press state yet; left for the build)
+

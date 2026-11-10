@@ -31,6 +31,8 @@ export interface YouProps {
   /** Tasks: open with the New task dialog. Notes: open this note. */
   readonly startNew?: boolean;
   readonly openTask?: string;
+  /** A new task starts on this record (⌘K "New task" while a record is open). */
+  readonly newFor?: RecordLink;
   readonly openNote?: string;
 }
 
@@ -81,7 +83,7 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
 }
 
 /** Tasks: yours or everyone's, grouped by when they're due. */
-export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask }: YouProps) {
+export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask, newFor }: YouProps) {
   const { toast } = useToast();
   const [whose, setWhose] = useState<'mine' | 'all'>('mine');
   const [editing, setEditing] = useState<AppTask | 'new' | undefined>(startNew ? 'new' : state.tasks.find((t) => t.id === openTask));
@@ -107,7 +109,9 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask 
         <span className="tf-rec__spacer" />
         <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setEditing('new')}>New task</Button>
       </div>
-      {groups.length === 0 ? <EmptyState icon={<CheckSquare size={20} strokeWidth={1.75} />} title="No tasks" description="Add one here, or from any record." action={<Button size="sm" variant="primary" onPress={() => setEditing('new')}>New task</Button>} /> : groups.map((g) => (
+      {groups.length === 0 ? <EmptyState icon={<CheckSquare size={20} strokeWidth={1.75} />} title={whose === 'mine' ? 'Nothing for you right now' : 'No tasks'}
+        description={whose === 'mine' && state.tasks.some((t) => !t.done && t.assignee !== state.me) ? 'Others on the team have open tasks.' : 'Add one here, or from any record.'}
+        action={<span className="tf-set__row"><Button size="sm" variant="primary" onPress={() => setEditing('new')}>New task</Button>{whose === 'mine' && state.tasks.some((t) => !t.done && t.assignee !== state.me) && <Button size="sm" variant="secondary" onPress={() => setWhose('all')}>See everyone’s tasks</Button>}</span>} /> : groups.map((g) => (
         <section key={g.id} className="tf-you__group" aria-label={g.title}>
           <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}>{g.title}<span className="tf-rec__muted tf-num">{g.id === 'done' ? g.tasks.length : g.tasks.filter((t) => !t.done).length}</span></h3>
           <div className="tf-you__card">
@@ -116,7 +120,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask 
           </div>
         </section>
       ))}
-      {editing && <TaskDialog state={state} task={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)} onOpenRecord={onOpenRecord}
+      {editing && <TaskDialog state={state} record={editing === 'new' ? newFor : undefined} task={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)} onOpenRecord={onOpenRecord}
         onSave={(t) => { dispatch({ type: 'task/set', task: t }); setEditing(undefined); toast({ message: editing === 'new' ? 'Task added' : 'Task saved', tone: 'success' }); }}
         onDelete={editing !== 'new' ? () => { const t = editing; dispatch({ type: 'task/remove', id: t.id }); setEditing(undefined); toast({ message: 'Task deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); } : undefined} />}
     </div>

@@ -101,6 +101,8 @@ export interface Prefs {
   readonly sidebarHidden: ReadonlyArray<string>;
   /** Home sections someone turned off in Preferences: today, tasks, numbers, link, team, reports. */
   readonly homeHidden?: ReadonlyArray<string>;
+  /** Your photo, shown in the sidebar, on your pages and in Members. */
+  readonly photo?: string;
   /** The invite link: the role it gives, how long it lasts, and its code (a new code stops the old link). */
   readonly inviteLinkOpts?: { readonly role: string; readonly expires: string; readonly code: string };
   /** Partner hubs that reach the workspace from outside, and what they can see. */

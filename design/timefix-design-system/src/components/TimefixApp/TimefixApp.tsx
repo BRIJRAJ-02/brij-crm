@@ -81,6 +81,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   /** A screen opened straight into an action from ⌘K: New person, New task, a note or a task. */
   const [launch, setLaunch] = useState<{ readonly kind: 'person' | 'company' | 'task' | 'note' | 'form' | 'visit' | 'report'; readonly value?: string; readonly n: number }>();
   const [recent, setRecent] = useState<ReadonlyArray<string>>([]);
+  /** The record that was open when ⌘K "New task" ran, so the task starts on it. */
+  const [taskFor, setTaskFor] = useState<{ readonly object: ObjectId; readonly id: string }>();
   const [switchWs, setSwitchWs] = useState<{ readonly id: 'northwind' | 'lumen' | 'olive'; readonly n: number }>();
   const [bookGuest, setBookGuest] = useState<{ readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number }>();
   const kind = bookings?.business?.kind ?? 'team';
@@ -105,7 +107,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   }, [bookings?.workspace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remember = (id: string) => setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, 5));
-  const go = (p: AppPage) => { setPage(p); setRecord(undefined); setTrail([]); setSub(undefined); setLaunch(undefined); };
+  const go = (p: AppPage) => { setPage(p); setRecord(undefined); setTrail([]); setSub(undefined); setLaunch(undefined); setTaskFor(undefined); };
   const openRecord = (object: ObjectId, id: string, tab?: string) => { setSub(undefined); if (page === 'bookings') setPage(`records:${object}`); if (record) setTrail((t) => [...t, record]); setRecord({ object, id, tab }); remember(`${object}:${id}`); };
   const back = () => { const prev = trail[trail.length - 1]; setTrail(trail.slice(0, -1)); setRecord(prev); };
   /** Opens a Bookings page; with a guest's name, their next meeting's drawer opens too. */
@@ -184,7 +186,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     if (k === 'create') { const [what, ...name] = restParts; if (what === 'company') launchAt('company', 'records:companies', name.join(':')); else launchAt('person', 'records:people', name.join(':')); return; }
     if (id === 'new:booking') openBookings('pages');
     else if (id === 'new:person') launchAt('person', 'records:people', '');
-    else if (id === 'new:task') launchAt('task', 'tasks');
+    else if (id === 'new:task') { const r = record; launchAt('task', 'tasks'); if (r) setTaskFor(r); }
     else if (id === 'new:list') setNewList(true);
     else if (id === 'imp:people') { go('records:people'); setSub('import'); }
   };
@@ -220,9 +222,9 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const main: ReactNode = page === 'home' ? <HomeScreen state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} onImport={() => { go('records:people'); setSub('import'); }} onSettings={(at) => openSettings(at)} onNewTask={() => launchAt('task', 'tasks')} onReports={(rid) => launchAt('report', 'insights', rid)} />
     : page === 'more' ? <MoreScreen state={state} bookings={bookings} kind={kind} unread={unread} onGo={go} onBookings={openBookings} onSettings={openSettings} onSignOut={() => setSigningOut(true)} onNewList={() => setNewList(true)} />
     : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
-    : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} />
+    : page === 'tasks' ? <TasksScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} startNew={launch?.kind === 'task' && !launch.value} openTask={launch?.kind === 'task' ? launch.value : undefined} newFor={taskFor} />
     : page === 'notes' ? <NotesScreen key={lk} state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} openNote={launch?.kind === 'note' ? launch.value : undefined} />
-    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
+    : page === 'settings' ? <SettingsScreen key={settingsStart.n} state={state} dispatch={dispatch} onBookings={openBookings} calendars={bookings?.calendars} onOpenRecord={(o, rid) => openRecord(o, rid)} onOpenList={(lid) => go(`list:${lid}`)} start={settingsStart.page} kind={kind} onDoor={(d) => { if (d === 'signin') setDoor('signin'); else setDoor(d); }} />
     : page === 'link' ? <LinkPageScreen state={state} dispatch={dispatch} handle={handleFor(state, bookings)} onBack={() => go('links')} />
     : page === 'links' ? <LinksScreen state={state} bookings={bookings} appsMenu={state.prefs.apps.menu} onLinkPage={() => go('link')} onBookings={openBookings}
         onBookingPage={(pageId, scenario) => setBookGuest((g) => ({ pageId, scenario, n: (g?.n ?? 0) + 1 }))} onForm={(id, visit) => launchAt(visit ? 'visit' : 'form', 'forms', id)} />
@@ -263,7 +265,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
           dispatch({ type: 'link/publish', page: { ...was, blocks: [...was.blocks, { kind: 'booking', id: newId('lb'), title: b.name, durationMinutes: b.minutes, location: { kind: 'video', label: b.place } }] } });
           return () => dispatch({ type: 'link/publish', page: was });
         }}
-        hiddenSections={state.prefs.apps.menu ? [] : ['menu']} person={{ name: state.me, email: me?.email ?? '' }} workspaceName={state.prefs.workspace.name}
+        hiddenSections={state.prefs.apps.menu ? [] : ['menu']} person={{ name: state.me, email: me?.email ?? '', src: state.prefs.photo }} workspaceName={state.prefs.workspace.name}
         onMenu={(id) => { if (id === 'signout') setSigningOut(true); else if (id === 'create') setDoor('welcome'); else openSettings(id === 'profile' ? 'profile' : 'general'); }}
         appMobileNav={<TabBar aria-label="Timefix" current={tabCurrent}
           items={[{ id: 'home', label: 'Home', icon: <Home {...i16} /> }, { id: 'inbox', label: 'Inbox', icon: <Inbox {...i16} />, badge: unread }, { id: 'records', label: 'Records', icon: <Users {...i16} /> },
@@ -280,6 +282,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         onFormat={(k) => { setSwitchWs((w) => ({ id: k === 'salon' ? 'lumen' : k === 'restaurant' ? 'olive' : 'northwind', n: (w?.n ?? 0) + 1 }));
           if (k !== 'team') { openBookings('meetings'); toast({ message: k === 'salon' ? 'Here’s a salon set up with services, staff and a booking page. Change anything.' : 'Here’s a restaurant set up with tables, services and a menu. Change anything.', tone: 'success' }); } }}
         onRestore={() => { dispatch({ type: 'history/add', text: `${state.me} restored ${state.prefs.workspace.name}` }); toast({ message: `${state.prefs.workspace.name} is back. Everyone has access again.`, tone: 'success' }); }}
+        onJoin={() => { const iv = state.prefs.invites[0]; if (!iv) return; rawDispatch({ type: 'member/set', member: { id: newId('u'), name: iv.email.split('@')[0]?.replace(/^./, (c) => c.toUpperCase()) ?? iv.email, email: iv.email, role: iv.role === 'guest' ? 'Guest' : 'Member', title: '' }, note: `${iv.email} accepted the invitation` }); rawDispatch({ type: 'prefs/update', fn: (q) => ({ invites: q.invites.filter((x) => x.id !== iv.id) }) }); toast({ message: `${iv.email} joined ${state.prefs.workspace.name}`, tone: 'success' }); }}
+        onAskJoin={() => { rawDispatch({ type: 'prefs/update', fn: (q) => ({ joinRequests: [...q.joinRequests, { id: newId('jr'), name: 'Arjun Nair', email: `arjun@${q.workspace.slug}.com` }] }) }); }}
         onFinish={(v) => { dispatch({ type: 'prefs/set', prefs: { workspace: { ...state.prefs.workspace, name: v.workspace, slug: v.slug }, invites: [...state.prefs.invites, ...v.invites.map((x) => ({ id: newId('iv'), email: x.email, role: x.role, at: new Date() }))] }, note: `${state.me} set up ${v.workspace}` });
           toast({ message: `Welcome to ${v.workspace}`, tone: 'success' }); go('home'); }} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={commands} recent={recentItems} fromQuery={fromQuery} onAction={onCommand} onShowShortcuts={() => { setSearch(false); setHelp(true); }}

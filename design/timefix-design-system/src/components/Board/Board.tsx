@@ -29,6 +29,8 @@ export interface BoardColumn {
   readonly hue?: Hue;
   readonly cards: ReadonlyArray<BoardCard>;
   readonly isCollapsed?: boolean;
+  /** A short figure beside the count, such as the column's total value. */
+  readonly meta?: string;
 }
 
 /** A finished drag: these cards now sit in `toColumnId`, before or after `target` (or at the end). */
@@ -187,6 +189,7 @@ function KanbanColumn({ column, noun, onMove, onAdd, onToggleCollapse, onOpen, s
         <span className={`tf-board__status tf-board__status--${hue}`}><StatusIcon shape={column.status} size={16} /></span>
         <h3 className="tf-board__title">{column.title}</h3>
         <Count><NumberRoll value={count} /></Count>
+        {column.meta ? <span className="tf-board__meta">{column.meta}</span> : null}
         <span className="tf-board__headactions">
           {onToggleCollapse && <IconButton size="sm" label={`Collapse ${column.title}`} onPress={() => onToggleCollapse(column.id)}><ChevronsLeft size={14} strokeWidth={1.75} /></IconButton>}
           {onAdd && <IconButton size="sm" label={`Add to ${column.title}`} onPress={() => onAdd(column.id)}><Plus size={14} strokeWidth={1.75} /></IconButton>}

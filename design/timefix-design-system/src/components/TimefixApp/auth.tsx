@@ -36,7 +36,8 @@ export interface DoorContext {
 }
 
 /** One door, full screen and modal (focus moves in, Escape leaves), with a way back to the app. */
-export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onFormat, onTwoFactorOn }: { readonly door: Door; readonly onDone: () => void; readonly onDoor: (d: Door) => void; readonly ctx: DoorContext;
+export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onFormat, onTwoFactorOn, onJoin, onAskJoin }: { readonly door: Door; readonly onDone: () => void; readonly onDoor: (d: Door) => void; readonly ctx: DoorContext;
+  /** Accepting the invitation adds the person; asking to join puts a request in Members. */ readonly onJoin?: () => void; readonly onAskJoin?: () => void;
   /** Two factor was set up on the way in. */ readonly onTwoFactorOn?: () => void;
   /** The first run's one question: what this business books. Salons and restaurants land in their own workspace. */ readonly onFormat?: (kind: 'team' | 'salon' | 'restaurant') => void;
   /** The first run's answers, to set the workspace up. */ readonly onFinish?: (v: OnboardingValues) => void; readonly onRestore?: () => void }) {
@@ -103,12 +104,12 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
           <div className="tf-door__card">
             <Avatar name={ctx.workspace} size={56} shape="square" />
             <AuthHeading title={`Join ${ctx.workspace}`} description="Sam Kim invited you as a Member. You’ll see the team’s records, pages and bookings." />
-            <Button variant="primary" size="lg" onPress={onDone}>Join workspace</Button>
+            <Button variant="primary" size="lg" onPress={() => { onJoin?.(); onDone(); }}>Join workspace</Button>
             <span className="tf-rec__muted">Signed in as rahul@{ctx.slug}.com · <button type="button" className="tf-rec__link" onClick={() => onDoor('signin')}>Not you?</button></span>
           </div>
         </AuthLayout>
       )}
-      {door === 'join' && <JoinRequest workspace={ctx.workspace} slug={ctx.slug} onDone={onDone} onOwn={() => onDoor('welcome')} />}
+      {door === 'join' && <JoinRequest workspace={ctx.workspace} slug={ctx.slug} onAsk={onAskJoin} onDone={onDone} onOwn={() => onDoor('welcome')} />}
       {door === 'deleted' && <Deleted workspace={ctx.workspace} onRestore={() => { onRestore?.(); onDone(); }} onSignOut={() => onDoor('signin')} />}
       {door === 'email' && <EmailPrefs email={ctx.email} />}
     </div>
@@ -134,7 +135,7 @@ function TwoFactor({ onDone, email }: { readonly onDone: () => void; readonly em
   );
 }
 
-function JoinRequest({ onDone, onOwn, workspace, slug }: { readonly onDone: () => void; readonly onOwn: () => void; readonly workspace: string; readonly slug: string }) {
+function JoinRequest({ onDone, onOwn, workspace, slug, onAsk }: { readonly onAsk?: () => void; readonly onDone: () => void; readonly onOwn: () => void; readonly workspace: string; readonly slug: string }) {
   const [sent, setSent] = useState(false);
   return (
     <AuthLayout aria-label="Join by email">
@@ -146,7 +147,7 @@ function JoinRequest({ onDone, onOwn, workspace, slug }: { readonly onDone: () =
         </> : <>
           <Avatar name={workspace} size={56} shape="square" />
           <AuthHeading title={`${workspace} is on Timefix`} description={`People with an @${slug}.com email can ask to join. Owners see your request and decide.`} />
-          <Button variant="primary" size="lg" onPress={() => setSent(true)}>Ask to join</Button>
+          <Button variant="primary" size="lg" onPress={() => { onAsk?.(); setSent(true); }}>Ask to join</Button>
           <Button variant="ghost" onPress={onOwn}>Make my own workspace instead</Button>
         </>}
       </div>

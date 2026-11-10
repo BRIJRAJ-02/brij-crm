@@ -103,3 +103,5 @@ Four reviewers read every screen; their findings and state are in `review-ledger
 - Links hub; Insights from real bookings and answers; Reports saved, renamed and deleted.
 - Bookings: the guest's own bookings hold their time and table, cut-offs hold on Manage, moves check the host is free, Confirm re-checks, walk-ins outside services show, sold out applies at once, table QR codes are unique and safe.
 - First run asks one question (Meetings, Appointments or Tables) and lands in that workspace; the phone has a More page with every section.
+
+Then a second review round and an improvement pass (10 Nov, late): reasons instead of "busy" when reassigning, deadlines as dates for guests, next free times on staff tiles, totals on the deals board, results per question, a direct Edit on Links and calmer form settings. The details are in `review-ledger.md`.
