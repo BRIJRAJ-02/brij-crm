@@ -29,11 +29,11 @@ export const strings = {
   noMatch: 'Nothing matches these filters',
   more: 'Show more',
   moreFailed: 'Couldn’t load more. Try again',
-  /** Each tab's own empty state: one line. */
+  /** Each tab's own empty state: its title and its action say it (the v5 mock); only Requests needs a line of why. */
   empty: {
-    upcoming: { title: 'Nothing coming up', text: 'Bookings from your booking pages show up here.' },
-    past: { title: 'Nothing behind you yet', text: 'Meetings that have happened show up here.' },
-    cancelled: { title: 'Nothing has been called off', text: 'Cancelled bookings show up here.' },
+    upcoming: { title: 'Nothing coming up', text: undefined },
+    past: { title: 'Nothing behind you yet', text: undefined },
+    cancelled: { title: 'Nothing has been called off', text: undefined },
     requests: { title: 'No requests waiting', text: 'Bookings on pages that confirm first wait here for you.' },
   },
   /** Meetings' list (the redesign): a day's quiet count, an event's line, a row's ⋯. */
