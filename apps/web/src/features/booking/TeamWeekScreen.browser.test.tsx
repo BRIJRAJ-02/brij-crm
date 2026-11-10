@@ -133,16 +133,26 @@ async function render(week: TeamWeek = WEEK) {
 const SAM_TUESDAY = 'Tuesday 3 November, Sam Lee: 10:00 am to 2:00 pm, this date only';
 
 describe('the Team week', () => {
-  it('names every cell, shows the offset only where it differs, and counts the footer', async () => {
+  it('names every cell, puts each zone and week under the name, and counts the footer', async () => {
     await render();
     await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
     await expect.element(page.getByRole('button', { name: SAM_TUESDAY })).toBeVisible();
-    await expect.element(page.getByText('36 h · UTC+5:30')).toBeVisible();
+    await expect.element(page.getByText('GMT+5:30 · 36 h')).toBeVisible();
     await expect.element(page.getByText('2 other schedules')).toBeVisible();
     // See only: Priya's cells are text, with Away read out.
-    expect(document.querySelectorAll('button[aria-label*="Priya Shah"]')).toHaveLength(0);
+    expect(document.querySelectorAll('button[aria-label*="Priya Shah:"]')).toHaveLength(0);
     await expect.element(page.getByText('Wednesday 4 November, Priya Shah: Away')).toBeInTheDocument();
     await expect.element(page.getByText('Monday 2 November: 3 people working, 24 h added up')).toBeInTheDocument();
+  });
+
+  it('opens a person from their name: their usual week in a centred popup, read only where it can’t change', async () => {
+    await render();
+    await page.getByRole('button', { name: 'Open Priya Shah’s hours' }).click();
+    const popup = page.getByRole('dialog', { name: 'Priya Shah’s hours' });
+    await expect.element(popup).toBeVisible();
+    await expect.element(popup.getByRole('link', { name: 'Open in Availability' })).toBeVisible();
+    await popup.getByRole('button', { name: 'Done' }).click();
+    await expect.element(popup).not.toBeInTheDocument();
   });
 
   it('says under each day how many the workspace link can book, only while there is one', async () => {

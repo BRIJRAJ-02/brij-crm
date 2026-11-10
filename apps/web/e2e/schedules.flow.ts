@@ -105,11 +105,11 @@ test.describe('availability schedules', () => {
 
     // Availability opens the default in its editor; New schedule asks for a name and opens the new one there.
     await page.goto(`/w/${slug}/bookings/availability`);
-    // The switcher is one Select (962dc4e48): its trigger reads the open schedule's name, its Default badge on the
-    // default, then its own label, Schedule.
+    // The switcher is one plain Select (962dc4e48; no badge since the redesign, 10 November 2026): its trigger reads
+    // the open schedule's name, then its own label, Schedule; "Default · Used by N pages" is quiet text beside it.
     const switcher = (name: string) => page.getByRole('button', { name: new RegExp(`^${name}( Default)? Schedule$`) });
     await expect(switcher('Working hours')).toBeVisible();
-    await expect(page.getByText('Default', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/^Default · /).first()).toBeVisible();
     await page.getByRole('button', { name: 'New schedule' }).click();
     const dialog = page.getByRole('dialog', { name: 'New schedule' });
     await dialog.getByLabel('Name').fill('Evenings');

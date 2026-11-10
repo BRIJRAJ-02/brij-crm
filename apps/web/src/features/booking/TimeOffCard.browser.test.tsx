@@ -1,15 +1,16 @@
-// Availability's Time off section in Chromium (spec 0037, AC-1285, AC-1286, AC-1445): upcoming rows with their reason
-// and stand in, Add time off by keyboard and pointer, the meetings inside listed after a save over them, Delete asking
-// first, See reading Away alone with nothing to change, and no axe violations in either theme. With
+// Availability's Time off section in Chromium (spec 0037, AC-1285, AC-1286): upcoming rows with their reason, note and
+// stand in, Add time off on the popup's month, the meetings inside listed after a save over them, Delete at once with
+// Undo in the toast (the simplicity sweep's rule 2, 10 November 2026), See reading Away alone with nothing to change,
+// and no axe violations in either theme. With
 // TIME_OFF_SHOTS set it saves the section at 390 and 1280 wide, light and dark.
 import '@crm/ui/styles.css';
 import type { DataLayer, TimeOffEntry, TimeOffHeld, TimeOffList, TimeOffSaved, TimeOffState } from '@crm/data';
 import { Card, PageColumn } from '@crm/ui';
 import { afterEach, describe, expect, it } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
-import { TimeOffCard } from './TimeOffCard.tsx';
+import { TimeOffCard, type TimeOffNotice } from './TimeOffCard.tsx';
 
 const ME = '00000000-0000-7000-8000-000000000001';
 const BO = '00000000-0000-7000-8000-000000000002';
@@ -95,7 +96,7 @@ async function render(
   list: TimeOffList,
   options: { inside?: TimeOffSaved['bookingsInside']; member?: { id: string; name: string } } = {},
 ) {
-  const made = fake(list, options.inside);
+  const made = { ...fake(list, options.inside), notices: [] as TimeOffNotice[] };
   shown = await renderInApp(
     () => (
       <PageColumn>
@@ -107,7 +108,7 @@ async function render(
           me={ME}
           nameOf={nameOf}
           people={PEOPLE}
-          onNotice={() => undefined}
+          onNotice={(notice) => made.notices.push(notice)}
           onOpenBookings={() => undefined}
         />
       </PageColumn>
@@ -126,16 +127,16 @@ const mine = (over: Partial<TimeOffList> = {}): TimeOffList => ({
 });
 
 describe('Time off', () => {
-  it('lists upcoming time off with its reason, stand in, note and who changed it, past ones folded', async () => {
+  it('lists upcoming time off with its reason, note, stand in and who changed it, past ones folded', async () => {
     await render(mine());
-    await expect.element(page.getByRole('rowheader', { name: '3 to 7 Nov 2030' })).toBeVisible();
-    await expect.element(page.getByText('Vacation · Bo covers')).toBeVisible();
-    await expect.element(page.getByText('Public holiday · Changed by Sam Lee')).toBeVisible();
+    await expect.element(page.getByText(/3 Nov 2030 – .* 7 Nov 2030/)).toBeVisible();
+    await expect.element(page.getByText('Away all day · Vacation · Lisbon · Bo covers')).toBeVisible();
+    await expect.element(page.getByText('Away all day · Public holiday · Changed by Sam Lee')).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Past/ })).toBeVisible();
-    await expect.element(page.getByText('Sick leave')).not.toBeVisible();
+    await expect.element(page.getByText(/Sick leave/)).not.toBeVisible();
   });
 
-  it('adds time off from the keyboard and lists the meetings already inside (AC-1285)', async () => {
+  it('adds time off on the month and lists the meetings already inside (AC-1285)', async () => {
     const made = await render(mine({ upcoming: [], past: [] }), {
       inside: [
         {
@@ -151,18 +152,16 @@ describe('Time off', () => {
     await page.getByRole('button', { name: 'Add time off' }).click();
     const dialog = page.getByRole('dialog', { name: 'Add time off' });
     await expect.element(dialog).toBeVisible();
-    // Save with no days says so on the field.
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    // Adding with no days says so under the month.
+    await dialog.getByRole('button', { name: 'Add time off' }).click();
     await expect.element(dialog.getByText('Pick the days.')).toBeVisible();
-    // Type the range into its segments: month, day, year, then the end.
-    const [first] = dialog.getByRole('spinbutton').elements();
-    if (first === undefined) throw new Error('no date segment');
-    await userEvent.click(first);
-    await userEvent.keyboard('04112030');
-    await userEvent.keyboard('05112030');
-    // No hint lines under the fields (spec 0058, AC-15).
-    expect(dialog.getByText(/Whole days|Optional\./).elements()).toHaveLength(0);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    // All day first, with no Some hours offered where no schedule is open.
+    expect(dialog.getByText('Some hours').elements()).toHaveLength(0);
+    // Today, twice: a run of one day.
+    const today = dialog.getByRole('button', { name: /^Today/ });
+    await today.click();
+    await today.click();
+    await dialog.getByRole('button', { name: 'Add time off' }).click();
     const inside = page.getByRole('dialog', { name: 'Time off saved' });
     // The meetings inside as a count, with Open Bookings for the list (spec 0058, AC-15).
     await expect.element(inside.getByText('1 meeting in this time off')).toBeVisible();
@@ -175,15 +174,18 @@ describe('Time off', () => {
     await inside.getByRole('button', { name: 'Done' }).click();
   });
 
-  it('asks before deleting, saying what happens (AC-1445), then removes the row', async () => {
+  it('deletes at once with Undo in the toast, and Undo adds it back', async () => {
     const made = await render(mine());
-    await page.getByRole('button', { name: 'Actions for 3 to 7 Nov 2030' }).click();
-    await page.getByRole('menuitem', { name: 'Delete' }).click();
-    const confirm = page.getByRole('alertdialog', { name: 'Delete time off, 3 to 7 Nov 2030?' });
-    await expect.element(confirm.getByText('These days open for booking again.')).toBeVisible();
-    await confirm.getByRole('button', { name: 'Delete time off' }).click();
+    await page.getByRole('button', { name: /^Delete time off on .*3 Nov 2030/ }).click();
+    // No confirm: the row goes, and the toast offers Undo.
+    expect(page.getByRole('alertdialog').elements()).toHaveLength(0);
     expect(made.removed).toEqual(['a']);
-    await expect.element(page.getByText('Vacation · Bo covers')).not.toBeInTheDocument();
+    await expect.element(page.getByText('Away all day · Vacation · Lisbon · Bo covers')).not.toBeInTheDocument();
+    const notice = made.notices.at(-1);
+    expect(notice?.message).toBe('Time off deleted');
+    notice?.action?.onAction();
+    await expect.poll(() => made.created).toHaveLength(1);
+    expect(made.created[0]).toMatchObject({ fromDate: '2030-11-03', toDate: '2030-11-07', reason: 'vacation' });
   });
 
   it('shows a colleague the reader may only See as Away, with nothing to change (AC-1286)', async () => {
@@ -194,7 +196,7 @@ describe('Time off', () => {
     await expect.element(page.getByText('Away').first()).toBeVisible();
     await expect.element(page.getByText(/Lisbon/)).not.toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: /Add time off/ })).not.toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: /Delete time off/ })).not.toBeInTheDocument();
   });
 
   it.each(THEMES)('has no axe violations in %s', async (theme) => {

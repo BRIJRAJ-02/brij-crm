@@ -552,7 +552,7 @@ describe('a row’s details (owner ask T12: the secondary columns left the table
     }
     // Every member is active: only someone on their way in has a status to read.
     expect(details.getByText('Status', { exact: true }).elements()).toHaveLength(0);
-    await expect.element(details.getByText('Reconnect needed')).toBeVisible();
+    await expect.element(details.getByText('Needs reconnecting')).toBeVisible();
     // Removing still asks first, in its own dialog.
     await details.getByRole('button', { name: 'Remove from workspace' }).click();
     await expect.element(page.getByRole('alertdialog', { name: 'Remove Linus Torvalds from Acme?' })).toBeVisible();
