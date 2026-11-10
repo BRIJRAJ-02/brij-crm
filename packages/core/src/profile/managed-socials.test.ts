@@ -1,7 +1,8 @@
 // The social links of someone with no login of their own (10 Nov 2026), kept by a team page manager, against the real
 // Postgres: a page only person's and a connected app's person's set saved, read back on their page, written to
-// History once; never someone with a login, an owner or admin, another workspace's person, or, from inside an app's
-// frame, another app's person; and never for someone without `link_pages.manage_team`.
+// History once; never someone with a login, an owner or admin, another workspace's person, a connected app's person
+// from Timefix itself (the app owns them, 10 Nov 2026) or from another app's frame; and never for someone without
+// `link_pages.manage_team`.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
@@ -132,6 +133,8 @@ const partnerUsers = {
 
 const LINKEDIN = { network: 'linkedin', href: 'https://www.linkedin.com/in/nickpage' } as const;
 const SITE = { network: 'website', href: 'https://nick.example.com/' } as const;
+/** The registry's name for the test's app, as the api reads it. */
+const HUB_NAME = () => Promise.resolve('Hub');
 
 /** A partner's person in `hub`'s workspace, with no login. */
 async function partnerPerson(hub: Awaited<ReturnType<typeof connected>>) {
@@ -220,9 +223,28 @@ describe('a managed person’s social links', () => {
     const hub = await connected();
     const pat = await partnerPerson(hub);
     const page = await enterTeamLinkPage(hub.owner, pat);
-    // In Timefix, and inside this app's frame.
-    expect(await getMyProfile(page)).toMatchObject({ socialsByManager: true });
+    // Inside this app's frame only: the app owns them, so in Timefix itself they are read only, the app named.
     expect(await getMyProfile(page, { fromConnection: hub.connectionId })).toMatchObject({ socialsByManager: true });
+    expect(await getMyProfile(page, { fromConnection: hub.connectionId })).not.toHaveProperty('managedByApp');
+    const inTimefix = await getMyProfile(page, { partnerName: HUB_NAME });
+    expect(inTimefix).not.toHaveProperty('socialsByManager');
+    expect(inTimefix.managedByApp).toEqual({ name: 'Hub' });
+    // The app's name unread: still the app's, unnamed.
+    expect((await getMyProfile(page)).managedByApp).toEqual({});
+    expect(
+      await refusalOf(
+        setManagedSocials(hub.owner, { member: pat, socials: [LINKEDIN] }, [], {}, { partnerName: HUB_NAME }),
+      ),
+    ).toEqual({ code: 'FORBIDDEN', message: 'Hub manages this person’s social links.' });
+    expect(await refusalOf(setManagedSocials(hub.owner, { member: pat, socials: [LINKEDIN] }))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'The app that added them manages this person’s social links.',
+    });
+    expect((await getMyProfile(page)).socials).toEqual([]);
+    // Refused, so nothing was written to History either.
+    expect(
+      (await listAuditEvents(hub.owner, {})).entries.filter((entry) => entry.action === 'member.profile_updated'),
+    ).toHaveLength(0);
     await setManagedSocials(
       hub.owner,
       { member: pat, socials: [LINKEDIN] },
@@ -236,12 +258,16 @@ describe('a managed person’s social links', () => {
     // Another app's frame on the same workspace never reaches them.
     const elsewhere = randomUUID();
     expect(await getMyProfile(page, { fromConnection: elsewhere })).not.toHaveProperty('socialsByManager');
+    // Nor does it learn which app keeps them.
+    expect(await getMyProfile(page, { fromConnection: elsewhere, partnerName: HUB_NAME })).not.toHaveProperty(
+      'managedByApp',
+    );
     expect(
       await refusalOf(
         setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: elsewhere }),
       ),
     ).toMatchObject({ code: 'NOT_FOUND' });
-    // A page only person is reachable from any frame of the workspace.
+    // A page only person is reachable from any frame of the workspace, and from Timefix itself.
     const added = await addPageOnlyPerson(hub.owner, { name: 'Nick', handle: handle() }, makers);
     await setManagedSocials(
       hub.owner,
@@ -252,12 +278,39 @@ describe('a managed person’s social links', () => {
         fromConnection: elsewhere,
       },
     );
+    await setManagedSocials(hub.owner, { member: added.memberId, socials: [SITE, LINKEDIN] });
+    const nick = await getMyProfile(await enterTeamLinkPage(hub.owner, added.memberId));
+    expect(nick).toMatchObject({ socialsByManager: true });
+    expect(nick).not.toHaveProperty('managedByApp');
+    expect(nick.socials).toHaveLength(2);
     // With a login of their own, the set is theirs.
     await testQuery(ownerUrl, `update managed_members set claimed_at = now() where member_id = $1`, [pat]);
     expect(await getMyProfile(page)).not.toHaveProperty('socialsByManager');
+    expect(await getMyProfile(page)).not.toHaveProperty('managedByApp');
+    expect(
+      await refusalOf(
+        setManagedSocials(hub.owner, { member: pat, socials: [] }, [], {}, { fromConnection: hub.connectionId }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(setManagedSocials(hub.owner, { member: pat, socials: [] }))).toMatchObject({
       code: 'NOT_FOUND',
     });
     expect((await getMyProfile(page)).socials).toHaveLength(1);
+  });
+
+  it('answers an app’s person made an admin as an admin, not as the app’s', async () => {
+    const hub = await connected();
+    const pat = await partnerPerson(hub);
+    await testQuery(ownerUrl, `update members set role = 'admin' where id = $1`, [pat]);
+    const page = await enterTeamLinkPage(hub.owner, pat);
+    expect(await getMyProfile(page, { partnerName: HUB_NAME })).not.toHaveProperty('managedByApp');
+    expect(
+      await refusalOf(
+        setManagedSocials(hub.owner, { member: pat, socials: [LINKEDIN] }, [], {}, { partnerName: HUB_NAME }),
+      ),
+    ).toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This person is an owner or admin now, so their social links aren’t changed from Team pages.',
+    });
   });
 });

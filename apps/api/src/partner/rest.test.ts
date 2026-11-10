@@ -381,7 +381,7 @@ describe('/api/partner/v1', () => {
     await expect(frame.embed.session()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
   });
 
-  it('keeps the social links of its own people from the frame, never another app’s (10 Nov 2026)', async () => {
+  it('keeps the social links of its own people from the frame, never another app’s, nor from Timefix itself (10 Nov 2026)', async () => {
     const owner = await memberWithWorkspace(app);
     /** A partner connected to the owner's workspace, with one person of its own; its admin launched into the frame. */
     const connect = async (admin: boolean) => {
@@ -457,14 +457,22 @@ describe('/api/partner/v1', () => {
     });
     expect(saved.socials).toHaveLength(1);
     // Another app's person on the same workspace: read only from this frame, and refused as absent.
-    expect(await frame.profile.get({ workspace: owner.slug, member: theirs })).not.toHaveProperty('socialsByManager');
+    const theirsFromFrame = await frame.profile.get({ workspace: owner.slug, member: theirs });
+    expect(theirsFromFrame).not.toHaveProperty('socialsByManager');
+    expect(theirsFromFrame).not.toHaveProperty('managedByApp');
     await expect(
       frame.teamPages.setSocials({ workspace: owner.slug, member: theirs, socials: links, mutationId: newId() }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    // In Timefix itself, the workspace's own manager keeps either.
+    // In Timefix itself, an app's people are that app's (10 Nov 2026): read only, the app named, and refused.
+    const theirsInTimefix = await owner.client.profile.get({ workspace: owner.slug, member: theirs });
+    expect(theirsInTimefix).toMatchObject({ managedByApp: { name: 'Hub' } });
+    expect(theirsInTimefix).not.toHaveProperty('socialsByManager');
+    expect(await owner.client.profile.get({ workspace: owner.slug, member: ours })).not.toHaveProperty(
+      'socialsByManager',
+    );
     await expect(
       owner.client.teamPages.setSocials({ workspace: owner.slug, member: theirs, socials: links, mutationId: newId() }),
-    ).resolves.toMatchObject({ socials: [{ network: 'linkedin' }] });
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Hub manages this person’s social links.' });
   });
 
   it('answers a partner’s frame origins for the edge, and none for an unknown client id', async () => {

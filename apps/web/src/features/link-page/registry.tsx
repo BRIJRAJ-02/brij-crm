@@ -101,7 +101,8 @@ export interface BlockEditorProps {
 /**
  * Who keeps a page's social links (10 Nov 2026): the page's own person (`self`, through their own links store); a
  * team page manager, for someone with no login (`team`, `teamPages.setSocials`), whose set the phone shows through
- * `onShow`; or the person themselves, elsewhere (`kept`): shown read only.
+ * `onShow`; or someone else (`kept`), shown read only: the person themselves, or, with `byApp`, the connected app that
+ * added them (its name when known), whose people are changed only from inside its own frame.
  */
 export type SocialsKeeper =
   | { readonly kind: 'self' }
@@ -110,7 +111,7 @@ export type SocialsKeeper =
       readonly member: string;
       readonly onShow: (links: readonly SocialLinkItem[]) => void;
     }
-  | { readonly kind: 'kept' };
+  | { readonly kind: 'kept'; readonly byApp?: { readonly name?: string | undefined } };
 
 /** What follows a save once it lands. */
 export interface AfterSave {

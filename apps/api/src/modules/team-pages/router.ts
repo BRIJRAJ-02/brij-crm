@@ -114,12 +114,14 @@ export const teamPagesRouter = member.teamPages.router({
     return named;
   }),
   // The social links of someone with no login of their own (10 Nov 2026), from their page's editor. Inside a connected
-  // app's frame only that app's people and the workspace's page only people (core checks the connection). Their page
+  // app's frame only that app's people and the workspace's page only people; in Timefix itself only page only people,
+  // since an app's people are that app's to keep (core checks both, and names the app in its refusal). Their page
   // draws the links, so the edge's copies of it are deleted once the change has committed.
   setSocials: member.teamPages.setSocials.handler(async ({ context, input }) => {
     const { handle, ...saved } = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setManagedSocials(context.scope, { member: input.member, socials: input.socials }, hooks, sourceOf(context), {
         fromConnection: context.embed?.connectionId,
+        partnerName: async (partnerId) => (await context.partners.partnerById(partnerId))?.name,
       }),
     );
     if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));

@@ -37,7 +37,7 @@ import { touched } from '../engine/definitions.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
-import { managerKeepsSocials } from '../profile/managed-socials.ts';
+import { socialsKeeperOf } from '../profile/managed-socials.ts';
 import { touchLinkPage } from '../profile/page-touch.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
@@ -54,6 +54,11 @@ export interface ProfileExtras {
    * `socialsByManager` says what that frame may keep. Absent in Timefix itself.
    */
   readonly fromConnection?: string | undefined;
+  /**
+   * A partner's display name by its id, for a team page manager's read of a connected app's person whose social
+   * links that app keeps (`managedByApp`); without it the name is left out.
+   */
+  readonly partnerName?: ((partnerId: string) => Promise<string | undefined>) | undefined;
 }
 
 /** The caller's member id, or a refusal: only a member has a profile. */
@@ -87,6 +92,20 @@ async function readProfile(
   extras: ProfileExtras,
   lock: boolean,
 ): Promise<MyProfile> {
+  return (await readProfileKept(tx, scope, memberId, extras, lock)).profile;
+}
+
+/**
+ * The profile, and the connected app that keeps the person's social links when one does (`managedByApp`, its name
+ * left for the caller to read outside the transaction).
+ */
+async function readProfileKept(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  memberId: string,
+  extras: ProfileExtras,
+  lock: boolean,
+): Promise<{ readonly profile: MyProfile; readonly byApp?: string }> {
   const query = tx
     .select({
       name: members.name,
@@ -147,16 +166,20 @@ async function readProfile(
           .limit(1)
       )[0]
     : undefined;
-  // Whether the manager keeps their social links here (10 Nov 2026): someone with no login of their own.
-  const socialsByManager =
+  // Who keeps their social links (10 Nov 2026): the manager, here, for someone with no login of their own; or, outside
+  // its own frame, the connected app that added them, named once the transaction has ended.
+  const keeper =
     forTeam && managed !== undefined
-      ? await managerKeepsSocials(tx, scope.workspaceId, memberId, { fromConnection: extras.fromConnection })
-      : false;
-  return {
+      ? await socialsKeeperOf(tx, scope.workspaceId, memberId, { fromConnection: extras.fromConnection })
+      : undefined;
+  const socialsByManager = keeper === 'manager';
+  const byApp = typeof keeper === 'object' ? keeper.partnerId : undefined;
+  const profile: MyProfile = {
     memberId,
     name: row.name,
     ...(managed === undefined ? {} : { managedBy: managed.partnerId === null ? 'team' : 'partner' }),
     ...(socialsByManager ? { socialsByManager: true as const } : {}),
+    ...(byApp === undefined ? {} : { managedByApp: {} }),
     email: row.email,
     workspaceTimeZone: row.workspaceTimeZone,
     workspaceName: row.workspaceName,
@@ -184,12 +207,17 @@ async function readProfile(
       ? {}
       : { shareImage: profileSharePath(held.handle, held.shareImageVersion) }),
   };
+  return { profile, ...(byApp === undefined ? {} : { byApp }) };
 }
 
 /** The caller's own profile in this workspace (any active member, themself only). */
 export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {}): Promise<MyProfile> {
   const memberId = selfId(scope);
-  return inWorkspace(scope, (tx) => readProfile(tx, scope, memberId, extras, false));
+  const { profile, byApp } = await inWorkspace(scope, (tx) => readProfileKept(tx, scope, memberId, extras, false));
+  if (byApp === undefined) return profile;
+  // The app's name, read from the global registry once the workspace's transaction has ended.
+  const name = (await extras.partnerName?.(byApp).catch(() => undefined))?.trim();
+  return { ...profile, managedByApp: name === undefined || name === '' ? {} : { name } };
 }
 
 /**

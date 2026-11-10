@@ -59,6 +59,9 @@ export const reachStrings = {
   socials: 'Social icons',
   socialsRow: 'Your social links as icons',
   socialsKept: 'They change their social links in their own Profile.',
+  /** A connected app's person, whose links that app keeps (10 Nov 2026): named when the app's name is known. */
+  socialsByApp: (app: string | undefined) =>
+    app === undefined ? 'Managed by the app that added them.' : `Managed by ${app}.`,
   socialsNotSaved: 'Their social links weren’t saved.',
   newMedia: 'Add video or music',
   editMedia: 'Edit video or music',

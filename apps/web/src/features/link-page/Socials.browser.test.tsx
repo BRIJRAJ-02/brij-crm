@@ -180,6 +180,20 @@ describe('Social icons, with its links (10 Nov 2026)', () => {
     await expect.element(page.getByRole('textbox').first()).toHaveAttribute('readonly');
   });
 
+  it('shows a connected app’s person’s links read only, with the app that manages them', async () => {
+    await render({ keeper: { kind: 'kept', byApp: { name: 'Hub' } }, links: [LINKEDIN], data: {} });
+    await expect.element(page.getByText('Managed by Hub.')).toBeVisible();
+    await expect.element(page.getByText(reachStrings.socialsKept)).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: 'Add social link' })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('textbox').first()).toHaveAttribute('readonly');
+  });
+
+  it('says an app manages them when the app’s name is unknown', async () => {
+    await render({ keeper: { kind: 'kept', byApp: {} }, links: [], data: {} });
+    await expect.element(page.getByText('Managed by the app that added them.')).toBeVisible();
+    await expect.element(page.getByText('No social links yet')).not.toBeInTheDocument();
+  });
+
   it('adds nothing from the keyboard while there is no link', async () => {
     const onSubmit = vi.fn();
     await render({ keeper: { kind: 'self' }, onSubmit });

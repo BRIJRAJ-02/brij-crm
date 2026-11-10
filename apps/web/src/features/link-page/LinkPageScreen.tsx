@@ -77,7 +77,7 @@ import {
   type ChosenFacts,
   type SocialsKeeper,
 } from './registry.tsx';
-import { drawnSocials } from './editors-reach.tsx';
+import { drawnSocials, socialsKeptLine } from './editors-reach.tsx';
 import { reachStrings } from './reach-strings.ts';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
@@ -533,12 +533,15 @@ function Blocks({
     [isTeam, saved, socialPreview, profile.socials],
   );
   // Who keeps those links, for the Social icons editor (10 Nov 2026): you, your own; someone else's page, the manager
-  // when that person has no login of their own (a page only person, or a connected app's), else the person, read only.
+  // when that person has no login of their own (a page only person, or, inside its own frame, a connected app's), else
+  // read only: the connected app that added them keeps theirs (named), anyone else keeps their own.
   const socialsKeeper: SocialsKeeper = !isTeam
     ? { kind: 'self' }
     : member !== undefined && profile.socialsByManager === true
       ? { kind: 'team', member, onShow: (links) => setSavedFor({ over: profile.socials, links }) }
-      : { kind: 'kept' };
+      : profile.managedByApp !== undefined
+        ? { kind: 'kept', byApp: profile.managedByApp }
+        : { kind: 'kept' };
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
@@ -1041,9 +1044,10 @@ function Blocks({
   );
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
-    // Someone who keeps their own links and has none: theirs to add, in their own Profile.
+    // Someone who keeps their own links (or whose app keeps them) and has none: nothing to add here, and the line says
+    // who adds them.
     (kind === 'socials' && socialsKeeper.kind === 'kept' && shownSocials.length === 0
-      ? reachStrings.socialsKept
+      ? socialsKeptLine(socialsKeeper)
       : undefined);
   const roomFor = (kind: AddableKind) => offReason(kind) === undefined;
   const openAdd = (kind: AddableKind) => {

@@ -3,9 +3,12 @@
 // login reaches Timefix only through the app's frame, so neither has a Settings › Profile of their own to keep their
 // links in: a team page manager keeps them from the person's page editor.
 //
-// - Who: someone with `link_pages.manage_team`, from a member. Inside a connected app's frame (spec 0070), only that
-//   app's own people and the workspace's page only people; another app's people are `NOT_FOUND`, as is anyone with a
-//   login, anyone removed, and anyone in another workspace. One made an owner or admin is `FORBIDDEN`: theirs to keep.
+// - Who: someone with `link_pages.manage_team`, from a member. The system that owns a person's profile controls it (10
+//   Nov 2026, the owner, as with directory synced accounts): a connected app's person is that app's to keep, so only
+//   from inside that app's own frame (spec 0070); in Timefix itself they are `FORBIDDEN`, with the app's name, and
+//   from another app's frame `NOT_FOUND`. The workspace's page only people are kept from either. Anyone with a login,
+//   anyone removed, and anyone in another workspace is `NOT_FOUND`. One made an owner or admin is `FORBIDDEN`: theirs
+//   to keep.
 // - Like a name or a title, the set is live the moment it saves (it is profile data, never a page's draft), so the
 //   page's Publish bar has nothing to read; the api clears the edge's copies of their page once it commits.
 import type { ManagedSocialsSaved, SocialLink } from '@crm/contracts';
@@ -25,6 +28,11 @@ const { managedMembers, members } = schema;
 export interface ManagerPlace {
   /** The frame's connection (spec 0070, AC-7031); absent in Timefix itself. */
   readonly fromConnection?: string | undefined;
+  /**
+   * A partner's display name by its id (the global registry, which a workspace transaction can't read), for the
+   * sentence that says which app keeps a person's links; without it, or with no name, the sentence names no app.
+   */
+  readonly partnerName?: ((partnerId: string) => Promise<string | undefined>) | undefined;
 }
 
 const NOT_KEPT = 'That person keeps their own social links. They change them in their own Profile.';
@@ -35,12 +43,23 @@ const NOT_A_MEMBER = 'Only a member of this workspace changes someone’s social
 interface Kept {
   readonly userId: string;
   readonly role: string;
+  /** Set when a connected app keeps them and the manager stands outside that app's frame: theirs, read only. */
+  readonly byPartner?: string;
+}
+
+/** The sentence a manager outside the app's frame reads, naming the app when its name is known. */
+async function partnerKeepsSocials(place: ManagerPlace, partnerId: string): Promise<string> {
+  const name = await place.partnerName?.(partnerId).catch(() => undefined);
+  return name === undefined || name.trim() === ''
+    ? 'The app that added them manages this person’s social links.'
+    : `${name} manages this person’s social links.`;
 }
 
 /**
  * The person `memberId` whose social links a manager may keep, or undefined: an active managed person of this
  * workspace with no login (`claimed_at` null), not removed, whose identity is their member row's, and, from a frame,
- * a page only person or one of that frame's connection. With `lock`, both rows are locked for the write.
+ * a page only person or one of that frame's connection. A connected app's person read outside a frame comes back
+ * with `byPartner`: the app keeps them. With `lock`, both rows are locked for the write.
  */
 async function keptPerson(
   tx: WorkspaceTx,
@@ -81,28 +100,33 @@ async function keptPerson(
     .where(and(eq(members.workspaceId, workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
   const [person] = lock ? await personQuery.for('update') : await personQuery;
   if (person === undefined || person.userId !== managed.userId || person.role === 'guest') return undefined;
-  return { userId: managed.userId, role: person.role };
+  // In Timefix itself, a connected app's person is the app's to keep (10 Nov 2026).
+  const byPartner = place.fromConnection === undefined && managed.partnerId !== null ? managed.partnerId : undefined;
+  return { userId: managed.userId, role: person.role, ...(byPartner === undefined ? {} : { byPartner }) };
 }
 
 /**
- * Whether a team page manager may keep `memberId`'s social links from the editor (`MyProfile.socialsByManager`):
- * the same rule `setManagedSocials` writes by, read without a lock. One or two statements.
+ * Who keeps `memberId`'s social links, for a team page manager's editor (`MyProfile.socialsByManager` and
+ * `managedByApp`): `manager` when the manager may change them here, `{ partnerId }` when a connected app keeps them
+ * and the manager stands outside that app's frame, undefined when the person keeps their own or isn't reachable from
+ * here. The same rule `setManagedSocials` writes by, read without a lock. One or two statements.
  */
-export async function managerKeepsSocials(
+export async function socialsKeeperOf(
   tx: WorkspaceTx,
   workspaceId: string,
   memberId: string,
   place: ManagerPlace,
-): Promise<boolean> {
+): Promise<'manager' | { readonly partnerId: string } | undefined> {
   const kept = await keptPerson(tx, workspaceId, memberId, place, false);
-  return kept !== undefined && kept.role !== 'owner' && kept.role !== 'admin';
+  if (kept === undefined || kept.role === 'owner' || kept.role === 'admin') return undefined;
+  return kept.byPartner === undefined ? 'manager' : { partnerId: kept.byPartner };
 }
 
 /**
  * Replaces the social links of a person with no login of their own (10 Nov 2026), from their page's editor:
- * `link_pages.manage_team`, from a member. Only a page only person, or a connected app's person who has no login (from
- * inside an app's frame, only that app's own); anyone else, anyone removed and anyone elsewhere is `NOT_FOUND`, one
- * made an owner or admin is `FORBIDDEN`. Each link is checked again, one per network, at most ten. A set that changes
+ * `link_pages.manage_team`, from a member. Only a page only person, or a connected app's person who has no login from
+ * inside that app's own frame; that app's person from Timefix itself is `FORBIDDEN` (the app keeps them), anyone else,
+ * anyone removed and anyone elsewhere is `NOT_FOUND`, one made an owner or admin is `FORBIDDEN`. Each link is checked again, one per network, at most ten. A set that changes
  * nothing writes nothing; otherwise, in one transaction under both rows' locks: the set, one `member.profile_updated`
  * History row with the manager as actor, and a `members` outbox row. Answers the set as saved, and their handle for
  * the api to clear the edge's copies of their page.
@@ -117,13 +141,20 @@ export async function setManagedSocials(
   requirePermission(scope, 'link_pages.manage_team');
   if (scope.actor.type !== 'member') throw refuse('FORBIDDEN', NOT_A_MEMBER);
   const socials = checkedSocialLinks(input.socials);
-  const { result } = await runWrite(
+  // The app that keeps the person, when the write was refused for it: named only once the transaction has ended, so
+  // the registry's read never waits with this person's rows locked.
+  let refusedFor: string | undefined;
+  const written = runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       const kept = await keptPerson(tx, scope.workspaceId, input.member, place, true);
       if (kept === undefined) throw refuse('NOT_FOUND', NOT_KEPT);
       if (kept.role === 'owner' || kept.role === 'admin') throw refuse('FORBIDDEN', OWNER_OR_ADMIN);
+      if (kept.byPartner !== undefined) {
+        refusedFor = kept.byPartner;
+        throw refuse('FORBIDDEN', 'A connected app manages this person’s social links.');
+      }
       const held = await socialLinksOfUser(tx, kept.userId);
       const page = (await publicProfilesOf(tx, scope.workspaceId, [kept.userId])).get(kept.userId);
       const saved = { socials: [...socials], ...(page === undefined ? {} : { handle: page.handle }) };
@@ -147,5 +178,10 @@ export async function setManagedSocials(
     },
     hooks,
   );
-  return result;
+  try {
+    return (await written).result;
+  } catch (error) {
+    if (refusedFor !== undefined) throw refuse('FORBIDDEN', await partnerKeepsSocials(place, refusedFor));
+    throw error;
+  }
 }

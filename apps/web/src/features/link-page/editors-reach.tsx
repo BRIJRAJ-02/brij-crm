@@ -170,6 +170,13 @@ export function SocialsEditor(props: BlockEditorProps) {
   );
 }
 
+/** Whose read only links these are: the app that added them, or the person, in their own Profile. */
+export function socialsKeptLine(keeper: SocialsKeeper): string {
+  return keeper.kind === 'kept' && keeper.byApp !== undefined
+    ? words.socialsByApp(keeper.byApp.name)
+    : words.socialsKept;
+}
+
 /** The links and the block's own fields, once the set they start from is known. */
 function SocialsFields({
   item,
@@ -270,7 +277,7 @@ function SocialsFields({
     >
       <Form id={formId} onSubmit={submit} label={words.newSocials} focusesFirstField={focusFirst}>
         {/* Read only, the one line says whose they are; with none, it is all there is to say. */}
-        {isReadOnly && <Callout tone="info">{words.socialsKept}</Callout>}
+        {isReadOnly && <Callout tone="info">{socialsKeptLine(keeper)}</Callout>}
         {(!isReadOnly || rows.length > 0) && (
           <SocialLinksEditor
             rows={rows}

@@ -126,10 +126,14 @@ export const profileRouter = member.profile.router({
   // look as their page shows them. What only the session knows (the Google picture, Sync) is the caller's own alone.
   get: member.profile.get.handler(async ({ context, input }) => {
     const page = await pageOf(context, input.member);
-    // Someone else's page from inside a connected app's frame says what that frame may keep (their social links).
+    // Someone else's page says what the manager may keep there (their social links): inside a connected app's frame,
+    // that app's own people; in Timefix itself, not an app's people, whose app is named instead.
     return page === context.scope
       ? getMyProfile(page, await extrasOf(context))
-      : getMyProfile(page, { fromConnection: context.embed?.connectionId });
+      : getMyProfile(page, {
+          fromConnection: context.embed?.connectionId,
+          partnerName: async (partnerId) => (await context.partners.partnerById(partnerId))?.name,
+        });
   }),
   update: member.profile.update.handler(async ({ context, input }) => {
     const extras = await extrasOf(context);
