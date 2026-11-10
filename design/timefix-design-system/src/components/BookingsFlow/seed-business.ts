@@ -105,7 +105,14 @@ export function olive(now = new Date()): BookingsState {
     savedHours: [{ id: 'working', name: 'Opening hours', hours }],
     business: {
       kind: 'restaurant', kindLabel: 'Mediterranean restaurant', handle: 'olive', address: '7 Apollo Bunder, Colaba, Mumbai', area: 'Colaba', phone: '+91 22 4000 1188',
-      about: 'Wood-fired plates and long lunches by the sea. The terrace opens at sunset.', rating: 4.7, reviews: 1204, amenities: ['Outdoor seating', 'Vegetarian options', 'Card payments'], published: true,
+      about: 'Wood-fired plates and long lunches by the sea. The terrace opens at sunset.',
+      menu: [
+        { name: 'Burrata, heirloom tomatoes', description: 'Basil oil, toasted sourdough', price: '₹780', tag: 'Vegetarian' },
+        { name: 'Wood-fired octopus', description: 'Smoked paprika, crushed potatoes, lemon', price: '₹1,250' },
+        { name: 'Lamb shoulder for two', description: 'Slow roasted for eight hours, salsa verde', price: '₹2,400' },
+        { name: 'Wild mushroom orzo', description: 'Parmesan, thyme, truffle oil', price: '₹920', tag: 'Vegetarian' },
+        { name: 'Olive oil cake', description: 'Orange, mascarpone', price: '₹480' },
+      ], rating: 4.7, reviews: 1204, amenities: ['Outdoor seating', 'Vegetarian options', 'Card payments'], published: true,
       photos: [scene('dining', '#e8d9c3'), scene('terrace', '#f4c9a0'), scene('bar', '#d8c3a5')],
     },
     tables,

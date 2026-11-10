@@ -5,8 +5,8 @@ import { useSlidingIndicator } from '../Tabs/useSlidingIndicator.ts';
 import { cx } from '../../lib/cx.ts';
 import './DayStrip.css';
 
-/** One day in the strip. `count` is how many meetings it holds (up to three dots draw). */
-export interface StripDay { readonly id: string; readonly weekday: string; readonly date: number; readonly label: string; readonly count: number; readonly isToday?: boolean }
+/** One day in the strip. `count` is how many meetings it holds (up to three dots draw); `dots` draws a different number, such as how full a day is. */
+export interface StripDay { readonly id: string; readonly weekday: string; readonly date: number; readonly label: string; readonly count: number; readonly isToday?: boolean; readonly dots?: number }
 
 /** Props for DayStrip. */
 export interface DayStripProps {
@@ -37,7 +37,7 @@ export function DayStrip({ days, value, onChange, onPrevious, onNext, label = 'D
               <span className="tf-daystrip__weekday">{d.isToday ? 'Today' : d.weekday}</span>
               <span className="tf-daystrip__date tf-num">{d.date}</span>
               <span className="tf-daystrip__dots" aria-hidden="true">
-                {Array.from({ length: Math.min(d.count, 3) }, (_, n) => <span key={n} className="tf-daystrip__dot" />)}
+                {Array.from({ length: Math.min(d.dots ?? d.count, 3) }, (_, n) => <span key={n} className="tf-daystrip__dot" />)}
               </span>
             </Radio>
           ))}

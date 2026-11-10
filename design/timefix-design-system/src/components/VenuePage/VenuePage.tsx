@@ -29,6 +29,8 @@ export interface Venue {
   /** Meets online only: no directions or map. */
   readonly isOnline?: boolean;
 }
+/** A dish or product shown on the page (not booked from it). */
+export interface VenueMenuItem { readonly name: string; readonly description?: string; readonly price: string; readonly tag?: string }
 /** One thing a guest can book from the page: a service, a meeting, a table. */
 export interface VenueItem { readonly id: string; readonly name: string; readonly meta: string; readonly price?: string; readonly description?: string; readonly categoryId?: string }
 /** Someone on the team. */
@@ -51,11 +53,13 @@ export interface VenuePageProps {
   readonly aside?: ReactNode;
   /** The foot under the page (Powered by). */
   readonly foot?: ReactNode;
+  /** A menu to read (a restaurant's dishes), shown before About. */
+  readonly menu?: ReadonlyArray<VenueMenuItem>;
 }
 
 /** A public business page in the shape guests know from Fresha and OpenTable: name, rating and where; a photo grid; the menu by category with Book on each;
  *  the team; about and opening hours; a side card with the main action that stays in view. Shared by every module that books (services, tables, meetings). */
-export function VenuePage({ venue, items = [], categories, itemsTitle = 'Services', team = [], onBook, bookLabel = 'Book now', onBookNow, aside, foot }: VenuePageProps) {
+export function VenuePage({ venue, items = [], categories, itemsTitle = 'Services', team = [], onBook, bookLabel = 'Book now', onBookNow, aside, foot, menu = [] }: VenuePageProps) {
   const cats = categories?.filter((c) => items.some((i) => i.categoryId === c.id)) ?? [];
   const [cat, setCat] = useState<string>(cats[0]?.id ?? 'all');
   const [allPhotos, setAllPhotos] = useState(false);
@@ -109,6 +113,19 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
               </ul>
             </section>
           )}
+          {menu.length > 0 && (
+            <section className="tf-venue__section" aria-labelledby="tf-venue-menu">
+              <h2 id="tf-venue-menu" className="tf-venue__h2">Menu</h2>
+              <ul className="tf-venue__menu">
+                {menu.map((d) => (
+                  <li key={d.name} className="tf-venue__dish">
+                    <span className="tf-venue__dish-text"><span className="tf-venue__dish-name">{d.name}{d.tag && <span className="tf-venue__dish-tag">{d.tag}</span>}</span>{d.description && <span className="tf-venue__muted">{d.description}</span>}</span>
+                    <span className="tf-venue__dish-price tf-num">{d.price}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {team.length > 0 && (
             <section className="tf-venue__section" aria-labelledby="tf-venue-team">
               <h2 id="tf-venue-team" className="tf-venue__h2">Team</h2>
@@ -121,7 +138,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
             <section className="tf-venue__section" aria-labelledby="tf-venue-about">
               <h2 id="tf-venue-about" className="tf-venue__h2">About</h2>
               {venue.about && <p className="tf-venue__about">{venue.about}</p>}
-              {!venue.isOnline && <div className="tf-venue__map" aria-hidden="true"><span className="tf-venue__pin"><MapPin size={18} strokeWidth={2} /></span></div>}
+              {!venue.isOnline && <VenueMap label={venue.area ?? venue.address} />}
               {!venue.isOnline && <p className="tf-venue__muted">{venue.address} · <a className="tf-venue__link" href={`https://maps.google.com/?q=${encodeURIComponent(venue.address)}`} target="_blank" rel="noreferrer">Get directions</a></p>}
               <div className="tf-venue__facts">
                 {venue.hours && (
@@ -175,12 +192,14 @@ export interface VenueCheckoutProps {
 export function VenueCheckout({ steps, step, title, onBack, children, summary }: VenueCheckoutProps) {
   return (
     <div className="tf-venue-co">
-      <div className="tf-venue-co__top"><IconButton label="Back" onPress={onBack}><ArrowLeft size={18} strokeWidth={1.75} /></IconButton></div>
       <div className="tf-venue-co__grid">
         <div className="tf-venue-co__main">
+          <div className="tf-venue-co__nav">
+          <IconButton label="Back" size="sm" onPress={onBack}><ArrowLeft size={16} strokeWidth={1.75} /></IconButton>
           <ol className="tf-venue-co__crumbs" aria-label="Steps">
             {steps.map((s, n) => <li key={s} className={cx(n === step && 'is-current', n < step && 'is-done')} aria-current={n === step ? 'step' : undefined}>{s}{n < steps.length - 1 && <ChevronRight size={12} strokeWidth={2} aria-hidden="true" />}</li>)}
           </ol>
+          </div>
           <h2 className="tf-venue-co__title" tabIndex={-1}>{title}</h2>
           <div className="tf-venue-co__body" key={step}>{children}</div>
         </div>
@@ -197,5 +216,24 @@ export function PersonTile({ name, title, isSelected, onPress, any = false }: { 
       {any ? <span className="tf-venue-tile__any" aria-hidden="true"><Users size={20} strokeWidth={1.75} /></span> : <Avatar name={name} size={48} />}
       <strong>{name}</strong><span className="tf-venue__muted">{title}</span>
     </AriaButton>
+  );
+}
+
+/** A drawn neighbourhood map (the page can't load a real one): blocks, two main roads, a park, the sea, and the pin with the area's name. */
+function VenueMap({ label }: { readonly label: string }) {
+  return (
+    <div className="tf-venue__map" role="img" aria-label={`Map of ${label}`}>
+      <svg className="tf-venue__map-art" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect className="tf-venue__map-land" width="600" height="240" />
+        <path className="tf-venue__map-water" d="M600 0 L600 240 L470 240 C490 190 450 150 490 110 C520 80 500 30 530 0 Z" />
+        <rect className="tf-venue__map-park" x="60" y="140" width="110" height="70" rx="12" />
+        {[[30, 20, 120, 80], [180, 20, 110, 90], [310, 20, 120, 60], [200, 140, 90, 80], [310, 110, 110, 100], [30, 230, 10, 10]].map(([x = 0, y = 0, w = 0, h = 0], n) => <rect key={n} className="tf-venue__map-block" x={x} y={y} width={w} height={h} rx="8" />)}
+        <path className="tf-venue__map-road" d="M0 120 C150 115 300 125 470 100" />
+        <path className="tf-venue__map-road" d="M300 0 C295 80 305 160 290 240" />
+        <path className="tf-venue__map-lane" d="M0 60 L300 55 M170 120 L175 240 M300 190 L450 180" />
+      </svg>
+      <span className="tf-venue__pin"><MapPin size={18} strokeWidth={2} /></span>
+      <span className="tf-venue__map-label">{label}</span>
+    </div>
   );
 }

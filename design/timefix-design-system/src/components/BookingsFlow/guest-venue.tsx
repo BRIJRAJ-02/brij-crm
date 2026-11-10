@@ -33,7 +33,7 @@ function venueOf(state: BookingsState, now: Date): Venue {
     name: b ? state.workspace : HOST, kind: b?.kindLabel ?? 'Meetings', rating: b?.rating, reviews: b?.reviews, address: b?.address ?? 'Online, by video call', area: b?.area,
     phone: b?.phone, status, isOpen: b ? Boolean(openRange) : Boolean(openRange || next), isOnline: !b,
     about: b?.about ?? 'Pick a meeting to see open times. You get a calendar invite with the video link.', photos: b?.photos ?? [], amenities: b?.amenities,
-    hours: week ? HOURS_DAYS.map((d, i) => ({ day: DAY_NAMES[i] ?? d, text: week[d].on ? week[d].ranges.map((r) => formatClockRange(r.start, r.end)).join(', ') : 'Closed', isToday: d === todayKey, isOpen: week[d].on })) : undefined,
+    hours: week ? HOURS_DAYS.map((d, i) => ({ day: DAY_NAMES[i] ?? d, text: week[d].on ? week[d].ranges.map((r) => formatClockRange(r.start, r.end)).join('\n') : 'Closed', isToday: d === todayKey, isOpen: week[d].on })) : undefined,
   };
 }
 
@@ -90,7 +90,14 @@ export function VenueGuest({ state, onBooked, onOpenPage }: { readonly state: Bo
           items={strip.map((d, n) => ({ id: isoDay(d), label: n === 0 ? `Today, ${formatDay(d)}` : n === 1 ? `Tomorrow, ${formatDay(d)}` : formatLongDay(d) }))} />
         {(() => {
           const t = openTimes(table, state, day, now, lengthOf(table), party);
-          return t.length === 0 ? <p className="tf-bkf__muted">No tables for {party} that day. Try another date, or call {b?.phone}.</p> : (
+          // Nothing that day: offer the next day that has a table, one tap away.
+          const nextDay = t.length === 0 ? strip.find((d) => d > day && openTimes(table, state, d, now, lengthOf(table), party).length > 0) : undefined;
+          return t.length === 0 ? (
+            <div className="tf-bkf-venue-next">
+              <span className="tf-bkf__muted">{isoDay(day) === isoDay(now) ? 'No more tables today' : `No tables on ${formatLongDay(day)}`} for {party}.</span>
+              {nextDay ? <Button variant="secondary" onPress={() => { setDayId(isoDay(nextDay)); setTime(undefined); }}>See {formatLongDay(nextDay)}</Button> : <span className="tf-bkf__muted">Call {b?.phone} to book.</span>}
+            </div>
+          ) : (
             <ChoiceChips label="Time" selectionMode="single" size="sm" selectedKeys={[]} onSelectionChange={(k) => { const v = [...k][0]; if (v) { setPageId(table.id); setTime(Number(v)); setStep(1); } }}
               items={t.slice(0, 12).map((m) => ({ id: String(m), label: formatClock(m) }))} />
           );
@@ -98,7 +105,7 @@ export function VenueGuest({ state, onBooked, onOpenPage }: { readonly state: Bo
       </div>
     );
     return (
-      <VenuePage venue={venue} items={items} categories={state.categories} itemsTitle={b ? (b.kind === 'restaurant' ? 'Menu highlights' : 'Services') : 'Meetings'} team={team}
+      <VenuePage venue={venue} items={items} menu={b?.menu} categories={state.categories} itemsTitle={b ? (b.kind === 'restaurant' ? 'Menu highlights' : 'Services') : 'Meetings'} team={team}
         onBook={(id) => { const p = pages.find((x) => x.id === id); if (p) start(p); }}
         aside={tableAside ?? undefined} bookLabel={b ? 'Book now' : 'Book a meeting'} onBookNow={tableAside ? undefined : () => { const p = pages.find((x) => x.kind !== 'table'); if (p) start(p); }} foot={foot} />
     );
@@ -148,7 +155,7 @@ export function VenueGuest({ state, onBooked, onOpenPage }: { readonly state: Bo
       )}
       {steps[step] === 'Time' && (
         <>
-          <DayStrip label="Day" days={strip.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: effective ? openTimes(effective, state, d, now, len).length : 0, isToday: isoDay(d) === isoDay(now) }))}
+          <DayStrip label="Day" days={strip.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: effective ? openTimes(effective, state, d, now, len).length : 0, dots: (() => { const c = effective ? openTimes(effective, state, d, now, len).length : 0; return c === 0 ? 0 : c < 6 ? 1 : c < 14 ? 2 : 3; })(), isToday: isoDay(d) === isoDay(now) }))}
             value={dayId} onChange={(v) => { setDayId(v); setTime(undefined); }} unit={['time', 'times']} />
           {times.length === 0 ? <p className="tf-bkf__muted">Nothing free that day{who !== 'any' ? ` with ${first(who)}` : ''}. Pick another day{who !== 'any' ? ' or Any professional' : ''}.</p> : (
             <div className="tf-bkf-venue-times" role="radiogroup" aria-label="Time">

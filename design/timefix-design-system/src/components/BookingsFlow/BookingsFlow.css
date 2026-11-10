@@ -654,3 +654,4 @@
 }
 /* The workspace link sits on white, like a real site, and its steps start at the top. */
 .tf-bkf-guestmode__page[data-venue] { justify-content: flex-start; background: var(--surface); }
+.tf-bkf-venue-next { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); font-size: 14px; }

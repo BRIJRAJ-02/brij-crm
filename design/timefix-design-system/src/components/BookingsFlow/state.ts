@@ -240,6 +240,8 @@ export interface BusinessProfile {
   readonly photos: ReadonlyArray<string>;
   /** What each person does, shown on the page's Team ("Colour specialist"). */
   readonly titles?: Readonly<Record<string, string>>;
+  /** A restaurant's dishes, to read on the page. */
+  readonly menu?: ReadonlyArray<{ readonly name: string; readonly description?: string; readonly price: string; readonly tag?: string }>;
 }
 /** A table: seats, area, bookable online, joins its neighbour for bigger parties. */
 export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean }
