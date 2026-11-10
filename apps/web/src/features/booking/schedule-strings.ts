@@ -20,6 +20,15 @@ export const scheduleStrings = {
   usedBy: (count: number) => (count === 1 ? 'Used by 1 booking page' : `Used by ${String(count)} booking pages`),
   usedByNone: 'No booking pages use this schedule',
   usedByLabel: 'Used by',
+  /** The schedule's quiet meta beside its Select: "Default · Used by 4 pages" (the simplicity sweep's finding 7). */
+  meta: (isDefault: boolean, pages: number) =>
+    [
+      ...(isDefault ? ['Default'] : []),
+      pages === 0 ? 'No pages use it' : pages === 1 ? 'Used by 1 page' : `Used by ${String(pages)} pages`,
+    ].join(' · '),
+  /** An option's description in the schedule Select: "Default · 4 pages". */
+  optionMeta: (isDefault: boolean, pages: number) =>
+    [...(isDefault ? ['Default'] : []), pages === 1 ? '1 page' : `${String(pages)} pages`].join(' · '),
   usedByText: 'The booking pages that book inside these hours. Open one to pick another schedule for it.',
   usedByDefaultText: 'Pages that follow your default, and pages that pick this schedule. Open one to change it.',
   noPagesUseIt: 'No booking pages use this schedule yet. A page picks its schedule in its editor.',

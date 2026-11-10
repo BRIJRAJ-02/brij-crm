@@ -20,6 +20,7 @@ import { mondayOf, plusDays, TEAM_WEEK, weekDates } from '@crm/data/roster';
 import {
   Badge,
   Button,
+  ButtonLink,
   Callout,
   EmptyState,
   Field,
@@ -58,6 +59,8 @@ import {
   useCalendarHealth,
   useSchedulingStore,
 } from './CalendarHealth.tsx';
+import { offsetLabel } from '../../public/booking/time.ts';
+import { zoneLabel } from '../bookings/meeting-format.ts';
 import { rangesProblem, todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
@@ -130,19 +133,6 @@ function weekDays(monday: string, locale: string, today: string, footer?: Week['
 /** "2 – 8 November 2026" for a week: the Calendar's format (DateNav's weekRangeLabel). */
 function rangeWords(monday: string, locale: string): string {
   return weekRangeLabel(monday, locale);
-}
-
-/** The zone's offset now, in minutes from UTC, for the reader's own zone. */
-function offsetMinutes(zone: string, monday: string): number {
-  const [year = 1970, month = 1, day = 1] = monday.split('-').map(Number);
-  const at = new Date(Date.UTC(year, month - 1, day, 12));
-  const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
-    .formatToParts(at)
-    .find((each) => each.type === 'timeZoneName')?.value;
-  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(part ?? '');
-  if (match === null) return 0;
-  const minutes = Number(match[2]) * 60 + Number(match[3]);
-  return match[1] === '-' ? -minutes : minutes;
 }
 
 /**
@@ -329,12 +319,14 @@ function Loaded({
 }) {
   const navigate = useNavigate();
   const state = useScheduling(held);
+  // A person whose usual week shows read only (a name the reader may not change), kept while the popup closes.
+  const [viewing, setViewing] = useState<TeamWeekRow | undefined>(undefined);
+  const onView = setViewing;
   const store = data.scheduling.loaded()?.teamWeek;
   const shown: Week | undefined = state.status === 'ready' ? state.week : undefined;
   const isPast = shown !== undefined && week < shown.thisWeek;
   const changeable = members.filter((each) => each.canChangeHours);
   const go = (next: string) => void navigate({ href: teamWeekHref(slug, next, query) });
-  const viewerOffset = offsetMinutes(zone, week);
   const dates = weekDates(week);
   const days = weekDays(week, locale, todayIn(zone), shown?.footer);
   const rowOf = (memberId: string) => shown?.rows.find((row) => row.memberId === memberId);
@@ -354,13 +346,19 @@ function Loaded({
       (shown?.rows ?? []).map((row) => ({
         id: row.memberId,
         name: row.name,
-        meta: words.hours(row.weekMinutes),
-        // The zone's offset where it differs from the reader's, and "View only" on a row the reader may not change
-        // beside rows they may, since its days are words rather than blocks.
+        // Their zone under the name as the mock's roster writes it ("GMT+5:30", the whole "India time (GMT+5:30)" in
+        // their popup), then the week's hours, and "View only" on a row the reader may not change beside rows they may.
+        meta: offsetLabel(row.timeZone, Date.parse(`${week}T12:00:00Z`)) || row.timeZone,
         ...badgeOf([
-          row.offsetMinutes === viewerOffset ? undefined : words.offset(row.offsetMinutes),
+          words.hours(row.weekMinutes),
           !row.canChange && !isPast && anyChangeable ? words.viewOnly : undefined,
         ]),
+        // The name opens their usual week in a centred popup: to change it, or (otherwise) to read it.
+        onOpen: () => {
+          if (row.canChange && !isPast) onUsualFor([row.memberId]);
+          else onView(row);
+        },
+        openLabel: words.openPerson(row.name),
         ...extraOf(
           <CalendarHealthChip state={health.get(row.memberId)} name={row.name} isQuiet />,
           health.get(row.memberId),
@@ -403,7 +401,7 @@ function Loaded({
         cells: row.days.map((day) => cellOf(row, day, locale)),
         isEditable: row.canChange && !isPast,
       })),
-    [shown, locale, viewerOffset, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor, health, healthStore, me],
+    [shown, locale, week, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor, onView, health, healthStore, me],
   );
   const anyEditable = people.some((person) => person.isEditable);
   // Copy week from the toolbar: everyone on this page the reader may change, one confirm for all (Deputy's and
@@ -450,7 +448,7 @@ function Loaded({
   // Set usual hours, the tab's one primary: in the TopBar's end in Bookings, as Availability's New schedule is.
   const usualAction =
     changeable.length > 0 ? (
-      <Button variant="primary" icon="clock" onPress={() => onUsualFor([])}>
+      <Button variant="primary" icon="clock" label={words.setUsual} isLabelCollapsible onPress={() => onUsualFor([])}>
         {words.setUsual}
       </Button>
     ) : null;
@@ -503,7 +501,13 @@ function Loaded({
               grid, and the furthest week has nowhere to copy. */}
           {copyRows.length > 0 && !isPast && !isLatest && (
             <Tooltip content={words.copyAllHint}>
-              <Button variant="secondary" icon="copy" onPress={() => onCopy(copyRows)}>
+              <Button
+                variant="secondary"
+                icon="copy"
+                label={words.copyAll}
+                isLabelCollapsible
+                onPress={() => onCopy(copyRows)}
+              >
                 {words.copyAll}
               </Button>
             </Tooltip>
@@ -615,6 +619,13 @@ function Loaded({
                   toast('danger', `${words.failedSave} ${isDataError(error) ? error.message : words.somethingWrong}`);
                 }
               }}
+            />
+            <PersonHoursModal
+              row={viewing}
+              slug={slug}
+              locale={locale}
+              at={Date.parse(`${week}T12:00:00Z`)}
+              onClose={() => setViewing(undefined)}
             />
             <UsualHoursModal
               key={usualKey}
@@ -876,6 +887,60 @@ function UsualHoursModal({
         onChange={(key, ranges) => setWeek((current) => ({ ...current, [key]: ranges.slice(0, TEAM_WEEK.rangesMax) }))}
       />
       {ids.length > 0 && <Callout tone="warning">{words.usualBody(ids.length)}</Callout>}
+    </Modal>
+  );
+}
+
+/**
+ * A person's usual week, read only (their name on the Roster, when the reader may not change it): the week as the
+ * HoursEditor draws it, and Open in Availability for their schedules. Kept while the Modal plays its exit.
+ */
+function PersonHoursModal({
+  row,
+  slug,
+  locale,
+  at,
+  onClose,
+}: {
+  readonly row: TeamWeekRow | undefined;
+  readonly slug: string;
+  readonly locale: string;
+  /** When the zone's offset is read: the week on show. */
+  readonly at: number;
+  readonly onClose: () => void;
+}) {
+  const [last, setLast] = useState(row);
+  if (row !== undefined && row !== last) setLast(row);
+  const shown = row ?? last;
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={words.personHours(shown.name)}
+      description={zoneLabel(shown.timeZone, at)}
+      variant="form"
+      isOpen={row !== undefined}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      actions={
+        <>
+          <ButtonLink href={availabilityHref(slug, shown.memberId)}>{words.openInAvailability}</ButtonLink>
+          <Button slot="close" variant="primary">
+            {words.done}
+          </Button>
+        </>
+      }
+    >
+      <HoursEditor
+        label={words.personHoursWeek}
+        rows={WEEKDAYS.map((key, index) => ({
+          id: key,
+          label: weekdayName(index, locale),
+          ranges: shown.days[index]?.usual ?? [],
+        }))}
+        isReadOnly
+        onChange={() => undefined}
+      />
     </Modal>
   );
 }

@@ -20,6 +20,13 @@ export interface DaysOffSlot {
   readonly onChange: (availability: BookingAvailability) => void;
   /** Lists the days off with nothing to change (a page the reader can't change). */
   readonly isReadOnly?: boolean;
+  /**
+   * Saves a change to the dates at once, apart from the week's Save (Availability's time off: some hours away, a
+   * delete and its Undo). Left out, Availability's time off card offers whole days only.
+   */
+  readonly onCommit?: (next: (current: BookingAvailability) => BookingAvailability) => Promise<boolean>;
+  /** The schedule's name, for "Changes Working hours only." */
+  readonly scheduleName?: string;
 }
 
 /** The days off still ahead in an availability, by its own zone's today. */

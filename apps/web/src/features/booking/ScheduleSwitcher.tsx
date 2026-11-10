@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the Availability tab's schedule switcher (spec 0035, AC-962, AC-964, AC-967, AC-969): one Select of the member's schedules, the default tagged Default, and a ⋯ menu to rename, duplicate, set as default or delete the open one.
+// Purpose: the Availability tab's schedule switcher (spec 0035, AC-962, AC-964, AC-967, AC-969): one plain Select of the member's schedules, each with its quiet facts ("Default · 4 pages"), and a ⋯ menu to rename, duplicate, set as default or delete the open one.
 // Main task: open another schedule, or act on the open one; Delete asks first, in the screen's confirm.
 // Leaves out: the hours (the tab's editor), New schedule (the TopBar's primary), and acting on the virtual default before its first save.
 import type { ScheduleView } from '@crm/data';
@@ -106,7 +106,8 @@ export function ScheduleSwitcher({
         items={schedules.map((schedule) => ({
           id: keyOf(schedule),
           label: schedule.name,
-          ...(schedule.isDefault ? { badge: scheduleStrings.defaultBadge } : {}),
+          // Quiet facts in the list, not a badge (the simplicity sweep's finding 7): "Default · 4 pages".
+          description: scheduleStrings.optionMeta(schedule.isDefault, schedule.pages.length),
           // A copy on its way can't be opened until the server made it.
           ...(schedule.id !== null && schedule.updatedAt === null ? { isDisabled: true } : {}),
         }))}

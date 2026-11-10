@@ -17,8 +17,11 @@ const meetings = (count: number) => (count === 1 ? '1 meeting' : `${String(count
 /** Meeting limits' words. */
 export const limitsStrings = {
   title: 'Meeting limits',
-  description: 'Across every booking page.',
-  descriptionFor: (first: string) => `${first}’s, across every booking page.`,
+  // One home for a person's limits (the simplicity sweep's finding 6): these count every page together; a page's own
+  // "Meetings a day from this page" can only be lower, and the lower one wins.
+  description: 'Across all your booking pages. A page can set a lower limit of its own.',
+  descriptionFor: (first: string) =>
+    `${first}’s, across all their booking pages. A page can set a lower limit of its own.`,
   loading: 'Loading meeting limits',
   failed: 'Couldn’t load meeting limits.',
   dayField: 'Meetings a day',

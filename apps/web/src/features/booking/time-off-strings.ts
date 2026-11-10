@@ -16,6 +16,15 @@ export const timeOffStrings = {
   actionsFor: (days: string) => `Actions for ${days}`,
   editAction: 'Edit',
   deleteAction: 'Delete',
+  deleteFor: (days: string) => `Delete time off on ${days}`,
+  // A row's words (the owner's ruling, 9 November 2026: "Away", never "free" or "unavailable").
+  awayAllDay: 'Away all day',
+  awayHours: (hours: string) => `Away ${hours}`,
+  /** A date whose own hours run past its usual day: its hours, as they are. */
+  hoursOn: (hours: string) => `Open ${hours}`,
+  undo: 'Undo',
+  restored: 'Time off back',
+  restoreFailed: 'Couldn’t put the time off back. Add it again.',
   away: 'Away',
   reasons: {
     vacation: 'Vacation',
@@ -39,6 +48,21 @@ export const timeOffStrings = {
   /** The one hint left (spec 0058, AC-15): acting for a colleague, whose zone the days are in. */
   daysZoneFor: (first: string) => `In ${first}’s time zone.`,
   pickDays: 'Pick the days.',
+  // All day or Some hours (the simplicity sweep's finding 1): time away, never "free" hours.
+  howLong: 'How long',
+  allDay: 'All day',
+  someHours: 'Some hours',
+  awayFrom: 'Away from',
+  to: 'to',
+  awayFromLabel: (index: number) => `Away from, time ${String(index)}`,
+  awayToLabel: (index: number) => `Away until, time ${String(index)}`,
+  removeAway: (index: number) => `Remove time ${String(index)}`,
+  addAway: 'Add another time',
+  endAfterStart: 'End after the start time.',
+  overlap: 'These times overlap.',
+  /** Under Some hours' note: it changes the open schedule alone. */
+  scheduleOnly: (schedule: string) => `Changes ${schedule} only.`,
+  optional: '(optional)',
   reason: 'Reason',
   standin: 'Who covers',
   nobody: 'Nobody',

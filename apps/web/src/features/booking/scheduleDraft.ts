@@ -35,6 +35,11 @@ export interface ScheduleDraft {
   readonly save: () => Promise<boolean>;
   /** Puts the schedule's own hours back. */
   readonly discard: () => void;
+  /**
+   * Saves one change at once, apart from the changes waiting for Save (time off for some hours, its delete and its
+   * Undo): it goes on top of the stored hours, and any unsaved hours keep it too. Answers whether it was stored.
+   */
+  readonly commit: (next: (current: BookingAvailability) => BookingAvailability) => Promise<boolean>;
 }
 
 /** Props for `useScheduleDraft`. */
@@ -167,6 +172,55 @@ export function useScheduleDraft({
     setError(undefined);
   };
 
+  // One change at a time, each on the version the last one stored (a delete, then its Undo, before the list redraws).
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const lastStored = useRef<ScheduleView | undefined>(undefined);
+  const now = useRef(schedule);
+  useEffect(() => {
+    now.current = schedule;
+  }, [schedule]);
+  const commit = (next: (current: BookingAvailability) => BookingAvailability): Promise<boolean> => {
+    // The virtual default isn't stored yet: the change joins the hours and its first save stores them all.
+    if (schedule.id === null) {
+      change(next);
+      return Promise.resolve(true);
+    }
+    const run = (): Promise<boolean> => {
+      const stored = lastStored.current;
+      const from =
+        stored !== undefined && stored.id === now.current.id && (stored.updatedAt ?? '') > (now.current.updatedAt ?? '')
+          ? stored
+          : now.current;
+      return data.schedules.update(slug, from, { availability: next(from.availability) }).then(
+        (answer) => {
+          lastStored.current = answer;
+          if (!isMounted.current) return true;
+          // Hours waiting for Save keep the change, and now build on the version just stored.
+          if (latest.current !== undefined) {
+            setUnsaved((current) => (current === undefined ? current : next(current)));
+            base.current = { id: answer.id, updatedAt: answer.updatedAt };
+          }
+          return true;
+        },
+        (failure: unknown) => {
+          if (!isMounted.current) return false;
+          const isStale = isDataError(failure) && failure.code === 'STALE';
+          if (isStale) reload();
+          onNotice({
+            tone: 'danger',
+            message: isStale
+              ? scheduleStrings.stale
+              : `${scheduleStrings.hoursFailed} ${isDataError(failure) ? failure.message : strings.somethingWrong}`,
+          });
+          return false;
+        },
+      );
+    };
+    const result = chain.current.then(run, run);
+    chain.current = result;
+    return result;
+  };
+
   return {
     shown,
     isDirty: unsaved !== undefined,
@@ -176,5 +230,6 @@ export function useScheduleDraft({
     change,
     save,
     discard,
+    commit,
   };
 }

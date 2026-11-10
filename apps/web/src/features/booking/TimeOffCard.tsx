@@ -1,35 +1,42 @@
 // Brief
-// Purpose: Availability's Time off section (spec 0037, AC-1286): the whole days a member is away, which close every page that books them, and the open schedule's days off beside them (critic A15: one card for the days someone is away).
-// Main task: see what is planned and Add time off (or a day off in this schedule); each row's menu edits or deletes it (Delete asks first, AC-1445).
-// Leaves out: a colleague's reason, note and stand in for someone who may only See them ("Away" and the days alone), and the Team week (a follow up).
-import type { DataLayer, TimeOffEntry, TimeOffSaved } from '@crm/data';
+// Purpose: Availability's Time off card (spec 0037, AC-1286): the whole days a member is away, which close every page that books them, and the open schedule's own dates beside them (a day off in it, or some hours away), one row each, soonest first.
+// Main task: see what is planned, Add time off in the card's head, open a row to change it, and delete one with its trash (gone at once, Undo in the toast; the simplicity sweep's rule 2, no confirm).
+// Leaves out: a colleague's reason, note and stand in for someone who may only See them ("Away" and the days alone), and the Team week (Bookings › Roster).
+import type { BookingAvailability, DataLayer, DateOverride, TimeOffEntry, TimeOffSaved } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
 import {
   Button,
-  ButtonGroup,
   Card,
   Disclosure,
   EmptyState,
   focusLater,
-  Menu,
-  MenuItem,
-  MenuTrigger,
-  Modal,
+  LinkList,
   Table,
+  Tooltip,
   useFormatSettings,
+  type LinkRow,
   type TableColumn,
 } from '@crm/ui';
-import { useRef, useState } from 'react';
-import { daysLabel, firstName } from './time-off.ts';
+import { useRef, useState, type ReactNode } from 'react';
+import { clockRangeOfMinutes, shortDay } from '../bookings/meeting-format.ts';
+import type { DaysOffSlot } from './DaysOff.tsx';
+import { awayOf, datesBetween, todayIn, upcomingOverrides, weeklyOn, withOverride } from './hours.ts';
+import { firstName } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 import { TimeOffDialog, type StandinChoice } from './TimeOffDialog.tsx';
-import { AddDayOff, DaysOffRows, upcomingOf, type DaysOffSlot } from './DaysOff.tsx';
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'days', label: strings.columns.days, isRowHeader: true },
   { id: 'what', label: strings.columns.what },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
+
+/** What the card says as a toast: a save, a delete with its Undo, or a refusal. */
+export interface TimeOffNotice {
+  readonly tone: 'success' | 'danger';
+  readonly message: string;
+  readonly action?: { readonly label: string; readonly onAction: () => void };
+}
 
 /** Props for the section. */
 export interface TimeOffCardProps {
@@ -43,46 +50,43 @@ export interface TimeOffCardProps {
   readonly nameOf: (memberId: string) => string | undefined;
   /** Who may cover: the workspace's members. */
   readonly people: readonly StandinChoice[];
-  /** A saved or deleted entry, as a toast. */
-  readonly onNotice: (notice: { readonly tone: 'success' | 'danger'; readonly message: string }) => void;
+  /** A saved or deleted entry, as a toast (one at a time: the screen replaces the last). */
+  readonly onNotice: (notice: TimeOffNotice) => void;
   /** Open Bookings (after a save over meetings). */
   readonly onOpenBookings: () => void;
   /**
-   * The open schedule's days off (Availability): listed under the time off and added beside it, saved with the
-   * schedule's hours. Left out, the card holds time off alone.
+   * The open schedule's own dates (Availability): listed beside the time off, and Some hours in the popup, saved at
+   * once. Left out, the card holds time off alone.
    */
   readonly daysOff?: DaysOffSlot | undefined;
 }
 
-/** The section: a Card of rows, upcoming first, past ones folded under them, then Add time off. */
-export function TimeOffCard({
-  data,
-  slug,
-  member,
-  me,
-  nameOf,
-  people,
-  onNotice,
-  onOpenBookings,
-  daysOff,
-}: TimeOffCardProps) {
-  const store = data.scheduling.loaded()?.timeOff;
-  return store === undefined ? (
-    <TimeOffCardPending />
-  ) : (
-    <Loaded
-      store={store}
-      data={data}
-      slug={slug}
-      member={member}
-      me={me}
-      nameOf={nameOf}
-      people={people}
-      onNotice={onNotice}
-      onOpenBookings={onOpenBookings}
-      daysOff={daysOff}
-    />
-  );
+/** The section: a Card of rows, upcoming first, past ones folded under them, Add time off in its head. */
+export function TimeOffCard(props: TimeOffCardProps) {
+  const store = props.data.scheduling.loaded()?.timeOff;
+  return store === undefined ? <TimeOffCardPending /> : <Loaded store={store} {...props} />;
+}
+
+type TimeOffStore = NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['timeOff'];
+
+/** One row: whole days of time off, or a date of the open schedule. */
+type Row =
+  | { readonly kind: 'entry'; readonly id: string; readonly date: string; readonly entry: TimeOffEntry }
+  | { readonly kind: 'date'; readonly id: string; readonly date: string; readonly override: DateOverride };
+
+/** "Away 2:00 – 6:00 pm" for a date's own hours against its usual day ("Away all day" for none; its hours if more). */
+function hoursWords(availability: BookingAvailability, override: DateOverride): string {
+  if (override.ranges.length === 0) return strings.awayAllDay;
+  const minutes = (time: string) => {
+    const [hours = '0', mins = '0'] = time.split(':');
+    return Number(hours) * 60 + Number(mins);
+  };
+  const words = (ranges: readonly (readonly [string, string])[]) =>
+    ranges.map(([start, end]) => clockRangeOfMinutes(minutes(start), minutes(end))).join(', ');
+  const { away, extra } = awayOf(weeklyOn(availability, override.date), override.ranges);
+  return extra.length > 0 || away.length === 0
+    ? strings.hoursOn(words(override.ranges))
+    : strings.awayHours(words(away));
 }
 
 function Loaded({
@@ -96,15 +100,16 @@ function Loaded({
   onNotice,
   onOpenBookings,
   daysOff,
-}: TimeOffCardProps & { readonly store: NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['timeOff'] }) {
-  const { locale, timeZone } = useFormatSettings();
+}: TimeOffCardProps & { readonly store: TimeOffStore }) {
+  const { timeZone } = useFormatSettings();
   const held = store.held(slug, member?.id);
   const state = useScheduling(held);
   const [isAdding, setAdding] = useState(false);
   const [editing, setEditing] = useState<TimeOffEntry | undefined>(undefined);
-  const [deleting, setDeleting] = useState<TimeOffEntry | undefined>(undefined);
+  const [editingDate, setEditingDate] = useState<DateOverride | undefined>(undefined);
+  // Rows on their way out: drawn from here, folding away, until the list says they are gone.
+  const [leaving, setLeaving] = useState<readonly Row[]>([]);
   const addRef = useRef<HTMLButtonElement>(null);
-  const addDayRef = useRef<HTMLButtonElement>(null);
   if (state.status === 'loading') return <TimeOffCardPending />;
   if (state.status === 'error') {
     return (
@@ -116,10 +121,10 @@ function Loaded({
     );
   }
   const { list } = state;
-  const thisYear = Number(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone }).format(new Date()));
-  const days = (entry: TimeOffEntry) => daysLabel(entry.fromDate, entry.toDate, locale, thisYear);
-  const others = people.filter((person) => person.id !== list.memberId);
-  const what = (entry: TimeOffEntry) => {
+  const today = todayIn(daysOff?.availability.timeZone ?? timeZone);
+  const dates = (from: string, to: string) =>
+    from === to ? shortDay(from, today) : `${shortDay(from, today)} – ${shortDay(to, today)}`;
+  const entryWords = (entry: TimeOffEntry) => {
     // See only: "Away" alone (AC-1286).
     if (entry.reason === undefined) return strings.away;
     const standin = entry.standinMemberId === undefined ? undefined : nameOf(entry.standinMemberId);
@@ -130,188 +135,220 @@ function Loaded({
           ? strings.you
           : (nameOf(entry.changedBy.memberId) ?? strings.someone);
     return [
-      strings.reasons[entry.reason],
+      strings.awayAllDay,
+      // "Other" says nothing a note doesn't.
+      ...(entry.reason === 'other' ? [] : [strings.reasons[entry.reason]]),
+      ...(entry.note === undefined || entry.note === '' ? [] : [entry.note]),
       ...(standin === undefined ? [] : [strings.covers(firstName(standin))]),
-      // Someone else's change only: "Changed by you" on one's own rows is noise. The note is in Edit.
+      // Someone else's change only: "Changed by you" on one's own rows is noise.
       ...(by === undefined || by === strings.you ? [] : [strings.changedBy(by)]),
     ].join(' · ');
   };
-  const columns = list.canManage ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions');
-  const table = (entries: readonly TimeOffEntry[], label: string, isPast = false) => (
-    <Table
-      label={label}
-      columns={columns}
-      rows={entries}
-      isHeaderHidden
-      getRowId={(entry) => entry.id}
-      renderCell={(entry, column) =>
-        column === 'days' ? (
-          days(entry)
-        ) : column === 'what' ? (
-          what(entry)
-        ) : (
-          <MenuTrigger>
-            <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(days(entry))} />
-            <Menu
-              label={strings.actionsFor(days(entry))}
-              onAction={(key) => {
-                if (key === 'edit') setEditing(entry);
-                else if (key === 'delete') setDeleting(entry);
-              }}
-            >
-              {isPast ? null : (
-                <MenuItem id="edit" icon="pencil">
-                  {strings.editAction}
-                </MenuItem>
-              )}
-              <MenuItem id="delete" icon="trash" isDanger>
-                {strings.deleteAction}
-              </MenuItem>
-            </Menu>
-          </MenuTrigger>
-        )
-      }
-    />
+  const canChangeDates = daysOff !== undefined && daysOff.isReadOnly !== true;
+  const canAdd = list.canManage || canChangeDates;
+  const live: readonly Row[] = [
+    ...list.upcoming.map((entry): Row => ({ kind: 'entry', id: entry.id, date: entry.fromDate, entry })),
+    ...(daysOff === undefined
+      ? []
+      : upcomingOverrides(daysOff.availability, today).map((override): Row => ({
+          kind: 'date',
+          id: `date:${override.date}`,
+          date: override.date,
+          override,
+        }))),
+  ];
+  const leavingIds = new Set(leaving.map((row) => row.id));
+  const rows = [...live.filter((row) => !leavingIds.has(row.id)), ...leaving].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
   );
+  const titleOf = (row: Row) =>
+    row.kind === 'entry' ? dates(row.entry.fromDate, row.entry.toDate) : shortDay(row.date, today);
+  const detailOf = (row: Row) => {
+    if (row.kind === 'entry') return entryWords(row.entry);
+    const note = row.override.note;
+    const hours = daysOff === undefined ? strings.awayAllDay : hoursWords(daysOff.availability, row.override);
+    return note === undefined || note === '' ? hours : `${hours} · ${note}`;
+  };
+  const canChange = (row: Row) => (row.kind === 'entry' ? list.canManage : canChangeDates);
+  const say = (message: string, undo?: () => void) =>
+    onNotice({
+      tone: 'success',
+      message,
+      ...(undo === undefined ? {} : { action: { label: strings.undo, onAction: undo } }),
+    });
+  const restoreEntry = (entry: TimeOffEntry) => {
+    if (entry.reason === undefined) return;
+    void store
+      .create(slug, {
+        id: store.newId(),
+        ...(member === undefined ? {} : { memberId: member.id }),
+        fromDate: entry.fromDate,
+        toDate: entry.toDate,
+        reason: entry.reason,
+        ...(entry.note === undefined ? {} : { note: entry.note }),
+        ...(entry.standinMemberId === undefined ? {} : { standinMemberId: entry.standinMemberId }),
+      })
+      .then(
+        () => say(strings.restored),
+        () => onNotice({ tone: 'danger', message: strings.restoreFailed }),
+      );
+  };
+  const remove = (row: Row) => {
+    setLeaving((all) => [...all, row]);
+    // The row goes with its button: focus lands on Add time off, which always stays.
+    focusLater(() => addRef.current);
+    if (row.kind === 'entry') {
+      say(strings.deleted, () => restoreEntry(row.entry));
+      void store.remove(slug, row.entry);
+      return;
+    }
+    const was = row.override;
+    say(strings.deleted, () => void daysOff?.onCommit?.((current) => withOverride(current, was.date, was)));
+    void daysOff?.onCommit?.((current) => withOverride(current, was.date, undefined));
+  };
+  const linkRow = (row: Row): LinkRow => {
+    const title = titleOf(row);
+    return {
+      id: row.id,
+      title,
+      address: detailOf(row),
+      chips: [],
+      ...(leavingIds.has(row.id) ? { isLeaving: true } : {}),
+      ...(canChange(row)
+        ? {
+            actions: (
+              <Tooltip content={strings.deleteAction}>
+                <Button
+                  variant="ghost-danger"
+                  icon="trash"
+                  label={strings.deleteFor(title)}
+                  onPress={() => remove(row)}
+                />
+              </Tooltip>
+            ),
+          }
+        : {}),
+    };
+  };
+  const open = (id: string) => {
+    const row = rows.find((each) => each.id === id);
+    if (row === undefined || !canChange(row) || leavingIds.has(id)) return;
+    if (row.kind === 'entry') setEditing(row.entry);
+    else setEditingDate(row.override);
+  };
+  // Everyone may read; only someone who may change a row gets rows that open.
+  const anyChangeable = rows.some(canChange);
+  const upcoming: ReactNode =
+    rows.length === 0 ? (
+      <EmptyState layout="row" icon="plane" title={strings.none} />
+    ) : anyChangeable ? (
+      <LinkList
+        label={strings.title}
+        searchLabel={strings.title}
+        density="compact"
+        placement="card"
+        isToolbarHidden
+        hasRowMotion
+        rows={rows.map(linkRow)}
+        onOpen={open}
+        onLeft={(id) => setLeaving((all) => all.filter((row) => row.id !== id))}
+      />
+    ) : (
+      <Table
+        label={strings.title}
+        columns={COLUMNS.filter((column) => column.id !== 'actions')}
+        rows={rows}
+        isHeaderHidden
+        getRowId={(row) => row.id}
+        renderCell={(row, column) => (column === 'days' ? titleOf(row) : detailOf(row))}
+      />
+    );
   const who = member === undefined ? undefined : { id: member.id, name: member.name };
+  const marked = live.flatMap((row) =>
+    row.kind === 'date' ? [row.date] : datesBetween(row.entry.fromDate, row.entry.toDate),
+  );
+  const pastEntries = list.past.map((entry): Row => ({ kind: 'entry', id: entry.id, date: entry.fromDate, entry }));
   return (
-    <Card title={strings.title}>
-      {/* One quiet line only when neither time off nor a day off is ahead. */}
-      {list.upcoming.length === 0 && (daysOff === undefined || upcomingOf(daysOff.availability).length === 0) ? (
-        <EmptyState layout="row" icon="plane" title={strings.none} />
-      ) : (
-        <>
-          {list.upcoming.length > 0 && table(list.upcoming, strings.title)}
-          {daysOff !== undefined && (
-            <DaysOffRows
-              availability={daysOff.availability}
-              onChange={daysOff.onChange}
-              isReadOnly={daysOff.isReadOnly === true}
-              onRemoved={() => addDayRef.current ?? addRef.current}
-            />
-          )}
-        </>
-      )}
-      {list.past.length > 0 && (
-        <Disclosure title={strings.past} count={list.past.length} variant="quiet">
-          {table(list.past, strings.past, true)}
+    <Card
+      title={strings.title}
+      actions={
+        canAdd ? (
+          <Button ref={addRef} icon="plus" onPress={() => setAdding(true)}>
+            {who === undefined ? strings.add : strings.addFor(firstName(who.name))}
+          </Button>
+        ) : undefined
+      }
+    >
+      {upcoming}
+      {pastEntries.length > 0 && (
+        <Disclosure title={strings.past} count={pastEntries.length} variant="quiet">
+          <Table
+            label={strings.past}
+            columns={list.canManage ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions')}
+            rows={pastEntries.filter((row) => !leavingIds.has(row.id))}
+            isHeaderHidden
+            getRowId={(row) => row.id}
+            renderCell={(row, column) =>
+              column === 'days' ? (
+                titleOf(row)
+              ) : column === 'what' ? (
+                detailOf(row)
+              ) : (
+                <Button
+                  variant="ghost-danger"
+                  icon="trash"
+                  label={strings.deleteFor(titleOf(row))}
+                  onPress={() => remove(row)}
+                />
+              )
+            }
+          />
         </Disclosure>
-      )}
-      {(list.canManage || (daysOff !== undefined && daysOff.isReadOnly !== true)) && (
-        <ButtonGroup label={strings.title} layout="row">
-          {list.canManage && (
-            <Button ref={addRef} icon="plus" onPress={() => setAdding(true)}>
-              {who === undefined ? strings.add : strings.addFor(firstName(who.name))}
-            </Button>
-          )}
-          {daysOff !== undefined && daysOff.isReadOnly !== true && (
-            <AddDayOff ref={addDayRef} availability={daysOff.availability} onChange={daysOff.onChange} />
-          )}
-        </ButtonGroup>
       )}
       <TimeOffDialog
         data={data}
         slug={slug}
         member={who}
         entry={editing}
-        isOpen={isAdding || editing !== undefined}
-        people={others}
+        override={editingDate}
+        isOpen={isAdding || editing !== undefined || editingDate !== undefined}
+        people={people.filter((person) => person.id !== list.memberId)}
+        marked={marked}
+        {...(canChangeDates && daysOff.onCommit !== undefined
+          ? {
+              hours: {
+                availability: daysOff.availability,
+                onCommit: daysOff.onCommit,
+                scheduleName: daysOff.scheduleName ?? '',
+              },
+            }
+          : {})}
         onClose={() => {
           setAdding(false);
           setEditing(undefined);
+          setEditingDate(undefined);
         }}
-        onSaved={(_saved: TimeOffSaved, isNew) =>
-          onNotice({ tone: 'success', message: isNew ? strings.added : strings.changed })
-        }
+        onSaved={(_saved: TimeOffSaved, isNew) => say(isNew ? strings.added : strings.changed)}
+        onHoursSaved={(isNew) => say(isNew ? strings.added : strings.changed)}
         onOpenBookings={onOpenBookings}
-      />
-      <DeleteTimeOff
-        entry={deleting}
-        days={deleting === undefined ? '' : days(deleting)}
-        member={who}
-        onClose={() => setDeleting(undefined)}
-        // Waits in its confirm; the row goes at once, and comes back with the store's toast if refused.
-        onDelete={(entry) =>
-          store.remove(slug, entry).then((landed) => {
-            setDeleting(undefined);
-            // The row is gone: focus lands on Add time off, which always stays.
-            if (landed) {
-              focusLater(() => addRef.current);
-              onNotice({ tone: 'success', message: strings.deleted });
-            }
-          })
-        }
       />
     </Card>
   );
 }
 
-/** "Delete time off, 3 to 7 Nov?": a danger Modal, Cancel (ESC), then Delete time off (AC-1445). */
-function DeleteTimeOff({
-  entry,
-  days,
-  member,
-  onClose,
-  onDelete,
-}: {
-  readonly entry: TimeOffEntry | undefined;
-  readonly days: string;
-  readonly member: { readonly name: string } | undefined;
-  readonly onClose: () => void;
-  readonly onDelete: (entry: TimeOffEntry) => Promise<void>;
-}) {
-  const [isBusy, setBusy] = useState(false);
-  // The last entry stays while the Modal plays its exit.
-  const [last, setLast] = useState(entry);
-  const [lastDays, setLastDays] = useState(days);
-  if (entry !== undefined && entry !== last) {
-    setLast(entry);
-    setLastDays(days);
-  }
-  const shown = entry ?? last;
-  if (shown === undefined) return null;
-  return (
-    <Modal
-      title={strings.deleteTitle(lastDays)}
-      tone="danger"
-      isOpen={entry !== undefined}
-      isBusy={isBusy}
-      onOpenChange={(open) => {
-        if (!open && !isBusy) onClose();
-      }}
-      actions={
-        <>
-          <Button slot="close" kbd="ESC" isDisabled={isBusy}>
-            {strings.cancel}
-          </Button>
-          <Button
-            variant="danger-solid"
-            icon="trash"
-            isPending={isBusy}
-            onPress={() => {
-              if (isBusy) return;
-              setBusy(true);
-              void onDelete(shown).finally(() => setBusy(false));
-            }}
-          >
-            {isBusy ? strings.deleting : strings.deleteCommit}
-          </Button>
-        </>
-      }
-    >
-      {member === undefined ? strings.deleteBody : strings.deleteBodyFor(firstName(member.name))}
-    </Modal>
-  );
-}
-
-/** The section while it loads, in its loaded anatomy: a row's place, then Add time off under it. */
+/** The section while it loads, in its loaded anatomy: Add time off in its head, a row's place under it. */
 export function TimeOffCardPending() {
   return (
-    <Card title={strings.title} isBusy>
+    <Card
+      title={strings.title}
+      isBusy
+      actions={
+        <Button icon="plus" isDisabled>
+          {strings.add}
+        </Button>
+      }
+    >
       <EmptyState layout="row" isLoading title={strings.loading} />
-      <Button icon="plus" isDisabled>
-        {strings.add}
-      </Button>
     </Card>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import type { DaysOffSlot } from './DaysOff.tsx';
+import { zoneLabel } from '../bookings/meeting-format.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
@@ -112,7 +113,7 @@ export function ScheduleEditor({
             status={status}
             {...(draft.error === undefined ? {} : { error: draft.error })}
             {...(draft.isValid ? {} : { blockedReason: scheduleStrings.invalidLeft })}
-            onSave={draft.save}
+            onSave={() => void draft.save()}
             onDiscard={draft.discard}
           />
           {/* Leaving with unsaved changes asks first in a Modal, as the booking page editor does; another schedule
@@ -128,7 +129,7 @@ export function ScheduleEditor({
       }
       aside={
         <>
-          {timeOff?.({ availability: shown, onChange: change })}
+          {timeOff?.({ availability: shown, onChange: change, onCommit: draft.commit, scheduleName: schedule.name })}
           <UsedBy slug={slug} schedule={schedule} />
         </>
       }
@@ -205,13 +206,16 @@ function ZoneSelect({
   /** Shows the zone with nothing to change (a page the reader can't change), as the week beside it. */
   readonly isReadOnly?: boolean;
 }) {
-  const zones = useMemo(() => zoneItems(value, new Date()), [value]);
+  // Each zone as Bookings writes one, "India time (GMT+5:30)" (the sweep's §2.10); the offset stays searchable.
+  const zones = useMemo(() => {
+    const at = new Date();
+    return zoneItems(value, at).map((zone) => ({ ...zone, label: zoneLabel(zone.id, at.getTime()) }));
+  }, [value]);
   return (
     <Select
       label={strings.timeZone}
       isLabelHidden
       size="sm"
-      showsDescription
       items={zones}
       filter={zoneMatches}
       isSearchable
