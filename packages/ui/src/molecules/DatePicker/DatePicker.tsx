@@ -9,7 +9,7 @@ import {
   toCalendarDate,
   type CalendarDate,
 } from '@internationalized/date';
-import { use, useContext, useState } from 'react';
+import { use, useContext, useEffect, useId, useState } from 'react';
 import { useLocale } from 'react-aria';
 import {
   Button as AriaButton,
@@ -312,8 +312,8 @@ function Grid({
 }: {
   readonly today: CalendarDate;
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
-  /** Days carrying something already (time off planned): a small dot under the number. */
-  readonly marked?: ReadonlySet<string> | undefined;
+  /** Days carrying something already (time off planned): a small dot under the number, and `markedLabel` said. */
+  readonly marked?: { readonly days: ReadonlySet<string>; readonly label: string } | undefined;
 }) {
   return (
     <div className={styles.weeks}>
@@ -329,14 +329,25 @@ function Grid({
                 date={date}
                 className={styles.day}
                 data-today-mark={isSameDay(date, today) ? '' : undefined}
-                data-marked={marked?.has(date.toString()) === true ? '' : undefined}
+                data-marked={marked?.days.has(date.toString()) === true ? '' : undefined}
                 data-shown={isShown ? '' : undefined}
                 // A week running over the month's edge ends its band at the month's first or last day.
                 data-shown-start={isShown && (isSameDay(date, shown.start) || date.day === 1) ? '' : undefined}
                 data-shown-end={
                   isShown && (isSameDay(date, shown.end) || date.add({ days: 1 }).day === 1) ? '' : undefined
                 }
-              />
+              >
+                {({ formattedDate }) =>
+                  marked?.days.has(date.toString()) === true ? (
+                    <>
+                      {formattedDate}
+                      <VisuallyHidden>{`, ${marked.label}`}</VisuallyHidden>
+                    </>
+                  ) : (
+                    formattedDate
+                  )
+                }
+              </CalendarCell>
             );
           }}
         </CalendarGridBody>
@@ -354,7 +365,7 @@ function CalendarBody({
 }: {
   readonly today: CalendarDate;
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
-  readonly marked?: ReadonlySet<string> | undefined;
+  readonly marked?: { readonly days: ReadonlySet<string>; readonly label: string } | undefined;
   /** The quick picks under it hold Today, so the header leaves its own out. */
   readonly hasTodayPick?: boolean;
 }) {
@@ -836,35 +847,68 @@ export interface MonthRangeCalendarProps {
   readonly minValue?: DateString;
   /** Days that already carry something (planned time off), marked with a small dot. */
   readonly marked?: readonly DateString[];
+  /** What a marked day says to a screen reader after its date ("time off planned"). */
+  readonly markedLabel?: string;
+  /** What to fix (no days picked yet): said under the month, which it describes, and announced. */
+  readonly error?: string;
+}
+
+/** A first press is already a day: the range's anchor, said as a range of one until a second press extends it. */
+function AnchorAsDay({ onDay }: { readonly onDay: (day: DateString) => void }) {
+  const state = useContext(RangeCalendarStateContext);
+  const anchor = state?.anchorDate?.toString();
+  useEffect(() => {
+    if (anchor !== undefined) onDay(anchor.slice(0, 10));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new anchor speaks.
+  }, [anchor]);
+  return null;
 }
 
 /**
  * MonthCalendar's range variant: the month inline, a run of days picked on it as DateRangePicker's popover picks them
- * (press the first day, then the last; the same day twice is one day), with days already taken marked. For a popup
- * whose main choice is the days themselves, as Cal.com's date overrides put the month beside the hours.
+ * (one press is that day; a second press ends the run there), with days already taken marked. For a popup whose main
+ * choice is the days themselves, as Cal.com's date overrides put the month beside the hours.
  */
-export function MonthRangeCalendar({ label, value, onChange, minValue, marked }: MonthRangeCalendarProps) {
+export function MonthRangeCalendar({
+  label,
+  value,
+  onChange,
+  minValue,
+  marked,
+  markedLabel = '',
+  error,
+}: MonthRangeCalendarProps) {
   const today = useToday();
   const { weekStart } = useFormatSettings();
+  const errorId = useId();
   const range = toRange(value);
-  const markedDays = marked === undefined ? undefined : new Set(marked);
+  const markedDays = marked === undefined ? undefined : { days: new Set(marked), label: markedLabel };
   return (
-    <RangeCalendar
-      className={styles.calendar}
-      data-inline=""
-      data-range=""
-      aria-label={label}
-      {...(range === undefined || range === null ? {} : { value: range })}
-      {...(minValue === undefined ? {} : { minValue: parseDate(minValue) })}
-      defaultFocusedValue={range?.start ?? today}
-      onChange={(next) => {
-        const start = fromDate(next.start);
-        const end = fromDate(next.end);
-        if (start !== null && end !== null) onChange({ start, end });
-      }}
-      {...firstDay(weekStart)}
-    >
-      <CalendarBody today={today} marked={markedDays} />
-    </RangeCalendar>
+    <>
+      <RangeCalendar
+        className={styles.calendar}
+        data-inline=""
+        data-range=""
+        aria-label={label}
+        {...(error === undefined ? {} : { 'aria-describedby': errorId, isInvalid: true })}
+        {...(range === undefined || range === null ? {} : { value: range })}
+        {...(minValue === undefined ? {} : { minValue: parseDate(minValue) })}
+        defaultFocusedValue={range?.start ?? today}
+        onChange={(next) => {
+          const start = fromDate(next.start);
+          const end = fromDate(next.end);
+          if (start !== null && end !== null) onChange({ start, end });
+        }}
+        {...firstDay(weekStart)}
+      >
+        <AnchorAsDay onDay={(day) => onChange({ start: day, end: day })} />
+        <CalendarBody today={today} marked={markedDays} />
+      </RangeCalendar>
+      {error !== undefined && (
+        <FieldError kind="standalone" id={errorId} isAnnounced>
+          {error}
+        </FieldError>
+      )}
+    </>
   );
 }

@@ -26,6 +26,8 @@ Field keeps its own error line, with the same look: it fades in on the field tha
 
 - Exported (10 November 2026) as `kind="standalone"`'s line for a control a screen lays out from parts: Availability's time off popup says "Pick the days." under its month and "End after the start time." under its times away.
 
+- `isAnnounced` (standalone only) gives the line `role="alert"`, for an error raised by a button elsewhere while focus stays on it.
+
 ## States
 
 Shown only with a message (and, in a field, only while the field is invalid). It has no other state.

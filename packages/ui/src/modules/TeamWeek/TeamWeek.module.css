@@ -83,6 +83,9 @@
     border-radius: var(--radius-sm);
     background: none;
     text-align: start;
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    text-underline-offset: var(--space-2);
     outline: none;
   }
 
@@ -92,9 +95,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .name[data-opens][data-hovered] {
-      text-decoration: underline;
       text-decoration-color: var(--border-strong);
-      text-underline-offset: var(--space-2);
     }
   }
 

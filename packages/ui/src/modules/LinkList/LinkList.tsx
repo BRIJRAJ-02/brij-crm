@@ -246,7 +246,7 @@ export function LinkListToolbar({
   );
 }
 
-/** How long a leaving row may take before it goes anyway: well past its motion (`duration-modal`). */
+/** How long a leaving row may take before it goes anyway: about 2.5 × `duration-modal`, well past its motion. */
 const LEAVE_FALLBACK_MS = 600;
 
 /** How many skeleton rows stand in while the list loads. */
