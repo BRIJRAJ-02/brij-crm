@@ -191,7 +191,9 @@ describe('every email, end to end through Mailpit', () => {
       expect(message.Text, kind).toContain('You got this email because');
       const optional = kind === 'form_submission';
       expect(message.Text.includes(`Email preferences: ${ORIGIN}/email-preferences#t=`), kind).toBe(optional);
-      expect(headers['List-Unsubscribe-Post'], kind).toEqual(optional ? ['List-Unsubscribe=One-Click'] : undefined);
+      // One click unsubscribe: an optional email's preferences link, and the news opt in's own (migration 0204).
+      const oneClick = optional || kind === 'reservation_news';
+      expect(headers['List-Unsubscribe-Post'], kind).toEqual(oneClick ? ['List-Unsubscribe=One-Click'] : undefined);
       if (kind === 'form_confirmation') expect(message.ReplyTo).toEqual([{ Address: addressOf('owner') }]);
       checkClients(kind, check);
     }
