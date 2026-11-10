@@ -25,7 +25,9 @@ interface Step {
   readonly maxShift?: number;
 }
 
-const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
+// The app's own sidebar: a booking page's editor has a "Bookings" section link in its own navigation too.
+const sidebar = (name: string) => (page: Page) =>
+  page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
 /** One of Meetings' views, on the switch inside the Meetings tab (5 November 2026): its label is what takes a pointer. */
 const meetingsView = (name: string) => (page: Page) =>
@@ -139,8 +141,17 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
     }
     const chrome = await chromeOf(page);
     expect.soft(chrome.topBar, `${step.name}: the TopBar stands as People's`).toEqual(people.topBar);
-    expect.soft(chrome.secondBar, `${step.name}: the tabs' bar stands as People's ViewBar`).toEqual(people.secondBar);
-    if (previous?.section === step.section) {
+    // Bookings draws its tabs in its TopBar since the redesign (the mock's header, 9 November 2026): only Captures
+    // keeps People's second bar.
+    if (step.section === 'captures') {
+      expect.soft(chrome.secondBar, `${step.name}: the tabs' bar stands as People's ViewBar`).toEqual(people.secondBar);
+    }
+    // Availability has no New of its own since the redesign (New schedule is in the schedules' Select).
+    if (
+      previous?.section === step.section &&
+      chrome.newButton !== undefined &&
+      previous.chrome.newButton !== undefined
+    ) {
       // Where it stands: the bar's end and its row. Its label may name what it makes (New schedule, the owner,
       // 22 October 2026), so only its far edge has to stay put.
       const end = (box: { x: number; y: number; width: number; height: number } | undefined) =>
