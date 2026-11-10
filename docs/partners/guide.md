@@ -250,8 +250,9 @@ await timefix(connection, `/members/${encodeURIComponent(user.id)}`, {
 **Their own Timefix login.** An admin of the workspace can set up a Timefix login for a person you added, from Team
 pages in Timefix (never from inside your frame: your page there only tells them whom to ask). Timefix emails them a
 link; once they open it they sign in to Timefix directly too, to the same page. They stay yours: launch, `PUT` and the list work for them as before, and the
-answer carries `"hasTimefixLogin": true`. From then on `email` is their login's: a `PUT` still changes their name and
-role, but never their address.
+answer carries `"hasTimefixLogin": true`. From then on `email` is their login's: a `PUT` still changes their name, and
+can keep or lower their role, but never raises it (`403 FORBIDDEN`: only the workspace raises a role in Timefix) and
+never changes their address.
 
 ### 4.2 List
 
