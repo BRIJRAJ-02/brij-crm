@@ -1,7 +1,7 @@
-// The Bookings week's calendar switch in Chromium: All calendars, then each connected calendar by its name in its
-// colour (no Bookings segment: bookings always show); hidden with one calendar or none; past five segments the rest
-// fold into More, which names the chosen one; the choice is kept per workspace in this browser, and a kept calendar
-// counts only once the calendars are read, it is still there and the switch shows.
+// The Bookings week's calendar switch in Chromium: one All calendars ▾ Select, then each connected calendar by its
+// name in its colour (no Bookings option: bookings always show); hidden with one calendar or none; two of one name
+// say their account; the choice is kept per workspace in this browser, and a kept calendar counts only once the
+// calendars are read, it is still there and the switch shows.
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
@@ -52,38 +52,34 @@ const render = async (calendars: readonly SwitchCalendar[] | undefined) => {
 };
 
 describe('the calendar switch', () => {
-  it('starts on All calendars, folds past five segments into More, and keeps a choice from there', async () => {
+  it('starts on All calendars, lists every calendar in one Select, and keeps a choice from there', async () => {
     await render(FIVE);
-    await expect.element(page.getByRole('radio', { name: 'All calendars' })).toBeChecked();
-    expect(page.getByRole('radio').all()).toHaveLength(4);
-    await expect.element(page.getByRole('radio', { name: 'Bookings' })).not.toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: '2 more calendars' }));
-    await userEvent.click(page.getByRole('menuitemradio', { name: /Gym/ }));
+    await userEvent.click(page.getByRole('button', { name: /All calendars/ }));
+    expect(page.getByRole('option').all()).toHaveLength(6);
+    await expect.element(page.getByRole('option', { name: /Bookings/ })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole('option', { name: /Gym/ }));
     await expect.element(page.getByText('Showing gym')).toBeInTheDocument();
-    // The segments stay put; More names the chosen calendar.
-    await expect.element(page.getByRole('button', { name: 'Gym' })).toBeInTheDocument();
-    expect(page.getByRole('radio').all()).toHaveLength(4);
+    // The trigger names the chosen calendar.
+    await expect.element(page.getByRole('button', { name: /Gym/ })).toBeInTheDocument();
     expect(globalThis.localStorage.getItem(KEY)).toBe('gym');
   });
 
-  it('moves with the arrow keys', async () => {
-    await render(FIVE.slice(0, 2));
-    await userEvent.click(page.getByText('All calendars'));
-    await userEvent.keyboard('{ArrowRight}');
-    await expect.element(page.getByText('Showing work')).toBeInTheDocument();
-    await userEvent.keyboard('{ArrowRight}');
-    await expect.element(page.getByText('Showing home')).toBeInTheDocument();
+  it('tells two calendars of the same name apart by their account', async () => {
+    await render([calendar('work', 'Calendar'), calendar('home', 'Calendar')]);
+    await userEvent.click(page.getByRole('button', { name: /All calendars/ }));
+    await expect.element(page.getByRole('option', { name: /work@example\.com/ })).toBeVisible();
+    await expect.element(page.getByRole('option', { name: /home@example\.com/ })).toBeVisible();
   });
 
   it('hides itself with one calendar or none, and then shows everything', async () => {
     globalThis.localStorage.setItem(KEY, 'work');
     await render(FIVE.slice(0, 1));
     await expect.element(page.getByText('Showing all')).toBeInTheDocument();
-    expect(page.getByRole('radiogroup').all()).toHaveLength(0);
+    expect(page.getByRole('button', { name: /All calendars/ }).all()).toHaveLength(0);
     shown?.unmount();
     await render([]);
     await expect.element(page.getByText('Showing all')).toBeInTheDocument();
-    expect(page.getByRole('radiogroup').all()).toHaveLength(0);
+    expect(page.getByRole('button', { name: /All calendars/ }).all()).toHaveLength(0);
   });
 
   it('reads a kept calendar that left the week, or one kept while the calendars load, as All calendars', async () => {

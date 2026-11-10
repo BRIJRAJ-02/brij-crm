@@ -1,16 +1,14 @@
 // Brief
 // Purpose: whose bookings an owner or admin sees on Bookings (the owner's ask of 29 October 2026: a colleague's
 // booking stays theirs): their own, or everyone's.
-// Main task: switch the week and the list between Mine and Everyone; only a holder of `booking.admin` sees it, since
-// for anyone else there is nothing but their own.
+// Main task: hold the week's and the list's Mine or Everyone, which Meetings' People picker sets (Whole team is
+// Everyone); only a holder of `booking.admin` has the choice, since for anyone else there is nothing but their own.
 // Leaves out: picking one colleague (spec 0037's reach brings that), and colleagues' calendar events, which never show.
 import type { BookingHosts } from '@crm/data';
-import { SegmentedControl } from '@crm/ui';
 import { useCallback, useState } from 'react';
-import { strings } from './strings.ts';
 
-// The choice is kept per workspace in this browser as a convenience, by the Bookings layout (one switch on the strip
-// for Calendar and List). The tabs' loaders read the default (Mine) and never this, so it stays out of the first
+// The choice is kept per workspace in this browser as a convenience, by the Bookings layout (one choice for Calendar
+// and List). The tabs' loaders read the default (Mine) and never this, so it stays out of the first
 // load: an admin who kept Everyone sees the week or list load once more.
 
 /** Where the choice is kept, per workspace, in this browser: a convenience only, Mine when it can't be read. */
@@ -51,27 +49,4 @@ export function useHostsChoice(slug: string, isAdmin: boolean) {
     [slug],
   );
   return { hosts: isAdmin ? value : ('mine' as const), choose };
-}
-
-/** Mine · Everyone, as one compact SegmentedControl (arrow keys move and choose). */
-export function HostsSwitch({
-  value,
-  onChange,
-}: {
-  readonly value: BookingHosts;
-  readonly onChange: (next: BookingHosts) => void;
-}) {
-  return (
-    <SegmentedControl
-      label={strings.hostsLabel}
-      size="compact"
-      isFitted
-      segments={[
-        { value: 'mine', label: strings.hosts.mine },
-        { value: 'all', label: strings.hosts.all },
-      ]}
-      value={value}
-      onChange={(next) => onChange(next === 'all' ? 'all' : 'mine')}
-    />
-  );
 }
