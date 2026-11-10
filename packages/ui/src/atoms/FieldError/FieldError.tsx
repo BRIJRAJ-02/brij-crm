@@ -17,6 +17,11 @@ export interface FieldErrorProps {
   readonly id?: string;
   /** `check` starts the line under a checkbox's words, past the box. */
   readonly inset?: 'check';
+  /**
+   * With `standalone`: said as it appears (`role="alert"`), for an error raised by pressing a button elsewhere (a
+   * popup's Add with no days picked), where focus stays on that button.
+   */
+  readonly isAnnounced?: boolean;
 }
 
 /**
@@ -24,7 +29,7 @@ export interface FieldErrorProps {
  * then the message, in the danger colour at the label size. Field keeps its own (it fades in and can float under a
  * grid cell); every other control draws this one, so a Rating's or a choice's error reads like a text field's.
  */
-export function FieldError({ children, kind = 'field', id, inset }: FieldErrorProps) {
+export function FieldError({ children, kind = 'field', id, inset, isAnnounced = false }: FieldErrorProps) {
   const body = (
     <>
       <Icon name="circle-alert" size="xs" />
@@ -33,7 +38,7 @@ export function FieldError({ children, kind = 'field', id, inset }: FieldErrorPr
   );
   if (kind === 'standalone') {
     return (
-      <p className={styles.root} id={id} data-inset={inset}>
+      <p className={styles.root} id={id} data-inset={inset} {...(isAnnounced ? { role: 'alert' } : {})}>
         {body}
       </p>
     );

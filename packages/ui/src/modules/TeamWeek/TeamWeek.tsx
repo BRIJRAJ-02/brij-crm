@@ -45,9 +45,9 @@ export interface TeamWeekCell {
 export interface TeamWeekPerson {
   readonly id: string;
   readonly name: string;
-  /** A quiet line under the name: their hours this week ("38 h"). */
+  /** A quiet line under the name: their zone ("GMT+5:30"), or (Shifts) their hours this week ("38 h"). */
   readonly meta: string;
-  /** More on that line, after a middle dot, only when it says something: their zone's offset ("UTC+5:30"). */
+  /** More on that line, after a middle dot: the week's hours ("41 h"), "View only". */
   readonly badge?: string;
   /** More under the name: a link to their schedules ("2 pages use other schedules"). */
   readonly extra?: ReactNode;

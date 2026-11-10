@@ -192,6 +192,7 @@
     min-inline-size: 0;
   }
 
+  /* bp-page-frame (a media query can't read the token). */
   @media (width < 700px) {
     .split {
       grid-template-columns: minmax(0, 1fr);

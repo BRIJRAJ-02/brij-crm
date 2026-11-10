@@ -174,7 +174,8 @@ export const OpensPerson: Story = {
           {...args}
           people={people().map((each) => ({
             ...each,
-            meta: 'India time (GMT+5:30) · Mon to Fri, 9:00 am – 5:00 pm',
+            meta: 'GMT+5:30',
+            badge: '40 h',
             onOpen: () => {
               setOpened(each.name);
             },

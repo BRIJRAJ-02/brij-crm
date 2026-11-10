@@ -206,6 +206,7 @@ export const InlineRange: Story = {
           onChange={setRange}
           minValue="2026-10-08"
           marked={['2026-10-13', '2026-10-27']}
+          markedLabel="time off planned"
         />
       </Stage>
     );
@@ -213,14 +214,18 @@ export const InlineRange: Story = {
   play: async ({ canvas, canvasElement }) => {
     await expect(canvasElement.querySelector('[data-selection-start]')).toHaveTextContent('19');
     await expect(canvasElement.querySelector('[data-selection-end]')).toHaveTextContent('21');
+    // Each marked day says so after its date.
     await expect([...canvasElement.querySelectorAll('[data-marked]')].map((day) => day.textContent)).toEqual([
-      '13',
-      '27',
+      '13, time off planned',
+      '27, time off planned',
     ]);
-    await userEvent.click(canvas.getByRole('button', { name: /October 23, 2026|23 October 2026/ }));
+    // One press is that day already.
     await userEvent.click(canvas.getByRole('button', { name: /October 23, 2026|23 October 2026/ }));
     await expect(canvasElement.querySelector('[data-selection-start]')).toHaveTextContent('23');
     await expect(canvasElement.querySelector('[data-selection-end]')).toHaveTextContent('23');
+    // A second press ends the run there.
+    await userEvent.click(canvas.getByRole('button', { name: /October 25, 2026|25 October 2026/ }));
+    await expect(canvasElement.querySelector('[data-selection-end]')).toHaveTextContent('25');
   },
 };
 
