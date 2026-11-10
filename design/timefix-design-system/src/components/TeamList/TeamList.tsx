@@ -56,10 +56,12 @@ export interface TeamListProps {
   readonly action?: ReactNode;
   /** Admins and owners manage; others see the list read only. */
   readonly canManage?: boolean;
+  /** Asks about removing an active member itself (to hand their records to someone); the list's own question is skipped. Invites still ask here. */
+  readonly onRemoveRequest?: (id: string) => void;
 }
 
 /** The workspace's people: who they are, their role, whether they joined, when they were last in, and a row menu to resend, change role or remove (which asks first). */
-export function TeamList({ members, now, workspace, roles = ROLE_OPTIONS, onRoleChange, onResend, onRemove, onCopyEmail, action, canManage = true }: TeamListProps) {
+export function TeamList({ members, now, workspace, roles = ROLE_OPTIONS, onRoleChange, onResend, onRemove, onCopyEmail, action, canManage = true, onRemoveRequest }: TeamListProps) {
   const titleId = useId();
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState<Member | undefined>(undefined);
@@ -113,7 +115,7 @@ export function TeamList({ members, now, workspace, roles = ROLE_OPTIONS, onRole
               <li key={m.id} className={cx('tf-team__row', leaving.has(m.id) && 'tf-team__row--leaving', washed.has(m.id) && 'tf-team__row--washed')}>
                 <div className="tf-team__clip">
                   <div className="tf-team__line">
-                    <span className="tf-team__person"><PersonLine name={m.name} sub={m.isYou ? `${m.email} · You` : m.email} /></span>
+                    <span className="tf-team__person"><PersonLine name={m.name} sub={m.isYou ? `${m.email} · You` : m.name === m.email ? undefined : m.email} /></span>
                     <span className="tf-team__role">
                       <Select label={`Role for ${m.name}`} isLabelHidden items={roles} value={m.role} isDisabled={locked} onChange={(v) => { if (v) changeRole(m, v); }} />
                     </span>
@@ -128,7 +130,7 @@ export function TeamList({ members, now, workspace, roles = ROLE_OPTIONS, onRole
                           <Menu aria-label={`Actions for ${m.name}`} placement="bottom end" onAction={(k) => {
                             if (k === 'resend') resend(m);
                             else if (k === 'copy') onCopyEmail?.(m.email);
-                            else if (k === 'remove') { setConfirm(m); setAsking(true); }
+                            else if (k === 'remove') { if (onRemoveRequest && m.status === 'active') onRemoveRequest(m.id); else { setConfirm(m); setAsking(true); } }
                           }}>
                             {m.status === 'invited' && <MenuItem id="resend" icon={<Send size={16} strokeWidth={1.75} />}>Resend invite</MenuItem>}
                             {m.role !== 'owner' && (

@@ -30,12 +30,19 @@ export interface CommandMenuProps {
   readonly onShowShortcuts?: () => void;
   readonly placeholder?: string;
   readonly autoFocus?: boolean;
+  /** Shown above everything while the search is empty ("Recent"). */
+  readonly recent?: ReadonlyArray<CommandItem>;
+  /** Items made from what's typed, always offered at the end ("Create person ‘Ana’"). */
+  readonly fromQuery?: (query: string) => ReadonlyArray<CommandItem>;
 }
 
 /** The palette's contents: a search that filters grouped results, with a key hint strip. Draw it inside CommandPalette, or inline. */
-export function CommandMenu({ items, onAction, onShowShortcuts, placeholder = 'Search or type a command…', autoFocus = false }: CommandMenuProps) {
+export function CommandMenu({ items: base, onAction: act, onShowShortcuts, placeholder = 'Search or type a command…', autoFocus = false, recent = [], fromQuery }: CommandMenuProps) {
   const { contains } = useFilter({ sensitivity: 'base' });
   const [query, setQuery] = useState('');
+  const typed = query.trim();
+  const items = [...(typed ? [] : recent.map((it) => ({ ...it, id: `recent~${it.id}`, group: 'Recent' }))), ...base, ...(typed && fromQuery ? fromQuery(typed) : [])];
+  const onAction = (id: string) => act(id.startsWith('recent~') ? id.slice(7) : id);
   const groups = [...new Set(items.map((it) => it.group))];
   return (
     <div className="tf-cmd">

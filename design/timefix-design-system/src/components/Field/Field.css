@@ -73,3 +73,4 @@
   .tf-field__box, .tf-field__count { transition: none; }
   .tf-field__error, .tf-field-shake { animation: none; }
 }
+.tf-field__error:empty { display: none; }

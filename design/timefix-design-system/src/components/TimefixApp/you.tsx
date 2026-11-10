@@ -16,7 +16,7 @@ import { DatePicker } from '../DatePicker/DatePicker.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { parseDate } from '@internationalized/date';
 import { Inbox, CheckSquare, NotebookPen } from 'lucide-react';
-import { newId, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink } from './data.ts';
+import { isEmptyNote, newId, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
 
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -26,24 +26,31 @@ const KIND_WORD: Readonly<Record<InboxItem['kind'], string>> = { mention: 'Menti
 export interface YouProps {
   readonly state: AppState;
   readonly dispatch: (a: AppAction) => void;
-  readonly onOpenRecord: (object: ObjectId, id: string) => void;
+  readonly onOpenRecord: (object: ObjectId, id: string, tab?: string) => void;
   readonly onBookings: (tab: string) => void;
+  /** Tasks: open with the New task dialog. Notes: open this note. */
+  readonly startNew?: boolean;
+  readonly openTask?: string;
+  readonly openNote?: string;
 }
 
 /** Inbox: what needs you. Opening one marks it read; Done moves it out of the way, with Undo. */
 export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouProps) {
   const { toast } = useToast();
   const [box, setBox] = useState<'inbox' | 'done'>('inbox');
-  const [kind, setKind] = useState<'all' | InboxItem['kind']>('all');
+  const [kind, setKind] = useState<'all' | 'due' | InboxItem['kind']>('all');
   const [unread, setUnread] = useState(false);
   const [taskId, setTaskId] = useState<string>();
   const today = startOf(new Date());
-  const items = state.inbox.filter((x) => (box === 'done' ? x.done : !x.done) && (kind === 'all' || x.kind === kind) && (!unread || !x.read));
+  const tomorrow = new Date(today.getTime() + 86_400_000);
+  const dueToday = (x: InboxItem) => { const t = state.tasks.find((y) => y.id === x.taskId); return t !== undefined && !t.done && t.due !== undefined && t.due < tomorrow; };
+  const items = state.inbox.filter((x) => (box === 'done' ? x.done : !x.done) && (kind === 'all' || (kind === 'due' ? dueToday(x) : x.kind === kind)) && (!unread || !x.read));
+  const filtered = kind !== 'all' || unread;
   const set = (x: InboxItem, patch: Partial<InboxItem>) => dispatch({ type: 'inbox/set', item: { ...x, ...patch } });
   const open = (id: string) => {
     const x = state.inbox.find((y) => y.id === id); if (!x) return;
     set(x, { read: true });
-    if (x.kind === 'booking') onBookings('meetings'); else if (x.taskId) setTaskId(x.taskId); else if (x.record) onOpenRecord(x.record.object, x.record.id);
+    if (x.kind === 'booking') onBookings('meetings'); else if (x.taskId) setTaskId(x.taskId); else if (x.record) onOpenRecord(x.record.object, x.record.id, x.kind === 'mention' || x.kind === 'reply' ? 'comments' : undefined);
   };
   const task = state.tasks.find((t) => t.id === taskId);
   return (
@@ -52,18 +59,19 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
         <SegmentedControl aria-label="Box" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : 'inbox')}
           items={[{ id: 'inbox', label: `Inbox · ${state.inbox.filter((x) => !x.done).length}` }, { id: 'done', label: 'Done' }]} />
         <Select label="Kind" isLabelHidden className="tf-you__select" value={kind} onChange={(v) => setKind((v ?? 'all') as typeof kind)}
-          items={[{ id: 'all', label: 'Everything' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
+          items={[{ id: 'all', label: 'Everything' }, { id: 'due', label: 'Tasks due today' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
         <Switch isSelected={unread} onChange={setUnread}>Unread only</Switch>
         <span className="tf-rec__spacer" />
       </div>
-      {items.length === 0 ? (
-        <EmptyState icon={<Inbox size={20} strokeWidth={1.75} />} title={box === 'done' ? 'Nothing done yet' : 'You’re all caught up'}
+      {items.length === 0 ? (filtered
+        ? <EmptyState icon={<Inbox size={20} strokeWidth={1.75} />} title="Nothing matches" description="Nothing here fits what you picked." action={<Button size="sm" variant="secondary" onPress={() => { setKind('all'); setUnread(false); }}>Show everything</Button>} />
+        : <EmptyState icon={<Inbox size={20} strokeWidth={1.75} />} title={box === 'done' ? 'Nothing done yet' : 'You’re all caught up'}
           description={box === 'done' ? 'What you mark done lands here, out of the way.' : 'Mentions, replies, tasks given to you and new bookings show up here.'} />
       ) : (
         <div className="tf-you__list">
-          <NotificationList items={items.map((x) => ({ id: x.id, actor: x.actor, action: x.text, object: x.record ? recordName(state, x.record).name : '', excerpt: x.excerpt, time: ago(x.at), group: x.at >= today ? 'Today' : 'Earlier', read: x.read }))}
-            onOpen={open} onReadChange={(id, read) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { read }); }} onReadAll={() => dispatch({ type: 'inbox/all-read' })}
-            onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (!x) return; set(x, { done: !x.done, read: true }); toast({ message: x.done ? 'Back in your inbox' : 'Marked done', action: { label: 'Undo', onAction: () => set(x, {}) } }); }} />
+          <NotificationList key={box} title="" archiveLabel={box === 'done' ? 'Move to inbox' : 'Mark done'} archivedLabel={box === 'done' ? 'Moved to inbox' : 'Done'} items={items.map((x) => ({ id: x.id, actor: x.actor, action: x.text, object: x.record ? recordName(state, x.record).name : '', excerpt: x.excerpt, time: ago(x.at), group: x.at >= today ? 'Today' : 'Earlier', read: x.read }))}
+            onOpen={open} onReadChange={(id, read) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { read }); }} onReadAll={() => items.forEach((x) => { if (!x.read) set(x, { read: true }); })}
+            onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { done: !x.done, read: true }); }} />
         </div>
       )}
       {task && <TaskDialog state={state} task={task} onClose={() => setTaskId(undefined)} onSave={(t) => { dispatch({ type: 'task/set', task: t }); setTaskId(undefined); toast({ message: 'Task saved', tone: 'success' }); }} />}
@@ -72,10 +80,10 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
 }
 
 /** Tasks: yours or everyone's, grouped by when they're due. */
-export function TasksScreen({ state, dispatch, onOpenRecord }: YouProps) {
+export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask }: YouProps) {
   const { toast } = useToast();
   const [whose, setWhose] = useState<'mine' | 'all'>('mine');
-  const [editing, setEditing] = useState<AppTask | 'new'>();
+  const [editing, setEditing] = useState<AppTask | 'new' | undefined>(startNew ? 'new' : state.tasks.find((t) => t.id === openTask));
   const now = new Date(); const today = startOf(now); const tomorrow = new Date(today.getTime() + 86_400_000);
   const list = state.tasks.filter((t) => whose === 'all' || t.assignee === state.me);
   const open = list.filter((t) => !t.done);
@@ -89,6 +97,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord }: YouProps) {
   const done = list.filter((t) => t.done);
   const last = groups[groups.length - 1];
   if (last && done.length) groups[groups.length - 1] = { ...last, tasks: [...last.tasks, ...done] };
+  else if (done.length) groups.push({ id: 'done', title: 'Done', tasks: done });
   const toggle = (id: string, done: boolean) => { const t = state.tasks.find((x) => x.id === id); if (!t) return; dispatch({ type: 'task/set', task: { ...t, done } }); toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); };
   return (
     <div className="tf-you">
@@ -99,7 +108,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord }: YouProps) {
       </div>
       {groups.length === 0 ? <EmptyState icon={<CheckSquare size={20} strokeWidth={1.75} />} title="No tasks" description="Add one here, or from any record." action={<Button size="sm" variant="primary" onPress={() => setEditing('new')}>New task</Button>} /> : groups.map((g) => (
         <section key={g.id} className="tf-you__group" aria-label={g.title}>
-          <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}>{g.title}<span className="tf-rec__muted tf-num">{g.tasks.length}</span></h3>
+          <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}>{g.title}<span className="tf-rec__muted tf-num">{g.id === 'done' ? g.tasks.length : g.tasks.filter((t) => !t.done).length}</span></h3>
           <div className="tf-you__card">
             <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
               record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
@@ -116,18 +125,19 @@ export function TasksScreen({ state, dispatch, onOpenRecord }: YouProps) {
 /** Add or edit a task: what, when, who, and the record it's about. */
 export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecord }: { readonly state: AppState; readonly task?: AppTask; readonly onClose: () => void; readonly onSave: (t: AppTask) => void; readonly onDelete?: () => void; readonly onOpenRecord?: (o: ObjectId, id: string) => void }) {
   const [title, setTitle] = useState(task?.title ?? '');
-  const [due, setDue] = useState<string | undefined>(task?.due ? task.due.toISOString().slice(0, 10) : undefined);
+  const [due, setDue] = useState<string | undefined>(task?.due ? ymdOf(task.due) : undefined);
   const [assignee, setAssignee] = useState(task?.assignee ?? state.me);
   const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : '');
   const [description, setDescription] = useState(task?.description ?? '');
   const records = [...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))];
   const link = (): RecordLink | undefined => { if (!rec) return undefined; const [o, i] = rec.split(':') as [ObjectId, string]; return { object: o, id: i }; };
+  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? dayFrom(due, 17) : undefined, assignee, record: link(), description: description.trim() || undefined, created: task?.created ?? new Date() }); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={task ? 'Task' : 'New task'}
       actions={<>{onDelete && <Button variant="ghost" onPress={onDelete}>Delete</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button>
-        <Button variant="primary" isDisabled={!title.trim()} onPress={() => onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? new Date(`${due}T17:00`) : undefined, assignee, record: link(), description: description.trim() || undefined, created: task?.created ?? new Date() })}>{task ? 'Save' : 'Add task'}</Button></>}>
+        <Button variant="primary" isDisabled={!title.trim()} onPress={save}>{task ? 'Save' : 'Add task'}</Button></>}>
       <div className="tf-rec__form">
-        <TextField label="Task" value={title} onChange={setTitle} autoFocus={!task} placeholder="Send the proposal" />
+        <TextField label="Task" value={title} onChange={setTitle} autoFocus={!task} placeholder="Send the proposal" onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
         <div className="tf-bkf__pair">
           <DatePicker label="Due" value={due ? parseDate(due) : null} onChange={(d) => setDue(d ? d.toString() : undefined)} />
           <Select label="Assignee" value={assignee} onChange={(v) => setAssignee(v ?? state.me)} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
@@ -141,9 +151,9 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
 }
 
 /** Notes: everything written, newest first; a note opens full page and saves as you type. */
-export function NotesScreen({ state, dispatch, onOpenRecord }: YouProps) {
+export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProps) {
   const { toast } = useToast();
-  const [openId, setOpenId] = useState<string>();
+  const [openId, setOpenId] = useState<string | undefined>(openNote);
   const [picking, setPicking] = useState(false);
   const [rec, setRec] = useState('');
   const note = state.notes.find((n) => n.id === openId);
@@ -153,7 +163,9 @@ export function NotesScreen({ state, dispatch, onOpenRecord }: YouProps) {
       <div className="tf-you tf-you--note">
         <button type="button" className="tf-rec__link" onClick={() => onOpenRecord(note.record.object, note.record.id)}>On {r.name}</button>
         <NotePage note={{ id: note.id, title: note.title, body: note.body, author: note.author, updated: ago(note.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
-          onBack={() => setOpenId(undefined)} onSave={(n) => dispatch({ type: 'note/set', note: { ...note, title: n.title, body: n.body, updated: new Date() } })} />
+          onBack={(l) => { setOpenId(undefined); if (isEmptyNote(l.title, l.body)) dispatch({ type: 'note/remove', id: note.id }); }}
+          onDelete={() => { const n = note; setOpenId(undefined); dispatch({ type: 'note/remove', id: n.id }); toast({ message: 'Note deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'note/set', note: n }) } }); }}
+          onSave={(n) => dispatch({ type: 'note/set', note: { ...note, title: n.title, body: n.body, updated: new Date() } })} />
       </div>
     );
   }
@@ -167,7 +179,7 @@ export function NotesScreen({ state, dispatch, onOpenRecord }: YouProps) {
           actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!rec} onPress={() => {
             const [o, i] = rec.split(':') as [ObjectId, string];
             const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, record: { object: o, id: i }, updated: new Date() };
-            dispatch({ type: 'note/set', note: n }); setPicking(false); setOpenId(n.id); toast({ message: 'Note started' });
+            dispatch({ type: 'note/set', note: n }); setPicking(false); setOpenId(n.id);
           }}>Start writing</Button></>}>
           <Select label="On" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="Pick a person, company or deal"
             items={[...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))]} />

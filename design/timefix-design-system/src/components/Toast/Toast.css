@@ -51,3 +51,5 @@
   .tf-toast { transition: none; }
   .tf-toast[data-depth] { filter: none; }
 }
+/* On a phone with a tab bar, toasts rise above it so they never cover the tabs. */
+@media (max-width: 40rem) { body:has(.tf-shell--tabbed) .tf-toasts { bottom: calc(var(--space-64) + env(safe-area-inset-bottom, 0px)); } }

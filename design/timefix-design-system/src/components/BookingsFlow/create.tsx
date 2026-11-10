@@ -14,7 +14,7 @@ import { SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
 import { CopyButton, SlidePages, i14, i16 } from './parts.tsx';
 import { newPage, uniqueSlug } from './seed.ts';
-import { PLACES, PLACE_ORDER, hoursFor, lengthOf, pageUrl, placeOf, slugify, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
+import { PLACES, PLACE_ORDER, hoursFor, lengthOf, pageUrl, placeOf, slugify, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
 
 const DURATIONS = ['15', '30', '45', '60'];
 const PLACE_ICON: Readonly<Record<PlaceKind, typeof Video>> = { meet: Video, zoom: Webcam, phone: Phone, 'in-person': MapPin };
@@ -87,7 +87,7 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   const close = () => onClose(step === 1 ? draft.id : undefined);
   const keys = (e: KeyboardEvent<HTMLElement>) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (step === 0) create(); else close(); } };
   const hours = hoursFor(draft, state);
-  const url = pageUrl(draft.slug);
+  const url = pageUrl(draft.slug, handleOf(state));
 
   const form = (
     <div className="tf-bkf-sheet__grid">

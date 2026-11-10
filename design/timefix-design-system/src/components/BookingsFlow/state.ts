@@ -426,7 +426,9 @@ export const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+
 /** A page's link: under the business's handle, or the host's name for a team. */
 export const pageUrl = (slug: string, handle = 'priya') => `timefix.com/${handle}/${slug}`;
 /** The workspace's own link: the business page, or the host's profile. */
-export const homeUrl = (state: BookingsState) => `timefix.com/${state.business?.handle ?? 'priya'}`;
+export const homeUrl = (state: BookingsState) => `timefix.com/${handleOf(state)}`;
+/** Whose address the workspace's links live under: the business's handle, or the host's name for a team. */
+export const handleOf = (state: BookingsState) => state.business?.handle || 'priya';
 /** `YYYY-MM-DD` for a local date. */
 export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /** A local date from `YYYY-MM-DD`. */

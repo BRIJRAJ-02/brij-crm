@@ -20,10 +20,14 @@ export interface HomeScreenProps {
   readonly bookings: BookingsState | undefined;
   readonly onGo: (p: AppPage) => void;
   readonly onBookings: (tab: string) => void;
+  /** The importer, Settings at a page, and a new task: where the checklist and empty states lead. */
+  readonly onImport: () => void;
+  readonly onSettings: (page: string) => void;
+  readonly onNewTask: () => void;
 }
 
 /** Home. */
-export function HomeScreen({ state, dispatch, bookings, onGo, onBookings }: HomeScreenProps) {
+export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImport, onSettings, onNewTask }: HomeScreenProps) {
   const { toast } = useToast();
   const now = new Date();
   const hour = now.getHours();
@@ -37,21 +41,25 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings }: Home
   const toTask = (t: (typeof mine)[number]): Task => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
     record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined });
   const open = state.deals.filter((d) => d.stage !== 'Won' && d.stage !== 'Lost');
-  const won = state.deals.filter((d) => d.stage === 'Won');
+  // This quarter against the last one, from the deals' own close dates; no made-up trend.
+  const q0 = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1); const qPrev = new Date(q0.getFullYear(), q0.getMonth() - 3, 1);
+  const wonIn = (from: Date, to: Date) => state.deals.filter((d) => d.stage === 'Won' && d.close >= from && d.close < to).reduce((n, d) => n + d.amount, 0);
+  const wonNow = wonIn(q0, new Date(q0.getFullYear(), q0.getMonth() + 3, 1)); const wonBefore = wonIn(qPrev, q0);
+  const wonDelta = wonBefore === 0 ? undefined : Math.round(((wonNow - wonBefore) / wonBefore) * 100);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = (bookings?.meetings ?? []).filter((m) => m.status !== 'cancelled' && m.start >= monday && m.start < new Date(monday.getTime() + 7 * 86_400_000));
   const steps: ReadonlyArray<ChecklistStep> = [
-    { id: 'workspace', title: 'Create your workspace', icon: <IdCard {...i16} />, actionLabel: 'Open', isDone: state.setupDone.includes('workspace') },
-    { id: 'booking', title: 'Make a booking page', description: 'Guests pick a time that suits you both.', icon: <Link2 {...i16} />, actionLabel: 'Make one', isDone: state.setupDone.includes('booking') },
-    { id: 'link', title: 'Claim your link page', icon: <IdCard {...i16} />, actionLabel: 'Claim', isDone: state.setupDone.includes('link') },
-    { id: 'calendar', title: 'Connect your calendar', description: 'So nobody books over your busy time.', icon: <CalendarCheck {...i16} />, actionLabel: 'Connect', isDone: state.setupDone.includes('calendar') },
-    { id: 'invite', title: 'Invite your team', description: 'Share records, pages and round robins.', icon: <UserPlus {...i16} />, actionLabel: 'Invite', isDone: state.setupDone.includes('invite') },
-    { id: 'import', title: 'Bring in your contacts', description: 'A CSV from your old CRM or a spreadsheet.', icon: <Upload {...i16} />, actionLabel: 'Import', isDone: state.setupDone.includes('import') },
+    // Each step ticks itself when the thing is really done, never on the click that leads there.
+    { id: 'workspace', title: 'Create your workspace', icon: <IdCard {...i16} />, actionLabel: 'Open', isDone: true },
+    { id: 'booking', title: 'Make a booking page', description: 'Guests pick a time that suits you both.', icon: <Link2 {...i16} />, actionLabel: 'Make one', isDone: (bookings?.pages.length ?? 0) > 0 },
+    { id: 'link', title: 'Publish your link page', icon: <IdCard {...i16} />, actionLabel: 'Open', isDone: state.setupDone.includes('link') },
+    { id: 'calendar', title: 'Connect your calendar', description: 'So nobody books over your busy time.', icon: <CalendarCheck {...i16} />, actionLabel: 'Connect', isDone: (bookings?.calendars ?? []).some((c) => c.status === 'connected') },
+    { id: 'invite', title: 'Invite your team', description: 'Share records, pages and round robins.', icon: <UserPlus {...i16} />, actionLabel: 'Invite', isDone: state.members.length > 1 || state.prefs.invites.length > 0 },
+    { id: 'import', title: 'Bring in your contacts', description: 'A CSV from your old CRM or a spreadsheet.', icon: <Upload {...i16} />, actionLabel: 'Import', isDone: state.setupDone.includes('import') || state.history.some((h) => h.text.includes(' imported ')) },
   ];
   const step = (id: string) => {
-    dispatch({ type: 'setup/done', id });
     if (id === 'booking') onBookings('pages'); else if (id === 'calendar') onBookings('availability'); else if (id === 'link') onGo('link');
-    else if (id === 'invite') onGo('settings'); else if (id === 'import') onGo('records:people');
+    else if (id === 'invite') onSettings('members'); else if (id === 'import') onImport(); else if (id === 'workspace') onSettings('general');
   };
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const summary = [left.length ? `${left.length} ${left.length === 1 ? 'meeting' : 'meetings'} left today` : today.length ? 'No more meetings today' : 'No meetings today', due.length ? `${due.length} ${due.length === 1 ? 'task' : 'tasks'} due` : 'Nothing due'];
@@ -74,8 +82,8 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings }: Home
                 return (
                   <li key={m.id} className="tf-home__meet" data-state={past ? 'past' : live ? 'live' : 'next'}>
                     <span className="tf-home__time tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span>
-                    <span className="tf-home__what"><strong>{m.title}</strong><span className="tf-home__muted">{m.invitee.name} · {m.place === 'in-person' ? <MapPin size={12} aria-hidden /> : <Video size={12} aria-hidden />} {m.placeLabel}</span></span>
-                    {live && m.place !== 'in-person' && <Button size="sm" variant="primary" onPress={() => toast({ message: `Opening ${m.placeLabel}…` })}>Join</Button>}
+                    <button type="button" className="tf-home__what" onClick={() => onBookings('meetings')} aria-label={`${m.title} with ${m.invitee.name}, open in Meetings`}><strong>{m.title}</strong><span className="tf-home__muted">{m.invitee.name} · {m.place === 'in-person' ? <MapPin size={12} aria-hidden /> : <Video size={12} aria-hidden />} {m.placeLabel}</span></button>
+                    {live && m.place !== 'in-person' && <Button size="sm" variant="primary" onPress={() => { const url = `https://meet.google.com/${m.id.slice(-3)}-tfx-${m.id.slice(0, 4)}`; void navigator.clipboard.writeText(url).then(() => toast({ message: `${m.placeLabel} link copied. Paste it in your browser.`, tone: 'success' }), () => toast({ message: `Join at ${url}` })); }}>Join</Button>}
                     {live && <span className="tf-home__now">Now</span>}
                   </li>
                 );
@@ -84,18 +92,19 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings }: Home
           )}
         </Card>
         <Card title="My tasks" action={<CardLink onPress={() => onGo('tasks')}>All tasks</CardLink>}>
-          {shown.length === 0 ? <div className="tf-home__none"><p>You’re all caught up.</p></div> : (
+          {shown.length === 0 ? <div className="tf-home__none"><p>You’re all caught up.</p><Button size="sm" variant="secondary" onPress={onNewTask}>Add a task</Button></div> : (<>
             <TaskList tasks={shown.map(toTask)} onToggle={(id, done) => {
               const t = state.tasks.find((x) => x.id === id); if (!t) return;
               dispatch({ type: 'task/set', task: { ...t, done } });
               toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } });
             }} onAdd={(title) => dispatch({ type: 'task/set', task: { id: `t-${Date.now().toString(36)}`, title, done: false, assignee: state.me, created: new Date() } })} />
-          )}
+            {mine.filter((t) => !t.done).length > shown.length && <button type="button" className="tf-rec__link" onClick={() => onGo('tasks')}>{mine.filter((t) => !t.done).length - shown.length} more in Tasks</button>}
+          </>)}
         </Card>
       </div>
       <div className="tf-home__stats">
         <StatCard label="Open pipeline" icon={<CircleDollarSign {...i16} />} value={open.reduce((n, d) => n + d.amount, 0)} format={inr} delta={{ value: `${open.length} deals`, direction: 'flat' }} />
-        <StatCard label="Won this quarter" icon={<Trophy {...i16} />} value={won.reduce((n, d) => n + d.amount, 0)} format={inr} delta={{ value: '+18%', direction: 'up', note: 'vs last quarter', isGood: true }} sparkline={[2, 3, 3, 5, 4, 6, 7]} />
+        <StatCard label="Won this quarter" icon={<Trophy {...i16} />} value={wonNow} format={inr} delta={wonDelta === undefined ? { value: wonBefore === 0 && wonNow > 0 ? 'First wins' : 'None yet', direction: 'flat' } : { value: `${wonDelta > 0 ? '+' : ''}${wonDelta}%`, direction: wonDelta > 0 ? 'up' : wonDelta < 0 ? 'down' : 'flat', note: 'vs last quarter', isGood: wonDelta >= 0 }} />
         <StatCard label="Meetings this week" icon={<CalendarDays {...i16} />} value={week.length} delta={{ value: `${week.filter((m) => m.status === 'pending').length} to confirm`, direction: 'flat' }} />
         <StatCard label="Overdue tasks" icon={<AlarmClock {...i16} />} value={mine.filter((t) => !t.done && t.due && t.due < new Date(now.getFullYear(), now.getMonth(), now.getDate())).length} delta={{ value: 'yours', direction: 'flat' }} />
       </div>

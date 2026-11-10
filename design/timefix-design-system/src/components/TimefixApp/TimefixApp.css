@@ -29,7 +29,7 @@
   .tf-home__stats { grid-template-columns: minmax(0, 1fr); }
 }
 /* Records: one toolbar, the filter row, then the table or board filling the page. */
-.tf-app__body:has(> .tf-rec) { display: flex; flex-direction: column; padding-bottom: var(--space-16); }
+.tf-app__body:has(> .tf-app__keep:not([hidden]) > .tf-rec) { display: flex; flex-direction: column; padding-bottom: var(--space-16); }
 .tf-rec { display: flex; flex: 1; flex-direction: column; gap: var(--space-12); min-height: 0; }
 .tf-rec__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .tf-rec__view { width: calc(var(--size-menu) * 0.85); }
@@ -75,7 +75,8 @@
 .tf-you__open { align-self: flex-start; font-size: 13px; }
 .tf-you--note > .tf-rec__link { align-self: flex-start; font: 500 13px/20px var(--font-sans); }
 .tf-list__title { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-right: var(--space-8); }
-.tf-list__title strong { color: var(--text); font: 600 17px/24px var(--font-sans); }
+.tf-list__title { min-width: 0; }
+.tf-list__title h2 { margin: 0; overflow: hidden; color: var(--text); font: 600 17px/24px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 .tf-list__picked { display: flex; flex-direction: column; gap: var(--space-4); margin: var(--space-12) 0 0; padding: 0; list-style: none; }
 .tf-list__picked li { display: flex; justify-content: space-between; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--surface-subtle); font: 500 14px/20px var(--font-sans); }
 /* Forms: a grid of cards; the editor with a name field, status and actions on top, then five tabs. */
@@ -127,11 +128,11 @@
 .tf-grow__see { display: flex; flex-direction: column; gap: var(--space-16); }
 .tf-grow__qr { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); font: 500 14px/20px var(--font-sans); }
 /* Settings: the shared layout, a find box over the nav, rows of switches and lists. */
-.tf-app__body:has(> .tf-set) { padding-top: 0; }
+.tf-app__body:has(> .tf-app__keep:not([hidden]) > .tf-set) { padding-top: 0; }
 .tf-set { width: 100%; }
 .tf-set__nav { display: flex; flex-direction: column; gap: var(--space-12); padding-top: var(--space-24); }
 .tf-set__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-16); }
-.tf-set__grow { flex: 1; min-width: 0; }
+.tf-set__grow { flex: 1 1 14rem; min-width: 0; }
 .tf-set__narrow { max-width: calc(var(--size-dialog) + var(--space-32)); }
 .tf-set__switch { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); min-height: var(--size-row); padding: var(--space-8) 0; }
 .tf-set__switch + .tf-set__switch { border-top: var(--border-width-hairline) solid var(--border-subtle); }
@@ -183,3 +184,50 @@
 .tf-set__open { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-12); width: 100%; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
 .tf-set__open:hover strong { text-decoration: underline; text-underline-offset: 3px; }
 .tf-set__open:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-set__logo { width: 56px; height: 56px; border-radius: var(--radius-md); object-fit: contain; background: var(--surface-subtle); }
+.tf-set__check { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; border: 0; }
+.tf-set__check legend { margin-bottom: var(--space-8); padding: 0; color: var(--text); font: 500 13px/18px var(--font-sans); }
+/* The page behind an open record stays mounted (its view, search and selection survive Back). */
+.tf-app__keep { display: contents; }
+.tf-app__keep[hidden] { display: none; }
+/* Phone: More lists every place the tab bar can't hold. */
+.tf-more { display: flex; flex-direction: column; gap: var(--space-24); max-width: 640px; }
+.tf-more__group { display: flex; flex-direction: column; gap: var(--space-4); }
+.tf-more__group h2 { margin: 0 0 var(--space-4); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); letter-spacing: 0.02em; }
+.tf-more__group ul { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-more__group li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-more__item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-12); width: 100%; min-height: var(--size-control-lg); padding: 0 var(--space-16); border: 0; background: none; color: var(--text); font: 400 15px/20px var(--font-sans); text-align: left; cursor: pointer; }
+.tf-more__item > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-more__item svg { color: var(--text-secondary); }
+.tf-more__item:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-lg); }
+.tf-more__count { color: var(--text-secondary); font: 400 13px/18px var(--font-sans); font-variant-numeric: tabular-nums; }
+/* Settings at phone width: the list, then one page with "All settings" to go back. */
+.tf-set__back { display: none; }
+@container tf-app (max-width: 640px) {
+  .tf-set .tf-settings { display: block; height: auto; }
+  .tf-set .tf-settings__nav { width: auto; padding: var(--space-16) 0; border-right: 0; }
+  .tf-set .tf-settings__content { padding: var(--space-8) 0 var(--space-32); overflow: visible; }
+  .tf-set:not(.tf-set--page) .tf-settings__content { display: none; }
+  .tf-set--page .tf-set__nav { display: none; }
+  .tf-set--page .tf-set__back { display: inline-flex; align-self: flex-start; order: -1; }
+}
+.tf-rec__rel--static { cursor: default; }
+.tf-home__what { all: unset; display: flex; flex-direction: column; min-width: 0; cursor: pointer; border-radius: var(--radius-sm); }
+.tf-home__what:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+.tf-home__what:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-links { display: flex; flex-direction: column; gap: var(--space-24); max-width: 960px; }
+.tf-links__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-links__h { margin: 0; color: var(--text-secondary); font: 500 12px/16px var(--font-sans); letter-spacing: 0.02em; }
+.tf-links__list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-links__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--space-12); min-height: var(--size-control-lg); padding: var(--space-8) var(--space-16); }
+.tf-links__row + .tf-links__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-links__icon { display: grid; place-items: center; width: var(--space-32); height: var(--space-32); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
+.tf-links__what { display: flex; flex-direction: column; min-width: 0; }
+.tf-links__what strong { overflow: hidden; color: var(--text); font: 500 14px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-links__what > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-links__acts { display: flex; align-items: center; gap: var(--space-4); }
+@container tf-app (max-width: 640px) {
+  .tf-links__row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tf-links__nums { display: none; }
+  .tf-links__acts { grid-column: 2 / -1; }
+}

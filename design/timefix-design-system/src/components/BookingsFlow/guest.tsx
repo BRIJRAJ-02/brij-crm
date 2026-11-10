@@ -32,7 +32,7 @@ export const GUEST_SCENARIOS: ReadonlyArray<{ readonly id: GuestScenario; readon
 
 /** Props for GuestMode. */
 export interface GuestPlayerProps {
-  readonly play: { readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string; /** A table's code, from its QR. */ readonly table?: string } | undefined;
+  readonly play: { readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string; /** A table's code, from its QR. */ readonly table?: string; /** Someone who just sent a form: their name and email carry over. */ readonly prefill?: { readonly name: string; readonly email: string } } | undefined;
   readonly state: BookingsState;
   readonly onClose: () => void;
   /** A booking made as the guest; the host side plays it when the view closes. */
@@ -78,7 +78,7 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
       </header>
       <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || scenario === 'menu' || (scenario === 'book' && page?.kind === 'table') || undefined}>
         <div className="tf-bkf-guestmode__frame" data-device={device}>
-          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} table={play.table} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />
+          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} table={play.table} prefill={play.prefill} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />
         </div>
       </main>
     </div>
@@ -99,7 +99,7 @@ function GuestCard({ children, align = 'center' }: { readonly children: ReactNod
   );
 }
 
-function Screen({ scenario, page, state, meetingId, table, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string; readonly table?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist'>) {
+function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist'>) {
   if (scenario === 'hidden' || (!page.isOn && scenario === 'book')) {
     return <GuestCard><EmptyState size="sm" icon={<EyeOff size={20} strokeWidth={1.75} />} title="This page isn't taking bookings right now" description={`${first(page.owner)} has paused ${page.name}. Try again later, or email them.`}
       action={<Button size="sm" icon={<Mail {...i14} />} onPress={() => window.open(`mailto:${first(page.owner).toLowerCase()}@northwind.com?subject=${encodeURIComponent(page.name)}`, '_blank', 'noopener')}>Email {first(page.owner)}</Button>} /></GuestCard>;
@@ -116,7 +116,7 @@ function Screen({ scenario, page, state, meetingId, table, onBooked, onGuestCanc
   if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} startOnMenu table={table} />;
   // A table page's own link opens the restaurant's page with the table card, as booking sites do.
   if (page.kind === 'table') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} />;
-  return <Book page={page} state={state} onBooked={onBooked} onBookedChange={onBookedChange} failFirst={scenario === 'taken'} />;
+  return <Book page={page} state={state} onBooked={onBooked} onBookedChange={onBookedChange} failFirst={scenario === 'taken'} prefill={prefill} />;
 }
 
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
@@ -146,7 +146,7 @@ function Profile({ owner, state, onBooked, onWaitlist, startOnMenu = false, tabl
 }
 
 /** The booking page, with a length or place choice first when the page offers several. */
-function Book({ page, state, onBooked, onBookedChange, failFirst = false }: { readonly page: BookingPage; readonly state: BookingsState; readonly failFirst?: boolean } & Pick<GuestPlayerProps, 'onBooked' | 'onBookedChange'>) {
+function Book({ page, state, onBooked, onBookedChange, failFirst = false, prefill }: { readonly page: BookingPage; readonly state: BookingsState; readonly failFirst?: boolean; readonly prefill?: { readonly name: string; readonly email: string } } & Pick<GuestPlayerProps, 'onBooked' | 'onBookedChange'>) {
   const tries = useRef(0);
   const [length, setLength] = useState(lengthOf(page));
   const [place, setPlace] = useState<PlaceKind>(placeOf(page));
@@ -155,8 +155,8 @@ function Book({ page, state, onBooked, onBookedChange, failFirst = false }: { re
   if (requested) return <Pending page={page} when={requested} />;
   return (
     <div className="tf-bkf__guest">
-      {page.whoCanBook === 'form' && <Callout tone="info" className="tf-bkf__guest-note">You answered the {page.formName} form. Now pick a time.</Callout>}
-      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace} chat={<Chat page={page} state={state} onBooked={onBooked} embedded length={length} place={place}
+      {(page.whoCanBook === 'form' || prefill) && <Callout tone="info" className="tf-bkf__guest-note">{prefill ? `Thanks, ${prefill.name.split(' ')[0]}. Now pick a time.` : `You answered the ${page.formName} form. Now pick a time.`}</Callout>}
+      <GuestView guestIs={prefill} page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace} chat={<Chat page={page} state={state} onBooked={onBooked} embedded length={length} place={place}
         onDone={(b) => { if (page.confirmFirst) setRequested(`${formatLongDay(new Date(b.date.year, b.date.month - 1, b.date.day))} · ${formatClockRange(b.minutes, b.minutes + length)}`); else setChatBooked(b); }} />} chatBooked={chatBooked}
         after={{ onCancelled: () => onBookedChange?.({ kind: 'cancel' }), onMoved: (date, minutes) => onBookedChange?.({ kind: 'move', date, minutes }), onGuestsChange: (guests) => onBookedChange?.({ kind: 'guests', guests }) }}
         onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => {

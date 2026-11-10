@@ -1,3 +1,4 @@
+import type { LinkPageDraft } from '../LinkEditor/LinkEditor.tsx';
 import type { FormQuestion } from '../HostedForm/answers.ts';
 import type { SchemaAttribute } from '../AttributeSettings/AttributeSettings.tsx';
 // The whole app's CRM data for the prototype: Northwind's team, the people, companies and deals they work, tasks, notes and the inbox.
@@ -48,10 +49,39 @@ export interface AppForm {
   readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page';
   readonly saveTo: 'people' | 'none'; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking'; readonly message: string };
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
+  /** The published layout, name and after-send settings, so a change to any of them counts as an unpublished edit. */
+  readonly liveConfig?: string;
 }
 
 /** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
 export interface ObjectSchema { readonly id: string; readonly one: string; readonly many: string; readonly custom: boolean; readonly attributes: ReadonlyArray<SchemaAttribute> }
+
+/** A deleted record, kept 30 days so it can come back. */
+export interface TrashItem { readonly id: string; readonly object: ObjectId; readonly record: Person | Company | Deal; readonly at: Date; readonly by: string }
+/** One line of the workspace's history: who did what. */
+export interface HistoryLine { readonly id: string; readonly text: string; readonly at: Date }
+
+/** A saved chart of deals. */
+export interface Report { readonly id: string; readonly name: string; readonly measure: 'count' | 'amount'; readonly group: 'stage' | 'owner' }
+
+/** A file on a record. The prototype keeps the file itself in memory so Download gives it back. */
+export interface RecordFile { readonly id: string; readonly record: RecordLink; readonly name: string; readonly size: number; readonly type: string; readonly at: Date; readonly by: string; readonly blob?: Blob }
+
+/** How the workspace and you are set up: everything Settings changes, kept so it sticks and reaches the rest of the app. */
+export interface Prefs {
+  readonly workspace: { readonly name: string; readonly slug: string; readonly currency: string; readonly country: string; readonly colour: string; readonly logo?: string };
+  readonly theme: 'system' | 'light' | 'dark'; readonly timeZone: string; readonly dateFormat: string; readonly weekStart: 'mon' | 'sun'; readonly startPage: string;
+  readonly showPhoto: boolean; readonly notify: Readonly<Record<string, boolean>>;
+  readonly twoFactor: boolean; readonly devices: ReadonlyArray<{ readonly id: string; readonly what: string; readonly where: string; readonly current?: boolean }>;
+  readonly apps: Readonly<Record<'menu' | 'seating' | 'appointments', boolean>>;
+  readonly rules: Readonly<Record<'require2fa' | 'google' | 'inviteLink' | 'domainJoin', boolean>>;
+  readonly grants: Readonly<Record<string, ReadonlyArray<string>>>;
+  readonly teams: ReadonlyArray<{ readonly id: string; readonly name: string; readonly members: ReadonlyArray<string> }>;
+  readonly invites: ReadonlyArray<{ readonly id: string; readonly email: string; readonly role: string; readonly at: Date }>;
+  readonly joinRequests: ReadonlyArray<{ readonly id: string; readonly name: string; readonly email: string }>;
+  readonly apiKeys: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scope: 'read' | 'write'; readonly last4: string; readonly at: Date }>;
+  readonly sidebarHidden: ReadonlyArray<string>;
+}
 
 /** The CRM side of the app. */
 export interface AppState {
@@ -72,6 +102,18 @@ export interface AppState {
   readonly lists: ReadonlyArray<CrmList>;
   readonly forms: ReadonlyArray<AppForm>;
   readonly objects: ReadonlyArray<ObjectSchema>;
+  readonly trash: ReadonlyArray<TrashItem>;
+  readonly history: ReadonlyArray<HistoryLine>;
+  readonly files: ReadonlyArray<RecordFile>;
+  /** Reactions on comments and replies, by comment id: kind → who. */
+  readonly prefs: Prefs;
+  /** Duplicate pairs someone said aren't ("a|b"). */
+  readonly notDupes: ReadonlyArray<string>;
+  /** The published link page; until someone publishes, the starter page shows. */
+  readonly linkPage?: LinkPageDraft;
+  /** Saved charts in Insights › Reports. */
+  readonly reports: ReadonlyArray<Report>;
+  readonly reactions: Readonly<Record<string, Readonly<Record<string, ReadonlyArray<string>>>>>;
 }
 
 export type AppAction =
@@ -85,7 +127,13 @@ export type AppAction =
   | { readonly type: 'company/set'; readonly company: Company }
   | { readonly type: 'deal/set'; readonly deal: Deal }
   | { readonly type: 'records/remove'; readonly object: ObjectId; readonly ids: ReadonlyArray<string> }
-  | { readonly type: 'records/restore'; readonly state: AppState }
+  | { readonly type: 'records/fields'; readonly object: ObjectId; readonly changes: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> }
+  | { readonly type: 'records/untrash'; readonly ids: ReadonlyArray<string> }
+  | { readonly type: 'records/drop'; readonly object: ObjectId; readonly ids: ReadonlyArray<string>; readonly note?: string }
+  | { readonly type: 'records/relink'; readonly from: RecordLink; readonly to: RecordLink; readonly only?: ReadonlyArray<string> }
+  | { readonly type: 'dupes/dismiss'; readonly key: string; readonly on: boolean }
+  | { readonly type: 'list/entries'; readonly id: string; readonly add?: ReadonlyArray<ListEntry>; readonly remove?: ReadonlyArray<string>; readonly stages?: Readonly<Record<string, string>> }
+  | { readonly type: 'list/insert'; readonly list: CrmList; readonly at: number }
   | { readonly type: 'comment/set'; readonly comment: Comment }
   | { readonly type: 'activity/add'; readonly activity: Activity }
   | { readonly type: 'setup/done'; readonly id: string }
@@ -95,8 +143,24 @@ export type AppAction =
   | { readonly type: 'list/remove'; readonly id: string }
   | { readonly type: 'form/set'; readonly form: AppForm }
   | { readonly type: 'form/remove'; readonly id: string }
-  | { readonly type: 'object/set'; readonly object: ObjectSchema };
+  | { readonly type: 'link/publish'; readonly page: LinkPageDraft }
+  | { readonly type: 'report/set'; readonly report: Report }
+  | { readonly type: 'report/remove'; readonly id: string }
+  | { readonly type: 'form/patch'; readonly id: string; readonly patch: (f: AppForm) => Partial<AppForm> }
+  | { readonly type: 'object/set'; readonly object: ObjectSchema }
+  | { readonly type: 'trash/restore'; readonly id: string }
+  | { readonly type: 'trash/purge'; readonly ids: ReadonlyArray<string> }
+  | { readonly type: 'history/add'; readonly text: string }
+  | { readonly type: 'file/set'; readonly file: RecordFile }
+  | { readonly type: 'file/remove'; readonly id: string }
+  | { readonly type: 'reaction/toggle'; readonly id: string; readonly kind: string }
+  | { readonly type: 'prefs/set'; readonly prefs: Partial<Prefs>; readonly note?: string }
+  | { readonly type: 'member/set'; readonly member: Member; readonly note?: string }
+  | { readonly type: 'member/remove'; readonly id: string; readonly reassignTo?: string }
+  | { readonly type: 'me/rename'; readonly name: string };
 
+let lineSeq = 0;
+const line = (text: string): HistoryLine => ({ id: `h-${Date.now().toString(36)}-${(lineSeq++).toString(36)}`, text, at: new Date() });
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
 /** The one reducer: new objects only. */
@@ -113,11 +177,40 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'deal/set': return { ...state, deals: upsert(state.deals, a.deal) };
     case 'records/remove': {
       const gone = new Set(a.ids);
-      return a.object === 'people' ? { ...state, people: state.people.filter((x) => !gone.has(x.id)) }
-        : a.object === 'companies' ? { ...state, companies: state.companies.filter((x) => !gone.has(x.id)) }
-          : { ...state, deals: state.deals.filter((x) => !gone.has(x.id)) };
+      const list: ReadonlyArray<Person | Company | Deal> = a.object === 'people' ? state.people : a.object === 'companies' ? state.companies : state.deals;
+      const binned = list.filter((x) => gone.has(x.id)).map((record) => ({ id: `tr-${record.id}`, object: a.object, record, at: new Date(), by: state.me }));
+      const kept = a.object === 'people' ? { people: state.people.filter((x) => !gone.has(x.id)) } : a.object === 'companies' ? { companies: state.companies.filter((x) => !gone.has(x.id)) } : { deals: state.deals.filter((x) => !gone.has(x.id)) };
+      return { ...state, ...kept, trash: [...binned, ...state.trash], history: [line(`${state.me} deleted ${binned.length === 1 ? binned[0]?.record.name ?? 'a record' : `${binned.length} ${a.object}`}`), ...state.history] };
     }
-    case 'records/restore': return a.state;
+    case 'records/fields': {
+      const by = new Map(a.changes.map((c) => [c.id, c.patch]));
+      const apply = <T extends { readonly id: string }>(x: T): T => { const patch = by.get(x.id); return patch ? { ...x, ...patch } : x; };
+      return a.object === 'people' ? { ...state, people: state.people.map(apply) } : a.object === 'companies' ? { ...state, companies: state.companies.map(apply) } : { ...state, deals: state.deals.map(apply) };
+    }
+    case 'records/untrash': {
+      const items = state.trash.filter((t) => a.ids.includes(t.record.id)); if (items.length === 0) return state;
+      const back = (o: ObjectId) => items.filter((t) => t.object === o).map((t) => t.record);
+      return { ...state, trash: state.trash.filter((t) => !items.includes(t)), people: [...(back('people') as ReadonlyArray<Person>), ...state.people], companies: [...(back('companies') as ReadonlyArray<Company>), ...state.companies],
+        deals: [...(back('deals') as ReadonlyArray<Deal>), ...state.deals], history: [line(`${state.me} restored ${items.length === 1 ? items[0]?.record.name ?? 'a record' : `${items.length} records`}`), ...state.history] };
+    }
+    case 'records/drop': {
+      const gone = new Set(a.ids);
+      const kept = a.object === 'people' ? { people: state.people.filter((x) => !gone.has(x.id)) } : a.object === 'companies' ? { companies: state.companies.filter((x) => !gone.has(x.id)) } : { deals: state.deals.filter((x) => !gone.has(x.id)) };
+      return { ...state, ...kept, history: a.note ? [line(a.note), ...state.history] : state.history };
+    }
+    case 'records/relink': {
+      const hit = (r: RecordLink | undefined, id: string) => r !== undefined && r.object === a.from.object && r.id === a.from.id && (!a.only || a.only.includes(id));
+      const mv = <T extends { readonly id: string; readonly record?: RecordLink }>(x: T): T => (hit(x.record, x.id) ? { ...x, record: a.to } : x);
+      const ok = (id: string) => !a.only || a.only.includes(id);
+      return { ...state, tasks: state.tasks.map(mv), notes: state.notes.map(mv), comments: state.comments.map(mv), activity: state.activity.map(mv), inbox: state.inbox.map(mv), files: state.files.map(mv),
+        deals: state.deals.map((d) => (a.from.object === 'people' && d.contactId === a.from.id && ok(d.id) ? { ...d, contactId: a.to.id } : a.from.object === 'companies' && d.companyId === a.from.id && ok(d.id) ? { ...d, companyId: a.to.id } : d)),
+        people: a.from.object === 'companies' ? state.people.map((p) => (p.companyId === a.from.id && ok(p.id) ? { ...p, companyId: a.to.id } : p)) : state.people,
+        lists: state.lists.map((l) => (l.object !== a.from.object ? l : { ...l, entries: l.entries.map((e) => (e.recordId === a.from.id && ok(e.id) && !(l.oncePerRecord && l.entries.some((x) => x.recordId === a.to.id)) ? { ...e, recordId: a.to.id } : e)) })),
+        forms: a.from.object === 'people' ? state.forms.map((f) => ({ ...f, responses: f.responses.map((r) => (r.personId === a.from.id && ok(r.id) ? { ...r, personId: a.to.id } : r)) })) : state.forms };
+    }
+    case 'dupes/dismiss': return { ...state, notDupes: a.on ? [...state.notDupes.filter((k) => k !== a.key), a.key] : state.notDupes.filter((k) => k !== a.key) };
+    case 'list/entries': return { ...state, lists: state.lists.map((l) => (l.id !== a.id ? l : { ...l, entries: [...l.entries.filter((e) => !(a.remove ?? []).includes(e.id)).map((e) => (a.stages?.[e.id] !== undefined ? { ...e, stage: a.stages[e.id] ?? e.stage } : e)), ...(a.add ?? [])] })) };
+    case 'list/insert': return { ...state, lists: [...state.lists.slice(0, a.at), a.list, ...state.lists.slice(a.at)].filter((l, n, all) => all.findIndex((x) => x.id === l.id) === n) };
     case 'comment/set': return { ...state, comments: upsert(state.comments, a.comment) };
     case 'activity/add': return { ...state, activity: [a.activity, ...state.activity] };
     case 'setup/done': return state.setupDone.includes(a.id) ? state : { ...state, setupDone: [...state.setupDone, a.id] };
@@ -127,8 +220,57 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'list/remove': return { ...state, lists: state.lists.filter((l) => l.id !== a.id) };
     case 'form/set': return { ...state, forms: upsert(state.forms, a.form) };
     case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
+    case 'link/publish': return { ...state, linkPage: a.page, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
+    case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
+    case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
+    case 'form/patch': return { ...state, forms: state.forms.map((f) => (f.id === a.id ? { ...f, ...a.patch(f) } : f)) };
+    case 'trash/restore': {
+      const t = state.trash.find((x) => x.id === a.id); if (!t) return state;
+      const rest = { ...state, trash: state.trash.filter((x) => x.id !== a.id), history: [line(`${state.me} restored ${t.record.name}`), ...state.history] };
+      return t.object === 'people' ? { ...rest, people: [t.record as Person, ...state.people] } : t.object === 'companies' ? { ...rest, companies: [t.record as Company, ...state.companies] } : { ...rest, deals: [t.record as Deal, ...state.deals] };
+    }
+    case 'trash/purge': return { ...state, trash: state.trash.filter((x) => !a.ids.includes(x.id)), history: [line(`${state.me} deleted ${a.ids.length} ${a.ids.length === 1 ? 'record' : 'records'} for good`), ...state.history] };
+    case 'file/set': return { ...state, files: upsert(state.files, a.file) };
+    case 'file/remove': return { ...state, files: state.files.filter((f) => f.id !== a.id) };
+    case 'reaction/toggle': {
+      const cur = state.reactions[a.id] ?? {}; const who = cur[a.kind] ?? [];
+      const next = who.includes(state.me) ? who.filter((x) => x !== state.me) : [...who, state.me];
+      return { ...state, reactions: { ...state.reactions, [a.id]: { ...cur, [a.kind]: next } } };
+    }
+    case 'prefs/set': return { ...state, prefs: { ...state.prefs, ...a.prefs }, history: a.note ? [line(a.note), ...state.history] : state.history };
+    case 'member/set': return { ...state, members: state.members.some((m) => m.id === a.member.id) ? state.members.map((m) => (m.id === a.member.id ? a.member : m)) : [...state.members, a.member], history: a.note ? [line(a.note), ...state.history] : state.history };
+    case 'member/remove': {
+      const gone = state.members.find((m) => m.id === a.id); if (!gone) return state;
+      const to = a.reassignTo ?? state.me;
+      const move = <T extends { readonly owner: string }>(x: T): T => (x.owner === gone.name ? { ...x, owner: to } : x);
+      return { ...state, members: state.members.filter((m) => m.id !== a.id), people: state.people.map(move), companies: state.companies.map(move), deals: state.deals.map(move),
+        tasks: state.tasks.map((t) => (t.assignee === gone.name ? { ...t, assignee: to } : t)), history: [line(`${state.me} removed ${gone.name}; their records went to ${to}`), ...state.history] };
+    }
+    case 'me/rename': {
+      const was = state.me; const to = a.name.trim(); if (!to || to === was) return state;
+      const own = <T extends { readonly owner: string }>(x: T): T => (x.owner === was ? { ...x, owner: to } : x);
+      return { ...state, me: to, members: state.members.map((m) => (m.name === was ? { ...m, name: to } : m)), people: state.people.map(own), companies: state.companies.map(own), deals: state.deals.map(own),
+        tasks: state.tasks.map((t) => (t.assignee === was ? { ...t, assignee: to } : t)), prefs: { ...state.prefs, teams: state.prefs.teams.map((t) => ({ ...t, members: t.members.map((n) => (n === was ? to : n)) })) },
+        history: [line(`${was} changed their name to ${to}`), ...state.history] };
+    }
+    case 'history/add': return { ...state, history: [line(a.text), ...state.history] };
     case 'object/set': return { ...state, objects: state.objects.some((o) => o.id === a.object.id) ? state.objects.map((o) => (o.id === a.object.id ? a.object : o)) : [...state.objects, a.object] };
   }
+}
+
+/** A date as "2026-11-10" in local time (toISOString would shift it a day in some zones). */
+export const ymdOf = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** "2026-11-10" back to a local date, at the hour given. */
+export const dayFrom = (v: string, hour = 12): Date | undefined => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), hour) : undefined; };
+
+/** A note nobody wrote in: no text and no real title. Leaving one throws it away. */
+export const isEmptyNote = (title: string, body: string): boolean => !body.trim() && (!title.trim() || title.trim() === 'Untitled note');
+
+/** Who answered a form: the first email question, and the question that asks their name (else the first short answer). */
+export function formWho(questions: ReadonlyArray<{ readonly id: string; readonly kind: string; readonly title: string }>, answers: Readonly<Record<string, string>>): { readonly name: string; readonly email: string } {
+  const email = questions.find((q) => q.kind === 'email');
+  const name = questions.find((q) => q.kind === 'short' && /name/i.test(q.title)) ?? questions.find((q) => q.kind === 'short');
+  return { name: (name && answers[name.id]?.trim()) || '', email: (email && answers[email.id]?.trim()) || '' };
 }
 
 let seq = 0;
@@ -255,7 +397,30 @@ export function northwindCrm(now = new Date()): AppState {
         ] },
     ],
     forms: [contactForm(now), feedbackForm(now)],
-    objects: builtInObjects(members.map((m) => ({ id: m.id, name: m.name }))) };
+    objects: builtInObjects(members.map((m) => ({ id: m.id, name: m.name }))),
+    trash: [{ id: 'tr-old', object: 'companies', record: { id: 'c-old', name: 'Vandelay Imports', domain: 'vandelay.com', industry: 'Retail', size: '11–50', city: 'Pune', owner: 'Sam Kim', created: dayAt(now, -200) }, at: dayAt(now, -4), by: 'Sam Kim' }],
+    history: [
+      { id: 'h0', text: 'Jo Mendes uploaded Acme pricing.pdf to Acme Corp', at: dayAt(now, -2, 14) },
+      { id: 'h1', text: 'Sam Kim changed Jo Mendes to Admin', at: dayAt(now, 0, 9) }, { id: 'h2', text: 'Priya Raman turned on Table seating', at: dayAt(now, -1, 16) },
+      { id: 'h3', text: 'Ava Chen added the attribute Lead source to People', at: dayAt(now, -7, 11) }, { id: 'h4', text: 'Sam Kim deleted Vandelay Imports', at: dayAt(now, -4, 15) }, { id: 'h5', text: 'Priya Raman invited Rahul Verma', at: dayAt(now, -9, 10) },
+    ],
+    files: [{ id: 'fl-1', record: { object: 'companies', id: 'c-acme' }, name: 'Acme pricing.pdf', size: 248_000, type: 'application/pdf', at: dayAt(now, -2, 14), by: 'Jo Mendes' },
+      { id: 'fl-2', record: { object: 'deals', id: 'd-acme' }, name: 'Rollout plan v3.docx', size: 91_000, type: 'application/msword', at: dayAt(now, -1, 11), by: 'Priya Raman' }],
+    reactions: { 'cm-1': { agree: ['Jo Mendes'] } },
+    notDupes: [],
+    reports: [{ id: 'r-stage', name: 'Pipeline by stage', measure: 'amount', group: 'stage' }, { id: 'r-owner', name: 'Deals by owner', measure: 'count', group: 'owner' }],
+    prefs: {
+      workspace: { name: 'Northwind', slug: 'northwind', currency: 'inr', country: 'in', colour: 'teal' },
+      theme: 'system', timeZone: 'ist', dateFormat: 'dmy', weekStart: 'mon', startPage: 'home', showPhoto: true,
+      notify: { mention: true, task: true, booking: true, form: false, digest: true }, twoFactor: false,
+      devices: [{ id: 'dv1', what: 'MacBook Pro · Chrome', where: 'Mumbai', current: true }, { id: 'dv2', what: 'iPhone · Safari', where: 'Mumbai · 2h ago' }, { id: 'dv3', what: 'Windows · Edge', where: 'Pune · 3d ago' }],
+      apps: { menu: true, seating: true, appointments: true }, rules: { require2fa: false, google: true, inviteLink: false, domainJoin: true },
+      grants: { owner: ['records.edit', 'schema', 'members', 'bookings'], admin: ['records.edit', 'schema', 'members', 'bookings'], member: ['records.edit', 'bookings'], guest: [] },
+      teams: [{ id: 'tm1', name: 'Sales', members: ['Priya Raman', 'Sam Kim', 'Jo Mendes'] }, { id: 'tm2', name: 'Customer success', members: ['Ava Chen'] }],
+      invites: [{ id: 'iv1', email: 'rahul@northwind.com', role: 'member', at: dayAt(now, -1, 10) }],
+      joinRequests: [{ id: 'jr1', name: 'Meera Iyer', email: 'meera@northwind.com' }],
+      apiKeys: [], sidebarHidden: [],
+    } };
 }
 
 /** ₹18,40,000 (Indian grouping). */

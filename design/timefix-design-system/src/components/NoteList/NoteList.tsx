@@ -1,7 +1,7 @@
 import { Button as AriaButton } from 'react-aria-components';
 import type { JSONContent } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Plus, StickyNote, Check } from 'lucide-react';
+import { ArrowLeft, Plus, StickyNote, Check, Trash2 } from 'lucide-react';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { NoteEditor, type MentionPerson } from '../RichTextEditor/RichTextEditor.tsx';
@@ -86,30 +86,37 @@ export interface NotePageProps {
   readonly note: Note;
   /** Saves the note; called 600ms after typing stops. `body` is the plain text the card previews. */
   readonly onSave: (note: Note) => Promise<void> | void;
-  readonly onBack?: () => void;
+  /** Back to the list; any unsaved typing is saved first, and the last title and text come along. */
+  readonly onBack?: (latest: { readonly title: string; readonly body: string }) => void;
+  /** Deletes the note (the caller offers Undo). */
+  readonly onDelete?: () => void;
   /** Members for `@` in the text. */
   readonly people?: ReadonlyArray<MentionPerson>;
 }
 
 /** One note open on a record: back to the list, the shared NoteEditor (Tiptap), and a save line that says when it saved. */
-export function NotePage({ note, onSave, onBack, people }: NotePageProps) {
+export function NotePage({ note, onSave, onBack, onDelete, people }: NotePageProps) {
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [state, setState] = useState<SaveState>('idle');
   const first = useRef(true);
+  const dirty = useRef(false);
+  const latest = useRef({ title, body, onSave, note }); latest.current = { title, body, onSave, note };
+  /** Saves now if typing hasn't been saved yet: on Back and when the page closes. */
+  const flush = () => { if (!dirty.current) return; dirty.current = false; const l = latest.current; void l.onSave({ ...l.note, title: l.title, body: l.body }); };
   useEffect(() => {
     if (first.current) { first.current = false; return; }
-    setState('saving');
-    const t = window.setTimeout(() => {
-      void Promise.resolve(onSave({ ...note, title, body })).then(() => setState('saved'));
-    }, 600);
+    dirty.current = true; setState('saving');
+    const t = window.setTimeout(() => { dirty.current = false; void Promise.resolve(onSave({ ...note, title, body })).then(() => setState('saved')); }, 600);
     return () => window.clearTimeout(t);
   }, [title, body]);
+  useEffect(() => () => flush(), []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <article className="tf-notes__page" aria-label="Note">
       <div className="tf-notes__bar">
-        {onBack && <IconButton size="sm" label="Back to notes" onPress={onBack}><ArrowLeft size={14} strokeWidth={1.75} /></IconButton>}
+        {onBack && <IconButton size="sm" label="Back to notes" onPress={() => { flush(); onBack({ title, body }); }}><ArrowLeft size={14} strokeWidth={1.75} /></IconButton>}
         <SaveIndicator state={state} />
+        {onDelete && <IconButton size="sm" label="Delete note" className="tf-notes__delete" onPress={() => { dirty.current = false; onDelete(); }}><Trash2 size={14} strokeWidth={1.75} /></IconButton>}
       </div>
       <NoteEditor label="Note" title={title} onTitleChange={setTitle} people={people} defaultContent={toHtml(note.body)}
         autoFocusOn={note.title ? 'text' : 'title'} onChange={(doc) => setBody(textOf(doc))} />

@@ -34,7 +34,7 @@ import { lumen, olive } from './seed-business.ts';
 import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
-  HOST, PLACES, TEAM, at, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
+  HOST, PLACES, TEAM, at, handleOf, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
@@ -60,6 +60,16 @@ export interface BookingsFlowProps {
   readonly onState?: (state: BookingsState) => void;
   /** Opens a Bookings page from outside (the app's Home or search); bump `n` to open it again. */
   readonly openTab?: { readonly tab: string; readonly n: number };
+  /** Bookings pages the app has turned off (Settings › Apps), hidden from the sidebar. */
+  readonly hiddenSections?: ReadonlyArray<string>;
+  /** Who is signed in, for the sidebar's person row. */
+  readonly person?: { readonly name: string; readonly email: string };
+  /** The workspace and person menus' own items: Workspace settings, Profile, Sign out. */
+  readonly onMenu?: (id: 'settings' | 'profile' | 'signout') => void;
+  /** Workspace name and logo from the app's settings, when it has its own. */
+  readonly workspaceName?: string;
+  /** Opens the guest's booking page from outside (a form's "Book a meeting"), their name and email filled in; bump `n` to open it again. */
+  readonly openGuest?: { readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number };
 }
 
 const readWhose = (workspace: string): Whose => { try { return window.localStorage.getItem(`tf-bkf-whose:${workspace}`) ?? 'mine'; } catch { return 'mine'; } };
@@ -79,19 +89,21 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openTab) setTab(openTab.tab); }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!openGuest) return; const p = state.pages.find((x) => x.id === openGuest.pageId) ?? state.pages.find((x) => x.isOn && x.kind !== 'table') ?? state.pages[0]; if (p) setGuest({ scenario: openGuest.scenario ?? 'book', pageId: p.id, prefill: openGuest.prefill }); }, [openGuest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (hiddenSections.includes(tab)) setTab('meetings'); }, [hiddenSections.join(','), tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
   const [whose, setWhoseState] = useState<Whose>(() => readWhose(initialState.workspace));
   const [week, setWeek] = useState(0);
   const [focusHour, setFocusHour] = useState<number>();
   const [creating, setCreating] = useState(false);
   const [editor, setEditor] = useState<{ readonly id: string; readonly draft: BookingPage; readonly section?: EditorSection }>();
-  const [guest, setGuest] = useState<{ readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string; readonly table?: string }>();
+  const [guest, setGuest] = useState<{ readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } }>();
   const [meetingId, setMeetingId] = useState<string>();
   const [bellOpen, setBellOpen] = useState(false);
   const [share, setShare] = useState<{ readonly kind: ShareDialogKind; readonly id: string }>();
@@ -181,7 +193,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     else remove(p);
   };
   const onShare = (p: BookingPage, how: ShareHow) => {
-    const url = `https://${pageUrl(p.slug)}`;
+    const url = `https://${pageUrl(p.slug, handleOf(state))}`;
     if (how === 'copy') {
       void navigator.clipboard?.writeText(url).catch(() => undefined);
       toast({ message: p.isOn ? 'Link copied' : "Link copied. The page is hidden, so guests see it isn't taking bookings.", tone: 'success' });
@@ -346,19 +358,19 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   const bookingsNav = (
       <NavSection title="Bookings">
-        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined) && !(appNav && x.id === 'insights')).map((x) => (
+        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined) && !(appNav && x.id === 'insights') && !hiddenSections.includes(x.id)).map((x) => (
           <NavItem key={x.id} label={labelOf(x)} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id && appContent === undefined} onPress={() => { leaveEditor(); setTab(x.id); onBookingsNav?.(); }} />
         ))}
       </NavSection>
   );
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
-      header={<WorkspaceSwitcher name={state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); }}>
+      header={<WorkspaceSwitcher name={workspaceName ?? state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); else if (id === 'settings') onMenu?.('settings'); }}>
         {showDemoMenu ? <WorkspaceItems current={currentWs} /> : null}
         {showDemoMenu ? <MenuSeparator /> : null}
         <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem>
       </WorkspaceSwitcher>}
-      footer={<PersonRow name={HOST} email="priya@northwind.com">
+      footer={<PersonRow name={person?.name ?? HOST} email={person?.email ?? 'priya@northwind.com'} onAction={(k) => { const id = String(k); if (id === 'profile' || id === 'signout') onMenu?.(id); }}>
         <MenuItem id="profile" icon={<User {...i16} />}>Profile</MenuItem>
         <MenuSeparator />
         <MenuItem id="signout" icon={<LogOut {...i16} />}>Sign out</MenuItem>

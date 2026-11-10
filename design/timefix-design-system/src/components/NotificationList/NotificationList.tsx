@@ -46,17 +46,24 @@ export interface NotificationListProps {
   readonly onOpen: (id: string) => void;
   readonly onReadChange: (id: string, read: boolean) => void;
   readonly onReadAll: () => void;
-  /** Called once the Undo window has passed. */
+  /** Called once the Undo window has passed, or straight away if the list closes first (nothing is lost). */
   readonly onArchive: (id: string) => void;
+  /** The heading; leave it out where the page already has one. */
+  readonly title?: string;
+  /** What Archive does here ("Move to inbox" in a Done list) and what the row says after. */
+  readonly archiveLabel?: string;
+  readonly archivedLabel?: string;
 }
 
 const UNDO_MS = 5000;
 
 /** The inbox: unread dots, who did what and when, grouped Today and Earlier; Mark all read fades the dots; Archive folds a row into "Archived · Undo" before it goes. */
-export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive }: NotificationListProps) {
+export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive, title = 'Inbox', archiveLabel = 'Archive', archivedLabel = 'Archived' }: NotificationListProps) {
   const [archiving, setArchiving] = useState<ReadonlyMap<string, 'undo' | 'gone'>>(new Map());
   const timers = useRef(new Map<string, number[]>());
-  useEffect(() => () => { for (const ts of timers.current.values()) ts.forEach((t) => window.clearTimeout(t)); }, []);
+  const latest = useRef(onArchive); latest.current = onArchive;
+  // Leaving mid-Undo still archives: the pending rows go through now instead of being forgotten.
+  useEffect(() => () => { for (const [id, ts] of timers.current) { ts.forEach((t) => window.clearTimeout(t)); latest.current(id); } timers.current.clear(); }, []);
   const setPhase = (id: string, phase?: 'undo' | 'gone') => setArchiving((m) => { const n = new Map(m); if (phase) n.set(id, phase); else n.delete(id); return n; });
   const archive = (id: string) => {
     setPhase(id, 'undo');
@@ -77,7 +84,7 @@ export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArc
         if (id && !archiving.has(id)) { e.preventDefault(); archive(id); }
       }}>
       <header className="tf-inbox__head">
-        <h3 className="tf-inbox__title">Inbox</h3>
+        {title ? <h3 className="tf-inbox__title">{title}</h3> : null}
         <span className="tf-inbox__count tf-num">{unread ? `${unread} unread` : 'All read'}</span>
         <Button size="sm" variant="ghost" icon={<CheckCheck size={14} strokeWidth={1.75} />} isDisabled={unread === 0} onPress={onReadAll}>Mark all read</Button>
       </header>
@@ -94,7 +101,7 @@ export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArc
                   <GridListItem key={n.id} id={n.id} textValue={phase ? 'Archived' : `${n.actor} ${n.action} ${n.object}, ${n.time}${n.read ? '' : ', unread'}`} className="tf-inbox__row">
                     <Collapse open={phase !== 'gone'}>
                       {phase ? (
-                        <div className="tf-inbox__undo"><Archive size={14} strokeWidth={1.75} aria-hidden="true" /><span>Archived</span><span aria-hidden="true">·</span><AriaButton className="tf-inbox__undo-btn" onPress={() => undo(n.id)}>Undo</AriaButton></div>
+                        <div className="tf-inbox__undo"><Archive size={14} strokeWidth={1.75} aria-hidden="true" /><span>{archivedLabel}</span><span aria-hidden="true">·</span><AriaButton className="tf-inbox__undo-btn" onPress={() => undo(n.id)}>Undo</AriaButton></div>
                       ) : (
                         <div className={cx('tf-inbox__item', !n.read && 'is-unread')}>
                           <span className="tf-inbox__dot" aria-hidden="true" />
@@ -106,7 +113,7 @@ export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArc
                           <time className="tf-inbox__time">{n.time}</time>
                           <span className="tf-inbox__actions">
                             <Tooltip label={n.read ? 'Mark unread' : 'Mark read'}><IconButton size="sm" label={n.read ? 'Mark unread' : 'Mark read'} onPress={() => onReadChange(n.id, !n.read)}>{n.read ? <span className="tf-inbox__dot-icon" /> : <Check size={14} strokeWidth={1.75} />}</IconButton></Tooltip>
-                            <Tooltip label="Archive" shortcut="E"><IconButton size="sm" label="Archive" onPress={() => archive(n.id)}><Archive size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+                            <Tooltip label={archiveLabel} shortcut="E"><IconButton size="sm" label={archiveLabel} onPress={() => archive(n.id)}><Archive size={14} strokeWidth={1.75} /></IconButton></Tooltip>
                           </span>
                         </div>
                       )}

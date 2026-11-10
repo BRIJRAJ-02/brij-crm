@@ -15,7 +15,7 @@ import { formatClockRange } from '../WeekCalendar/clock.ts';
 import { formatDate, formatDay } from '../../lib/format.ts';
 import { useToast } from '../Toast/Toast.tsx';
 import { CopyButton, i14 } from './parts.tsx';
-import { dayFrom, hoursFor, isoDay, lengthOf, lengthsText, nextId, openTimes, pageUrl, parseDay, plural, type BookingPage, type BookingsState, type OneTimeLink } from './state.ts';
+import { dayFrom, hoursFor, isoDay, lengthOf, lengthsText, nextId, openTimes, pageUrl, parseDay, plural, type BookingPage, type BookingsState, type OneTimeLink, handleOf } from './state.ts';
 
 /** Which share dialog is open. */
 export type ShareDialogKind = 'times' | 'once' | 'embed' | 'qr';
@@ -31,18 +31,19 @@ export interface ShareDialogsProps {
 
 /** The three share dialogs; one shows at a time. */
 export function ShareDialogs({ kind, page, state, onUpdate, onClose }: ShareDialogsProps) {
+  const handle = handleOf(state);
   return (
     <>
       <OfferTimesDialog isOpen={kind === 'times' && page !== undefined} page={page} state={state} onUpdate={onUpdate} onClose={onClose} />
-      <OneTimeLinksDialog isOpen={kind === 'once' && page !== undefined} page={page} onUpdate={onUpdate} onClose={onClose} />
+      <OneTimeLinksDialog isOpen={kind === 'once' && page !== undefined} page={page} handle={handle} onUpdate={onUpdate} onClose={onClose} />
       {page && (
         <Dialog isOpen={kind === 'embed'} onOpenChange={(o) => { if (!o) onClose(); }} size="wide" title="Embed on a website" description={`Show ${page.name} on your own site. Pick how, then paste the code.`}
           actions={<Button variant="secondary" slot="close">Done</Button>}>
           <EmbedPreview page={{ host: page.owner, title: page.name, duration: lengthsText(page), openDays: HOURS_DAYS.map((d) => hoursFor(page, state)[d].on), hue: page.accent }}
-            url={`https://${pageUrl(page.slug)}`} accent={page.look.accent} site="northwind.com/contact" />
+            url={`https://${pageUrl(page.slug, handle)}`} accent={page.look.accent} site={state.business ? `${handle}.com` : 'northwind.com/contact'} />
         </Dialog>
       )}
-      {page && <QrDialog isOpen={kind === 'qr'} page={page} onClose={onClose} />}
+      {page && <QrDialog isOpen={kind === 'qr'} page={page} handle={handle} onClose={onClose} />}
     </>
   );
 }
@@ -70,7 +71,7 @@ function OfferTimesDialog({ isOpen, page, state, onUpdate, onClose }: { readonly
     const id = nextId('off');
     const slots = options.filter((o) => picked.has(o.id)).map((o) => ({ day: o.day, start: o.start }));
     onUpdate({ ...page, offers: [...page.offers, { id, slots, created: isoDay(new Date()) }] });
-    setMade(`https://${pageUrl(page.slug)}/t/${id.slice(-6)}`);
+    setMade(`https://${pageUrl(page.slug, handleOf(state))}/t/${id.slice(-6)}`);
   };
   return (
     <Dialog isOpen={isOpen} onOpenChange={(o) => { if (!o) onClose(); }} size="md" title="Offer specific times"
@@ -100,7 +101,7 @@ function OfferTimesDialog({ isOpen, page, state, onUpdate, onClose }: { readonly
 const EXPIRY = [{ id: '7', label: 'In a week' }, { id: '14', label: 'In two weeks' }, { id: '30', label: 'In 30 days' }, { id: '365', label: 'In a year' }];
 
 /** One-time links: make one (label, how many bookings, expiry) and see the list with Revoke. */
-function OneTimeLinksDialog({ isOpen, page, onUpdate, onClose }: { readonly isOpen: boolean; readonly page: BookingPage | undefined; readonly onUpdate: (p: BookingPage) => void; readonly onClose: () => void }) {
+function OneTimeLinksDialog({ isOpen, page, handle, onUpdate, onClose }: { readonly isOpen: boolean; readonly page: BookingPage | undefined; readonly handle: string; readonly onUpdate: (p: BookingPage) => void; readonly onClose: () => void }) {
   const { toast } = useToast();
   const [label, setLabel] = useState('');
   const [uses, setUses] = useState(1);
@@ -109,7 +110,7 @@ function OneTimeLinksDialog({ isOpen, page, onUpdate, onClose }: { readonly isOp
   const [revoking, setRevoking] = useState<OneTimeLink>();
   useEffect(() => { if (isOpen) { setLabel(''); setUses(1); setExpiry('7'); setFresh(undefined); } }, [isOpen]);
   if (!page) return null;
-  const linkUrl = (l: OneTimeLink) => `https://${pageUrl(page.slug)}/o/${l.id.slice(-6)}`;
+  const linkUrl = (l: OneTimeLink) => `https://${pageUrl(page.slug, handle)}/o/${l.id.slice(-6)}`;
   const create = () => {
     const link: OneTimeLink = { id: nextId('otl'), label: label.trim() || 'One-time link', uses, used: 0, expires: isoDay(dayFrom(new Date(), Number(expiry))), revoked: false };
     onUpdate({ ...page, links: [link, ...page.links] });
@@ -161,9 +162,9 @@ function OneTimeLinksDialog({ isOpen, page, onUpdate, onClose }: { readonly isOp
 }
 
 /** A QR code for the page's link, to print or put on a slide; download as PNG or SVG. */
-function QrDialog({ isOpen, page, onClose }: { readonly isOpen: boolean; readonly page: BookingPage; readonly onClose: () => void }) {
+function QrDialog({ isOpen, page, handle, onClose }: { readonly isOpen: boolean; readonly page: BookingPage; readonly handle: string; readonly onClose: () => void }) {
   const { toast } = useToast();
-  const url = `https://${pageUrl(page.slug)}`;
+  const url = `https://${pageUrl(page.slug, handle)}`;
   const file = page.slug || 'booking-page';
   const svg = useRef<SVGSVGElement>(null);
   const get = async (format: 'svg' | 'png') => {
@@ -180,7 +181,7 @@ function QrDialog({ isOpen, page, onClose }: { readonly isOpen: boolean; readonl
       </>}>
       <div className="tf-bkf-qr">
         <QrCode ref={svg} value={url} label={`QR code for ${page.name}`} withLogo frameLabel="Book a time" />
-        <span className="tf-bkf__muted tf-num">{pageUrl(page.slug)}</span>
+        <span className="tf-bkf__muted tf-num">{pageUrl(page.slug, handle)}</span>
       </div>
     </Dialog>
   );

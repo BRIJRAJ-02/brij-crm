@@ -53,12 +53,16 @@ export function FieldDescription({ children }: { readonly children: ReactNode })
 export function FieldErrorText({ children }: { readonly children?: ReactNode }) {
   return (
     <FieldError className="tf-field__error">
-      {(v) => (
-        <>
-          <span className="tf-field__error-icon" aria-hidden="true"><CircleAlert size={14} strokeWidth={1.75} /></span>
-          <span>{children ?? v.validationErrors.join(' ')}</span>
-        </>
-      )}
+      {(v) => {
+        // Invalid with nothing to say (the form shows its own sentence): draw nothing, not a lone icon.
+        const text = children ?? v.validationErrors.join(' ');
+        return text === '' || text === undefined || text === null ? null : (
+          <>
+            <span className="tf-field__error-icon" aria-hidden="true"><CircleAlert size={14} strokeWidth={1.75} /></span>
+            <span>{text}</span>
+          </>
+        );
+      }}
     </FieldError>
   );
 }
