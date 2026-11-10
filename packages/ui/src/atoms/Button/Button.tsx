@@ -301,7 +301,7 @@ function Face({ face, look, isPending, dot }: { face: ButtonFace; look: ButtonLo
       {face.children !== undefined &&
         (dot !== undefined ? (
           <Suspense fallback={face.children}>
-            <LazyStatusDot hue={dot} isInherited>
+            <LazyStatusDot hue={dot} isInherited isAnimated={look.animateLabel === true}>
               {face.children}
             </LazyStatusDot>
           </Suspense>

@@ -53,6 +53,18 @@
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* An editor's column (PreviewLayout's `nav`): the pane draws the rule; the sections stay in view as the form scrolls. */
+  .nav[data-placement='pane'] {
+    border-inline-end: none;
+  }
+
+  @container (width >= 320px) {
+    .nav[data-placement='pane'] {
+      position: sticky;
+      inset-block-start: 0;
+    }
+  }
+
   .entries {
     display: flex;
     flex-direction: column;

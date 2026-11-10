@@ -312,6 +312,15 @@
     inset-inline-end: 0;
   }
 
+  /* Something there needs a fix: a small red dot after the name. */
+  .alert {
+    flex: none;
+    inline-size: var(--space-6);
+    block-size: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--dot-red);
+  }
+
   @media (forced-colors: active) {
     .item[aria-current='page'] {
       outline: var(--border-width-hairline) solid Highlight;

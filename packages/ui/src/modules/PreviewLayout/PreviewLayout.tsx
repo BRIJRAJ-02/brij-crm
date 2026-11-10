@@ -13,6 +13,7 @@ import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { SettingsNav, type SettingsNavEntry } from '../SettingsLayout/SettingsLayout.tsx';
 import styles from './PreviewLayout.module.css';
 import { strings } from './strings.ts';
 
@@ -70,7 +71,17 @@ export interface PreviewLayoutProps {
    * `snug`, the same on a laptop, and on a wide screen a readable form and the phone side by side, the pair centred,
    * so no band opens between what is edited and what it looks like (the booking page editor).
    */
-  readonly previewShare?: 'third' | 'wide' | 'snug';
+  readonly previewShare?: 'third' | 'wide' | 'snug' | 'column';
+  /**
+   * `column` only: the editor's sections as a column at the start, grouped under their names (SettingsLayout's
+   * navigation), the one shown marked, each a link (the booking page editor's `?tab=`).
+   */
+  readonly nav?: PreviewLayoutNav;
+  /**
+   * `column` only: the section's name as the form's heading (an h2 under the TopBar's h1), so no part of the section
+   * repeats it; the body's Cards are then h3.
+   */
+  readonly heading?: string;
   /**
    * `canvas` sets the preview on a sunken canvas (forms fixes 3, the design critic: a full height white slab in dark
    * mode): the frame takes the height of what it shows, at most the room there is, centred on the canvas, and the
@@ -87,6 +98,13 @@ export interface PreviewLayoutProps {
    * `previewControls`.
    */
   readonly previewDevice?: Device;
+}
+
+/** An editor's sections as `PreviewLayout`'s `nav`: the entries, the one shown, and the column's name. */
+export interface PreviewLayoutNav {
+  readonly label: string;
+  readonly entries: readonly SettingsNavEntry[];
+  readonly currentId: string;
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -391,7 +409,7 @@ interface PhoneFit {
 }
 
 /** The scale that fits the phone into the stage's width, and the height the stage leaves it (see `PHONE`). */
-function usePhoneFit(device: Device = 'phone') {
+function usePhoneFit(device: Device = 'phone', isWidthOnly = false) {
   const screen = device === 'desktop' ? DESKTOP : PHONE;
   const ref = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<PhoneFit>({ scale: 1, height: screen.height });
@@ -403,6 +421,12 @@ function usePhoneFit(device: Device = 'phone') {
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
       // Less the phone's two hairlines, so its outline fits too.
+      if (isWidthOnly) {
+        // The column's width alone sets the scale; the phone runs the column's height and its page scrolls.
+        const scale = Math.min(1, (width - 2) / screen.width);
+        setFit({ scale, height: Math.floor((height - 2) / scale) });
+        return;
+      }
       const scale = Math.min(1, (width - 2) / screen.width, (height - 2) / screen.minHeight);
       setFit({ scale, height: Math.min(screen.height, Math.floor((height - 2) / scale)) });
     });
@@ -410,7 +434,7 @@ function usePhoneFit(device: Device = 'phone') {
     return () => {
       observer.disconnect();
     };
-  }, [screen]);
+  }, [screen, isWidthOnly]);
   return { ref, ...fit };
 }
 
@@ -493,6 +517,12 @@ interface PhoneColumnProps {
   readonly surface?: 'canvas' | 'device';
   /** The screen the page is laid out at (PreviewLayout's `previewDevice`). */
   readonly device?: Device;
+  /**
+   * `width` (PreviewLayout's `column`): the page at a real phone's size, scaled to the column's width only, as tall as
+   * the column, the page scrolling inside it. Left out, it is also held to a phone's height and shrinks to fit a short
+   * room.
+   */
+  readonly fit?: 'width';
   /** What the phone shows. */
   readonly children: ReactNode;
 }
@@ -511,9 +541,10 @@ function PhoneColumn({
   size,
   surface,
   device = 'phone',
+  fit,
   children,
 }: PhoneColumnProps) {
-  const { ref, scale, height } = usePhoneFit(device);
+  const { ref, scale, height } = usePhoneFit(device, fit === 'width');
   const { ref: screenRef, isOverflowing, hasMoreBelow } = useOverflow();
   const content = useContentHeight(screenRef, surface === 'canvas');
   // On the canvas the frame is as tall as what it shows, never taller than the room there is.
@@ -525,6 +556,7 @@ function PhoneColumn({
       data-size={size}
       data-surface={surface}
       data-device={device}
+      data-fit={fit}
       style={{
         '--phone-width': `${String(device === 'desktop' ? DESKTOP.width : PHONE.width)}px`,
         '--phone-height': `${String(shown)}px`,
@@ -533,7 +565,7 @@ function PhoneColumn({
     >
       {place !== 'bare' && (
         <div className={styles.head}>
-          {surface === 'canvas' ? (
+          {surface === 'canvas' || fit === 'width' ? (
             // The controls say what the column is; its name stays for screen readers (the aside is named by it).
             <VisuallyHidden {...(headingId === undefined ? {} : { id: headingId })}>{strings.preview}</VisuallyHidden>
           ) : (
@@ -642,7 +674,26 @@ export function PreviewFooter({ children }: { readonly children: ReactNode }) {
  * column hides and a "Preview" button over the body opens the phone in a
  * sheet. `footer` pins the SaveBar to the body's foot.
  */
-export function PreviewLayout({
+export function PreviewLayout(props: PreviewLayoutProps) {
+  if (props.previewShare === 'column') {
+    return (
+      <ColumnLayout
+        notices={props.notices}
+        preview={props.preview}
+        previewNote={props.previewNote}
+        footer={props.footer}
+        nav={props.nav}
+        heading={props.heading}
+      >
+        {props.children}
+      </ColumnLayout>
+    );
+  }
+  return <SharedLayout {...props} />;
+}
+
+/** The thirds, wide and snug layouts: the body beside the phone, which hides behind Preview when narrow. */
+function SharedLayout({
   children,
   notices,
   preview,
@@ -716,6 +767,81 @@ export function PreviewLayout({
           {isOpen && (
             // The sheet's bar holds Close alone: the column's own heading names what it shows.
             <PhoneColumn place="sheet" controls={previewControls} note={previewNote} {...look}>
+              {preview}
+            </PhoneColumn>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/**
+ * `previewShare="column"` (the booking page editor, the owner's mock of 9 November 2026): the sections' column at the
+ * start, the form across the whole middle, and the phone in a column of its own at the end, a real phone's width
+ * (`size-column-wide` × 1.3) with `space-32` either side, on surface-subtle behind a hairline. Each pane fills the
+ * view's height and scrolls on its own. Too narrow for all three (the form under `bp-container-sm`), the sections
+ * go above the form and the phone waits behind Preview, in a sheet.
+ */
+function ColumnLayout({
+  children,
+  notices,
+  preview,
+  previewNote,
+  footer,
+  nav,
+  heading,
+}: {
+  readonly children: ReactNode;
+  readonly notices?: ReactNode;
+  readonly preview?: ReactNode;
+  readonly previewNote?: ReactNode;
+  readonly footer?: ReactNode;
+  readonly nav?: PreviewLayoutNav | undefined;
+  readonly heading?: string | undefined;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const hasPreview = preview !== undefined && preview !== null;
+  const headingId = useId();
+  return (
+    <div
+      className={styles.columns}
+      data-preview={hasPreview || undefined}
+      data-nav={nav === undefined ? undefined : ''}
+    >
+      <div className={styles.columnsGrid}>
+        {nav !== undefined && (
+          <div className={styles.navPane}>
+            <SettingsNav nav={nav.entries} currentNavId={nav.currentId} navLabel={nav.label} placement="pane" />
+          </div>
+        )}
+        <div className={styles.formPane}>
+          {hasPreview && (
+            <div className={styles.columnsBar}>
+              <Button icon="smartphone" onPress={() => setOpen(true)}>
+                {strings.showPreview}
+              </Button>
+            </div>
+          )}
+          {heading !== undefined && <h2 className={styles.columnsHeading}>{heading}</h2>}
+          {notices}
+          <div className={styles.columnsMain}>
+            <CardTitleLevel value={heading === undefined ? 2 : 3}>{children}</CardTitleLevel>
+          </div>
+          {footer !== undefined && footer !== null && footer !== false && <PreviewFooter>{footer}</PreviewFooter>}
+        </div>
+        {hasPreview && (
+          <aside className={styles.previewPane} aria-labelledby={headingId}>
+            <PhoneColumn place="side" headingId={headingId} note={previewNote} fit="width">
+              {preview}
+            </PhoneColumn>
+          </aside>
+        )}
+      </div>
+      {hasPreview && (
+        <Modal title={strings.preview} variant="sheet" isOpen={isOpen} onOpenChange={setOpen}>
+          {isOpen && (
+            <PhoneColumn place="sheet" note={previewNote}>
               {preview}
             </PhoneColumn>
           )}

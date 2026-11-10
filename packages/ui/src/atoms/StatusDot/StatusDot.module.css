@@ -57,6 +57,16 @@
     background: var(--dot-gray);
   }
 
+  /* Animated (a Live or Hidden trigger): the new hue fades in with the words' swap. */
+  .root[data-animated] .dot {
+    transition: background-color var(--duration-move) var(--ease-out);
+  }
+
+  /* The swap's words keep their own cell, so the label isn't cut mid swap. */
+  .root[data-animated] .label {
+    overflow: visible;
+  }
+
   .dot[data-hue='gray'] {
     background: var(--dot-gray);
   }

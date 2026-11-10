@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { useState } from 'react';
+import { expect, userEvent, waitFor } from 'storybook/test';
 import { HUES } from '../../hue.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { StatusDot } from './StatusDot.tsx';
@@ -83,4 +84,27 @@ export const ArchivedShortLabel: Story = {
       </Stage>
     </Stage>
   ),
+};
+
+/** Animated (a Live or Hidden trigger): the dot's colour fades and the words swap when the status changes. */
+export const Animated: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [isLive, setLive] = useState(true);
+    return (
+      <Stage>
+        <StatusDot hue={isLive ? 'green' : 'gray'} isAnimated>
+          {isLive ? 'Live' : 'Hidden'}
+        </StatusDot>
+        <button type="button" onClick={() => setLive((was) => !was)}>
+          Switch
+        </button>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Live')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Switch' }));
+    await waitFor(() => expect(canvas.getAllByText('Hidden').length).toBeGreaterThan(0));
+  },
 };

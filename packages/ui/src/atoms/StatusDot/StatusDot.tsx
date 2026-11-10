@@ -1,7 +1,12 @@
+import { lazy, Suspense } from 'react';
 import type { Hue } from '../../hue.ts';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import { strings } from '../Tag/strings.ts';
 import styles from './StatusDot.module.css';
+
+// The swap loads with the first dot that animates its words (a Live or Hidden menu's trigger), so the plain dots in
+// tables and on public pages never carry it.
+const LazyTextSwap = lazy(() => import('../TextSwap/TextSwap.tsx').then((module) => ({ default: module.TextSwap })));
 
 /** Props for StatusDot. */
 export interface StatusDotProps {
@@ -22,16 +27,29 @@ export interface StatusDotProps {
    * SegmentedControl's segment, a menu item), so it reads like the words beside it, chosen or not.
    */
   readonly isInherited?: boolean;
+  /**
+   * A change of hue and words plays: the dot's colour fades to the new one and the words swap through TextSwap (a
+   * Live or Hidden menu's trigger, the status it changes). The first value is simply there.
+   */
+  readonly isAnimated?: boolean;
 }
 
 /** A status as a dot in its hue and its label: the status attribute's one display. */
-export function StatusDot({ children, hue, isArchived = false, shortLabel, isInherited = false }: StatusDotProps) {
+export function StatusDot({
+  children,
+  hue,
+  isArchived = false,
+  shortLabel,
+  isInherited = false,
+  isAnimated = false,
+}: StatusDotProps) {
   return (
     <span
       className={styles.root}
       data-archived={isArchived || undefined}
       data-inherit={isInherited || undefined}
       data-short={shortLabel === undefined ? undefined : ''}
+      data-animated={isAnimated || undefined}
     >
       <span className={styles.dot} data-hue={isArchived ? 'gray' : hue} aria-hidden="true" />
       {shortLabel !== undefined ? (
@@ -46,6 +64,12 @@ export function StatusDot({ children, hue, isArchived = false, shortLabel, isInh
           </span>
           <VisuallyHidden>{children}</VisuallyHidden>
         </>
+      ) : isAnimated ? (
+        <span className={styles.label}>
+          <Suspense fallback={children}>
+            <LazyTextSwap>{children}</LazyTextSwap>
+          </Suspense>
+        </span>
       ) : (
         <span className={styles.label} data-truncated="">
           {children}

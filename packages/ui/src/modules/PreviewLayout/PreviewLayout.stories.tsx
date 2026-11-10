@@ -468,6 +468,54 @@ export const SnugShare: Story = {
 };
 
 /**
+ * The booking page editor (`previewShare="column"`, the owner's mock of 9 November 2026): the grouped sections at the
+ * start, one marked as needing a fix, the form across the middle under its heading, and the phone's own column.
+ */
+export const Column: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewShare="column"
+        heading="Details"
+        nav={{
+          label: 'Page sections',
+          currentId: 'details',
+          entries: [
+            { id: 'details', label: 'Details', href: '#details', icon: 'file-text', group: 'Meeting' },
+            { id: 'hours', label: 'Hours and limits', href: '#hours', icon: 'clock', group: 'Meeting' },
+            {
+              id: 'questions',
+              label: 'Questions',
+              href: '#questions',
+              icon: 'list-checks',
+              group: 'Guests',
+              alert: 'needs a fix',
+            },
+            { id: 'share', label: 'Share', href: '#share', icon: 'send', group: 'Page' },
+          ],
+        }}
+        preview={
+          <LinkPage
+            isPreview
+            person={{ name: 'Anish Gupta', id: 'anish' }}
+            blocks={[{ kind: 'link', id: 'site', title: 'timefix.com', href: 'https://www.timefix.com', hue: 'sky' }]}
+          />
+        }
+      >
+        <Field label="Title" value="Intro call" />
+        <Field label="Description" value="A first chat." isMultiline />
+      </PreviewLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Details' })).toBeInTheDocument();
+    await expect(canvas.getByRole('navigation', { name: 'Page sections' })).toBeInTheDocument();
+    await expect(canvas.getByRole('img', { name: 'needs a fix' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: /Details/ })).toHaveAttribute('aria-current', 'page');
+  },
+};
+
+/**
  * On a sunken canvas (`previewSurface="canvas"`), the frame as tall as what it shows and centred, the heading left to
  * screen readers; and laid out at a laptop's width (`previewDevice="desktop"`). Forms fixes 3, the form editor.
  */

@@ -34,6 +34,8 @@ export interface SettingsNavEntry {
    * group share one heading, in the order given. Left out, the entry stands in the plain list.
    */
   readonly group?: string;
+  /** Something on that page needs a fix: a red dot after its name, these words for screen readers. */
+  readonly alert?: string;
 }
 
 /** Props for SettingsLayout. */
@@ -268,21 +270,32 @@ export function ViewOnlyTag({ reason }: ViewOnlyTagProps) {
   );
 }
 
-/** The settings pages as a column beside the page, the one shown marked, under their groups' names when they have them. */
-function SettingsNav({
+/**
+ * The settings pages as a column beside the page, the one shown marked, under their groups' names when they have
+ * them. Also PreviewLayout's `nav` (an editor's sections), so the two columns are one design.
+ */
+export function SettingsNav({
   nav,
   currentNavId,
   navLabel,
+  placement,
 }: {
   readonly nav: readonly SettingsNavEntry[];
   readonly currentNavId: string | undefined;
   readonly navLabel: string;
+  /** `pane`: a column of an editor (PreviewLayout's): no rule of its own (the pane draws it), and it stays in view. */
+  readonly placement?: 'pane';
 }) {
   const list = (entries: readonly SettingsNavEntry[]) => (
     <ul className={styles.entries}>
       {entries.map((entry) => (
         <li key={entry.id}>
-          <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
+          <NavItem
+            icon={entry.icon}
+            href={entry.href}
+            isCurrent={entry.id === currentNavId}
+            {...(entry.alert === undefined ? {} : { alert: entry.alert })}
+          >
             {entry.label}
           </NavItem>
         </li>
@@ -290,7 +303,7 @@ function SettingsNav({
     </ul>
   );
   return (
-    <nav className={styles.nav} aria-label={navLabel}>
+    <nav className={styles.nav} aria-label={navLabel} data-placement={placement}>
       {groupsOf(nav).map((run) =>
         run.group === undefined ? (
           <div key={run.key}>{list(run.entries)}</div>
