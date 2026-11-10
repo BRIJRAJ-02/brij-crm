@@ -193,6 +193,28 @@ describe('a Captures list', () => {
     release();
   });
 
+  it('shows a write still on its way over a first read that lands meanwhile', async () => {
+    // The server lists the page until the delete lands, and not after.
+    const t = setup([
+      [
+        { id: 'a', title: 'Intro' },
+        { id: 'b', title: 'Demo' },
+      ],
+      [{ id: 'b', title: 'Demo' }],
+    ]);
+    // A delete with Undo from an editor, sent before the list was ever read: still waiting when the first read lands.
+    const sent = deferred<undefined>();
+    const write = t.store.write(WS, { send: () => sent.promise, ...shownDrop<Row>(undefined, 'a') });
+    t.view.retain();
+    await flush();
+    expect(items(t.view.getSnapshot())).toEqual(['Demo']);
+    sent.resolve(undefined);
+    await write;
+    await flush();
+    expect(items(t.view.getSnapshot())).toEqual(['Demo']);
+    expect(t.reads()).toBe(2);
+  });
+
   it('keeps a write made before the list was read for the next read', async () => {
     const t = setup([[{ id: 'a', title: 'Intro' }]]);
     await t.store.write(WS, { send: () => Promise.resolve(undefined) });
