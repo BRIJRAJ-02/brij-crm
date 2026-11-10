@@ -150,6 +150,7 @@
     margin-block: auto calc(-1 * var(--bleed-trim));
     margin-inline: calc(-1 * var(--bleed));
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-8);
     padding: var(--space-20) var(--bleed) 0;
@@ -169,8 +170,17 @@
   }
 
   /* Confirm takes the band as Book did, at a time's height; Back keeps its words' width. */
-  .actions > * {
+  .actions > :not(.line) {
     min-block-size: calc(var(--size-row) + var(--space-8));
+  }
+
+  /* The line takes the band's whole first row, over Back and Confirm; empty, it gives the row's gap back. */
+  .actions > .line {
+    flex-basis: 100%;
+  }
+
+  .actions > .line:empty {
+    margin-block-end: calc(-1 * var(--space-8));
   }
 
   .actions > :last-child {
@@ -198,6 +208,12 @@
     }
   }
 
+  /* The calm tick on a field put right: it opens out of a soft blur, as the guest chips do. */
+  .fixed {
+    display: inline-flex;
+    animation: chip-in var(--duration-modal) var(--ease-out) backwards;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .fixed {
       animation-name: line-in;
@@ -208,12 +224,6 @@
     .actions[data-shake] {
       animation: none;
     }
-  }
-
-  /* The calm tick on a field put right: it opens out of a soft blur, as the guest chips do. */
-  .fixed {
-    display: inline-flex;
-    animation: chip-in var(--duration-modal) var(--ease-out) backwards;
   }
 
   @keyframes shake-even {

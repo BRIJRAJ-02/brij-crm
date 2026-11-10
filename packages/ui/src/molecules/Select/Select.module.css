@@ -367,7 +367,7 @@
   }
 
   /* chosenLook="filled": the chosen option sits on the soft accent, its check beside it. */
-  .option[data-chosen-look='filled'][data-selected] {
+  .option[data-chosen-look='filled'][data-selected]:not([data-focused]) {
     background: var(--accent-soft);
   }
 

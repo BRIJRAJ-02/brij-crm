@@ -2,6 +2,8 @@
 // (spec 0025), so the page loads it apart from its first paint's code.
 export {
   BookingDetails,
+  /** What the step had typed, kept by the page while Back shows the times. */
+  type BookingDetailsDraft,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
 } from '../modules/BookingDetails/BookingDetails.tsx';

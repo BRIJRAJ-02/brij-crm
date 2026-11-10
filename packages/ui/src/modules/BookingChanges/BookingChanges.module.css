@@ -39,7 +39,6 @@
 
   /* Reschedule, Guests and Cancel are quiet words that share a phone's row (the v5 mock); a card too narrow even for
      that stacks them, full width in the order they're needed, Cancel last. */
-  /* Only where even three quiet words can't share a row (a very narrow card) do they stack. */
   @container (width < 320px) {
     .actions {
       flex-direction: column;
@@ -94,7 +93,7 @@
     color: var(--text-secondary);
   }
 
-  /* Who is on it: each guest's initial and address, Remove at the row's end. */
+  /* Who is on it, one PersonLine each. */
   .guestList {
     display: flex;
     flex-direction: column;
@@ -102,23 +101,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  .guest {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    min-block-size: var(--size-row);
-    animation: guest-fade var(--duration-move) var(--ease-out) backwards;
-  }
-
-  .guestEmail {
-    flex: 1;
-    min-inline-size: 0;
-    overflow: hidden;
-    color: var(--text);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .status {

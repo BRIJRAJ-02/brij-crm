@@ -920,6 +920,9 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
 /** How far ahead of the screen a booking page's row asks for its next time, so it is there as it scrolls in. */
 const NEXT_NEAR = '200px';
 
+/** Where a booking page's row leaves its next time out: the stylesheet's own breakpoint for `.next`. */
+const NEXT_HIDDEN = '(width < 700px)';
+
 /**
  * A booking page's row (the v5 mock): its tile, the title over its lengths, its next open time quietly at the end (left
  * out on a phone), and the chevron. The next time is read once the row nears the screen, by the page's times reader.
@@ -939,6 +942,8 @@ function PageRow({
   useEffect(() => {
     const row = rowRef.current;
     if (!isWaiting || onTimesNear === undefined || row === null) return undefined;
+    // A phone leaves the time out (the v5 mock, the stylesheet's NEXT_HIDDEN), so it never reads one.
+    if (globalThis.matchMedia(NEXT_HIDDEN).matches) return undefined;
     if (typeof IntersectionObserver === 'undefined') {
       onTimesNear(block.id);
       return undefined;
@@ -969,7 +974,12 @@ function PageRow({
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short',
-                hour: 'numeric',
+                // A 24 hour clock writes its hour in two figures, so 03:30 never reads as the afternoon's 3:30.
+                hour: /^h2[34]$/.test(
+                  new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle ?? '',
+                )
+                  ? '2-digit'
+                  : 'numeric',
                 minute: '2-digit',
                 timeZone,
               }),

@@ -95,5 +95,16 @@
       stroke-dashoffset: 0;
       animation: none;
     }
+
+    /* The booked moment keeps its fade (reduced motion keeps fades, drops movement). */
+    .root[data-size='xl'] {
+      animation: check-fade var(--check-pace) var(--ease-out) both;
+    }
+  }
+
+  @keyframes check-fade {
+    from {
+      opacity: 0;
+    }
   }
 }
