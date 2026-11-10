@@ -1,7 +1,7 @@
 // The whole Timefix app as one prototype: the sidebar from app-ia.md (You, Records, Lists, Bookings, Forms, Link page, Insights),
 // ⌘K over everything, Home, and each module as it's rebuilt. Bookings is the module already built: it stays mounted inside, so its state is kept.
 import { useMemo, useReducer, useState, type ReactNode } from 'react';
-import { BarChart3, Building2, CalendarDays, CheckSquare, CircleDollarSign, FileText, Home, IdCard, Inbox, ListChecks, NotebookPen, Plus, Search, Settings, UserPlus, Users } from 'lucide-react';
+import { Boxes, BarChart3, Building2, CalendarDays, CheckSquare, CircleDollarSign, FileText, Home, IdCard, Inbox, ListChecks, NotebookPen, Plus, Search, Settings, UserPlus, Users } from 'lucide-react';
 import { NavItem, NavSection } from '../Sidebar/Sidebar.tsx';
 import { TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -19,12 +19,14 @@ import { FormsScreen } from './forms.tsx';
 import { InsightsScreen, LinkPageScreen } from './grow.tsx';
 import { SettingsScreen } from './settings.tsx';
 import { DOORS, DoorScreen, type Door } from './auth.tsx';
+import { ImportScreen } from './importer.tsx';
+import { DuplicatesScreen } from './duplicates.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 
 /** Where the app is: a module, and for Records which object. */
-export type AppPage = 'home' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | `list:${string}` | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
+export type AppPage = `object:${string}` | 'home' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | `list:${string}` | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
 
 const OBJECTS: ReadonlyArray<{ readonly id: ObjectId; readonly label: string; readonly icon: ReactNode }> = [
   { id: 'people', label: 'People', icon: <Users {...i16} /> }, { id: 'companies', label: 'Companies', icon: <Building2 {...i16} /> }, { id: 'deals', label: 'Deals', icon: <CircleDollarSign {...i16} /> },
@@ -57,9 +59,11 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [search, setSearch] = useState(false);
   const [newList, setNewList] = useState(false);
   const [door, setDoor] = useState<Door>();
+  const [settingsStart, setSettingsStart] = useState<string>();
+  const [sub, setSub] = useState<'import' | 'dupes'>();
   const [record, setRecord] = useState<{ readonly object: ObjectId; readonly id: string }>();
   useCommandK(() => setSearch(true));
-  const go = (p: AppPage) => { setPage(p); setRecord(undefined); };
+  const go = (p: AppPage) => { setPage(p); setRecord(undefined); setSub(undefined); };
   const openRecord = (object: ObjectId, id: string) => { setPage(`records:${object}`); setRecord({ object, id }); };
   const openBookings = (tab: string) => { setOpenTab((o) => ({ tab, n: (o?.n ?? 0) + 1 })); setPage('bookings'); };
   const unread = state.inbox.filter((x) => !x.read && !x.done).length;
@@ -95,8 +99,9 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       <NavItem label="Inbox" icon={<Inbox {...i16} />} badge={unread || undefined} isCurrent={page === 'inbox'} onPress={() => go('inbox')} />
       <NavItem label="Tasks" icon={<CheckSquare {...i16} />} count={myOpen || undefined} isCurrent={page === 'tasks'} onPress={() => go('tasks')} />
       <NavItem label="Notes" icon={<NotebookPen {...i16} />} isCurrent={page === 'notes'} onPress={() => go('notes')} />
-      <NavSection title="Records" addLabel="New object" onAdd={() => go('settings')}>
+      <NavSection title="Records" addLabel="New object" onAdd={() => { setSettingsStart('objects'); go('settings'); }}>
         {OBJECTS.map((o) => <NavItem key={o.id} label={o.label} icon={o.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />)}
+        {state.objects.filter((o) => o.custom).map((o) => <NavItem key={o.id} label={o.many} icon={<Boxes {...i16} />} isCurrent={page === `object:${o.id}`} onPress={() => go(`object:${o.id}`)} />)}
       </NavSection>
       <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
         {state.lists.map((l) => <NavItem key={l.id} label={l.name} icon={<ListChecks {...i16} />} count={l.entries.length || undefined} isCurrent={page === `list:${l.id}`} onPress={() => go(`list:${l.id}`)} />)}
@@ -107,28 +112,34 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
         <NavItem label="Link page" icon={<IdCard {...i16} />} isCurrent={page === 'link'} onPress={() => go('link')} />
         <NavItem label="Insights" icon={<BarChart3 {...i16} />} isCurrent={page === 'insights'} onPress={() => go('insights')} />
       </NavSection>
-      <NavItem label="Settings" icon={<Settings {...i16} />} shortcut="⌘," isCurrent={page === 'settings'} onPress={() => go('settings')} />
+      <NavItem label="Settings" icon={<Settings {...i16} />} shortcut="⌘," isCurrent={page === 'settings'} onPress={() => { setSettingsStart(undefined); go('settings'); }} />
     </>
   );
 
   const listOpen = page.startsWith('list:') ? state.lists.find((l) => `list:${l.id}` === page) : undefined;
-  const head = listOpen ? { label: listOpen.name, icon: <ListChecks {...i16} /> } : TITLES[page];
+  const custom = page.startsWith('object:') ? state.objects.find((o) => `object:${o.id}` === page) : undefined;
+  const head = custom ? { label: custom.many, icon: <Boxes {...i16} /> } : listOpen ? { label: listOpen.name, icon: <ListChecks {...i16} /> } : TITLES[page];
   const content: ReactNode = page === 'bookings' ? undefined : (
     <>
       <TopBar title={<span className="tf-app__title">{head?.icon}{head?.label}</span>}
         actions={<Button size="sm" variant="ghost" icon={<Search size={14} strokeWidth={1.75} />} onPress={() => setSearch(true)}>Search</Button>} />
       <div className="tf-app__body">
         {page === 'home' ? <HomeScreen state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} />
+          : sub === 'import' ? <ImportScreen state={state} dispatch={dispatch} onDone={() => setSub(undefined)} />
+          : sub === 'dupes' ? <DuplicatesScreen state={state} dispatch={dispatch} onDone={() => setSub(undefined)} />
           : record ? <RecordPage key={`${record.object}-${record.id}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={() => setRecord(undefined)} onOpen={openRecord} />
           : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'tasks' ? <TasksScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'notes' ? <NotesScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
-          : page === 'settings' ? <SettingsScreen state={state} onBookings={openBookings} />
+          : page === 'settings' ? <SettingsScreen key={settingsStart} state={state} dispatch={dispatch} onBookings={openBookings} start={settingsStart} />
           : page === 'link' ? <LinkPageScreen />
           : page === 'insights' ? <InsightsScreen state={state} />
           : page === 'forms' ? <FormsScreen state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onBookings={openBookings} />
+          : custom ? <div className="tf-app__empty"><EmptyState icon={<Boxes size={20} strokeWidth={1.75} />} title={`No ${custom.many.toLowerCase()} yet`} description={`Add a ${custom.one.toLowerCase()} here, or import a CSV. Its ${custom.attributes.length} attributes are set in Settings › Objects.`}
+              action={<Button size="sm" variant="primary" onPress={() => { setSettingsStart('objects'); go('settings'); }}>Edit attributes</Button>} /></div>
           : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} />
-          : page.startsWith('records:') ? <RecordsScreen key={page} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord} />
+          : page.startsWith('records:') ? <RecordsScreen key={page} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord}
+            onImport={page === 'records:people' ? () => setSub('import') : undefined} onDuplicates={page === 'records:people' ? () => setSub('dupes') : undefined} />
           : <Rebuilding page={page} onHome={() => go('home')} />}
       </div>
     </>

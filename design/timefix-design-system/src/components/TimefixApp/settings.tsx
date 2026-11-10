@@ -18,7 +18,9 @@ import { Tag } from '../Tag/Tag.tsx';
 import { QrCode } from '../QrCode/QrCode.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { useToast } from '../Toast/Toast.tsx';
-import type { AppState } from './data.ts';
+import { AttributeSettings } from '../AttributeSettings/AttributeSettings.tsx';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { newId, type AppAction, type AppState, type ObjectSchema } from './data.ts';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'members' | 'roles' | 'apps' | 'history' | 'objects' | 'lists' | 'trash' | 'bookings' | 'developer';
@@ -32,11 +34,11 @@ const GROUPS: ReadonlyArray<SettingsNavGroup & { readonly items: ReadonlyArray<{
 ];
 
 /** Props for SettingsScreen. */
-export interface SettingsScreenProps { readonly state: AppState; readonly onBookings: (tab: string) => void }
+export interface SettingsScreenProps { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onBookings: (tab: string) => void; /** The page it opens on. */ readonly start?: string }
 
 /** Settings. */
-export function SettingsScreen({ state, onBookings }: SettingsScreenProps) {
-  const [page, setPage] = useState<Page>('profile');
+export function SettingsScreen({ state, dispatch, onBookings, start }: SettingsScreenProps) {
+  const [page, setPage] = useState<Page>((start as Page | undefined) ?? 'profile');
   const [find, setFind] = useState('');
   const q = find.trim().toLowerCase();
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => !q || `${x.label} ${x.words ?? ''}`.toLowerCase().includes(q)) })).filter((g) => g.items.length > 0);
@@ -45,13 +47,13 @@ export function SettingsScreen({ state, onBookings }: SettingsScreenProps) {
     <div className="tf-set">
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => setPage(id as Page)} />}</div>}>
-        <Body page={page} state={state} onBookings={onBookings} />
+        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} />
       </SettingsLayout>
     </div>
   );
 }
 
-function Body({ page, state, onBookings }: { readonly page: Page; readonly state: AppState; readonly onBookings: (tab: string) => void }) {
+function Body({ page, state, dispatch, onBookings }: { readonly page: Page; readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onBookings: (tab: string) => void }) {
   const { toast } = useToast();
   const saved = () => toast({ message: 'Saved', tone: 'success' });
   const [confirm, setConfirm] = useState<'account' | 'workspace'>();
@@ -131,8 +133,7 @@ function Body({ page, state, onBookings }: { readonly page: Page; readonly state
     </>; break;
     case 'history': body = <SettingsSection title="Changes" description="Who changed what in the workspace, newest first.">
       <ul className="tf-set__list">{[['Sam Kim changed Jo Mendes to Admin', '2h ago'], ['Priya Raman turned on Table seating', 'Yesterday'], ['Ava Chen added the attribute Lead source to People', '3 Nov'], ['Priya Raman invited Rahul Verma', '1 Nov']].map(([a, b]) => <li key={a}><span>{a}</span><span className="tf-rec__muted">{b}</span></li>)}</ul></SettingsSection>; break;
-    case 'objects': body = <SettingsSection title="Objects" description="What your workspace keeps records of. Open one to change its attributes and who can see it." action={<Button variant="secondary" onPress={() => toast({ message: 'New object: name it, pick an icon, then add attributes' })}>New object</Button>}>
-      <ul className="tf-set__list">{[['People', state.people.length, '9 attributes'], ['Companies', state.companies.length, '8 attributes'], ['Deals', state.deals.length, '7 attributes']].map(([a, n, b]) => <li key={String(a)}><strong>{a}</strong><span className="tf-rec__muted tf-num">{n} records · {b}</span></li>)}</ul></SettingsSection>; break;
+    case 'objects': body = <ObjectsPage state={state} dispatch={dispatch} />; break;
     case 'lists': body = <SettingsSection title="Lists"><ul className="tf-set__list">{state.lists.map((l) => <li key={l.id}><strong>{l.name}</strong><span className="tf-rec__muted tf-num">{l.entries.length} entries · {l.stages.length} stages</span></li>)}</ul></SettingsSection>; break;
     case 'trash': body = <SettingsSection title="Trash" description="Deleted records wait here for 30 days."><EmptyState size="sm" icon={<Trash2 size={20} strokeWidth={1.75} />} title="Trash is empty" description="Records you delete land here, and you can restore them." /></SettingsSection>; break;
     case 'bookings': body = <SettingsSection title="Bookings" description="These live in Bookings, where you use them.">
@@ -175,3 +176,46 @@ function SwitchRow({ label, hint, on, onSave }: { readonly label: string; readon
   return <div className="tf-set__switch"><span><strong>{label}</strong>{hint && <span className="tf-rec__muted">{hint}</span>}</span><Switch aria-label={label} isSelected={v} onChange={(x) => { setV(x); onSave(); }} /></div>;
 }
 
+
+/** Settings › Objects: the list, one object's attributes (add, edit, reorder, archive), and New object. */
+function ObjectsPage({ state, dispatch }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void }) {
+  const { toast } = useToast();
+  const [openId, setOpenId] = useState<string>();
+  const [making, setMaking] = useState(false);
+  const [one, setOne] = useState('');
+  const [many, setMany] = useState('');
+  const counts: Readonly<Record<string, number>> = { people: state.people.length, companies: state.companies.length, deals: state.deals.length };
+  const o = state.objects.find((x) => x.id === openId);
+  if (o) {
+    return (
+      <div className="tf-set__obj">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setOpenId(undefined)}>Objects</Button>
+        <AttributeSettings objectName={o.one} objectPlural={o.many} attributes={o.attributes} valueCounts={Object.fromEntries(o.attributes.map((a) => [a.id, counts[o.id] ?? 0]))}
+          onChange={(attributes) => dispatch({ type: 'object/set', object: { ...o, attributes } })} />
+      </div>
+    );
+  }
+  return (
+    <SettingsSection title="Objects" description="What your workspace keeps records of. Open one to add or change its attributes." action={<Button variant="secondary" onPress={() => { setOne(''); setMany(''); setMaking(true); }}>New object</Button>}>
+      <ul className="tf-set__list">
+        {state.objects.map((x) => (
+          <li key={x.id}><button type="button" className="tf-set__open" onClick={() => setOpenId(x.id)}>
+            <strong>{x.many}</strong><span className="tf-rec__muted tf-num">{counts[x.id] ?? 0} records · {x.attributes.length} attributes{x.custom ? ' · yours' : ''}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden />
+          </button></li>
+        ))}
+      </ul>
+      {making && (
+        <Dialog isOpen onOpenChange={(v) => { if (!v) setMaking(false); }} title="New object" description="Like Projects, Vendors or Properties. It shows under Records in the sidebar."
+          actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!one.trim() || !many.trim()} onPress={() => {
+            const obj: ObjectSchema = { id: newId('obj'), one: one.trim(), many: many.trim(), custom: true, attributes: [{ id: 'name', name: 'Name', type: 'text', isSystem: true, isRequired: true }, { id: 'created', name: 'Created at', type: 'timestamp', isSystem: true, readOnlyReason: 'Set by the system' }] };
+            dispatch({ type: 'object/set', object: obj }); setMaking(false); setOpenId(obj.id); toast({ message: `${obj.many} made. Add its attributes next.`, tone: 'success' });
+          }}>Create object</Button></>}>
+          <div className="tf-bkf__pair">
+            <TextField label="One" value={one} onChange={(v) => { setOne(v); if (!many || many === `${one}s`) setMany(v ? `${v}s` : ''); }} placeholder="Project" autoFocus />
+            <TextField label="Many" value={many} onChange={setMany} placeholder="Projects" />
+          </div>
+        </Dialog>
+      )}
+    </SettingsSection>
+  );
+}

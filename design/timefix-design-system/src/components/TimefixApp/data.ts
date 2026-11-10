@@ -1,4 +1,5 @@
 import type { FormQuestion } from '../HostedForm/answers.ts';
+import type { SchemaAttribute } from '../AttributeSettings/AttributeSettings.tsx';
 // The whole app's CRM data for the prototype: Northwind's team, the people, companies and deals they work, tasks, notes and the inbox.
 // Bookings keeps its own state (BookingsFlow); everything else reads this. One pure reducer, new objects only.
 
@@ -49,6 +50,9 @@ export interface AppForm {
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
 }
 
+/** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
+export interface ObjectSchema { readonly id: string; readonly one: string; readonly many: string; readonly custom: boolean; readonly attributes: ReadonlyArray<SchemaAttribute> }
+
 /** The CRM side of the app. */
 export interface AppState {
   readonly me: string;
@@ -67,6 +71,7 @@ export interface AppState {
   readonly views: Readonly<Record<ObjectId, ReadonlyArray<SavedView>>>;
   readonly lists: ReadonlyArray<CrmList>;
   readonly forms: ReadonlyArray<AppForm>;
+  readonly objects: ReadonlyArray<ObjectSchema>;
 }
 
 export type AppAction =
@@ -89,7 +94,8 @@ export type AppAction =
   | { readonly type: 'list/set'; readonly list: CrmList }
   | { readonly type: 'list/remove'; readonly id: string }
   | { readonly type: 'form/set'; readonly form: AppForm }
-  | { readonly type: 'form/remove'; readonly id: string };
+  | { readonly type: 'form/remove'; readonly id: string }
+  | { readonly type: 'object/set'; readonly object: ObjectSchema };
 
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
@@ -121,6 +127,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'list/remove': return { ...state, lists: state.lists.filter((l) => l.id !== a.id) };
     case 'form/set': return { ...state, forms: upsert(state.forms, a.form) };
     case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
+    case 'object/set': return { ...state, objects: state.objects.some((o) => o.id === a.object.id) ? state.objects.map((o) => (o.id === a.object.id ? a.object : o)) : [...state.objects, a.object] };
   }
 }
 
@@ -165,6 +172,8 @@ export function northwindCrm(now = new Date()): AppState {
     p('p-happy', 'Harold Hogan', 'Store operations', 'c-stark', 'Ava Chen', [], undefined, 10),
     p('p-ishita', 'Ishita Rao', 'Consultant', undefined, 'Jo Mendes', ['Partner'], 30, 66),
     p('p-tom', 'Tom Walsh', 'Freelance designer', undefined, 'Sam Kim', [], undefined, 5),
+    { ...p('p-liam2', 'Liam Ortiz', 'VP Ops', 'c-acme', 'Jo Mendes', [], 40, 3), email: 'l.ortiz@acme.com', phone: '+91 98200 11001' },
+    { ...p('p-noor2', 'Noor H.', 'Chief Technology Officer', 'c-globex', 'Ava Chen', ['Technical'], undefined, 2), email: 'noor@globex.io' },
   ];
   const d = (id: string, name: string, companyId: string, contactId: string, stage: Stage, amount: number, owner: string, closeIn: number, ago: number): Deal => ({ id, name, companyId, contactId, stage, amount, owner, close: dayAt(now, closeIn), created: dayAt(now, -ago) });
   const deals: Deal[] = [
@@ -245,7 +254,8 @@ export function northwindCrm(now = new Date()): AppState {
           { id: 'e8', recordId: 'p-tom', stage: 'New', priority: 'Low', next: 'Send deck', added: dayAt(now, -1) },
         ] },
     ],
-    forms: [contactForm(now), feedbackForm(now)] };
+    forms: [contactForm(now), feedbackForm(now)],
+    objects: builtInObjects(members.map((m) => ({ id: m.id, name: m.name }))) };
 }
 
 /** ₹18,40,000 (Indian grouping). */
@@ -288,4 +298,20 @@ function feedbackForm(now: Date): AppForm {
   ];
   return { id: 'f-feedback', name: 'Event feedback', slug: 'event-feedback', status: 'draft', questions: q, mode: 'page', saveTo: 'none', owner: 'Priya Raman', views: 0, updated: new Date(now.getTime() - 3 * 3_600_000),
     after: { kind: 'thanks', message: 'Thanks for helping us get better.' }, responses: [] };
+}
+
+/** People, Companies and Deals as Settings › Objects shows them. */
+function builtInObjects(owners: ReadonlyArray<{ readonly id: string; readonly name: string }>): ReadonlyArray<ObjectSchema> {
+  const sys = (id: string, name: string, type: SchemaAttribute['type'], extra: Partial<SchemaAttribute> = {}): SchemaAttribute => ({ id, name, type, ...extra });
+  const owner = sys('owner', 'Owner', 'actor', { candidates: owners });
+  const created = sys('created', 'Created at', 'timestamp', { isSystem: true, readOnlyReason: 'Set by the system' });
+  return [
+    { id: 'people', one: 'Person', many: 'People', custom: false, attributes: [sys('name', 'Name', 'personalName', { isSystem: true, isRequired: true }), sys('email', 'Email', 'email', { isUnique: true }), sys('phone', 'Phone', 'phone'), sys('title', 'Job title', 'text'),
+      sys('company', 'Company', 'record'), sys('tags', 'Tags', 'multiSelect', { options: ['Decision maker', 'Champion', 'Technical', 'Budget', 'Partner'].map((x) => ({ id: x, label: x, hue: 'gray' as const })) }), owner, sys('lastContact', 'Last contact', 'date'), created] },
+    { id: 'companies', one: 'Company', many: 'Companies', custom: false, attributes: [sys('name', 'Name', 'text', { isSystem: true, isRequired: true }), sys('domain', 'Domain', 'domain', { isUnique: true }),
+      sys('industry', 'Industry', 'select', { options: ['Software', 'Fintech', 'Healthcare', 'Manufacturing', 'Logistics', 'Retail'].map((x) => ({ id: x, label: x, hue: 'blue' as const })) }), sys('size', 'Employees', 'text'), sys('city', 'City', 'location'), owner, created] },
+    { id: 'deals', one: 'Deal', many: 'Deals', custom: false, attributes: [sys('name', 'Deal', 'text', { isSystem: true, isRequired: true }), sys('company', 'Company', 'record'),
+      sys('stage', 'Stage', 'status', { options: ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost'].map((x) => ({ id: x, label: x, hue: (x === 'Won' ? 'green' : x === 'Lost' ? 'red' : 'blue') as 'green' | 'red' | 'blue' })) }),
+      sys('amount', 'Amount', 'currency', { currency: 'INR' }), sys('close', 'Close date', 'date'), owner, created] },
+  ];
 }

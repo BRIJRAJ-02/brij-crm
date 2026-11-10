@@ -19,6 +19,8 @@ import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { useToast } from '../Toast/Toast.tsx';
+import { Callout } from '../Callout/Callout.tsx';
+import { duplicatePairs } from './duplicates.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { Attribute, AttributeValue } from '../AttributeField/AttributeField.tsx';
 import { STAGES, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
@@ -83,10 +85,13 @@ export interface RecordsScreenProps {
   readonly object: ObjectId;
   /** Opens a record's full page. */
   readonly onOpen: (object: ObjectId, id: string) => void;
+  /** People only: open the import and the duplicates review. */
+  readonly onImport?: () => void;
+  readonly onDuplicates?: () => void;
 }
 
 /** One object's records. */
-export function RecordsScreen({ state, dispatch, object, onOpen }: RecordsScreenProps) {
+export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDuplicates }: RecordsScreenProps) {
   const { toast } = useToast();
   const def = objectDef(object, state);
   const views = state.views[object];
@@ -154,13 +159,15 @@ export function RecordsScreen({ state, dispatch, object, onOpen }: RecordsScreen
         )}
         <MenuTrigger>
           <IconButton label="Import or export" size="md"><MoreHorizontal {...i16} /></IconButton>
-          <Menu aria-label="Import or export" placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'import') toast({ message: 'Import opens in the next pass of this rebuild.' }); }}>
+          <Menu aria-label="Import or export" placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'import') { if (onImport) onImport(); else toast({ message: `Import comes to ${def.many} with custom fields.` }); } else if (k === 'dupes') onDuplicates?.(); }}>
             <MenuItem id="import" icon={<Upload {...i16} />}>Import {def.many}</MenuItem>
             <MenuItem id="export" icon={<Download {...i16} />} description={`${sorted.length} rows, ${columns.length} columns`}>Export this view</MenuItem>
+            {onDuplicates ? <MenuItem id="dupes" icon={<Users {...i16} />}>Find duplicates</MenuItem> : null}
           </Menu>
         </MenuTrigger>
         <Button variant="primary" icon={<Plus {...i14} />} onPress={() => setCreating(true)}>New {def.one}</Button>
       </div>
+      {onDuplicates && duplicatePairs(state, new Set()).length > 0 && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{duplicatePairs(state, new Set()).length} people look like duplicates.</Callout>}
       <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
         columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} />
       <div className="tf-rec__split">

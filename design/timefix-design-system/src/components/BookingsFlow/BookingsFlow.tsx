@@ -346,7 +346,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   const bookingsNav = (
       <NavSection title="Bookings">
-        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined)).map((x) => (
+        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined) && !(appNav && x.id === 'insights')).map((x) => (
           <NavItem key={x.id} label={labelOf(x)} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id && appContent === undefined} onPress={() => { leaveEditor(); setTab(x.id); onBookingsNav?.(); }} />
         ))}
       </NavSection>
