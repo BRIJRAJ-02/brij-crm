@@ -9,7 +9,9 @@ import { TextSwap, DropIn, ShimmerText } from '../Motion/Motion.tsx';
 import './NoteList.css';
 
 /** A note on a record. `updated` is already a relative label ("2h ago"). */
-export interface Note { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly updated: string }
+export interface Note { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly updated: string;
+  /** The note as the editor wrote it (headings, marks, lists, mentions); `body` stays its plain text for previews and search. */
+  readonly doc?: JSONContent }
 
 /** Where an autosave stands. */
 export type SaveState = 'idle' | 'saving' | 'saved';
@@ -100,16 +102,17 @@ export interface NotePageProps {
 export function NotePage({ note, onSave, onBack, onDelete, people }: NotePageProps) {
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
+  const docRef = useRef<JSONContent | undefined>(note.doc);
   const [state, setState] = useState<SaveState>('idle');
   const first = useRef(true);
   const dirty = useRef(false);
   const latest = useRef({ title, body, onSave, note }); latest.current = { title, body, onSave, note };
   /** Saves now if typing hasn't been saved yet: on Back and when the page closes. */
-  const flush = () => { if (!dirty.current) return; dirty.current = false; const l = latest.current; void l.onSave({ ...l.note, title: l.title, body: l.body }); };
+  const flush = () => { if (!dirty.current) return; dirty.current = false; const l = latest.current; void l.onSave({ ...l.note, title: l.title, body: l.body, doc: docRef.current }); };
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     dirty.current = true; setState('saving');
-    const t = window.setTimeout(() => { dirty.current = false; void Promise.resolve(onSave({ ...note, title, body })).then(() => setState('saved')); }, 600);
+    const t = window.setTimeout(() => { dirty.current = false; void Promise.resolve(onSave({ ...note, title, body, doc: docRef.current })).then(() => setState('saved')); }, 600);
     return () => window.clearTimeout(t);
   }, [title, body]);
   useEffect(() => () => flush(), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,8 +123,8 @@ export function NotePage({ note, onSave, onBack, onDelete, people }: NotePagePro
         <SaveIndicator state={state} />
         {onDelete && <IconButton size="sm" label="Delete note" className="tf-notes__delete" onPress={() => { dirty.current = false; onDelete(); }}><Trash2 size={14} strokeWidth={1.75} /></IconButton>}
       </div>
-      <NoteEditor label="Note" title={title} onTitleChange={setTitle} people={people} defaultContent={toHtml(note.body)}
-        autoFocusOn={note.title ? 'text' : 'title'} onChange={(doc) => setBody(textOf(doc))} />
+      <NoteEditor label="Note" title={title} onTitleChange={setTitle} people={people} defaultContent={note.doc ?? toHtml(note.body)}
+        autoFocusOn={note.title ? 'text' : 'title'} onChange={(doc) => { docRef.current = doc; setBody(textOf(doc)); }} />
       <p className="tf-notes__meta"><Avatar name={note.author} size={20} />{note.author} · edited {state === 'idle' ? note.updated : 'just now'}</p>
     </article>
   );

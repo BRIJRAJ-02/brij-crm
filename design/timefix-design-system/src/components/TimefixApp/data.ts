@@ -25,8 +25,8 @@ export interface Deal { readonly id: string; readonly name: string; readonly com
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
-export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; readonly assignee: string; readonly record?: RecordLink; readonly description?: string; readonly created: Date }
-export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly record: RecordLink; readonly updated: Date }
+export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; readonly description?: string; readonly created: Date }
+export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly record: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
 /** One thing for you in the Inbox. */
 export interface InboxItem {
   readonly id: string; readonly kind: 'mention' | 'reply' | 'assignment' | 'booking'; readonly actor: string; readonly text: string; readonly excerpt?: string;

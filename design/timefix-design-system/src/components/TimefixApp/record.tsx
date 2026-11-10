@@ -172,10 +172,10 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
             <TabPanel id="activity" className="tf-recp__panel">{events.length === 0 ? <p className="tf-rec__muted">Nothing yet.</p> : <ActivityFeed events={events} />}</TabPanel>
             <TabPanel id="notes" className="tf-recp__panel">
               {openNote ? (
-                <NotePage note={{ id: openNote.id, title: openNote.title, body: openNote.body, author: openNote.author, updated: ago(openNote.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
+                <NotePage note={{ id: openNote.id, title: openNote.title, body: openNote.body, doc: openNote.doc, author: openNote.author, updated: ago(openNote.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
                   onBack={(l) => { setNoteId(undefined); if (isEmptyNote(l.title, l.body)) dispatch({ type: 'note/remove', id: openNote.id }); }}
                   onDelete={() => { const n = openNote; setNoteId(undefined); dispatch({ type: 'note/remove', id: n.id }); toast({ message: 'Note deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'note/set', note: n }) } }); }}
-                  onSave={(n) => dispatch({ type: 'note/set', note: { ...openNote, title: n.title, body: n.body, updated: new Date() } })} />
+                  onSave={(n) => dispatch({ type: 'note/set', note: { ...openNote, title: n.title, body: n.body, doc: n.doc, updated: new Date() } })} />
               ) : (
                 <NoteList notes={notes.map((n) => ({ id: n.id, title: n.title, body: n.body, author: n.author, updated: ago(n.updated) }))}
                   onNew={() => { const n = { id: newId('n'), title: 'Untitled note', body: '', author: state.me, record: link, updated: new Date() }; dispatch({ type: 'note/set', note: n }); setNoteId(n.id); }}

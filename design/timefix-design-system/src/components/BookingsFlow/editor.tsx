@@ -116,7 +116,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         title={<Breadcrumbs size="title" items={[{ id: 'pages', label: 'Booking pages', icon: <Link2 {...i16} /> }, { id: 'page', label: page.name }]} onAction={(id) => { if (id !== 'page') onBack(); }} />}
         actions={<>
           <OnSwitch page={page} onChange={onToggle} />
-          <Button size="sm" variant="ghost" icon={<Play {...i14} />} onPress={onGuest}>See it as a guest</Button>
+          <Button variant="ghost" icon={<Play {...i14} />} onPress={onGuest}>See it as a guest</Button>
           <ShareMenu page={page} onShare={onShare} />
           <PageMoreMenu page={page} withEdit={false} withVersions onAction={(k) => { if (k === 'versions') setVersionsOpen(true); else onMore(page, k); }} />
         </>} />
@@ -152,8 +152,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     onBlur={() => { if (!draft.slug) set({ slug: uniqueSlug('meeting', state.pages, draft.id) }); }} />
                   {draft.kind === 'service' && (
                     <div className="tf-bkf__pair">
-                      <NumberField label="Price" value={draft.priceType === 'free' ? 0 : draft.price ?? 0} minValue={0} step={50} showSteppers={false} isDisabled={draft.priceType === 'free'}
-                        formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ price: Number.isFinite(n) ? n : 0 })} />
+                      {(draft.durations.length < 2 || draft.priceType === 'free') && <NumberField label="Price" value={draft.priceType === 'free' ? 0 : draft.price ?? 0} minValue={0} step={50} showSteppers={false} isDisabled={draft.priceType === 'free'}
+                        formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ price: Number.isFinite(n) ? n : 0 })} />}
                       <Select label="Price shows as" value={draft.priceType ?? 'fixed'} onChange={(v) => set({ priceType: (v ?? 'fixed') as 'fixed' })}
                         items={[{ id: 'fixed', label: 'Fixed price' }, { id: 'from', label: '“From” price' }, { id: 'free', label: 'Free' }]} />
                     </div>
@@ -167,16 +167,23 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <NumberField label="Largest party online" value={draft.party?.max ?? 8} minValue={draft.party?.min ?? 1} maxValue={20} onChange={(n) => set({ party: { min: draft.party?.min ?? 1, max: Number.isFinite(n) ? n : 8 } })} />
                     </div>
                   )}
-                  <ChoiceChips label={draft.kind === 'table' ? 'Time at the table' : 'Lengths'} size="sm" selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
+                  <ChoiceChips label={draft.kind === 'table' ? 'Time at the table' : 'Lengths'} selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
                     onSelectionChange={(keys) => { const d = [...keys].map(Number).sort((a, b) => a - b); if (d.length) set({ durations: d }); }} />
                   {draft.durations.length > 1 && <p className="tf-bkf__muted tf-bkf__hint">Guests choose the length. {draft.durations[0]} min is picked first.</p>}
-                  {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" size="sm" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
+                  {draft.kind === 'service' && draft.durations.length > 1 && draft.priceType !== 'free' && (
+                    <div className="tf-bkf__group"><span className="tf-bkf__label">Price by length</span>
+                      <ul className="tf-bkf__turns">{draft.durations.map((d) => (
+                        <li key={d}><span>{d} min</span><NumberField aria-label={`Price for ${d} minutes`} value={draft.prices?.[String(d)] ?? draft.price ?? 0} minValue={0} step={50} showSteppers={false}
+                          formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ prices: { ...(draft.prices ?? {}), [String(d)]: Number.isFinite(n) ? n : 0 } })} /></li>))}</ul>
+                    </div>
+                  )}
+                  {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
                     onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} /> : null}
                   {(draft.kind === undefined || draft.kind === 'meeting') && draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
-                  {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" size="sm" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
+                  {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
                   {draft.kind !== 'table' && <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Guests start in</span>
-                    <SegmentedControl aria-label="Guests start in" size="sm" selectedKey={draft.defaultView ?? 'month'} onSelectionChange={(k) => set({ defaultView: k === 'list' ? 'list' : k === 'chat' ? 'chat' : 'month' })}
+                    <SegmentedControl aria-label="Guests start in" selectedKey={draft.defaultView ?? 'month'} onSelectionChange={(k) => set({ defaultView: k === 'list' ? 'list' : k === 'chat' ? 'chat' : 'month' })}
                       items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }, { id: 'chat', label: 'Chat' }]} />
                     <span className="tf-bkf__muted">They can switch any time; their last choice is remembered.</span>
                   </div>}
@@ -190,20 +197,18 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                           <Select label="Late tables held for" description="Then the table can go to someone else." value={String(draft.holdLate ?? 15)} onChange={(v) => set({ holdLate: Number(v ?? 15) })}
                             items={[10, 15, 20, 30].map((n) => ({ id: String(n), label: `${n} min` }))} />
                         </div>
-                        <Switch isSelected={draft.bigTurn !== undefined} onChange={(on) => set({ bigTurn: on ? { from: 5, minutes: 120 } : undefined })}>Bigger parties stay longer</Switch>
-                        {draft.bigTurn && (
-                          <div className="tf-bkf__pair">
-                            <NumberField label="Parties of" value={draft.bigTurn.from} minValue={2} maxValue={20} onChange={(n) => set({ bigTurn: { from: Number.isFinite(n) ? n : 5, minutes: draft.bigTurn?.minutes ?? 120 } })} description="or more" />
-                            <Select label="Get the table for" value={String(draft.bigTurn.minutes)} onChange={(v) => set({ bigTurn: { from: draft.bigTurn?.from ?? 5, minutes: Number(v ?? 120) } })}
-                              items={[90, 120, 150, 180].map((n) => ({ id: String(n), label: n % 60 ? `${Math.floor(n / 60)} hr ${n % 60} min` : `${n / 60} hours` }))} />
-                          </div>
-                        )}
+                        {/* How long each party keeps its table, by size (OpenTable's turn times). */}
+                        <Switch isSelected={draft.turns !== undefined} onChange={(on) => set({ turns: on ? [{ upTo: 2, minutes: 75 }, { upTo: 4, minutes: 90 }, { upTo: 6, minutes: 120 }, { upTo: 99, minutes: 150 }] : undefined, bigTurn: undefined })}>Turn time by party size</Switch>
+                        {draft.turns && <ul className="tf-bkf__turns">{draft.turns.map((t, n) => (
+                          <li key={t.upTo}><span>{t.upTo >= 99 ? `${(draft.turns?.[n - 1]?.upTo ?? 0) + 1} or more` : `${n === 0 ? 1 : (draft.turns?.[n - 1]?.upTo ?? 0) + 1}–${t.upTo} guests`}</span>
+                            <Select label={`Table time for ${t.upTo >= 99 ? 'larger parties' : `up to ${t.upTo}`}`} isLabelHidden className="tf-bkf__inline-select" value={String(t.minutes)} onChange={(v) => set({ turns: (draft.turns ?? []).map((x, m) => (m === n ? { ...x, minutes: Number(v ?? x.minutes) } : x)) })}
+                              items={[60, 75, 90, 105, 120, 150, 180].map((m) => ({ id: String(m), label: m % 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m / 60} ${m === 60 ? 'hour' : 'hours'}` }))} /></li>))}</ul>}
                         {new Set((state.tables ?? []).map((t) => t.area)).size > 1 && <Switch isSelected={draft.pickArea ?? false} onChange={(pickArea) => set({ pickArea })}>Guests can ask for an area ({[...new Set((state.tables ?? []).map((t) => t.area))].join(', ')})</Switch>}
                       </div>
                     )}
                     <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Who can find it</span>
-                    <SegmentedControl aria-label="Who can find it" size="sm" selectedKey={draft.visibility ?? 'public'} onSelectionChange={(k) => set({ visibility: k === 'link' ? 'link' : 'public' })}
+                    <SegmentedControl aria-label="Who can find it" selectedKey={draft.visibility ?? 'public'} onSelectionChange={(k) => set({ visibility: k === 'link' ? 'link' : 'public' })}
                       items={[{ id: 'public', label: 'On your profile' }, { id: 'link', label: 'Only with the link' }]} />
                     <span className="tf-bkf__muted">{(draft.visibility ?? 'public') === 'link' ? 'It’s left off timefix.com/priya. Only people you send the link to can book.' : 'It’s listed on timefix.com/priya with your other pages.'}</span>
                     {draft.visibility === 'link' && <Switch isSelected={draft.inHeldTime ?? false} onChange={(inHeldTime) => set({ inHeldTime })}>Book inside time you’ve held, and skip minimum notice</Switch>}
@@ -257,7 +262,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                   </div>
                 </Section></TabPanel>
                 <TabPanel id="who" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Who" description={whoSummary(draft, state, now)}
-                  action={stuck ? <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} />}>No hosts available</Tag> : undefined}>
+                  action={stuck ? <Tag hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} />}>No hosts available</Tag> : undefined}>
                   <div className="tf-bkf__stack" data-section="who">
                     {stuck && <Callout tone="warning">Everyone on this page is away or paused, so guests can't book it. Add a host who's free.</Callout>}
                     <div className="tf-bkf-settings">
@@ -328,14 +333,14 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         <div className="tf-bkf-setting__more tf-bkf__spread">
                           <span className="tf-bkf__label">{draft.countDays ? `Last ${draft.countDays} days` : 'This month so far'}</span>
                           {draft.hosts.map((h) => <Meter key={h} label={h} value={spread[h] ?? 0} maxValue={maxSpread} valueLabel={plural(spread[h] ?? 0, 'meeting')} warnAt={2} dangerAt={2} />)}
-                          <Button size="sm" variant="secondary" icon={<Settings2 {...i14} />} onPress={onManageGroups}>Manage groups</Button>
+                          <Button variant="secondary" icon={<Settings2 {...i14} />} onPress={onManageGroups}>Manage groups</Button>
                         </div>
                       </div>
                     )}
                     {draft.hostMode === 'managed' && (
                       <div className="tf-bkf-settings tf-bkf-settings--ruled">
                         <SettingRow title="Locked for members" description="Members can't change these on their copy. Saving here updates every copy.">
-                          <ChoiceChips label="Locked for members" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.locked ?? ['length', 'questions']}
+                          <ChoiceChips label="Locked for members" isLabelHidden selectionMode="multiple" selectedKeys={draft.locked ?? ['length', 'questions']}
                             items={LOCKABLE} onSelectionChange={(k) => set({ locked: [...k] as LockedPart[] })} />
                         </SettingRow>
                         <div className="tf-bkf-setting__more">
@@ -347,10 +352,10 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                                 <li key={h} className="tf-bkf-copies__row">
                                   <Avatar name={h} size={24} />
                                   <span className="tf-bkf-copies__text"><strong>{first(h)}’s copy</strong><span className="tf-bkf__muted tf-num">timefix.com/{first(h).toLowerCase()}/{draft.slug}</span></span>
-                                  {stale.length > 0 ? <Tag size="sm" hue="orange">Behind on {stale.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
-                                    : changed.length > 0 ? <Tag size="sm" hue="gray">Changed {changed.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
-                                    : <Tag size="sm" hue="green">In sync</Tag>}
-                                  {stale.length > 0 && <Button size="sm" variant="ghost" onPress={() => set({ drift: { ...(draft.drift ?? {}), [h]: changed } })}>Update copy</Button>}
+                                  {stale.length > 0 ? <Tag hue="orange">Behind on {stale.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
+                                    : changed.length > 0 ? <Tag hue="gray">Changed {changed.map((x) => LOCKABLE.find((l) => l.id === x)?.label.toLowerCase()).join(', ')}</Tag>
+                                    : <Tag hue="green">In sync</Tag>}
+                                  {stale.length > 0 && <Button variant="ghost" onPress={() => set({ drift: { ...(draft.drift ?? {}), [h]: changed } })}>Update copy</Button>}
                                 </li>
                               );
                             })}
@@ -360,11 +365,11 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     )}
                     <div className="tf-bkf-settings tf-bkf-settings--ruled">
                     <SettingRow title="Who can book" description={draft.whoCanBook === 'form' ? 'Guests see times after they send the form.' : 'Anyone with the link picks a time.'}>
-                      <SegmentedControl aria-label="Who can book" size="sm" selectedKey={draft.whoCanBook} onSelectionChange={(v) => set({ whoCanBook: v === 'form' ? 'form' : 'anyone', formName: v === 'form' ? draft.formName || 'Support request' : draft.formName })}
+                      <SegmentedControl aria-label="Who can book" selectedKey={draft.whoCanBook} onSelectionChange={(v) => set({ whoCanBook: v === 'form' ? 'form' : 'anyone', formName: v === 'form' ? draft.formName || 'Support request' : draft.formName })}
                         items={[{ id: 'anyone', label: 'Anyone' }, { id: 'form', label: 'Through a form' }]} />
                     </SettingRow>
                     <SettingRow title="Who can edit" description="Admins always can. Others you pick here can change this page too.">
-                      <ChoiceChips label="Who can edit" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.editors ?? []}
+                      <ChoiceChips label="Who can edit" isLabelHidden selectionMode="multiple" selectedKeys={draft.editors ?? []}
                         items={TEAM.filter((n) => n !== draft.owner).map((n) => ({ id: n, label: first(n) }))} onSelectionChange={(k) => set({ editors: [...k] })} />
                     </SettingRow>
                     {draft.whoCanBook === 'form' && (
@@ -383,7 +388,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                 <TabPanel id="after" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="After booking" description={afterSummary(draft)}>
                   <div className="tf-bkf-settings" data-section="after">
                     <SettingRow title="Confirming" description="Requests wait for you in Meetings, under Needs your OK.">
-                      <SegmentedControl aria-label="Confirming" size="sm" selectedKey={draft.confirmFirst ? 'me' : 'auto'} onSelectionChange={(v) => set({ confirmFirst: v === 'me' })}
+                      <SegmentedControl aria-label="Confirming" selectedKey={draft.confirmFirst ? 'me' : 'auto'} onSelectionChange={(v) => set({ confirmFirst: v === 'me' })}
                         items={[{ id: 'auto', label: 'At once' }, { id: 'me', label: 'I confirm first' }]} />
                     </SettingRow>
                     <SettingRow title="Calendar" description="Where new bookings are added.">
@@ -393,21 +398,21 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <Switch aria-label="Add guests to People" isSelected={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) !== 'none'} onChange={(on) => set({ addToPeople: on, fileTo: on ? (draft.fileTo && draft.fileTo !== 'none' ? draft.fileTo : 'people') : 'none' })} />
                     </SettingRow>
                     <SettingRow title="Reminders" description="Emails to the guest before the meeting.">
-                      <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.reminders}
+                      <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" selectedKeys={draft.reminders}
                         items={[{ id: 'day', label: 'A day before' }, { id: 'hour', label: 'An hour before' }]} onSelectionChange={(k) => set({ reminders: [...k] })} />
                     </SettingRow>
                     <SettingRow title="Emails to the guest" description="Each one goes from your address, with the meeting details.">
-                      <ChoiceChips label="Emails to the guest" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.emails ?? ALL_EMAILS}
+                      <ChoiceChips label="Emails to the guest" isLabelHidden selectionMode="multiple" selectedKeys={draft.emails ?? ALL_EMAILS}
                         items={[{ id: 'confirm', label: 'Confirmation' }, { id: 'change', label: 'Changes' }, { id: 'cancel', label: 'Cancellations' }, { id: 'after', label: 'Thank-you after' }]}
                         onSelectionChange={(k) => set({ emails: [...(draft.emails ?? ALL_EMAILS).filter((e) => e.startsWith('host-')), ...k] })} />
                     </SettingRow>
                     <SettingRow title="Emails to you" description="Your hosts get the same.">
-                      <ChoiceChips label="Emails to you" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={(draft.emails ?? ALL_EMAILS).filter((e) => e.startsWith('host-'))}
+                      <ChoiceChips label="Emails to you" isLabelHidden selectionMode="multiple" selectedKeys={(draft.emails ?? ALL_EMAILS).filter((e) => e.startsWith('host-'))}
                         items={[{ id: 'host-booked', label: 'New bookings' }, { id: 'host-cancel', label: 'Cancellations' }]}
                         onSelectionChange={(k) => set({ emails: [...(draft.emails ?? ALL_EMAILS).filter((e) => !e.startsWith('host-')), ...k] })} />
                     </SettingRow>
                     <SettingRow title="After they book" description={draft.after === 'redirect' ? 'They go to your web page.' : 'They see a thank-you with the details.'}>
-                      <SegmentedControl aria-label="After they book" size="sm" selectedKey={draft.after} onSelectionChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}
+                      <SegmentedControl aria-label="After they book" selectedKey={draft.after} onSelectionChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}
                         items={[{ id: 'message', label: 'Thank-you' }, { id: 'redirect', label: 'Web page' }]} />
                     </SettingRow>
  <ShowMore showLabel="More options" hideLabel="Fewer options">
@@ -456,7 +461,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         </div>
         <footer className="tf-bkf__savefoot">
           <span className="tf-bkf__savenote" aria-live="polite">
-            <Tag size="sm" hue={dirty ? 'orange' : 'green'}>{dirty ? 'Unpublished changes' : 'Live'}</Tag>
+            <Tag hue={dirty ? 'orange' : 'green'}>{dirty ? 'Unpublished changes' : 'Live'}</Tag>
             <TextSwap swapKey={dirty ? 'dirty' : 'clean'}>{dirty ? 'Guests still see the live version until you publish.' : 'Guests see what’s here.'}</TextSwap>
           </span>
           {(dirty || kept) && save !== 'saving' && <Button variant="ghost" onPress={() => { onDraft(page); onKeepDraft(page); }}>Discard</Button>}
@@ -478,7 +483,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                 <strong className="tf-num">{formatDay(v.at)}</strong>
                 <span className="tf-bkf__muted">{first(v.by)} changed {v.changes.join(', ').toLowerCase() || 'nothing visible'}</span>
               </span>
-              <Button size="sm" variant="ghost" icon={<RotateCcw {...i14} />} onPress={() => { onDraft({ ...v.page, versions: page.versions, isOn: page.isOn }); setVersionsOpen(false); }}>Restore</Button>
+              <Button variant="ghost" icon={<RotateCcw {...i14} />} onPress={() => { onDraft({ ...v.page, versions: page.versions, isOn: page.isOn }); setVersionsOpen(false); }}>Restore</Button>
             </li>
           ))}
           {(page.versions ?? []).length === 0 && <li className="tf-bkf__muted">No earlier versions yet. Publish a change and the version before it appears here.</li>}

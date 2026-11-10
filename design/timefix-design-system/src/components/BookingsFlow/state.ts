@@ -156,6 +156,8 @@ export interface BookingPage {
   readonly kind?: 'meeting' | 'service' | 'table';
   /** A service's price and how it reads ("₹1,200", "from ₹2,500", "Free"). */
   readonly price?: number;
+  /** A service with several lengths: the price of each (45 min ₹1,200, 60 min ₹1,500); the rest use `price`. */
+  readonly prices?: Readonly<Record<string, number>>;
   readonly priceType?: 'fixed' | 'from' | 'free';
   /** The menu category a service sits in. */
   readonly categoryId?: string;
@@ -169,6 +171,8 @@ export interface BookingPage {
   readonly pickArea?: boolean;
   /** A table page: bigger parties stay longer; the turn time for parties of this size or more. */
   readonly bigTurn?: { readonly from: number; readonly minutes: number };
+  /** A table page: how long a table is held by party size, smallest band first (the last band covers everyone larger). */
+  readonly turns?: ReadonlyArray<{ readonly upTo: number; readonly minutes: number }>;
 }
 
 /** One published version of a page, kept so it can be restored. */
@@ -194,6 +198,8 @@ export interface BookedMeeting extends Meeting {
   /** A table booking at the host stand: seated (when), then left. Unset is still to come. */
   readonly seating?: 'seated' | 'left';
   readonly seatedAt?: Date;
+  /** A service visit at the front desk: when they arrived and when the service started. */
+  readonly arrivedAt?: Date; readonly startedAt?: Date;
   /** A table booking: the guest's phone, the occasion, the area asked for, and tags the floor staff see (VIP, Allergy). */
   readonly phone?: string;
   readonly occasion?: string;
@@ -609,7 +615,7 @@ export function heldTables(state: BookingsState, date: Date, start: number, leng
   return held;
 }
 /** How long a table is held for a party: the page's turn time, longer for big parties. */
-export const turnFor = (page: BookingPage, party: number) => (page.bigTurn && party >= page.bigTurn.from ? page.bigTurn.minutes : lengthOf(page));
+export const turnFor = (page: BookingPage, party: number) => { const band = page.turns?.find((b) => party <= b.upTo) ?? page.turns?.[page.turns.length - 1]; return band ? band.minutes : page.bigTurn && party >= page.bigTurn.from ? page.bigTurn.minutes : lengthOf(page); };
 /** Guests whose tables start at this time on this day. */
 export const coversAt = (state: BookingsState, pageId: string, date: Date, minutes: number) => state.meetings
   .filter((m) => m.pageId === pageId && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString() && minutesOf(m.start) === minutes)
@@ -675,7 +681,10 @@ export const afterSummary = (p: BookingPage) => `${p.confirmFirst ? 'You confirm
 export const lookSummary = (p: BookingPage) => [p.look.look === 'custom' ? 'Custom' : p.look.look.charAt(0).toUpperCase() + p.look.look.slice(1), p.showPhoto ? 'photo' : '', p.socials.length ? plural(p.socials.length, 'link') : ''].filter(Boolean).join(' · ');
 /** "30 min · Google Meet". */
 /** "₹1,200", "from ₹2,500", "Free". */
-export const priceText = (p: BookingPage) => (p.priceType === 'free' ? 'Free' : p.price === undefined ? '' : `${p.priceType === 'from' ? 'from ' : ''}₹${p.price.toLocaleString('en-IN')}`);
+export const priceText = (p: BookingPage, minutes?: number) => { if (p.priceType === 'free') return 'Free'; const own = minutes !== undefined ? p.prices?.[String(minutes)] : undefined; if (own !== undefined) return `₹${own.toLocaleString('en-IN')}`;
+  // Several lengths, several prices: show the lowest as "from".
+  const all = p.durations.map((d) => p.prices?.[String(d)] ?? p.price).filter((n): n is number => n !== undefined); if (minutes === undefined && p.prices && all.length > 1 && new Set(all).size > 1) return `from ₹${Math.min(...all).toLocaleString('en-IN')}`;
+  return p.price === undefined ? '' : `${p.priceType === 'from' ? 'from ' : ''}₹${p.price.toLocaleString('en-IN')}`; };
 export const pageSub = (p: BookingPage) => (p.kind === 'table' ? `Parties of ${p.party?.min ?? 1} to ${p.party?.max ?? 8} · ${lengthsText(p)} a table` : p.kind === 'service' ? `${lengthsText(p)} · ${priceText(p)}` : `${lengthsText(p)} · ${placesText(p)}`);
 /** A meeting's time as a short line. */
 export const meetingWhen = (m: Meeting) => `${formatDay(m.start)} · ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}`;
@@ -731,7 +740,7 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
     noticeHours: 'Notice', daysAhead: 'How far ahead', perDay: 'Most a day', perWeek: 'Most a week', hostMode: 'Who hosts', hosts: 'Hosts', shareOut: 'Round robin', questions: 'Questions',
     confirmFirst: 'Confirming', reminders: 'Reminders', emails: 'Emails', look: 'Look', socials: 'Social links', slotStep: 'Start times', visibility: 'Who can find it',
     cancelCutoff: 'Cancel cut-off', moveCutoff: 'Move cut-off', fileTo: 'Filed to', after: 'After they book', whoCanBook: 'Who can book',
-    price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time',
+    price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time', turns: 'Turn times',
   };
   const keys = Object.keys(names) as Array<keyof BookingPage>;
   return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];

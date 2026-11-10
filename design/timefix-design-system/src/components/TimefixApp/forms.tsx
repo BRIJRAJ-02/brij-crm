@@ -231,6 +231,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
           </div>
         </TabPanel>
         <TabPanel id="settings" className="tf-forms__panel">
+          <div className="tf-forms__setgrid">
           <div className="tf-forms__settings">
             <div className="tf-bkf__group"><span className="tf-bkf__label">Layout</span>
               <SegmentedControl aria-label="Layout" selectedKey={form.mode} onSelectionChange={(k) => set({ mode: k === 'page' ? 'page' : 'one' })} items={[{ id: 'one', label: 'One question at a time' }, { id: 'page', label: 'Classic: all on one page' }]} /></div>
@@ -261,6 +262,23 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
               <TextArea label="Message" rows={2} value={form.after.message} onChange={(message) => set({ after: { ...form.after, message } })} />
               {form.after.kind === 'booking' && <p className="tf-rec__muted">They go straight to your booking page with their name and email filled in, so they only pick a time.</p>}
             </div>
+          </div>
+          {/* The form at a glance, with the switches people look for before publishing (owner's 11 Nov reference). */}
+          <aside className="tf-forms__summary" aria-label="Form summary">
+            <SettingsSection title="Form summary">
+              <dl className="tf-set__facts">
+                {[['Questions', String(form.questions.filter((q) => q.kind !== 'statement').length)], ['Required', String(form.questions.filter((q) => q.required).length)],
+                  ['Answers go to', form.saveTo === 'none' ? 'This form only' : objectWord(state, form.saveTo, 2)], ['Owner', form.owner], ['Status', form.status === 'live' ? (edited(form) ? 'Live, with unpublished edits' : 'Live') : form.status === 'paused' ? 'Paused' : 'Draft']]
+                  .map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+              </dl>
+            </SettingsSection>
+            <SettingsSection title="When someone answers">
+              <div className="tf-set__switch"><span><strong>Email {form.notify?.[0]?.split(' ')[0] ?? form.owner.split(' ')[0]}</strong><span className="tf-rec__muted">Each response, as it arrives.</span></span><Switch aria-label="Email each response" isSelected={Boolean(form.notify?.length)} onChange={(on) => set({ notify: on ? [form.owner] : undefined })} /></div>
+              <div className="tf-set__switch"><span><strong>Confirm to them</strong><span className="tf-rec__muted">An email with their answers.</span></span><Switch aria-label="Send a confirmation email" isSelected={Boolean(form.confirmEmail)} onChange={(on) => set({ confirmEmail: on ? { subject: `We got your answers: ${form.name}`, line: 'Thanks for writing. We’ll be in touch soon.' } : undefined })} /></div>
+              <div className="tf-set__switch"><span><strong>Spam check</strong><span className="tf-rec__muted">Bot answers go to Spam, out of your way.</span></span><Tag size="sm" hue="green">On</Tag></div>
+            </SettingsSection>
+            {form.status === 'draft' ? <Button variant="primary" onPress={publish}>Publish form</Button> : edited(form) ? <Button variant="primary" onPress={publish}>Publish changes</Button> : <p className="tf-rec__muted">Live at {url}. Share it from Share.</p>}
+          </aside>
           </div>
         </TabPanel>
         <TabPanel id="records" className="tf-forms__panel">

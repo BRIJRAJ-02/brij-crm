@@ -42,6 +42,8 @@ export interface LinkEditorProps {
   readonly neverPublished?: boolean;
   /** The workspace's forms, for the Form block. */
   readonly forms?: ReadonlyArray<{ readonly slug: string; readonly name: string; readonly live: boolean }>;
+  /** The workspace's booking pages, for the Booking block: it opens one of them, with its length and place. */
+  readonly bookingPages?: ReadonlyArray<{ readonly slug: string; readonly name: string; readonly minutes: number; readonly location: { readonly kind: 'video' | 'phone' | 'place'; readonly label: string } }>;
 }
 
 type Kind = LinkBlock['kind'];
@@ -94,7 +96,7 @@ function newBlock(kind: Kind): LinkBlock {
 }
 
 /** The link page editor: blocks on the left (drag to reorder, switch to hide, press to edit in a side panel), a live phone preview on the right, and the PublishBar once the draft differs from the live page. */
-export function LinkEditor({ live: initial, onPublish, booking, initialDraft, onDraftChange, neverPublished = false, forms = [] }: LinkEditorProps) {
+export function LinkEditor({ live: initial, onPublish, booking, initialDraft, onDraftChange, neverPublished = false, forms = [], bookingPages = [] }: LinkEditorProps) {
   const [live, setLive] = useState(initial);
   const [draft, setDraft] = useState(initialDraft ?? initial);
   const [published, setPublished] = useState(!neverPublished);
@@ -231,6 +233,17 @@ export function LinkEditor({ live: initial, onPublish, booking, initialDraft, on
       );
     }
     if (block.kind === 'header') return <TextField label="Title" value={block.title} onChange={(title) => patch(block.id, { title })} />;
+    if (block.kind === 'booking' && bookingPages.length > 0) {
+      const page = bookingPages.find((p) => p.slug === block.slug) ?? bookingPages.find((p) => p.name === block.title);
+      return (
+        <>
+          <Select label="Booking page" value={block.slug ?? bookingPages.find((x) => x.name === block.title)?.slug ?? null} placeholder="Pick a booking page" onChange={(slug) => { const p = bookingPages.find((x) => x.slug === slug); if (p) patch(block.id, { slug: p.slug, title: !block.title || bookingPages.some((x) => x.name === block.title) ? p.name : block.title, durationMinutes: p.minutes, location: p.location }); }}
+            items={bookingPages.map((p) => ({ id: p.slug, label: p.name, description: `${p.minutes} min · ${p.location.label}` }))} />
+          <TextField label="Title" value={block.title} onChange={(title) => patch(block.id, { title })} />
+          <p className="tf-linked__note">{page ? `${page.minutes} min · ${page.location.label}. Change these on the booking page itself.` : 'Pick which booking page this opens; its length and place come from there.'}</p>
+        </>
+      );
+    }
     if (block.kind === 'booking') {
       return (
         <>

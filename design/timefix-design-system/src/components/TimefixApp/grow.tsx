@@ -20,6 +20,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
+import { lengthOf, placeLabel } from '../BookingsFlow/state.ts';
 import { STAGES, dayFrom, inr, newId, ymdOf, type AppAction, type AppState, type Report } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
@@ -32,7 +33,7 @@ const copyText = (text: string) => navigator.clipboard.writeText(text).then(() =
 export const handleFor = (state: AppState, bookings: BookingsState | undefined) => bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase() || 'me';
 
 /** The link page editor: edit beside the phone; Publish keeps it in the workspace. Unpublished work is kept in the app, so See it and leaving never lose it. */
-export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void }) {
+export function LinkPageScreen({ state, dispatch, handle, onBack, bookings }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void; readonly bookings?: BookingsState }) {
   const { toast } = useToast();
   const live = state.linkPage ?? STARTER;
   const published = (state.linkPage !== undefined || state.setupDone.includes('link')) && !state.linkOffline;
@@ -73,6 +74,7 @@ export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly s
         </div>
         <LinkEditor live={live} booking={demoBooking} initialDraft={state.linkDraft} neverPublished={!published}
           forms={state.forms.map((f) => ({ slug: f.slug, name: f.name, live: f.status === 'live' }))}
+          bookingPages={(bookings?.pages ?? []).filter((p) => p.kind !== 'table' && p.isOn).map((p) => { const where = p.places?.[0] ?? 'video'; return { slug: p.slug, name: p.name, minutes: lengthOf(p), location: { kind: where === 'phone' ? 'phone' as const : where === 'in-person' ? 'place' as const : 'video' as const, label: placeLabel(p, where) } }; })}
           onDraftChange={(d) => { if (JSON.stringify(d) !== JSON.stringify(state.linkDraft)) dispatch({ type: 'link/draft', page: d }); }}
           onPublish={(page) => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'link/publish', page }); resolve(); }, 500); })} />
         {qr && <QrSheet url={url} name="your link page" onClose={() => setQr(false)} />}
@@ -113,7 +115,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
   const rows: ReadonlyArray<{ readonly title: string; readonly rows: ReadonlyArray<ShareRow> }> = [
     { title: 'Your page', rows: business
       ? [{ id: 'home', icon: <Store {...i16} />, name: bookings?.workspace ?? 'Your business page', url: `timefix.com/${handle}`, live: business.published, off: 'Not published', numbers: `${upcoming()} upcoming bookings`, open: () => onBookingPage(undefined, 'profile'), edit: () => onBookings('pages'), editLabel: 'Edit page' }]
-      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: `${(state.linkPage ?? STARTER).blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length} links`, open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
+      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: (() => { const blocks = (state.linkPage ?? STARTER).blocks; const n = blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length; const clicks = blocks.reduce((t, b) => t + (b.kind === 'link' ? b.clicks ?? 0 : 0), 0); return `${n} links${clicks ? ` · ${clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks} clicks` : ''}`; })(), open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
     { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
       numbers: `${upcoming(p.id)} upcoming`, open: () => onBookingPage(p.id, 'book'), edit: () => onBookings('pages'), editLabel: 'Edit in Bookings' })) },
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),
@@ -242,7 +244,7 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
             <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />
             <StatCard label="Meetings in this period" value={booked} delta={delta(booked, prev.filter((e) => e.what === 'booking').length)} />
             <StatCard label="Form answers" value={answered} delta={delta(answered, prev.filter((e) => e.what === 'form').length)} />
-            <StatCard label="Form views" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: 'all time', direction: 'flat' }} />
+            <StatCard label="Form views, all time" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: `${formsShown.reduce((n, f) => n + f.views, 0) ? Math.round((formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0) / formsShown.reduce((n, f) => n + f.views, 0)) * 100) : 0}% answered`, direction: 'flat' }} />
           </div>
           <div className="tf-home__grid">
             <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>

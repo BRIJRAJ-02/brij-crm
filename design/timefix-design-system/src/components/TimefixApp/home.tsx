@@ -2,6 +2,7 @@
 // side by side, then four numbers. Everything links to where the work is.
 import { CalendarCheck, CalendarDays, CircleDollarSign, IdCard, Link2, Trophy, Upload, UserPlus, AlarmClock, Video, MapPin } from 'lucide-react';
 import { Card, CardLink, StatCard } from '../Card/Card.tsx';
+import { Avatar } from '../Avatar/Avatar.tsx';
 import { Checklist, type ChecklistStep } from '../Checklist/Checklist.tsx';
 import { TaskList, type Task } from '../TaskList/TaskList.tsx';
 import { Button } from '../Button/Button.tsx';
@@ -15,6 +16,9 @@ const i16 = { size: 16, strokeWidth: 1.75 } as const;
 
 /** Props for HomeScreen. */
 export interface HomeScreenProps {
+  /** Records opened lately, newest first ("people:p1"), for Recently viewed. */
+  readonly recent?: ReadonlyArray<string>;
+  readonly onOpenRecord?: (object: 'people' | 'companies' | 'deals', id: string) => void;
   readonly state: AppState;
   readonly dispatch: (a: AppAction) => void;
   readonly bookings: BookingsState | undefined;
@@ -33,7 +37,7 @@ export const HOME_SECTIONS: ReadonlyArray<{ readonly id: string; readonly label:
 ];
 
 /** Home. */
-export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImport, onSettings, onNewTask, onReports }: HomeScreenProps) {
+export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImport, onSettings, onNewTask, onReports, recent = [], onOpenRecord }: HomeScreenProps) {
   const hidden = new Set(state.prefs.homeHidden ?? []);
   const { toast } = useToast();
   const now = new Date();
@@ -119,6 +123,15 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
         <StatCard label="Meetings this week" icon={<CalendarDays {...i16} />} value={week.length} delta={{ ...vs(week.length, lastWeek), note: week.some((m) => m.status === 'pending') ? `${week.filter((m) => m.status === 'pending').length} to confirm` : undefined }} />
         <StatCard label="Overdue tasks" icon={<AlarmClock {...i16} />} value={mine.filter((t) => !t.done && t.due && t.due < new Date(now.getFullYear(), now.getMonth(), now.getDate())).length} delta={{ value: 'yours', direction: 'flat' }} />
       </div>}
+      {(() => {
+        // Records opened lately, so getting back to them is one click.
+        const items = recent.map((key) => { const [o, id] = key.split(':'); const list = o === 'people' ? state.people : o === 'companies' ? state.companies : o === 'deals' ? state.deals : undefined; const r = list?.find((x) => x.id === id); return r && (o === 'people' || o === 'companies' || o === 'deals') ? { o, id: r.id, name: r.name } : undefined; }).filter((x): x is { o: 'people' | 'companies' | 'deals'; id: string; name: string } => x !== undefined).slice(0, 5);
+        return items.length === 0 || !onOpenRecord ? null : (
+          <Card title="Recently viewed">
+            <ul className="tf-home__recent">{items.map((x) => <li key={`${x.o}:${x.id}`}><button type="button" className="tf-home__recentbtn" onClick={() => onOpenRecord(x.o, x.id)}>
+              <Avatar name={x.name} size={24} shape={x.o === 'people' ? 'round' : 'square'} /><span>{x.name}</span><span className="tf-home__muted">{x.o === 'people' ? 'Person' : x.o === 'companies' ? 'Company' : 'Deal'}</span></button></li>)}</ul>
+          </Card>);
+      })()}
       {(!hidden.has('link') || !hidden.has('team') || !hidden.has('reports')) && <div className="tf-home__grid">
         {!hidden.has('link') && <Card title="Link page" action={<CardLink onPress={() => onGo('links')}>All links</CardLink>}>
           <div className="tf-home__none"><p className="tf-num">{state.linkPage || state.setupDone.includes('link') ? `Live at timefix.com/${bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase()}` : 'Not published yet'}</p>

@@ -254,7 +254,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     const start = at(day, r.minutes);
     const id = nextId('m');
     const name = r.name.trim() || 'Guest';
-    const host = p.kind === 'table' ? (p.hosts[0] ?? HOST) : hostFor(now, p, day, r.minutes, r.minutes + r.length);
+    // A returning guest on a shared page goes to whoever they met last time, when that person is free then.
+    const lastHost = p.hostMode !== 'one' && r.email ? now.meetings.filter((m) => m.invitee.email.toLowerCase() === r.email.toLowerCase() && p.hosts.includes(m.host) && m.status !== 'cancelled').sort((a, b) => b.start.getTime() - a.start.getTime())[0]?.host : undefined;
+    const host = p.kind === 'table' ? (p.hosts[0] ?? HOST) : lastHost && memberFree(now, p, lastHost, day, r.minutes, r.minutes + r.length) ? lastHost : hostFor(now, p, day, r.minutes, r.minutes + r.length);
     // Nobody free then (someone else took it a moment ago): the guest's page shows "Someone just booked that time".
     if (!host || (p.kind === 'table' && !tables)) return false;
     pending.current.push({

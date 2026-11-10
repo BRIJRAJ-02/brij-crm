@@ -46,6 +46,8 @@ export interface NotificationListProps {
   readonly onOpen: (id: string) => void;
   readonly onReadChange: (id: string, read: boolean) => void;
   readonly onReadAll: () => void;
+  /** The bulk button's words: "Mark all read" by default, "Mark all done" for an inbox that clears to Done. */
+  readonly allLabel?: string;
   /** Called once the Undo window has passed, or straight away if the list closes first (nothing is lost). */
   readonly onArchive: (id: string) => void;
   /** The heading; leave it out where the page already has one. */
@@ -58,7 +60,7 @@ export interface NotificationListProps {
 const UNDO_MS = 5000;
 
 /** The inbox: unread dots, who did what and when, grouped Today and Earlier; Mark all read fades the dots; Archive folds a row into "Archived · Undo" before it goes. */
-export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive, title = 'Inbox', archiveLabel = 'Archive', archivedLabel = 'Archived' }: NotificationListProps) {
+export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArchive, title = 'Inbox', archiveLabel = 'Archive', archivedLabel = 'Archived', allLabel = 'Mark all read' }: NotificationListProps) {
   const [archiving, setArchiving] = useState<ReadonlyMap<string, 'undo' | 'gone'>>(new Map());
   const timers = useRef(new Map<string, number[]>());
   const latest = useRef(onArchive); latest.current = onArchive;
@@ -86,7 +88,7 @@ export function NotificationList({ items, onOpen, onReadChange, onReadAll, onArc
       <header className="tf-inbox__head">
         {title ? <h3 className="tf-inbox__title">{title}</h3> : null}
         <span className="tf-inbox__count tf-num">{unread ? `${unread} unread` : 'All read'}</span>
-        <Button size="sm" variant="ghost" icon={<CheckCheck size={14} strokeWidth={1.75} />} isDisabled={unread === 0} onPress={onReadAll}>Mark all read</Button>
+        <Button size="sm" variant="ghost" icon={<CheckCheck size={14} strokeWidth={1.75} />} isDisabled={allLabel === 'Mark all read' ? unread === 0 : items.length === 0} onPress={onReadAll}>{allLabel}</Button>
       </header>
       {items.length === 0 ? (
         <p className="tf-inbox__empty"><Inbox size={20} strokeWidth={1.75} aria-hidden="true" /><strong>You're all caught up</strong><span>Mentions, assignments and bookings land here.</span></p>

@@ -515,6 +515,20 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
       <Select label="Occasion" value={occasion || 'none'} onChange={(v) => setOccasion(v && v !== 'none' ? v : '')} items={[{ id: 'none', label: 'None' }, ...OCCASIONS.map((o) => ({ id: o, label: o }))]} />
       <ChoiceChips label="Tags" selectionMode="multiple" size="sm" selectedKeys={[...tags]} onSelectionChange={(k) => setTags([...k].map(String))} items={TAGS.map((t) => ({ id: t, label: t }))} />
       <TextArea label="Notes for the floor" rows={2} value={notes} onChange={setNotes} placeholder="Allergies, seating, a cake to bring out" />
+      {(() => {
+        // What the floor learned on earlier visits (same email or phone), so allergies and preferences carry forward.
+        const mail = email.trim().toLowerCase(); const tel = phone.replace(/\D/g, '');
+        if (!mail && tel.length < 6) return null;
+        const before = state.meetings.filter((x) => x.id !== meeting?.id && x.tables && x.start < (meeting?.start ?? new Date()) && ((mail && x.invitee.email.trim().toLowerCase() === mail) || (tel.length >= 6 && (x.phone ?? '').replace(/\D/g, '') === tel)))
+          .sort((a, b) => b.start.getTime() - a.start.getTime()).slice(0, 3);
+        if (before.length === 0) return null;
+        return (
+          <div className="tf-bkf__group"><span className="tf-bkf__label">Earlier visits</span>
+            <ul className="tf-bkf-res__past">{before.map((x) => <li key={x.id}><span className="tf-num">{formatLongDay(x.start)} · {x.party ?? 2}</span>{x.status === 'no-show' ? <Tag size="sm" hue="red">No-show</Tag> : null}{(x.tags ?? []).map((t) => <Tag key={t} size="sm" hue={t === 'Allergy' ? 'red' : t === 'VIP' ? 'purple' : 'gray'}>{t}</Tag>)}{x.notes ? <span className="tf-bkf__muted">“{x.notes}”</span> : null}
+              {x.notes && !notes.includes(x.notes) ? <Button size="sm" variant="ghost" onPress={() => setNotes(notes ? `${notes} · ${x.notes}` : x.notes)}>Use this note</Button> : null}</li>)}</ul>
+          </div>
+        );
+      })()}
     </div>
   );
   return (

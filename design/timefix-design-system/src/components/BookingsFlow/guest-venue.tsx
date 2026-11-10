@@ -150,7 +150,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
         <span className="tf-bkf-venue-sum__line"><span>{page.kind === 'table' ? `${waitMode ? 'Waitlist, t' : 'T'}able for ${party}` : page.name}<span className="tf-bkf__muted tf-num">{page.kind === 'table' ? (time !== undefined ? ` · ${formatLongDay(day)}, ${formatClock(time)}` : ` · ${formatLongDay(day)}`) + (areaPick ? ` · ${areaPick}` : '') + (occasion ? ` · ${occasion}` : '') : ` · ${len} min${who !== 'any' ? ` with ${first(who)}` : ''}`}</span></span><span className="tf-num">{page.kind === 'service' ? priceText(page) : ''}</span></span>
         {page.kind !== 'table' && (time !== undefined ? <span className="tf-bkf-venue-sum__when tf-num">{formatLongDay(day)}, {formatClockRange(time, time + len)}</span> : step >= timeStep && <span className="tf-bkf__muted">Pick a day and time</span>)}
       </div>
-      {page.kind === 'service' && <span className="tf-bkf-venue-sum__total"><span>Total</span><strong className="tf-num">{priceText(page)}</strong></span>}
+      {page.kind === 'service' && <span className="tf-bkf-venue-sum__total"><span>Total</span><strong className="tf-num">{priceText(page, len)}</strong></span>}
       {!done && (step < confirmStep
         ? <Button variant="primary" size="lg" isDisabled={step === timeStep && time === undefined} onPress={() => setStep(step + 1)}>Continue</Button>
         : <Button variant="primary" size="lg" isDisabled={(!waitMode && time === undefined) || !detailsOk} onPress={book}>{waitMode ? 'Join the waitlist' : page.confirmFirst ? 'Send request' : isTable ? 'Book table' : 'Book'}</Button>)}

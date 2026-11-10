@@ -67,7 +67,7 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   useEffect(() => {
     if (!isOpen) return;
     // A fresh sheet every time it opens.
-    setDraft(newPage(state.pages)); setStep(0); setCustom(false); setNameTouched(false); setSlugTouched(false); setHoursOpen(false); setConnecting(false);
+    setDraft(kind === 'service' ? { ...newPage(state.pages), name: 'New service', slug: uniqueSlug('new-service', state.pages) } : newPage(state.pages)); setStep(0); setCustom(false); setNameTouched(false); setSlugTouched(false); setHoursOpen(false); setConnecting(false);
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (step !== 1) return undefined;
@@ -83,9 +83,9 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
     setNameTouched(true);
     set({ name, ...(slugTouched ? {} : { slug: uniqueSlug(slugify(name), state.pages) }) });
   };
-  const setLength = (n: number) => set({ durations: [n], ...(nameTouched ? {} : { name: `${n} min meeting`, ...(slugTouched ? {} : { slug: uniqueSlug(`${n}-min-meeting`, state.pages) }) }) });
+  const setLength = (n: number) => set({ durations: [n], ...(nameTouched || kind === 'service' ? {} : { name: `${n} min meeting`, ...(slugTouched ? {} : { slug: uniqueSlug(`${n}-min-meeting`, state.pages) }) }) });
   const canCreate = draft.name.trim() !== '' && draft.slug !== '' && !taken;
-  const create = () => { if (step === 0 && canCreate) { onCreate(kind ? { ...draft, kind } : draft); setStep(1); } };
+  const create = () => { if (step === 0 && canCreate) { onCreate(kind === 'service' ? { ...draft, kind, places: ['in-person'], address: state.business?.address ?? draft.address, categoryId: draft.categoryId ?? state.categories?.[0]?.id } : kind ? { ...draft, kind } : draft); setStep(1); } };
   const close = () => onClose(step === 1 ? draft.id : undefined);
   const keys = (e: KeyboardEvent<HTMLElement>) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (step === 0) create(); else close(); } };
   const hours = hoursFor(draft, state);
@@ -109,7 +109,12 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
             </div>
           </div>
         </div>
-        <div className="tf-bkf__group">
+        {kind === 'service' && <div className="tf-bkf__pair">
+          {/* A service is priced and filed under a category; it happens at the business, so there's no "Where". */}
+          <NumberField label="Price" value={draft.price ?? 0} minValue={0} step={50} formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ price: Number.isFinite(n) ? n : 0, priceType: 'fixed' })} />
+          <Select label="Category" value={draft.categoryId ?? (state.categories?.[0]?.id ?? null)} onChange={(k) => set({ categoryId: k ?? undefined })} items={(state.categories ?? []).map((c) => ({ id: c.id, label: c.name }))} placeholder="None yet" />
+        </div>}
+        {kind !== 'service' && <div className="tf-bkf__group">
           <Select label="Where" value={place} onChange={(k) => { if (k) set({ places: [k as PlaceKind] }); }}
             items={PLACE_ORDER.map((k) => { const Icon = PLACE_ICON[k]; return { id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label, icon: <Icon {...i16} /> }; })} />
           <div className="tf-bkf__reveal tf-bkf__reveal--tight" data-open={place === 'in-person' || undefined}>
@@ -123,7 +128,7 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
                 items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />
             </div>
           </div>
-        </div>
+        </div>}
         <div className="tf-bkf__group">
           <span className="tf-bkf__label">When</span>
           <div className="tf-bkf-when">
@@ -177,12 +182,12 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   return (
     <ModalOverlay isOpen={isOpen} onOpenChange={(o) => { if (!o) close(); }} isDismissable className="tf-bkf-scrim tf-overlay">
       <Modal className="tf-bkf-sheet">
-        <AriaDialog className="tf-bkf-sheet__dialog" aria-label={step === 0 ? 'New booking page' : 'Your page is live'}>
+        <AriaDialog className="tf-bkf-sheet__dialog" aria-label={step === 0 ? (kind === 'service' ? 'New service' : 'New booking page') : 'Your page is live'}>
           <div className="tf-bkf-sheet__inner" onKeyDown={keys}>
           <header className="tf-bkf-sheet__head">
             <div className="tf-bkf-sheet__titles">
-              <Heading slot="title" className="tf-bkf-sheet__title"><TextSwap swapKey={String(step)}>{step === 0 ? 'New booking page' : 'Your page is live'}</TextSwap></Heading>
-              <p className="tf-bkf-sheet__desc">{step === 0 ? 'You can change everything later.' : 'Share the link anywhere. Changes you make later show up at once.'}</p>
+              <Heading slot="title" className="tf-bkf-sheet__title"><TextSwap swapKey={String(step)}>{step === 0 ? (kind === 'service' ? 'New service' : 'New booking page') : kind === 'service' ? 'Your service is live' : 'Your page is live'}</TextSwap></Heading>
+              <p className="tf-bkf-sheet__desc">{step === 0 ? (kind === 'service' ? 'Guests book it from your business page. You can change everything later.' : 'You can change everything later.') : 'Share the link anywhere. Changes you make later show up at once.'}</p>
             </div>
           </header>
           <div className="tf-bkf-sheet__body">
@@ -192,7 +197,7 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
             {step === 0 ? (
               <>
                 <Button variant="ghost" slot="close">Cancel</Button>
-                <Button variant="primary" isDisabled={!canCreate} onPress={create} aria-keyshortcuts="Meta+Enter" iconEnd={<span className="tf-bkf__kbd"><Kbd>⌘↵</Kbd></span>}>Create page</Button>
+                <Button variant="primary" isDisabled={!canCreate} onPress={create} aria-keyshortcuts="Meta+Enter" iconEnd={<span className="tf-bkf__kbd"><Kbd>⌘↵</Kbd></span>}>{kind === 'service' ? 'Add service' : 'Create page'}</Button>
               </>
             ) : <Button variant="primary" onPress={close}>Done</Button>}
           </footer>

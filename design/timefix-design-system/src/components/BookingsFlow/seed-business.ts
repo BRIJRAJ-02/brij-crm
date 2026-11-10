@@ -37,7 +37,7 @@ export function lumen(now = new Date()): BookingsState {
     return p;
   };
   const everyone = ['Priya Raman', 'Sam Kim', 'Jo Mendes', 'Ava Chen'];
-  const cut = svc('s-cut', 'Haircut and blow dry', 'c-hair', 45, 1200, everyone, { description: 'A consultation, wash, cut and finish.', durations: [45, 60] });
+  const cut = svc('s-cut', 'Haircut and blow dry', 'c-hair', 45, 1200, everyone, { description: 'A consultation, wash, cut and finish.', durations: [45, 60], prices: { '45': 1200, '60': 1500 } });
   const trim = svc('s-trim', 'Fringe trim', 'c-hair', 15, 300, everyone, { bufferAfter: 0 });
   const mens = svc('s-mens', 'Men’s cut', 'c-hair', 30, 700, ['Sam Kim', 'Ava Chen'], { description: 'Clipper and scissor work, finished with a wash.' });
   const roots = svc('s-roots', 'Root colour', 'c-colour', 75, 2500, ['Priya Raman', 'Jo Mendes'], { priceType: 'from' });
@@ -85,7 +85,7 @@ export function olive(now = new Date()): BookingsState {
   const tables: Table[] = [t('t1', 'T1', 2, 'Main room'), t('t2', 'T2', 2, 'Main room'), t('t3', 'T3', 4, 'Main room', true), t('t4', 'T4', 4, 'Main room', true), t('t5', 'T5', 6, 'Main room'),
     t('t6', 'T6', 2, 'Terrace', true), t('t7', 'T7', 2, 'Terrace', true), t('t8', 'T8', 4, 'Terrace'), { ...t('t9', 'T9', 8, 'Terrace'), online: false }];
   const table = newPage([], { id: 'p-table', name: 'Book a table', kind: 'table', party: { min: 1, max: 8 }, durations: [90], places: ['in-person'], address: '7 Apollo Bunder, Colaba',
-    hostMode: 'one', hosts: [HOST], noticeHours: 1, slotStep: 15, accent: 'green', pacing: 16, holdLate: 15, pickArea: true, bigTurn: { from: 5, minutes: 120 }, cancelCutoff: 2,
+    hostMode: 'one', hosts: [HOST], noticeHours: 1, slotStep: 15, accent: 'green', pacing: 16, holdLate: 15, pickArea: true, bigTurn: { from: 5, minutes: 120 }, turns: [{ upTo: 2, minutes: 75 }, { upTo: 4, minutes: 90 }, { upTo: 6, minutes: 120 }, { upTo: 99, minutes: 150 }], cancelCutoff: 2,
     stats: { views: 1840, bookings: 412, showRate: 93 } });
   const meetings: BookedMeeting[] = [];
   type Extra = { readonly status?: BookedMeeting['status']; readonly offset?: number; readonly tags?: ReadonlyArray<string>; readonly occasion?: string; readonly note?: string; readonly area?: string };

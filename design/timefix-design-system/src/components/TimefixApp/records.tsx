@@ -197,11 +197,15 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       dispatch({ type: 'prefs/update', fn: (q) => ({ jobs: [{ id: newId('jb'), kind: 'export' as const, what: `${def.many[0]?.toUpperCase()}${def.many.slice(1)} · ${view.name}`, rows: pick.length, by: state.me, at: new Date(), file: csv, name: `${def.many}.csv` }, ...(q.jobs ?? [])].slice(0, 20) }) }); }
   };
   const byOwner = view.groupBy === 'owner';
-  const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = byOwner
+  // A board for every object: deals by stage (or owner), companies by industry, people by owner. Dragging a card sets that field.
+  const boardField = object === 'deals' ? (byOwner ? 'owner' : 'stage') : object === 'companies' ? 'industry' : 'owner';
+  const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = object === 'companies'
+    ? [...new Set([...state.companies.map((c) => c.industry).filter(Boolean), ''])].map((ind) => ({ id: ind, title: ind || 'No industry', status: 'draft' as const, hue: 'gray' as const, field: 'industry' }))
+    : byOwner || object === 'people'
     ? state.members.map((m) => ({ id: m.name, title: m.name, status: 'draft' as const, hue: 'gray' as const, field: 'owner' }))
     : STAGES.map((stage) => ({ id: stage, title: stage, status: STAGE_LOOK[stage].status, hue: STAGE_LOOK[stage].hue, field: 'stage' }));
   const board: ReadonlyArray<BoardColumn> = groups.map((g) => { const inCol = sorted.filter((r) => r.values[g.field] === g.id); const sum = inCol.reduce((n, r) => n + Number(r.values.amount ?? 0), 0); const wsum = inCol.reduce((n, r) => n + Number(r.values.weighted ?? 0), 0); return { id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id), meta: sum ? (wsum && wsum !== sum ? `${inr(sum)} · ${inr(wsum)} weighted` : inr(sum)) : undefined,
-    cards: inCol.map((r) => { const d = state.deals.find((x) => x.id === r.id); const open = d && d.stage !== 'Won' && d.stage !== 'Lost'; const days = d ? daysInStage(d) : 0; return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : '', open ? `${days}d in ${d.stage}` : ''].filter(Boolean).join(' · '), tags: open && days > STALE_DAYS ? [{ label: `Stale · no move in ${days}d`, hue: 'orange' as const }] : undefined, people: d ? [d.owner] : [], date: d?.close }; }) }; });
+    cards: inCol.map((r) => { if (object !== 'deals') return { id: r.id, title: String(r.values.name), description: [object === 'people' ? r.values.title : r.values.domain, r.values.company ?? r.values.city].filter(Boolean).join(' · '), people: r.values.owner ? [String(r.values.owner)] : [] }; const d = state.deals.find((x) => x.id === r.id); const open = d && d.stage !== 'Won' && d.stage !== 'Lost'; const days = d ? daysInStage(d) : 0; return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : '', open ? `${days}d in ${d.stage}` : ''].filter(Boolean).join(' · '), tags: open && days > STALE_DAYS ? [{ label: `Stale · no move in ${days}d`, hue: 'orange' as const }] : undefined, people: d ? [d.owner] : [], date: d?.close }; }) }; });
   const peekIndex = peek ? sorted.findIndex((r) => r.id === peek) : -1;
   const peekGone = peek !== undefined && !all.some((r) => r.id === peek);
   const pairs = pairCount;
@@ -234,12 +238,12 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             <MenuItem id="rename" icon={<Pencil {...i16} />}>Rename view</MenuItem>
             <MenuItem id="duplicate" icon={<Copy {...i16} />}>Duplicate view</MenuItem>
             {views[0]?.id !== view.id ? <MenuItem id="default" icon={<Star {...i16} />}>Open this view first</MenuItem> : null}
-            {object === 'deals' ? <MenuItem id={byOwner ? 'group-stage' : 'group-owner'} icon={<LayoutGrid {...i16} />}>{byOwner ? 'Board by stage' : 'Board by owner'}</MenuItem> : null}
+            {object === 'deals' && view.layout === 'board' ? <MenuItem id={byOwner ? 'group-stage' : 'group-owner'} icon={<LayoutGrid {...i16} />}>{byOwner ? 'Board by stage' : 'Board by owner'}</MenuItem> : null}
             {others.length > 0 ? <MenuSeparator /> : null}
             {others.length > 0 ? <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete view</MenuItem> : null}
           </Menu>
         </MenuTrigger>
-        {object === 'deals' && <SegmentedControl aria-label="Layout" size="sm" selectedKey={view.layout} onSelectionChange={(k) => edit({ layout: k === 'board' ? 'board' : 'table' })}
+        {<SegmentedControl aria-label="Layout" size="sm" selectedKey={view.layout} onSelectionChange={(k) => edit({ layout: k === 'board' ? 'board' : 'table' })}
           items={[{ id: 'table', label: 'Table', icon: <LayoutList {...i14} /> }, { id: 'board', label: 'Board', icon: <LayoutGrid {...i14} /> }]} />}
         <SearchField label={`Search ${def.many}`} placeholder={`Search ${def.many}`} size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
         <span className="tf-rec__spacer" />
@@ -268,13 +272,14 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
         columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} />
       <div className="tf-rec__split">
-      {view.layout === 'board' && object === 'deals' ? (
+      {view.layout === 'board' ? (
         <div className="tf-rec__board">
-          <Board label={byOwner ? 'Deals by owner' : 'Deals by stage'} noun="deals" columns={board} onOpen={setPeek}
+          <Board label={`${def.many[0]?.toUpperCase()}${def.many.slice(1)} by ${boardField === 'stage' ? 'stage' : boardField}`} noun={def.many} columns={board} onOpen={setPeek}
             onToggleCollapse={(id) => setFolded((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-            onMove={(m) => { if (!canEdit) return; const field = byOwner ? 'owner' : 'stage'; const to = m.toColumnId; const moved = m.cardIds.filter((id) => (state.deals.find((x) => x.id === id) as Readonly<Record<string, unknown>> | undefined)?.[field] !== to); if (moved.length === 0) return;
-              setMany(moved, field, to, byOwner ? `${moved.length === 1 ? 'Deal' : `${moved.length} deals`} now owned by ${to}` : moved.length === 1 ? `Moved to ${to}` : `${moved.length} deals moved to ${to}`); }}
-            onAdd={canEdit ? (columnId) => { if (byOwner) setNewOwner(columnId); else setNewStage(columnId as Stage); setCreating(true); } : undefined} />
+            onMove={(m) => { if (!canEdit) return; const field = boardField; const to = m.toColumnId; const list = (object === 'deals' ? state.deals : object === 'companies' ? state.companies : state.people) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>; const moved = m.cardIds.filter((id) => list.find((x) => x.id === id)?.[field] !== to); if (moved.length === 0) return;
+              const many = moved.length === 1 ? def.one[0]?.toUpperCase() + def.one.slice(1) : `${moved.length} ${def.many}`;
+              setMany(moved, field, to, field === 'owner' ? `${many} now owned by ${to}` : field === 'industry' ? `${many} now in ${to || 'no industry'}` : moved.length === 1 ? `Moved to ${to}` : `${moved.length} deals moved to ${to}`); }}
+            onAdd={canEdit ? (columnId) => { if (boardField === 'owner') setNewOwner(columnId); else if (boardField === 'stage') setNewStage(columnId as Stage); setCreating(true); } : undefined} />
         </div>
       ) : (
         <div className="tf-rec__grid">

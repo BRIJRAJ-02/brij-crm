@@ -341,3 +341,14 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - [x] References (research/references-11nov.md): Tasks groups fold by their caret; Home numbers show the change against last week; Team day is a staff calendar (the workspace's real staff, bookings tinted by where they stand with a chip, service tag, striped breaks, hatched hours they don't work, a now line, the day's count); the link page, form page and booking rail have a cover band with the face or logo overlapping it.
 - [ ] Still to do from the research: Forms analytics and drop-off, endings with buttons, look options; Restaurant shifts and pacing per 15 minutes, turn time by party size bands, guest profile notes carried forward, reminders; Records column menu, footer calculations, group by in the table, board on any object, related sections; Salon service variants with prices, Arrived and Started, client record, a service form for New service; Meetings fixed plus rotating hosts; Insights per-link clicks; Tasks several linked records, due time; references: Forms summary and publish settings card, setup steps rail, quick-create popover on the week.
 
+
+## Owner round, 11 Nov, batch 3 (references applied, more depth)
+- [x] Notes keep their formatting (the editor's document is saved, not flattened to text); Notes and Links have search.
+- [x] Tasks: a time as well as a day ("Today 3:00 PM"); Inbox "Mark all done" with Undo.
+- [x] Home: "Recently viewed" records; Forms: a summary card in Settings; Insights: form views with the answered rate; Links hub shows clicks.
+- [x] Records: a board for every object (deals by stage or owner, companies by industry, people by owner), with weighted totals in the summary.
+- [x] Public page headers (reference): link pages have a cover band with the avatar over it; booking pages have a cover strip on the wide layout; a link page's Booking block picks a real booking page.
+- [x] Team day (Zendenta reference): headers show each person's count and the day total; breaks, closed hours and a now-line; Arrived, Start and Finish on a service visit today ("Here", "In progress").
+- [x] Salon: a price per length (a 45 min cut ₹1,200, 60 min ₹1,500); the list reads "from" the lowest, the guest's total follows the length they pick. Returning guests get their last stylist when free; a closed venue says when it next opens.
+- [x] Restaurant: turn time by party size bands in the editor.
+- [ ] Still to do: Forms analytics and drop-off, endings with buttons, look options; Restaurant shifts and 15 minute pacing, reminders, guest profile; Records column menu and related sections; salon client record; meetings fixed plus rotating hosts; tasks linked to several records; setup steps rail and the week quick-create popover (references).

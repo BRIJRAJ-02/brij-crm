@@ -297,7 +297,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
   const nowAt = minutesOf(now);
   const doneToday = onDay.filter((m) => m.status === 'completed' || (m.status === 'confirmed' && m.end < now)).length;
   /** How a booking reads in its block: tint and chip by where it stands. */
-  const standing = (m: BookedMeeting): { readonly key: string; readonly label: string } => m.status === 'pending' ? { key: 'pending', label: 'To confirm' } : m.status === 'no-show' ? { key: 'noshow', label: 'No-show' } : m.status === 'completed' || m.end < now ? { key: 'done', label: 'Done' } : m.start <= now && now < m.end ? { key: 'now', label: 'Now' } : { key: 'booked', label: 'Booked' };
+  const standing = (m: BookedMeeting): { readonly key: string; readonly label: string } => m.status === 'pending' ? { key: 'pending', label: 'To confirm' } : m.status === 'no-show' ? { key: 'noshow', label: 'No-show' } : m.status === 'completed' ? { key: 'done', label: 'Done' } : m.startedAt ? { key: 'now', label: 'In progress' } : m.arrivedAt ? { key: 'now', label: 'Here' } : m.end < now ? { key: 'done', label: 'Done' } : m.start <= now && now < m.end ? { key: 'now', label: 'Now' } : { key: 'booked', label: 'Booked' };
   return (
     <div className="tf-bkf__stack tf-bkf__stack--12 tf-bkf__calfill">
       <p className="tf-bkf-team__total tf-num"><strong>{onDay.length}</strong> {onDay.length === 1 ? 'booking' : 'bookings'} {isToday ? 'today' : `on ${formatLongDay(day)}`}{doneToday ? ` · ${doneToday} done` : ''}</p>

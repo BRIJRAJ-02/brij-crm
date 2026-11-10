@@ -76,6 +76,13 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
       footerStart={m.status === 'pending' ? <span className="tf-bkf__row">
         <Button variant="primary" onPress={() => onConfirm(m)}>Confirm</Button>
         <Button variant="ghost" onPress={() => onDecline(m)}>Decline</Button>
+      </span> : page?.kind === 'service' && m.status === 'confirmed' && m.start.toDateString() === new Date().toDateString() ? <span className="tf-bkf__row">
+        {/* The front desk, one tap each: Arrived, Start, Finish (each with Undo). */}
+        {!m.arrivedAt ? <Button variant="primary" onPress={() => { onUpdate({ ...m, arrivedAt: new Date() }); toast({ message: `${m.invitee.name.split(' ')[0]} is here`, action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Arrived</Button>
+          : !m.startedAt ? <Button variant="primary" onPress={() => { onUpdate({ ...m, startedAt: new Date() }); toast({ message: 'Started', action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Start</Button>
+            : <Button variant="primary" onPress={() => { onUpdate({ ...m, status: 'completed' }); toast({ message: 'Finished', tone: 'success', action: { label: 'Undo', onAction: () => onUpdate(m) } }); }}>Finish</Button>}
+        {!m.arrivedAt && <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel</Button>}
+        <span className="tf-bkf__muted tf-num">{m.startedAt ? `Started ${m.startedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : m.arrivedAt ? `Here since ${m.arrivedAt.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}` : ''}</span>
       </span> : open && !past ? <span className="tf-bkf__row">
         <Button variant="secondary" onPress={() => onReschedule(m)}>Reschedule</Button>
         <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel meeting</Button>

@@ -74,7 +74,7 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
       ) : (
         <div className="tf-you__list">
           <NotificationList key={box} title="" archiveLabel={box === 'done' ? 'Move to inbox' : 'Mark done'} archivedLabel={box === 'done' ? 'Moved to inbox' : 'Done'} items={items.map((x) => ({ id: x.id, actor: x.actor, action: x.text, object: x.record ? recordName(state, x.record).name : '', excerpt: x.excerpt, time: ago(x.at), group: x.at >= today ? 'Today' : 'Earlier', read: x.read }))}
-            onOpen={open} onReadChange={(id, read) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { read }); }} onReadAll={() => items.forEach((x) => { if (!x.read) set(x, { read: true }); })}
+            onOpen={open} onReadChange={(id, read) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { read }); }} allLabel={box === 'done' ? 'Mark all read' : 'Mark all done'} onReadAll={() => { if (box === 'done') { items.forEach((x) => { if (!x.read) set(x, { read: true }); }); return; } const was = items; was.forEach((x) => set(x, { done: true, read: true })); toast({ message: `${was.length} moved to Done`, action: { label: 'Undo', onAction: () => was.forEach((x) => set(x, { done: x.done, read: x.read })) } }); }}
             onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { done: !x.done, read: true }); }} />
         </div>
       )}
@@ -115,7 +115,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />{g.title}<span className="tf-rec__muted tf-num">{g.tasks.filter((t) => !t.done).length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
           <div className="tf-you__card">
-            <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
+            <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
               record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
           </div>
           </DisclosurePanel>
@@ -127,7 +127,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <h3 className="tf-you__h"><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />Completed<span className="tf-rec__muted tf-num">{done.length}</span></AriaButton></h3>
           <DisclosurePanel className="tf-you__donepanel">
             <div className="tf-you__card">
-              <TaskList isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
+              <TaskList isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
                 record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
             </div>
           </DisclosurePanel>
@@ -144,12 +144,13 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
 export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecord, record }: { /** A new task's record, when made from a record page. */ readonly record?: RecordLink; readonly state: AppState; readonly task?: AppTask; readonly onClose: () => void; readonly onSave: (t: AppTask) => void; readonly onDelete?: () => void; readonly onOpenRecord?: (o: ObjectId, id: string) => void }) {
   const [title, setTitle] = useState(task?.title ?? '');
   const [due, setDue] = useState<string | undefined>(task?.due ? ymdOf(task.due) : undefined);
+  const [at, setAt] = useState<string>(task?.due && task.dueTime ? String(task.due.getHours() * 60 + task.due.getMinutes()) : 'none');
   const [assignee, setAssignee] = useState(task?.assignee ?? state.me);
   const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : record ? `${record.object}:${record.id}` : '');
   const [description, setDescription] = useState(task?.description ?? '');
   const records = [...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))];
   const link = (): RecordLink | undefined => { if (!rec) return undefined; const [o, i] = rec.split(':') as [ObjectId, string]; return { object: o, id: i }; };
-  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? dayFrom(due, 17) : undefined, assignee, record: link(), description: description.trim() || undefined, created: task?.created ?? new Date() }); };
+  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? (() => { const d = dayFrom(due, 17); if (!d || at === 'none') return d; return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(Number(at) / 60), Number(at) % 60); })() : undefined, dueTime: Boolean(due) && at !== 'none', assignee, record: link(), description: description.trim() || undefined, created: task?.created ?? new Date() }); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={task ? 'Task' : 'New task'}
       actions={<>{onDelete && <Button variant="ghost" onPress={onDelete}>Delete</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button>
@@ -158,6 +159,9 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
         <TextField label="Task" value={title} onChange={setTitle} autoFocus={!task} placeholder="Send the proposal" onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
         <div className="tf-bkf__pair">
           <DatePicker label="Due" value={due ? parseDate(due) : null} onChange={(d) => setDue(d ? d.toString() : undefined)} />
+          <Select label="At" value={at} isDisabled={!due} onChange={(v) => setAt(v ?? 'none')} items={[{ id: 'none', label: 'Any time that day' }, ...Array.from({ length: 23 }, (_, n) => 7 * 60 + n * 30).map((m) => ({ id: String(m), label: new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }))]} />
+        </div>
+        <div className="tf-bkf__pair">
           <Select label="Assignee" value={assignee} onChange={(v) => setAssignee(v ?? state.me)} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
         </div>
         <Select label="About" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="A person, company or deal" items={records} />
@@ -181,10 +185,10 @@ export function NotesScreen({ state, dispatch, onOpenRecord, openNote }: YouProp
     return (
       <div className="tf-you tf-you--note">
         <button type="button" className="tf-rec__link" onClick={() => onOpenRecord(note.record.object, note.record.id)}>On {r.name}</button>
-        <NotePage note={{ id: note.id, title: note.title, body: note.body, author: note.author, updated: ago(note.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
+        <NotePage note={{ id: note.id, title: note.title, body: note.body, doc: note.doc, author: note.author, updated: ago(note.updated) }} people={state.members.map((m) => ({ id: m.id, name: m.name }))}
           onBack={(l) => { setOpenId(undefined); if (isEmptyNote(l.title, l.body)) dispatch({ type: 'note/remove', id: note.id }); }}
           onDelete={() => { const n = note; setOpenId(undefined); dispatch({ type: 'note/remove', id: n.id }); toast({ message: 'Note deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'note/set', note: n }) } }); }}
-          onSave={(n) => dispatch({ type: 'note/set', note: { ...note, title: n.title, body: n.body, updated: new Date() } })} />
+          onSave={(n) => dispatch({ type: 'note/set', note: { ...note, title: n.title, body: n.body, doc: n.doc, updated: new Date() } })} />
       </div>
     );
   }

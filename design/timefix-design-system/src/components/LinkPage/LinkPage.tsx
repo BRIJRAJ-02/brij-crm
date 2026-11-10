@@ -41,7 +41,7 @@ export type LinkStyle = 'button' | 'tile' | 'featured';
 export type LinkBlock =
   | { readonly kind: 'link'; readonly id: string; readonly title: string; readonly subtitle?: string; readonly href: string; readonly icon?: LinkIconName; readonly style?: LinkStyle; readonly hue?: Hue; readonly image?: string; readonly clicks?: number; readonly hidden?: boolean }
   | { readonly kind: 'header'; readonly id: string; readonly title: string; readonly hidden?: boolean }
-  | { readonly kind: 'booking'; readonly id: string; readonly title: string; readonly durationMinutes: number; readonly location: BookingFlowProps['location']; readonly hidden?: boolean }
+  | { readonly kind: 'booking'; readonly id: string; readonly title: string; readonly durationMinutes: number; readonly location: BookingFlowProps['location']; readonly hidden?: boolean; /** The booking page it opens; its length and place come from there. */ readonly slug?: string }
   | { readonly kind: 'social'; readonly id: string; readonly hidden?: boolean }
   | { readonly kind: 'divider'; readonly id: string; readonly hidden?: boolean }
   /** A few lines of writing: an about, an offer, office hours. */
