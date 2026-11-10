@@ -588,7 +588,11 @@ describe('free and busy per calendar (AC-994, AC-995)', () => {
     });
     expect(read?.status === 'read' ? read.busy.map((each) => each.start) : []).toEqual([day(3)]);
     expect((await w.calendar('ada@work.dev')).warning).toMatchObject({ code: 'CALENDAR_AUTH_REVOKED' });
-    // Operators see which connection, and nothing of the tokens or the address.
+    // Read again while it stays broken: no second line, and the standing warning isn't rewritten.
+    const before = (await w.calendar('ada@work.dev')).warning?.at;
+    await w.events.freeBusy(w.system, ask, { fresh: true });
+    expect((await w.calendar('ada@work.dev')).warning?.at).toBe(before);
+    // Operators see which connection, once, and nothing of the tokens or the address.
     expect(warned).toEqual([
       {
         message: 'calendar.busy.tokens_unreadable',
@@ -598,6 +602,15 @@ describe('free and busy per calendar (AC-994, AC-995)', () => {
     // The destination's account doesn't open either: closed, as a revoked grant is (AC-995).
     await w.query(sql`update calendar_connections set tokens = '\\x01deadbeef'::bytea where id = ${conn.id}::uuid`);
     expect((await w.events.freeBusy(w.system, ask, { fresh: true }))[0]).toMatchObject({ status: 'blocked' });
+    // Its sync never crashes on it either: the account expires, so it stays closed until the member reconnects.
+    expect(await w.sync(conn.id)).toMatchObject({ kind: 'stopped', reason: 'expired' });
+    expect(
+      await w.query<{ status: string }>(sql`select status::text from calendar_connections where id = ${conn.id}::uuid`),
+    ).toEqual([{ status: 'expired' }]);
+    // Removed, it still goes, with its tokens, though nothing at the provider could be ended.
+    await w.query(sql`update calendar_connections set status = 'revoked' where id = ${work.id}::uuid`);
+    expect(await w.sync(work.id)).toMatchObject({ kind: 'stopped', reason: 'revoked' });
+    expect(await w.query(sql`select id from calendar_connections where id = ${work.id}::uuid`)).toEqual([]);
   });
 });
 

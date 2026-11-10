@@ -44,6 +44,7 @@ import { isBusyOnly } from './match.ts';
 import {
   failureOf,
   isProviderError,
+  providerError,
   type CalendarErrorCode,
   type CalendarProvider,
   type CalendarTokens,
@@ -61,7 +62,7 @@ import {
   type ChannelStopReason,
   type StoredChannel,
 } from './push.ts';
-import { openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
+import { isUnreadableTokens, openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
 
 /** How far back and ahead a full sync reads (spec 0024's call). */
 export const SYNC_DAYS_BACK = 90;
@@ -353,8 +354,12 @@ async function endChannels(
   try {
     tokens = await liveTokens(deps, scope, provider, row, binding, now);
   } catch (error) {
-    if (!isProviderError(error)) throw error;
-    refused = failureOf(error);
+    // Tokens that won't open can end nothing at the provider: the channels are forgotten as a refused grant's are.
+    const failure = isUnreadableTokens(error)
+      ? providerError('CALENDAR_AUTH_REVOKED', 'The stored calendar tokens did not open.')
+      : error;
+    if (!isProviderError(failure)) throw failure;
+    refused = failureOf(failure);
   }
   const channels: ChannelReport[] = [];
   for (const each of held) {
@@ -408,7 +413,14 @@ async function revokeConnection(
     try {
       await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
     } catch (error) {
-      if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
+      // A grant whose tokens won't open can't be ended at the provider either; the row and its tokens still go.
+      if (
+        !isUnreadableTokens(error) &&
+        !isProviderError(error, 'CALENDAR_AUTH_REVOKED') &&
+        !isProviderError(error, 'CALENDAR_AUTH')
+      ) {
+        throw error;
+      }
     }
   }
   await inWorkspace(scope, (tx) =>
@@ -561,6 +573,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   try {
     tokens = await liveTokens(deps, scope, provider, row, binding, now);
   } catch (error) {
+    // Stored tokens that won't open (another key, a damaged row) heal only when the member reconnects: expired, so
+    // the closed rule (AC-995) holds even for a destination account free and busy never reads.
+    if (isUnreadableTokens(error)) return failed('CALENDAR_AUTH_REVOKED');
     if (!isProviderError(error)) throw error;
     return failed(error.code);
   }
