@@ -10,6 +10,7 @@ import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { Select } from '../Select/Select.tsx';
 import { SuccessCheck } from '../Motion/Motion.tsx';
 import { VenuePage, VenueCheckout, PersonTile, type Venue } from '../VenuePage/VenuePage.tsx';
+import { dishPrice } from '../MenuPage/MenuPage.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
@@ -51,7 +52,7 @@ function venueOf(state: BookingsState, now: Date): Venue {
 }
 
 /** The guest's view of the workspace link. */
-export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist }: { readonly state: BookingsState; readonly onBooked: OnBooked; readonly onOpenPage: (p: BookingPage) => void; readonly onWaitlist?: OnWaitlist }) {
+export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }: { readonly state: BookingsState; readonly onBooked: OnBooked; readonly onOpenPage: (p: BookingPage) => void; readonly onWaitlist?: OnWaitlist; readonly onOpenMenu?: () => void }) {
   const now = new Date();
   const { toast } = useToast();
   const venue = venueOf(state, now);
@@ -120,7 +121,7 @@ export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist }: { readon
         onWaitlist={onWaitlist ? () => { setPageId(table.id); setTime(undefined); setWaitMode(true); setStep(1); } : undefined} />
     );
     return (
-      <VenuePage venue={venue} items={items} menu={b?.menu} categories={state.categories} itemsTitle={b ? (b.kind === 'restaurant' ? 'Menu highlights' : 'Services') : 'Meetings'} team={team}
+      <VenuePage venue={venue} items={items} menu={venueMenu(state) ?? b?.menu} onFullMenu={venueMenu(state) ? onOpenMenu : undefined} categories={state.categories} itemsTitle={b ? (b.kind === 'restaurant' ? 'Menu highlights' : 'Services') : 'Meetings'} team={team}
         onBook={(id) => { const p = pages.find((x) => x.id === id); if (p) start(p); }}
         aside={tableAside ?? undefined} bookLabel={b ? 'Book now' : 'Book a meeting'} onBookNow={tableAside ? undefined : () => { const p = pages.find((x) => x.kind !== 'table'); if (p) start(p); }} foot={foot} />
     );
@@ -272,4 +273,14 @@ export function TablePreview({ state, table }: { readonly state: BookingsState; 
       <TableCard state={state} table={table} now={now} party={party} dayId={dayId} area={area} onParty={setParty} onDay={setDayId} onArea={setArea} onTime={() => undefined} />
     </div>
   );
+}
+
+/** The page's Menu section: the popular dishes on the live menus (five at most), else the first ones. */
+function venueMenu(state: BookingsState): ReadonlyArray<{ readonly name: string; readonly description?: string; readonly price: string; readonly tag?: string }> | undefined {
+  const live = state.menuLive;
+  if (!live) return undefined;
+  const ids = [...new Set(live.menus.filter((m) => m.isLive).flatMap((m) => m.sections.flatMap((s) => s.dishIds)))];
+  const dishes = ids.map((id) => live.dishes.find((d) => d.id === id)).filter((d): d is NonNullable<typeof d> => d !== undefined && !d.soldOut);
+  const pick = [...dishes.filter((d) => d.popular), ...dishes.filter((d) => !d.popular)].slice(0, 5);
+  return pick.length ? pick.map((d) => ({ name: d.name, description: d.description, price: dishPrice(d), tag: d.diet.includes('vegan') ? 'Vegan' : d.diet.includes('vegetarian') ? 'Vegetarian' : undefined })) : undefined;
 }

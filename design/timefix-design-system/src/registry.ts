@@ -58,6 +58,7 @@ import { LinkPageDemo } from './components/LinkPage/LinkPage.demo.tsx';
 import { LogoDemo } from './components/Logo/Logo.demo.tsx';
 import { MeetingListDemo } from './components/MeetingList/MeetingList.demo.tsx';
 import { MenuDemo } from './components/Menu/Menu.demo.tsx';
+import { MenuPageDemo } from './components/MenuPage/MenuPage.demo.tsx';
 import { MotionDemo } from './components/Motion/Motion.demo.tsx';
 import { NoteListDemo } from './components/NoteList/NoteList.demo.tsx';
 import { NotificationListDemo } from './components/NotificationList/NotificationList.demo.tsx';
@@ -159,6 +160,7 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   Logo: LogoDemo,
   MeetingList: MeetingListDemo,
   Menu: MenuDemo,
+  MenuPage: MenuPageDemo,
   Motion: MotionDemo,
   NoteList: NoteListDemo,
   NotificationList: NotificationListDemo,

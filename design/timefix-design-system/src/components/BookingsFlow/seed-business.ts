@@ -2,6 +2,7 @@
 // (one table page, tables in Availability). Same team, same pages, same meetings: only the business fields are new.
 import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { FIRST_VISIT, newPage } from './seed.ts';
+import { oliveMenus } from './menu-seed.ts';
 import { HOST, PLACES, at, dayFrom, isoDay, nextId, type BookedMeeting, type BookingPage, type BookingsState, type Table, type WaitParty } from './state.ts';
 
 const off: DayHours = { on: false, ranges: [] };
@@ -80,7 +81,7 @@ export function lumen(now = new Date()): BookingsState {
 
 /** Olive Kitchen in Colaba: one table page, tables in Availability, reservations are meetings with a party and tables. */
 export function olive(now = new Date()): BookingsState {
-  const t = (id: string, name: string, seats: number, area: string, joinable = false): Table => ({ id, name, seats, area, online: true, joinable });
+  const t = (id: string, name: string, seats: number, area: string, joinable = false): Table => ({ id, name, seats, area, online: true, joinable, code: `${name.toLowerCase()}-${(seats * 7919 + name.length * 31).toString(36)}` });
   const tables: Table[] = [t('t1', 'T1', 2, 'Main room'), t('t2', 'T2', 2, 'Main room'), t('t3', 'T3', 4, 'Main room', true), t('t4', 'T4', 4, 'Main room', true), t('t5', 'T5', 6, 'Main room'),
     t('t6', 'T6', 2, 'Terrace', true), t('t7', 'T7', 2, 'Terrace', true), t('t8', 'T8', 4, 'Terrace'), { ...t('t9', 'T9', 8, 'Terrace'), online: false }];
   const table = newPage([], { id: 'p-table', name: 'Book a table', kind: 'table', party: { min: 1, max: 8 }, durations: [90], places: ['in-person'], address: '7 Apollo Bunder, Colaba',
@@ -104,6 +105,7 @@ export function olive(now = new Date()): BookingsState {
   res(20, 0, 6, ['t5'], 'Vikram Shetty', { occasion: 'Birthday', note: 'Bringing a cake, candles at dessert.' }); res(20, 0, 4, ['t3'], 'Leela Menon', { status: 'pending' });
   res(20, 30, 8, ['t3', 't4'], 'Dev Malhotra', { tags: ['Allergy'], note: 'One guest allergic to tree nuts.' }); res(21, 0, 2, ['t2'], 'Priya Joshi'); res(21, 15, 2, ['t7'], 'Kabir Rao', { area: 'Terrace' });
   res(20, 0, 4, ['t3'], 'Kiran Bose', { offset: 1, tags: ['VIP'] }); res(13, 0, 2, ['t6'], 'Lara Dias', { offset: 2 }); res(20, 30, 6, ['t5'], 'Ishaan Mehta', { offset: 2, occasion: 'Birthday' });
+  const book = oliveMenus();
   const today = isoDay(now);
   const waitlist: WaitParty[] = [
     { id: nextId('w'), name: 'Rhea Sen', phone: '+91 98111 20456', party: 2, added: new Date(now.getTime() - 12 * 60_000), day: today, quote: 20 },
@@ -129,6 +131,6 @@ export function olive(now = new Date()): BookingsState {
       ], rating: 4.7, reviews: 1204, amenities: ['Outdoor seating', 'Vegetarian options', 'Card payments'], published: true,
       photos: [scene('dining', '#e8d9c3'), scene('terrace', '#f4c9a0'), scene('bar', '#d8c3a5')],
     },
-    tables, waitlist,
+    tables, waitlist, menu: book, menuLive: book,
   };
 }

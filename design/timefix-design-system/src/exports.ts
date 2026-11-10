@@ -57,6 +57,7 @@ export * from './components/LinkPage/LinkPage.tsx';
 export * from './components/Logo/Logo.tsx';
 export * from './components/MeetingList/MeetingList.tsx';
 export * from './components/Menu/Menu.tsx';
+export * from './components/MenuPage/MenuPage.tsx';
 export * from './components/Motion/Motion.tsx';
 export * from './components/NoteList/NoteList.tsx';
 export * from './components/NotificationList/NotificationList.tsx';

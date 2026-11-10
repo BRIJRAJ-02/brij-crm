@@ -55,11 +55,13 @@ export interface VenuePageProps {
   readonly foot?: ReactNode;
   /** A menu to read (a restaurant's dishes), shown before About. */
   readonly menu?: ReadonlyArray<VenueMenuItem>;
+  /** Opens the whole menu (its own link); shown under the dishes. */
+  readonly onFullMenu?: () => void;
 }
 
 /** A public business page in the shape guests know from Fresha and OpenTable: name, rating and where; a photo grid; the menu by category with Book on each;
  *  the team; about and opening hours; a side card with the main action that stays in view. Shared by every module that books (services, tables, meetings). */
-export function VenuePage({ venue, items = [], categories, itemsTitle = 'Services', team = [], onBook, bookLabel = 'Book now', onBookNow, aside, foot, menu = [] }: VenuePageProps) {
+export function VenuePage({ venue, items = [], categories, itemsTitle = 'Services', team = [], onBook, bookLabel = 'Book now', onBookNow, aside, foot, menu = [], onFullMenu }: VenuePageProps) {
   const cats = categories?.filter((c) => items.some((i) => i.categoryId === c.id)) ?? [];
   const [cat, setCat] = useState<string>(cats[0]?.id ?? 'all');
   const [allPhotos, setAllPhotos] = useState(false);
@@ -124,6 +126,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
                   </li>
                 ))}
               </ul>
+              {onFullMenu && <Button variant="secondary" className="tf-venue__fullmenu" onPress={onFullMenu}>See the full menu</Button>}
             </section>
           )}
           {team.length > 0 && (

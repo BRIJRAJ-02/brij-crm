@@ -32,12 +32,15 @@ export interface PagesTabProps {
   /** A business: saves its page, and opens it as a guest. */
   readonly dispatch?: (a: BookingsAction) => void;
   readonly onSeePage?: () => void;
+  /** A restaurant's menu link: see it as a guest, or edit it. */
+  readonly onSeeMenu?: () => void;
+  readonly onEditMenu?: () => void;
 }
 
 const hostWords = (p: BookingPage) => (p.hostMode === 'roundrobin' ? 'Round robin' : p.hostMode === 'collective' ? 'Everyone free' : p.hostMode === 'managed' ? 'A copy each' : p.hosts[0] === HOST ? 'You' : p.hosts[0] ?? '');
 
 /** The Pages tab. */
-export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onShare, onMore, onCreate, dispatch, onSeePage }: PagesTabProps) {
+export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onShare, onMore, onCreate, dispatch, onSeePage, onSeeMenu, onEditMenu }: PagesTabProps) {
   const [scope, setScope] = useState<'mine' | 'team'>('mine');
   const { toast } = useToast();
   const slug = state.workspace.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -46,7 +49,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
     ...state.groups.map((g) => ({ id: g.id, label: g.name, url: `timefix.com/${slug}/${g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, count: state.pages.filter((p) => p.isOn && p.groupId === g.id).length }))];
   const now = new Date();
   // A business sees its own page first, then its services as a menu.
-  if (state.business && dispatch && onSeePage) return <BusinessPages state={state} dispatch={dispatch} fresh={fresh} onOpen={onOpen} onToggle={onToggle} onShare={onShare} onMore={onMore} onCreate={onCreate} onSeePage={onSeePage} />;
+  if (state.business && dispatch && onSeePage) return <BusinessPages state={state} dispatch={dispatch} fresh={fresh} onOpen={onOpen} onToggle={onToggle} onShare={onShare} onMore={onMore} onCreate={onCreate} onSeePage={onSeePage} onSeeMenu={onSeeMenu} onEditMenu={onEditMenu} />;
   if (state.pages.length === 0) {
     return <EmptyState icon={<Link2 size={20} strokeWidth={1.75} />} title="No booking pages yet" description="A booking page lets people pick a time with you. It takes a minute."
       action={<Button variant="primary" icon={<Plus {...i14} />} onPress={onCreate}>Create booking page</Button>} />;

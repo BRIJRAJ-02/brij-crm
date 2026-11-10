@@ -25,10 +25,12 @@ export interface BusinessPagesProps {
   readonly onMore: (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => void;
   readonly onCreate: () => void;
   readonly onSeePage: () => void;
+  readonly onSeeMenu?: () => void;
+  readonly onEditMenu?: () => void;
 }
 
 /** The business's Booking pages tab. */
-export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShare, onMore, onCreate, onSeePage }: BusinessPagesProps) {
+export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShare, onMore, onCreate, onSeePage, onSeeMenu, onEditMenu }: BusinessPagesProps) {
   const { toast } = useToast();
   const b = state.business;
   const [cat, setCat] = useState('all');
@@ -70,9 +72,30 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
         </div>
       </section>
 
-      {tablePages.length > 0 && (
-        <section className="tf-bkf-card" aria-label="Table booking">
-          <ul className="tf-bkf-svcs">{tablePages.map(card)}</ul>
+      {(tablePages.length > 0 || state.menuLive) && (
+        <section className="tf-bkf-card" aria-label="Your links">
+          <ul className="tf-bkf-svcs">
+            {tablePages.map(card)}
+            {state.menuLive && (() => {
+              // The menu is a link like the others: its own address, a QR on every table, and the venue page points to it.
+              const live = state.menuLive.menus.filter((m) => m.isLive);
+              const dishes = new Set(live.flatMap((m) => m.sections.flatMap((s) => s.dishIds))).size;
+              const menuUrl = `${homeUrl(state)}/menu`;
+              return (
+                <li className={cx('tf-bkf-svc', live.length === 0 && 'is-hidden')} data-hue="orange">
+                  <AriaButton className="tf-bkf-svc__open" onPress={() => onEditMenu?.()} aria-label="Edit the menu">
+                    <span className="tf-bkf-svc__name">Menu</span>
+                    <span className="tf-bkf-svc__sub tf-num">{live.length ? `${live.map((m) => m.name).join(', ')} · ${plural(dishes, 'dish', 'dishes')}` : 'Nothing on show'} · {menuUrl}</span>
+                  </AriaButton>
+                  <span />
+                  <span className="tf-bkf-svc__who" />
+                  <Button size="sm" variant="ghost" icon={<Copy {...i14} />} aria-label="Copy the menu link" onPress={() => copy(menuUrl)}>Copy link</Button>
+                  <Button size="sm" variant="ghost" icon={<ExternalLink {...i14} />} aria-label="See the menu as a guest" onPress={() => onSeeMenu?.()}>See it</Button>
+                  <span />
+                </li>
+              );
+            })()}
+          </ul>
         </section>
       )}
 

@@ -129,3 +129,4 @@
 .tf-venue-co__nav { display: flex; align-items: center; gap: var(--space-8); margin: 0 0 var(--space-8) calc(var(--space-8) * -1); }
 .tf-venue-co__nav .tf-venue-co__crumbs { margin: 0; }
 .tf-venue__hours > li > span:last-child { white-space: pre-line; text-align: right; }
+.tf-venue__fullmenu { align-self: flex-start; }

@@ -1,4 +1,5 @@
 // The Bookings flow's model: types, the one reducer, and the pure rules (open times, summaries, routing).
+import type { Menu, MenuAddOn, MenuDish } from '../MenuPage/MenuPage.tsx';
 import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { HOURS_DAYS, summarizeHours } from '../HoursEditor/HoursEditor.tsx';
 import type { Meeting, MeetingPlace } from '../MeetingList/MeetingList.tsx';
@@ -265,7 +266,10 @@ export interface BusinessProfile {
   readonly menu?: ReadonlyArray<{ readonly name: string; readonly description?: string; readonly price: string; readonly tag?: string }>;
 }
 /** A table: seats, area, bookable online, joins its neighbour for bigger parties. */
-export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean }
+export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean;
+  /** The code in the table's QR (timefix.com/<handle>/menu?t=<code>). A new code stops old prints working. */ readonly code?: string }
+/** A restaurant's menus as you edit them; `live` is what guests see until you publish. */
+export interface MenuBook { readonly menus: ReadonlyArray<Menu>; readonly dishes: ReadonlyArray<MenuDish>; readonly addOns: ReadonlyArray<MenuAddOn> }
 
 /** Everything the flow holds. */
 export interface BookingsState {
@@ -299,6 +303,9 @@ export interface BookingsState {
   readonly business?: BusinessProfile;
   readonly categories?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly tables?: ReadonlyArray<Table>;
+  /** A restaurant's menus: the draft you edit and the published one guests read. Sold out and Hide apply to both at once. */
+  readonly menu?: MenuBook;
+  readonly menuLive?: MenuBook;
   /** A restaurant's waitlist, every day. */
   readonly waitlist?: ReadonlyArray<WaitParty>;
   /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
@@ -319,6 +326,11 @@ export type BookingsAction =
   | { readonly type: 'business/set'; readonly business: BusinessProfile }
   | { readonly type: 'tables/set'; readonly tables: ReadonlyArray<Table> }
   | { readonly type: 'waitlist/set'; readonly waitlist: ReadonlyArray<WaitParty> }
+  | { readonly type: 'menu/draft'; readonly menu: MenuBook }
+  | { readonly type: 'menu/publish' }
+  | { readonly type: 'menu/discard' }
+  | { readonly type: 'dish/soldout'; readonly id: string; readonly soldOut: boolean }
+  | { readonly type: 'menu/show'; readonly id: string; readonly isLive: boolean }
   | { readonly type: 'page/delete'; readonly id: string }
   | { readonly type: 'page/restore'; readonly page: BookingPage; readonly index: number }
   | { readonly type: 'meeting/add'; readonly meeting: BookedMeeting; readonly notification?: Notification }
@@ -382,6 +394,17 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'business/set': return { ...state, business: action.business };
     case 'tables/set': return { ...state, tables: action.tables };
     case 'waitlist/set': return { ...state, waitlist: action.waitlist };
+    case 'menu/draft': return { ...state, menu: action.menu };
+    case 'menu/publish': return state.menu ? { ...state, menuLive: state.menu } : state;
+    case 'menu/discard': return state.menuLive ? { ...state, menu: state.menuLive } : state;
+    case 'dish/soldout': {
+      const flip = (b: MenuBook | undefined) => b && { ...b, dishes: b.dishes.map((d) => (d.id === action.id ? { ...d, soldOut: action.soldOut } : d)) };
+      return { ...state, menu: flip(state.menu), menuLive: flip(state.menuLive) };
+    }
+    case 'menu/show': {
+      const show = (b: MenuBook | undefined) => b && { ...b, menus: b.menus.map((m) => (m.id === action.id ? { ...m, isLive: action.isLive } : m)) };
+      return { ...state, menu: show(state.menu), menuLive: show(state.menuLive) };
+    }
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
@@ -686,3 +709,16 @@ export function personFree(state: BookingsState, name: string, day: Date, start:
   if (state.meetings.some((x) => x.id !== skipId && x.host === name && x.status !== 'cancelled' && x.start < e && s < x.end)) return false;
   return !busyOn(state, name, day).some((b) => b.start < end && start < b.end);
 }
+
+/** What changed between the menu you're editing and the one guests see: "2 dishes, Dinner". */
+export function menuChanges(state: BookingsState): ReadonlyArray<string> {
+  const a = state.menu; const b = state.menuLive;
+  if (!a || !b) return [];
+  const diff = <T extends { readonly id: string }>(x: ReadonlyArray<T>, y: ReadonlyArray<T>) => x.filter((i) => JSON.stringify(i) !== JSON.stringify(y.find((j) => j.id === i.id))).length + y.filter((j) => !x.some((i) => i.id === j.id)).length;
+  const dishes = diff(a.dishes, b.dishes); const addOns = diff(a.addOns, b.addOns);
+  const menus = a.menus.filter((m) => JSON.stringify(m) !== JSON.stringify(b.menus.find((x) => x.id === m.id))).map((m) => m.name);
+  const gone = b.menus.filter((m) => !a.menus.some((x) => x.id === m.id)).map((m) => `${m.name} removed`);
+  return [...menus, ...gone, ...(dishes ? [plural(dishes, 'dish', 'dishes')] : []), ...(addOns ? [plural(addOns, 'add-on')] : [])];
+}
+/** A table's menu link, as its QR opens it. */
+export const tableMenuUrl = (state: BookingsState, t: Table) => `timefix.com/${state.business?.handle ?? 'priya'}/menu?t=${t.code ?? t.name.toLowerCase()}`;

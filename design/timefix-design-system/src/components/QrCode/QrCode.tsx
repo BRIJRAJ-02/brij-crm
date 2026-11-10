@@ -140,6 +140,21 @@ function standalone(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(copy);
 }
 
+/** One printable sheet of several drawn codes, three to a row, each with its label and line under it (table tents, a wall of codes). */
+export function qrSheet(codes: ReadonlyArray<{ readonly svg: SVGSVGElement; readonly label: string; readonly line?: string }>, title: string): string {
+  const cell = 240; const cols = 3; const gap = 24; const head = 72;
+  const rows = Math.ceil(codes.length / cols);
+  const w = cols * cell + (cols + 1) * gap; const h = head + rows * (cell + 64) + (rows + 1) * gap;
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const parts = codes.map((c, i) => {
+    const x = gap + (i % cols) * (cell + gap); const y = head + gap + Math.floor(i / cols) * (cell + 64 + gap);
+    const inner = standalone(c.svg).replace(/^<svg/, `<svg x="${x}" y="${y}" width="${cell}" height="${cell}"`);
+    return `${inner}<text x="${x + cell / 2}" y="${y + cell + 30}" text-anchor="middle" font-family="Geist, Arial, sans-serif" font-size="20" font-weight="600" fill="#111">${esc(c.label)}</text>`
+      + (c.line ? `<text x="${x + cell / 2}" y="${y + cell + 52}" text-anchor="middle" font-family="Geist, Arial, sans-serif" font-size="12" fill="#555">${esc(c.line)}</text>` : '');
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#fff"/><text x="${gap}" y="44" font-family="Geist, Arial, sans-serif" font-size="24" font-weight="600" fill="#111">${esc(title)}</text>${parts}</svg>`;
+}
+
 /** Saves a drawn QrCode as `name.svg`, or `name.png` at `px` pixels wide (default 1024), always on white. */
 export async function downloadQr(svg: SVGSVGElement, name: string, format: 'svg' | 'png', px = 1024): Promise<SaveOutcome> {
   const text = standalone(svg);
