@@ -69,7 +69,9 @@ export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen }: TaskListP
   const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
   const [draft, setDraft] = useState('');
   const timers = useRef(new Map<string, number[]>());
-  useEffect(() => () => { for (const ts of timers.current.values()) ts.forEach((t) => window.clearTimeout(t)); }, []);
+  const latest = useRef(onToggle); latest.current = onToggle;
+  // Leaving mid-tick still completes the task: pending ticks go through now instead of being dropped.
+  useEffect(() => () => { for (const [id, ts] of timers.current) { ts.forEach((t) => window.clearTimeout(t)); latest.current(id, true); } timers.current.clear(); }, []);
   const without = (s: ReadonlySet<string>, id: string) => { const n = new Set(s); n.delete(id); return n; };
 
   const complete = (id: string, v: boolean) => {

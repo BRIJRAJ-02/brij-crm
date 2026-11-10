@@ -12,9 +12,9 @@ export type ObjectId = 'people' | 'companies' | 'deals';
 export type Stage = 'Lead' | 'Qualified' | 'Proposal' | 'Won' | 'Lost';
 export const STAGES: ReadonlyArray<Stage> = ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost'];
 
-export interface Company { readonly id: string; readonly name: string; readonly domain: string; readonly industry: string; readonly size: string; readonly city: string; readonly owner: string; readonly created: Date }
-export interface Person { readonly id: string; readonly name: string; readonly email: string; readonly phone?: string; readonly title: string; readonly companyId?: string; readonly owner: string; readonly tags: ReadonlyArray<string>; readonly lastContact?: Date; readonly created: Date }
-export interface Deal { readonly id: string; readonly name: string; readonly companyId: string; readonly contactId?: string; readonly stage: Stage; readonly amount: number; readonly owner: string; readonly close: Date; readonly created: Date }
+export interface Company { readonly id: string; readonly name: string; readonly domain: string; readonly industry: string; readonly size: string; readonly city: string; readonly owner: string; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
+export interface Person { readonly id: string; readonly name: string; readonly email: string; readonly phone?: string; readonly title: string; readonly companyId?: string; readonly owner: string; readonly tags: ReadonlyArray<string>; readonly lastContact?: Date; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
+export interface Deal { readonly id: string; readonly name: string; readonly companyId: string; readonly contactId?: string; readonly stage: Stage; readonly amount: number; readonly owner: string; readonly close: Date; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
@@ -33,6 +33,8 @@ export interface Activity { readonly id: string; readonly record: RecordLink; re
 /** A saved way to look at an object: its filters, sorts, columns and layout. Private views are only yours. */
 export interface SavedView {
   readonly id: string; readonly name: string; readonly layout: 'table' | 'board';
+  /** A deals board's columns: by stage (default) or by owner. */
+  readonly groupBy?: 'stage' | 'owner';
   readonly filters: ReadonlyArray<{ readonly id: string; readonly field: string; readonly operator: string; readonly values: ReadonlyArray<string> }>;
   readonly sorts: ReadonlyArray<{ readonly field: string; readonly direction: 'ascending' | 'descending' }>;
   readonly hidden: ReadonlyArray<string>; readonly isPrivate?: boolean;
@@ -40,7 +42,7 @@ export interface SavedView {
 
 /** A list: records of one object gathered for a purpose, with the list's own fields (a stage, a priority, the next step). */
 export interface ListEntry { readonly id: string; readonly recordId: string; readonly stage: string; readonly priority: 'High' | 'Medium' | 'Low'; readonly next: string; readonly added: Date }
-export interface CrmList { readonly id: string; readonly name: string; readonly object: ObjectId; readonly stages: ReadonlyArray<string>; readonly entries: ReadonlyArray<ListEntry>; readonly oncePerRecord: boolean }
+export interface CrmList { readonly id: string; readonly name: string; readonly object: ObjectId; /** Archived lists leave the sidebar; Settings › Lists brings them back. */ readonly archived?: boolean; readonly stages: ReadonlyArray<string>; readonly entries: ReadonlyArray<ListEntry>; readonly oncePerRecord: boolean }
 
 /** A form: its questions as you edit them, the live ones guests answer, where answers go and what happens after. */
 export interface FormResponse { readonly id: string; readonly at: Date; readonly answers: Readonly<Record<string, string>>; readonly spam?: boolean; readonly personId?: string }
@@ -51,18 +53,34 @@ export interface AppForm {
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
   /** The published layout, name and after-send settings, so a change to any of them counts as an unpublished edit. */
   readonly liveConfig?: string;
+  /** A line under the title on the form. */
+  readonly subtitle?: string;
+  /** Which People attribute each answer fills, by question id ("email", "title", or an owner-made attribute). */
+  readonly mapping?: Readonly<Record<string, string>>;
+  /** "If <question> is <answer>, go to <question>" rules (one question at a time). */
+  readonly logic?: ReadonlyArray<{ readonly id: string; readonly when: string; readonly is: string; readonly goto: string }>;
 }
 
 /** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
 export interface ObjectSchema { readonly id: string; readonly one: string; readonly many: string; readonly custom: boolean; readonly attributes: ReadonlyArray<SchemaAttribute> }
 
 /** A deleted record, kept 30 days so it can come back. */
-export interface TrashItem { readonly id: string; readonly object: ObjectId; readonly record: Person | Company | Deal; readonly at: Date; readonly by: string }
+export interface TrashItem { readonly id: string; readonly object: ObjectId; /** Set when a merge removed it: the record it went into. */ readonly mergedInto?: string; readonly record: Person | Company | Deal; readonly at: Date; readonly by: string }
 /** One line of the workspace's history: who did what. */
 export interface HistoryLine { readonly id: string; readonly text: string; readonly at: Date }
 
+/** A record of an owner-made object: a name plus its attribute values. */
+export interface CustomRecord { readonly id: string; readonly name: string; readonly owner: string; readonly created: Date; readonly extra: Readonly<Record<string, string>> }
+
 /** A saved chart of deals. */
-export interface Report { readonly id: string; readonly name: string; readonly measure: 'count' | 'amount'; readonly group: 'stage' | 'owner' }
+export interface Report {
+  readonly id: string; readonly name: string; readonly measure: 'count' | 'amount';
+  /** What it counts (deals by default) and how it groups them. Amount is for deals only. */
+  readonly object?: 'deals' | 'people' | 'companies';
+  readonly group: 'stage' | 'owner' | 'industry' | 'company' | 'tag' | 'city';
+  /** Only records owned by this person; none means everyone's. */
+  readonly owner?: string;
+}
 
 /** A file on a record. The prototype keeps the file itself in memory so Download gives it back. */
 export interface RecordFile { readonly id: string; readonly record: RecordLink; readonly name: string; readonly size: number; readonly type: string; readonly at: Date; readonly by: string; readonly blob?: Blob }
@@ -81,6 +99,12 @@ export interface Prefs {
   readonly joinRequests: ReadonlyArray<{ readonly id: string; readonly name: string; readonly email: string }>;
   readonly apiKeys: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scope: 'read' | 'write'; readonly last4: string; readonly at: Date }>;
   readonly sidebarHidden: ReadonlyArray<string>;
+  /** Home sections someone turned off in Preferences: today, tasks, numbers, link, team, reports. */
+  readonly homeHidden?: ReadonlyArray<string>;
+  /** The invite link: the role it gives, how long it lasts, and its code (a new code stops the old link). */
+  readonly inviteLinkOpts?: { readonly role: string; readonly expires: string; readonly code: string };
+  /** Partner hubs that reach the workspace from outside, and what they can see. */
+  readonly partners?: ReadonlyArray<{ readonly id: string; readonly name: string; readonly scopes: ReadonlyArray<string>; readonly at: Date }>;
 }
 
 /** The CRM side of the app. */
@@ -113,6 +137,10 @@ export interface AppState {
   readonly linkPage?: LinkPageDraft;
   /** Saved charts in Insights › Reports. */
   readonly reports: ReadonlyArray<Report>;
+  /** Records of objects owners made (Projects, Vendors), by object id. */
+  readonly customRecords: Readonly<Record<string, ReadonlyArray<CustomRecord>>>;
+  /** "Preview as": see the app as a member or guest would, read only where they can't change things. */
+  readonly previewRole?: 'Member' | 'Guest';
   readonly reactions: Readonly<Record<string, Readonly<Record<string, ReadonlyArray<string>>>>>;
 }
 
@@ -143,9 +171,15 @@ export type AppAction =
   | { readonly type: 'list/remove'; readonly id: string }
   | { readonly type: 'form/set'; readonly form: AppForm }
   | { readonly type: 'form/remove'; readonly id: string }
+  | { readonly type: 'form/insert'; readonly form: AppForm; readonly at: number }
   | { readonly type: 'link/publish'; readonly page: LinkPageDraft }
   | { readonly type: 'report/set'; readonly report: Report }
   | { readonly type: 'report/remove'; readonly id: string }
+  | { readonly type: 'custom/set'; readonly object: string; readonly record: CustomRecord }
+  | { readonly type: 'custom/remove'; readonly object: string; readonly ids: ReadonlyArray<string> }
+  | { readonly type: 'custom/restore'; readonly object: string; readonly records: ReadonlyArray<CustomRecord> }
+  | { readonly type: 'preview/set'; readonly role?: 'Member' | 'Guest' }
+  | { readonly type: 'trash/merged'; readonly id: string; readonly into: string }
   | { readonly type: 'form/patch'; readonly id: string; readonly patch: (f: AppForm) => Partial<AppForm> }
   | { readonly type: 'object/set'; readonly object: ObjectSchema }
   | { readonly type: 'trash/restore'; readonly id: string }
@@ -220,9 +254,15 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'list/remove': return { ...state, lists: state.lists.filter((l) => l.id !== a.id) };
     case 'form/set': return { ...state, forms: upsert(state.forms, a.form) };
     case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
+    case 'form/insert': return { ...state, forms: [...state.forms.slice(0, a.at), a.form, ...state.forms.slice(a.at)].filter((f, n, all) => all.findIndex((x) => x.id === f.id) === n) };
     case 'link/publish': return { ...state, linkPage: a.page, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
     case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
     case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
+    case 'custom/set': { const list = state.customRecords[a.object] ?? []; return { ...state, customRecords: { ...state.customRecords, [a.object]: list.some((r) => r.id === a.record.id) ? list.map((r) => (r.id === a.record.id ? a.record : r)) : [a.record, ...list] } }; }
+    case 'custom/remove': return { ...state, customRecords: { ...state.customRecords, [a.object]: (state.customRecords[a.object] ?? []).filter((r) => !a.ids.includes(r.id)) } };
+    case 'custom/restore': return { ...state, customRecords: { ...state.customRecords, [a.object]: [...a.records, ...(state.customRecords[a.object] ?? []).filter((r) => !a.records.some((x) => x.id === r.id))] } };
+    case 'preview/set': return { ...state, previewRole: a.role };
+    case 'trash/merged': return { ...state, trash: state.trash.map((t) => (t.record.id === a.id ? { ...t, mergedInto: a.into } : t)) };
     case 'form/patch': return { ...state, forms: state.forms.map((f) => (f.id === a.id ? { ...f, ...a.patch(f) } : f)) };
     case 'trash/restore': {
       const t = state.trash.find((x) => x.id === a.id); if (!t) return state;
@@ -408,6 +448,7 @@ export function northwindCrm(now = new Date()): AppState {
       { id: 'fl-2', record: { object: 'deals', id: 'd-acme' }, name: 'Rollout plan v3.docx', size: 91_000, type: 'application/msword', at: dayAt(now, -1, 11), by: 'Priya Raman' }],
     reactions: { 'cm-1': { agree: ['Jo Mendes'] } },
     notDupes: [],
+    customRecords: {},
     reports: [{ id: 'r-stage', name: 'Pipeline by stage', measure: 'amount', group: 'stage' }, { id: 'r-owner', name: 'Deals by owner', measure: 'count', group: 'owner' }],
     prefs: {
       workspace: { name: 'Northwind', slug: 'northwind', currency: 'inr', country: 'in', colour: 'teal' },
@@ -480,3 +521,6 @@ function builtInObjects(owners: ReadonlyArray<{ readonly id: string; readonly na
       sys('amount', 'Amount', 'currency', { currency: 'INR' }), sys('close', 'Close date', 'date'), owner, created] },
   ];
 }
+
+/** The attribute ids every built-in object draws itself; anything else in Settings › Objects is the owner's own, kept in `extra`. */
+export const BUILT_IN_ATTRIBUTES: ReadonlySet<string> = new Set(['name', 'email', 'phone', 'title', 'company', 'tags', 'owner', 'created', 'domain', 'industry', 'size', 'city', 'stage', 'amount', 'close', 'lastContact', 'contact']);

@@ -22,6 +22,8 @@ import { AttributeSettings } from '../AttributeSettings/AttributeSettings.tsx';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { newId, type AppAction, type AppState, type Member, type ObjectSchema, type Prefs } from './data.ts';
 import type { Door } from './auth.tsx';
+import { RenameDialog } from './records.tsx';
+import { HOME_SECTIONS } from './home.tsx';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 type Page = 'profile' | 'preferences' | 'notifications' | 'security' | 'calendars' | 'general' | 'members' | 'roles' | 'apps' | 'history' | 'objects' | 'lists' | 'trash' | 'bookings' | 'developer';
@@ -40,10 +42,11 @@ export interface SettingsScreenProps {
   /** The page it opens on. */ readonly start?: string;
   /** Sign out, delete account or workspace: leaves for that screen. */ readonly onDoor?: (d: Door) => void;
   /** The workspace's kind, from Bookings: decides which apps and Bookings links fit. */ readonly kind?: 'team' | 'salon' | 'restaurant';
+  /** Opens a list from Settings › Lists. */ readonly onOpenList?: (id: string) => void;
 }
 
 /** Settings. */
-export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team' }: SettingsScreenProps) {
+export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kind = 'team', onOpenList }: SettingsScreenProps) {
   const [page, setPage] = useState<Page>(((start ?? '').split(':')[0] as Page | '') || 'profile');
   const [find, setFind] = useState('');
   /** Phone: the list of settings first, then one page with a way back (a start page opens straight on it). */
@@ -56,7 +59,7 @@ export function SettingsScreen({ state, dispatch, onBookings, start, onDoor, kin
       <SettingsLayout title={item?.label ?? 'Settings'} nav={<div className="tf-set__nav"><SearchField label="Find a setting" placeholder="Find a setting" size="sm" value={find} onChange={setFind} />
         {groups.length === 0 ? <p className="tf-rec__muted">No setting matches “{find}”.</p> : <SettingsNav groups={groups} current={page} onNavigate={(id) => { setPage(id as Page); setPicked(true); }} />}</div>}>
         <Button size="sm" variant="ghost" className="tf-set__back" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={() => setPicked(false)}>All settings</Button>
-        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} newObject={start === 'objects:new'} />
+        <Body page={page} state={state} dispatch={dispatch} onBookings={onBookings} onDoor={onDoor} kind={kind} onOpenList={onOpenList} newObject={start === 'objects:new'} />
       </SettingsLayout>
     </div>
   );
@@ -66,7 +69,8 @@ type Dispatch = (a: AppAction) => void;
 type Ask =
   | { readonly kind: 'account' | 'workspace' }
   | { readonly kind: 'devices' } | { readonly kind: 'device'; readonly id: string } | { readonly kind: '2fa-off' } | { readonly kind: 'signout' }
-  | { readonly kind: 'team'; readonly id?: string } | { readonly kind: 'remove'; readonly id: string } | { readonly kind: 'key' } | { readonly kind: 'revoke'; readonly id: string };
+  | { readonly kind: 'team'; readonly id?: string } | { readonly kind: 'remove'; readonly id: string } | { readonly kind: 'key' } | { readonly kind: 'revoke'; readonly id: string }
+  | { readonly kind: 'guest'; readonly id: string } | { readonly kind: 'transfer' } | { readonly kind: 'leave' } | { readonly kind: 'partner' } | { readonly kind: 'unpartner'; readonly id: string };
 
 const ROLE_ID = (r: Member['role']) => r.toLowerCase();
 const ROLE_NAME = (id: string): Member['role'] => (id === 'owner' ? 'Owner' : id === 'admin' ? 'Admin' : id === 'guest' ? 'Guest' : 'Member');
@@ -76,7 +80,7 @@ const APPS = [
   { id: 'appointments', title: 'Appointments', hint: 'Services with prices, booked with your staff', kinds: ['salon'] },
 ] as const;
 
-function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false }: { readonly newObject?: boolean; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
+function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = false, onOpenList }: { readonly onOpenList?: (id: string) => void; readonly newObject?: boolean; readonly page: Page; readonly state: AppState; readonly dispatch: Dispatch; readonly onBookings: (tab: string) => void; readonly onDoor?: (d: Door) => void; readonly kind: 'team' | 'salon' | 'restaurant' }) {
   const { toast } = useToast();
   const p = state.prefs;
   const ws = p.workspace;
@@ -99,6 +103,9 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
   );
   const close = () => { setAsk(undefined); setTyped(''); setCode(''); };
   let body: ReactNode;
+  /** Pages only owners and admins open; a preview as a member or guest shows why they can't. */
+  const ADMIN_ONLY: ReadonlyArray<Page> = ['general', 'members', 'roles', 'apps', 'objects', 'trash', 'developer', 'history'];
+  if (state.previewRole && ADMIN_ONLY.includes(page)) return <SettingsSection title="Only owners and admins open this" description={`A ${state.previewRole.toLowerCase()} sees their own settings: profile, preferences, notifications, sign in and calendars.`}><Button variant="secondary" onPress={() => dispatch({ type: 'preview/set', role: undefined })}>Stop previewing</Button></SettingsSection>;
   switch (page) {
     case 'profile': body = <>
       <SettingsSection title="You"><div className="tf-set__row"><Avatar name={state.me} size={56} /><div className="tf-rec__form tf-set__grow">
@@ -114,6 +121,10 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         <Select label="Date format" value={p.dateFormat} onChange={(v) => v && set({ dateFormat: v })} items={[{ id: 'dmy', label: '10 Nov 2026' }, { id: 'mdy', label: 'Nov 10, 2026' }, { id: 'iso', label: '2026-11-10' }]} />
         <Select label="Week starts on" value={p.weekStart} onChange={(v) => v && set({ weekStart: v as Prefs['weekStart'] })} items={[{ id: 'mon', label: 'Monday' }, { id: 'sun', label: 'Sunday' }]} />
         <Select label="Open the app on" value={p.startPage} onChange={(v) => v && set({ startPage: v })} items={[{ id: 'home', label: 'Home' }, { id: 'inbox', label: 'Inbox' }, { id: 'bookings', label: kind === 'restaurant' ? 'Reservations' : 'Meetings' }, { id: 'records:people', label: 'People' }]} />
+        <span className="tf-bkf__label">On Home</span>
+        <span className="tf-bkf__label">In the sidebar</span>
+        {[['tasks', 'Tasks'], ['notes', 'Notes'], ['lists', 'Lists'], ['forms', 'Forms'], ['insights', 'Insights']].map(([id, label]) => sw(label ?? '', !p.sidebarHidden.includes(id ?? ''), (on) => set({ sidebarHidden: on ? p.sidebarHidden.filter((x) => x !== id) : [...p.sidebarHidden, id ?? ''] })))}
+        {HOME_SECTIONS.map((h) => sw(h.label, !(p.homeHidden ?? []).includes(h.id), (on) => set({ homeHidden: on ? (p.homeHidden ?? []).filter((x) => x !== h.id) : [...(p.homeHidden ?? []), h.id] })))}
         {sw('Show the setup checklist on Home', !state.setupHidden, (on) => { dispatch({ type: 'setup/hide', hidden: !on }); toast({ message: on ? 'The checklist is back on Home' : 'Checklist hidden', tone: 'success' }); })}
       </div></SettingsSection>; break;
     case 'notifications': body = <SettingsSection title="Email me when" description="The Inbox always gets everything; these are emails.">
@@ -153,6 +164,7 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         ...p.invites.map((iv) => ({ id: iv.id, name: iv.email, email: iv.email, role: iv.role, status: 'invited' as const, seen: iv.at }))]}
         onRoleChange={(id, role) => {
           const m = state.members.find((x) => x.id === id);
+          if (m && role === 'guest' && m.role !== 'Guest') { setAsk({ kind: 'guest', id: m.id }); return; }
           if (m) { dispatch({ type: 'member/set', member: { ...m, role: ROLE_NAME(role) }, note: `${state.me} made ${m.name} ${ROLE_NAME(role).toLowerCase()}` }); toast({ message: `${m.name.split(' ')[0]} is now ${ROLE_NAME(role).toLowerCase()}`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); return; }
           set({ invites: p.invites.map((iv) => (iv.id === id ? { ...iv, role } : iv)) });
         }}
@@ -169,9 +181,22 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           <Button size="sm" variant="ghost" onPress={() => set({ joinRequests: p.joinRequests.filter((x) => x.id !== r.id) }, undefined, 'Request turned down')}>Turn down</Button></span></li>)}</ul></SettingsSection>}
       <SettingsSection title="Ways in" description="Besides invitations.">
         {sw('Anyone with the invite link can join as a member', p.rules.inviteLink, (on) => set({ rules: { ...p.rules, inviteLink: on } }, `${state.me} turned the invite link ${on ? 'on' : 'off'}`))}
-        {p.rules.inviteLink && <div className="tf-set__row"><TextField label="Invite link" value={`timefix.com/join/${ws.slug}-7Hq2`} isReadOnly className="tf-set__grow" />
-          <Button size="sm" variant="secondary" onPress={() => { void copy(`https://timefix.com/join/${ws.slug}-7Hq2`).then((ok) => toast({ message: ok ? 'Invite link copied' : 'Copy didn’t work. Select the link and copy it.', tone: ok ? 'success' : 'danger' })); }}>Copy</Button></div>}
+        {p.rules.inviteLink && (() => { const o = p.inviteLinkOpts ?? { role: 'member', expires: '30', code: '7Hq2' }; const link = `timefix.com/join/${ws.slug}-${o.code}`; return <>
+          <div className="tf-set__row"><TextField label="Invite link" value={link} isReadOnly className="tf-set__grow" />
+            <Button size="sm" variant="secondary" onPress={() => { void copy(`https://${link}`).then((ok) => toast({ message: ok ? 'Invite link copied' : 'Copy didn’t work. Select the link and copy it.', tone: ok ? 'success' : 'danger' })); }}>Copy</Button></div>
+          <div className="tf-bkf__pair">
+            <Select label="Joins as" value={o.role} onChange={(v) => v && set({ inviteLinkOpts: { ...o, role: v } })} items={[{ id: 'member', label: 'Member' }, { id: 'guest', label: 'Guest' }]} />
+            <Select label="Works for" value={o.expires} onChange={(v) => v && set({ inviteLinkOpts: { ...o, expires: v } })} items={[{ id: '7', label: '7 days' }, { id: '30', label: '30 days' }, { id: 'never', label: 'Until I turn it off' }]} />
+          </div>
+          <Button size="sm" variant="ghost" onPress={() => set({ inviteLinkOpts: { ...o, code: Math.random().toString(36).slice(2, 6) } }, `${state.me} made a new invite link`, 'New link made. The old one stops working.')}>Make a new link</Button>
+        </>; })()}
         {sw(`People with an @${ws.slug}.com email can ask to join`, p.rules.domainJoin, (on) => set({ rules: { ...p.rules, domainJoin: on } }), 'An owner or admin approves each request')}</SettingsSection>
+      <SettingsSection title="Ownership" description={`Owners can delete ${ws.name} and change billing. There’s always at least one.`}>
+        <div className="tf-set__row">
+          <Button variant="secondary" isDisabled={state.members.filter((x) => x.name !== state.me && x.role !== 'Guest').length === 0} onPress={() => setAsk({ kind: 'transfer' })}>Make someone else owner</Button>
+          <Button variant="ghost" onPress={() => setAsk({ kind: 'leave' })}>Leave {ws.name}</Button>
+        </div>
+      </SettingsSection>
       <SettingsSection title="Teams" description="Use teams in round robins and to share views." action={<Button variant="secondary" onPress={() => { setTeamName(''); setTeamMembers([]); setAsk({ kind: 'team' }); }}>New team</Button>}>
         {p.teams.length === 0 ? <p className="tf-rec__muted">No teams yet.</p> : <ul className="tf-set__list">{p.teams.map((t) => <li key={t.id}><button type="button" className="tf-set__open" onClick={() => { setTeamName(t.name); setTeamMembers(t.members); setAsk({ kind: 'team', id: t.id }); }}>
           <strong>{t.name}</strong><span className="tf-rec__muted">{t.members.length === 0 ? 'Nobody yet' : t.members.map((n) => n.split(' ')[0]).join(', ')}</span><ChevronRight size={16} strokeWidth={1.75} aria-hidden /></button></li>)}</ul>}</SettingsSection>
@@ -181,6 +206,10 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
         areas={[{ id: 'records', title: 'Records', powers: [{ id: 'records.edit', label: 'Add and edit records' }, { id: 'schema', label: 'Change objects and attributes' }] },
           { id: 'people', title: 'People', powers: [{ id: 'members', label: 'Invite and remove members' }] }, { id: 'bookings', title: 'Bookings', powers: [{ id: 'bookings', label: 'Make booking pages and round robins' }] }]}
         grants={p.grants} onChange={(role, power, held) => set({ grants: { ...p.grants, [role]: held ? [...(p.grants[role] ?? []), power] : (p.grants[role] ?? []).filter((x) => x !== power) } }, `${state.me} changed what ${role}s can do`)} />
+      <SettingsSection title="See it as they do" description="Look around the app as a member or a guest would. Nothing changes while you preview.">
+        <div className="tf-set__row"><Button variant="secondary" onPress={() => { dispatch({ type: 'preview/set', role: 'Member' }); toast({ message: 'Previewing as a member' }); }}>Preview as a member</Button>
+          <Button variant="secondary" onPress={() => { dispatch({ type: 'preview/set', role: 'Guest' }); toast({ message: 'Previewing as a guest' }); }}>Preview as a guest</Button></div>
+      </SettingsSection>
       <SettingsSection title="Sign in rules">
         {sw('Everyone must use two factor', p.rules.require2fa, (on) => set({ rules: { ...p.rules, require2fa: on } }, `${state.me} turned required two factor ${on ? 'on' : 'off'}`, on ? 'Members without two factor set it up at their next sign in' : 'Saved'), 'Members without it set it up at their next sign in')}
         {sw('Allow Google sign in', p.rules.google, (on) => set({ rules: { ...p.rules, google: on } }, `${state.me} turned Google sign in ${on ? 'on' : 'off'}`))}</SettingsSection>
@@ -194,12 +223,16 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
                 toast({ message: on ? `${a.title} is on. Menu is back in Bookings.` : `${a.title} is off. Menu is hidden from Bookings; nothing is deleted.`, action: { label: 'Undo', onAction: () => dispatch({ type: 'prefs/set', prefs: { apps: before } }) } }); }} />}</div>); })}
         <div className="tf-set__switch"><span><strong>Events</strong><span className="tf-rec__muted">Ticketed classes and workshops</span></span><Tag size="sm" hue="gray">Coming soon</Tag></div>
       </SettingsSection>
-      <SettingsSection title="Connected apps" description="Apps that reach your workspace from outside."><EmptyState size="sm" icon={<Workflow size={20} strokeWidth={1.75} />} title="Nothing connected" description="When a partner hub connects, it shows here with what it can reach, and you can disconnect it." /></SettingsSection>
+      <SettingsSection title="Connected apps" description="Apps that reach your workspace from outside." action={<Button variant="secondary" onPress={() => setAsk({ kind: 'partner' })}>Connect a hub</Button>}>
+        {(p.partners ?? []).length === 0 ? <EmptyState size="sm" icon={<Workflow size={20} strokeWidth={1.75} />} title="Nothing connected" description="When a partner hub connects, it shows here with what it can reach, and you can disconnect it." />
+          : <ul className="tf-set__list">{(p.partners ?? []).map((x) => <li key={x.id}><span><strong>{x.name}</strong> <span className="tf-rec__muted">Can {x.scopes.join(', ')} · connected {x.at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span></span>
+            <Button size="sm" variant="ghost" onPress={() => setAsk({ kind: 'unpartner', id: x.id })}>Disconnect</Button></li>)}</ul>}
+      </SettingsSection>
     </>; break;
     case 'history': body = <SettingsSection title="Changes" description="Who changed what in the workspace, newest first.">
       <ul className="tf-set__list">{state.history.slice(0, 60).map((h) => <li key={h.id}><span>{h.text}</span><span className="tf-rec__muted tf-num">{h.at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, {h.at.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })}</span></li>)}</ul></SettingsSection>; break;
     case 'objects': body = <ObjectsPage state={state} dispatch={dispatch} startMaking={newObject} />; break;
-    case 'lists': body = <SettingsSection title="Lists" description="Open a list from the sidebar to change its stages or delete it."><ul className="tf-set__list">{state.lists.map((l) => <li key={l.id}><strong>{l.name}</strong><span className="tf-rec__muted tf-num">{l.entries.length} {l.entries.length === 1 ? 'entry' : 'entries'} · {l.stages.length} {l.stages.length === 1 ? 'stage' : 'stages'}</span></li>)}</ul></SettingsSection>; break;
+    case 'lists': body = <ListsPage state={state} dispatch={dispatch} onOpenList={onOpenList} />; break;
     case 'trash': body = <TrashPage state={state} dispatch={dispatch} />; break;
     case 'bookings': body = <SettingsSection title="Bookings" description="These live in Bookings, where you use them.">
       <div className="tf-set__links">{(kind === 'team' ? [['Availability and hours', 'availability'], ['Booking pages', 'pages'], ['Round robin and routing', 'routing'], ['Team roster', 'roster']] : [['Opening hours', 'availability'], ['Your business page', 'pages'], ...(kind === 'restaurant' ? [['Menu', 'menu']] : [])])
@@ -228,6 +261,19 @@ function Body({ page, state, dispatch, onBookings, onDoor, kind, newObject = fal
           {ask.kind === 'account' && otherOwners === 0 && <Button variant="secondary" onPress={close}>Go to Members</Button>}
         </Dialog>
       )}
+      {ask?.kind === 'guest' && (() => { const m = state.members.find((x) => x.id === ask.id); if (!m) return null; const n = state.people.filter((x) => x.owner === m.name).length + state.deals.filter((x) => x.owner === m.name).length + state.companies.filter((x) => x.owner === m.name).length; return (
+        <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Make ${m.name} a guest?`} description={`Guests only see what’s shared with them and can’t change records. ${m.name.split(' ')[0]} owns ${n} ${n === 1 ? 'record' : 'records'}; they stay theirs, read only.`}
+          actions={<><Button variant="ghost" slot="close">Keep as {m.role.toLowerCase()}</Button><Button variant="primary" onPress={() => { close(); dispatch({ type: 'member/set', member: { ...m, role: 'Guest' }, note: `${state.me} made ${m.name} a guest` }); toast({ message: `${m.name.split(' ')[0]} is now a guest`, action: { label: 'Undo', onAction: () => dispatch({ type: 'member/set', member: m }) } }); }}>Make guest</Button></>} />); })()}
+      {ask?.kind === 'transfer' && <TransferDialog state={state} onClose={close} onTransfer={(to) => { const target = state.members.find((x) => x.name === to); if (!target || !me) return; close();
+        dispatch({ type: 'member/set', member: { ...target, role: 'Owner' }, note: `${state.me} made ${target.name} an owner` }); dispatch({ type: 'member/set', member: { ...me, role: 'Admin' }, note: `${state.me} is now an admin` });
+        toast({ message: `${target.name} is the owner now. You’re an admin.`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'member/set', member: target }); dispatch({ type: 'member/set', member: me }); } } }); }} />}
+      {ask?.kind === 'leave' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Leave ${ws.name}?`}
+        description={otherOwners === 0 && me?.role === 'Owner' ? `You’re the only owner. Make someone else owner first, or delete the workspace.` : 'You lose access straight away. Your records stay with the workspace; someone can invite you back.'}
+        actions={<><Button variant="ghost" slot="close">Stay</Button><Button variant="danger" isDisabled={otherOwners === 0 && me?.role === 'Owner'} onPress={() => { close(); dispatch({ type: 'history/add', text: `${state.me} left ${ws.name}` }); onDoor?.('signin'); }}>Leave workspace</Button></>} />}
+      {ask?.kind === 'partner' && <PartnerDialog onClose={close} onConnect={(name, scopes) => { close(); set({ partners: [...(p.partners ?? []), { id: newId('pt'), name, scopes, at: new Date() }] }, `${state.me} connected ${name}`, `${name} is connected`); }} />}
+      {ask?.kind === 'unpartner' && (() => { const x = (p.partners ?? []).find((y) => y.id === ask.id); if (!x) return null; return (
+        <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Disconnect ${x.name}?`} description="It stops reaching your workspace straight away. Pages it shows go blank until you connect again."
+          actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { close(); set({ partners: (p.partners ?? []).filter((y) => y.id !== x.id) }, `${state.me} disconnected ${x.name}`, `${x.name} disconnected`); }}>Disconnect</Button></>} />); })()}
       {ask?.kind === 'devices' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title="Sign out of other devices?" description={`${p.devices.length - 1} other ${p.devices.length - 1 === 1 ? 'device needs' : 'devices need'} to sign in again. This one stays signed in.`}
         actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => { const n = p.devices.length - 1; close(); set({ devices: p.devices.filter((d) => d.current) }, `${state.me} signed out of ${n} other devices`, `Signed out of ${n} ${n === 1 ? 'device' : 'devices'}`); }}>Sign out</Button></>} />}
       {ask?.kind === 'device' && <Dialog isOpen onOpenChange={(o) => { if (!o) close(); }} title={`Sign out of ${p.devices.find((d) => d.id === ask.id)?.what ?? 'this device'}?`} description="It needs to sign in again."
@@ -372,5 +418,62 @@ function TrashPage({ state, dispatch }: { readonly state: AppState; readonly dis
           actions={<><Button variant="ghost" slot="close">Keep them</Button><Button variant="danger" onPress={() => { dispatch({ type: 'trash/purge', ids: purge }); setPurge(undefined); toast({ message: 'Deleted for good' }); }}>Delete for good</Button></>} />
       )}
     </SettingsSection>
+  );
+}
+
+/** Settings › Lists: every list, archived ones too. Open, rename, archive or restore, delete (with Undo). */
+function ListsPage({ state, dispatch, onOpenList }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly onOpenList?: (id: string) => void }) {
+  const { toast } = useToast();
+  const [renaming, setRenaming] = useState<string>();
+  const word = (o: string) => (o === 'people' ? 'People' : o === 'companies' ? 'Companies' : 'Deals');
+  const row = (l: AppState['lists'][number]) => (
+    <li key={l.id}><span><strong>{l.name}</strong> <span className="tf-rec__muted tf-num">{word(l.object)} · {l.entries.length} {l.entries.length === 1 ? 'entry' : 'entries'} · {l.stages.length} {l.stages.length === 1 ? 'stage' : 'stages'}</span></span>
+      <span className="tf-set__row">
+        {!l.archived && <Button size="sm" variant="secondary" onPress={() => onOpenList?.(l.id)}>Open</Button>}
+        <Button size="sm" variant="ghost" onPress={() => setRenaming(l.id)}>Rename</Button>
+        <Button size="sm" variant="ghost" onPress={() => { dispatch({ type: 'list/set', list: { ...l, archived: !l.archived } }); toast({ message: l.archived ? `${l.name} is back in the sidebar` : `${l.name} archived`, action: { label: 'Undo', onAction: () => dispatch({ type: 'list/set', list: l }) } }); }}>{l.archived ? 'Restore' : 'Archive'}</Button>
+        <Button size="sm" variant="ghost" onPress={() => { const at = state.lists.findIndex((x) => x.id === l.id); dispatch({ type: 'list/remove', id: l.id }); toast({ message: `${l.name} deleted. The records stay.`, action: { label: 'Undo', onAction: () => dispatch({ type: 'list/insert', list: l, at }) } }); }}>Delete</Button>
+      </span></li>
+  );
+  const live = state.lists.filter((l) => !l.archived); const archived = state.lists.filter((l) => l.archived);
+  const renamingList = state.lists.find((l) => l.id === renaming);
+  return (
+    <>
+      <SettingsSection title="Lists" description="Make a list from the sidebar’s Lists, then add records from any table or record.">
+        {live.length === 0 ? <p className="tf-rec__muted">No lists yet.</p> : <ul className="tf-set__list">{live.map(row)}</ul>}
+      </SettingsSection>
+      {archived.length > 0 && <SettingsSection title="Archived" description="Out of the sidebar, with their entries kept."><ul className="tf-set__list">{archived.map(row)}</ul></SettingsSection>}
+      {renamingList && <RenameDialog title="Rename list" label="Name" value={renamingList.name} onClose={() => setRenaming(undefined)} onSave={(name) => { dispatch({ type: 'list/set', list: { ...renamingList, name } }); setRenaming(undefined); toast({ message: 'List renamed', tone: 'success' }); }} />}
+    </>
+  );
+}
+
+/** Hand the workspace to another member: they become owner, you become admin. */
+function TransferDialog({ state, onClose, onTransfer }: { readonly state: AppState; readonly onClose: () => void; readonly onTransfer: (name: string) => void }) {
+  const others = state.members.filter((m) => m.name !== state.me && m.role !== 'Guest');
+  const [to, setTo] = useState(others[0]?.name ?? '');
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Make someone else owner" description="They can delete the workspace and change billing. You stay as an admin."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!to} onPress={() => onTransfer(to)}>Make owner</Button></>}>
+      <Select label="New owner" value={to} onChange={(v) => setTo(v ?? '')} items={others.map((m) => ({ id: m.name, label: m.name, description: m.role }))} />
+    </Dialog>
+  );
+}
+
+/** Connect a partner hub: its name, what it may reach, and the one-time code it gives you. */
+function PartnerDialog({ onClose, onConnect }: { readonly onClose: () => void; readonly onConnect: (name: string, scopes: ReadonlyArray<string>) => void }) {
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [scopes, setScopes] = useState<ReadonlyArray<string>>(['show booking pages']);
+  const ALL = ['show booking pages', 'show forms', 'read people', 'add people'];
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Connect a partner hub" description="The hub gives you a code. It can only reach what you tick, and you can disconnect it any time."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || code.replace(/\W/g, '').length < 6 || scopes.length === 0} onPress={() => onConnect(name.trim(), scopes)}>Connect</Button></>}>
+      <div className="tf-rec__form">
+        <TextField label="Hub name" value={name} onChange={setName} placeholder="Acme marketing hub" autoFocus />
+        <TextField label="Connection code" value={code} onChange={setCode} placeholder="ABC-123" description="Prototype: any six letters or digits" />
+        <fieldset className="tf-set__check"><legend>It can</legend>{ALL.map((x) => <Checkbox key={x} isSelected={scopes.includes(x)} onChange={(on) => setScopes(on ? [...scopes, x] : scopes.filter((y) => y !== x))}>{x[0]?.toUpperCase() + x.slice(1)}</Checkbox>)}</fieldset>
+      </div>
+    </Dialog>
   );
 }

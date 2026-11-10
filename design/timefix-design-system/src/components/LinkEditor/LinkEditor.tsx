@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
-import { AtSign, CalendarDays, GripVertical, Heading, Link2, Minus, Plus, Trash2 } from 'lucide-react';
+import { AlignLeft, AtSign, CalendarDays, FileText, GripVertical, Heading, HelpCircle, Link2, Mail, Minus, Plus, Quote, Trash2 } from 'lucide-react';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button } from '../Button/Button.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
@@ -38,8 +38,9 @@ export interface LinkEditorProps {
 }
 
 type Kind = LinkBlock['kind'];
-const KIND_LABEL: Readonly<Record<Kind, string>> = { link: 'Link', header: 'Header', booking: 'Booking', social: 'Social icons', divider: 'Divider' };
-const KIND_ICON: Readonly<Record<Kind, ReactNode>> = { link: <Link2 {...i16} />, header: <Heading {...i16} />, booking: <CalendarDays {...i16} />, social: <AtSign {...i16} />, divider: <Minus {...i16} /> };
+const KIND_LABEL: Readonly<Record<Kind, string>> = { link: 'Link', header: 'Header', booking: 'Booking', social: 'Social icons', divider: 'Divider', text: 'Text', faq: 'Questions', testimonial: 'Testimonial', form: 'Form', signup: 'Email signup' };
+const KIND_ICON: Readonly<Record<Kind, ReactNode>> = { link: <Link2 {...i16} />, header: <Heading {...i16} />, booking: <CalendarDays {...i16} />, social: <AtSign {...i16} />, divider: <Minus {...i16} />,
+  text: <AlignLeft {...i16} />, faq: <HelpCircle {...i16} />, testimonial: <Quote {...i16} />, form: <FileText {...i16} />, signup: <Mail {...i16} /> };
 
 /** How many things differ between the draft and the live page (a moved block counts once). */
 export function changesBetween(a: LinkPageDraft, b: LinkPageDraft): number {
@@ -58,9 +59,16 @@ function describe(b: LinkBlock, socials: number): string {
   if (b.kind === 'link') return socialLabel(b.href) || 'No address yet';
   if (b.kind === 'booking') return `${b.durationMinutes} min · ${b.location.label}`;
   if (b.kind === 'social') return `${socials} ${socials === 1 ? 'network' : 'networks'}`;
+  if (b.kind === 'text') return b.body.slice(0, 48) || 'Empty';
+  if (b.kind === 'faq') return `${b.items.length} ${b.items.length === 1 ? 'question' : 'questions'}`;
+  if (b.kind === 'testimonial') return b.name || 'No name yet';
+  if (b.kind === 'form') return `timefix.com/f/${b.slug}`;
+  if (b.kind === 'signup') return b.button;
   return KIND_LABEL[b.kind];
 }
-const titleOf = (b: LinkBlock) => (b.kind === 'link' || b.kind === 'header' || b.kind === 'booking' ? b.title || 'Untitled' : KIND_LABEL[b.kind]);
+const titleOf = (b: LinkBlock) => (b.kind === 'link' || b.kind === 'header' || b.kind === 'booking' || b.kind === 'form' || b.kind === 'signup' ? b.title || 'Untitled' : b.kind === 'text' ? b.title || 'Text' : b.kind === 'testimonial' ? `“${b.quote.slice(0, 32)}”` : KIND_LABEL[b.kind]);
+/** A button title from a pasted address: "youtube.com/@priya" reads "YouTube". */
+const titleFromUrl = (href: string) => { const host = /^(?:https?:\/\/)?(?:www\.)?([^/?#]+)/i.exec(href.trim())?.[1] ?? ''; const name = host.split('.')[0] ?? ''; const known: Readonly<Record<string, string>> = { youtube: 'YouTube', linkedin: 'LinkedIn', github: 'GitHub', instagram: 'Instagram', x: 'X', twitter: 'X', tiktok: 'TikTok', substack: 'Substack', medium: 'Medium', dribbble: 'Dribbble', behance: 'Behance', spotify: 'Spotify', calendly: 'Booking page' }; return known[name.toLowerCase()] ?? (name ? name[0]?.toUpperCase() + name.slice(1) : ''); };
 
 let nextId = 0;
 function newBlock(kind: Kind): LinkBlock {
@@ -69,7 +77,12 @@ function newBlock(kind: Kind): LinkBlock {
   if (kind === 'link') return { kind, id, title: '', href: '' };
   if (kind === 'header') return { kind, id, title: 'New section' };
   if (kind === 'booking') return { kind, id, title: 'Intro call', durationMinutes: 15, location: { kind: 'video', label: 'Google Meet' } };
-  return { kind, id };
+  if (kind === 'text') return { kind, id, title: '', body: 'A few words about what you do.' };
+  if (kind === 'faq') return { kind, id, items: [{ q: 'How long does a session take?', a: 'About an hour.' }] };
+  if (kind === 'testimonial') return { kind, id, quote: 'Working with them was the best decision this year.', name: 'A happy client' };
+  if (kind === 'form') return { kind, id, title: 'Tell me about your project', slug: 'contact' };
+  if (kind === 'signup') return { kind, id, title: 'Get my monthly letter', button: 'Sign up' };
+  return { kind, id } as LinkBlock;
 }
 
 /** The link page editor: blocks on the left (drag to reorder, switch to hide, press to edit in a side panel), a live phone preview on the right, and the PublishBar once the draft differs from the live page. */
@@ -150,6 +163,11 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
             <MenuItem id="header" icon={KIND_ICON.header} description="A small title over a group">Header</MenuItem>
             {!hasSocial ? <MenuItem id="social" icon={KIND_ICON.social} description="Your social marks, placed here">Social icons</MenuItem> : null}
             <MenuItem id="divider" icon={KIND_ICON.divider}>Divider</MenuItem>
+            <MenuItem id="text" icon={KIND_ICON.text} description="A few lines of writing">Text</MenuItem>
+            <MenuItem id="faq" icon={KIND_ICON.faq} description="Questions that open to answers">Questions</MenuItem>
+            <MenuItem id="testimonial" icon={KIND_ICON.testimonial} description="A quote from a client">Testimonial</MenuItem>
+            <MenuItem id="form" icon={KIND_ICON.form} description="A button to one of your forms">Form</MenuItem>
+            <MenuItem id="signup" icon={KIND_ICON.signup} description="Collect emails for a list">Email signup</MenuItem>
           </Menu>
         </MenuTrigger>
       </div>
@@ -191,7 +209,7 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
       return (
         <>
           <TextField label="Title" value={block.title} placeholder="What the button says" onChange={(title) => patch(block.id, { title })} />
-          <TextField label="Address" type="url" value={block.href} placeholder="https://" onChange={(href) => patch(block.id, { href })}
+          <TextField label="Address" type="url" value={block.href} placeholder="https://" onChange={(href) => patch(block.id, { href, ...(block.title ? {} : { title: titleFromUrl(href) }) })}
             icon={<span className="tf-linked__detected" key={net ?? 'none'}>{net ? <SocialMark network={net} size={16} /> : <Link2 {...i16} />}</span>} />
           <TextField label="Line under the title" aside="Optional" value={block.subtitle ?? ''} onChange={(subtitle) => patch(block.id, { subtitle: subtitle || undefined })} />
           <Select label="Shown as" items={[{ id: 'button', label: 'Button' }, { id: 'tile', label: 'Tile, two to a row' }, { id: 'featured', label: 'Featured card with picture' }]}
@@ -209,6 +227,26 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
           <Select label="Length" items={[15, 30, 45, 60].map((m) => ({ id: String(m), label: `${m} min` }))} value={String(block.durationMinutes)} onChange={(m) => patch(block.id, { durationMinutes: Number(m ?? 30) })} />
           <Select label="Where" items={[{ id: 'Google Meet', label: 'Google Meet' }, { id: 'Zoom', label: 'Zoom' }, { id: 'Phone call', label: 'Phone call' }]} value={block.location.label}
             onChange={(l) => patch(block.id, { location: { kind: l === 'Phone call' ? 'phone' : 'video', label: l ?? 'Google Meet' } })} />
+        </>
+      );
+    }
+    if (block.kind === 'text') return <><TextField label="Title" aside="Optional" value={block.title ?? ''} onChange={(title) => patch(block.id, { title: title || undefined })} /><TextArea label="Text" rows={5} value={block.body} onChange={(body) => patch(block.id, { body })} /></>;
+    if (block.kind === 'testimonial') return <><TextArea label="Quote" rows={3} value={block.quote} onChange={(quote) => patch(block.id, { quote })} /><TextField label="Their name" value={block.name} onChange={(name) => patch(block.id, { name })} /><TextField label="Role or company" aside="Optional" value={block.role ?? ''} onChange={(role) => patch(block.id, { role: role || undefined })} /></>;
+    if (block.kind === 'form') return <><TextField label="Button" value={block.title} onChange={(title) => patch(block.id, { title })} /><TextField label="Form link" value={block.slug} icon={<span className="tf-bkf__prefix">timefix.com/f/</span>} onChange={(slug) => patch(block.id, { slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} /></>;
+    if (block.kind === 'signup') return <><TextField label="Heading" value={block.title} onChange={(title) => patch(block.id, { title })} /><TextField label="Button" value={block.button} onChange={(button) => patch(block.id, { button })} /><p className="tf-linked__note">Emails land in People, tagged with this heading.</p></>;
+    if (block.kind === 'faq') {
+      const items = block.items;
+      const put = (next: ReadonlyArray<{ readonly q: string; readonly a: string }>) => patch(block.id, { items: next });
+      return (
+        <>
+          {items.map((x, n) => (
+            <div key={n} className="tf-linked__faq">
+              <TextField label={`Question ${n + 1}`} value={x.q} onChange={(q) => put(items.map((y, k) => (k === n ? { ...y, q } : y)))} />
+              <TextArea label="Answer" rows={2} value={x.a} onChange={(a) => put(items.map((y, k) => (k === n ? { ...y, a } : y)))} />
+              {items.length > 1 && <Button size="sm" variant="ghost" icon={<Trash2 {...i16} />} onPress={() => put(items.filter((_, k) => k !== n))}>Remove question</Button>}
+            </div>
+          ))}
+          <Button size="sm" variant="secondary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => put([...items, { q: '', a: '' }])}>Add a question</Button>
         </>
       );
     }

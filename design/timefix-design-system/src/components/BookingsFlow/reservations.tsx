@@ -22,8 +22,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty,
-} from './state.ts';
+  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay } from './state.ts';
 
 /** Where a table booking is tonight. */
 type Stage = 'request' | 'booked' | 'late' | 'seated' | 'left' | 'no-show' | 'cancelled';
@@ -114,7 +113,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
             else if (k === 'move') setSeating({ kind: 'move', meeting: m });
             else if (k === 'noshow') noShow(m);
             else if (k === 'unseat') withUndo(m, { ...m, seating: undefined, seatedAt: undefined }, 'Back to booked', `${first(m.invitee.name)} isn't seated`);
-            else if (k === 'reseat') withUndo(m, { ...m, seating: 'seated', status: 'confirmed' }, 'Back to seated', `${first(m.invitee.name)} is seated again`);
+            else if (k === 'reseat') withUndo(m, { ...m, seating: 'seated', status: 'confirmed', seatedAt: m.seatedAt ?? new Date() }, 'Back to seated', `${first(m.invitee.name)} is seated again`);
             else if (k === 'cancel') onCancel(m);
           }}>
             <MenuItem id="edit" icon={<Pencil {...i16} />}>Edit reservation</MenuItem>
@@ -213,10 +212,10 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
                     <IconButton label={`More for ${w.name}`} size="sm"><MoreHorizontal {...i14} /></IconButton>
                     <Menu aria-label={`Actions for ${w.name}`} placement="bottom end" onAction={(k) => {
                       const list = state.waitlist ?? [];
-                      if (k === 'notify') { dispatch({ type: 'waitlist/set', waitlist: list.map((x) => (x.id === w.id ? { ...x, notified: true } : x)) }); toast({ message: `Texted ${first(w.name)}: your table is ready`, tone: 'success' }); }
+                      if (k === 'notify') { dispatch({ type: 'waitlist/set', waitlist: list.map((x) => (x.id === w.id ? { ...x, notified: true } : x)) }); toast({ message: w.phone ? `Texted ${first(w.name)} at ${w.phone}: your table is ready` : `Marked as told. ${first(w.name)} left no phone, so call their name.`, tone: 'success' }); }
                       else if (k === 'remove') { dispatch({ type: 'waitlist/set', waitlist: list.filter((x) => x.id !== w.id) }); toast({ message: `${first(w.name)} left the waitlist`, action: { label: 'Undo', onAction: () => dispatch({ type: 'waitlist/set', waitlist: list }) } }); }
                     }}>
-                      <MenuItem id="notify" icon={<Clock {...i16} />} description={w.phone}>Text: table ready</MenuItem>
+                      <MenuItem id="notify" icon={<Clock {...i16} />} description={w.phone ?? 'No phone: call their name'}>{w.phone ? 'Text: table ready' : 'Table ready (told in person)'}</MenuItem>
                       <MenuItem id="remove" icon={<X {...i16} />}>Remove</MenuItem>
                     </Menu>
                   </MenuTrigger>
@@ -252,7 +251,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
         {wait.length > 0 && <span>{wait.length} waiting</span>}
       </p>
       <div className="tf-bkf-res-layout">
-        {view === 'list' ? listView : <FloorView state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
+        {view === 'list' ? listView : <FloorView onNew={() => setEditing('new')} state={state} page={page} day={day} isToday={isToday} now={now} holdLate={holdLate}
           onSeat={seat} onFinish={finish} onOpen={setEditing} onWalkIn={(t) => setSeating({ kind: 'walkin', table: t })} />}
         {waitRail}
       </div>
@@ -280,9 +279,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
 
 /** The day's services from opening hours: one range is "Service", two are Lunch and Dinner. */
 function servicesOn(state: BookingsState, day: Date): ReadonlyArray<{ readonly name: string; readonly start: number; readonly end: number }> {
-  const week = state.savedHours.find((h) => h.id === state.defaultHoursId)?.hours ?? state.savedHours[0]?.hours;
-  const key = (['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const)[day.getDay()] ?? 'mon';
-  const d = week?.[key];
+  const d = venueDay(state, day);
   if (!d?.on) return [];
   return d.ranges.map((r) => ({ name: d.ranges.length === 1 ? 'Service' : r.start < 16 * 60 ? 'Lunch' : 'Dinner', start: r.start, end: r.end }));
 }
@@ -306,7 +303,8 @@ function stageTag(m: BookedMeeting, stage: Stage, now: Date, holdLate: number): 
 }
 
 /** Every table by area: who's at it and for how long, or when it's next booked. Tap one to act on it. */
-function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish, onOpen, onWalkIn }: {
+function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish, onOpen, onWalkIn, onNew }: {
+  /** A free table on a day ahead: book it by phone. */ readonly onNew?: () => void;
   readonly state: BookingsState; readonly page: BookingPage; readonly day: Date; readonly isToday: boolean; readonly now: Date; readonly holdLate: number;
   readonly onSeat: (m: BookedMeeting) => void; readonly onFinish: (m: BookedMeeting) => void; readonly onOpen: (m: BookedMeeting) => void; readonly onWalkIn: (t: Table) => void;
 }) {
@@ -345,6 +343,7 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                       if (k === 'finish' && sat) onFinish(sat);
                       else if (k === 'seat' && next) onSeat(next);
                       else if (k === 'walkin') onWalkIn(t);
+                      else if (k === 'new') onNew?.();
                       else if (k === 'open-sat' && sat) onOpen(sat);
                       else if (k === 'open-next' && next) onOpen(next);
                     }}>
@@ -353,6 +352,7 @@ function FloorView({ state, page, day, isToday, now, holdLate, onSeat, onFinish,
                       {!sat && next && isToday ? <MenuItem id="seat" icon={<Users {...i16} />}>Seat {first(next.invitee.name)} ({next.party})</MenuItem> : null}
                       {next ? <MenuItem id="open-next" icon={<Pencil {...i16} />} description={formatClock(minutesOf(next.start))}>{next.invitee.name}</MenuItem> : null}
                       {!sat && isToday ? <MenuItem id="walkin" icon={<UserPlus {...i16} />}>Seat a walk-in</MenuItem> : null}
+                      {!isToday ? <MenuItem id="new" icon={<CalendarPlus {...i16} />}>New reservation</MenuItem> : null}
                     </Menu>
                   </MenuTrigger>
                 </li>
@@ -460,7 +460,9 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
   const [occasion, setOccasion] = useState(meeting?.occasion ?? '');
   const [tags, setTags] = useState<ReadonlyArray<string>>(meeting?.tags ?? []);
   const [notes, setNotes] = useState(meeting?.notes ?? '');
-  const days = Array.from({ length: 60 }, (_, n) => dayFrom(now, n));
+  // Its own date stays in the list, even when it has passed, so editing an old reservation never shows a blank date.
+  const ahead = Array.from({ length: 60 }, (_, n) => dayFrom(now, n));
+  const days = meeting && !ahead.some((x) => isoDay(x) === isoDay(meeting.start)) ? [dayFrom(meeting.start, 0), ...ahead] : ahead;
   const d = days.find((x) => isoDay(x) === dayId) ?? (meeting?.start ?? day);
   const turn = turnFor(page, party);
   // The host can book any time in service hours, staff-only tables included.
@@ -502,7 +504,7 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
         <div className="tf-bkf__pair">
           <NumberField label="Guests" value={party} minValue={1} maxValue={30} onChange={(n) => { setParty(Number.isFinite(n) ? n : 2); setPick(undefined); }} />
           <Select label="Date" value={dayId} onChange={(v) => { if (v) { setDayId(v); setPick(undefined); } }}
-            items={days.map((x, n) => ({ id: isoDay(x), label: n === 0 ? `Today, ${formatDay(x)}` : n === 1 ? `Tomorrow, ${formatDay(x)}` : formatLongDay(x) }))} />
+            items={days.map((x) => { const n = Math.round((dayFrom(x, 0).getTime() - dayFrom(now, 0).getTime()) / 86_400_000); return { id: isoDay(x), label: n === 0 ? `Today, ${formatDay(x)}` : n === 1 ? `Tomorrow, ${formatDay(x)}` : n < 0 ? `${formatLongDay(x)} (passed)` : formatLongDay(x) }; })} />
         </div>
         <div className="tf-bkf__pair">
           <Select label="Time" placeholder={slots.length ? 'Pick a time' : 'Closed this day'} isDisabled={slots.length === 0} value={time === undefined ? null : String(time)} onChange={(v) => { if (v) { setTime(Number(v)); setPick(undefined); } }}

@@ -6,6 +6,8 @@ import type { CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarClock, Plus, CalendarDays, LayoutList, MessageCircle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ArrowUpRight, Globe, MapPin, Phone, UserPlus, Video, X } from 'lucide-react';
 import { Avatar, AvatarGroup } from '../Avatar/Avatar.tsx';
+import { saveFile } from '../../lib/saveFile.ts';
+import { googleCalendarUrl, icsFor, outlookCalendarUrl } from '../../lib/ics.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { LogoMark } from '../Logo/Logo.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
@@ -299,8 +301,11 @@ export function BookingFlow({ host, title, durationMinutes, location, today, tim
   useEffect(() => {
     if (!chatBooked) return;
     setGuest({ name: chatBooked.name, email: chatBooked.email, notes: '' });
-    setDate(chatBooked.date); setTime(chatBooked.minutes + shift); setLastGuests([]); setAfter('idle'); setBookedAt(asDate(chatBooked.date).getTime() + chatBooked.minutes * 60_000);
-    setBookedWhen(`${formatLongDay(asDate(chatBooked.date))}, ${formatClockRange(chatBooked.minutes, chatBooked.minutes + durationMinutes, hour12)}`);
+    // The chat books in the host's time; show it in the guest's own zone, rolling the day over when the shift crosses midnight.
+    let gm = chatBooked.minutes + shift; let gd = chatBooked.date;
+    if (gm >= 1440) { gm -= 1440; gd = gd.add({ days: 1 }); } else if (gm < 0) { gm += 1440; gd = gd.subtract({ days: 1 }); }
+    setDate(gd); setTime(gm); setLastGuests([]); setAfter('idle'); setBookedAt(asDate(chatBooked.date).getTime() + chatBooked.minutes * 60_000);
+    setBookedWhen(`${formatLongDay(asDate(gd))}, ${formatClockRange(gm, gm + durationMinutes, hour12)}`);
     setStep('done');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per booking the chat makes
   }, [chatBooked]);
@@ -309,7 +314,8 @@ export function BookingFlow({ host, title, durationMinutes, location, today, tim
     if (!date || time === undefined) return;
     setPending(true); setFailed(false);
     const guests = guestList;
-    try { const h = toHost(date, time); await onBook({ ...guest, guests, date: h.date, minutes: h.minutes, timeZone: tz }); setLastGuests(guests); setBookedWhen(when); setBookedAt(asDate(date).getTime() + time * 60_000); setStep('done'); }
+    // Cut-offs count from the real moment, which is the host's clock time, not the guest's.
+    try { const h = toHost(date, time); await onBook({ ...guest, guests, date: h.date, minutes: h.minutes, timeZone: tz }); setLastGuests(guests); setBookedWhen(when); setBookedAt(asDate(h.date).getTime() + h.minutes * 60_000); setStep('done'); }
     catch { setFailed(true); }
     finally { setPending(false); }
   };
@@ -556,10 +562,17 @@ export function BookingFlow({ host, title, durationMinutes, location, today, tim
               <div className="tf-booking__add tf-booking__reveal-line">
                 <span className="tf-booking__label">Add to calendar</span>
                 <span className="tf-row">
-                  {['Google', 'Outlook', 'Apple'].map((p) => (
-                    <Button key={p} size="sm" variant={added.has(p) ? 'ghost' : 'secondary'} onPress={() => setAdded((a) => new Set(a).add(p))}
-                      icon={added.has(p) ? <Check size={14} strokeWidth={2} /> : <CalendarPlus size={14} strokeWidth={1.75} />}>{added.has(p) ? `In ${p}` : p}</Button>
-                  ))}
+                  {(() => {
+                    // Google and Outlook open their own "add event" page; Apple (and any other calendar) gets an .ics file.
+                    const start = new Date(bookedAt ?? Date.now()); const what = `${title} with ${host.name}`;
+                    const cls = 'tf-btn tf-btn--secondary tf-btn--sm';
+                    return <>
+                      <a className={cls} href={googleCalendarUrl(what, location.label, start, durationMinutes)} target="_blank" rel="noopener noreferrer" onClick={() => setAdded((a) => new Set(a).add('Google'))}><CalendarPlus size={14} strokeWidth={1.75} aria-hidden /><span className="tf-btn__label">Google</span></a>
+                      <a className={cls} href={outlookCalendarUrl(what, location.label, start, durationMinutes)} target="_blank" rel="noopener noreferrer" onClick={() => setAdded((a) => new Set(a).add('Outlook'))}><CalendarPlus size={14} strokeWidth={1.75} aria-hidden /><span className="tf-btn__label">Outlook</span></a>
+                      <Button size="sm" variant={added.has('Apple') ? 'ghost' : 'secondary'} icon={added.has('Apple') ? <Check size={14} strokeWidth={2} /> : <CalendarPlus size={14} strokeWidth={1.75} />}
+                        onPress={() => { void saveFile(`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`, icsFor(what, location.label, start, durationMinutes)).then((o) => { if (o === 'saved') setAdded((a) => new Set(a).add('Apple')); }); }}>{added.has('Apple') ? 'Saved' : 'Apple (.ics)'}</Button>
+                    </>;
+                  })()}
                 </span>
               </div>
               {(() => {

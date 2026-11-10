@@ -20,18 +20,24 @@ const FORMATS = [
 ] as const;
 
 /** Which door. */
-export type Door = 'signin' | 'twofactor' | 'welcome' | 'invite' | 'join' | 'deleted' | 'email';
+export type Door = 'signin' | 'twofactor' | 'welcome' | 'invite' | 'join' | 'deleted' | 'email' | 'expired' | 'setup2fa' | 'invite-wrong' | 'invite-used';
 /** The doors as ⌘K lists them. */
 export const DOORS: ReadonlyArray<{ readonly id: Door; readonly label: string }> = [
   { id: 'signin', label: 'Sign in' }, { id: 'twofactor', label: 'Two factor at sign in' }, { id: 'welcome', label: 'First run (welcome)' }, { id: 'invite', label: 'Accept an invitation' },
   { id: 'join', label: 'Ask to join by email domain' }, { id: 'deleted', label: 'A deleted workspace' }, { id: 'email', label: 'Email preferences (no sign in)' },
+  { id: 'expired', label: 'Session ran out' }, { id: 'setup2fa', label: 'Two factor required by the workspace' }, { id: 'invite-wrong', label: 'Invitation for another email' }, { id: 'invite-used', label: 'Invitation already used' },
 ];
 
 /** Who the doors are about: the workspace and the signed-in person, from the app's data. */
-export interface DoorContext { readonly workspace: string; readonly slug: string; readonly name: string; readonly email: string; readonly twoFactor: boolean }
+export interface DoorContext {
+  readonly workspace: string; readonly slug: string; readonly name: string; readonly email: string; readonly twoFactor: boolean;
+  /** Members' emails: signing in with any other goes to setting up a new workspace. */ readonly memberEmails?: ReadonlyArray<string>;
+  /** The workspace asks everyone for two factor. */ readonly require2fa?: boolean;
+}
 
 /** One door, full screen and modal (focus moves in, Escape leaves), with a way back to the app. */
-export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onFormat }: { readonly door: Door; readonly onDone: () => void; readonly onDoor: (d: Door) => void; readonly ctx: DoorContext;
+export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onFormat, onTwoFactorOn }: { readonly door: Door; readonly onDone: () => void; readonly onDoor: (d: Door) => void; readonly ctx: DoorContext;
+  /** Two factor was set up on the way in. */ readonly onTwoFactorOn?: () => void;
   /** The first run's one question: what this business books. Salons and restaurants land in their own workspace. */ readonly onFormat?: (kind: 'team' | 'salon' | 'restaurant') => void;
   /** The first run's answers, to set the workspace up. */ readonly onFinish?: (v: OnboardingValues) => void; readonly onRestore?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -46,7 +52,11 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
     return () => { el.removeEventListener('keydown', key); before?.focus(); };
   }, [door]); // eslint-disable-line react-hooks/exhaustive-deps
   const back = <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} strokeWidth={1.75} />} onPress={onDone}>Back to the app</Button>;
-  const signedIn = () => (ctx.twoFactor ? onDoor('twofactor') : onDone());
+  // After the code: someone new sets up their own workspace; a workspace that asks for two factor gets it set up first; otherwise straight in.
+  const signedIn = (email?: string) => {
+    if (email && ctx.memberEmails && !ctx.memberEmails.includes(email.trim().toLowerCase())) { onDoor('welcome'); return; }
+    if (ctx.twoFactor) onDoor('twofactor'); else if (ctx.require2fa) onDoor('setup2fa'); else onDone();
+  };
   if (door === 'welcome' && !format) return (
     <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="What do you book?" className="tf-door"><div className="tf-door__back">{back}</div>
       <AuthLayout aria-label="What do you book?">
@@ -64,14 +74,30 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
   return (
     <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={DOORS.find((d) => d.id === door)?.label ?? 'Timefix'} className="tf-door">
       <div className="tf-door__back">{back}</div>
-      {door === 'signin' && (
-        <AuthLayout aria-label="Sign in" footer={<span className="tf-rec__muted">Prototype: any email, then the code 123456 · <AuthFooterLink onPress={() => onDoor('join')}>Joining your team?</AuthFooterLink> · <AuthFooterLink onPress={() => onDoor('welcome')}>New to Timefix?</AuthFooterLink></span>}>
-          <SignInForm workspace={ctx.workspace} onGoogle={signedIn}
+      {(door === 'signin' || door === 'expired') && (
+        <AuthLayout aria-label="Sign in" footer={<span className="tf-rec__muted">Prototype: {ctx.email} (or any other email to start a new workspace), then the code 123456 · <AuthFooterLink onPress={() => onDoor('join')}>Joining your team?</AuthFooterLink> · <AuthFooterLink onPress={() => onDoor('welcome')}>New to Timefix?</AuthFooterLink></span>}>
+          <SignInForm workspace={ctx.workspace} onGoogle={() => signedIn()} notice={door === 'expired' ? <span>You were signed out after 30 days away. Sign in again and you’re back where you were.</span> : undefined}
             onSendCode={(email) => (email.includes('@') ? undefined : 'That doesn’t look like an email.')}
             onVerify={(_e, code) => (code === '123456' ? undefined : 'That code isn’t right. It’s 123456 in this prototype.')} onSignedIn={signedIn} />
         </AuthLayout>
       )}
       {door === 'twofactor' && <TwoFactor email={ctx.email} onDone={onDone} />}
+      {door === 'setup2fa' && <SetUpTwoFactor workspace={ctx.workspace} email={ctx.email} onDone={() => { onTwoFactorOn?.(); onDone(); }} onSignOut={() => onDoor('signin')} />}
+      {(door === 'invite-wrong' || door === 'invite-used') && (
+        <AuthLayout aria-label="Invitation">
+          <div className="tf-door__card">
+            <span className="tf-door__icon"><MailCheck size={24} strokeWidth={1.75} /></span>
+            {door === 'invite-wrong' ? <>
+              <AuthHeading title="This invitation is for someone else" description={`It was sent to rahul@${ctx.slug}.com, and you’re signed in as ${ctx.email}.`} />
+              <Button variant="primary" size="lg" onPress={() => onDoor('signin')}>Sign in as rahul@{ctx.slug}.com</Button>
+              <Button variant="ghost" onPress={() => onDoor('join')}>Ask to join {ctx.workspace} as {ctx.email.split('@')[0]}</Button>
+            </> : <>
+              <AuthHeading title="This invitation was already used" description={`Each link works once. If it was you, sign in. If not, ask whoever invited you for a new one.`} />
+              <Button variant="primary" size="lg" onPress={() => onDoor('signin')}>Sign in</Button>
+            </>}
+          </div>
+        </AuthLayout>
+      )}
       {door === 'invite' && (
         <AuthLayout aria-label="Invitation">
           <div className="tf-door__card">
@@ -155,6 +181,22 @@ function EmailPrefs({ email }: { readonly email: string }) {
         {LIST.map((x) => <Switch key={x} isSelected={on.includes(x)} onChange={(v) => save(v ? [...on, x] : on.filter((y) => y !== x))}>{x}</Switch>)}
         <Button variant={on.length === 0 ? 'secondary' : 'ghost'} onPress={() => (on.length === 0 ? save(LIST, 'Emails are back on') : save([], 'Unsubscribed from everything'))}>{on.length === 0 ? 'Turn them back on' : 'Unsubscribe from everything'}</Button>
         {on.length === 0 && <p className="tf-rec__muted">Done. You’ll still get emails you must, like sign-in codes.</p>}
+      </div>
+    </AuthLayout>
+  );
+}
+
+/** The workspace asks for two factor: set it up before going in. Signing out is the only other way. */
+function SetUpTwoFactor({ workspace, email, onDone, onSignOut }: { readonly workspace: string; readonly email: string; readonly onDone: () => void; readonly onSignOut: () => void }) {
+  const [code, setCode] = useState('');
+  return (
+    <AuthLayout aria-label="Set up two factor" account={email}>
+      <div className="tf-door__card tf-door__card--left">
+        <AuthHeading title="Set up two factor to go in" description={`${workspace} asks everyone for a code from an authenticator app at sign in. It takes a minute.`} />
+        <span className="tf-rec__muted tf-num">Scan the code in Google Authenticator or 1Password, or type the key: JBSW Y3DP EHPK 3PXP</span>
+        <TextField label="Six-digit code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(v) => setCode(v.replace(/[^\d]/g, '').slice(0, 6))} autoFocus description="Prototype: any six digits" />
+        <Button variant="primary" size="lg" isDisabled={code.length !== 6} onPress={onDone}>Turn on and continue</Button>
+        <button type="button" className="tf-rec__link" onClick={onSignOut}>Sign out instead</button>
       </div>
     </AuthLayout>
   );

@@ -1,4 +1,5 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
+import { copyText } from '../../lib/copy.ts';
 import { useToast } from '../Toast/Toast.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Popover } from '../Popover/Popover.tsx';
@@ -152,7 +153,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
           <MeetingList isFullWidth meetings={shown(range === 'upcoming' ? lists.upcoming.slice(1) : lists[range])} requests={range === 'upcoming' ? shown(requests) : []} now={now} highlightId={fresh} conflictIds={new Set(clashes.map((m) => m.id))} onOpen={(m) => props.onOpen(m.id)}
             onCancel={props.onCancel} onUndoCancel={props.onUndoCancel} onReschedule={(m) => props.onReschedule(m.id)} onNoShow={(m) => props.onNoShow(m.id)}
             onConfirm={(m) => props.onConfirm(m.id)} onDecline={(m) => props.onDecline(m.id)}
-            onNote={(m) => props.onOpen(m.id)} onCopyLink={(m) => { void navigator.clipboard?.writeText(`https://timefix.com/m/${m.id.slice(-6)}`).catch(() => undefined); toast({ message: 'Meeting link copied', tone: 'success' }); }}
+            onNote={(m) => props.onOpen(m.id)} onCopyLink={(m) => { void copyText(`https://timefix.com/m/${m.id.slice(-6)}`).then((ok) => toast(ok ? { message: 'Meeting link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://timefix.com/m/${m.id.slice(-6)}`}`, tone: 'danger' })); }}
             emptyAction={range === 'upcoming' ? <Button size="sm" onPress={props.onCopyFirstLink}>Copy booking link</Button> : undefined} />
         </>
       )}
@@ -272,18 +273,22 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
   const monday = dayFrom(mondayOf(now), week * 7);
   const weekend = [5, 6].some((n) => state.meetings.some((m) => m.status !== 'cancelled' && m.start.toDateString() === dayFrom(monday, n).toDateString()));
   const days = Array.from({ length: weekend ? 7 : 5 }, (_, n) => dayFrom(monday, n));
-  const [kb, setKb] = useState<{ readonly member: string; readonly at: number }>();
+  const [kb, setKb] = useState<{ readonly member: string; readonly at: number; readonly len: number }>();
   const [dayId, setDayId] = useState(() => isoDay(days.find((d) => d.toDateString() === now.toDateString()) ?? days[0] ?? now));
   const day = days.find((d) => isoDay(d) === dayId) ?? days[0] ?? now;
   const [drag, setDrag] = useState<{ readonly member: string; readonly a: number; readonly b: number }>();
   const dragging = useRef(false);
   useEffect(() => { if (!days.some((d) => isoDay(d) === dayId)) setDayId(isoDay(days[0] ?? now)); }, [week]); // eslint-disable-line react-hooks/exhaustive-deps
-  const total = (HOUR_TO - HOUR_FROM) * 60;
-  const pct = (m: number) => `${((m - HOUR_FROM * 60) / total) * 100}%`;
+  // The grid reaches the day's earliest and latest meeting, never cutting one off (8:00 to 20:00 at least).
+  const onDay = state.meetings.filter((m) => m.status !== 'cancelled' && m.start.toDateString() === day.toDateString());
+  const from = Math.min(HOUR_FROM, ...onDay.map((m) => Math.floor(minutesOf(m.start) / 60)));
+  const to = Math.max(HOUR_TO, ...onDay.map((m) => Math.min(24, Math.ceil((minutesOf(m.end) || 1440) / 60))));
+  const total = (to - from) * 60;
+  const pct = (m: number) => `${((m - from * 60) / total) * 100}%`;
   const len = (a: number, b: number) => `${((b - a) / total) * 100}%`;
   const minuteAt = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    return Math.min(HOUR_TO * 60 - 15, Math.max(HOUR_FROM * 60, HOUR_FROM * 60 + Math.floor(((e.clientY - r.top) / r.height) * total / 15) * 15));
+    return Math.min(to * 60 - 15, Math.max(from * 60, from * 60 + Math.floor(((e.clientY - r.top) / r.height) * total / 15) * 15));
   };
   const counts = (d: Date) => state.meetings.filter((m) => m.status !== 'cancelled' && m.start.toDateString() === d.toDateString()).length;
   return (
@@ -301,7 +306,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
           </Callout>
         );
       })()}
-      <div className="tf-bkf-team" style={{ '--tf-bkf-cols': TEAM.length, '--tf-bkf-hours': HOUR_TO - HOUR_FROM } as React.CSSProperties}>
+      <div className="tf-bkf-team" style={{ '--tf-bkf-cols': TEAM.length, '--tf-bkf-hours': to - from } as React.CSSProperties}>
         <div className="tf-bkf-team__head">
           <span />
           {TEAM.map((name) => <span key={name} className="tf-bkf-team__who"><Avatar name={name} size={20} />{first(name)}{isOff(state, name, day) && <span className="tf-bkf__muted"> · off</span>}</span>)}
@@ -309,7 +314,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
         <div className="tf-bkf-team__scroll">
         <div className="tf-bkf-team__body">
           <div className="tf-bkf-team__gutter" aria-hidden="true">
-            {Array.from({ length: HOUR_TO - HOUR_FROM }, (_, n) => <span key={n} style={{ top: pct((HOUR_FROM + n) * 60) }}>{formatClock((HOUR_FROM + n) * 60).replace(":00", "")}</span>)}
+            {Array.from({ length: to - from }, (_, n) => <span key={n} style={{ top: pct((from + n) * 60) }}>{formatClock((from + n) * 60).replace(":00", "")}</span>)}
           </div>
           {TEAM.map((name) => {
             const off = isOff(state, name, day);
@@ -318,14 +323,15 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
             const sel = drag?.member === name ? { start: Math.min(drag.a, drag.b), end: Math.max(drag.a, drag.b) + 15 } : undefined;
             return (
               <div key={name} className="tf-bkf-team__col" tabIndex={0} role="group"
-                aria-label={`${name}, ${formatLongDay(day)}. ${plural(meetings.length, 'meeting')}. Up and Down move the time, Enter picks half an hour.`}
-                aria-description={kb?.member === name ? formatClockRange(kb.at, kb.at + 30) : undefined}
+                aria-label={`${name}, ${formatLongDay(day)}. ${plural(meetings.length, 'meeting')}. Up and Down move the time, Shift with Up and Down changes the length, Enter picks it.`}
+                aria-description={kb?.member === name ? formatClockRange(kb.at, kb.at + kb.len) : undefined}
                 onBlur={() => setKb(undefined)}
                 onKeyDown={(e) => {
                   if (e.target !== e.currentTarget) return;
-                  const at0 = kb?.member === name ? kb.at : 9 * 60;
-                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setKb({ member: name, at: Math.min(HOUR_TO * 60 - 30, Math.max(HOUR_FROM * 60, at0 + (e.key === 'ArrowDown' ? 30 : -30))) }); }
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick({ member: name, day, start: at0, end: at0 + 30 }); }
+                  const at0 = kb?.member === name ? kb.at : 9 * 60; const len0 = kb?.member === name ? kb.len : 30;
+                  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey) { e.preventDefault(); setKb({ member: name, at: at0, len: Math.min(to * 60 - at0, Math.max(15, len0 + (e.key === 'ArrowDown' ? 15 : -15))) }); }
+                  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setKb({ member: name, len: len0, at: Math.min(to * 60 - len0, Math.max(from * 60, at0 + (e.key === 'ArrowDown' ? 30 : -30))) }); }
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick({ member: name, day, start: at0, end: at0 + len0 }); }
                 }}
                 onPointerDown={(e) => {
                   if ((e.target as HTMLElement).closest('button') || e.button !== 0) return;
@@ -341,7 +347,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
                   setDrag(undefined);
                   onPick({ member: name, day, start: sel.start, end: Math.max(sel.end, sel.start + 30) });
                 }}>
-                {Array.from({ length: HOUR_TO - HOUR_FROM }, (_, n) => <span key={n} className="tf-bkf-team__line" style={{ top: pct((HOUR_FROM + n) * 60) }} aria-hidden="true" />)}
+                {Array.from({ length: to - from }, (_, n) => <span key={n} className="tf-bkf-team__line" style={{ top: pct((from + n) * 60) }} aria-hidden="true" />)}
                 {off && <span className="tf-bkf-team__off" style={{ top: 0, height: '100%' }}>{off.note || 'Time off'}</span>}
                 {busy.map((b) => <span key={b.id} className={cx('tf-bkf-team__busy', b.kind !== 'calendar' && 'tf-bkf-team__busy--own')} style={{ top: pct(b.start), height: len(b.start, b.end) }}>{b.source.split(' · ')[0]}</span>)}
                 {meetings.map((m) => (
@@ -353,7 +359,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
                   </button>
                 ))}
                 {sel && <span className="tf-bkf-team__sel" style={{ top: pct(sel.start), height: len(sel.start, sel.end) }} aria-hidden="true" />}
-                {!sel && kb?.member === name && <span className="tf-bkf-team__sel" style={{ top: pct(kb.at), height: len(kb.at, kb.at + 30) }} aria-hidden="true" />}
+                {!sel && kb?.member === name && <span className="tf-bkf-team__sel" style={{ top: pct(kb.at), height: len(kb.at, kb.at + kb.len) }} aria-hidden="true" />}
                 {!sel && held?.member === name && held.day.toDateString() === day.toDateString() && <span ref={heldRef} className="tf-bkf-team__sel" style={{ top: pct(held.start), height: len(held.start, held.end) }} aria-hidden="true" />}
               </div>
             );

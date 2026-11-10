@@ -17,6 +17,8 @@ export { QuestionInput, type QuestionInputProps, type UploadFile } from './Quest
 
 /** One question per screen (Typeform's way) or every question on one card (Tally's page). */
 export type HostedFormMode = 'one' | 'page';
+/** One logic rule, in plain words: "If <question> is <answer>, go to <question>" (or "the end"). One question at a time only. */
+export interface FormRule { readonly id: string; readonly when: string; readonly is: string; readonly goto: string }
 
 /** Props for HostedForm. It never touches the network: answers leave through `onSubmit`. */
 export interface HostedFormProps {
@@ -33,6 +35,8 @@ export interface HostedFormProps {
   readonly onUpload?: UploadFile;
   /** Thank-you words; the defaults are Tally's plain ones. */
   readonly thanks?: { readonly title: string; readonly line?: string };
+  /** Jumps between questions by answer (one question at a time). */
+  readonly logic?: ReadonlyArray<FormRule>;
 }
 
 /** transitions.dev 08 page side-by-side in a box that eases to the showing page's height (01 card resize). */
@@ -184,7 +188,7 @@ function Thanks({ show, title, line, children }: { readonly show: boolean; reado
  * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), or every question on one
  * card. Required answers and emails are checked; a refused step shakes. Ends on a thank you with the sent answers.
  */
-export function HostedForm({ title, description, questions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
+export function HostedForm({ title, description, questions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
   const [answers, setAnswers] = useState<FormAnswers>({});
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [attempt, setAttempt] = useState(0);
@@ -217,6 +221,17 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     try { await onSubmit(answers); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
   };
   const last = questions.length - 1;
+  /** Where the visitor came from, so Back retraces a jump instead of landing on a skipped question. */
+  const trail = useRef<number[]>([]);
+  /** The step after this one: a matching rule's target, the end, or simply the next question. */
+  const after = (at: number, all: FormAnswers): number | 'end' => {
+    const q = questions[at]; const a = q ? all[q.id] : undefined;
+    const said = Array.isArray(a) ? a.map(String) : a === undefined ? [] : [String(a)];
+    const rule = q ? logic.find((r) => r.when === q.id && said.includes(r.is)) : undefined;
+    if (rule) { if (rule.goto === 'end') return 'end'; const to = questions.findIndex((x) => x.id === rule.goto); if (to > at) return to; }
+    return at === last ? 'end' : at + 1;
+  };
+  const go = (at: number) => { const to = after(at, answers); if (to === 'end') void send(); else { trail.current.push(at); setStep(to); } };
   const next = () => {
     window.clearTimeout(advance.current);
     const q = questions[step];
@@ -224,15 +239,14 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     const problem = checkAnswer(q, answers[q.id]);
     if (problem) { refuse({ [q.id]: problem }); return; }
     setErrors({});
-    if (step === last) void send();
-    else setStep(step + 1);
+    go(step);
   };
-  const back = () => { window.clearTimeout(advance.current); setErrors({}); setStep((s) => Math.max(0, s - 1)); };
+  const back = () => { window.clearTimeout(advance.current); setErrors({}); setStep((s) => trail.current.pop() ?? Math.max(0, s - 1)); };
   // A single choice picked by pointer or letter goes on by itself after a short look at the tick, never from the last question.
   const picked = () => {
     if (step === last) return;
     window.clearTimeout(advance.current);
-    advance.current = window.setTimeout(() => setStep((s) => Math.min(last, s + 1)), 450);
+    advance.current = window.setTimeout(() => setAnswers((all) => { const to = after(step, all); if (to !== 'end') { trail.current.push(step); setStep(to); } return all; }), 450);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter' || e.shiftKey || e.defaultPrevented || e.nativeEvent.isComposing) return;

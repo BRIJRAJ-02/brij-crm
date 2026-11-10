@@ -1,4 +1,5 @@
 // Step 4, Share: Offer specific times, One-time links and Embed, each a short dialog over the page.
+import { copyText } from '../../lib/copy.ts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Link2, Plus } from 'lucide-react';
 import { QrCode, downloadQr } from '../QrCode/QrCode.tsx';
@@ -116,8 +117,7 @@ function OneTimeLinksDialog({ isOpen, page, handle, onUpdate, onClose }: { reado
     onUpdate({ ...page, links: [link, ...page.links] });
     setFresh(link.id);
     setLabel('');
-    void navigator.clipboard?.writeText(linkUrl(link)).catch(() => undefined);
-    toast({ message: 'Link created and copied', tone: 'success' });
+    void copyText(linkUrl(link)).then((ok) => toast(ok ? { message: 'Link created and copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${linkUrl(link)}`, tone: 'danger' }));
   };
   const today = isoDay(new Date());
   return (

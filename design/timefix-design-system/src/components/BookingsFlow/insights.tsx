@@ -189,7 +189,7 @@ export function InsightsTab({ state, pageId: only, dispatch }: {
             </div>
           </Section>
           <Section className="tf-bkf-card" title="How meetings ended" description="Of the bookings in this period.">
-            <DonutChart label="How meetings ended" total={data.bookings} totalLabel="Booked" segments={[
+            <DonutChart label="How meetings ended" total={String(data.bookings)} totalLabel="Booked" segments={[
               { id: 'held', label: 'Met', value: data.held, hue: 'green' },
               { id: 'noshow', label: 'No-show', value: data.noShows, hue: 'orange' },
               { id: 'cancel', label: 'Cancelled', value: data.cancelled, hue: 'red' },

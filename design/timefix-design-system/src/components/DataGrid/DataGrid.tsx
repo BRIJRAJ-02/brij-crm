@@ -44,6 +44,8 @@ export interface GridRecord {
   readonly id: string;
   readonly kind?: 'person' | 'company';
   readonly values: Readonly<Record<string, string | number | undefined>>;
+  /** Just made: the name shows a "New" tag until the list is left. */
+  readonly isNew?: boolean;
 }
 
 /** Props for DataGrid. The consumer sorts, filters and stores; the grid draws and edits. */
@@ -65,6 +67,8 @@ export interface DataGridProps {
   readonly isLoading?: boolean;
   /** The one line shown where rows would be. */
   readonly emptyState?: ReactNode;
+  /** A line under the rows: counts and sums for what's shown ("5 deals · ₹48,20,000 total"). */
+  readonly summary?: ReactNode;
 }
 
 const SKELETON_ROWS = ['sk1', 'sk2', 'sk3', 'sk4', 'sk5'];
@@ -75,7 +79,7 @@ const WASH_MS = 1000;
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState }: DataGridProps) {
+export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
   const revealing = useReveal(isLoading);
@@ -194,6 +198,7 @@ export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, s
           </TableBody>
         </Table>
       </ResizableTableContainer>
+      {summary !== undefined && !isLoading && rows.length > 0 && <div className="tf-grid__summary tf-num" aria-live="polite">{summary}</div>}
       {onAddRow && !isLoading && (
         <AriaButton className="tf-grid__add" onPress={addRow}><Plus size={14} strokeWidth={1.75} />{addLabel}</AriaButton>
       )}
@@ -252,7 +257,7 @@ function renderValue(c: GridColumn, r: GridRecord): ReactNode {
   if (v === undefined || v === '') return null;
   switch (c.type) {
     case 'name':
-      return <PersonLine name={String(v)} shape={r.kind === 'person' ? 'round' : 'square'} size={20} />;
+      return <span className="tf-grid__namecell"><PersonLine name={String(v)} shape={r.kind === 'person' ? 'round' : 'square'} size={20} />{r.isNew && <Tag size="sm" hue="blue">New</Tag>}</span>;
     case 'select':
     case 'status': {
       const o = c.options?.find((x) => x.id === v);

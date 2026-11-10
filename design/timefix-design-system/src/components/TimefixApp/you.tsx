@@ -27,7 +27,7 @@ export interface YouProps {
   readonly state: AppState;
   readonly dispatch: (a: AppAction) => void;
   readonly onOpenRecord: (object: ObjectId, id: string, tab?: string) => void;
-  readonly onBookings: (tab: string) => void;
+  readonly onBookings: (tab: string, who?: string) => void;
   /** Tasks: open with the New task dialog. Notes: open this note. */
   readonly startNew?: boolean;
   readonly openTask?: string;
@@ -50,7 +50,7 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
   const open = (id: string) => {
     const x = state.inbox.find((y) => y.id === id); if (!x) return;
     set(x, { read: true });
-    if (x.kind === 'booking') onBookings('meetings'); else if (x.taskId) setTaskId(x.taskId); else if (x.record) onOpenRecord(x.record.object, x.record.id, x.kind === 'mention' || x.kind === 'reply' ? 'comments' : undefined);
+    if (x.kind === 'booking') onBookings('meetings', x.actor); else if (x.taskId) setTaskId(x.taskId); else if (x.record) onOpenRecord(x.record.object, x.record.id, x.kind === 'mention' || x.kind === 'reply' ? 'comments' : undefined);
   };
   const task = state.tasks.find((t) => t.id === taskId);
   return (
@@ -123,11 +123,11 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask 
 }
 
 /** Add or edit a task: what, when, who, and the record it's about. */
-export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecord }: { readonly state: AppState; readonly task?: AppTask; readonly onClose: () => void; readonly onSave: (t: AppTask) => void; readonly onDelete?: () => void; readonly onOpenRecord?: (o: ObjectId, id: string) => void }) {
+export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecord, record }: { /** A new task's record, when made from a record page. */ readonly record?: RecordLink; readonly state: AppState; readonly task?: AppTask; readonly onClose: () => void; readonly onSave: (t: AppTask) => void; readonly onDelete?: () => void; readonly onOpenRecord?: (o: ObjectId, id: string) => void }) {
   const [title, setTitle] = useState(task?.title ?? '');
   const [due, setDue] = useState<string | undefined>(task?.due ? ymdOf(task.due) : undefined);
   const [assignee, setAssignee] = useState(task?.assignee ?? state.me);
-  const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : '');
+  const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : record ? `${record.object}:${record.id}` : '');
   const [description, setDescription] = useState(task?.description ?? '');
   const records = [...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))];
   const link = (): RecordLink | undefined => { if (!rec) return undefined; const [o, i] = rec.split(':') as [ObjectId, string]; return { object: o, id: i }; };

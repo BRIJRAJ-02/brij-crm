@@ -1,9 +1,9 @@
 import { TextArea, TextField, ToggleButton } from 'react-aria-components';
 import { useId, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, Reply, ThumbsUp, Check, Eye, X } from 'lucide-react';
+import { ArrowUp, Reply, ThumbsUp, Check, CheckCheck, Eye, X } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Avatar } from '../Avatar/Avatar.tsx';
-import { IconButton } from '../Button/Button.tsx';
+import { Button, IconButton } from '../Button/Button.tsx';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import { Kbd } from '../Kbd/Kbd.tsx';
 import { NumberRoll, DropIn } from '../Motion/Motion.tsx';
@@ -26,6 +26,8 @@ export interface Comment {
   readonly time: string;
   readonly body: string;
   readonly replyTo?: string;
+  /** A top-level comment marked done: it folds away under "Resolved". */
+  readonly resolved?: boolean;
   readonly reactions?: Readonly<Partial<Record<ReactionKind, ReadonlyArray<string>>>>;
 }
 
@@ -36,7 +38,7 @@ export function MentionText({ text, people, me }: { readonly text: string; reado
   return <>{text.split(re).map((part, i) => (i % 2 === 1 ? <Mention key={i} name={part.slice(1)} isSelf={part.slice(1) === me} /> : part))}</>;
 }
 
-function CommentItem({ c, me, people, fresh, onReact, onReply }: { readonly c: Comment; readonly me: string; readonly people: ReadonlyArray<string>; readonly fresh: boolean; readonly onReact: (id: string, k: ReactionKind) => void; readonly onReply: (c: Comment) => void }) {
+function CommentItem({ c, me, people, fresh, onReact, onReply, onResolve }: { readonly c: Comment; readonly me: string; readonly people: ReadonlyArray<string>; readonly fresh: boolean; readonly onReact: (id: string, k: ReactionKind) => void; readonly onReply: (c: Comment) => void; readonly onResolve?: (id: string, resolved: boolean) => void }) {
   const used = REACTIONS.filter((r) => (c.reactions?.[r.kind]?.length ?? 0) > 0);
   return (
     <li>
@@ -67,6 +69,7 @@ function CommentItem({ c, me, people, fresh, onReact, onReply }: { readonly c: C
               <Tooltip key={r.kind} label={r.label}><IconButton size="sm" label={r.label} onPress={() => onReact(c.id, r.kind)}>{r.icon}</IconButton></Tooltip>
             ))}
             <Tooltip label="Reply" shortcut="R"><IconButton size="sm" label="Reply" onPress={() => onReply(c)}><Reply size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+            {onResolve && !c.replyTo && <Tooltip label={c.resolved ? 'Reopen' : 'Resolve'}><IconButton size="sm" label={c.resolved ? 'Reopen' : 'Resolve'} onPress={() => onResolve(c.id, !c.resolved)}><CheckCheck size={14} strokeWidth={1.75} /></IconButton></Tooltip>}
           </div>
         </article>
       </DropIn>
@@ -167,23 +170,33 @@ export interface CommentThreadProps {
   readonly me: string;
   readonly people: ReadonlyArray<string>;
   readonly onReact: (id: string, kind: ReactionKind) => void;
-  readonly onSend: (body: string, replyTo?: string) => Promise<void>;
+  /** `replyTo` is who they answer (shown on the reply); `replyId` is the comment they answered, to file the reply under its thread. */
+  readonly onSend: (body: string, replyTo?: string, replyId?: string) => Promise<void>;
   /** Ids that arrived since the thread drew; they drop in. */
   readonly freshIds?: ReadonlySet<string>;
+  /** Resolve a top-level comment, or reopen it. Resolved threads fold under "Resolved". */
+  readonly onResolve?: (id: string, resolved: boolean) => void;
 }
 
 /** A conversation on a record: comments oldest first with mentions, icon reactions and Reply on hover, and the composer at the foot. */
-export function CommentThread({ comments, me, people, onReact, onSend, freshIds }: CommentThreadProps) {
+export function CommentThread({ comments, me, people, onReact, onSend, freshIds, onResolve }: CommentThreadProps) {
   const [replying, setReplying] = useState<Comment>();
+  const [showResolved, setShowResolved] = useState(false);
+  // A thread is a top-level comment and the replies after it; resolved threads fold away.
+  const threadOf = (i: number): string | undefined => { for (let j = i; j >= 0; j--) { const x = comments[j]; if (x && !x.replyTo) return x.id; } return undefined; };
+  const isResolved = (i: number) => comments.find((x) => x.id === threadOf(i))?.resolved === true;
+  const open = comments.filter((_, i) => !isResolved(i));
+  const done = comments.filter((_, i) => isResolved(i));
+  const item = (c: Comment) => <CommentItem key={c.id} c={c} me={me} people={people} fresh={freshIds?.has(c.id) ?? false} onReact={onReact} onReply={setReplying} onResolve={onResolve} />;
   return (
     <section className="tf-thread" aria-label="Comments">
-      {comments.length === 0 ? <p className="tf-thread__empty">No comments yet. Start the conversation below.</p> : (
-        <ol className="tf-thread__list">
-          {comments.map((c) => <CommentItem key={c.id} c={c} me={me} people={people} fresh={freshIds?.has(c.id) ?? false} onReact={onReact} onReply={setReplying} />)}
-        </ol>
-      )}
+      {open.length === 0 ? <p className="tf-thread__empty">{done.length ? 'Every thread is resolved.' : 'No comments yet. Start the conversation below.'}</p> : <ol className="tf-thread__list">{open.map(item)}</ol>}
+      {done.length > 0 && <>
+        <Button size="sm" variant="ghost" onPress={() => setShowResolved(!showResolved)}>{showResolved ? 'Hide resolved' : `Resolved (${done.filter((c) => !c.replyTo).length})`}</Button>
+        {showResolved && <ol className="tf-thread__list tf-thread__list--resolved">{done.map(item)}</ol>}
+      </>}
       <CommentComposer people={people} replyingTo={replying?.author} onCancelReply={() => setReplying(undefined)}
-        onSend={async (body) => { await onSend(body, replying?.author); setReplying(undefined); }} />
+        onSend={async (body) => { await onSend(body, replying?.author, replying?.id); setReplying(undefined); }} />
     </section>
   );
 }

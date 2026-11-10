@@ -20,7 +20,7 @@ import { SuccessCheck } from '../Motion/Motion.tsx';
 import { formatClock, formatClockRange } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { GuestView, i14 } from './parts.tsx';
-import { PLACES, at, dayFrom, first, homeUrl, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
+import { PLACES, at, dayFrom, first, homeUrl, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind, handleOf } from './state.ts';
 
 /** What the guest view plays. */
 export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile' | 'taken' | 'menu';
@@ -102,15 +102,15 @@ function GuestCard({ children, align = 'center' }: { readonly children: ReactNod
 function Screen({ scenario, page, state, meetingId, table, prefill, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist'>) {
   if (scenario === 'hidden' || (!page.isOn && scenario === 'book')) {
     return <GuestCard><EmptyState size="sm" icon={<EyeOff size={20} strokeWidth={1.75} />} title="This page isn't taking bookings right now" description={`${first(page.owner)} has paused ${page.name}. Try again later, or email them.`}
-      action={<Button size="sm" icon={<Mail {...i14} />} onPress={() => window.open(`mailto:${first(page.owner).toLowerCase()}@northwind.com?subject=${encodeURIComponent(page.name)}`, '_blank', 'noopener')}>Email {first(page.owner)}</Button>} /></GuestCard>;
+      action={<ContactOwner owner={page.owner} email={`${first(page.owner).toLowerCase()}@${state.business ? `${handleOf(state)}.com` : 'northwind.com'}`} />} /></GuestCard>;
   }
   if (scenario === 'expired') {
     return <GuestCard><EmptyState size="sm" icon={<Link2Off size={20} strokeWidth={1.75} />} title="This link has been used" description={`It was for one booking with ${first(page.owner)}. Ask them for a new one.`}
-      action={<Button size="sm" icon={<Mail {...i14} />} onPress={() => window.open(`mailto:${first(page.owner).toLowerCase()}@northwind.com?subject=${encodeURIComponent(page.name)}`, '_blank', 'noopener')}>Email {first(page.owner)}</Button>} /></GuestCard>;
+      action={<ContactOwner owner={page.owner} email={`${first(page.owner).toLowerCase()}@${state.business ? `${handleOf(state)}.com` : 'northwind.com'}`} />} /></GuestCard>;
   }
-  if (scenario === 'pending') return <Pending page={page} when={undefined} />;
+  if (scenario === 'pending') { const w = state.meetings.find((m) => m.pageId === page.id && m.status === 'pending' && m.start > new Date()); return <Pending page={page} when={w ? meetingWhen(w) : undefined} />; }
   if (scenario === 'manage') return <Manage page={page} state={state} meeting={state.meetings.find((m) => m.id === meetingId) ?? state.meetings.find((m) => m.pageId === page.id && m.status === 'confirmed' && m.start > new Date())} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} />;
-  if (scenario === 'offered') return <Offered page={page} onBooked={onBooked} />;
+  if (scenario === 'offered') return <Offered page={page} state={state} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
   if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />;
   if (scenario === 'menu') return <Profile owner={page.owner} state={state} onBooked={onBooked} onBookedChange={onBookedChange} onWaitlist={onWaitlist} startOnMenu table={table} />;
@@ -170,6 +170,13 @@ function Book({ page, state, onBooked, onBookedChange, failFirst = false, prefil
   );
 }
 
+/** How a guest reaches the owner when a page can't book: the address shown and copied (mail links don't open everywhere). */
+function ContactOwner({ owner, email }: { readonly owner: string; readonly email: string }) {
+  const [copied, setCopied] = useState(false);
+  return <span className="tf-bkf__row"><span className="tf-bkf__muted tf-num">{email}</span>
+    <Button size="sm" icon={<Mail {...i14} />} onPress={() => { void navigator.clipboard.writeText(email).then(() => setCopied(true), () => setCopied(false)); }}>{copied ? 'Copied' : `Copy ${first(owner)}’s email`}</Button></span>;
+}
+
 /** A request waiting: "Priya will confirm your time". */
 function Pending({ page, when }: { readonly page: BookingPage; readonly when: string | undefined }) {
   return (
@@ -179,7 +186,7 @@ function Pending({ page, when }: { readonly page: BookingPage; readonly when: st
       <p className="tf-bkf__muted">{first(page.owner)} will confirm your time. You'll get an email either way, usually within a day.</p>
       <dl className="tf-bkf__answers">
         <div><dt>What</dt><dd>{page.name} with {page.owner}</dd></div>
-        <div><dt>When</dt><dd className="tf-num">{when ?? `${formatLongDay(dayFrom(new Date(), 2))} · ${formatClockRange(15 * 60, 15 * 60 + lengthOf(page))}`}</dd></div>
+        {when && <div><dt>When</dt><dd className="tf-num">{when}</dd></div>}
         <div><dt>Where</dt><dd>{placeLabel(page, placeOf(page))}</dd></div>
       </dl>
     </GuestCard>
@@ -240,7 +247,7 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
 }
 
 /** A link that offers only the host's picked times. */
-function Offered({ page, onBooked }: { readonly page: BookingPage } & Pick<GuestPlayerProps, 'onBooked'>) {
+function Offered({ page, state, onBooked }: { readonly page: BookingPage; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
   const offer = page.offers[page.offers.length - 1];
   const [slot, setSlot] = useState<string>();
   const [name, setName] = useState('');
@@ -248,6 +255,10 @@ function Offered({ page, onBooked }: { readonly page: BookingPage } & Pick<Guest
   const [done, setDone] = useState(false);
   if (!offer) return <GuestCard><EmptyState size="sm" icon={<Clock size={20} strokeWidth={1.75} />} title="No times offered yet" description="Use Share › Offer specific times on this page first." /></GuestCard>;
   const len = lengthOf(page);
+  // An offered time is used up once someone books it, and gone once it has passed.
+  const taken = (s: { readonly day: string; readonly start: number }) => { const at0 = at(parseDay(s.day), s.start); return at0 < new Date() || state.meetings.some((m) => m.pageId === page.id && m.status !== 'cancelled' && m.start.getTime() === at0.getTime()); };
+  const open = offer.slots.filter((s) => !taken(s));
+  if (!done && open.length === 0) return <GuestCard><EmptyState size="sm" icon={<Clock size={20} strokeWidth={1.75} />} title="These times have gone" description={`They were booked or have passed. Ask ${first(page.owner)} for new ones.`} /></GuestCard>;
   if (done && page.confirmFirst && slot) { const [dd, st] = slot.split('T'); return <Pending page={page} when={`${formatLongDay(parseDay(dd ?? ''))} · ${formatClockRange(Number(st), Number(st) + len)}`} />; }
   if (done) return <GuestCard><span className="tf-bkf__guest-icon tf-bkf__guest-icon--ok" aria-hidden="true"><SuccessCheck size={20} /></span><h2 className="tf-bkf__guest-title">You're booked</h2><p className="tf-bkf__muted">An invitation is on its way to {email}.</p></GuestCard>;
   return (
@@ -256,7 +267,7 @@ function Offered({ page, onBooked }: { readonly page: BookingPage } & Pick<Guest
       <h2 className="tf-bkf__guest-title">{page.name} with {page.owner}</h2>
       <p className="tf-bkf__muted">{first(page.owner)} picked these times for you. Choose one.</p>
       <ChoiceChips label="Times" isLabelHidden size="md" selectedKeys={slot ? [slot] : []} onSelectionChange={(k) => setSlot([...k][0])}
-        items={offer.slots.map((s) => ({ id: `${s.day}T${s.start}`, label: `${formatDay(parseDay(s.day))} · ${formatClockRange(s.start, s.start + len)}` }))} />
+        items={open.map((s) => ({ id: `${s.day}T${s.start}`, label: `${formatDay(parseDay(s.day))} · ${formatClockRange(s.start, s.start + len)}` }))} />
       <TextField label="Name" size="lg" value={name} onChange={setName} className="tf-bkf__full" />
       <TextField label="Email" size="lg" type="email" value={email} onChange={setEmail} className="tf-bkf__full" />
       <Button variant="primary" size="lg" className="tf-bkf__full" isDisabled={!slot || !name.trim() || !email.includes('@')} onPress={() => {
@@ -300,7 +311,7 @@ function Chat({ page, state, onBooked, embedded = false, onDone, length, place }
       const date = new CalendarDate(chosen.d.getFullYear(), chosen.d.getMonth() + 1, chosen.d.getDate());
       onBooked(page, { name: who, email, notes: 'Booked by chat', date, minutes: chosen.m, timeZone: 'Asia/Kolkata', length: len, place: where });
       if (onDone) { onDone({ name: who, email, date, minutes: chosen.m }); return; }
-      setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + len)}`, where: PLACES[where].label, email });
+      setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + len)}`, where: PLACES[where].label, email, isRequest: page.confirmFirst, host: first(page.owner) });
     }, 800);
   };
   const send = (text: string) => {
@@ -321,7 +332,14 @@ function Chat({ page, state, onBooked, embedded = false, onDone, length, place }
     setThinking(true);
     window.setTimeout(() => {
       const morning = /morning/i.test(text);
-      const later = /next week/i.test(text) ? days.slice(3, 5) : days.slice(0, 2);
+      // Read what they said: tomorrow, later this week, next week; otherwise the next open days. Mornings keep only days with a morning time.
+      const now = new Date(); const tomorrow = dayFrom(now, 1); const nextMonday = dayFrom(now, 7 - ((now.getDay() + 6) % 7)); const weekAfter = dayFrom(nextMonday, 7);
+      const fits = days.filter(({ times }) => !morning || times.some((t) => t < 12 * 60));
+      const pick = /tomorrow/i.test(text) ? fits.filter(({ d }) => d.toDateString() === tomorrow.toDateString())
+        : /next week/i.test(text) ? fits.filter(({ d }) => d >= nextMonday && d < weekAfter)
+        : /this week|later/i.test(text) ? fits.filter(({ d }) => d > tomorrow && d < nextMonday)
+        : fits;
+      const later = pick.slice(0, 2);
       setThinking(false);
       setLines((l) => [...l, {
         id: `h${l.length}`, role: 'host', text: later.length ? `Here's what's open${morning ? ' in the morning' : ''}:` : 'Nothing is open then. Try another week?',

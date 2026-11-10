@@ -18,8 +18,15 @@ Ken Adams,ken@newco.ai,NewCo,Founder,Jo M.,Decision maker
 Rita Das,,Initech,Analyst,,
 Omar Said,omar@zylo.in,Zylo,Ops lead,Ava Chen,`;
 
-const TARGETS = [{ id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'company', label: 'Company' }, { id: 'title', label: 'Job title' }, { id: 'owner', label: 'Owner' }, { id: 'tags', label: 'Tags' }, { id: 'skip', label: 'Don’t import' }];
-const GUESS: Readonly<Record<string, string>> = { 'full name': 'name', name: 'name', email: 'email', 'email address': 'email', company: 'company', organisation: 'company', role: 'title', title: 'title', 'job title': 'title', owner: 'owner', tags: 'tags' };
+const TARGETS = [{ id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'company', label: 'Company' }, { id: 'title', label: 'Job title' }, { id: 'owner', label: 'Owner' }, { id: 'tags', label: 'Tags' }, { id: 'lastContact', label: 'Last contact (a date)' }, { id: 'new', label: 'A new attribute' }, { id: 'skip', label: 'Don’t import' }];
+const GUESS: Readonly<Record<string, string>> = { 'full name': 'name', name: 'name', email: 'email', 'email address': 'email', company: 'company', organisation: 'company', role: 'title', title: 'title', 'job title': 'title', owner: 'owner', tags: 'tags', 'last contact': 'lastContact', 'last contacted': 'lastContact' };
+/** Reads a date cell: ISO, or day/month/year (or month/day/year when asked). */
+const readDate = (v: string, order: 'dmy' | 'mdy'): Date | undefined => {
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v); if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(v.trim()); if (!m) return undefined;
+  const [a, b] = order === 'dmy' ? [Number(m[1]), Number(m[2])] : [Number(m[2]), Number(m[1])]; const y = Number(m[3]) < 100 ? 2000 + Number(m[3]) : Number(m[3]);
+  return b >= 1 && b <= 12 && a >= 1 && a <= 31 ? new Date(y, b - 1, a) : undefined;
+};
 
 /** Splits a CSV into rows: quoted cells may hold commas, line breaks and doubled quotes (""). */
 function parse(text: string): ReadonlyArray<ReadonlyArray<string>> {
@@ -63,6 +70,7 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   const [map, setMap] = useState<ReadonlyArray<string>>([]);
   const [owners, setOwners] = useState<Readonly<Record<string, string>>>({});
   const [newCompanies, setNewCompanies] = useState(true);
+  const [dateOrder, setDateOrder] = useState<'dmy' | 'mdy'>('dmy');
   const [done, setDone] = useState<ImportUndo>();
   const head = file?.rows[0] ?? [];
   const body = file?.rows.slice(1) ?? [];
@@ -73,9 +81,19 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   const unknownOwners = [...new Set(body.map((r) => val(r, 'owner')).filter((o) => o && !state.members.some((m) => m.name === o)))];
   const unknownCompanies = [...new Set(body.map((r) => val(r, 'company')).filter((c) => c && !state.companies.some((x) => x.name.toLowerCase() === c.toLowerCase())))];
   const noEmail = body.filter((r) => !val(r, 'email'));
+  // Dates like 03/04/2026 read two ways: ask once. New tags become options of the Tags attribute. New attribute columns are named after their header.
+  const ambiguous = body.map((r) => val(r, 'lastContact')).some((d) => { const m = /^(\d{1,2})[/.-](\d{1,2})[/.-]/.exec(d); return m !== null && Number(m[1]) <= 12 && Number(m[2]) <= 12 && m[1] !== m[2]; });
+  const badDates = body.filter((r) => val(r, 'lastContact') && !readDate(val(r, 'lastContact'), dateOrder)).length;
+  const tagOptions = (state.objects.find((o) => o.id === 'people')?.attributes.find((a) => a.id === 'tags')?.options ?? []).map((o) => o.label.toLowerCase());
+  const newTags = [...new Set(body.flatMap((r) => (val(r, 'tags') ? val(r, 'tags').split(/;\s*/).filter(Boolean) : [])))].filter((t) => !tagOptions.includes(t.toLowerCase()));
+  const newAttrs = head.map((h, i) => ({ h, i })).filter(({ i }) => map[i] === 'new');
   const plan = body.filter((r) => val(r, 'name')).map((r) => ({ r, match: state.people.find((p) => p.email && p.email.toLowerCase() === val(r, 'email').toLowerCase()) }));
   const nameMissing = col('name') < 0;
   const run = () => {
+    // New attribute columns become text attributes on People; new tags join the Tags options.
+    const people = state.objects.find((o) => o.id === 'people');
+    const attrIds = newAttrs.map(() => newId('attr'));
+    if (people && (newAttrs.length || newTags.length)) dispatch({ type: 'object/set', object: { ...people, attributes: [...people.attributes.map((a) => (a.id === 'tags' ? { ...a, options: [...(a.options ?? []), ...newTags.map((t) => ({ id: t, label: t, hue: 'gray' as const }))] } : a)), ...newAttrs.map(({ h }, n) => ({ id: attrIds[n] ?? newId('attr'), name: h, type: 'text' as const }))] } });
     const created: string[] = []; const newCos: string[] = []; const before: Array<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> = [];
     let updated = 0;
     const companyIds = new Map(state.companies.map((c) => [c.name.toLowerCase(), c.id]));
@@ -84,10 +102,12 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
       const given = val(r, 'owner');
       const owner = given ? (owners[given] ?? (state.members.some((m) => m.name === given) ? given : state.me)) : undefined;
       const tags = val(r, 'tags') ? val(r, 'tags').split(/;\s*/).filter(Boolean) : undefined;
+      const lastContact = val(r, 'lastContact') ? readDate(val(r, 'lastContact'), dateOrder) : undefined;
+      const extraNew = Object.fromEntries(newAttrs.map(({ i }, n) => [attrIds[n] ?? '', r[i] ?? '']).filter(([, v]) => v !== ''));
       // Only what the file actually says: a blank cell never clears what's already there.
-      const fields: Readonly<Record<string, unknown>> = Object.fromEntries(Object.entries({ name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner, tags }).filter(([, v]) => v !== '' && v !== undefined));
+      const fields: Readonly<Record<string, unknown>> = Object.fromEntries(Object.entries({ name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner, tags, lastContact, extra: Object.keys(extraNew).length ? { ...(match?.extra ?? {}), ...extraNew } : undefined }).filter(([, v]) => v !== '' && v !== undefined));
       if (match) { updated++; before.push({ id: match.id, patch: Object.fromEntries(Object.keys(fields).map((k) => [k, (match as unknown as Readonly<Record<string, unknown>>)[k]])) }); dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: fields }] }); }
-      else { const id = newId('p'); created.push(id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [] } }); }
+      else { const id = newId('p'); created.push(id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
     });
     dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'person', 'people')} from ${file?.name ?? 'a CSV'}` });
     setDone({ made: created.length, updated, created, newCompanies: newCos, before, skipped: body.filter((r) => !val(r, 'name')).map((r) => r.join(', ')) }); setStep(4);
@@ -110,7 +130,7 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
             {head.map((h, i) => (
               <li key={`${h}-${i}`}><span className="tf-imp__col"><strong>{h}</strong><span className="tf-rec__muted">{body.slice(0, 2).map((r) => r[i]).filter(Boolean).join(', ') || 'Empty'}</span></span>
                 <span className="tf-imp__arrow" aria-hidden>→</span>
-                <Select label={`${h} goes to`} isLabelHidden value={map[i] ?? 'skip'} onChange={(v) => setMap(map.map((m, j) => (j === i ? v ?? 'skip' : m === v && v !== 'skip' ? 'skip' : m)))} items={TARGETS} />
+                <Select label={`${h} goes to`} isLabelHidden value={map[i] ?? 'skip'} onChange={(v) => setMap(map.map((m, j) => (j === i ? v ?? 'skip' : m === v && v !== 'skip' && v !== 'new' ? 'skip' : m)))} items={TARGETS} />
                 {map[i] !== 'skip' && GUESS[h.toLowerCase()] === map[i] && <Tag size="sm" hue="green" icon={<Check size={12} strokeWidth={2} />}>Matched</Tag>}
               </li>
             ))}
@@ -119,11 +139,16 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
         </>}
         {step === 2 && <>
           <h2 className="tf-imp__h">Fix values</h2>
-          {unknownOwners.length + unknownCompanies.length + noEmail.length === 0 ? <p className="tf-rec__muted">Everything fits. Nothing to fix.</p> : <p className="tf-rec__muted">A few values don’t fit yet. Decide once; it applies to every row.</p>}
+          {unknownOwners.length + unknownCompanies.length + noEmail.length + newTags.length + newAttrs.length + (ambiguous ? 1 : 0) === 0 ? <p className="tf-rec__muted">Everything fits. Nothing to fix.</p> : <p className="tf-rec__muted">A few values don’t fit yet. Decide once; it applies to every row.</p>}
           {unknownOwners.map((o) => <div key={o} className="tf-imp__fix"><span><strong>Owner “{o}”</strong><span className="tf-rec__muted">Not a member here</span></span>
             <Select label={`Owner for ${o}`} isLabelHidden value={owners[o] ?? state.me} onChange={(v) => setOwners({ ...owners, [o]: v ?? state.me })} items={state.members.map((m) => ({ id: m.name, label: m.name }))} /></div>)}
           {unknownCompanies.length > 0 && <div className="tf-imp__fix"><span><strong>{unknownCompanies.length} new {unknownCompanies.length === 1 ? 'company' : 'companies'}</strong><span className="tf-rec__muted">{unknownCompanies.join(', ')}</span></span>
             <Select label="New companies" isLabelHidden value={newCompanies ? 'make' : 'skip'} onChange={(v) => setNewCompanies(v !== 'skip')} items={[{ id: 'make', label: 'Add them to Companies' }, { id: 'skip', label: 'Leave the company empty' }]} /></div>}
+          {ambiguous && <div className="tf-imp__fix"><span><strong>Dates like 03/04/2026</strong><span className="tf-rec__muted">They can be read two ways. How does your file write them?</span></span>
+            <Select label="Date order" isLabelHidden value={dateOrder} onChange={(v) => setDateOrder(v === 'mdy' ? 'mdy' : 'dmy')} items={[{ id: 'dmy', label: 'Day first (3 April)' }, { id: 'mdy', label: 'Month first (March 4)' }]} /></div>}
+          {badDates > 0 && <div className="tf-imp__fix"><span><strong>{badDates} {badDates === 1 ? 'date doesn’t' : 'dates don’t'} read as a date</strong><span className="tf-rec__muted">Those cells are left empty; everything else on the row comes in.</span></span></div>}
+          {newTags.length > 0 && <div className="tf-imp__fix"><span><strong>{newTags.length} new {newTags.length === 1 ? 'tag' : 'tags'}</strong><span className="tf-rec__muted">{newTags.join(', ')}: added as options of Tags</span></span></div>}
+          {newAttrs.length > 0 && <div className="tf-imp__fix"><span><strong>{newAttrs.length} new {newAttrs.length === 1 ? 'attribute' : 'attributes'} on People</strong><span className="tf-rec__muted">{newAttrs.map(({ h }) => h).join(', ')}: text, named after the column. Change them in Settings › Objects.</span></span></div>}
           {noEmail.length > 0 && <div className="tf-imp__fix"><span><strong>{noEmail.length} {noEmail.length === 1 ? 'row has' : 'rows have'} no email</strong><span className="tf-rec__muted">They’re added as new people and can’t be matched later</span></span></div>}
           <div className="tf-imp__go"><Button variant="ghost" onPress={() => setStep(1)}>Back</Button><Button variant="primary" onPress={() => setStep(3)}>Continue</Button></div>
         </>}

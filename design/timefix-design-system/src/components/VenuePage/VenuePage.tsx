@@ -94,7 +94,7 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
             <section className="tf-venue__section" aria-labelledby="tf-venue-items">
               <h2 id="tf-venue-items" className="tf-venue__h2">{itemsTitle}</h2>
               {cats.length > 1 && (
-                <div className="tf-venue__pills" role="tablist" aria-label="Categories">
+                <div className="tf-venue__pills" role="group" aria-label="Categories">
                   {cats.map((c) => <AriaButton key={c.id} className="tf-venue__pill" aria-pressed={cat === c.id} onPress={() => setCat(c.id)}>{c.name}</AriaButton>)}
                 </div>
               )}

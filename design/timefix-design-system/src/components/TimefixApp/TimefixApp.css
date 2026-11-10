@@ -239,3 +239,12 @@
 .tf-door__choice strong { font: 500 15px/22px var(--font-sans); }
 .tf-door__choice-icon { display: grid; place-items: center; flex: none; width: var(--size-control-lg); height: var(--size-control-lg); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-secondary); }
 @media (prefers-reduced-motion: reduce) { .tf-door__choice { transition: none; } }
+.tf-rec__rel { min-width: 0; }
+.tf-rec__rel > :not(svg):not(.tf-avatar):not(.tf-tag) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-dup__who strong, .tf-dup__who .tf-rec__muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-forms__rule { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.tf-forms__rule-say { flex-basis: 100%; }
+.tf-home__team { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-home__team li { display: flex; justify-content: space-between; gap: var(--space-12); padding: var(--space-8) 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-home__team li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-app__preview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-8) var(--space-16); background: var(--accent-soft); color: var(--text); font: 500 13px/18px var(--font-sans); }

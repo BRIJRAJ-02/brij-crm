@@ -154,7 +154,7 @@ export function MenuPage({ venue, line, cover, menus, dishes, addOns, table, now
       </div>
       {sections.length > 1 && (
         <nav className="tf-menupage__pills" aria-label="Sections">
-          {sections.map((s) => <AriaButton key={s.id} className="tf-menupage__pill" onPress={() => sectionRefs.current[s.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{s.name}</AriaButton>)}
+          {sections.map((s) => <AriaButton key={s.id} className="tf-menupage__pill" onPress={() => sectionRefs.current[s.id]?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })}>{s.name}</AriaButton>)}
         </nav>
       )}
       {sections.length === 0 ? (

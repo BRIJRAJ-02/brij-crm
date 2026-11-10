@@ -20,7 +20,7 @@ import { Menu, MenuItem, MenuTrigger } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { BookingsState } from '../BookingsFlow/BookingsFlow.tsx';
-import { STAGES, inr, newId, type AppAction, type AppState, type Report } from './data.ts';
+import { STAGES, dayFrom, inr, newId, type AppAction, type AppState, type Report } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -132,104 +132,153 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
   );
 }
 
-/** Insights: Pages (from real bookings and form answers) and Reports (saved charts of deals). */
-export function InsightsScreen({ state, dispatch, bookings }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly bookings: BookingsState | undefined }) {
+/** The bars of one report, from the workspace's records. */
+export function reportPoints(state: AppState, r: Report): ReadonlyArray<{ readonly id: string; readonly label: string; readonly value: number; readonly valueText: string }> {
+  const object = r.object ?? 'deals';
+  const mine = <T extends { readonly owner: string }>(xs: ReadonlyArray<T>) => (r.owner ? xs.filter((x) => x.owner === r.owner) : xs);
+  const amount = (ds: ReadonlyArray<{ readonly amount: number }>) => ds.reduce((n, d) => n + d.amount, 0);
+  const keyOf = (rec: Readonly<Record<string, unknown>>): ReadonlyArray<string> => {
+    if (r.group === 'owner') return [String(rec.owner ?? 'No owner')];
+    if (r.group === 'stage') return [String(rec.stage ?? '')];
+    if (r.group === 'industry') return [String(rec.industry || 'No industry')];
+    if (r.group === 'city') return [String(rec.city || 'No city')];
+    if (r.group === 'company') return [state.companies.find((c) => c.id === rec.companyId)?.name ?? 'No company'];
+    if (r.group === 'tag') { const t = rec.tags as ReadonlyArray<string> | undefined; return t && t.length ? t : ['No tags']; }
+    return [''];
+  };
+  const rows = (object === 'deals' ? mine(state.deals) : object === 'people' ? mine(state.people) : mine(state.companies)) as unknown as ReadonlyArray<Readonly<Record<string, unknown>> & { readonly amount?: number }>;
+  const groups = new Map<string, Array<Readonly<Record<string, unknown>> & { readonly amount?: number }>>();
+  if (object === 'deals' && r.group === 'stage') STAGES.forEach((st) => groups.set(st, []));
+  rows.forEach((x) => keyOf(x).forEach((k) => groups.set(k, [...(groups.get(k) ?? []), x])));
+  return [...groups].map(([k, xs]) => {
+    const value = r.measure === 'amount' && object === 'deals' ? amount(xs as ReadonlyArray<{ readonly amount: number }>) : xs.length;
+    return { id: k, label: r.group === 'owner' ? k.split(' ')[0] ?? k : k, value, valueText: r.measure === 'amount' && object === 'deals' ? inr(value) : String(value) };
+  });
+}
+
+/** Insights: Pages (from real bookings and form answers) and Reports (saved charts: one tab each, new, change, delete). */
+export function InsightsScreen({ state, dispatch, bookings, startTab, startReport }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly bookings: BookingsState | undefined; readonly startTab?: 'pages' | 'reports'; readonly startReport?: string }) {
   const { toast } = useToast();
-  const [tab, setTab] = useState('pages');
+  const [tab, setTab] = useState<string>(startTab ?? 'pages');
   const [kind, setKind] = useState('all');
   const [range, setRange] = useState('30');
-  const days = Number(range);
+  const [from0, setFrom0] = useState<string>();
+  const [to0, setTo0] = useState<string>();
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
-  const before = new Date(from.getFullYear(), from.getMonth(), from.getDate() - days);
-  // Real events only: bookings made through pages, and form answers. Each has a date.
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const firstEver = [...(bookings?.meetings ?? []).map((m) => m.start), ...state.forms.flatMap((f) => f.responses.map((r) => r.at))].reduce((a, b) => (b < a ? b : a), now);
+  const from = range === 'all' ? dayStart(firstEver) : range === 'custom' && from0 ? dayFrom(from0, 0) ?? dayStart(now) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - Number(range === 'custom' ? 30 : range) + 1);
+  const until = range === 'custom' && to0 ? new Date((dayFrom(to0, 0) ?? now).getTime() + 86_400_000) : new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const days = Math.max(1, Math.round((until.getTime() - from.getTime()) / 86_400_000));
+  const before = new Date(from.getTime() - days * 86_400_000);
+  // One page or form, or a whole kind. Everything counted comes from real bookings and answers.
+  const pageId = kind.startsWith('page:') ? kind.slice(5) : undefined; const formId = kind.startsWith('form:') ? kind.slice(5) : undefined;
   const events = (a: Date, b: Date) => [
-    ...(kind === 'all' || kind === 'booking' ? (bookings?.meetings ?? []).filter((m) => m.pageId && m.status !== 'cancelled').map((m) => ({ at: m.start, what: 'booking' as const })) : []),
-    ...(kind === 'all' || kind === 'forms' ? state.forms.flatMap((f) => f.responses.filter((r) => !r.spam).map((r) => ({ at: r.at, what: 'form' as const }))) : []),
+    ...(kind === 'all' || kind === 'booking' || pageId ? (bookings?.meetings ?? []).filter((m) => m.pageId && (!pageId || m.pageId === pageId) && m.status !== 'cancelled').map((m) => ({ at: m.start, what: 'booking' as const })) : []),
+    ...(kind === 'all' || kind === 'forms' || formId ? state.forms.filter((f) => !formId || f.id === formId).flatMap((f) => f.responses.filter((r) => !r.spam).map((r) => ({ at: r.at, what: 'form' as const }))) : []),
   ].filter((e) => e.at >= a && e.at < b);
-  const cur = events(from, new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  const cur = events(from, until);
   const prev = events(before, from);
-  const delta = (a: number, b: number) => (b === 0 ? { value: a ? 'New' : 'None yet', direction: 'flat' as const } : { value: `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`, direction: a > b ? 'up' as const : a < b ? 'down' as const : 'flat' as const, note: 'vs the period before', isGood: a >= b });
+  const delta = (a: number, b: number) => (range === 'all' ? { value: 'all time', direction: 'flat' as const } : b === 0 ? { value: a ? 'New' : 'None yet', direction: 'flat' as const } : { value: `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%`, direction: a > b ? 'up' as const : a < b ? 'down' as const : 'flat' as const, note: 'vs the period before', isGood: a >= b });
   const buckets = Math.min(days, 30);
   const step = Math.max(1, Math.round(days / buckets));
-  const perDay = Array.from({ length: buckets }, (_, i) => { const a = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i * step); const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + step); return { label: a.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), value: cur.filter((e) => e.at >= a && e.at < b).length }; });
+  const perDay = Array.from({ length: Math.ceil(days / step) }, (_, i) => { const a = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i * step); const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + step); return { label: a.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), value: cur.filter((e) => e.at >= a && e.at < b).length }; });
   const booked = cur.filter((e) => e.what === 'booking').length; const answered = cur.filter((e) => e.what === 'form').length;
-  const byPage = [...(bookings?.pages ?? []).map((p) => ({ id: p.id, label: p.name, value: (bookings?.meetings ?? []).filter((m) => m.pageId === p.id && m.status !== 'cancelled' && m.start >= from).length })),
-    ...state.forms.map((f) => ({ id: f.id, label: f.name, value: f.responses.filter((r) => !r.spam && r.at >= from).length }))].filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 6);
-  const exportCsv = async () => { const csv = ['Date,Bookings and answers', ...perDay.map((d) => `${d.label},${d.value}`)].join('\n'); const o = await saveFile(`insights-${range}d.csv`, new Blob([csv], { type: 'text/csv' })); if (o === 'saved') toast({ message: 'Exported', tone: 'success' }); };
+  const byPage = [...(bookings?.pages ?? []).filter((p) => !pageId || p.id === pageId).filter(() => !formId && kind !== 'forms').map((p) => ({ id: p.id, label: p.name, value: (bookings?.meetings ?? []).filter((m) => m.pageId === p.id && m.status !== 'cancelled' && m.start >= from && m.start < until).length })),
+    ...state.forms.filter((f) => !formId || f.id === formId).filter(() => !pageId && kind !== 'booking').map((f) => ({ id: f.id, label: f.name, value: f.responses.filter((r) => !r.spam && r.at >= from && r.at < until).length }))].filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 6);
+  const formsShown = state.forms.filter((f) => (formId ? f.id === formId : kind === 'all' || kind === 'forms'));
+  const funnel = formsShown.length ? [{ id: 'views', label: 'Opened', value: formsShown.reduce((n, f) => n + f.views, 0) }, { id: 'sent', label: 'Sent', value: formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0) }, { id: 'filed', label: 'Filed in People', value: formsShown.reduce((n, f) => n + f.responses.filter((r) => !r.spam && r.personId).length, 0) }] : [];
+  const exportCsv = async () => { const csv = ['Date,Bookings and answers', ...perDay.map((d) => `${d.label},${d.value}`)].join('\n'); const o = await saveFile(`insights-${range}.csv`, new Blob([csv], { type: 'text/csv' })); if (o === 'saved') toast({ message: 'Exported', tone: 'success' }); };
 
   const reports = state.reports;
-  const [report, setReport] = useState(reports[0]?.id ?? '');
+  const [report, setReport] = useState(startReport ?? reports[0]?.id ?? '');
   const [making, setMaking] = useState<Report | 'new'>();
   const r = reports.find((x) => x.id === report) ?? reports[0];
-  const groups = r?.group === 'stage' ? STAGES.map((s) => ({ key: s, deals: state.deals.filter((d) => d.stage === s) })) : state.members.map((m) => ({ key: m.name, deals: state.deals.filter((d) => d.owner === m.name) }));
-  const points = groups.map((g) => ({ id: g.key, label: r?.group === 'owner' ? g.key.split(' ')[0] ?? g.key : g.key, value: r?.measure === 'amount' ? g.deals.reduce((n, d) => n + d.amount, 0) : g.deals.length, valueText: r?.measure === 'amount' ? inr(g.deals.reduce((n, d) => n + d.amount, 0)) : String(g.deals.length) }));
+  const points = r ? reportPoints(state, r) : [];
   return (
     <div className="tf-grow tf-grow--wide">
       <Tabs aria-label="Insights" selectedKey={tab} onSelectionChange={setTab} items={[{ id: 'pages', label: 'Pages' }, { id: 'reports', label: 'Reports', count: reports.length }]}>
         <TabPanel id="pages" className="tf-forms__panel">
           <div className="tf-rec__bar">
             <Select label="What" isLabelHidden className="tf-rec__view" value={kind} onChange={(v) => setKind(v ?? 'all')}
-              items={[{ id: 'all', label: 'Everything' }, { id: 'booking', label: 'Booking pages' }, { id: 'forms', label: 'Forms' }]} />
+              items={[{ id: 'all', label: 'Everything' }, { id: 'booking', label: 'All booking pages' }, { id: 'forms', label: 'All forms' },
+                ...(bookings?.pages ?? []).map((p) => ({ id: `page:${p.id}`, label: p.name, description: 'Booking page' })), ...state.forms.map((f) => ({ id: `form:${f.id}`, label: f.name, description: 'Form' }))]} />
             <Select label="When" isLabelHidden className="tf-you__select" value={range} onChange={(v) => setRange(v ?? '30')}
-              items={[{ id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }, { id: '365', label: 'Last 12 months' }]} />
+              items={[{ id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }, { id: '365', label: 'Last 12 months' }, { id: 'all', label: 'All time' }, { id: 'custom', label: 'Pick dates…' }]} />
+            {range === 'custom' && <>
+              <TextField label="From" isRequired type="date" value={from0 ?? ''} onChange={(v) => setFrom0(v || undefined)} />
+              <TextField label="To" type="date" value={to0 ?? ''} onChange={(v) => setTo0(v || undefined)} />
+            </>}
             <span className="tf-rec__spacer" />
             <Button variant="ghost" icon={<Download {...i14} />} onPress={() => { void exportCsv(); }}>Export CSV</Button>
-            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => { void copyText(`https://timefix.com/insights/${state.prefs.workspace.slug}-${range}d`).then((ok) => toast(ok ? { message: 'View-only link copied. It shows numbers, never names.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}>Share</Button>
+            <Button variant="ghost" icon={<Share2 {...i14} />} onPress={() => { void copyText(`https://timefix.com/insights/${state.prefs.workspace.slug}-${range}`).then((ok) => toast(ok ? { message: 'View-only link copied. It shows numbers, never names.', tone: 'success' } : { message: 'Copy didn’t work. Try again.', tone: 'danger' })); }}>Share</Button>
           </div>
           <div className="tf-home__stats">
             <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />
             <StatCard label="Booked" value={booked} delta={delta(booked, prev.filter((e) => e.what === 'booking').length)} />
             <StatCard label="Form answers" value={answered} delta={delta(answered, prev.filter((e) => e.what === 'form').length)} />
-            <StatCard label="Form views" value={state.forms.reduce((n, f) => n + f.views, 0)} delta={{ value: 'all time', direction: 'flat' }} />
+            <StatCard label="Form views" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: 'all time', direction: 'flat' }} />
           </div>
           <div className="tf-home__grid">
             <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>
-            <ChartCard title="Which pages and forms">{byPage.length ? <BarList label="By page" items={byPage} /> : <p className="tf-rec__muted">Nothing came in yet in this period.</p>}</ChartCard>
+            <ChartCard title={funnel.length && (formId || kind === 'forms') ? 'Where people stop' : 'Which pages and forms'}>
+              {funnel.length && (formId || kind === 'forms') ? <BarList label="From opening to filed" items={funnel} /> : byPage.length ? <BarList label="By page" items={byPage} /> : <p className="tf-rec__muted">Nothing came in yet in this period.</p>}
+            </ChartCard>
           </div>
+          <p className="tf-rec__muted">Visits and where people came from show once the pages are live; the prototype counts bookings, answers and form opens.</p>
         </TabPanel>
         <TabPanel id="reports" className="tf-forms__panel">
-          <div className="tf-rec__bar">
-            <Select label="Report" isLabelHidden className="tf-rec__view" value={r?.id ?? null} onChange={(v) => { if (v === 'new') setMaking('new'); else if (v) setReport(v); }}
-              items={[...reports.map((x) => ({ id: x.id, label: x.name })), { id: 'new', label: 'New report…' }]} />
-            {r && <MenuTrigger>
-              <IconButton label="More for this report"><MoreHorizontal {...i16} /></IconButton>
-              <Menu aria-label="Report" placement="bottom end" onAction={(k) => {
-                if (k === 'edit') setMaking(r);
-                else if (k === 'delete') { const was = r; dispatch({ type: 'report/remove', id: r.id }); setReport(reports.find((x) => x.id !== r.id)?.id ?? ''); toast({ message: `${was.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'report/set', report: was }); setReport(was.id); } } }); }
-              }}>
-                <MenuItem id="edit" icon={<Pencil {...i16} />}>Rename or change</MenuItem>
-                <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete report</MenuItem>
-              </Menu>
-            </MenuTrigger>}
-            <span className="tf-rec__spacer" />
-            <Button variant="secondary" icon={<Plus {...i14} />} onPress={() => setMaking('new')}>New report</Button>
-          </div>
-          {!r ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No reports yet" description="Chart your deals by stage or owner, and keep it for the team." action={<Button size="sm" variant="primary" onPress={() => setMaking('new')}>New report</Button>} /> : (
-            <div className="tf-home__grid">
-              <ChartCard title={r.name}><BarChart label={r.name} points={points} /></ChartCard>
-              <ChartCard title="Share of the total"><DonutChart label={r.name} segments={points.map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
-                total={r.measure === 'amount' ? inr(points.reduce((n, p) => n + p.value, 0)) : String(points.reduce((n, p) => n + p.value, 0))} /></ChartCard>
-            </div>
+          {reports.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No reports yet" description="Chart your deals, people or companies, and keep it for the team." action={<Button size="sm" variant="primary" onPress={() => setMaking('new')}>New report</Button>} /> : (
+            <Tabs aria-label="Reports" selectedKey={r?.id} onSelectionChange={setReport} items={reports.map((x) => ({ id: x.id, label: x.name }))}>
+              {reports.map((x) => (
+                <TabPanel key={x.id} id={x.id} className="tf-forms__panel">
+                  <div className="tf-rec__bar">
+                    <span className="tf-rec__muted">{(x.object ?? 'deals') === 'deals' ? 'Deals' : x.object === 'people' ? 'People' : 'Companies'} by {x.group}{x.owner ? `, owned by ${x.owner}` : ''}</span>
+                    <span className="tf-rec__spacer" />
+                    <Button size="sm" variant="ghost" icon={<Pencil {...i14} />} onPress={() => setMaking(x)}>Change</Button>
+                    <Button size="sm" variant="ghost" icon={<Trash2 {...i14} />} onPress={() => { const was = x; dispatch({ type: 'report/remove', id: x.id }); setReport(reports.find((y) => y.id !== x.id)?.id ?? ''); toast({ message: `${was.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'report/set', report: was }); setReport(was.id); } } }); }}>Delete</Button>
+                    <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={() => setMaking('new')}>New report</Button>
+                  </div>
+                  {x.id === r?.id && (points.every((p) => p.value === 0) ? <p className="tf-rec__muted">Nothing to count yet.</p> : (
+                    <div className="tf-home__grid">
+                      <ChartCard title={x.name}><BarChart label={x.name} points={points} /></ChartCard>
+                      <ChartCard title="Share of the total"><DonutChart label={x.name} segments={points.filter((p) => p.value > 0).map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
+                        total={x.measure === 'amount' && (x.object ?? 'deals') === 'deals' ? inr(points.reduce((n, p) => n + p.value, 0)) : String(points.reduce((n, p) => n + p.value, 0))} /></ChartCard>
+                    </div>
+                  ))}
+                </TabPanel>
+              ))}
+            </Tabs>
           )}
         </TabPanel>
       </Tabs>
-      {making && <ReportDialog report={making === 'new' ? undefined : making} onClose={() => setMaking(undefined)} onSave={(x) => { dispatch({ type: 'report/set', report: x }); setReport(x.id); setMaking(undefined); toast({ message: `${x.name} saved`, tone: 'success' }); }} />}
+      {making && <ReportDialog report={making === 'new' ? undefined : making} members={state.members.map((m) => m.name)} onClose={() => setMaking(undefined)} onSave={(x) => { dispatch({ type: 'report/set', report: x }); setReport(x.id); setMaking(undefined); toast({ message: `${x.name} saved`, tone: 'success' }); }} />}
     </div>
   );
 }
 
-function ReportDialog({ report, onClose, onSave }: { readonly report?: Report; readonly onClose: () => void; readonly onSave: (r: Report) => void }) {
+const GROUPS: Readonly<Record<'deals' | 'people' | 'companies', ReadonlyArray<{ readonly id: Report['group']; readonly label: string }>>> = {
+  deals: [{ id: 'stage', label: 'Stage' }, { id: 'owner', label: 'Owner' }, { id: 'company', label: 'Company' }],
+  people: [{ id: 'owner', label: 'Owner' }, { id: 'company', label: 'Company' }, { id: 'tag', label: 'Tag' }],
+  companies: [{ id: 'industry', label: 'Industry' }, { id: 'owner', label: 'Owner' }, { id: 'city', label: 'City' }],
+};
+
+function ReportDialog({ report, members, onClose, onSave }: { readonly report?: Report; readonly members: ReadonlyArray<string>; readonly onClose: () => void; readonly onSave: (r: Report) => void }) {
+  const [object, setObject] = useState<'deals' | 'people' | 'companies'>(report?.object ?? 'deals');
   const [measure, setMeasure] = useState<'count' | 'amount'>(report?.measure ?? 'amount');
-  const [group, setGroup] = useState<'stage' | 'owner'>(report?.group ?? 'stage');
+  const [group, setGroup] = useState<Report['group']>(report?.group ?? 'stage');
+  const [owner, setOwner] = useState<string>(report?.owner ?? 'all');
   const [name, setName] = useState(report?.name ?? '');
-  const auto = `${measure === 'amount' ? 'Deal value' : 'Deals'} by ${group}`;
+  const amount = object === 'deals' && measure === 'amount';
+  const auto = `${amount ? 'Deal value' : object === 'deals' ? 'Deals' : object === 'people' ? 'People' : 'Companies'} by ${GROUPS[object].find((g) => g.id === group)?.label.toLowerCase() ?? group}`;
   return (
-    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={report ? 'Change report' : 'New report'} description="A chart of your deals, saved for the team."
-      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => onSave({ id: report?.id ?? newId('rep'), name: name.trim() || auto, measure, group })}>Save report</Button></>}>
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={report ? 'Change report' : 'New report'} description="A chart of your records, saved for the team."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => onSave({ id: report?.id ?? newId('rep'), name: name.trim() || auto, object, measure: object === 'deals' ? measure : 'count', group, owner: owner === 'all' ? undefined : owner })}>Save report</Button></>}>
       <div className="tf-rec__form">
-        <Select label="Measure" value={measure} onChange={(v) => setMeasure(v === 'count' ? 'count' : 'amount')} items={[{ id: 'amount', label: 'Total deal value' }, { id: 'count', label: 'Number of deals' }]} />
-        <Select label="Grouped by" value={group} onChange={(v) => setGroup(v === 'owner' ? 'owner' : 'stage')} items={[{ id: 'stage', label: 'Stage' }, { id: 'owner', label: 'Owner' }]} />
+        <Select label="Count" value={object} onChange={(v) => { const o = (v ?? 'deals') as 'deals' | 'people' | 'companies'; setObject(o); setGroup(GROUPS[o][0]?.id ?? 'owner'); }} items={[{ id: 'deals', label: 'Deals' }, { id: 'people', label: 'People' }, { id: 'companies', label: 'Companies' }]} />
+        {object === 'deals' && <Select label="Measure" value={measure} onChange={(v) => setMeasure(v === 'count' ? 'count' : 'amount')} items={[{ id: 'amount', label: 'Total deal value' }, { id: 'count', label: 'Number of deals' }]} />}
+        <Select label="Grouped by" value={group} onChange={(v) => { if (v) setGroup(v as Report['group']); }} items={GROUPS[object]} />
+        <Select label="Owned by" value={owner} onChange={(v) => setOwner(v ?? 'all')} items={[{ id: 'all', label: 'Everyone' }, ...members.map((m) => ({ id: m, label: m }))]} />
         <TextField label="Name" aside="Optional" value={name} onChange={setName} placeholder={auto} />
       </div>
     </Dialog>

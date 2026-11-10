@@ -100,15 +100,17 @@ export function RecordPanel({ isOpen, onClose, objectName, recordKey, label, pos
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); onClose(); }
         const typing = !(e.target instanceof HTMLElement) || e.target.isContentEditable || e.target.closest('input, textarea, [role="listbox"], [role="grid"], [role="radiogroup"], [role="group"]') !== null;
-        if (!typing && position && (e.key === 'j' || e.key === 'k')) { if (e.key === 'j') { setDir('forward'); position.onNext(); } else { setDir('back'); position.onPrevious(); } }
+        // J and K, or the arrow keys, step through the list (the flow and the tooltips say both).
+        const next = e.key === 'j' || e.key === 'ArrowDown'; const prev = e.key === 'k' || e.key === 'ArrowUp';
+        if (!typing && position && (next || prev)) { e.preventDefault(); if (next) { setDir('forward'); position.onNext(); } else { setDir('back'); position.onPrevious(); } }
       }}>
       <div className="tf-rpanel__bar">
         <span className="tf-rpanel__object">{objectName}</span>
         {position && <span className="tf-rpanel__pos">{position.index} of {position.total}</span>}
         <span className="tf-rpanel__tools">
           {position && <>
-            <Tooltip label="Previous" shortcut="K"><IconButton size="sm" label="Previous record" isDisabled={position.index <= 1} onPress={() => { setDir('back'); position.onPrevious(); }}><ChevronUp size={14} strokeWidth={1.75} /></IconButton></Tooltip>
-            <Tooltip label="Next" shortcut="J"><IconButton size="sm" label="Next record" isDisabled={position.index >= position.total} onPress={() => { setDir('forward'); position.onNext(); }}><ChevronDown size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+            <Tooltip label="Previous (K or ↑)" shortcut="K"><IconButton size="sm" label="Previous record" isDisabled={position.index <= 1} onPress={() => { setDir('back'); position.onPrevious(); }}><ChevronUp size={14} strokeWidth={1.75} /></IconButton></Tooltip>
+            <Tooltip label="Next (J or ↓)" shortcut="J"><IconButton size="sm" label="Next record" isDisabled={position.index >= position.total} onPress={() => { setDir('forward'); position.onNext(); }}><ChevronDown size={14} strokeWidth={1.75} /></IconButton></Tooltip>
           </>}
           {onExpand && <Tooltip label="Open full page"><IconButton size="sm" label="Open full page" onPress={onExpand}><Maximize2 size={14} strokeWidth={1.75} /></IconButton></Tooltip>}
           <Tooltip label="Close" shortcut="Esc"><IconButton size="sm" label="Close" onPress={onClose}><X size={14} strokeWidth={1.75} /></IconButton></Tooltip>

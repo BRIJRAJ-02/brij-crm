@@ -454,6 +454,12 @@ export const placeLabel = (p: BookingPage, k: PlaceKind) => (k === 'in-person' &
 /** "Google Meet" or "Google Meet or Phone". */
 export const placesText = (p: BookingPage) => p.places.map((k) => placeLabel(p, k)).join(' or ');
 const dayKey = (d: Date) => HOURS_DAYS[(d.getDay() + 6) % 7] ?? 'mon';
+/** The business's hours on one date: a date-only change (a holiday, a late night) wins over the usual week. */
+export function venueDay(state: BookingsState, date: Date): DayHours | undefined {
+  const host = state.pages.find((p) => p.kind === 'table')?.hosts[0] ?? state.pages[0]?.hosts[0] ?? HOST;
+  const week = state.savedHours.find((h) => h.id === state.defaultHoursId)?.hours ?? state.savedHours[0]?.hours;
+  return state.overrides?.[overrideKey(host, date)] ?? week?.[dayKey(date)];
+}
 const overlap = (a: number, b: number, c: number, d: number) => a < d && c < b;
 
 /** The hours a page offers. */

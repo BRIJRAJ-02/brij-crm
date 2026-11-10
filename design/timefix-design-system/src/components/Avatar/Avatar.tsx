@@ -20,7 +20,8 @@ export interface AvatarProps {
   readonly name: string;
   readonly src?: string;
   /** 20 inline, 28 rows (default), 44 headers. */
-  readonly size?: 20 | 28 | 36 | 44;
+  /** Pixels: 20, 28, 36 and 44 in lists and rows; 56 and 64 for a profile or page header. */
+  readonly size?: 20 | 24 | 28 | 32 | 36 | 44 | 48 | 56 | 64;
   /** Rounded square for companies, workspaces and pages; round for people. */
   readonly shape?: 'round' | 'square';
   readonly status?: 'online' | 'away';

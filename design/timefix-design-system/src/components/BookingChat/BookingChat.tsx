@@ -26,7 +26,7 @@ export interface BookingChatLine {
 }
 
 /** The booking the chat made, for the booked card. */
-export interface BookingChatBooked { readonly title: string; readonly when: string; readonly where: string; readonly email?: string }
+export interface BookingChatBooked { readonly title: string; readonly when: string; readonly where: string; readonly email?: string; /** A page that confirms first: the card says the request is sent, not booked. */ readonly isRequest?: boolean; readonly host?: string }
 
 /** Props for BookingChat. It holds no conversation of its own: the page owns `lines` and answers `onSend`. */
 export interface BookingChatProps {
@@ -147,8 +147,8 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
           {booked && (
             <div className="tf-chat__booked" role="status">
               <span className="tf-chat__check" aria-hidden="true"><SuccessCheck size={20} /></span>
-              <h3 className="tf-chat__booked-title">You're booked</h3>
-              <p className="tf-chat__booked-sub">{booked.email ? `An invitation is on its way to ${booked.email}.` : 'An invitation is on its way.'}</p>
+              <h3 className="tf-chat__booked-title">{booked.isRequest ? 'Request sent' : 'You’re booked'}</h3>
+              <p className="tf-chat__booked-sub">{booked.isRequest ? `${booked.host ?? 'They'} will confirm soon${booked.email ? `; we’ll email ${booked.email}` : ''}.` : booked.email ? `An invitation is on its way to ${booked.email}.` : 'An invitation is on its way.'}</p>
               <dl className="tf-chat__summary">
                 <dt>What</dt><dd>{booked.title}</dd>
                 <dt>When</dt><dd className="tf-num">{booked.when}</dd>
@@ -164,7 +164,7 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
 
         <form className="tf-chat__composer" onSubmit={submit} data-closed={booked ? true : undefined}>
           <TextField aria-label={placeholder} value={draft} onChange={setDraft} isDisabled={booked !== undefined} className="tf-chat__field">
-            <Input ref={input} className="tf-chat__input" placeholder={booked ? 'Booked. See you then.' : placeholder} autoComplete="off" />
+            <Input ref={input} className="tf-chat__input" placeholder={booked ? (booked.isRequest ? 'Request sent.' : 'Booked. See you then.') : placeholder} autoComplete="off" />
           </TextField>
           <IconButton type="submit" label="Send" variant={draft.trim() && !busy ? 'primary' : 'secondary'} isDisabled={booked !== undefined || busy || !draft.trim()} size="lg" className="tf-chat__send">
             <ArrowUp size={16} strokeWidth={2} />

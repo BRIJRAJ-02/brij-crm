@@ -1,4 +1,5 @@
 // Small parts the flow's screens share: copy with a morph, the scaled guest preview, page pictures, menus and the page slide.
+import { copyText } from '../../lib/copy.ts';
 import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -31,7 +32,7 @@ export function CopyButton({ value, label = 'Copy link', variant = 'primary', si
   return (
     <>
       <Button variant={variant} size={size} icon={<span className="tf-bkf__swapicon" data-on={copied || undefined}><Copy {...i14} /><SuccessCheck size={14} /></span>}
-        onPress={() => { void navigator.clipboard?.writeText(value).catch(() => undefined); setCopied(true); onCopied?.(); }}>
+        onPress={() => { void copyText(value).then((ok) => { setCopied(ok); if (ok) onCopied?.(); }); }}>
         <TextMorph text={copied ? 'Copied' : label} />
       </Button>
       <span className="tf-sr-only" role="status">{copied ? 'Copied to the clipboard' : ''}</span>

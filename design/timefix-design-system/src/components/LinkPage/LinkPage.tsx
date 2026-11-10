@@ -43,7 +43,17 @@ export type LinkBlock =
   | { readonly kind: 'header'; readonly id: string; readonly title: string; readonly hidden?: boolean }
   | { readonly kind: 'booking'; readonly id: string; readonly title: string; readonly durationMinutes: number; readonly location: BookingFlowProps['location']; readonly hidden?: boolean }
   | { readonly kind: 'social'; readonly id: string; readonly hidden?: boolean }
-  | { readonly kind: 'divider'; readonly id: string; readonly hidden?: boolean };
+  | { readonly kind: 'divider'; readonly id: string; readonly hidden?: boolean }
+  /** A few lines of writing: an about, an offer, office hours. */
+  | { readonly kind: 'text'; readonly id: string; readonly title?: string; readonly body: string; readonly hidden?: boolean }
+  /** Questions people ask, each opening to its answer. */
+  | { readonly kind: 'faq'; readonly id: string; readonly items: ReadonlyArray<{ readonly q: string; readonly a: string }>; readonly hidden?: boolean }
+  /** One quote from a client, with their name. */
+  | { readonly kind: 'testimonial'; readonly id: string; readonly quote: string; readonly name: string; readonly role?: string; readonly hidden?: boolean }
+  /** A button to one of your forms. */
+  | { readonly kind: 'form'; readonly id: string; readonly title: string; readonly slug: string; readonly hidden?: boolean }
+  /** An email field and a button: join a list. */
+  | { readonly kind: 'signup'; readonly id: string; readonly title: string; readonly button: string; readonly hidden?: boolean };
 
 /** Who the page belongs to. */
 export interface LinkPageProfile { readonly name: string; readonly bio?: string; readonly avatarSrc?: string }
@@ -149,6 +159,11 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
     else if (b.kind === 'header') out.push(<h2 key={b.id} className="tf-linkpage__heading">{b.title}</h2>);
     else if (b.kind === 'divider') out.push(<hr key={b.id} className="tf-linkpage__divider" />);
     else if (b.kind === 'social') out.push(<div key={b.id} className="tf-linkpage__socials">{socialRow}</div>);
+    else if (b.kind === 'text') out.push(<section key={b.id} className="tf-linkpage__text">{b.title && <h2 className="tf-linkpage__heading">{b.title}</h2>}<p>{b.body}</p></section>);
+    else if (b.kind === 'faq') out.push(<section key={b.id} className="tf-linkpage__faq" aria-label="Questions">{b.items.filter((x) => x.q.trim()).map((x, n) => <details key={n}><summary>{x.q}</summary><p>{x.a}</p></details>)}</section>);
+    else if (b.kind === 'testimonial') out.push(<figure key={b.id} className="tf-linkpage__quote"><blockquote>“{b.quote}”</blockquote><figcaption>{b.name}{b.role ? `, ${b.role}` : ''}</figcaption></figure>);
+    else if (b.kind === 'form') out.push(<LinkCard key={b.id} item={{ id: b.id, title: b.title, href: `https://timefix.com/f/${b.slug}`, icon: <FileText size={20} strokeWidth={1.75} /> }} isPreview={isPreview} />);
+    else if (b.kind === 'signup') out.push(<SignupBlock key={b.id} block={b} isPreview={isPreview} />);
     else out.push(<BookingBlock key={b.id} block={b} host={profile.name} booking={booking} />);
   }
   flush();
@@ -170,5 +185,24 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
         </footer>
       </PageColumn>
     </div>
+  );
+}
+
+/** An email signup on the page: one field, one button, and a thank-you once it's sent. */
+function SignupBlock({ block, isPreview }: { readonly block: Extract<LinkBlock, { kind: 'signup' }>; readonly isPreview: boolean }) {
+  const [email, setEmail] = useState('');
+  const [done, setDone] = useState(false);
+  const [bad, setBad] = useState(false);
+  const id = useId();
+  if (done) return <p className="tf-linkpage__signup tf-linkpage__signup--done" role="status">You’re on the list. Check {email} for a hello.</p>;
+  return (
+    <form className="tf-linkpage__signup" onSubmit={(e) => { e.preventDefault(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setBad(true); return; } setDone(true); }}>
+      <label htmlFor={id} className="tf-linkpage__signup-title">{block.title}</label>
+      <span className="tf-linkpage__signup-row">
+        <input id={id} type="email" className="tf-linkpage__signup-input" placeholder="you@example.com" value={email} aria-invalid={bad || undefined} onChange={(e) => { setEmail(e.target.value); setBad(false); }} />
+        <Button type="submit" variant="primary">{block.button}</Button>
+      </span>
+      {bad && <span className="tf-linkpage__signup-error" role="alert">That doesn’t look like an email address.</span>}
+    </form>
   );
 }

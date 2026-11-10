@@ -15,8 +15,11 @@ import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { BrandCard, DayTimes } from '../BookingFlow/BookingFlow.tsx';
-import { HOST, PLACES, at, dayFrom, first, isoDay, lengthOf, lengthsText, openTimes, placeOf, plural, priceText, turnFor, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
+import { HOST, PLACES, at, dayFrom, first, isoDay, lengthOf, lengthsText, openTimes, placeOf, plural, priceText, turnFor, type BookingPage, type BookingsState, type PlaceKind, venueDay } from './state.ts';
 import { saveFile } from '../../lib/saveFile.ts';
+import { EmptyState } from '../EmptyState/EmptyState.tsx';
+import { Store } from 'lucide-react';
+import { icsFor } from '../../lib/ics.ts';
 import { useToast } from '../Toast/Toast.tsx';
 
 type OnBooked = (page: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly date: CalendarDate; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => void;
@@ -25,20 +28,13 @@ export type OnWaitlist = (w: { readonly name: string; readonly phone: string; re
 const OCCASIONS = ['Birthday', 'Anniversary', 'Date night', 'Business', 'Celebration'];
 /** Times split by service: before 4 pm is lunch. */
 const byService = (times: ReadonlyArray<number>) => [{ name: 'Lunch', times: times.filter((m) => m < 16 * 60) }, { name: 'Dinner', times: times.filter((m) => m >= 16 * 60) }].filter((g) => g.times.length > 0);
-/** An .ics file for the guest's own calendar. */
-function icsFor(title: string, where: string, start: Date, minutes: number): string {
-  const f = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Timefix//Bookings//EN', 'BEGIN:VEVENT', `UID:${start.getTime()}@timefix.com`, `DTSTAMP:${f(new Date())}`, `DTSTART:${f(start)}`,
-    `DTEND:${f(new Date(start.getTime() + minutes * 60_000))}`, `SUMMARY:${title}`, `LOCATION:${where}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-}
-
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 /** The venue as the page shows it: open now, today's hours first, the week below. */
 function venueOf(state: BookingsState, now: Date): Venue {
   const b = state.business;
   const week = state.savedHours.find((h) => h.id === state.defaultHoursId)?.hours ?? state.savedHours[0]?.hours;
   const todayKey = HOURS_DAYS[(now.getDay() + 6) % 7] ?? 'mon';
-  const today = week?.[todayKey];
+  const today = venueDay(state, now);
   const m = minutesOf(now);
   const openRange = today?.on ? today.ranges.find((r) => r.start <= m && m < r.end) : undefined;
   const next = today?.on ? today.ranges.find((r) => r.start > m) : undefined;
@@ -52,7 +48,14 @@ function venueOf(state: BookingsState, now: Date): Venue {
 }
 
 /** The guest's view of the workspace link. */
-export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }: { readonly state: BookingsState; readonly onBooked: OnBooked; readonly onOpenPage: (p: BookingPage) => void; readonly onWaitlist?: OnWaitlist; readonly onOpenMenu?: () => void }) {
+export function VenueGuest(props: { readonly state: BookingsState; readonly onBooked: OnBooked; readonly onOpenPage: (p: BookingPage) => void; readonly onWaitlist?: OnWaitlist; readonly onOpenMenu?: () => void }) {
+  const b = props.state.business;
+  // A page that isn't published yet says so to guests instead of taking bookings.
+  if (b && !b.published) return <div className="tf-bkf__guest-page"><div className="tf-bkf__guest-card"><EmptyState size="sm" icon={<Store size={20} strokeWidth={1.75} />} title={`${props.state.workspace} isn’t taking bookings online yet`} description={b.phone ? `Call ${b.phone} to book.` : 'Check back soon.'} /></div></div>;
+  return <VenueGuestPage {...props} />;
+}
+
+function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }: { readonly state: BookingsState; readonly onBooked: OnBooked; readonly onOpenPage: (p: BookingPage) => void; readonly onWaitlist?: OnWaitlist; readonly onOpenMenu?: () => void }) {
   const now = new Date();
   const { toast } = useToast();
   const venue = venueOf(state, now);
@@ -200,6 +203,8 @@ export function VenueGuest({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu
           <div className="tf-bkf__pair">
             <TextField label="Name" size="lg" value={name} onChange={setName} isRequired autoComplete="name" />
             <TextField label="Mobile" size="lg" type="tel" value={phone} onChange={setPhone} isRequired autoComplete="tel" description={waitMode ? 'We text you when a table frees up.' : 'In case we need to reach you.'} />
+            {waitMode && <Select label="Hoping for" value={time === undefined ? 'any' : String(time)} onChange={(v) => setTime(!v || v === 'any' ? undefined : Number(v))}
+              items={[{ id: 'any', label: 'Any time that day' }, ...(venueDay(state, day)?.ranges ?? []).flatMap((r) => Array.from({ length: Math.max(0, Math.floor((r.end - r.start) / 30)) }, (_, n) => r.start + n * 30)).map((m) => ({ id: String(m), label: `Around ${formatClock(m)}` }))]} />}
           </div>
           {!waitMode && <TextField label="Email" size="lg" type="email" value={email} onChange={setEmail} isRequired autoComplete="email" description="Your confirmation, and the link to change or cancel." />}
           {!waitMode && <Select label="Occasion" value={occasion || 'none'} onChange={(v) => setOccasion(v && v !== 'none' ? v : '')} items={[{ id: 'none', label: 'No occasion' }, ...OCCASIONS.map((o) => ({ id: o, label: o }))]} />}
@@ -252,10 +257,11 @@ export function TableCard({ state, table, now, party, dayId, area, onParty, onDa
         </div>
       ) : t.length === 0 ? (
         <div className="tf-bkf-venue-next">
-          <span className="tf-bkf__muted">{isoDay(day) === isoDay(now) ? 'No more tables today' : `No tables on ${formatLongDay(day)}`} for {party}{areaPick ? ` on the ${areaPick}` : ''}.</span>
+          {/* A closed day says so and offers the next open day; the waitlist is only for a full day the place is open. */}
+          <span className="tf-bkf__muted">{!venueDay(state, day)?.on ? `Closed on ${formatLongDay(day)}` : isoDay(day) === isoDay(now) ? `No more tables today for ${party}${areaPick ? ` on the ${areaPick}` : ''}` : `No tables on ${formatLongDay(day)} for ${party}${areaPick ? ` on the ${areaPick}` : ''}`}.</span>
           <span className="tf-bkf__row">
             {nextDay && <Button variant="secondary" onPress={() => onDay(isoDay(nextDay))}>See {formatLongDay(nextDay)}</Button>}
-            {onWaitlist && <Button variant="ghost" onPress={onWaitlist}>Join the waitlist</Button>}
+            {onWaitlist && venueDay(state, day)?.on && <Button variant="ghost" onPress={onWaitlist}>Join the waitlist</Button>}
           </span>
         </div>
       ) : byService(t).map((g) => (

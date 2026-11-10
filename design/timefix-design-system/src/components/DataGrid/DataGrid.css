@@ -102,3 +102,5 @@
   .tf-grid__row.is-changed > .tf-grid__td, .tf-grid--revealing .tf-grid__ghost, .tf-grid--revealing .tf-grid__content { animation: none; }
   .tf-grid--revealing .tf-grid__ghost { opacity: 0; }
 }
+.tf-grid__summary { display: flex; justify-content: flex-end; gap: var(--space-16); padding: var(--space-8) var(--space-16); border-top: var(--border-width-hairline) solid var(--border-subtle); color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+.tf-grid__namecell { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; }

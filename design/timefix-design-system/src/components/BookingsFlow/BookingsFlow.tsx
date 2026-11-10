@@ -1,7 +1,8 @@
+import { copyText } from '../../lib/copy.ts';
 import type { ReactNode } from 'react';
 import { useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, BarChart3, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
@@ -59,13 +60,13 @@ export interface BookingsFlowProps {
   /** Hears every change to Bookings' state, for the app around it (Home's agenda, search). */
   readonly onState?: (state: BookingsState) => void;
   /** Opens a Bookings page from outside (the app's Home or search); bump `n` to open it again. */
-  readonly openTab?: { readonly tab: string; readonly n: number };
+  readonly openTab?: { readonly tab: string; readonly n: number; /** Opens this meeting's drawer too (a booking notice in the Inbox). */ readonly meetingId?: string };
   /** Bookings pages the app has turned off (Settings › Apps), hidden from the sidebar. */
   readonly hiddenSections?: ReadonlyArray<string>;
   /** Who is signed in, for the sidebar's person row. */
   readonly person?: { readonly name: string; readonly email: string };
   /** The workspace and person menus' own items: Workspace settings, Profile, Sign out. */
-  readonly onMenu?: (id: 'settings' | 'profile' | 'signout') => void;
+  readonly onMenu?: (id: 'settings' | 'profile' | 'signout' | 'create') => void;
   /** Workspace name and logo from the app's settings, when it has its own. */
   readonly workspaceName?: string;
   /** Opens the guest's booking page from outside (a form's "Book a meeting"), their name and email filled in; bump `n` to open it again. */
@@ -98,7 +99,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (openTab) setTab(openTab.tab); }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openTab) { setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!openGuest) return; const p = state.pages.find((x) => x.id === openGuest.pageId) ?? state.pages.find((x) => x.isOn && x.kind !== 'table') ?? state.pages[0]; if (p) setGuest({ scenario: openGuest.scenario ?? 'book', pageId: p.id, prefill: openGuest.prefill }); }, [openGuest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hiddenSections.includes(tab)) setTab('meetings'); }, [hiddenSections.join(','), tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
@@ -206,15 +207,14 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const onShare = (p: BookingPage, how: ShareHow) => {
     const url = `https://${pageUrl(p.slug, handleOf(state))}`;
     if (how === 'copy') {
-      void navigator.clipboard?.writeText(url).catch(() => undefined);
-      toast({ message: p.isOn ? 'Link copied' : "Link copied. The page is hidden, so guests see it isn't taking bookings.", tone: 'success' });
+      void copyText(url).then((ok) => toast(ok ? { message: p.isOn ? 'Link copied' : "Link copied. The page is hidden, so guests see it isn't taking bookings.", tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${url}`, tone: 'danger' }));
     } else if (how === 'email' || how === 'whatsapp') {
       // Opens the guest's own mail or WhatsApp with the link written in; nothing is sent from here.
       const text = `Pick a time that suits you: ${url}`;
       window.open(how === 'email' ? `mailto:?subject=${encodeURIComponent(p.name)}&body=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
     } else if (how === 'more') {
       if (typeof navigator.share === 'function') void navigator.share({ title: p.name, url }).catch(() => undefined);
-      else { void navigator.clipboard?.writeText(url).catch(() => undefined); toast({ message: 'Link copied', tone: 'success' }); }
+      else { void copyText(url).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${url}`, tone: 'danger' })); }
     } else if (how === 'linkpage') {
       const undo = onAddToLinkPage?.({ name: p.name, minutes: lengthOf(p), place: placeLabel(p, placeOf(p)) });
       if (!onAddToLinkPage) toast({ message: 'Your link page lives in the Timefix app, under Links.' });
@@ -283,6 +283,11 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     }, 300);
   };
 
+  /** Join: the meeting's own link, copied so it opens in any browser; the toast shows it too in case copying is blocked. */
+  const join = (m: BookedMeeting) => {
+    const url = m.place === 'phone' ? `tel:${m.phone ?? ''}` : `https://meet.google.com/${m.id.replace(/[^a-z0-9]/gi, '').slice(-3)}-tfx-${m.id.replace(/[^a-z0-9]/gi, '').slice(0, 4)}`;
+    void navigator.clipboard.writeText(url).then(() => toast({ message: `${m.placeLabel} link copied. Paste it in your browser to join.`, tone: 'success' }), () => toast({ message: `Join at ${url}` }));
+  };
   /* Meetings */
   const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) cancelFromDrawer(x); };
   const cancelFromDrawer = (m: BookedMeeting, inline = false) => {
@@ -399,23 +404,19 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   );
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
-      header={<WorkspaceSwitcher name={workspaceName ?? state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); else if (id === 'settings') onMenu?.('settings'); }}>
+      header={<WorkspaceSwitcher name={workspaceName ?? state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); else if (id === 'settings' || id === 'create') onMenu?.(id); }}>
         {showDemoMenu ? <WorkspaceItems current={currentWs} /> : null}
         {showDemoMenu ? <MenuSeparator /> : null}
-        <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem>
+        {onMenu ? <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem> : null}
+        {onMenu ? <MenuItem id="create" icon={<Plus {...i16} />}>Create a workspace</MenuItem> : null}
       </WorkspaceSwitcher>}
       footer={<PersonRow name={person?.name ?? HOST} email={person?.email ?? 'priya@northwind.com'} onAction={(k) => { const id = String(k); if (id === 'profile' || id === 'signout') onMenu?.(id); }}>
-        <MenuItem id="profile" icon={<User {...i16} />}>Profile</MenuItem>
-        <MenuSeparator />
-        <MenuItem id="signout" icon={<LogOut {...i16} />}>Sign out</MenuItem>
+        {onMenu ? <MenuItem id="profile" icon={<User {...i16} />}>Profile</MenuItem> : <MenuItem id="none" isDisabled>Your profile is in the Timefix app</MenuItem>}
+        {onMenu ? <MenuSeparator /> : null}
+        {onMenu ? <MenuItem id="signout" icon={<LogOut {...i16} />}>Sign out</MenuItem> : null}
       </PersonRow>}>
-      {appNav ? appNav(bookingsNav) : <>
-      <NavItem label="Home" icon={<Home {...i16} />} onPress={() => undefined} />
-      <NavItem label="Inbox" icon={<Inbox {...i16} />} badge={unread} onPress={() => undefined} />
-      <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
-      <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
-        {bookingsNav}
-      </>}
+      {/* On its own, Bookings shows only its own pages; the rest of the app lives in the Timefix app around it. */}
+      {appNav ? appNav(bookingsNav) : bookingsNav}
     </Sidebar>
   );
 
@@ -456,7 +457,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
 
   /** First run's answers become the workspace: its name, your hours, the first booking page, and a calendar if one was connected. */
   const finishSetup = (v: OnboardingValues) => {
-    const hours = Object.fromEntries(HOURS_DAYS.map((d) => [d, v.hours.days.includes(d) ? { on: true, ranges: [{ id: nextId('r'), start: v.hours.start, end: v.hours.end }] } : { on: false, ranges: [] }])) as BookingsState['savedHours'][number]['hours'];
+    const hours = Object.fromEntries(HOURS_DAYS.map((d) => [d, v.hours.days.includes(d) ? { on: true, ranges: [{ id: nextId('r'), start: v.hours.start, end: v.hours.end }] } : { on: false, ranges: [] }])) as unknown as BookingsState['savedHours'][number]['hours'];
     const page = newPage([], { name: v.meeting.name || 'Intro call', slug: slugify(v.meeting.name) || 'intro-call', durations: [v.meeting.length] });
     dispatch({ type: 'reset', state: { ...FIRST_VISIT, workspace: v.workspace || 'My workspace', savedHours: [{ id: 'working', name: 'Working hours', hours }], pages: [page],
       calendars: v.calendar ? [{ id: nextId('cal'), provider: v.calendar === 'google' ? 'Google' : 'Outlook', email: 'priya@northwind.com', calendars: 2, status: 'connected', checkConflicts: true }] : [] } });
@@ -536,7 +537,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                   onReassignMany={(list) => {
                     // Each meeting goes to whoever covers its host's time off first, then whoever is free.
                     const n = list.reduce((sum, m) => { const off = state.timeOff.find((t) => t.member === m.host && t.from <= isoDay(m.start) && isoDay(m.start) <= t.to); return sum + reassignMany([m], off?.cover ? [off.cover, ...TEAM] : undefined); }, 0); toast({ message: n === list.length ? `${plural(n, 'meeting')} handed on` : `${n} of ${list.length} handed on; no one was free for the rest`, tone: n ? 'success' : undefined }); return n; }}
-                  onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
+                  onSeeConflict={seeConflict} onJoin={(id) => { const m = meetingById(id); if (m) join(m); }} />
               </div>)}
               {tab === 'pages' && (<div className="tf-bkf__panel">
                 <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p) }); }}
@@ -549,9 +550,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                   onGuest={(table) => { const p = state.pages[0]; if (p) setGuest({ scenario: 'menu', pageId: p.id, table }); }} />
               </div>)}
               {tab === 'availability' && (<div className="tf-bkf__panel">
-                <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} />
+                <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list: ReadonlyArray<BookedMeeting>, pool?: ReadonlyArray<string>) => reassignMany(list, pool)} />
               </div>)}
-              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={tellOthers} onReassignMany={(list, pool) => reassignMany(list, pool)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
+              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={tellOthers} onReassignMany={(list) => reassignMany(list)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
               {tab === 'insights' && (<div className="tf-bkf__panel"><InsightsTab state={state} dispatch={dispatch} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
@@ -578,7 +579,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       <MeetingDrawer meeting={restaurant ? undefined : openMeeting} page={pageById(openMeeting?.pageId)} onClose={() => setMeetingId(undefined)}
         onUpdate={(m) => update(m)} onCancel={cancelFromDrawer} onReschedule={(m) => setRescheduleId(m.id)} onReassign={(m) => setReassignId(m.id)}
         onNoShow={(m) => { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); }}
-        onJoin={(m) => toast({ message: `Opening ${m.placeLabel}…` })} onConfirm={(m) => confirm(m.id)} onDecline={(m) => setDeclineId(m.id)} />
+        onJoin={(m) => { const x = meetingById(m.id); if (x) join(x); }} onConfirm={(m) => confirm(m.id)} onDecline={(m) => setDeclineId(m.id)} />
       <RescheduleDialog meeting={meetingById(rescheduleId)} state={state} onClose={() => setRescheduleId(undefined)}
         onMove={(m, start) => { setRescheduleId(undefined); move(m, start, 'gets an email with the new time'); }} />
       <ReassignDialog meeting={meetingById(reassignId)} state={state} onClose={() => setReassignId(undefined)}

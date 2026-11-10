@@ -44,3 +44,4 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-comment, .tf-comment__hover, .tf-reaction, .tf-composer { transition: none; }
 }
+.tf-thread__list--resolved { opacity: 0.72; }

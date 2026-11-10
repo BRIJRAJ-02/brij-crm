@@ -1,7 +1,7 @@
 // Forms: a list of cards, New form from a gallery, and one editor with five tabs: Questions (builder beside the live preview),
 // Settings (layout, where answers go, what happens after), Share (link and embeds), Responses (with Add to People, spam, delete + Undo),
 // Results (views, finishes, where people stop). Edits are a draft until Publish; the visitor's page is HostedForm itself.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Copy, ExternalLink, FileText, MoreHorizontal, Pause, Play, Plus, Trash2, UserPlus, ShieldAlert } from 'lucide-react';
 import { FormCard, FormStatusTag, HostedFormPreview } from '../FormPicture/FormPicture.tsx';
 import { QuestionBuilder } from '../QuestionList/QuestionList.tsx';
@@ -16,6 +16,8 @@ import { Select } from '../Select/Select.tsx';
 import { StatCard } from '../Card/Card.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
+import { SearchField } from '../SearchField/SearchField.tsx';
+import { Callout } from '../Callout/Callout.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { formWho, newId, type AppAction, type AppForm, type AppState, type FormResponse } from './data.ts';
@@ -30,6 +32,9 @@ const edited = (f: AppForm) => f.status !== 'draft' && (JSON.stringify(f.questio
 /** Copies text, and says honestly whether it worked. */
 const copyText = (text: string) => navigator.clipboard.writeText(text).then(() => true, () => false);
 
+/** A form holds up to this many questions; past that it's two forms. */
+const MAX_QUESTIONS = 50;
+
 const TEMPLATES: ReadonlyArray<{ readonly id: string; readonly name: string; readonly line: string; readonly questions: ReadonlyArray<FormQuestion> }> = [
   { id: 'blank', name: 'Blank', line: 'Start from nothing', questions: [] },
   { id: 'contact', name: 'Contact us', line: 'Name, email and a message', questions: [{ id: 'a', kind: 'short', title: 'Your name', required: true }, { id: 'b', kind: 'email', title: 'Email', required: true }, { id: 'c', kind: 'long', title: 'How can we help?' }] },
@@ -37,6 +42,11 @@ const TEMPLATES: ReadonlyArray<{ readonly id: string; readonly name: string; rea
   { id: 'event', name: 'Event signup', line: 'Who’s coming, and any needs', questions: [{ id: 'a', kind: 'short', title: 'Name', required: true }, { id: 'b', kind: 'email', title: 'Email', required: true }, { id: 'c', kind: 'dropdown', title: 'Which session?', options: ['Morning', 'Afternoon'] }] },
   { id: 'feedback', name: 'Feedback', line: 'A rating and a few words', questions: [{ id: 'a', kind: 'rating', title: 'How did we do?', required: true }, { id: 'b', kind: 'long', title: 'Anything to add?' }] },
   { id: 'job', name: 'Job application', line: 'CV, links and a cover note', questions: [{ id: 'a', kind: 'short', title: 'Full name', required: true }, { id: 'b', kind: 'email', title: 'Email', required: true }, { id: 'c', kind: 'file', title: 'Your CV', required: true }] },
+  { id: 'quote', name: 'Quote request', line: 'What they need, by when, for how much', questions: [{ id: 'a', kind: 'short', title: 'Your name', required: true }, { id: 'b', kind: 'email', title: 'Work email', required: true }, { id: 'c', kind: 'long', title: 'What do you need?', required: true }, { id: 'd', kind: 'dropdown', title: 'Budget', options: ['Under ₹1 lakh', '₹1–5 lakh', '₹5 lakh+'] }, { id: 'e', kind: 'date', title: 'Needed by' }] },
+  { id: 'newsletter', name: 'Newsletter signup', line: 'Just an email, and what they like', questions: [{ id: 'a', kind: 'email', title: 'Email', required: true }, { id: 'b', kind: 'multi', title: 'What would you like to hear about?', options: ['Product news', 'Guides', 'Events'] }] },
+  { id: 'nps', name: 'Customer satisfaction', line: 'How likely they are to recommend you', questions: [{ id: 'a', kind: 'rating', title: 'How likely are you to recommend us?', required: true }, { id: 'b', kind: 'long', title: 'What’s the main reason?' }, { id: 'c', kind: 'email', title: 'Email, if we can follow up' }] },
+  { id: 'support', name: 'Support request', line: 'The problem, how urgent, a screenshot', questions: [{ id: 'a', kind: 'short', title: 'Your name', required: true }, { id: 'b', kind: 'email', title: 'Email', required: true }, { id: 'c', kind: 'choice', title: 'How urgent is it?', options: ['It can wait', 'Today, please', 'Everything is stuck'] }, { id: 'd', kind: 'long', title: 'What happened?', required: true }, { id: 'e', kind: 'file', title: 'A screenshot' }] },
+  { id: 'waitlist', name: 'Early access', line: 'Join the waitlist for something new', questions: [{ id: 'a', kind: 'short', title: 'Your name', required: true }, { id: 'b', kind: 'email', title: 'Email', required: true }, { id: 'c', kind: 'short', title: 'Company' }, { id: 'd', kind: 'choice', title: 'Team size', options: ['Just me', '2–10', '11–50', '51+'] }] },
 ];
 
 /** Props for FormsScreen. */
@@ -56,15 +66,17 @@ export function FormsScreen({ state, dispatch, onOpenPerson, onBookings, onBookG
   const { toast } = useToast();
   const [openId, setOpenId] = useState<string | undefined>(start?.id);
   const [gallery, setGallery] = useState(false);
+  const [find, setFind] = useState('');
   const form = state.forms.find((f) => f.id === openId);
   if (form) return <FormEditor state={state} form={form} dispatch={dispatch} onBack={() => setOpenId(undefined)} onOpenPerson={onOpenPerson} onBookGuest={onBookGuest} visit={start?.id === form.id && start.visit} />;
   return (
     <div className="tf-forms">
       <div className="tf-rec__bar"><span className="tf-rec__muted">{state.forms.length} {state.forms.length === 1 ? 'form' : 'forms'} · {state.forms.reduce((n, f) => n + f.responses.filter((r) => !r.spam).length, 0)} responses</span><span className="tf-rec__spacer" />
+        {state.forms.length > 3 && <SearchField label="Search forms" placeholder="Search forms" size="sm" value={find} onChange={setFind} />}
         <Button variant="primary" icon={<Plus {...i14} />} onPress={() => setGallery(true)}>New form</Button></div>
       {state.forms.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No forms yet" description="Collect leads, signups and feedback; answers file into People." action={<Button size="sm" variant="primary" onPress={() => setGallery(true)}>New form</Button>} /> : (
         <ul className="tf-forms__grid">
-          {state.forms.map((f) => <li key={f.id}><FormCard name={f.name} status={statusOf(f)} responses={f.responses.filter((r) => !r.spam).length} updated={edited(f) ? `Live · edited ${ago(f.updated)}, not published` : `Edited ${ago(f.updated)}`} questions={f.questions} onPress={() => setOpenId(f.id)} /></li>)}
+          {state.forms.filter((f) => !find.trim() || f.name.toLowerCase().includes(find.trim().toLowerCase())).map((f) => <li key={f.id}><FormCard name={f.name} status={statusOf(f)} responses={f.responses.filter((r) => !r.spam).length} updated={edited(f) ? `Live · edited ${ago(f.updated)}, not published` : `Edited ${ago(f.updated)}`} questions={f.questions} onPress={() => setOpenId(f.id)} /></li>)}
         </ul>
       )}
       {gallery && (
@@ -88,6 +100,9 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
   const { toast } = useToast();
   const [tab, setTab] = useState('questions');
   const [guest, setGuest] = useState(visit);
+  const [toBooking, setToBooking] = useState<{ readonly name: string; readonly email: string }>();
+  const [discarding, setDiscarding] = useState(false);
+  const [respFind, setRespFind] = useState('');
   const [openResp, setOpenResp] = useState<string>();
   const [showSpam, setShowSpam] = useState(false);
   /** Changes to this form apply to its latest version, so an Undo later never brings back older edits. */
@@ -102,32 +117,45 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
     toast({ message: first ? 'Your form is live. Share the link.' : 'Published. Visitors see the new version.', tone: 'success', action: first ? { label: 'Copy link', onAction: copy } : undefined });
   };
   const questions = form.live ?? form.questions;
-  const who = (r: FormResponse) => formWho(questions, r.answers);
+  /** Name and email from the mapped questions first, then the usual guess. */
+  const who = (r: FormResponse) => {
+    const m = form.mapping ?? {}; const by = (attr: string) => Object.entries(m).find(([, a]) => a === attr)?.[0];
+    const guess = formWho(questions, r.answers);
+    return { name: (by('name') && r.answers[by('name') ?? '']) || guess.name, email: (by('email') && r.answers[by('email') ?? '']) || guess.email };
+  };
+  /** The other mapped answers, as fields on the person. */
+  const mappedFields = (r: FormResponse) => {
+    const out: Record<string, string> = {}; const extra: Record<string, string> = {};
+    for (const [qid, attr] of Object.entries(form.mapping ?? {})) { const v = r.answers[qid]; if (!v || attr === 'name' || attr === 'email' || attr === 'none') continue; if (attr === 'title' || attr === 'phone') out[attr] = v; else extra[attr] = v; }
+    return { out, extra };
+  };
   /** Files a response under People: the person with that email if there is one, else a new person. Never a second copy. */
   const file = (r: FormResponse, quiet = false): string | undefined => {
     const w = who(r); if (!w.name && !w.email) { if (!quiet) toast({ message: 'This response has no name or email to file under.', tone: 'danger' }); return undefined; }
     const match = w.email ? state.people.find((p) => p.email.toLowerCase() === w.email.toLowerCase()) : undefined;
     const id = match?.id ?? newId('p');
-    if (match) dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: { tags: [...new Set([...match.tags, form.name])] } }] });
-    else dispatch({ type: 'person/set', person: { id, name: w.name || w.email, email: w.email, title: '', owner: form.owner, tags: [form.name], created: new Date() } });
+    const { out, extra } = mappedFields(r);
+    if (match) dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: { tags: [...new Set([...match.tags, form.name])], ...out, ...(Object.keys(extra).length ? { extra: { ...(match.extra ?? {}), ...extra } } : {}) } }] });
+    else dispatch({ type: 'person/set', person: { id, name: w.name || w.email, email: w.email, title: out.title ?? '', phone: out.phone, owner: form.owner, tags: [form.name], created: new Date(), extra: Object.keys(extra).length ? extra : undefined } });
     dispatch({ type: 'activity/add', activity: { id: newId('a'), record: { object: 'people', id }, kind: 'form', actor: w.name || w.email, text: `sent ${form.name}`, at: r.at } });
     if (!quiet) toast({ message: match ? `Filed under ${match.name}, who was already in People` : `${w.name || w.email} added to People`, tone: 'success', action: { label: 'Open', onAction: () => onOpenPerson(id) } });
     return id;
   };
-  const responses = form.responses.filter((r) => (showSpam ? r.spam : !r.spam));
+  const responses = form.responses.filter((r) => (showSpam ? r.spam : !r.spam) && (!respFind.trim() || Object.values(r.answers).some((v) => v.toLowerCase().includes(respFind.trim().toLowerCase()))));
   const resp = form.responses.find((r) => r.id === openResp);
   const setResp = (r: FormResponse) => patchResponses((rs) => rs.map((x) => (x.id === r.id ? r : x)));
   const setRespBack = (r: FormResponse) => patchResponses((rs) => [...rs, r].sort((a, b) => b.at.getTime() - a.at.getTime()));
   const addToPeople = (r: FormResponse) => { const id = file(r); if (id) setResp({ ...r, personId: id }); };
   const finishes = form.responses.filter((r) => !r.spam).length;
   const live = form.status === 'live';
+  if (guest && toBooking) return <BookingCountdown name={toBooking.name} onGo={() => { const w = toBooking; setToBooking(undefined); setGuest(false); onBookGuest?.(w); }} onStay={() => setToBooking(undefined)} />;
   if (guest) {
     return (
       <div className="tf-forms__guest">
         <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setGuest(false)}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
           {!live && <Tag size="sm" hue="orange">Preview · answers aren’t saved</Tag>}</div>
         {form.status === 'paused' ? <EmptyState icon={<Pause size={20} strokeWidth={1.75} />} title="This form is closed" description={`${form.owner.split(' ')[0]} isn't taking answers right now.`} /> : (
-          <HostedForm title={form.name} questions={live ? questions : form.questions} mode={form.mode} thanks={{ title: 'Thanks, we got it.', line: form.after.message }}
+          <HostedForm title={form.name} description={form.subtitle} logic={form.mode === 'one' ? form.logic : undefined} questions={live ? questions : form.questions} mode={form.mode} thanks={{ title: 'Thanks, we got it.', line: form.after.message }}
             onSubmit={(answers) => new Promise<void>((resolve) => {
               const flat = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' || typeof v === 'number' ? String(v) : Array.isArray(v) ? v.join(', ') : '']));
               window.setTimeout(() => {
@@ -137,7 +165,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
                   const personId = form.saveTo === 'people' ? file(r, true) : undefined;
                   patchResponses((rs) => [{ ...r, personId }, ...rs]);
                 }
-                if (form.after.kind === 'booking' && onBookGuest) { setGuest(false); onBookGuest(w); }
+                if (form.after.kind === 'booking' && onBookGuest) setToBooking(w);
                 resolve();
               }, 500);
             })} />
@@ -160,11 +188,8 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
           <IconButton label="More for this form"><MoreHorizontal {...i16} /></IconButton>
           <Menu aria-label="Form" placement="bottom end" onAction={(k) => {
             if (k === 'pause') { const was = form.status; set({ status: was === 'paused' ? 'live' : 'paused' }); toast({ message: was === 'paused' ? 'Taking answers again' : 'Paused. Visitors see that it’s closed.', action: { label: 'Undo', onAction: () => set({ status: was }) } }); }
-            else if (k === 'discard') {
-              const was = { questions: form.questions, name: form.name, mode: form.mode, after: form.after }; const cfg = form.liveConfig ? (JSON.parse(form.liveConfig) as Pick<AppForm, 'name' | 'mode' | 'after'>) : {};
-              set({ questions: form.live ?? form.questions, ...cfg }); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => set(was) } });
-            }
-            else if (k === 'delete') { const before = form; dispatch({ type: 'form/remove', id: form.id }); onBack(); toast({ message: `${form.name} deleted`, action: { label: 'Undo', onAction: () => dispatch({ type: 'form/set', form: before }) } }); }
+            else if (k === 'discard') setDiscarding(true);
+            else if (k === 'delete') { const before = form; const at = state.forms.findIndex((f) => f.id === form.id); dispatch({ type: 'form/remove', id: form.id }); onBack(); toast({ message: `${form.name} deleted`, action: { label: 'Undo', onAction: () => dispatch({ type: 'form/insert', form: before, at }) } }); }
           }}>
             {form.status !== 'draft' && <MenuItem id="pause" icon={form.status === 'paused' ? <Play {...i16} /> : <Pause {...i16} />}>{form.status === 'paused' ? 'Resume' : 'Pause answers'}</MenuItem>}
             {edited(form) && <MenuItem id="discard">Discard changes</MenuItem>}
@@ -177,18 +202,22 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
         items={[{ id: 'questions', label: 'Questions', count: form.questions.length }, { id: 'settings', label: 'Settings' }, { id: 'share', label: 'Share' }, { id: 'responses', label: 'Responses', count: finishes }, { id: 'results', label: 'Results' }]}>
         <TabPanel id="questions" className="tf-forms__panel">
           <div className="tf-forms__build">
-            <div className="tf-forms__builder"><QuestionBuilder questions={form.questions} onChange={(questions) => set({ questions })} /></div>
-            <div className="tf-forms__preview"><HostedFormPreview title={form.name} questions={form.questions} mode={form.mode} address={url} onSubmit={() => Promise.resolve()} /></div>
+            <div className="tf-forms__builder"><QuestionBuilder questions={form.questions} onChange={(questions) => { if (questions.length > MAX_QUESTIONS) { toast({ message: `A form holds up to ${MAX_QUESTIONS} questions. Split it into two forms.`, tone: 'danger' }); return; } set({ questions }); }} />
+              <p className="tf-rec__muted tf-num">{form.questions.length} of {MAX_QUESTIONS} questions</p></div>
+            <div className="tf-forms__preview"><HostedFormPreview title={form.name} description={form.subtitle} questions={form.questions} mode={form.mode} address={url} onSubmit={() => Promise.resolve()} /></div>
           </div>
         </TabPanel>
         <TabPanel id="settings" className="tf-forms__panel">
           <div className="tf-forms__settings">
             <div className="tf-bkf__group"><span className="tf-bkf__label">Layout</span>
-              <SegmentedControl aria-label="Layout" selectedKey={form.mode} onSelectionChange={(k) => set({ mode: k === 'page' ? 'page' : 'one' })} items={[{ id: 'one', label: 'One question at a time' }, { id: 'page', label: 'All on one page' }]} /></div>
+              <SegmentedControl aria-label="Layout" selectedKey={form.mode} onSelectionChange={(k) => set({ mode: k === 'page' ? 'page' : 'one' })} items={[{ id: 'one', label: 'One question at a time' }, { id: 'page', label: 'Classic: all on one page' }]} /></div>
+            <TextArea label="Subtitle" aside="Optional" rows={2} value={form.subtitle ?? ''} onChange={(subtitle) => set({ subtitle: subtitle || undefined })} description="A line under the title, like what it’s for or how long it takes." />
             <TextField label="Link" value={form.slug} onChange={(v) => set({ slug: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} onBlur={() => { const clean = form.slug.replace(/-+/g, '-').replace(/^-|-$/g, ''); if (clean !== form.slug || !clean) set({ slug: clean || `form-${form.id.slice(-4)}` }); }}
               isInvalid={state.forms.some((f) => f.id !== form.id && f.slug === form.slug)} errorMessage={state.forms.some((f) => f.id !== form.id && f.slug === form.slug) ? 'Another form uses this link' : undefined} description="Old links keep working when you change it." />
             <Select label="Save answers to" value={form.saveTo} onChange={(v) => set({ saveTo: v === 'none' ? 'none' : 'people' })}
               items={[{ id: 'people', label: 'People', description: 'Matched by email; new people are added' }, { id: 'none', label: 'Keep answers only' }]} />
+            {form.saveTo === 'people' && <MappingEditor form={form} state={state} onChange={(mapping) => set({ mapping })} />}
+            {form.mode === 'one' && <LogicEditor form={form} onChange={(logic) => set({ logic })} />}
             <Select label="Owner" value={form.owner} onChange={(v) => set({ owner: v ?? form.owner })} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
             <div className="tf-bkf__group"><span className="tf-bkf__label">After they send</span>
               <SegmentedControl aria-label="After they send" selectedKey={form.after.kind} onSelectionChange={(k) => set({ after: { ...form.after, kind: k === 'booking' ? 'booking' : 'thanks' } })} items={[{ id: 'thanks', label: 'Say thanks' }, { id: 'booking', label: 'Book a meeting' }]} />
@@ -214,7 +243,11 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
         </TabPanel>
         <TabPanel id="responses" className="tf-forms__panel">
           <div className="tf-rec__bar"><SegmentedControl aria-label="Which" size="sm" selectedKey={showSpam ? 'spam' : 'in'} onSelectionChange={(k) => { setShowSpam(k === 'spam'); setOpenResp(undefined); }}
-            items={[{ id: 'in', label: `Responses · ${finishes}` }, { id: 'spam', label: `Spam · ${form.responses.length - finishes}` }]} /></div>
+            items={[{ id: 'in', label: `Responses · ${finishes}` }, { id: 'spam', label: `Spam · ${form.responses.length - finishes}` }]} />
+            <span className="tf-rec__spacer" />{form.responses.length > 3 && <SearchField label="Search answers" placeholder="Search answers" size="sm" value={respFind} onChange={setRespFind} />}</div>
+          {(() => { const unfiled = form.responses.filter((r) => !r.spam && !r.personId); return form.saveTo === 'people' && !showSpam && unfiled.length > 0 ? (
+            <Callout tone="info" action={{ label: `File ${unfiled.length}`, onPress: () => { const ids = unfiled.map((r) => ({ id: r.id, personId: file(r, true) })); patchResponses((rs) => rs.map((x) => { const f = ids.find((y) => y.id === x.id); return f?.personId ? { ...x, personId: f.personId } : x; })); toast({ message: `${ids.filter((x) => x.personId).length} earlier ${ids.length === 1 ? 'answer' : 'answers'} filed in People`, tone: 'success' }); } }}>
+              {unfiled.length === 1 ? '1 earlier answer isn’t in People yet.' : `${unfiled.length} earlier answers aren’t in People yet.`}</Callout>) : null; })()}
           {responses.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title={showSpam ? 'No spam' : 'No responses yet'} description={showSpam ? 'Bot answers are kept here, out of your way.' : 'Share the link; answers show up here as they arrive.'} /> : (
             <div className="tf-forms__resp">
               <ul className="tf-forms__rows">
@@ -264,7 +297,61 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
           )}
         </TabPanel>
       </Tabs>
+      {discarding && <Dialog isOpen onOpenChange={(o) => { if (!o) setDiscarding(false); }} title="Discard your changes?" description="The form goes back to what visitors see now. You can undo this."
+        actions={<><Button variant="ghost" slot="close">Keep editing</Button><Button variant="danger" onPress={() => { setDiscarding(false); const was = { questions: form.questions, name: form.name, mode: form.mode, after: form.after, subtitle: form.subtitle, mapping: form.mapping, logic: form.logic }; const cfg = form.liveConfig ? (JSON.parse(form.liveConfig) as Pick<AppForm, 'name' | 'mode' | 'after'>) : {}; set({ questions: form.live ?? form.questions, ...cfg }); toast({ message: 'Changes discarded', action: { label: 'Undo', onAction: () => set(was) } }); }}>Discard changes</Button></>} />}
     </div>
   );
 }
 
+
+/** After a form that books: a short count, then the booking page, with a way to stay. */
+function BookingCountdown({ name, onGo, onStay }: { readonly name: string; readonly onGo: () => void; readonly onStay: () => void }) {
+  const [left, setLeft] = useState(3);
+  const go = useRef(onGo); go.current = onGo;
+  useEffect(() => { if (left <= 0) { go.current(); return undefined; } const t = window.setTimeout(() => setLeft((n) => n - 1), 1000); return () => window.clearTimeout(t); }, [left]);
+  return (
+    <div className="tf-forms__guest"><div className="tf-app__empty">
+      <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title={`Thanks${name ? `, ${name.split(' ')[0]}` : ''}. Now pick a time.`} description={`Taking you to the booking page in ${left}…`}
+        action={<span className="tf-set__row"><Button size="sm" variant="primary" onPress={onGo}>Pick a time now</Button><Button size="sm" variant="ghost" onPress={onStay}>Stay here</Button></span>} />
+    </div></div>
+  );
+}
+
+/** Which People attribute each question fills. Name and email are guessed; the rest are picked here. */
+function MappingEditor({ form, state, onChange }: { readonly form: AppForm; readonly state: AppState; readonly onChange: (m: Readonly<Record<string, string>>) => void }) {
+  const people = state.objects.find((o) => o.id === 'people');
+  const attrs = [{ id: 'none', label: 'Nothing (answer only)' }, { id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'phone', label: 'Phone' }, { id: 'title', label: 'Job title' },
+    ...(people?.attributes ?? []).filter((a) => !['name', 'email', 'phone', 'title', 'company', 'tags', 'owner', 'created'].includes(a.id)).map((a) => ({ id: a.id, label: a.name }))];
+  const guess = (q: FormQuestion) => (q.kind === 'email' ? 'email' : q.kind === 'phone' ? 'phone' : q.kind === 'short' && /name/i.test(q.title) ? 'name' : q.kind === 'short' && /title|role/i.test(q.title) ? 'title' : 'none');
+  const m = form.mapping ?? {};
+  return (
+    <div className="tf-bkf__group"><span className="tf-bkf__label">Each answer fills</span>
+      <ul className="tf-set__list">{form.questions.map((q) => (
+        <li key={q.id}><span>{q.title}</span><Select label={`${q.title} fills`} isLabelHidden className="tf-you__select" value={m[q.id] ?? guess(q)} onChange={(v) => { if (v) onChange({ ...m, [q.id]: v }); }} items={attrs} /></li>
+      ))}</ul>
+    </div>
+  );
+}
+
+/** "If <question> is <answer>, go to <question>", in plain words. Only for questions with set answers. */
+function LogicEditor({ form, onChange }: { readonly form: AppForm; readonly onChange: (l: AppForm['logic']) => void }) {
+  const rules = form.logic ?? [];
+  const pickable = form.questions.filter((q) => (q.kind === 'choice' || q.kind === 'dropdown') && (q.options?.length ?? 0) > 0);
+  const title = (id: string) => (id === 'end' ? 'the end' : form.questions.find((q) => q.id === id)?.title ?? 'a deleted question');
+  if (pickable.length === 0) return null;
+  const add = () => { const q = pickable[0]; if (!q) return; const later = form.questions.slice(form.questions.findIndex((x) => x.id === q.id) + 2)[0]; onChange([...rules, { id: newId('rule'), when: q.id, is: q.options?.[0] ?? '', goto: later?.id ?? 'end' }]); };
+  return (
+    <div className="tf-bkf__group"><span className="tf-bkf__label">Skip questions by answer</span>
+      {rules.length === 0 && <p className="tf-rec__muted">Everyone sees every question, in order.</p>}
+      <ul className="tf-set__list">{rules.map((r) => { const q = form.questions.find((x) => x.id === r.when); const after = form.questions.slice(form.questions.findIndex((x) => x.id === r.when) + 1); return (
+        <li key={r.id} className="tf-forms__rule">
+          <span>If</span><Select label="Question" isLabelHidden className="tf-you__select" value={r.when} onChange={(v) => { const nq = pickable.find((x) => x.id === v); if (nq) onChange(rules.map((x) => (x.id === r.id ? { ...x, when: nq.id, is: nq.options?.[0] ?? '' } : x))); }} items={pickable.map((x) => ({ id: x.id, label: x.title }))} />
+          <span>is</span><Select label="Answer" isLabelHidden className="tf-you__select" value={r.is} onChange={(v) => { if (v) onChange(rules.map((x) => (x.id === r.id ? { ...x, is: v } : x))); }} items={(q?.options ?? []).map((o) => ({ id: o, label: o }))} />
+          <span>go to</span><Select label="Go to" isLabelHidden className="tf-you__select" value={r.goto} onChange={(v) => { if (v) onChange(rules.map((x) => (x.id === r.id ? { ...x, goto: v } : x))); }} items={[...after.map((x) => ({ id: x.id, label: x.title })), { id: 'end', label: 'The end (send)' }]} />
+          <Button size="sm" variant="ghost" onPress={() => onChange(rules.filter((x) => x.id !== r.id))}>Remove</Button>
+          <span className="tf-rec__muted tf-forms__rule-say">If “{title(r.when)}” is {r.is}, they go to {title(r.goto)}.</span>
+        </li>); })}</ul>
+      <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={add}>Add a rule</Button>
+    </div>
+  );
+}

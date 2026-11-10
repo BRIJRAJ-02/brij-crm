@@ -1,5 +1,6 @@
 // Booking pages for a business: its own page first (timefix.com/<handle>), then what it books, laid out like Fresha's service menu:
 // categories on the left, a card a service on the right with its colour, length, price and link.
+import { copyText } from '../../lib/copy.ts';
 import { useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { Copy, ExternalLink, Pencil, Plus } from 'lucide-react';
@@ -41,7 +42,7 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
   const tablePages = state.pages.filter((p) => p.kind === 'table');
   const shown = cat === 'all' ? services : services.filter((p) => p.categoryId === cat);
   const url = homeUrl(state);
-  const copy = (text: string) => { void navigator.clipboard?.writeText(`https://${text}`).catch(() => undefined); toast({ message: 'Link copied', tone: 'success' }); };
+  const copy = (text: string) => { void copyText(`https://${text}`).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://${text}`}`, tone: 'danger' })); };
   const card = (p: BookingPage) => (
     <li key={p.id} className={cx('tf-bkf-svc', p.id === fresh && 'is-new', !p.isOn && 'is-hidden')} data-hue={p.accent}>
       <AriaButton className="tf-bkf-svc__open" onPress={() => onOpen(p.id)} aria-label={`Edit ${p.name}`}>
@@ -66,7 +67,8 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
           <span className="tf-bkf-yourpage__url tf-num">{url}</span>
         </div>
         <div className="tf-bkf-yourpage__actions">
-          <Button variant="secondary" icon={<Copy {...i14} />} onPress={() => copy(url)}>Copy link</Button>
+          {!b.published && <Button variant="primary" onPress={() => { dispatch({ type: 'business/set', business: { ...b, published: true } }); toast({ message: 'Your page is live. Share the link.', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'business/set', business: { ...b, published: false } }) } }); }}>Publish</Button>}
+          <Button variant="secondary" icon={<Copy {...i14} />} isDisabled={!b.published} onPress={() => copy(url)}>Copy link</Button>
           <Button variant="secondary" icon={<ExternalLink {...i14} />} onPress={onSeePage}>See it</Button>
           <Button variant="ghost" icon={<Pencil {...i14} />} onPress={() => setEditing(true)}>Edit page</Button>
         </div>
@@ -146,7 +148,7 @@ function EditPageDrawer({ state, business, onClose, onSave }: { readonly state: 
   const [hours, setHours] = useState(week);
   const dirty = JSON.stringify(b) !== JSON.stringify(business) || JSON.stringify(hours) !== JSON.stringify(week);
   return (
-    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Your page" subtitle={homeUrl({ ...state, business: b })} width="lg" saveState={dirty ? 'dirty' : 'idle'} onSave={() => onSave(b, hours)} onDiscard={onClose}>
+    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Your page" subtitle={homeUrl({ ...state, business: b })} width="lg" saveState={dirty ? 'dirty' : 'clean'} onSave={() => onSave(b, hours)} onDiscard={onClose}>
       <div className="tf-bkf-cards">
         <section className="tf-bkf-card">
           <div className="tf-bkf__stack">

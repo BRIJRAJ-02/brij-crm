@@ -1,4 +1,5 @@
 // Step 7: the meeting drawer, and its Reschedule and Reassign dialogs.
+import { copyText } from '../../lib/copy.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'react-aria-components';
 import { Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
@@ -59,7 +60,7 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <Menu aria-label="Meeting actions" placement="bottom end" onAction={(k: Key) => {
             if (k === 'reassign') onReassign(m);
             else if (k === 'noshow') onNoShow(m);
-            else if (k === 'copy') { void navigator.clipboard?.writeText(`https://timefix.com/m/${m.id.slice(-6)}`).catch(() => undefined); toast({ message: 'Meeting link copied', tone: 'success' }); }
+            else if (k === 'copy') { void copyText(`https://timefix.com/m/${m.id.slice(-6)}`).then((ok) => toast(ok ? { message: 'Meeting link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://timefix.com/m/${m.id.slice(-6)}`}`, tone: 'danger' })); }
           }}>
             <MenuItem id="reassign" icon={<Users {...i16} />} isDisabled={!open}>Reassign</MenuItem>
             <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy meeting link</MenuItem>

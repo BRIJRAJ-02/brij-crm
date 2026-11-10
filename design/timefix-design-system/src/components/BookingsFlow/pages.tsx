@@ -1,4 +1,5 @@
 // Pages: booking pages as rows (picture, name, length · place, who hosts, On/Hidden, Share, ⋯), Mine / Team.
+import { copyText } from '../../lib/copy.ts';
 import { useState } from 'react';
 import type { EditorSection } from './editor.tsx';
 import { Button as AriaButton } from 'react-aria-components';
@@ -65,7 +66,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
             <Button variant="secondary" icon={<Users {...i14} />}>Team links</Button>
             <Menu aria-label="Team links" placement="bottom end" onAction={(k: Key) => {
               const t = teamLinks.find((x) => x.id === k);
-              if (t) { void navigator.clipboard?.writeText(`https://${t.url}`).catch(() => undefined); toast({ message: `${t.label} link copied`, tone: 'success' }); }
+              if (t) { void copyText(`https://${t.url}`).then((ok) => toast(ok ? { message: `${t.label} link copied`, tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://${t.url}`}`, tone: 'danger' })); }
             }}>
               <MenuSection title="Copy one link for">
                 {teamLinks.map((t) => <MenuItem key={t.id} id={t.id} icon={t.id === 'workspace' ? <Building2 {...i16} /> : <Users {...i16} />} description={`${t.url} · ${t.count} ${t.count === 1 ? 'page' : 'pages'}`}>{t.label}</MenuItem>)}

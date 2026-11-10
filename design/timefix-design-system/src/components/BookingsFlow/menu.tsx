@@ -1,5 +1,6 @@
 // A restaurant's Menu: its menus (Lunch, Dinner, Drinks) as sections of dishes, edited as a draft beside a live preview and published
 // when ready; Sold out and Hide apply at once. QR codes gives each table a code that opens timefix.com/<handle>/menu with the table set.
+import { copyText } from '../../lib/copy.ts';
 import { useRef, useState } from 'react';
 import { Copy, Download, Eye, MoreHorizontal, Pencil, Plus, QrCode as QrIcon, UtensilsCrossed, X } from 'lucide-react';
 import { Button, IconButton } from '../Button/Button.tsx';
@@ -269,7 +270,7 @@ function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns, on
   const readPhoto = (files: readonly File[]) => { const f = files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { if (typeof r.result === 'string') patch({ photo: r.result }); }; r.readAsDataURL(f); };
   return (
     <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={dish ? dish.name : 'New dish'} subtitle={where.length ? `On ${where.join(', ')}` : 'Not on a menu yet'} width="lg"
-      saveState={dirty ? 'dirty' : 'idle'} saveLabel={dish ? 'Save dish' : 'Add dish'} onSave={() => { if (d.name.trim() && priced) onSave({ ...finished, name: d.name.trim() }); }} onDiscard={onClose}
+      saveState={dirty ? 'dirty' : 'clean'} saveLabel={dish ? 'Save dish' : 'Add dish'} onSave={() => { if (d.name.trim() && priced) onSave({ ...finished, name: d.name.trim() }); }} onDiscard={onClose}
       footerStart={onDelete && <Button variant="ghost" onPress={onDelete}>Delete dish</Button>}>
       <div className="tf-bkf-cards">
         <section className="tf-bkf-card">
@@ -338,7 +339,7 @@ function MenuSettings({ menu, onClose, onSave }: { readonly menu: MenuT; readonl
   const [m, setM] = useState(menu);
   const dirty = JSON.stringify(m) !== JSON.stringify(menu);
   return (
-    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Menu settings" subtitle={menu.name} saveState={dirty ? 'dirty' : 'idle'} onSave={() => onSave(m)} onDiscard={onClose}>
+    <Drawer isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Menu settings" subtitle={menu.name} saveState={dirty ? 'dirty' : 'clean'} onSave={() => onSave(m)} onDiscard={onClose}>
       <div className="tf-bkf-cards"><section className="tf-bkf-card"><div className="tf-bkf__stack">
         <TextField label="Name" value={m.name} onChange={(name) => setM({ ...m, name })} />
         <Switch isSelected={m.serving !== undefined} onChange={(on) => setM({ ...m, serving: on ? { start: 12 * 60, end: 16 * 60 } : undefined })}>Served at set times</Switch>
@@ -430,7 +431,7 @@ function QrCodes({ state, dispatch, onGuest, onTables }: { readonly state: Booki
                     <IconButton size="sm" label={`More for ${t.name}`}><MoreHorizontal {...i14} /></IconButton>
                     <Menu aria-label={`${t.name} code`} placement="bottom end" onAction={(k) => {
                       if (k === 'open') onGuest(t.code ?? t.name);
-                      else if (k === 'copy') { void navigator.clipboard?.writeText(`https://${tableMenuUrl(state, t)}`).catch(() => undefined); toast({ message: 'Link copied', tone: 'success' }); }
+                      else if (k === 'copy') { void copyText(`https://${tableMenuUrl(state, t)}`).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. Select the link and copy it: ${`https://${tableMenuUrl(state, t)}`}`, tone: 'danger' })); }
                       else if (k === 'png') { const svg = refs.current[t.id]; if (svg) void downloadQr(svg, `${t.name}-menu`, 'png').then(saved); }
                       else if (k === 'renew') setRenew(t);
                     }}>

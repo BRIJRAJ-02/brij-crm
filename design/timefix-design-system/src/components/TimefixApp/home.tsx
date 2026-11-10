@@ -24,10 +24,17 @@ export interface HomeScreenProps {
   readonly onImport: () => void;
   readonly onSettings: (page: string) => void;
   readonly onNewTask: () => void;
+  /** Insights › Reports, on one report. */
+  readonly onReports?: (reportId?: string) => void;
 }
+/** Home's sections, in order; any can be turned off in Settings › Preferences. */
+export const HOME_SECTIONS: ReadonlyArray<{ readonly id: string; readonly label: string }> = [
+  { id: 'today', label: 'Today and my tasks' }, { id: 'numbers', label: 'The four numbers' }, { id: 'link', label: 'Link page' }, { id: 'team', label: 'Team this week' }, { id: 'reports', label: 'Saved reports' },
+];
 
 /** Home. */
-export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImport, onSettings, onNewTask }: HomeScreenProps) {
+export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImport, onSettings, onNewTask, onReports }: HomeScreenProps) {
+  const hidden = new Set(state.prefs.homeHidden ?? []);
   const { toast } = useToast();
   const now = new Date();
   const hour = now.getHours();
@@ -71,7 +78,7 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
         <p className="tf-home__sub tf-num">{now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {summary.join(' · ')}</p>
       </header>
       {!state.setupHidden && <Checklist title="Finish setting up" steps={steps} onAction={step} onHide={() => { dispatch({ type: 'setup/hide', hidden: true }); toast({ message: 'Setup hidden. Bring it back from Settings › Preferences.', action: { label: 'Undo', onAction: () => dispatch({ type: 'setup/hide', hidden: false }) } }); }} />}
-      <div className="tf-home__grid">
+      {!hidden.has('today') && <div className="tf-home__grid">
         <Card title="Today" action={<CardLink onPress={() => onBookings('meetings')}>All meetings</CardLink>}>
           {today.length === 0 ? (
             <div className="tf-home__none"><p>No meetings today.</p><Button size="sm" variant="secondary" onPress={() => onBookings('pages')}>Share a booking link</Button></div>
@@ -101,13 +108,27 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
             {mine.filter((t) => !t.done).length > shown.length && <button type="button" className="tf-rec__link" onClick={() => onGo('tasks')}>{mine.filter((t) => !t.done).length - shown.length} more in Tasks</button>}
           </>)}
         </Card>
-      </div>
-      <div className="tf-home__stats">
+      </div>}
+      {!hidden.has('numbers') && <div className="tf-home__stats">
         <StatCard label="Open pipeline" icon={<CircleDollarSign {...i16} />} value={open.reduce((n, d) => n + d.amount, 0)} format={inr} delta={{ value: `${open.length} deals`, direction: 'flat' }} />
         <StatCard label="Won this quarter" icon={<Trophy {...i16} />} value={wonNow} format={inr} delta={wonDelta === undefined ? { value: wonBefore === 0 && wonNow > 0 ? 'First wins' : 'None yet', direction: 'flat' } : { value: `${wonDelta > 0 ? '+' : ''}${wonDelta}%`, direction: wonDelta > 0 ? 'up' : wonDelta < 0 ? 'down' : 'flat', note: 'vs last quarter', isGood: wonDelta >= 0 }} />
         <StatCard label="Meetings this week" icon={<CalendarDays {...i16} />} value={week.length} delta={{ value: `${week.filter((m) => m.status === 'pending').length} to confirm`, direction: 'flat' }} />
         <StatCard label="Overdue tasks" icon={<AlarmClock {...i16} />} value={mine.filter((t) => !t.done && t.due && t.due < new Date(now.getFullYear(), now.getMonth(), now.getDate())).length} delta={{ value: 'yours', direction: 'flat' }} />
-      </div>
+      </div>}
+      {(!hidden.has('link') || !hidden.has('team') || !hidden.has('reports')) && <div className="tf-home__grid">
+        {!hidden.has('link') && <Card title="Link page" action={<CardLink onPress={() => onGo('links')}>All links</CardLink>}>
+          <div className="tf-home__none"><p className="tf-num">{state.linkPage || state.setupDone.includes('link') ? `Live at timefix.com/${bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase()}` : 'Not published yet'}</p>
+            <Button size="sm" variant="secondary" onPress={() => onGo('link')}>Edit link page</Button></div>
+        </Card>}
+        {!hidden.has('team') && state.members.length > 1 && <Card title="Team this week" action={<CardLink onPress={() => onBookings('meetings')}>Meetings</CardLink>}>
+          <ul className="tf-home__team">{state.members.map((m) => { const n = week.filter((x) => x.host === m.name).length; const deals = open.filter((d) => d.owner === m.name).length; return (
+            <li key={m.id}><span>{m.name}</span><span className="tf-rec__muted tf-num">{n} {n === 1 ? 'meeting' : 'meetings'} · {deals} open {deals === 1 ? 'deal' : 'deals'}</span></li>); })}</ul>
+        </Card>}
+        {!hidden.has('reports') && <Card title="Saved reports" action={<CardLink onPress={() => onReports?.()}>Insights</CardLink>}>
+          {state.reports.length === 0 ? <div className="tf-home__none"><p>No reports yet.</p><Button size="sm" variant="secondary" onPress={() => onReports?.()}>Make one</Button></div>
+            : <ul className="tf-home__team">{state.reports.slice(0, 4).map((r) => <li key={r.id}><button type="button" className="tf-rec__link" onClick={() => onReports?.(r.id)}>{r.name}</button></li>)}</ul>}
+        </Card>}
+      </div>}
     </div>
   );
 }

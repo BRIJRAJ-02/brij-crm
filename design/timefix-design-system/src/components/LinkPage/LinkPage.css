@@ -98,3 +98,20 @@
 @media (prefers-reduced-motion: reduce) {
   .tf-linkpage, .tf-linkpage__booking-panel, .tf-linkpage__booking-clip, .tf-linkpage__foot { transition: none; }
 }
+.tf-linkpage__text { display: flex; flex-direction: column; gap: var(--space-4); }
+.tf-linkpage__text p { margin: 0; color: var(--tf-lp-text, var(--text)); font: 400 15px/24px var(--font-sans); white-space: pre-line; text-align: center; }
+.tf-linkpage__faq { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-linkpage__faq details { border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-linkpage__faq summary { padding: var(--space-12) var(--space-16); color: var(--text); font: 500 15px/22px var(--font-sans); cursor: pointer; }
+.tf-linkpage__faq summary:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-lg); }
+.tf-linkpage__faq details p { margin: 0; padding: 0 var(--space-16) var(--space-12); color: var(--text-secondary); font: 400 14px/22px var(--font-sans); }
+.tf-linkpage__quote { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-linkpage__quote blockquote { margin: 0; color: var(--text); font: 400 15px/24px var(--font-sans); }
+.tf-linkpage__quote figcaption { color: var(--text-secondary); font: 500 13px/18px var(--font-sans); }
+.tf-linkpage__signup { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 0 0 var(--border-width-hairline) var(--border-subtle); }
+.tf-linkpage__signup-title { color: var(--text); font: 500 15px/22px var(--font-sans); }
+.tf-linkpage__signup-row { display: flex; gap: var(--space-8); }
+.tf-linkpage__signup-input { flex: 1; min-width: 0; height: var(--size-control); padding: 0 var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-md); background: var(--canvas); color: var(--text); font: 400 15px/20px var(--font-sans); }
+.tf-linkpage__signup-input:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 1px; }
+.tf-linkpage__signup-error { color: var(--danger); font: 400 13px/18px var(--font-sans); }
+.tf-linkpage__signup--done { color: var(--text); font: 500 14px/20px var(--font-sans); text-align: center; }

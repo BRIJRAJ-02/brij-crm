@@ -1,7 +1,12 @@
 // A record's full page: a header, then the work on it in tabs (Overview, Activity, Notes, Tasks, Comments), with its details down the side.
 // Log a call or meeting in two clicks; every change has Undo.
 import { useState } from 'react';
-import { ArrowLeft, Phone, Users as UsersIcon } from 'lucide-react';
+import { ArrowLeft, Link2, ListPlus, Mail, Phone, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
+import { MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
+import { Select } from '../Select/Select.tsx';
+import { TaskDialog } from './you.tsx';
+import { customColumns, canEditRecords } from './records.tsx';
+import { copyText } from '../../lib/copy.ts';
 import { RecordHeader } from '../RecordHeader/RecordHeader.tsx';
 import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
 import { AttributeRow, RecordSection } from '../RecordPanel/RecordPanel.tsx';
@@ -43,6 +48,9 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
   const [tab, setTab] = useState(initialTab ?? 'overview');
   const [logging, setLogging] = useState(false);
   const [noteId, setNoteId] = useState<string>();
+  const [emailing, setEmailing] = useState(false);
+  const [listing, setListing] = useState(false);
+  const [taskOpen, setTaskOpen] = useState<string | 'new'>();
   const link = { object, id };
   const same = (r: { readonly object: ObjectId; readonly id: string } | undefined) => r?.object === object && r.id === id;
   const { name, sub } = recordName(state, link);
@@ -61,15 +69,19 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
   /** One field on this record. Saves on change, says so, and Undo puts back only this field. */
   const fieldRow = (attribute: Attribute, key: string, value: unknown, toValue: (v: unknown) => unknown = (v) => String(v ?? '')) => (
     <AttributeRow key={attribute.id} attribute={attribute} value={value as never} onChange={(v) => {
+      if (!canEdit) { toast({ message: `You’re previewing as a ${state.previewRole?.toLowerCase()}: you can’t change this.` }); return; }
       const was = current?.[key]; const next = toValue(v); if (String(next) === String(was)) return;
       dispatch({ type: 'records/fields', object, changes: [{ id, patch: { [key]: next } }] });
       toast({ message: `${attribute.name} saved`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { [key]: was } }] }) } });
     }} />
   );
+  const canEdit = canEditRecords(state);
   if (!current) {
     const binned = state.trash.find((t) => t.record.id === id);
-    return <div className="tf-rec__gone"><p>{binned ? `${binned.record.name} is in Trash. ${binned.by} deleted it.` : 'This record was deleted for good.'}</p>
-      <span className="tf-set__row">{binned && <Button variant="primary" onPress={() => { dispatch({ type: 'trash/restore', id: binned.id }); toast({ message: `${binned.record.name} restored`, tone: 'success' }); }}>Restore</Button>}
+    const into = binned?.mergedInto ? recordName(state, { object, id: binned.mergedInto }) : undefined;
+    return <div className="tf-rec__gone"><p>{binned && into ? `${binned.record.name} was merged into ${into.name}.` : binned ? `${binned.record.name} is in Trash. ${binned.by} deleted it.` : 'This record was deleted for good.'}</p>
+      {binned?.mergedInto && <Button variant="primary" onPress={() => { if (binned.mergedInto) onOpen(object, binned.mergedInto); }}>Open {into?.name}</Button>}
+      <span className="tf-set__row">{binned && !binned.mergedInto && <Button variant="primary" onPress={() => { dispatch({ type: 'trash/restore', id: binned.id }); toast({ message: `${binned.record.name} restored`, tone: 'success' }); }}>Restore</Button>}
         <Button variant="secondary" onPress={onBack}>{backLabel ? `Back to ${backLabel}` : 'Back'}</Button></span></div>;
   }
   const events: ReadonlyArray<ActivityEvent> = [
@@ -98,7 +110,18 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
         {fieldRow({ id: 'city', name: 'City', type: 'text' }, 'city', company.city)}
       </>}
       {current && fieldRow({ id: 'owner', name: 'Owner', type: 'actor', candidates: state.members.map((m) => ({ id: m.name, name: m.name })) }, 'owner', { id: current.owner, name: current.owner }, (v) => (typeof v === 'object' && v !== null && 'name' in v ? String((v as { name: string }).name) : String(v ?? '')))}
-      {lists.length > 0 && <RecordSection title="Lists" count={lists.length}>{lists.map((l) => <span key={l.id} className="tf-rec__rel tf-rec__rel--static">{l.name}<span className="tf-rec__muted">{l.entries.find((e) => e.recordId === id)?.stage}</span></span>)}</RecordSection>}
+      {(state.objects.find((o) => o.id === object)?.attributes ?? []).filter((a) => customColumns(state, object).some((c) => c.id === a.id)).map((a) => (
+        <AttributeRow key={a.id} attribute={a} value={(current.extra as Readonly<Record<string, string>> | undefined)?.[a.id]} onChange={(v) => {
+          if (!canEdit) return;
+          const before = current.extra as Readonly<Record<string, string>> | undefined;
+          dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: { ...(before ?? {}), [a.id]: Array.isArray(v) ? v.join(', ') : String(v ?? '') } } }] });
+          toast({ message: `${a.name} saved`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: before } }] }) } });
+        }} />
+      ))}
+      <RecordSection title="Lists" count={lists.length}>
+        {lists.map((l) => <span key={l.id} className="tf-rec__rel tf-rec__rel--static">{l.name}<span className="tf-rec__muted">{l.entries.find((e) => e.recordId === id)?.stage}</span></span>)}
+        {canEdit && <Button size="sm" variant="ghost" icon={<ListPlus {...i14} />} onPress={() => setListing(true)}>Add to a list</Button>}
+      </RecordSection>
       {company && object !== 'companies' && <RecordSection title="Company" count={1}><button type="button" className="tf-rec__rel" onClick={() => onOpen('companies', company.id)}><Avatar name={company.name} size={20} shape="square" />{company.name}</button></RecordSection>}
       {object === 'companies' && <RecordSection title="People" count={state.people.filter((p) => p.companyId === id).length}>{state.people.filter((p) => p.companyId === id).map((p) => <button key={p.id} type="button" className="tf-rec__rel" onClick={() => onOpen('people', p.id)}><Avatar name={p.name} size={20} />{p.name}</button>)}</RecordSection>}
       {object !== 'deals' && <RecordSection title="Deals" count={state.deals.filter((d) => (object === 'people' ? d.contactId === id : d.companyId === id)).length}>
@@ -112,7 +135,18 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       <RecordHeader name={name} kind={object === 'people' ? 'person' : object === 'companies' ? 'company' : 'deal'} sub={sub}
         tags={person?.tags.map((t) => ({ label: t })) ?? []}
         onRename={(n) => { if (person) dispatch({ type: 'person/set', person: { ...person, name: n } }); else if (deal) dispatch({ type: 'deal/set', deal: { ...deal, name: n } }); else if (company) dispatch({ type: 'company/set', company: { ...company, name: n } }); }}
-        onEmail={person ? () => toast({ message: `Writing to ${person.email}…` }) : undefined}
+        onEmail={person?.email ? () => setEmailing(true) : undefined}
+        moreActions={<>
+          <MenuItem id="copy" icon={<Link2 size={16} strokeWidth={1.75} />}>Copy link</MenuItem>
+          {canEdit ? <MenuItem id="list" icon={<ListPlus size={16} strokeWidth={1.75} />}>Add to a list</MenuItem> : null}
+          {canEdit ? <MenuSeparator /> : null}
+          {canEdit ? <MenuItem id="delete" icon={<Trash2 size={16} strokeWidth={1.75} />} isDanger>Delete</MenuItem> : null}
+        </>}
+        onMoreAction={(k) => {
+          if (k === 'copy') { const url = `https://timefix.com/${state.prefs.workspace.slug}/${object}/${id}`; void copyText(url).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work: ${url}`, tone: 'danger' })); }
+          else if (k === 'list') setListing(true);
+          else if (k === 'delete') { dispatch({ type: 'records/remove', object, ids: [id] }); onBack(); toast({ message: `${name} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: [id] }) } }); }
+        }}
         stage={deal ? { attribute: stageAttr, value: deal.stage, onChange: (v) => { const before = deal; dispatch({ type: 'deal/set', deal: { ...deal, stage: String(v) as Stage } }); toast({ message: `Moved to ${String(v)}`, action: { label: 'Undo', onAction: () => dispatch({ type: 'deal/set', deal: before }) } }); } } : undefined} />
       <div className="tf-recp__body">
         <div className="tf-recp__main">
@@ -146,7 +180,8 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
               )}
             </TabPanel>
             <TabPanel id="tasks" className="tf-recp__panel">
-              <TaskList tasks={tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee }))}
+              <div className="tf-recp__quick"><Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={() => setTaskOpen('new')}>New task with a date</Button></div>
+              <TaskList tasks={tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee }))} onOpen={(tid) => setTaskOpen(tid)}
                 onToggle={(tid, done) => { const t = state.tasks.find((x) => x.id === tid); if (!t) return; dispatch({ type: 'task/set', task: { ...t, done } }); toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); }}
                 onAdd={(title) => dispatch({ type: 'task/set', task: { id: newId('t'), title, done: false, assignee: state.me, record: link, created: new Date() } })} />
             </TabPanel>
@@ -169,10 +204,14 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
             </TabPanel>
             <TabPanel id="comments" className="tf-recp__panel">
               <CommentThread me={state.me} people={people}
-                comments={comments.flatMap((c) => [{ id: c.id, author: c.author, time: ago(c.at), body: c.body, reactions: state.reactions[c.id] }, ...c.replies.map((r) => ({ id: r.id, author: r.author, time: ago(r.at), body: r.body, replyTo: c.id, reactions: state.reactions[r.id] }))])}
+                comments={comments.flatMap((c) => [{ id: c.id, author: c.author, time: ago(c.at), body: c.body, resolved: c.resolved, reactions: state.reactions[c.id] }, ...c.replies.map((r) => ({ id: r.id, author: r.author, time: ago(r.at), body: r.body, replyTo: c.author, reactions: state.reactions[r.id] }))])}
+                onResolve={(cid, resolved) => { const c = comments.find((x) => x.id === cid); if (!c) return; dispatch({ type: 'comment/set', comment: { ...c, resolved } }); toast({ message: resolved ? 'Thread resolved' : 'Thread reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'comment/set', comment: c }) } }); }}
                 onReact={(cid, kind) => dispatch({ type: 'reaction/toggle', id: cid, kind })}
-                onSend={(body, replyTo) => new Promise<void>((resolve) => {
-                  const parent = comments.find((c) => c.id === replyTo);
+                onSend={(body, _replyTo, replyId) => new Promise<void>((resolve) => {
+                  // A reply files under its thread, whether they answered the first comment or a reply in it.
+                  const parent = comments.find((c) => c.id === replyId || c.replies.some((r) => r.id === replyId));
+                  const named = state.members.filter((m) => m.name !== state.me && body.includes(`@${m.name}`)).map((m) => m.name.split(' ')[0]);
+                  if (named.length) toast({ message: `${named.join(' and ')} ${named.length === 1 ? 'gets' : 'get'} this in their Inbox`, tone: 'success' });
                   if (parent) dispatch({ type: 'comment/set', comment: { ...parent, replies: [...parent.replies, { id: newId('cr'), author: state.me, body, at: new Date() }] } });
                   else dispatch({ type: 'comment/set', comment: { id: newId('cm'), record: link, author: state.me, body, at: new Date(), resolved: false, replies: [] } });
                   resolve();
@@ -182,6 +221,19 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
         </div>
         {details}
       </div>
+      {emailing && person && <EmailDialog to={person.email} name={person.name} onClose={() => setEmailing(false)} onSend={(subject) => {
+        dispatch({ type: 'activity/add', activity: { id: newId('a'), record: link, kind: 'email', actor: state.me, text: `emailed “${subject}”`, at: new Date() } });
+        setEmailing(false); toast({ message: `Sent to ${person.email} from your connected mailbox. It’s on the timeline.`, tone: 'success' });
+      }} />}
+      {listing && <AddToList state={state} object={object} id={id} onClose={() => setListing(false)} onAdd={(lid) => {
+        const l = state.lists.find((x) => x.id === lid); if (!l) return;
+        const e = { id: newId('e'), recordId: id, stage: l.stages[0] ?? '', priority: 'Medium' as const, next: '', added: new Date() };
+        dispatch({ type: 'list/entries', id: l.id, add: [e] }); setListing(false);
+        toast({ message: `Added to ${l.name}`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'list/entries', id: l.id, remove: [e.id] }) } });
+      }} />}
+      {taskOpen && <TaskDialog state={state} record={link} task={taskOpen === 'new' ? undefined : state.tasks.find((t) => t.id === taskOpen)} onClose={() => setTaskOpen(undefined)}
+        onSave={(t) => { dispatch({ type: 'task/set', task: t }); setTaskOpen(undefined); toast({ message: taskOpen === 'new' ? 'Task added' : 'Task saved', tone: 'success' }); }}
+        onDelete={taskOpen !== 'new' ? () => { const t = state.tasks.find((x) => x.id === taskOpen); if (!t) return; dispatch({ type: 'task/remove', id: t.id }); setTaskOpen(undefined); toast({ message: 'Task deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); } : undefined} />}
       {logging && <LogActivity onClose={() => setLogging(false)} onLog={(kind, text) => {
         dispatch({ type: 'activity/add', activity: { id: newId('a'), record: link, kind, actor: state.me, text, at: new Date() } });
         setLogging(false); toast({ message: kind === 'call' ? 'Call logged' : 'Meeting logged', tone: 'success' }); setTab('activity');
@@ -202,6 +254,34 @@ function LogActivity({ onClose, onLog }: { readonly onClose: () => void; readonl
         <TextField label="What about" value={what} onChange={setWhat} autoFocus placeholder="Rollout plan" />
         <TextArea label="Notes" aside="Optional" rows={3} value={notes} onChange={setNotes} />
       </div>
+    </Dialog>
+  );
+}
+
+/** Write to a person from their record. It sends from the connected mailbox and lands on the timeline. */
+function EmailDialog({ to, name, onClose, onSend }: { readonly to: string; readonly name: string; readonly onClose: () => void; readonly onSend: (subject: string) => void }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState(`Hi ${name.split(' ')[0]},\n\n`);
+  return (
+    <Dialog isOpen size="wide" onOpenChange={(o) => { if (!o) onClose(); }} title={`Email ${name}`} description={`To ${to}, from your connected mailbox.`}
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" icon={<Mail size={14} strokeWidth={1.75} />} isDisabled={!subject.trim() || !body.trim()} onPress={() => onSend(subject.trim())}>Send</Button></>}>
+      <div className="tf-rec__form">
+        <TextField label="Subject" value={subject} onChange={setSubject} autoFocus />
+        <TextArea label="Message" rows={6} value={body} onChange={setBody} />
+      </div>
+    </Dialog>
+  );
+}
+
+/** Put this record on one of the lists made for its kind. */
+function AddToList({ state, object, id, onClose, onAdd }: { readonly state: AppState; readonly object: ObjectId; readonly id: string; readonly onClose: () => void; readonly onAdd: (listId: string) => void }) {
+  const open = state.lists.filter((l) => l.object === object && !l.archived && !(l.oncePerRecord && l.entries.some((e) => e.recordId === id)));
+  const [pick, setPick] = useState(open[0]?.id ?? '');
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title="Add to a list"
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!pick} onPress={() => onAdd(pick)}>Add</Button></>}>
+      {open.length === 0 ? <p className="tf-rec__muted">It’s already on every list for {object}. Make a new list from the sidebar.</p>
+        : <Select label="List" value={pick} onChange={(v) => setPick(v ?? '')} items={open.map((l) => ({ id: l.id, label: l.name, description: `${l.entries.length} on it` }))} />}
     </Dialog>
   );
 }

@@ -76,10 +76,12 @@ export function ListScreen({ state, dispatch, listId, onOpenRecord, onDeleted, o
           <IconButton label="List settings"><MoreHorizontal {...i16} /></IconButton>
           <Menu aria-label="List" placement="bottom end" onAction={(k) => {
             if (k === 'settings') setSettings(true);
+            else if (k === 'archive') { const was = list; dispatch({ type: 'list/set', list: { ...list, archived: true } }); onDeleted(); toast({ message: `${list.name} archived. Find it in Settings › Lists.`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'list/set', list: was }); onRestored?.(was.id); } } }); }
             else if (k === 'delete') { const was = list; const at = state.lists.findIndex((x) => x.id === list.id); dispatch({ type: 'list/remove', id: list.id }); onDeleted();
               toast({ message: `${list.name} deleted. The records themselves stay.`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'list/insert', list: was, at }); onRestored?.(was.id); } } }); }
           }}>
-            <MenuItem id="settings">List settings</MenuItem>
+            <MenuItem id="settings">Rename, stages and settings</MenuItem>
+            <MenuItem id="archive">Archive list</MenuItem>
             <MenuSeparator />
             <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete list</MenuItem>
           </Menu>

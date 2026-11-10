@@ -1,8 +1,8 @@
 // Records: People, Companies, Deals. One toolbar (view, Table/Board, search, filters and sorts, Import/Export, New), a table you edit in place
 // or a board you drag, bulk actions with Undo, and a record panel beside the list. A changed view is a draft: Save it or Discard it.
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Selection, SortDescriptor } from 'react-aria-components';
-import { Building2, CircleDollarSign, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, Plus, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { Building2, CircleDollarSign, Copy, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, PenLine, Pencil, Plus, Star, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { DataGrid, type GridColumn, type GridRecord } from '../DataGrid/DataGrid.tsx';
 import { Board, type BoardColumn } from '../Board/Board.tsx';
 import { FilterBar, type FilterField, type FilterRule, type SortRule, type ViewColumn } from '../FilterBar/FilterBar.tsx';
@@ -20,10 +20,11 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { Callout } from '../Callout/Callout.tsx';
-import { duplicatePairs } from './duplicates.tsx';
+import { EmptyState } from '../EmptyState/EmptyState.tsx';
+import { companyPairs, duplicatePairs } from './duplicates.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { Attribute, AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { STAGES, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
+import { BUILT_IN_ATTRIBUTES, STAGES, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -92,12 +93,28 @@ export interface RecordsScreenProps {
   readonly onDuplicates?: () => void;
   /** Opens with the New dialog, its name filled in (⌘K "Create person ‘Ana’"). */
   readonly startNew?: string;
+  /** Settings › Objects, to add or change this object's attributes. */
+  readonly onAttributes?: () => void;
 }
 
+/** Owner-made attributes on a built-in object, as grid columns. Their values live in each record's `extra`. */
+export function customColumns(state: AppState, object: string): ReadonlyArray<GridColumn> {
+  return (state.objects.find((o) => o.id === object)?.attributes ?? []).filter((a) => !BUILT_IN_ATTRIBUTES.has(a.id)).map((a) => ({
+    id: a.id, name: a.name, width: 160, isSortable: true,
+    type: a.type === 'select' || a.type === 'status' ? a.type : a.type === 'number' || a.type === 'currency' ? 'number' : 'text',
+    options: a.options?.filter((o) => !o.archived).map((o) => ({ id: o.id, label: o.label, hue: o.hue })),
+  }));
+}
+/** The signed-in person can change records (not when previewing as a role that can't). */
+export const canEditRecords = (state: AppState) => !state.previewRole || (state.prefs.grants[state.previewRole.toLowerCase()] ?? []).includes('records.edit');
+
 /** One object's records. */
-export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDuplicates, startNew }: RecordsScreenProps) {
+export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDuplicates, startNew, onAttributes }: RecordsScreenProps) {
   const { toast } = useToast();
-  const def = objectDef(object, state);
+  const base = objectDef(object, state);
+  const extras = customColumns(state, object);
+  const def: ObjectDef = { ...base, columns: [...base.columns, ...extras], rows: (s) => base.rows(s).map((r) => ({ ...r, values: { ...r.values, ...((object === 'people' ? s.people : object === 'companies' ? s.companies : s.deals).find((x) => x.id === r.id)?.extra ?? {}) } })) };
+  const canEdit = canEditRecords(state);
   const views = state.views[object];
   const [viewId, setViewId] = useState(views[0]?.id ?? '');
   const saved = views.find((v) => v.id === viewId) ?? views[0];
@@ -111,8 +128,28 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   const [creating, setCreating] = useState(startNew !== undefined);
   const [newStage, setNewStage] = useState<Stage>();
   const [naming, setNaming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState(false);
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  // A short skeleton on arrival, the way the real list loads from the server.
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { const t = window.setTimeout(() => setLoading(false), 350); return () => window.clearTimeout(t); }, [object]);
+  /** Cell edits made here, newest last: ⌘Z takes back the latest one. */
+  const edits = useRef<Array<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }>>([]);
   const all = useMemo(() => def.rows(state), [state, object]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+      const t = e.target as HTMLElement | null; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
+      const last = edits.current.pop(); if (!last) return;
+      e.preventDefault(); dispatch({ type: 'records/fields', object, changes: [last] }); toast({ message: 'Edit undone' });
+    };
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
+  }, [object]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!view) return null;
+  // A guest sees only what's shared with them; nothing is yet in the prototype.
+  if (state.previewRole === 'Guest') return <div className="tf-app__empty"><EmptyState icon={<Users size={20} strokeWidth={1.75} />} title={`No ${def.many} shared with you`} description={`As a guest you see only lists and records someone shares with you. Ask an admin of ${state.prefs.workspace.name} to share one.`} /></div>;
   const edit = (patch: Partial<SavedView>) => { setDraft({ ...view, ...patch }); if (patch.filters) setSelected(new Set()); };
   const q = query.trim().toLowerCase();
   const rows = all.filter((r) => view.filters.every((f) => passes(r, f)) && (!q || Object.values(r.values).some((v) => String(v ?? '').toLowerCase().includes(q))));
@@ -132,25 +169,45 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   /** One value as the record keeps it: dates as dates, amounts as numbers. */
   const cellValue = (col: string, value: string): unknown => (col === 'amount' ? Number(value) || 0 : col === 'close' ? (dayOf(value) ?? new Date()) : value);
   const recordOf = (rowId: string): Readonly<Record<string, unknown>> | undefined => (object === 'people' ? state.people : object === 'companies' ? state.companies : state.deals).find((x) => x.id === rowId) as Readonly<Record<string, unknown>> | undefined;
-  const setCell = (rowId: string, col: string, value: string) => { if (recordOf(rowId)) dispatch({ type: 'records/fields', object, changes: [{ id: rowId, patch: { [col]: cellValue(col, value) } }] }); };
+  const isExtra = (col: string) => extras.some((c) => c.id === col);
+  const setCell = (rowId: string, col: string, value: string) => {
+    const rec = recordOf(rowId); if (!rec || !canEdit) return;
+    if (col === 'email' && value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) { toast({ message: `“${value}” isn’t an email address. Nothing changed.`, tone: 'danger' }); return; }
+    if (col === 'name' && !value.trim()) { toast({ message: 'A name can’t be empty. Nothing changed.', tone: 'danger' }); return; }
+    const patch = isExtra(col) ? { extra: { ...((rec.extra as Readonly<Record<string, string>> | undefined) ?? {}), [col]: value } } : { [col]: cellValue(col, value) };
+    edits.current.push({ id: rowId, patch: Object.fromEntries(Object.keys(patch).map((k) => [k, rec[k]])) });
+    dispatch({ type: 'records/fields', object, changes: [{ id: rowId, patch }] });
+  };
   /** Sets one field on many records; Undo puts back only that field, so later edits stay. */
   const setMany = (rowIds: ReadonlyArray<string>, col: string, value: unknown, message: string) => {
-    const was = rowIds.map((id) => ({ id, patch: { [col]: recordOf(id)?.[col] } }));
-    dispatch({ type: 'records/fields', object, changes: rowIds.map((id) => ({ id, patch: { [col]: value } })) });
+    const key = isExtra(col) ? 'extra' : col;
+    const was = rowIds.map((id) => ({ id, patch: { [key]: recordOf(id)?.[key] } }));
+    dispatch({ type: 'records/fields', object, changes: rowIds.map((id) => ({ id, patch: isExtra(col) ? { extra: { ...((recordOf(id)?.extra as Readonly<Record<string, string>> | undefined) ?? {}), [col]: String(value ?? '') } } : { [col]: value } })) });
     toast({ message, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: was }) } });
   };
-  const exportCsv = async (only?: ReadonlyArray<string>) => {
+  const exportCsv = async (only?: ReadonlyArray<string>, everyColumn = false) => {
     const pick = only ? sorted.filter((r) => only.includes(r.id)) : sorted;
+    const cols = everyColumn ? def.columns : columns;
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [columns.map((c) => esc(c.name)).join(','), ...pick.map((r) => columns.map((c) => esc(r.values[c.id])).join(','))].join('\n');
+    const csv = [cols.map((c) => esc(c.name)).join(','), ...pick.map((r) => cols.map((c) => esc(r.values[c.id])).join(','))].join('\n');
     const o = await saveFile(`${def.many}.csv`, new Blob([csv], { type: 'text/csv' }));
     if (o === 'saved') toast({ message: `${pick.length} ${pick.length === 1 ? def.one : def.many} exported`, tone: 'success' });
   };
-  const board: ReadonlyArray<BoardColumn> = STAGES.map((stage) => ({ id: stage, title: stage, status: STAGE_LOOK[stage].status, hue: STAGE_LOOK[stage].hue,
-    cards: sorted.filter((r) => r.values.stage === stage).map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }));
+  const byOwner = view.groupBy === 'owner';
+  const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = byOwner
+    ? state.members.map((m) => ({ id: m.name, title: m.name, status: 'draft' as const, hue: 'gray' as const, field: 'owner' }))
+    : STAGES.map((stage) => ({ id: stage, title: stage, status: STAGE_LOOK[stage].status, hue: STAGE_LOOK[stage].hue, field: 'stage' }));
+  const board: ReadonlyArray<BoardColumn> = groups.map((g) => ({ id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id),
+    cards: sorted.filter((r) => r.values[g.field] === g.id).map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }));
   const peekIndex = peek ? sorted.findIndex((r) => r.id === peek) : -1;
   const peekGone = peek !== undefined && !all.some((r) => r.id === peek);
-  const pairs = onDuplicates ? duplicatePairs(state, new Set(state.notDupes)).length : 0;
+  const pairs = !onDuplicates ? 0 : object === 'people' ? duplicatePairs(state, new Set(state.notDupes)).length : object === 'companies' ? companyPairs(state, new Set(state.notDupes)).length : 0;
+  const shownRows = sorted.map((r) => (fresh.has(r.id) ? { ...r, isNew: true } : r));
+  const total = object === 'deals' ? sorted.reduce((n, r) => n + Number(r.values.amount ?? 0), 0) : 0;
+  const summary = `${sorted.length === all.length ? `${sorted.length}` : `${sorted.length} of ${all.length}`} ${sorted.length === 1 ? def.one : def.many}${object === 'deals' ? ` · ${inr(total)} total · ${inr(sorted.length ? Math.round(total / sorted.length) : 0)} average` : ''}`;
+  const others = views.filter((v) => v.id !== view.id);
+  /** After a bulk action the floating bar leaves; focus goes back to the table so keyboard use carries on. */
+  const refocus = () => window.requestAnimationFrame(() => { if (document.activeElement === document.body) document.querySelector<HTMLElement>('.tf-rec__grid [role="grid"]')?.focus(); });
 
   return (
     <div className="tf-rec">
@@ -161,7 +218,24 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
           const was = draft; const wasId = viewId; setViewId(v); setDraft(undefined); setSelected(new Set());
           if (was) toast({ message: `Unsaved changes to ${was.name} discarded`, action: { label: 'Undo', onAction: () => { setViewId(wasId); setDraft(was); } } });
         }}
-          items={[...views.map((v) => ({ id: v.id, label: v.name, description: v.isPrivate ? 'Only you' : undefined })), { id: 'new', label: 'New view…' }]} />
+          items={[...views.map((v, n) => ({ id: v.id, label: v.name, description: [n === 0 ? 'Default' : '', v.isPrivate ? 'Only you' : ''].filter(Boolean).join(' · ') || undefined })), { id: 'new', label: 'New view…' }]} />
+        <MenuTrigger>
+          <IconButton label={`More for the ${view.name} view`} size="md"><PenLine {...i16} /></IconButton>
+          <Menu aria-label="View" placement="bottom start" onAction={(k) => {
+            if (k === 'rename') setRenaming(true);
+            else if (k === 'duplicate') { const v: SavedView = { ...view, id: newId('v'), name: `${view.name} copy` }; dispatch({ type: 'views/set', object, views: [...views, v] }); setViewId(v.id); setDraft(undefined); toast({ message: `${v.name} made`, tone: 'success' }); }
+            else if (k === 'default') { const was = views; dispatch({ type: 'views/set', object, views: [saved ?? view, ...views.filter((v) => v.id !== view.id)] }); toast({ message: `${view.name} opens first now`, action: { label: 'Undo', onAction: () => dispatch({ type: 'views/set', object, views: was }) } }); }
+            else if (k === 'group-stage' || k === 'group-owner') edit({ groupBy: k === 'group-owner' ? 'owner' : 'stage', layout: 'board' });
+            else if (k === 'delete') { const was = views; const gone = view; dispatch({ type: 'views/set', object, views: others }); setViewId(others[0]?.id ?? ''); setDraft(undefined); toast({ message: `${gone.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'views/set', object, views: was }); setViewId(gone.id); } } }); }
+          }}>
+            <MenuItem id="rename" icon={<Pencil {...i16} />}>Rename view</MenuItem>
+            <MenuItem id="duplicate" icon={<Copy {...i16} />}>Duplicate view</MenuItem>
+            {views[0]?.id !== view.id ? <MenuItem id="default" icon={<Star {...i16} />}>Open this view first</MenuItem> : null}
+            {object === 'deals' ? <MenuItem id={byOwner ? 'group-stage' : 'group-owner'} icon={<LayoutGrid {...i16} />}>{byOwner ? 'Board by stage' : 'Board by owner'}</MenuItem> : null}
+            {others.length > 0 ? <MenuSeparator /> : null}
+            {others.length > 0 ? <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete view</MenuItem> : null}
+          </Menu>
+        </MenuTrigger>
         {object === 'deals' && <SegmentedControl aria-label="Layout" size="sm" selectedKey={view.layout} onSelectionChange={(k) => edit({ layout: k === 'board' ? 'board' : 'table' })}
           items={[{ id: 'table', label: 'Table', icon: <LayoutList {...i14} /> }, { id: 'board', label: 'Board', icon: <LayoutGrid {...i14} /> }]} />}
         <SearchField label={`Search ${def.many}`} placeholder={`Search ${def.many}`} size="sm" value={query} onChange={setQuery} className="tf-rec__search" />
@@ -175,31 +249,35 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
         )}
         <MenuTrigger>
           <IconButton label="Import or export" size="md"><MoreHorizontal {...i16} /></IconButton>
-          <Menu aria-label="Import or export" placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'import') onImport?.(); else if (k === 'dupes') onDuplicates?.(); }}>
-            {onImport ? <MenuItem id="import" icon={<Upload {...i16} />}>Import {def.many}</MenuItem> : null}
+          <Menu aria-label="Import or export" placement="bottom end" onAction={(k) => { if (k === 'export') void exportCsv(); else if (k === 'export-all') void exportCsv(undefined, true); else if (k === 'import') onImport?.(); else if (k === 'dupes') onDuplicates?.(); else if (k === 'attrs') onAttributes?.(); }}>
+            {onImport && canEdit ? <MenuItem id="import" icon={<Upload {...i16} />}>Import {def.many}</MenuItem> : null}
             <MenuItem id="export" icon={<Download {...i16} />} description={`${sorted.length} rows, ${columns.length} columns`}>Export this view</MenuItem>
+            {columns.length < def.columns.length ? <MenuItem id="export-all" icon={<Download {...i16} />} description={`${sorted.length} rows, all ${def.columns.length} columns`}>Export with hidden columns</MenuItem> : null}
             {onDuplicates ? <MenuItem id="dupes" icon={<Users {...i16} />}>Find duplicates</MenuItem> : null}
+            {onAttributes && canEdit ? <MenuItem id="attrs" icon={<Plus {...i16} />}>Add or change attributes</MenuItem> : null}
           </Menu>
         </MenuTrigger>
-        <Button variant="primary" icon={<Plus {...i14} />} onPress={() => setCreating(true)}>New {def.one}</Button>
+        {canEdit && <Button variant="primary" icon={<Plus {...i14} />} onPress={() => setCreating(true)}>New {def.one}</Button>}
       </div>
-      {pairs > 0 && onDuplicates && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{pairs === 1 ? '1 pair of people looks like a duplicate.' : `${pairs} pairs of people look like duplicates.`}</Callout>}
+      {!canEdit && <Callout tone="info">You’re previewing as a {state.previewRole?.toLowerCase()}: you can look, but not change {def.many}.</Callout>}
+      {pairs > 0 && onDuplicates && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{pairs === 1 ? `1 pair of ${def.many} looks like a duplicate.` : `${pairs} pairs of ${def.many} look like duplicates.`}</Callout>}
       <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
         columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} />
       <div className="tf-rec__split">
       {view.layout === 'board' && object === 'deals' ? (
         <div className="tf-rec__board">
-          <Board label="Deals by stage" noun="deals" columns={board} onOpen={setPeek}
-            onMove={(m) => { const stage = m.toColumnId as Stage; const moved = m.cardIds.filter((id) => state.deals.find((x) => x.id === id)?.stage !== stage); if (moved.length === 0) return;
-              setMany(moved, 'stage', stage, moved.length === 1 ? `Moved to ${stage}` : `${moved.length} deals moved to ${stage}`); }}
-            onAdd={(columnId) => { setNewStage(columnId as Stage); setCreating(true); }} />
+          <Board label={byOwner ? 'Deals by owner' : 'Deals by stage'} noun="deals" columns={board} onOpen={setPeek}
+            onToggleCollapse={(id) => setFolded((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
+            onMove={(m) => { if (!canEdit) return; const field = byOwner ? 'owner' : 'stage'; const to = m.toColumnId; const moved = m.cardIds.filter((id) => (state.deals.find((x) => x.id === id) as Readonly<Record<string, unknown>> | undefined)?.[field] !== to); if (moved.length === 0) return;
+              setMany(moved, field, to, byOwner ? `${moved.length === 1 ? 'Deal' : `${moved.length} deals`} now owned by ${to}` : moved.length === 1 ? `Moved to ${to}` : `${moved.length} deals moved to ${to}`); }}
+            onAdd={canEdit ? (columnId) => { if (!byOwner) setNewStage(columnId as Stage); setCreating(true); } : undefined} />
         </div>
       ) : (
         <div className="tf-rec__grid">
-          <DataGrid label={def.many} columns={columns} rows={sorted} selectedKeys={selected} onSelectionChange={setSelected}
+          <DataGrid label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} isLoading={loading} summary={summary}
             sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined}
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
-            onCellChange={setCell} onRowAction={setPeek} onAddRow={() => { setCreating(true); return undefined; }} addLabel={`New ${def.one}`}
+            onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${def.one}`}
             emptyState={q || view.filters.length ? <span>No {def.many} match. <button type="button" className="tf-rec__link" onClick={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</button></span> : `No ${def.many} yet.`} />
         </div>
       )}
@@ -209,11 +287,12 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
         {peek && <PeekBody state={state} object={object} id={peek} onCell={(c, v) => setCell(peek, c, v)} onOpen={onOpen} />}
       </RecordPanel>}
       </div>
-      <BulkActionBar count={ids.length} onClear={() => setSelected(new Set())}>
+      <BulkActionBar count={canEdit ? ids.length : 0} onClear={() => setSelected(new Set())}>
+        <BarButton icon={<Pencil {...i16} />} onPress={() => setBulkEdit(true)}>Edit field</BarButton>
         <MenuTrigger>
           <BarButton icon={<UserRound {...i16} />}>Owner</BarButton>
           <Menu aria-label="Set owner" onAction={(k) => {
-            setMany(ids, 'owner', String(k), `${ids.length} ${ids.length === 1 ? def.one : def.many} now owned by ${String(k)}`); setSelected(new Set());
+            setMany(ids, 'owner', String(k), `${ids.length} ${ids.length === 1 ? def.one : def.many} now owned by ${String(k)}`); setSelected(new Set()); refocus();
           }}>{state.members.map((m) => <MenuItem key={m.id} id={m.name}>{m.name}</MenuItem>)}</Menu>
         </MenuTrigger>
         <MenuTrigger>
@@ -222,25 +301,30 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             const l = state.lists.find((x) => x.id === String(k)); if (!l) return;
             const have = new Set(l.entries.map((e) => e.recordId));
             const fresh = ids.filter((id) => !(l.oncePerRecord && have.has(id)));
-            dispatch({ type: 'list/set', list: { ...l, entries: [...l.entries, ...fresh.map((rid) => ({ id: newId('e'), recordId: rid, stage: l.stages[0] ?? '', priority: 'Medium' as const, next: '', added: new Date() }))] } });
-            toast({ message: fresh.length === ids.length ? `${fresh.length} added to ${l.name}` : `${fresh.length} added to ${l.name}; ${ids.length - fresh.length} already there`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'list/set', list: l }) } });
+            const added = fresh.map((rid) => ({ id: newId('e'), recordId: rid, stage: l.stages[0] ?? '', priority: 'Medium' as const, next: '', added: new Date() }));
+            dispatch({ type: 'list/entries', id: l.id, add: added });
+            toast({ message: fresh.length === ids.length ? `${fresh.length} added to ${l.name}` : `${fresh.length} added to ${l.name}; ${ids.length - fresh.length} already there`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'list/entries', id: l.id, remove: added.map((e) => e.id) }) } });
             setSelected(new Set());
           }}>
-            {state.lists.filter((l) => l.object === object).length === 0 ? <MenuItem id="none" isDisabled>No lists of {def.many} yet</MenuItem>
-              : state.lists.filter((l) => l.object === object).map((l) => <MenuItem key={l.id} id={l.id} description={`${l.entries.length} on it`}>{l.name}</MenuItem>)}
+            {state.lists.filter((l) => l.object === object && !l.archived).length === 0 ? <MenuItem id="none" isDisabled>No lists of {def.many} yet</MenuItem>
+              : state.lists.filter((l) => l.object === object && !l.archived).map((l) => <MenuItem key={l.id} id={l.id} description={`${l.entries.length} on it`}>{l.name}</MenuItem>)}
           </Menu>
         </MenuTrigger>
         <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>
-        <BarButton icon={<Trash2 {...i16} />} onPress={() => { const gone = [...ids]; dispatch({ type: 'records/remove', object, ids: gone }); toast({ message: `${gone.length} ${gone.length === 1 ? def.one : def.many} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: gone }) } }); setSelected(new Set()); }}>Delete</BarButton>
+        <BarButton icon={<Trash2 {...i16} />} onPress={() => { const gone = [...ids]; dispatch({ type: 'records/remove', object, ids: gone }); toast({ message: `${gone.length} ${gone.length === 1 ? def.one : def.many} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: gone }) } }); setSelected(new Set()); refocus(); }}>Delete</BarButton>
       </BulkActionBar>
       {creating && <NewRecord state={state} object={object} one={def.one} initialName={startNew} onClose={() => { setCreating(false); setNewStage(undefined); }} onCreate={(name, extra, more) => {
         const id = newId(object.slice(0, 1));
         if (object === 'people') dispatch({ type: 'person/set', person: { id, name, email: extra.email ?? '', title: extra.title ?? '', companyId: extra.company || undefined, owner: state.me, tags: [], created: new Date() } });
         else if (object === 'companies') dispatch({ type: 'company/set', company: { id, name, domain: extra.domain ?? '', industry: 'Software', size: '', city: '', owner: state.me, created: new Date() } });
         else dispatch({ type: 'deal/set', deal: { id, name, companyId: extra.company ?? '', stage: newStage ?? 'Lead', amount: Number(extra.amount) || 0, owner: state.me, close: new Date(Date.now() + 30 * 86_400_000), created: new Date() } });
+        setFresh((f) => new Set(f).add(id));
         toast({ message: `${name} created`, tone: 'success', action: { label: 'Open', onAction: () => onOpen(object, id) } });
         if (!more) { setCreating(false); setNewStage(undefined); }
       }} />}
+      {renaming && <RenameDialog title="Rename view" label="Name" value={view.name} onClose={() => setRenaming(false)} onSave={(name) => { const next = { ...(saved ?? view), name }; dispatch({ type: 'views/set', object, views: views.map((v) => (v.id === view.id ? next : v)) }); if (draft) setDraft({ ...draft, name }); setRenaming(false); toast({ message: 'View renamed', tone: 'success' }); }} />}
+      {bulkEdit && <BulkEdit columns={def.columns.filter((c) => !c.isReadOnly && c.id !== 'name')} count={ids.length} members={state.members.map((m) => m.name)} onClose={() => setBulkEdit(false)}
+        onApply={(col, value) => { const c = def.columns.find((x) => x.id === col); setMany(ids, col, col === 'amount' ? Number(value) || 0 : value, `${c?.name ?? 'Field'} ${value === '' ? 'cleared' : `set to ${c?.options?.find((o) => o.id === value)?.label ?? value}`} on ${ids.length} ${ids.length === 1 ? def.one : def.many}`); setBulkEdit(false); setSelected(new Set()); refocus(); }} />}
       {naming && <ViewNamer onClose={() => setNaming(false)} onSave={(name, isPrivate) => {
         const v: SavedView = { ...view, id: newId('v'), name, isPrivate };
         dispatch({ type: 'views/set', object, views: [...views, v] }); setViewId(v.id); setDraft(undefined); setNaming(false);
@@ -310,12 +394,12 @@ function NewRecord({ state, object, one, initialName = '', onClose, onCreate }: 
   const go = () => { if (!name.trim()) return; onCreate(name.trim(), extra, more); setName(''); setExtra({}); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`New ${one}`}
-      actions={<><Checkbox isSelected={more} onChange={setMore}>Create more</Checkbox><span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim()} onPress={go}>Create {one}</Button></>}>
+      actions={<><Checkbox isSelected={more} onChange={setMore}>Create more</Checkbox><span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || (object === 'deals' && !extra.company)} onPress={go}>Create {one}</Button></>}>
       <form className="tf-rec__form" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <TextField label={object === 'deals' ? 'Deal name' : 'Name'} value={name} onChange={setName} autoFocus isRequired description={twin ? `There's already a ${one} called ${twin.name}.` : undefined} />
         {object === 'people' && <><TextField label="Email" type="email" value={extra.email ?? ''} onChange={(v) => set('email', v)} /><TextField label="Job title" value={extra.title ?? ''} onChange={(v) => set('title', v)} /></>}
         {object === 'companies' && <TextField label="Domain" value={extra.domain ?? ''} onChange={(v) => set('domain', v)} placeholder="acme.com" />}
-        {(object === 'people' || object === 'deals') && <Select label="Company" value={extra.company ?? null} onChange={(v) => set('company', v ?? '')} placeholder="Pick a company" items={state.companies.map((c) => ({ id: c.id, label: c.name }))} />}
+        {(object === 'people' || object === 'deals') && <Select label="Company" searchable value={extra.company ?? null} onChange={(v) => set('company', v ?? '')} placeholder="Pick a company" description={object === 'deals' ? 'Every deal is with a company.' : 'Optional'} items={state.companies.map((c) => ({ id: c.id, label: c.name }))} />}
         {object === 'deals' && <TextField label="Amount (₹)" value={extra.amount ?? ''} onChange={(v) => set('amount', v.replace(/[^\d]/g, ''))} />}
         <button type="submit" hidden />
       </form>
@@ -337,3 +421,32 @@ function ViewNamer({ onClose, onSave }: { readonly onClose: () => void; readonly
   );
 }
 
+
+/** One name, in a dialog: rename a view, a list, a stage. Empty names are refused. */
+export function RenameDialog({ title, label, value, onClose, onSave }: { readonly title: string; readonly label: string; readonly value: string; readonly onClose: () => void; readonly onSave: (v: string) => void }) {
+  const [v, setV] = useState(value);
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={title}
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!v.trim() || v.trim() === value} onPress={() => onSave(v.trim())}>Save</Button></>}>
+      <TextField label={label} value={v} onChange={setV} autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && v.trim() && v.trim() !== value) onSave(v.trim()); }} />
+    </Dialog>
+  );
+}
+
+/** Edit one field on many records at once: pick the field, then a value or Clear. */
+function BulkEdit({ columns, count, members, onClose, onApply }: { readonly columns: ReadonlyArray<GridColumn>; readonly count: number; readonly members: ReadonlyArray<string>; readonly onClose: () => void; readonly onApply: (col: string, value: string) => void }) {
+  const [col, setCol] = useState(columns[0]?.id ?? '');
+  const [value, setValue] = useState('');
+  const c = columns.find((x) => x.id === col);
+  const choices = c?.type === 'person' ? members.map((m) => ({ id: m, label: m })) : c?.options?.map((o) => ({ id: o.id, label: o.label }));
+  return (
+    <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`Edit ${count} ${count === 1 ? 'record' : 'records'}`} description="The same value goes on every one. Undo puts each back as it was."
+      actions={<><Button variant="ghost" slot="close">Cancel</Button>{c?.type !== 'person' && c?.type !== 'status' && <Button variant="secondary" onPress={() => onApply(col, '')}>Clear field</Button>}<Button variant="primary" isDisabled={!value} onPress={() => onApply(col, value)}>Set value</Button></>}>
+      <div className="tf-rec__form">
+        <Select label="Field" value={col} onChange={(v) => { if (v) { setCol(v); setValue(''); } }} items={columns.map((x) => ({ id: x.id, label: x.name }))} />
+        {choices ? <Select label="Value" value={value || null} onChange={(v) => setValue(v ?? '')} placeholder="Pick one" items={choices} />
+          : <TextField label="Value" value={value} onChange={setValue} inputMode={c?.type === 'number' ? 'numeric' : undefined} />}
+      </div>
+    </Dialog>
+  );
+}
