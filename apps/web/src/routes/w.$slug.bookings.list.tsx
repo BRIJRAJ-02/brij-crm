@@ -95,6 +95,11 @@ function List({ objects, pages, seesTeam }: ListLoaded) {
     }),
     [data, slug],
   );
+  // Bookings guests make while the list is open, one listener per workspace (the toast's own is the layout's).
+  const arrivals = useMemo(
+    () => (listener: (arrival: { readonly bookingId: string }) => void) => data.bookings.arrivals(slug, listener),
+    [data, slug],
+  );
   // Mine or Everyone: an admin's choice, the layout's (its switch is on the strip); anyone else sees their own.
   const choice = useBookingsHosts();
   // Team where the calendar offers it: a colleague to see, or someone the reader could invite.
@@ -114,6 +119,7 @@ function List({ objects, pages, seesTeam }: ListLoaded) {
       hosts={choice}
       search={search}
       meetings={(query) => data.bookings.meetings(slug, query)}
+      arrivals={arrivals}
       calendars={data.calendar.calendars(slug)}
       onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
       objects={objects}

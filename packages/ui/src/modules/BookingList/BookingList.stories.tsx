@@ -333,6 +333,27 @@ export const Columns: Story = {
   },
 };
 
+/** A booking a guest just made washes in on its row once (left out of the screenshots: at rest it is Columns). */
+export const ColumnsArrived: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList
+        {...args}
+        layout="columns"
+        groups={columnGroups().map((group, index) =>
+          index === 0
+            ? { ...group, rows: group.rows.map((row) => (row.id === 'grace' ? { ...row, isNew: true } : row)) }
+            : group,
+        )}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Grace Hopper' }).closest('li')).toHaveAttribute('data-new');
+  },
+};
+
 /** Columns in a phone's list: the time beside who; Join and the ⋯ go (the popup holds them), Decline and Accept stay. */
 export const ColumnsNarrow: Story = {
   // The list is its own inline-size container, so it takes the phone's whole width from the stage (`phone-fill`), as

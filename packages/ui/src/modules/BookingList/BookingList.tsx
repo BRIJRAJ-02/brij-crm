@@ -65,6 +65,11 @@ export interface BookingListRow {
    * touch screen; their room is kept, so nothing shifts as they show.
    */
   readonly quickActions?: ReactNode;
+  /**
+   * It just arrived (a guest booked while the list was open): the row washes in the accent's soft fill once, then
+   * rests. Set it while it stays new; the wash plays only as the row mounts.
+   */
+  readonly isNew?: boolean;
 }
 
 /** One day's band and its rows. */
@@ -186,6 +191,7 @@ export function BookingList({
                       data-pressable=""
                       data-open={isOpen || undefined}
                       data-done={row.isDone === true || undefined}
+                      data-new={row.isNew === true || undefined}
                       aria-current={isOpen || undefined}
                       onClick={(event) => {
                         const element = event.currentTarget;
@@ -271,6 +277,7 @@ export function BookingList({
                   className={styles.row}
                   data-pressable=""
                   data-open={isOpen || undefined}
+                  data-new={row.isNew === true || undefined}
                   aria-current={isOpen || undefined}
                   onClick={(event) => {
                     const element = event.currentTarget;
