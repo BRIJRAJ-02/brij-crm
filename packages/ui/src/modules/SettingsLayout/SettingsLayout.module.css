@@ -205,6 +205,26 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* A row that just arrived washes in the accent's soft fill, a beat after it lands, then rests. The fill reaches
+     space-8 past the row on every side (a spread ring, so nothing moves), and with no movement it plays under
+     reduced motion too. */
+  .row[data-new] {
+    border-radius: var(--radius-sm);
+    animation: rowArrive var(--duration-pulse) var(--ease-out) var(--duration-modal) both;
+  }
+
+  @keyframes rowArrive {
+    from {
+      background-color: var(--accent-soft);
+      box-shadow: 0 0 0 var(--space-8) var(--accent-soft);
+    }
+
+    to {
+      background-color: transparent;
+      box-shadow: 0 0 0 var(--space-8) transparent;
+    }
+  }
+
   /* Never wider than a column's most, so a description keeps a readable line on a wide page. */
   .rowMain {
     display: flex;

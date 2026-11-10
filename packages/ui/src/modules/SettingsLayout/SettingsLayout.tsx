@@ -498,6 +498,11 @@ export interface SettingsRowProps {
    * page it takes the row's full width under the text.
    */
   readonly control?: 'fit' | 'field' | 'compact';
+  /**
+   * The row just arrived (an account connected a moment ago): it washes in the accent's soft fill once as it mounts,
+   * then rests as every row does. Set it only for the render the thing arrives in.
+   */
+  readonly isNew?: boolean;
   /** The control, at the end of the row: a Select, a Switch, a Button, a row's "···" menu. None for a row that only shows. */
   readonly children?: ReactNode;
 }
@@ -516,10 +521,11 @@ export function SettingsRow({
   leadingAlign = 'start',
   control = 'fit',
   meta,
+  isNew = false,
   children,
 }: SettingsRowProps) {
   return (
-    <div className={styles.row}>
+    <div className={styles.row} data-new={isNew ? '' : undefined}>
       <span className={styles.rowMain} data-align={leading === undefined ? undefined : leadingAlign}>
         {leading !== undefined && <span className={styles.rowLeading}>{leading}</span>}
         <span className={styles.rowText}>

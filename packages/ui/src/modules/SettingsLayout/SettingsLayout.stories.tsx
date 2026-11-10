@@ -582,6 +582,37 @@ export const ThingRows: Story = {
   },
 };
 
+/** A row that just arrived washes in the accent's soft fill once, then rests (an account connected a moment ago). */
+export const NewRow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <SettingsLayout titleLevel={1} title="Calendars">
+        <Card>
+          <SettingsRow
+            isNew
+            title="grace@gmail.com"
+            leading={<ProviderMark provider="google-calendar" />}
+            description={<Badge text="Connected" dot="green" />}
+          >
+            <Button variant="ghost" icon="ellipsis" label="Actions for grace@gmail.com" />
+          </SettingsRow>
+          <SettingsRow
+            title="grace@timefix.dev"
+            leading={<ProviderMark provider="google-calendar" />}
+            description={<Badge text="Connected" dot="green" />}
+          >
+            <Button variant="ghost" icon="ellipsis" label="Actions for grace@timefix.dev" />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('grace@gmail.com')).toBeVisible();
+  },
+};
+
 /**
  * The pattern every settings page follows (21 Oct 2026): sections across the
  * page's width, each with its heading above its cards; a form
