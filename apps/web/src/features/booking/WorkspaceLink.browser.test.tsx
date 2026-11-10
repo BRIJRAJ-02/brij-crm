@@ -1,6 +1,6 @@
 // The workspace link's screens in Chromium (30 Oct 2026): New workspace link (from the Links header's Team links, 4
 // Nov 2026) makes it as a draft with no type, schedule or rotation to pick; Captures › Links puts the workspace's own
-// links in a Workspace group ahead of members' pages, and stays one ungrouped grid without any; the link's Hosts
+// links in a Workspace group after the reader's own, and stays one ungrouped grid without any; the link's Hosts
 // lead with one switch for everyone, including people who join later; the roster rotation's dialog lists everyone
 // with their switches and no Add or Remove. Each is axe clean at 390 and 1280, in light and dark. With
 // `VITE_WSLINK_SHOTS` set to a folder, each state is also saved there as a screenshot.
@@ -196,7 +196,7 @@ describe('Captures › Links: the Workspace group', () => {
     );
   };
 
-  it('puts the workspace’s links first, under their own heading, then members’ pages', async () => {
+  it('puts the reader’s own pages first, then the workspace’s links under their own heading', async () => {
     await render([
       pageOf('1', 'Intro call'),
       pageOf('2', 'Talk to us', {
@@ -210,15 +210,15 @@ describe('Captures › Links: the Workspace group', () => {
       .getByRole('heading', { level: 2 })
       .elements()
       .map((each) => each.textContent);
-    expect(headings.slice(0, 2)).toEqual([strings.workspaceGroup, strings.membersGroup]);
+    expect(headings.slice(0, 2)).toEqual([strings.yourGroup, strings.workspaceGroup]);
     const workspace = page.getByRole('list', { name: strings.workspaceGroup });
     await expect.element(workspace.getByRole('heading', { level: 3, name: 'Talk to us' })).toBeVisible();
     await expect.element(workspace.getByText(strings.workspaceLink, { exact: false })).toBeVisible();
-    expect(page.getByRole('list', { name: strings.membersGroup }).getByRole('listitem').elements()).toHaveLength(2);
+    expect(page.getByRole('list', { name: strings.yourGroup }).getByRole('listitem').elements()).toHaveLength(2);
     await checkEverywhere('links-grouped');
   });
 
-  it('shows a member the workspace link to copy and open, with no editor, switch or menu', async () => {
+  it('shows a member the workspace link to copy, with no editor or menu, and its status they can’t change', async () => {
     await render([
       pageOf('1', 'Intro call'),
       pageOf('2', 'Talk to us', { kind: 'round_robin', scope: 'workspace', canChange: false }),
@@ -226,10 +226,11 @@ describe('Captures › Links: the Workspace group', () => {
     const workspace = page.getByRole('list', { name: strings.workspaceGroup });
     await expect.element(workspace.getByText(strings.viewOnly)).toBeVisible();
     expect(workspace.getByRole('link', { name: 'Talk to us' }).elements()).toHaveLength(0);
-    expect(workspace.getByRole('switch').elements()).toHaveLength(0);
     expect(workspace.getByRole('button', { name: strings.more('Talk to us') }).elements()).toHaveLength(0);
     await expect.element(workspace.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    await expect.element(workspace.getByRole('button', { name: strings.openPage('Talk to us') })).toBeVisible();
+    await expect
+      .element(workspace.getByRole('button', { name: strings.pageCard.statusName('Talk to us', 'Live') }))
+      .toBeDisabled();
     await checkEverywhere('links-member');
   });
 
@@ -309,13 +310,16 @@ describe('A team page’s Hosts', () => {
       ),
       { data, pattern: '/w/$slug/captures/links/$pageId', at: '/w/acme/captures/links/t1' },
     );
+    // Who can be booked shows under the team's "N of M bookable".
+    await userEvent.click(page.getByRole('button', { name: rotationStrings.host.bookable(4, 5) }));
     const who = page.getByRole('grid', { name: rotationStrings.whoIsOn });
     const kim = who.getByRole('row', { name: /Kim Park/ });
     await expect.element(kim).toBeVisible();
     expect(kim.element().textContent).toContain(rotationStrings.isOff);
     expect(who.getByRole('row', { name: /Ada Lovelace/ }).element().textContent).toContain(rotationStrings.isOn);
-    expect(page.getByText(rotationStrings.addRotation).elements()).toHaveLength(0);
-    await expect.element(page.getByText(rotationStrings.addFixed)).toBeVisible();
+    // No other team to add: Add team waits, turned off.
+    await expect.element(page.getByRole('button', { name: rotationStrings.host.addTeam })).toBeDisabled();
+    await expect.element(page.getByRole('button', { name: rotationStrings.host.addHost })).toBeVisible();
     await checkEverywhere('hosts-team');
   });
 });
@@ -347,11 +351,11 @@ describe('A workspace link’s Hosts', () => {
     );
     const everyone = page.getByRole('switch', { name: rotationStrings.everyoneSwitch });
     await expect.element(everyone).toBeChecked();
-    expect(page.getByText(rotationStrings.addFixed).elements()).toHaveLength(0);
+    expect(page.getByRole('button', { name: rotationStrings.host.addHost }).elements()).toHaveLength(0);
     await checkEverywhere('hosts-everyone');
     // Off: nothing is saved until a group is picked; the pickers show.
     await userEvent.click(everyone, { force: true });
-    await expect.element(page.getByText(rotationStrings.addFixed).first()).toBeVisible();
+    await expect.element(page.getByRole('button', { name: rotationStrings.host.addHost })).toBeVisible();
     expect(update).not.toHaveBeenCalled();
     await checkEverywhere('hosts-picked');
   });
