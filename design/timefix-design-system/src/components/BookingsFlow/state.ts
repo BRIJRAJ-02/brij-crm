@@ -142,6 +142,15 @@ export interface BookingPage {
   readonly fileTo?: 'people' | 'companies' | 'deals' | 'none';
   /** Published versions, newest first. */
   readonly versions?: ReadonlyArray<PageVersion>;
+  /** What the page books: a meeting (the default), a service with a price, or a table. */
+  readonly kind?: 'meeting' | 'service' | 'table';
+  /** A service's price and how it reads ("₹1,200", "from ₹2,500", "Free"). */
+  readonly price?: number;
+  readonly priceType?: 'fixed' | 'from' | 'free';
+  /** The menu category a service sits in. */
+  readonly categoryId?: string;
+  /** A table page: the smallest and largest party booked online. */
+  readonly party?: { readonly min: number; readonly max: number };
 }
 
 /** One published version of a page, kept so it can be restored. */
@@ -161,6 +170,9 @@ export interface BookedMeeting extends Meeting {
   readonly guestZone: string;
   readonly record?: RecordRef;
   readonly activity: ReadonlyArray<ActivityLine>;
+  /** A table booking: how many guests and which tables. */
+  readonly party?: number;
+  readonly tables?: ReadonlyArray<string>;
 }
 /** Time a member blocked or held by hand. */
 export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string }
@@ -210,6 +222,28 @@ export interface Routing {
   readonly wonMeans: string;
 }
 
+/** A business's public page: timefix.com/<handle>, with its services or table booking. */
+export interface BusinessProfile {
+  readonly kind: 'salon' | 'restaurant';
+  /** What guests read under the name ("Hair salon"). */
+  readonly kindLabel: string;
+  readonly handle: string;
+  readonly address: string;
+  readonly area: string;
+  readonly phone: string;
+  readonly about: string;
+  readonly rating: number;
+  readonly reviews: number;
+  readonly amenities: ReadonlyArray<string>;
+  readonly published: boolean;
+  /** Drawn photo scenes for the page's gallery (the prototype has no uploads). */
+  readonly photos: ReadonlyArray<string>;
+  /** What each person does, shown on the page's Team ("Colour specialist"). */
+  readonly titles?: Readonly<Record<string, string>>;
+}
+/** A table: seats, area, bookable online, joins its neighbour for bigger parties. */
+export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean }
+
 /** Everything the flow holds. */
 export interface BookingsState {
   readonly workspace: string;
@@ -238,6 +272,10 @@ export interface BookingsState {
   readonly routing: Routing;
   /** Unpublished changes per page: guests still see the live version. */
   readonly drafts?: Readonly<Record<string, BookingPage>>;
+  /** A business (salon, clinic, restaurant): its public page and, for a restaurant, its tables. A team taking meetings has none. */
+  readonly business?: BusinessProfile;
+  readonly categories?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  readonly tables?: ReadonlyArray<Table>;
   /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
   readonly memberCalendars?: Readonly<Record<string, MemberCalendar>>;
   /** Insights shared by a read-only link. */
@@ -253,6 +291,8 @@ export type BookingsAction =
   | { readonly type: 'draft/set'; readonly id: string; readonly draft: BookingPage | undefined }
   | { readonly type: 'member/calendar'; readonly name: string; readonly calendar: MemberCalendar }
   | { readonly type: 'insights/share'; readonly on: boolean }
+  | { readonly type: 'business/set'; readonly business: BusinessProfile }
+  | { readonly type: 'tables/set'; readonly tables: ReadonlyArray<Table> }
   | { readonly type: 'page/delete'; readonly id: string }
   | { readonly type: 'page/restore'; readonly page: BookingPage; readonly index: number }
   | { readonly type: 'meeting/add'; readonly meeting: BookedMeeting; readonly notification?: Notification }
@@ -313,6 +353,8 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     }
     case 'member/calendar': return { ...state, memberCalendars: { ...(state.memberCalendars ?? {}), [action.name]: action.calendar } };
     case 'insights/share': return { ...state, insightsShared: action.on };
+    case 'business/set': return { ...state, business: action.business };
+    case 'tables/set': return { ...state, tables: action.tables };
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
@@ -331,7 +373,10 @@ export const nextId = (prefix: string) => { seq += 1; return `${prefix}-${Date.n
 /** "Discovery call" → "discovery-call". */
 export const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'meeting';
 /** The page's public address, without the scheme. */
-export const pageUrl = (slug: string) => `timefix.com/priya/${slug}`;
+/** A page's link: under the business's handle, or the host's name for a team. */
+export const pageUrl = (slug: string, handle = 'priya') => `timefix.com/${handle}/${slug}`;
+/** The workspace's own link: the business page, or the host's profile. */
+export const homeUrl = (state: BookingsState) => `timefix.com/${state.business?.handle ?? 'priya'}`;
 /** `YYYY-MM-DD` for a local date. */
 export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /** A local date from `YYYY-MM-DD`. */
@@ -459,7 +504,22 @@ export function monthSpread(state: BookingsState, page: BookingPage, now: Date):
 }
 
 /** The open start times of a page on a day: its hours, minus notice, limits, time off, busy time and meetings with buffers. */
-export function openTimes(page: BookingPage, state: BookingsState, date: Date, now: Date, length = lengthOf(page)): ReadonlyArray<number> {
+/** The best tables for a party then: the smallest free one that seats them, else two joinable ones in one area. */
+export function fitTables(state: BookingsState, party: number, date: Date, start: number, length: number, onlineOnly = true): ReadonlyArray<Table> | undefined {
+  const held = new Set<string>();
+  state.meetings.forEach((m) => {
+    if (!m.tables || m.status === 'cancelled' || m.start.toDateString() !== date.toDateString()) return;
+    const a = minutesOf(m.start); const b = minutesOf(m.end);
+    if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
+  });
+  const free = (state.tables ?? []).filter((t) => !held.has(t.id) && (!onlineOnly || t.online));
+  const one = [...free].filter((t) => t.seats >= party).sort((a, b) => a.seats - b.seats)[0];
+  if (one) return [one];
+  const pairs = free.flatMap((a, i) => free.slice(i + 1).filter((b) => a.joinable && b.joinable && a.area === b.area && a.seats + b.seats >= party).map((b) => [a, b]));
+  return pairs.sort((x, y) => x.reduce((t, z) => t + z.seats, 0) - y.reduce((t, z) => t + z.seats, 0))[0];
+}
+
+export function openTimes(page: BookingPage, state: BookingsState, date: Date, now: Date, length = lengthOf(page), party = page.party?.min ?? 2): ReadonlyArray<number> {
   const startOfToday = dayFrom(now, 0);
   const ahead = Math.round((date.getTime() - startOfToday.getTime()) / 86_400_000);
   if (ahead < 0 || ahead > page.daysAhead) return [];
@@ -475,7 +535,7 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   const step = page.slotStep && page.slotStep > 0 ? page.slotStep : length < 30 ? 15 : 30;
   const out: number[] = [];
   day.ranges.forEach((r) => {
-    for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && hostFor(state, page, date, m, m + length)) out.push(m);
+    for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && (page.kind === 'table' ? fitTables(state, party, date, m, length) !== undefined : hostFor(state, page, date, m, m + length))) out.push(m);
   });
   return [...new Set(out)].sort((a, b) => a - b);
 }
@@ -511,7 +571,9 @@ export const afterSummary = (p: BookingPage) => `${p.confirmFirst ? 'You confirm
 /** "Calm · photo · 2 links". */
 export const lookSummary = (p: BookingPage) => [p.look.look === 'custom' ? 'Custom' : p.look.look.charAt(0).toUpperCase() + p.look.look.slice(1), p.showPhoto ? 'photo' : '', p.socials.length ? plural(p.socials.length, 'link') : ''].filter(Boolean).join(' · ');
 /** "30 min · Google Meet". */
-export const pageSub = (p: BookingPage) => `${lengthsText(p)} · ${placesText(p)}`;
+/** "₹1,200", "from ₹2,500", "Free". */
+export const priceText = (p: BookingPage) => (p.priceType === 'free' ? 'Free' : p.price === undefined ? '' : `${p.priceType === 'from' ? 'from ' : ''}₹${p.price.toLocaleString('en-IN')}`);
+export const pageSub = (p: BookingPage) => (p.kind === 'table' ? `Parties of ${p.party?.min ?? 1} to ${p.party?.max ?? 8} · ${lengthsText(p)} a table` : p.kind === 'service' ? `${lengthsText(p)} · ${priceText(p)}` : `${lengthsText(p)} · ${placesText(p)}`);
 /** A meeting's time as a short line. */
 export const meetingWhen = (m: Meeting) => `${formatDay(m.start)} · ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}`;
 

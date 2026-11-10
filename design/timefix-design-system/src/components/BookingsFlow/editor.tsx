@@ -145,16 +145,33 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
               <Section className="tf-bkf-card" title="Basics" description="What guests see first: the name, the link, how long and where.">
                 <div className="tf-bkf__stack">
                   <TextField label="Name" value={draft.name} onChange={(name) => set({ name })} isRequired isInvalid={nameless} errorMessage="Give the page a name." />
-                  <TextField label="Link" value={draft.slug} className="tf-bkf__linkinput" icon={<span className="tf-bkf__prefix">timefix.com/priya/</span>}
+                  <TextField label="Link" value={draft.slug} className="tf-bkf__linkinput" icon={<span className="tf-bkf__prefix">timefix.com/{state.business?.handle ?? 'priya'}/</span>}
                     onChange={(v) => set({ slug: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} isInvalid={taken} errorMessage="Another page has this link. Try another."
                     suffix={!taken && draft.slug !== page.slug ? <span className="tf-bkf__ok-word"><Check size={14} strokeWidth={2} aria-hidden="true" />Available</span> : undefined}
                     onBlur={() => { if (!draft.slug) set({ slug: uniqueSlug('meeting', state.pages, draft.id) }); }} />
-                  <ChoiceChips label="Lengths" size="sm" selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
+                  {draft.kind === 'service' && (
+                    <div className="tf-bkf__pair">
+                      <NumberField label="Price" value={draft.priceType === 'free' ? 0 : draft.price ?? 0} minValue={0} step={50} showSteppers={false} isDisabled={draft.priceType === 'free'}
+                        formatOptions={{ style: 'currency', currency: 'INR', maximumFractionDigits: 0 }} onChange={(n) => set({ price: Number.isFinite(n) ? n : 0 })} />
+                      <Select label="Price shows as" value={draft.priceType ?? 'fixed'} onChange={(v) => set({ priceType: (v ?? 'fixed') as 'fixed' })}
+                        items={[{ id: 'fixed', label: 'Fixed price' }, { id: 'from', label: '“From” price' }, { id: 'free', label: 'Free' }]} />
+                    </div>
+                  )}
+                  {draft.kind === 'service' && (state.categories ?? []).length > 0 && (
+                    <Select label="Category" value={draft.categoryId ?? null} onChange={(v) => { if (v) set({ categoryId: v }); }} items={(state.categories ?? []).map((c) => ({ id: c.id, label: c.name }))} />
+                  )}
+                  {draft.kind === 'table' && (
+                    <div className="tf-bkf__pair">
+                      <NumberField label="Smallest party" value={draft.party?.min ?? 1} minValue={1} maxValue={draft.party?.max ?? 8} onChange={(n) => set({ party: { min: Number.isFinite(n) ? n : 1, max: draft.party?.max ?? 8 } })} />
+                      <NumberField label="Largest party online" value={draft.party?.max ?? 8} minValue={draft.party?.min ?? 1} maxValue={20} onChange={(n) => set({ party: { min: draft.party?.min ?? 1, max: Number.isFinite(n) ? n : 8 } })} />
+                    </div>
+                  )}
+                  <ChoiceChips label={draft.kind === 'table' ? 'Table held for' : 'Lengths'} size="sm" selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
                     onSelectionChange={(keys) => { const d = [...keys].map(Number).sort((a, b) => a - b); if (d.length) set({ durations: d }); }} />
                   {draft.durations.length > 1 && <p className="tf-bkf__muted tf-bkf__hint">Guests choose the length. {draft.durations[0]} min is picked first.</p>}
-                  <ChoiceChips label="Places" size="sm" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
-                    onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} />
-                  {draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
+                  {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" size="sm" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
+                    onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} /> : null}
+                  {(draft.kind === undefined || draft.kind === 'meeting') && draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
                   {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" size="sm" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
                   <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Guests start in</span>

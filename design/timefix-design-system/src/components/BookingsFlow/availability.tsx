@@ -1,4 +1,5 @@
 // Availability: saved hours with the HoursEditor, then time off and calendars beside them. The team's week lives on Roster.
+import { TablesSection } from './tables.tsx';
 import { useEffect, useState } from 'react';
 import { type Key } from 'react-aria-components';
 import { parseDate, type CalendarDate } from '@internationalized/date';
@@ -48,6 +49,7 @@ export function AvailabilityTab({ state, dispatch, onReassignMany }: Availabilit
       <div className="tf-bkf__avail">
         <div className="tf-bkf-cards tf-bkf__avail-main">
           <div className="tf-bkf-card">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div>
+          {state.tables && <div className="tf-bkf-card"><TablesSection state={state} dispatch={dispatch} /></div>}
           <div className="tf-bkf-card"><LimitsSection state={state} dispatch={dispatch} name={HOST} /></div>
         </div>
         <div className="tf-bkf-cards tf-bkf__avail-side">

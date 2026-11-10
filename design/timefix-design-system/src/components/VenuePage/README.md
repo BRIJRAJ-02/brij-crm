@@ -1,0 +1,5 @@
+VenuePage is the public page behind a workspace's own link (timefix.com/<handle>), in the shape guests know from Fresha and OpenTable: the name with rating, open status and directions; a photo grid; the menu by category with Book on each; the team; about, opening hours and location; and a side card with the main action that stays in view. VenueCheckout is the booking steps after it (a breadcrumb, the choice on the left, a summary card with the total and the main button on the right); PersonTile picks a person or "Any professional".
+
+**Use it for**: every module that books from a public link: services, tables and meetings now, and the modules that follow. **Don't use it for** a single page's own link (that is BookingFlow).
+
+**The consumer provides**: `venue` (name, kind, rating, address, status, photos, about, hours), `items` with `categories`, `team`, and `onBook` / `onBookNow`, or an `aside` that replaces the side card's body (a table picker). On a phone the page is one column and the main button sits in a bar at the foot.

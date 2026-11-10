@@ -1,0 +1,106 @@
+/* The public business page: Fresha's shape in the system's tokens. Big name, a photo grid, the menu in cards, a side card that stays in view. */
+.tf-venue { container: tf-venue / inline-size; width: 100%; max-width: calc(var(--size-dialog-wide) * 1.6); margin: 0 auto; padding: var(--space-32) var(--space-24) var(--space-48); color: var(--text); font: 400 15px/22px var(--font-sans); }
+.tf-venue__head { position: relative; display: flex; flex-direction: column; gap: var(--space-8); padding-right: var(--space-48); }
+.tf-venue__name { margin: 0; font: 600 34px/42px var(--font-sans); letter-spacing: -0.02em; text-wrap: balance; }
+.tf-venue__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6) var(--space-8); margin: 0; color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-venue__share { position: absolute; top: 0; right: 0; }
+.tf-venue__rating { display: inline-flex; align-items: center; gap: var(--space-4); font-weight: 600; }
+.tf-venue__stars { display: inline-flex; color: var(--text); }
+.tf-venue__muted { color: var(--text-secondary); font-weight: 400; }
+.tf-venue__link { color: var(--link); font-weight: 500; text-decoration: none; border-radius: var(--radius-xs); }
+.tf-venue__link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tf-venue__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+
+/* Photos: one large on the left, two stacked on the right. */
+.tf-venue__photos { position: relative; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: var(--space-8); height: calc(var(--size-row) * 9); margin-top: var(--space-24); }
+.tf-venue__photos.is-single { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.tf-venue__photo { width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-venue__photo:first-child { grid-row: 1 / -1; }
+.tf-venue__photos:not(:has(> img:nth-of-type(4))) > .tf-venue__photo:nth-child(n + 4) { display: none; }
+.tf-venue__allphotos { position: absolute; right: var(--space-12); bottom: var(--space-12); }
+
+.tf-venue__body { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-panel) - var(--space-48)); gap: var(--space-48); align-items: start; margin-top: var(--space-32); }
+.tf-venue__main { display: flex; flex-direction: column; gap: var(--space-48); min-width: 0; }
+.tf-venue__section { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-venue__h2 { margin: 0; font: 600 24px/32px var(--font-sans); letter-spacing: -0.01em; }
+.tf-venue__h3 { margin: 0 0 var(--space-8); font: 600 16px/24px var(--font-sans); }
+
+/* Category pills, then the services as cards. */
+.tf-venue__pills { display: flex; gap: var(--space-8); overflow-x: auto; scrollbar-width: none; }
+.tf-venue__pill { flex: none; height: var(--size-control); padding: 0 var(--space-16); border: var(--border-width-hairline) solid transparent; border-radius: var(--radius-full); background: transparent; color: var(--text); font: 500 14px/20px var(--font-sans); cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.tf-venue__pill[data-hovered] { background: var(--surface-hover); }
+.tf-venue__pill[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); }
+.tf-venue__pill[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-venue__items { display: flex; flex-direction: column; gap: var(--space-12); margin: 0; padding: 0; list-style: none; animation: tf-venue-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-venue__item { display: flex; align-items: center; gap: var(--space-16); width: 100%; padding: var(--space-16) var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; outline: none; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-smooth-out); }
+.tf-venue__item[data-hovered] { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.tf-venue__item[data-pressed] { transform: scale(var(--scale-tiny)); }
+.tf-venue__item[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-venue__item-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.tf-venue__item-name { font: 500 16px/24px var(--font-sans); }
+.tf-venue__item-meta { color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-venue__item-desc { color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-venue__item-price { margin-top: var(--space-6); font: 600 15px/22px var(--font-sans); }
+.tf-venue__item-book { flex: none; padding: var(--space-6) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); font: 500 14px/20px var(--font-sans); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-venue__item[data-hovered] .tf-venue__item-book { background: var(--surface-hover); }
+
+.tf-venue__team { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-control-lg) * 2.6), 1fr)); gap: var(--space-24) var(--space-16); margin: 0; padding: 0; list-style: none; }
+.tf-venue__person { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); text-align: center; font-size: 14px; }
+.tf-venue__person > .tf-avatar { margin-bottom: var(--space-6); }
+.tf-venue__about { max-width: 65ch; margin: 0; }
+.tf-venue__map { position: relative; height: calc(var(--size-row) * 5); border-radius: var(--radius-lg); background:
+  linear-gradient(90deg, transparent 49%, var(--border) 49%, var(--border) 51%, transparent 51%) 0 0 / 120px 120px,
+  linear-gradient(0deg, transparent 49%, var(--border) 49%, var(--border) 51%, transparent 51%) 0 0 / 120px 120px, var(--surface-subtle); }
+.tf-venue__pin { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); background: var(--primary); color: var(--on-primary); transform: translate(-50%, -50%); box-shadow: var(--shadow-md); }
+.tf-venue__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-24); }
+.tf-venue__hours, .tf-venue__amen { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.tf-venue__hours > li { display: flex; justify-content: space-between; gap: var(--space-12); }
+.tf-venue__hours > li.is-today { font-weight: 600; }
+.tf-venue__amen > li { display: flex; align-items: center; gap: var(--space-8); }
+
+/* The side card: stays in view while the page scrolls. */
+.tf-venue__aside { position: sticky; top: var(--space-24); }
+.tf-venue__card { display: flex; flex-direction: column; gap: var(--space-12); padding: var(--space-24); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-sm); }
+.tf-venue__card-name { font: 600 22px/30px var(--font-sans); letter-spacing: -0.01em; }
+.tf-venue__cta { width: 100%; }
+.tf-venue__rule { width: 100%; height: 1px; margin: var(--space-4) 0; border: 0; background: var(--border-subtle); }
+.tf-venue__cardline { display: flex; align-items: flex-start; gap: var(--space-8); color: var(--text); font-size: 14px; }
+.tf-venue__cardline > svg { flex: none; margin-top: var(--space-2); color: var(--text-secondary); }
+.tf-venue__bar { display: none; }
+
+@keyframes tf-venue-in { from { opacity: 0; transform: translateY(var(--distance-base)); } }
+
+/* Checkout: steps on the left, the summary card on the right. */
+.tf-venue-co { width: 100%; max-width: calc(var(--size-dialog-wide) * 1.4); margin: 0 auto; padding: var(--space-24); container: tf-venue-co / inline-size; }
+.tf-venue-co__top { margin-bottom: var(--space-16); }
+.tf-venue-co__grid { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-panel) - var(--space-64)); gap: var(--space-48); align-items: start; }
+.tf-venue-co__crumbs { display: flex; flex-wrap: wrap; gap: var(--space-6); margin: 0 0 var(--space-8); padding: 0; list-style: none; color: var(--text-tertiary); font: 500 13px/20px var(--font-sans); }
+.tf-venue-co__crumbs > li { display: inline-flex; align-items: center; gap: var(--space-6); }
+.tf-venue-co__crumbs > li.is-current, .tf-venue-co__crumbs > li.is-done { color: var(--text); }
+.tf-venue-co__title { margin: 0 0 var(--space-24); font: 600 30px/38px var(--font-sans); letter-spacing: -0.02em; outline: none; }
+.tf-venue-co__body { display: flex; flex-direction: column; gap: var(--space-16); animation: tf-venue-in var(--duration-fast) var(--ease-smooth-out) both; }
+.tf-venue-co__summary { position: sticky; top: var(--space-24); display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-sm); }
+.tf-venue-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); min-height: calc(var(--size-row) * 3.3); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: 400 13px/18px var(--font-sans); text-align: center; cursor: pointer; outline: none; transition: border-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out); }
+.tf-venue-tile strong { margin-top: var(--space-6); font: 500 15px/22px var(--font-sans); }
+.tf-venue-tile[data-hovered] { border-color: var(--border-strong); }
+.tf-venue-tile[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tf-venue-tile[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-venue-tile__any { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text); }
+
+/* Phone: one column, a smaller name, photos in a row, the main button in a bar at the foot. */
+@container tf-venue (max-width: 44rem) {
+  .tf-venue__name { font-size: 26px; line-height: 34px; }
+  .tf-venue__photos { grid-template-columns: 1fr; grid-template-rows: 1fr; height: calc(var(--size-row) * 5.5); }
+  .tf-venue__photo:not(:first-child) { display: none; }
+  .tf-venue__body { grid-template-columns: minmax(0, 1fr); gap: var(--space-32); }
+  .tf-venue__aside { position: static; }
+  .tf-venue__facts { grid-template-columns: minmax(0, 1fr); }
+  .tf-venue__bar { position: sticky; bottom: 0; display: block; margin: var(--space-24) calc(var(--space-24) * -1) calc(var(--space-48) * -1); padding: var(--space-12) var(--space-16) calc(var(--space-12) + env(safe-area-inset-bottom, 0px)); border-top: var(--border-width-hairline) solid var(--border-subtle); background: var(--surface); }
+  .tf-venue { padding: var(--space-20) var(--space-16) var(--space-48); }
+}
+@container tf-venue-co (max-width: 44rem) {
+  .tf-venue-co__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-24); }
+  .tf-venue-co__summary { position: static; }
+  .tf-venue-co__title { font-size: 24px; line-height: 32px; }
+}
+@media (prefers-reduced-motion: reduce) { .tf-venue__items, .tf-venue-co__body { animation: none; } .tf-venue__item, .tf-venue-tile, .tf-venue__pill { transition: none; } }

@@ -27,15 +27,16 @@ import { InsightsTab } from './insights.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
 import { GuestMode, GUEST_SCENARIOS, type BookedChange, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, newPage, northwind, uniqueSlug } from './seed.ts';
+import { lumen, olive } from './seed-business.ts';
 import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
-  HOST, PLACES, TEAM, at, bookingsReducer, dayFrom, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
+  HOST, PLACES, TEAM, at, bookingsReducer, dayFrom, fitTables, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
 } from './state.ts';
 import './BookingsFlow.css';
 
-export { bookingsReducer, FIRST_VISIT, NORTHWIND, northwind };
+export { bookingsReducer, FIRST_VISIT, NORTHWIND, northwind, lumen, olive };
 export type { BookingsState, BookingsAction, BookingPage, BookedMeeting };
 
 /** Props for BookingsFlow. */
@@ -68,7 +69,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
-  const [view, setView] = useState('list');
+  const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
   const [whose, setWhoseState] = useState<Whose>(() => readWhose(initialState.workspace));
   const [week, setWeek] = useState(0);
   const [focusHour, setFocusHour] = useState<number>();
@@ -109,6 +110,15 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     if (who && who !== HOST && Date.now() - (told.current[who] ?? 0) > 600_000) { told.current[who] = Date.now(); toast({ message: `${first(who)} gets one email about your changes in 10 minutes` }); }
   };
   const brokenCal = state.calendars.find((c) => c.status === 'reconnect');
+  /** The demo's three workspaces share this one Bookings: a team taking meetings, a salon, a restaurant. */
+  const currentWs: WorkspaceId = state.business?.kind === 'salon' ? 'lumen' : state.business?.kind === 'restaurant' ? 'olive' : 'northwind';
+  const switchTo = (id: WorkspaceId) => {
+    if (id === currentWs) return;
+    leaveEditor();
+    dispatch({ type: 'reset', state: id === 'lumen' ? lumen() : id === 'olive' ? olive() : northwind() });
+    setTab('meetings'); setView(id === 'lumen' ? 'team' : 'list'); setMeetingId(undefined);
+    onWorkspace?.(id);
+  };
   const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
   const unread = state.notifications.filter((n) => !n.read).length;
   const flash = (setter: (v: string | undefined) => void, id: string) => { setter(id); window.setTimeout(() => setter(undefined), 1600); };
@@ -178,8 +188,11 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   };
 
   /* Guest bookings */
-  const book = (p: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly guests?: ReadonlyArray<string>; readonly date: { readonly year: number; readonly month: number; readonly day: number }; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: keyof typeof PLACES }) => {
+  const book = (p: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly guests?: ReadonlyArray<string>; readonly date: { readonly year: number; readonly month: number; readonly day: number }; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: keyof typeof PLACES; readonly party?: number }) => {
     const day = new Date(r.date.year, r.date.month - 1, r.date.day);
+    // A table booking takes the best-fitting tables then; a service or meeting takes a free host.
+    const tables = p.kind === 'table' ? fitTables(state, r.party ?? 2, day, r.minutes, r.length)?.map((t) => t.id) : undefined;
+    const tableText = tables ? tables.map((tid) => state.tables?.find((t) => t.id === tid)?.name ?? '').join(' + ') : '';
     const start = at(day, r.minutes);
     const id = nextId('m');
     const name = r.name.trim() || 'Guest';
@@ -187,11 +200,12 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     pending.current.push({
       type: 'meeting/add',
       meeting: {
-        id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: placeLabel(p, r.place),
+        id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.kind === 'table' ? `Table for ${r.party ?? 2}` : p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: tables ? tableText : placeLabel(p, r.place),
+        party: p.kind === 'table' ? r.party ?? 2 : undefined, tables,
         status: p.confirmFirst ? 'pending' : 'confirmed', notes: '', answers: r.notes ? [{ question: 'Anything to share before the call?', answer: r.notes }] : [], guestZone: r.timeZone,
         record: p.addToPeople ? { id: nextId('r'), name, kind: 'person', sub: r.email } : undefined, activity: [{ id: nextId('a'), text: `Booked by ${name}`, at: new Date() }],
       },
-      notification: { id, actor: name, action: p.confirmFirst ? 'asked to book' : 'booked', object: `${p.name} · ${r.length} min`, excerpt: `${formatDay(start)}, ${formatClockRange(r.minutes, r.minutes + r.length)}`, time: 'Just now', group: 'Today', read: false },
+      notification: { id, actor: name, action: p.confirmFirst ? 'asked to book' : 'booked', object: p.kind === 'table' ? `a table for ${r.party ?? 2}` : `${p.name} · ${r.length} min`, excerpt: `${formatDay(start)}, ${formatClockRange(r.minutes, r.minutes + r.length)}`, time: 'Just now', group: 'Today', read: false },
     });
   };
   /** The guest changed the booking they just made: the queued booking takes the change before the host side sees it. */
@@ -306,12 +320,14 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const repointTo = (id: string) => state.pages.find((p) => p.id !== id && p.isOn);
   const deleteCount = toDelete ? upcomingOn(toDelete.id) : 0;
   const isTeam = state.pages.some((p) => p.hosts.length > 1) || state.routing.rules.length > 0;
+  /** Routing answers a form before booking: a team's tool, not a salon's or a restaurant's. */
+  const hideRouting = state.business !== undefined;
 
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
-      header={<WorkspaceSwitcher name={state.workspace} plan="Team plan · 4 members" mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:') && onWorkspace && id !== 'ws:northwind') onWorkspace(id.slice(3) as WorkspaceId); }}>
-        {onWorkspace ? <WorkspaceItems current="northwind" /> : null}
-        {onWorkspace ? <MenuSeparator /> : null}
+      header={<WorkspaceSwitcher name={state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); }}>
+        {showDemoMenu ? <WorkspaceItems current={currentWs} /> : null}
+        {showDemoMenu ? <MenuSeparator /> : null}
         <MenuItem id="settings" icon={<Settings {...i16} />}>Workspace settings</MenuItem>
       </WorkspaceSwitcher>}
       footer={<PersonRow name={HOST} email="priya@northwind.com">
@@ -324,7 +340,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
       <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
       <NavSection title="Bookings">
-        {SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => (
+        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting)).map((x) => (
           <NavItem key={x.id} label={x.label} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id} onPress={() => { leaveEditor(); setTab(x.id); }} />
         ))}
       </NavSection>
@@ -386,7 +402,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
       mobileNav={<TabBar aria-label="Bookings" current={tab}
-        items={SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => ({ id: x.id, label: SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
+        items={SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting)).map((x) => ({ id: x.id, label: SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
         onChange={(id) => { leaveEditor(); setTab(id); }} />}>
       {editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
@@ -446,7 +462,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
               {tab === 'pages' && (<div className="tf-bkf__panel">
                 <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p) }); }}
                   onFix={(id, section) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p), section: section ?? 'who' }); }}
-                  onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} />
+                  onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} dispatch={dispatch} onSeePage={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'profile', pageId: p.id }); }} />
               </div>)}
               {tab === 'availability' && (<div className="tf-bkf__panel">
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} />

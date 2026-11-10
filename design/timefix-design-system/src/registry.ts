@@ -13,7 +13,6 @@ import { BookingFlowDemo } from './components/BookingFlow/BookingFlow.demo.tsx';
 import { BookingPagePictureDemo } from './components/BookingPagePicture/BookingPagePicture.demo.tsx';
 import { BookingsFlowDemo } from './components/BookingsFlow/BookingsFlow.demo.tsx';
 import { BreadcrumbsDemo } from './components/Breadcrumbs/Breadcrumbs.demo.tsx';
-import { BusinessFlowDemo } from './components/BusinessFlow/BusinessFlow.demo.tsx';
 import { BusinessPageDemo } from './components/BusinessPage/BusinessPage.demo.tsx';
 import { ButtonDemo } from './components/Button/Button.demo.tsx';
 import { CalendarConnectionsDemo } from './components/CalendarConnections/CalendarConnections.demo.tsx';
@@ -97,6 +96,7 @@ import { TextDemo } from './components/Text/Text.demo.tsx';
 import { TimeFieldDemo } from './components/TimeField/TimeField.demo.tsx';
 import { ToastDemo } from './components/Toast/Toast.demo.tsx';
 import { TooltipDemo } from './components/Tooltip/Tooltip.demo.tsx';
+import { VenuePageDemo } from './components/VenuePage/VenuePage.demo.tsx';
 import { WeekCalendarDemo } from './components/WeekCalendar/WeekCalendar.demo.tsx';
 
 /** Every component's live demo, by name. */
@@ -114,7 +114,6 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   BookingPagePicture: BookingPagePictureDemo,
   BookingsFlow: BookingsFlowDemo,
   Breadcrumbs: BreadcrumbsDemo,
-  BusinessFlow: BusinessFlowDemo,
   BusinessPage: BusinessPageDemo,
   Button: ButtonDemo,
   CalendarConnections: CalendarConnectionsDemo,
@@ -198,5 +197,6 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   TimeField: TimeFieldDemo,
   Toast: ToastDemo,
   Tooltip: TooltipDemo,
+  VenuePage: VenuePageDemo,
   WeekCalendar: WeekCalendarDemo,
 };
