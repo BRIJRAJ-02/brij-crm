@@ -214,7 +214,7 @@ export function MeetingList({ meetings, now, hour12 = true, loading = false, onR
                     tabIndex={onOpen && !strip ? 0 : undefined} aria-label={onOpen && !strip ? `${m.title} with ${m.invitee.name}, ${span(m.start, m.end, hour12)}` : undefined}
                     aria-haspopup={onOpen && !strip ? 'dialog' : undefined} onClick={press(m, strip)} onKeyDown={key(m, strip)}>
                     <div className="tf-meetings__main" inert={strip}>
-                      <span className="tf-meetings__time tf-num">{g.title && <span className="tf-meetings__time-day">{formatDay(m.start)}</span>}{span(m.start, m.end, hour12)}</span>
+                      <span className="tf-meetings__time tf-num">{g.title && <span className="tf-meetings__time-day">{formatDay(m.start)}</span>}<span className="tf-meetings__time-start">{clock(m.start, hour12)}</span><span className="tf-meetings__time-end">{clock(m.end, hour12)}</span></span>
                       <span className="tf-meetings__what">
                         <span className="tf-meetings__title">{m.title} <span className="tf-meetings__with">with {m.invitee.name}</span></span>
                         <span className="tf-meetings__place"><PlaceIcon place={m.place} />{m.placeLabel}{m.host !== undefined && <> · {m.host}</>}</span>

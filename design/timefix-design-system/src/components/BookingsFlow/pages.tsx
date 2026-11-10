@@ -58,11 +58,14 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                         <span className="tf-bkf__pagerow-sub tf-num"><PlaceIcon place={PLACES[placeOf(p)].meeting} />{pageSub(p)}</span>
                       </span>
                     </AriaButton>
-                    <Tooltip label={p.hosts.join(', ')}>
-                      <AriaButton className="tf-bkf__hosts" aria-label={`Hosts: ${p.hosts.join(', ')}`} onPress={() => onFix(p.id)}>
-                        <AvatarGroup names={p.hosts} size={20} max={3} /><span>{hostWords(p)}</span>
-                      </AriaButton>
-                    </Tooltip>
+                    {/* Hosts only when someone else is involved: "You" on every row of Mine said nothing. */}
+                    {p.hosts.length > 1 || p.hosts[0] !== HOST ? (
+                      <Tooltip label={p.hosts.join(', ')}>
+                        <AriaButton className="tf-bkf__hosts" aria-label={`Hosts: ${p.hosts.join(', ')}`} onPress={() => onFix(p.id)}>
+                          <AvatarGroup names={p.hosts} size={20} max={3} /><span>{hostWords(p)}</span>
+                        </AriaButton>
+                      </Tooltip>
+                    ) : <span aria-hidden="true" />}
                     <OnSwitch page={p} onChange={(on) => onToggle(p.id, on)} />
                     <ShareMenu page={p} onShare={onShare} />
                     <PageMoreMenu page={p} onAction={(k) => onMore(p, k)} />

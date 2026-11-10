@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, CalendarCheck, CalendarDays, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
@@ -20,7 +20,8 @@ import { MeetingsTab, NewMeetingDialog, DeclineDialog, HoldDialog, meetingFrom, 
 import { MeetingDrawer, RescheduleDialog, ReassignDialog } from './drawer.tsx';
 import { PagesTab } from './pages.tsx';
 import { PageEditor, type EditorSection } from './editor.tsx';
-import { CalendarsTab, AvailabilityTab } from './availability.tsx';
+import { AvailabilityTab } from './availability.tsx';
+import { RosterTab } from './roster.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
 import { GuestMode, GUEST_SCENARIOS, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, northwind, uniqueSlug } from './seed.ts';
@@ -50,7 +51,7 @@ const SECTIONS = [
   { id: 'meetings', label: 'Meetings', icon: <CalendarDays {...i16} /> },
   { id: 'pages', label: 'Booking pages', icon: <Link2 {...i16} /> },
   { id: 'availability', label: 'Availability', icon: <Clock {...i16} /> },
-  { id: 'calendars', label: 'Calendars', icon: <CalendarCheck {...i16} /> },
+  { id: 'roster', label: 'Roster', icon: <CalendarRange {...i16} /> },
   { id: 'routing', label: 'Routing', icon: <Route {...i16} /> },
 ] as const;
 
@@ -245,7 +246,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
       <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
       <NavSection title="Bookings">
-        {SECTIONS.filter((x) => x.id !== 'routing' || isTeam).map((x) => (
+        {SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => (
           <NavItem key={x.id} label={x.label} icon={x.icon} count={x.id === 'meetings' ? upcoming : undefined} isCurrent={tab === x.id} onPress={() => { setEditor(undefined); setTab(x.id); }} />
         ))}
       </NavSection>
@@ -336,7 +337,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
               {tab === 'availability' && (<div className="tf-bkf__panel">
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list) => reassignMany(list)} />
               </div>)}
-              {tab === 'calendars' && (<div className="tf-bkf__panel"><CalendarsTab state={state} dispatch={dispatch} /></div>)}
+              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={dispatch} onReassignMany={(list) => reassignMany(list)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>

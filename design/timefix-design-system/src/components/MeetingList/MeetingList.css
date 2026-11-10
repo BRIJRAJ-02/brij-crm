@@ -1,6 +1,6 @@
 /* The Meetings list. Rows wash on hover and show their actions; a cancelled row folds in place to "Cancelled · Undo". */
 /* Fixed, readable columns: time 160 | title + place | invitee 240 | status 140 | actions; capped so a wide page does not spread a row. */
-.tf-meetings { --tf-meetings-cols: 128px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; max-width: 1040px; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
+.tf-meetings { --tf-meetings-cols: 96px minmax(200px, 1fr) auto auto; display: grid; min-width: 0; max-width: 1040px; font: 400 14px/20px var(--font-sans); color: var(--text); container-type: inline-size; }
 /* 14 skeleton reveal: skeleton and rows share one cell and cross-fade with a 2px blur over 400ms. */
 .tf-meetings__skeleton, .tf-meetings__content { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-slow) var(--ease-in-out), filter var(--duration-slow) var(--ease-in-out); }
 .tf-meetings__content { opacity: 0; filter: blur(var(--blur-small)); }
@@ -20,13 +20,16 @@
 .tf-meetings__date { color: var(--text-secondary); font-weight: 400; }
 .tf-meetings__rows { list-style: none; margin: 0; padding: var(--space-4) 0 0; }
 
-.tf-meetings__row { position: relative; display: grid; height: calc(var(--size-row) + var(--space-16)); border-radius: var(--radius-md); transition: height var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out); }
+.tf-meetings__row { position: relative; display: grid; min-height: calc(var(--size-row) + var(--space-16)); border-radius: var(--radius-md); transition: height var(--duration-fast) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-out); }
 .tf-meetings__row:hover, .tf-meetings__row:focus-within { background: var(--surface-hover); }
 .tf-meetings__main, .tf-meetings__strip { grid-area: 1 / 1; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out), filter var(--duration-fast) var(--ease-smooth-out); }
-.tf-meetings__main { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; padding: 0 var(--space-8); }
+.tf-meetings__main { display: grid; grid-template-columns: var(--tf-meetings-cols); gap: var(--space-16); align-items: center; padding: var(--space-8); }
 .tf-meetings--full { max-width: none; }
 .tf-meetings__time { display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
 .tf-meetings__time-day { color: var(--text-secondary); font-weight: 400; }
+/* Start over end, so a long range never runs into the title. */
+.tf-meetings__time-start { color: var(--text); font-weight: 500; }
+.tf-meetings__time-end { color: var(--text-tertiary); font: 400 13px/18px var(--font-sans); }
 .tf-meetings__what { display: flex; flex-direction: column; min-width: 0; }
 .tf-meetings__title { font: 500 15px/22px var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-meetings__with { color: var(--text-secondary); font-weight: 400; }
@@ -51,7 +54,7 @@
 
 /* Cancelled in place: the row folds to 44 and the strip resolves where the eye already is. */
 .tf-meetings__strip { display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-8) 0 var(--space-12); opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
-.tf-meetings__row.is-strip { height: var(--size-row); background: var(--surface-subtle); }
+.tf-meetings__row.is-strip { min-height: var(--size-row); height: var(--size-row); background: var(--surface-subtle); }
 .tf-meetings__row.is-strip .tf-meetings__main { opacity: 0; filter: blur(var(--blur-small)); pointer-events: none; }
 .tf-meetings__row.is-strip .tf-meetings__strip { opacity: 1; filter: none; pointer-events: auto; }
 .tf-meetings__strip-icon { display: inline-flex; color: var(--tag-red-text); }
@@ -77,7 +80,7 @@
 
 /* Narrow: a tighter time column. */
 @container (max-width: 40rem) {
-  .tf-meetings__main, .tf-meetings__skel-row { grid-template-columns: 96px minmax(0, 1fr) auto auto; }
+  .tf-meetings__main, .tf-meetings__skel-row { grid-template-columns: 80px minmax(0, 1fr) auto auto; }
   .tf-meetings__skel-person { display: none; }
 }
 

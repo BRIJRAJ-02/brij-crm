@@ -182,6 +182,7 @@ export type BookingsAction =
   | { readonly type: 'hours/set'; readonly id: string; readonly hours: WeekHours }
   | { readonly type: 'hours/saved'; readonly savedHours: ReadonlyArray<SavedHours>; readonly defaultHoursId: string }
   | { readonly type: 'timeoff/set'; readonly timeOff: ReadonlyArray<TimeOff> }
+  | { readonly type: 'member/hours'; readonly name: string; readonly hours: WeekHours }
   | { readonly type: 'calendar/set'; readonly calendars: ReadonlyArray<CalendarAccount>; readonly health?: CalendarHealth }
   | { readonly type: 'busy/add'; readonly block: BusyBlock }
   | { readonly type: 'block/add'; readonly block: TimeBlock }
@@ -212,6 +213,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'hours/set': return { ...state, savedHours: state.savedHours.map((h) => (h.id === action.id ? { ...h, hours: action.hours } : h)) };
     case 'hours/saved': return { ...state, savedHours: action.savedHours, defaultHoursId: action.defaultHoursId };
     case 'timeoff/set': return { ...state, timeOff: action.timeOff };
+    case 'member/hours': return { ...state, memberHours: { ...state.memberHours, [action.name]: action.hours } };
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };

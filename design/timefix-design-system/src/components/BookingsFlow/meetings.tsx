@@ -103,6 +103,15 @@ export function MeetingsTab(props: MeetingsTabProps) {
   const clashes = conflicted(state, now).filter(mine);
   const firstClash = clashes.find((m) => !dismissed.has(m.id));
 
+  const clashCallout = firstClash && (
+        <Callout key={firstClash.id} tone="warning" onDismiss={() => setDismissed((d) => new Set(d).add(firstClash.id))}>
+          <span className="tf-bkf__banner">
+            <span>{firstClash.title} on {formatDay(firstClash.start)} clashes with {firstClash.host === HOST ? 'your' : `${first(firstClash.host)}'s`} calendar{clashes.length > 1 ? `, and ${plural(clashes.length - 1, 'other meeting')} too` : ''}.</span>
+            <AriaButton className="tf-bkf__textbtn" onPress={() => props.onSeeConflict(firstClash)}>See conflict</AriaButton>
+          </span>
+        </Callout>
+  );
+
   if (state.meetings.length === 0) {
     return (
       <EmptyState icon={<CalendarDays size={20} strokeWidth={1.75} />} title="No meetings yet"
@@ -125,14 +134,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
             items={[{ id: 'upcoming', label: `Upcoming · ${lists.upcoming.length + requests.length}` }, { id: 'past', label: `Past · ${lists.past.length}` }, { id: 'cancelled', label: `Cancelled · ${lists.cancelled.length}` }]} />}
         </>}
         action={<Button variant="primary" icon={<CalendarPlus {...i14} />} onPress={() => props.onNewMeeting()}>New meeting</Button>} />
-      {firstClash && (
-        <Callout key={firstClash.id} tone="warning" onDismiss={() => setDismissed((d) => new Set(d).add(firstClash.id))}>
-          <span className="tf-bkf__banner">
-            <span>{firstClash.title} on {formatDay(firstClash.start)} clashes with {firstClash.host === HOST ? 'your' : `${first(firstClash.host)}'s`} calendar{clashes.length > 1 ? `, and ${plural(clashes.length - 1, 'other meeting')} too` : ''}.</span>
-            <AriaButton className="tf-bkf__textbtn" onPress={() => props.onSeeConflict(firstClash)}>See conflict</AriaButton>
-          </span>
-        </Callout>
-      )}
+      {view !== 'list' && clashCallout}
       {view === 'list' && (
         <>
           {range === 'upcoming' && nextUp && (
@@ -141,6 +143,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
               <MeetingCard meeting={nextUp} strip={{ tone: 'success', text: startsIn(nextUp.start, now), action: nextUp.place === 'in-person' ? 'Open' : 'Join', onAction: () => (nextUp.place === 'in-person' ? props.onOpen(nextUp.id) : props.onJoin(nextUp.id)) }} />
             </section>
           )}
+          {clashCallout}
           <MeetingList isFullWidth meetings={shown(range === 'upcoming' ? lists.upcoming.slice(1) : lists[range])} requests={range === 'upcoming' ? shown(requests) : []} now={now} highlightId={fresh} conflictIds={new Set(clashes.map((m) => m.id))} onOpen={(m) => props.onOpen(m.id)}
             onCancel={props.onCancel} onUndoCancel={props.onUndoCancel} onReschedule={(m) => props.onReschedule(m.id)} onNoShow={(m) => props.onNoShow(m.id)}
             onConfirm={(m) => props.onConfirm(m.id)} onDecline={(m) => props.onDecline(m.id)}
