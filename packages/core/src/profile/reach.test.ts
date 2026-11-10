@@ -382,6 +382,13 @@ describe('insights (AC-6116 to AC-6120)', () => {
     const times = await add(ada, { kind: 'times', workspaceId: ada.workspaceId, pageId: page.id });
     expect((await enterTimesBlock({ db }, ada.handle, times.id)).entry.pageId).toBe(page.id);
     expect(await refusalOf(enterTimesBlock({ db }, bob.handle, times.id))).toMatchObject({ code: 'NOT_FOUND' });
+    // The page's own block reads the same (its row's next open time, the v5 mock); a link block never does.
+    const read = await visitorRead(ada.handle);
+    const pageRow = read.items.find((item) => item.kind === 'page' && item.slug === page.slug);
+    expect(pageRow).toBeDefined();
+    expect((await enterTimesBlock({ db }, ada.handle, pageRow?.id ?? '')).entry.pageId).toBe(page.id);
+    const site = await add(ada, { kind: 'link', title: 'Site', url: 'https://ada.dev' });
+    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, site.id))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('writes a CSV with the formula guard, and refuses more than 365 days', async () => {

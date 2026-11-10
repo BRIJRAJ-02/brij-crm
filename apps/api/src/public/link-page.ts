@@ -1,7 +1,7 @@
 // A link page's public reads beyond the page itself (spec 0061), outside the RPC router, with no session:
 //
 //   GET /api/public/profiles/:handle/images/:imageId        a picture a live block of that page uses (AC-6101, AC-6129)
-//   GET /api/public/profiles/:handle/items/:itemId/times    ?tz: a next times block's next open times (AC-6110)
+//   GET /api/public/profiles/:handle/items/:itemId/times    ?tz: a next times or booking page block's next open times (AC-6110)
 //   GET /api/public/sitemap-handles.xml                     ?after: the handles search engines may list (AC-6123)
 //   GET /api/public/robots.txt                              the public origin's robots file, naming the sitemap
 //
@@ -213,7 +213,7 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
     }
   });
 
-  // A next times block's next open times (AC-6110): up to 6 starts over the next 14 days, for the page's first length,
+  // A next times or booking page block's next open times (AC-6110; a page row shows the first): up to 6 starts over the next 14 days, for the page's first length,
   // in the visitor's zone (the chips are drawn there; the starts are UTC). The page's own rules decide, through the
   // same slots engine its booking page reads.
   app.get('/public/profiles/:handle/items/:itemId/times', async (c) => {
