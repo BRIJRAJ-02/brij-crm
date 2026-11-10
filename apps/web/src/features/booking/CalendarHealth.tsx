@@ -26,7 +26,7 @@ const LOOKS: Readonly<
   none: { label: words.none },
 };
 
-/** Whether Ask to reconnect is offered for a status (AC-1309): Reconnect needed or Some calendars skipped. */
+/** Whether Ask to reconnect is offered for a status (AC-1309): Needs reconnecting or Some calendars skipped. */
 export const needsReconnect = (health: MemberCalendarHealth): boolean =>
   health.status === 'reconnect' || health.status === 'skipped';
 

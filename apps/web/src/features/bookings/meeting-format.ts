@@ -26,6 +26,16 @@ export function clockOfMinute(minute: number): string {
   return `${String(twelve)}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'am' : 'pm'}`;
 }
 
+/** "2:00 – 6:00 pm" from minutes of the day (one am or pm when both ends share it); 1440 is "12:00 am". */
+export function clockRangeOfMinutes(start: number, end: number): string {
+  const from = clockOfMinute(start);
+  const to = clockOfMinute(end);
+  const [fromTime, fromHalf] = from.split(' ');
+  return fromHalf !== undefined && fromHalf === to.split(' ')[1] && end < 1440
+    ? `${fromTime ?? from} – ${to}`
+    : `${from} – ${to}`;
+}
+
 /** "11:00 – 11:45 am" (one am or pm when both ends share it), else "11:30 am – 12:30 pm". */
 export function clockRange(startsAt: string, endsAt: string, zone: string): string {
   const start = clockTime(startsAt, zone);

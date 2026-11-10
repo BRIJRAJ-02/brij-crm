@@ -98,6 +98,13 @@ export const teamWeekStrings = {
         : `Copied to next week for ${teamWeekStrings.people(changed)}.`,
   /** On a row the reader may not change, beside rows they may. */
   viewOnly: 'View only',
+  /** A name's button: it opens their usual week in a popup. */
+  openPerson: (name: string) => `Open ${name}’s hours`,
+  /** The read only popup of a person's usual week. */
+  personHours: (name: string) => `${name}’s hours`,
+  personHoursWeek: 'Usual week',
+  openInAvailability: 'Open in Availability',
+  done: 'Done',
   /** Between the quiet extras after a person's hours. */
   metaSeparator: ' · ',
   usualTitle: (name: string | undefined) => (name === undefined ? 'Set usual hours' : `Set ${name}’s usual hours`),

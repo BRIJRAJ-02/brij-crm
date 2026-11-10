@@ -15,6 +15,7 @@ import {
   Select,
   Tooltip,
   TopBar,
+  usePhoneWidth,
   ViewOnlyTag,
 } from '@crm/ui';
 import { useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -97,6 +98,7 @@ export function AvailabilityScreen({
   const state = useSchedules(view);
   const slot = useBookingsToolbarSlot();
   const actionSlot = useBookingsActionSlot();
+  const isPhone = usePhoneWidth();
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleView | undefined>(undefined);
   const [renaming, setRenaming] = useState<ScheduleView | undefined>(undefined);
@@ -220,6 +222,11 @@ export function AvailabilityScreen({
       // With no Bookings strip to sit on (Settings › Scheduling › Availability), its own bar under the TopBar.
       variant={slot === null ? 'bar' : 'inline'}
       start={switcher}
+      // The open schedule's quiet facts beside its name (the simplicity sweep's finding 7): no badge, no link. A phone
+      // keeps the strip to one line: the Select's list still says them.
+      {...(current === undefined || isPhone
+        ? {}
+        : { description: scheduleStrings.meta(current.isDefault, current.pages.length) })}
       end={
         <>
           {hasColleagues && (
@@ -437,8 +444,16 @@ function Viewing({
 
 /** New schedule, the screen's one primary. */
 function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boolean; readonly onPress: () => void }) {
+  // On a phone the label folds into the plus, so the bar keeps to one line (as Pages' New page does).
   return (
-    <Button variant="primary" icon="plus" isDisabled={isDisabled} onPress={onPress}>
+    <Button
+      variant="primary"
+      icon="plus"
+      label={scheduleStrings.newSchedule}
+      isLabelCollapsible
+      isDisabled={isDisabled}
+      onPress={onPress}
+    >
       {scheduleStrings.newSchedule}
     </Button>
   );

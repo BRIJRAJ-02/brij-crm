@@ -403,8 +403,10 @@ export const strings = {
       example: 'With 60 days, on 1 March the last day offered is 30 April.',
     },
     daily: {
-      text: 'Meetings from this page in one day.',
-      example: 'With 3, a day with three meetings is full.',
+      // The page's own cap; the person's cap across every page lives in Availability › Meeting limits, and the lower
+      // one wins (the simplicity sweep's finding 6).
+      text: 'Meetings from this page in one day. Your limit across all pages is in Availability, and the lower one wins.',
+      example: 'With 3, a day with three meetings from this page is full.',
     },
     cancelCutoff: {
       text: 'How close to the meeting a guest can still cancel it. You can always cancel it.',
@@ -427,7 +429,7 @@ export const strings = {
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',
   window: 'How far ahead',
-  dailyLimit: 'Max per day',
+  dailyLimit: 'Meetings a day from this page',
   noLimit: 'No limit',
   step: 'Start times every',
   stepDuration: 'Meeting length',

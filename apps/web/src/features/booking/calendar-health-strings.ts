@@ -3,7 +3,8 @@ export const calendarHealthStrings = {
   column: 'Calendar',
   connected: 'Connected',
   skipped: 'Some calendars skipped',
-  reconnect: 'Reconnect needed',
+  // Settings › Calendars' own words, so a person's trouble reads the same everywhere (calendar connect, 9 November).
+  reconnect: 'Needs reconnecting',
   none: 'No calendar',
   hidden: 'Hidden',
   unavailable: 'Unavailable',

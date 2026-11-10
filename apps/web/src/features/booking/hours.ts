@@ -92,6 +92,114 @@ export function withDayOff(
   };
 }
 
+type Range = readonly [string, string];
+
+const clockOf = (minutes: number): string =>
+  `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/** Ranges as minute pairs, in order, touching or overlapping ones merged. */
+function merged(ranges: readonly Range[]): readonly (readonly [number, number])[] {
+  const sorted = ranges
+    .map(([start, end]): readonly [number, number] => [minutesOf(start), minutesOf(end)])
+    .filter(([start, end]) => end > start)
+    .sort((a, b) => a[0] - b[0]);
+  const out: (readonly [number, number])[] = [];
+  for (const [start, end] of sorted) {
+    const last = out.at(-1);
+    if (last !== undefined && start <= last[1]) out[out.length - 1] = [last[0], Math.max(last[1], end)];
+    else out.push([start, end]);
+  }
+  return out;
+}
+
+/**
+ * The hours left of `within` once `away` is taken out (a part day's time off, saved as that date's own hours): "9:00
+ * to 18:00" less "14:00 to 16:00" is "9:00 to 14:00" and "16:00 to 18:00". Nothing left is a day off.
+ */
+export function hoursLessAway(within: readonly Range[], away: readonly Range[]): readonly TimeRange[] {
+  const cuts = merged(away);
+  return merged(within).flatMap(([start, end]) => {
+    const pieces: TimeRange[] = [];
+    let from = start;
+    for (const [cutStart, cutEnd] of cuts) {
+      if (cutEnd <= from || cutStart >= end) continue;
+      if (cutStart > from) pieces.push([clockOf(from), clockOf(cutStart)]);
+      from = Math.max(from, cutEnd);
+    }
+    if (from < end) pieces.push([clockOf(from), clockOf(end)]);
+    return pieces;
+  });
+}
+
+/**
+ * A date's own hours read as time off against the usual day: the hours of `within` it leaves out (`away`), and any
+ * hours it adds outside them (`extra`, a date that works longer). A day off is all of `within` away.
+ */
+export function awayOf(
+  within: readonly Range[],
+  hours: readonly Range[],
+): { readonly away: readonly TimeRange[]; readonly extra: readonly TimeRange[] } {
+  return { away: hoursLessAway(within, hours), extra: hoursLessAway(hours, within) };
+}
+
+/** A date's weekly hours, by its weekday (`YYYY-MM-DD`, a calendar date). */
+export function weeklyOn(availability: BookingAvailability, date: string): readonly TimeRange[] {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return availability.weekly[WEEKDAYS[(day + 6) % 7] ?? 'mon'];
+}
+
+/** The dates from `start` to `end`, both kept (`YYYY-MM-DD`). */
+export function datesBetween(start: string, end: string): readonly string[] {
+  const out: string[] = [];
+  for (let at = Date.parse(`${start}T12:00:00Z`); at <= Date.parse(`${end}T12:00:00Z`); at += 86_400_000) {
+    out.push(new Date(at).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/**
+ * The availability with some hours away on each date from `start` to `end` (Availability's time off, Some hours): each
+ * date's own hours become its usual hours (or the hours it already had) less the hours away, with the note. A date with
+ * no hours that day is left alone; `replacing` is an earlier date's entry being edited, read from its usual week.
+ */
+export function withHoursAway(
+  availability: BookingAvailability,
+  dates: readonly string[],
+  away: readonly Range[],
+  note: string,
+  replacing?: string,
+): BookingAvailability {
+  return dates.reduce((current, date) => {
+    const own = current.overrides.find((override) => override.date === date);
+    const within = own === undefined || date === replacing ? weeklyOn(current, date) : own.ranges;
+    if (within.length === 0) return current;
+    const others = current.overrides.filter((override) => override.date !== date);
+    const trimmed = note.trim();
+    return {
+      ...current,
+      overrides: [
+        ...others,
+        { date, ranges: [...hoursLessAway(within, away)], ...(trimmed === '' ? {} : { note: trimmed }) },
+      ],
+    };
+  }, availability);
+}
+
+/** A date's own hours put back as they were (`was`), or removed when it had none: an Undo. */
+export function withOverride(
+  availability: BookingAvailability,
+  date: string,
+  was: DateOverride | undefined,
+): BookingAvailability {
+  const others = availability.overrides.filter((override) => override.date !== date);
+  return { ...availability, overrides: was === undefined ? others : [...others, was] };
+}
+
+/** The dates from today on with their own hours (days off and part days), by date. */
+export function upcomingOverrides(availability: BookingAvailability, today: string): readonly DateOverride[] {
+  return availability.overrides.filter((override) => override.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
 /** The availability with a date's override removed: it books by the week again. */
 export function openDay(availability: BookingAvailability, date: string): BookingAvailability {
   return { ...availability, overrides: availability.overrides.filter((override) => override.date !== date) };

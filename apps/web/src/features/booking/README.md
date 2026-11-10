@@ -70,7 +70,7 @@ The group dialog (`RotationDialog`) leads with the people (B-04, 4 November 2026
 
 ## Calendar health chip (CalendarHealth.tsx, spec 0037 J8)
 
-- Purpose: a colleague's calendar status (Connected, Some calendars skipped, Reconnect needed, No calendar), the one chip Settings › Members (its Calendar column, `members.manage`), the Team week (trouble only, under a name) and Round robin (beside each member; Hidden outside See reach) share.
+- Purpose: a colleague's calendar status (Connected, Some calendars skipped, Needs reconnecting, No calendar), the one chip Settings › Members (its Calendar column, `members.manage`), the Team week (trouble only, under a name) and Round robin (beside each member; Hidden outside See reach) share.
 - Main task: see who needs to reconnect, when it began (tooltip, and read to screen readers), and press Ask to reconnect in the row menu (once per member a day; the item then reads Asked to reconnect).
 - Leaves out: which account or calendar broke, and why: that is the member's own, in their Settings.
 
