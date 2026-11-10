@@ -2776,6 +2776,8 @@ interface RowContext {
   /** A booking's ⋯ on its row (Reschedule, Cancel meeting; a no show once it has started), when it has any. */
   readonly menuOf: (booking: BookingListItem) => ReactNode;
   readonly tab: MeetingsTab;
+  /** Bookings that arrived while the list was open: their rows wash in once. */
+  readonly arrived?: ReadonlySet<string>;
 }
 
 /** "Product demo · Zoom": the page, then where (a call by its provider, a phone call, the place), or whose. */
@@ -2874,6 +2876,7 @@ function meetingGroupsOf(items: readonly MeetingListItem[], context: RowContext)
               ? { join: { href: item.booking.videoUrl, provider: providerOf(item.booking.videoUrl) } }
               : {}),
             quickActions: context.menuOf(item.booking),
+            ...(context.arrived?.has(item.booking.id) === true ? { isNew: true } : {}),
           }
         : (() => {
             const calendar = context.calendarOf(item.event.calendarId);
@@ -3041,6 +3044,11 @@ const SOURCES: readonly MeetingSource[] = ['all', 'bookings', 'calendar'];
 /** Props for the list: its held pages, the address, the calendars and what Filter offers. */
 export interface BookingsListScreenProps {
   readonly slug: string;
+  /**
+   * Hears each booking a guest makes while the list is open (`data.bookings.arrivals`), so its row washes in as it
+   * arrives with its toast. Absent, rows simply appear.
+   */
+  readonly arrivals?: (listener: (arrival: { readonly bookingId: string }) => void) => () => void;
   /** Mine or Everyone, for a holder of `booking.admin` only (the switch itself is on the strip, the layout's). */
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
@@ -3195,6 +3203,7 @@ export function BookingsListScreen({
   slug,
   search: asked,
   meetings,
+  arrivals,
   calendars,
   onDismissNotice,
   objects,
@@ -3212,6 +3221,9 @@ export function BookingsListScreen({
   // Off with calendar sync off for the deployment, as the layout knows (the bookings critique, A2).
   const canConnectCalendar = useCanConnectCalendar() && canConnectProp;
   const personHref = usePersonHref(slug, objects);
+  // Bookings guests made while the list is open: their rows wash in once as they arrive.
+  const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => arrivals?.((arrival) => setArrived((before) => new Set([...before, arrival.bookingId]))), [arrivals]);
   // One clock for every time on the screen (C13): the member's zone, as the week and the popup read it.
   const format = useFormatSettings();
   const { timeZone } = format;
@@ -3473,6 +3485,7 @@ export function BookingsListScreen({
           peopleObjectId: people?.id,
           menuOf,
           tab,
+          arrived,
         })}
         layout="columns"
         onOpen={setOpenId}

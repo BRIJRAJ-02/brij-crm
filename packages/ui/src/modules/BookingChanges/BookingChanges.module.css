@@ -4,9 +4,9 @@
    at the row's end; stacked on a phone), then the open change's panel as its own band. */
 @layer components {
   .root {
-    /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --panel-duration: 480ms;
+    /* A panel opening, near transitions.dev's 400ms (the owner, 2 November 2026): the public pages' reveal token, so
+       no literal sits beside the scale. */
+    --panel-duration: var(--duration-public-reveal);
     /* The blur a changed count or status line resolves out of (transitions.dev's text swap), a literal until the
        artifact has a blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */

@@ -264,6 +264,28 @@
     transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* A booking that arrived while the list was open fades in on the accent's soft fill, then rests as every row does:
+     colour and opacity only, so it plays under reduced motion too. */
+  .row[data-new] {
+    animation: row-arrive var(--duration-pulse) var(--ease-out) both;
+  }
+
+  @keyframes row-arrive {
+    from {
+      opacity: 0;
+      background-color: var(--accent-soft);
+    }
+
+    15% {
+      opacity: 1;
+      background-color: var(--accent-soft);
+    }
+
+    to {
+      background-color: transparent;
+    }
+  }
+
   .root[data-layout='columns'] .row:last-child {
     border-block-end: none;
   }
