@@ -92,6 +92,19 @@ export const BookingRequestView = z.object({
 /** One booking waiting for a Confirm. */
 export type BookingRequestView = z.infer<typeof BookingRequestView>;
 
+/** The most requests Meetings › Requests lists at once, across every page. */
+export const WAITING_REQUESTS_MAX = 100;
+
+/** Every request the reader may answer, across the pages, for Meetings › Requests (the Bookings redesign). */
+export const ListWaitingRequestsInput = WorkspaceScoped;
+/** Every request the reader may answer. */
+export type ListWaitingRequestsInput = z.infer<typeof ListWaitingRequestsInput>;
+
+/** One request on Meetings › Requests: a page's request and the page it was made on. */
+export const WaitingRequestView = BookingRequestView.extend({ pageId: Uuid });
+/** One request on Meetings › Requests. */
+export type WaitingRequestView = z.infer<typeof WaitingRequestView>;
+
 /** Confirms a request: its event, confirmation and reminders go as any booking's. */
 export const ConfirmBookingInput = WorkspaceScoped.extend({ bookingId: Uuid, mutationId: Uuid });
 /** Confirms a request. */
@@ -116,6 +129,8 @@ export const bookingFlowContract = {
   createLink: oc.input(CreateOneOffLinkInput).output(CreatedOneOffLink),
   revokeLink: oc.input(RevokeOneOffLinkInput).output(OneOffLinkView),
   requests: oc.input(ListRequestsInput).output(z.array(BookingRequestView)),
+  /** Every request the reader may answer, soonest first, at most `WAITING_REQUESTS_MAX`. */
+  waiting: oc.input(ListWaitingRequestsInput).output(z.array(WaitingRequestView)),
   /** Whether it was confirmed now: a request already answered changes nothing. */
   confirm: oc.input(ConfirmBookingInput).output(z.object({ confirmed: z.boolean() })),
   decline: oc.input(DeclineBookingInput).output(z.object({ declined: z.boolean() })),

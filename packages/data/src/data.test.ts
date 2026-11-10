@@ -978,6 +978,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       createLink: os.bookingFlow.createLink.handler(notServed),
       revokeLink: os.bookingFlow.revokeLink.handler(notServed),
       requests: os.bookingFlow.requests.handler(notServed),
+      waiting: os.bookingFlow.waiting.handler(notServed),
       confirm: os.bookingFlow.confirm.handler(notServed),
       decline: os.bookingFlow.decline.handler(notServed),
     },

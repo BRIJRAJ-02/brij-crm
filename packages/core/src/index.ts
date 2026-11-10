@@ -724,7 +724,7 @@ export {
 } from './booking/change.ts';
 // A page's flow rules (spec 0062, L1): its one off links (AC-6204) and its requests (AC-6203).
 export { createOneOffLink, listOneOffLinks, revokeOneOffLink } from './booking/one-off-links.ts';
-export { listRequests } from './booking/requests.ts';
+export { listRequests, listWaitingRequests } from './booking/requests.ts';
 export { type ManageLinkKey } from './booking/tokens.ts';
 export {
   createBusyCache,

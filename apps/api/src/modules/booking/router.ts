@@ -32,6 +32,7 @@ import {
   listOneOffLinks,
   revokeOneOffLink,
   listRequests,
+  listWaitingRequests,
   linkBookingRecord,
   markNoShow,
   setMeetingLink,
@@ -586,6 +587,7 @@ export const bookingFlowRouter = member.bookingFlow.router({
     commitWrite(context, { mutationId: input.mutationId }, () => revokeOneOffLink(context.scope, input)),
   ),
   requests: member.bookingFlow.requests.handler(({ context, input }) => listRequests(context.scope, input)),
+  waiting: member.bookingFlow.waiting.handler(({ context }) => listWaitingRequests(context.scope)),
   confirm: member.bookingFlow.confirm.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       confirmBooking(hostTarget(context.scope, input.bookingId), { hooks }),

@@ -89,7 +89,7 @@ function List({ objects, pages, seesTeam }: ListLoaded) {
   // Requests (spec 0062) through the data layer, one set per workspace, so the tab never reads again for a redraw.
   const requests = useMemo(
     () => ({
-      list: (pageId: string) => data.bookingFlow.requests(slug, pageId),
+      held: data.bookingFlow.waiting(slug),
       confirm: (bookingId: string) => data.bookingFlow.confirm(slug, bookingId),
       decline: (bookingId: string, reason?: string) => data.bookingFlow.decline(slug, bookingId, reason),
     }),
