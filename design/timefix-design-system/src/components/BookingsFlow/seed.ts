@@ -146,11 +146,21 @@ export function northwind(now: Date = new Date()): BookingsState {
     routing: {
       formName: 'Contact sales',
       rules: [
-        { id: 'rule-1', conditions: [{ id: 'c1', attributeId: 'size', operator: 'gt', value: 50 }], conjunction: 'and', pageId: demo.id, team: 'Sales' },
+        { id: 'rule-1', conditions: [{ id: 'c1', attributeId: 'size', operator: 'gt', value: 50 }], conjunction: 'and', pageId: demo.id, team: 'Sales', tag: 'qualified' },
         { id: 'rule-2', conditions: [{ id: 'c2', attributeId: 'need', operator: 'is', value: 'help' }], conjunction: 'and', pageId: support.id, team: 'Support' },
         { id: 'rule-3', conditions: [{ id: 'c3', attributeId: 'need', operator: 'is', value: 'partner' }, { id: 'c4', attributeId: 'region', operator: 'is', value: 'apac' }], conjunction: 'or', pageId: discovery.id, team: 'Partnerships' },
       ],
       fallbackPageId: discovery.id,
+      log: [
+        { id: 'd1', at: new Date(now.getTime() - 25 * 60_000), name: 'Maya Chen', company: 'Acme', answers: { size: 120, region: 'eu', need: 'buy', source: 'web', known: 'no' }, ruleId: 'rule-1', booked: true },
+        { id: 'd2', at: new Date(now.getTime() - 3 * 3_600_000), name: 'Leo Brandt', company: 'Globex', answers: { size: 12, region: 'eu', need: 'help', source: 'email', known: 'yes' }, ruleId: 'rule-2', booked: true },
+        { id: 'd3', at: new Date(now.getTime() - 26 * 3_600_000), name: 'Aiko Tanaka', company: 'Initech', answers: { size: 40, region: 'apac', need: 'partner', source: 'linkedin', known: 'no' }, ruleId: 'rule-3', booked: false },
+        { id: 'd4', at: new Date(now.getTime() - 30 * 3_600_000), name: 'Sara Ortiz', company: 'Umbrella', answers: { size: 300, region: 'na', need: 'buy', source: 'ads', known: 'no' }, ruleId: 'rule-1', booked: true, won: true },
+        { id: 'd5', at: new Date(now.getTime() - 50 * 3_600_000), name: 'Tom Price', company: 'Hooli', answers: { size: 8, region: 'na', need: 'buy', source: 'web', known: 'no' }, booked: true, noShow: true },
+        { id: 'd6', at: new Date(now.getTime() - 74 * 3_600_000), name: 'Nina Rossi', company: 'Stark', answers: { size: 75, region: 'eu', need: 'buy', source: 'email', known: 'yes' }, ruleId: 'rule-1', booked: true, won: true },
+        { id: 'd7', at: new Date(now.getTime() - 98 * 3_600_000), name: 'Omar Haddad', company: 'Waynelog', answers: { size: 20, region: 'eu', need: 'help', source: 'web', known: 'yes' }, ruleId: 'rule-2', booked: true },
+        { id: 'd8', at: new Date(now.getTime() - 120 * 3_600_000), name: 'Ivy Park', company: 'Soylent', answers: { size: 5, region: 'na', need: 'buy', source: 'ads', known: 'no' }, booked: false },
+      ],
       skills: { 'Priya Raman': ['Sales', 'Partnerships'], 'Sam Kim': ['Sales', 'Onboarding'], 'Jo Mendes': ['Support', 'Onboarding'], 'Ava Chen': ['Support', 'Onboarding'] },
       wonMeans: 'won',
     },

@@ -148,12 +148,25 @@ export interface CalendarHealth { readonly skipped: Readonly<Record<string, numb
 /** A round robin group: its members and who is paused. */
 export interface RoundRobinGroup { readonly id: string; readonly name: string; readonly members: ReadonlyArray<{ readonly name: string; readonly paused: boolean }> }
 /** One routing rule: when the answers match, book this page with this team. */
-export interface RoutingRule { readonly id: string; readonly conditions: ReadonlyArray<Condition>; readonly conjunction: Conjunction; readonly pageId: string; readonly team: string }
+/** What a matched rule does: book a page, show a message, or send to a link. */
+export type RouteOutcome = 'page' | 'message' | 'redirect';
+/** How a rule tags the person it routes, for reports. */
+export type RouteTag = 'qualified' | 'not';
+export interface RoutingRule { readonly id: string; readonly conditions: ReadonlyArray<Condition>; readonly conjunction: Conjunction; readonly pageId: string; readonly team: string;
+  readonly outcome?: RouteOutcome; readonly message?: string; readonly url?: string; readonly tag?: RouteTag }
+/** One answer the routing form got, and where it went. */
+export interface RouteDecision { readonly id: string; readonly at: Date; readonly name: string; readonly company: string; readonly answers: RoutingAnswers;
+  /** The rule that matched; undefined is Otherwise. */ readonly ruleId?: string; readonly booked: boolean; readonly noShow?: boolean; readonly won?: boolean }
 /** The routing form: its rules, the fallback, member skills and what "won" means. */
 export interface Routing {
   readonly formName: string;
   readonly rules: ReadonlyArray<RoutingRule>;
   readonly fallbackPageId: string;
+  readonly fallbackOutcome?: RouteOutcome;
+  readonly fallbackMessage?: string;
+  readonly fallbackUrl?: string;
+  /** Recent answers and where each went, newest first. */
+  readonly log?: ReadonlyArray<RouteDecision>;
   readonly skills: Readonly<Record<string, ReadonlyArray<string>>>;
   readonly wonMeans: string;
 }
@@ -432,6 +445,9 @@ export const ROUTING_FIELDS: ReadonlyArray<Attribute> = [
   { id: 'size', name: 'Team size', type: 'number' },
   { id: 'region', name: 'Region', type: 'select', options: [{ id: 'eu', label: 'Europe', hue: 'blue' }, { id: 'na', label: 'North America', hue: 'green' }, { id: 'apac', label: 'Asia Pacific', hue: 'orange' }] },
   { id: 'need', name: 'Looking for', type: 'select', options: [{ id: 'buy', label: 'Buying', hue: 'purple' }, { id: 'help', label: 'Help with an account', hue: 'sky' }, { id: 'partner', label: 'A partnership', hue: 'yellow' }] },
+  // Hidden fields: filled from the link or the CRM, never asked.
+  { id: 'source', name: 'Came from', type: 'select', options: [{ id: 'web', label: 'Website', hue: 'gray' }, { id: 'email', label: 'Email', hue: 'blue' }, { id: 'linkedin', label: 'LinkedIn', hue: 'sky' }, { id: 'ads', label: 'Ads', hue: 'orange' }] },
+  { id: 'known', name: 'Known in CRM', type: 'select', options: [{ id: 'yes', label: 'Yes', hue: 'green' }, { id: 'no', label: 'No', hue: 'gray' }] },
 ];
 /** The answers a test (or a guest) gives the routing form. */
 export type RoutingAnswers = Readonly<Record<string, string | number | undefined>>;
