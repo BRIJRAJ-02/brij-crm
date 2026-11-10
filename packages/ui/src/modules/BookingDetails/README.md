@@ -48,7 +48,7 @@ Not in the artifact.
 
 Booked: a `done` outcome may carry `next`. Confirm then reads Booked with a tick for one `--duration-move` before `next` runs (the page opens the receipt there), so the visitor sees the booking land (the owner, 1 November 2026). Without `next`, the page has already moved on.
 
-Guests are rows (9 November 2026, the owner: "more guests should be added, instead of just one"): InviteRows' `guests` variant, one email a row with its ×, "Guests (up to 10)" over them, Add guests and then Add another guest under them, as New meeting and the guest's own page add them. Blank rows are left out, a repeat goes once, a row that isn't an address is named under itself and nothing is sent, and a server's `guest-n` lands on the row the n-th address sent came from. GuestChips is no longer drawn here.
+Guests are rows (9 November 2026, the owner: "more guests should be added, instead of just one"): InviteRows' `guests` variant, one email a row with its ×, "Guests (up to 10)" over them, Add guests and then Add another guest under them, as New meeting and the guest's own page add them. Blank rows are left out, a repeat goes once, a row that isn't an address is named under itself and nothing is sent, and a server's `guest-n` lands on the row the n-th address sent came from.
 
 ## Bookings fix pass (5 November 2026)
 
