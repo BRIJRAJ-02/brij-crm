@@ -9,7 +9,7 @@ export interface BookingsSettingsEntry {
   readonly id: BookingsSettingsPage;
   readonly label: string;
   readonly href: string;
-  readonly icon: 'calendar' | 'users-round' | 'eye' | 'palette';
+  readonly icon: 'calendar' | 'users-round' | 'eye' | 'timer' | 'palette';
   /** The group's name it sits under. */
   readonly group: string;
   /** A permission the page needs; absent, every member but a guest may open it. */
@@ -18,8 +18,9 @@ export interface BookingsSettingsEntry {
 
 /**
  * Bookings settings, in the mock's groups: Connections (Calendars), People (Teams, the round robin groups, and
- * Scheduling access) and Guests see (Brand, the look booking pages wear). Meeting limits, booking notifications,
- * Appointments and the all pages overview are not here yet: they have no screen of their own today.
+ * Scheduling access), Meetings (Meeting limits, out of Availability on 10 November 2026) and Guests see (Brand, the
+ * look booking pages wear). Booking notifications, Appointments and the all pages overview are not here: there is no
+ * setting of theirs to move, and none is made up.
  */
 export function bookingsSettingsNav(slug: string): readonly BookingsSettingsEntry[] {
   return [
@@ -44,6 +45,13 @@ export function bookingsSettingsNav(slug: string): readonly BookingsSettingsEntr
       href: bookingsSettingsHref(slug, 'access'),
       icon: 'eye',
       group: strings.groups.people,
+    },
+    {
+      id: 'limits',
+      label: strings.limits,
+      href: bookingsSettingsHref(slug, 'limits'),
+      icon: 'timer',
+      group: strings.groups.meetings,
     },
     {
       id: 'brand',
@@ -71,5 +79,7 @@ export function visibleBookingsSettingsNav(
 /** The Bookings settings page an address shows, or undefined for none (bare `/bookings/settings`, an unknown page). */
 export function bookingsSettingsPageOf(pathname: string): BookingsSettingsPage | undefined {
   const last = /^\/w\/[^/]+\/bookings\/settings\/([^/]+)\/*$/.exec(pathname)?.[1];
-  return last === 'calendars' || last === 'teams' || last === 'access' || last === 'brand' ? last : undefined;
+  return last === 'calendars' || last === 'teams' || last === 'access' || last === 'limits' || last === 'brand'
+    ? last
+    : undefined;
 }

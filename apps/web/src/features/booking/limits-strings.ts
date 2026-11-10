@@ -43,4 +43,10 @@ export const limitsStrings = {
   // Read only (AC-1299): why it can't be changed here.
   setByOthers: 'Your meeting limits are set by others.',
   seeOnly: (first: string) => `You can see ${first}’s meeting limits but not change them.`,
+  // Bookings settings › Meeting limits: whose limits show, for a reader who reaches a colleague's scheduling.
+  whose: 'Whose limits',
+  whoseMine: 'My limits',
+  whoseTheirs: (name: string) => `${name}’s limits`,
+  seeOnlyShort: 'See only',
+  loadFailed: 'Meeting limits didn’t load.',
 } as const;
