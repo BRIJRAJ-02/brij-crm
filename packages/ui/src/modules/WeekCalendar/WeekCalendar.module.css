@@ -651,10 +651,12 @@
   }
 
   /* The time now on the axis, level with the line, over the hour label it may cross. It starts at the axis's start, so
-     a long time ("10:20 am") runs on toward the line rather than being cut at the page's edge. */
+     a long time ("10:20 am") runs on toward the line rather than being cut at the page's edge. Never higher than half
+     its own line (16px) below the grid's top: when now is the first hour shown, the label sat half under the pinned
+     day heads (lane 5.7, 10 November 2026), so it rests just under them, the line still at the true minute. */
   .nowLabel {
     position: absolute;
-    inset-block-start: calc(var(--start) / 60 * var(--hour));
+    inset-block-start: max(calc(var(--start) / 60 * var(--hour)), var(--space-8));
     inset-inline-start: 0;
     z-index: var(--z-raised);
     min-inline-size: 100%;
