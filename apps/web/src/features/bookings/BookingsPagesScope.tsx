@@ -42,7 +42,13 @@ function PagesActions() {
   return createPortal(
     <ButtonGroup layout="line" label={strings.pagesActions}>
       <TeamLinksMenu slug={slug} onNew={(kind) => newPage(kind)} />
-      <Button variant="primary" icon="plus" onPress={() => newPage()}>
+      <Button
+        variant="primary"
+        icon="plus"
+        label={strings.pageCard.newPage}
+        isLabelCollapsible
+        onPress={() => newPage()}
+      >
         {strings.pageCard.newPage}
       </Button>
     </ButtonGroup>,

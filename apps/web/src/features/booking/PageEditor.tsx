@@ -1538,7 +1538,8 @@ export function PageEditor({
                         facts={pageFacts(page.questions, recordFields)}
                         factLabel={routingStrings.questionOrField}
                         emptyFacts={routingStrings.noFields}
-                        description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
+                        title={rotationStrings.host.rules}
+                        description={rotationStrings.host.rulesLine}
                         isReadOnly={isLocked}
                         nameOf={(memberId) => people.find((person) => person.id === memberId)?.name ?? ''}
                         onRulesChange={async (rules) => {

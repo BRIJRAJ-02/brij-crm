@@ -36,7 +36,7 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
   // never shifts when it arrives (design review, 5 November 2026).
   if (list.status === 'loading' || rotations.status === 'loading') {
     return canBookTeams || canManageForms || canManageTeams ? (
-      <Button iconRight="chevron-down" label={strings.teamLinks} isPending>
+      <Button icon="users" iconRight="chevron-down" label={strings.teamLinks} isLabelCollapsible isPending>
         {strings.teamLinks}
       </Button>
     ) : null;
@@ -69,7 +69,7 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
   };
   return (
     <MenuTrigger>
-      <Button iconRight="chevron-down" label={strings.teamLinks}>
+      <Button icon="users" iconRight="chevron-down" label={strings.teamLinks} isLabelCollapsible>
         {strings.teamLinks}
       </Button>
       <Menu
