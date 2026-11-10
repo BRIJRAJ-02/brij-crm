@@ -9,6 +9,13 @@ export const strings = {
   /** A team page's host, in a sentence. */
   theTeam: 'the team',
   minutesShort: (count: number) => `${String(count)} min`,
+  /** A page's lengths in one phrase: "30 min", "15 or 30 min", "15, 30 or 60 min". */
+  lengths: (minutes: readonly number[]) => {
+    const all = minutes.map(String);
+    const last = all.at(-1);
+    if (last === undefined) return '';
+    return all.length === 1 ? `${last} min` : `${all.slice(0, -1).join(', ')} or ${last} min`;
+  },
   meeting: (minutes: number, where: string) => `${String(minutes)} min · ${where}`,
   locations: { video: 'Video call', phone: 'Phone call' },
   length: 'Meeting length',
@@ -50,6 +57,10 @@ export const strings = {
   // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
   matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',
+  zoneSearchPlaceholder: 'Search a city or GMT+4',
+  /** The time zone list's groups: the zone in use (and the visitor's own) first, then every other. */
+  zoneSuggested: 'Suggested',
+  zoneAll: 'All time zones',
   /** The time zone picker with no zone chosen, which a page always has: only a stand in's empty state. */
   zoneChoose: 'Choose a time zone',
   // Book by chat (spec 0042).
@@ -190,6 +201,8 @@ export const strings = {
   socials: (name: string) => `${name}’s social links`,
   /** The square button beside Save contact: it hands the page on. */
   sharePage: 'Share this page',
+  /** Share beside Save contact, the two an equal pair. */
+  share: 'Share',
   /** The browser can’t share, so the address went to the clipboard instead. */
   shareCopied: 'Link copied',
   /** Neither sharing nor copying worked: the address is in the bar, so there is still a way. */
@@ -220,9 +233,11 @@ export const strings = {
     /** A long ended booking's link (B-13): its details are no longer kept. */
     ended: 'This booking ended',
   },
+  what: 'What',
+  /** The booked moment's What: "Intro call with Brij Raj, 30 min". */
+  whatLine: (title: string, host: string, minutes: number) => `${title} with ${host}, ${String(minutes)} min`,
   who: 'Who',
   /** The guest page's summary, after the meeting's name: "Intro call  with Ada Lovelace" (spec 0058, AC-19). */
-  withHost: (host: string) => `with ${host}`,
   where: 'Where',
   yourNote: 'Your note',
   /** A video call with no link made (no calendar that makes one): its host sends it, never a promise (QA Q77). */

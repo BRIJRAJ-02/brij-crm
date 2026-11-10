@@ -31,6 +31,7 @@ import { strings, tabTitle } from './strings.ts';
 import {
   dayKey,
   dayLabels,
+  fullDay,
   localeUses12h,
   longDate,
   rangeLabel,
@@ -75,6 +76,10 @@ const compact = (instant: string) =>
     .replace(/\.\d{3}/, '');
 
 /** Where it happens, as one line. */
+/** How long the booking runs, in minutes. */
+const minutesOf = (booking: PublicManagedBooking): number =>
+  Math.round((Date.parse(booking.end) - Date.parse(booking.start)) / 60_000);
+
 function whereOf(booking: PublicManagedBooking): string {
   if (booking.videoUrl !== undefined) return booking.videoUrl;
   switch (booking.location.type) {
@@ -240,17 +245,19 @@ export function ManagePage({
     setLoaded((current) =>
       current.state === 'ready' ? { state: 'ready', booking: { ...current.booking, guests: [...guests] } } : current,
     );
-  const invite = (email: string): Promise<GuestsOutcome> =>
-    changes.addGuests(token, [email]).then(
+  const invite = (emails: readonly string[]): Promise<GuestsOutcome> =>
+    changes.addGuests(token, [...emails]).then(
       (answer): GuestsOutcome => {
         withGuests(answer.guests);
         return { kind: 'done', added: answer.added };
       },
       (error: unknown): GuestsOutcome => {
         const issue = isDataError(error) ? error.data?.issues?.[0] : undefined;
+        // The address it names, by its place among those sent, when the refusal says which.
+        const index = issue?.path.find((part): part is number => typeof part === 'number');
         return issue === undefined
           ? { kind: 'failed', message: messageOf(error) }
-          : { kind: 'invalid', message: issue.message };
+          : { kind: 'invalid', message: issue.message, ...(index === undefined ? {} : { index }) };
       },
     );
   const remove = (email: string): Promise<CancelOutcome> =>
@@ -283,13 +290,24 @@ export function ManagePage({
       range={rangeLabel(booking.start, booking.end, zone, locale)}
       when={`${longDate(booking.start, zone, locale)} · ${zoneDisplay(zone, now())}`}
       relative={relativeLabel(booking.start, now(), zone, locale)}
-      // The summary leads (spec 0058, AC-19): what, when and who, from the booking already loaded.
-      summary={{ what: booking.title, who: strings.withHost(booking.hostName) }}
-      // An aged link's guest details come back blank (B-13): no Who, guests, note or reason, never empty rows.
+      // The booked moment's card (the v5 mock): the whole time first, the zone and how soon quietly under it.
+      headline={{
+        when: `${fullDay(booking.start, zone, locale)}, ${rangeLabel(booking.start, booking.end, zone, locale)}`,
+        meta:
+          booking.state === 'confirmed'
+            ? `${zoneDisplay(zone, now())} · ${relativeLabel(booking.start, now(), zone, locale).toLowerCase()}`
+            : zoneDisplay(zone, now()),
+      }}
+      {...(booking.aged === true ? {} : { sentTo: booking.visitorEmail })}
+      // An aged link's guest details come back blank (B-13): What alone, no Who, guests, note or reason, never empty rows.
       facts={
         booking.aged === true
-          ? []
+          ? [{ term: strings.what, description: strings.whatLine(booking.title, booking.hostName, minutesOf(booking)) }]
           : [
+              {
+                term: strings.what,
+                description: strings.whatLine(booking.title, booking.hostName, minutesOf(booking)),
+              },
               { term: strings.who, ...who },
               ...(booking.guests.length === 0
                 ? []

@@ -110,7 +110,7 @@ describe('ManagePage', () => {
     );
     show();
     await expect.element(page.getByRole('heading', { level: 1, name: 'This booking ended' })).toBeVisible();
-    await expect.element(page.getByText('Intro call', { exact: true })).toBeVisible();
+    await expect.element(page.getByText('Intro call with Ada Lovelace, 30 min')).toBeVisible();
     expect(host?.textContent).not.toContain('Who');
     expect(document.title).toBe('This booking ended · Timefix');
   });
