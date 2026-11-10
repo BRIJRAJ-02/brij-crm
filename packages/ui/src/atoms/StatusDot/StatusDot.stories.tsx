@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import { HUES } from '../../hue.ts';
+import { Button } from '../Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { StatusDot } from './StatusDot.tsx';
 
@@ -96,9 +97,7 @@ export const Animated: Story = {
         <StatusDot hue={isLive ? 'green' : 'gray'} isAnimated>
           {isLive ? 'Live' : 'Hidden'}
         </StatusDot>
-        <button type="button" onClick={() => setLive((was) => !was)}>
-          Switch
-        </button>
+        <Button onPress={() => setLive((was) => !was)}>Switch</Button>
       </Stage>
     );
   },

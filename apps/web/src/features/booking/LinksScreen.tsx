@@ -19,7 +19,7 @@ import {
   type LinkGridCard,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { strings as capturesStrings } from '../captures/strings.ts';
 import { useCapturesCreate } from '../captures/create.tsx';
@@ -28,7 +28,7 @@ import { useMyName } from '../workspace/WorkspacePage.tsx';
 import { managedStrings } from './managed-strings.ts';
 import { managedPageHref, pageEditorHref, publicBookingUrl, type PageTab } from './links.ts';
 import { cardFacts, cardIcon, cardPeople } from './page-card.ts';
-import { setPageLive } from './page-status.ts';
+import { liveRefusal, setPageLive } from './page-status.ts';
 import { PageStatusMenu } from './PageStatusMenu.tsx';
 import { sharingStrings } from './sharing-strings.ts';
 import { strings } from './strings.ts';
@@ -90,8 +90,14 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   };
   const open = (pageId: string, tab?: PageTab) => void navigate({ href: pageEditorHref(slug, pageId, tab) });
   // Live or Hidden shows on the card at once; a refusal puts it back and the toast says why. Each says theirs with Undo.
+  // Undo reads the page as the list holds it then, not as it stood when its toast was made.
+  const itemsNow = useRef<readonly BookingPageView[]>([]);
+  useLayoutEffect(() => {
+    itemsNow.current = list.status === 'ready' ? list.items : [];
+  });
   const setStatus = (page: BookingPageView, isLive: boolean) => {
-    setPageLive(data, slug, page, isLive).then(
+    const current = itemsNow.current.find((each) => each.id === page.id) ?? page;
+    setPageLive(data, slug, current, isLive).then(
       () => {
         toasts.toast({
           tone: 'success',
@@ -99,7 +105,9 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           action: { label: capturesStrings.undo, onAction: () => setStatus(page, !isLive) },
         });
       },
-      failed(isLive ? strings.turnOnFailed(page.title) : strings.turnOffFailed(page.title)),
+      (error: unknown) => {
+        toasts.toast(liveRefusal(error, page.title, () => open(page.id, 'hosts')));
+      },
     );
   };
   const duplicate = (page: BookingPageView) => {
@@ -182,7 +190,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           isLive={isLive}
           isPending={isPending}
           onChange={(next) => setStatus(page, next)}
-          {...(page.canChange ? {} : { lockedReason: strings.notYours })}
+          // A reader who can't change it sees its state, turned off; its View only badge says why.
+          isLocked={!page.canChange}
         />
       ),
       ...(page.canChange
@@ -316,6 +325,8 @@ function useUndoableRemove(data: DataLayer, slug: string) {
       () => back(page.id),
       (error: unknown) => {
         back(page.id);
+        // Someone else deleted it meanwhile: gone either way, as the toast said.
+        if (isDataError(error) && error.code === 'NOT_FOUND') return;
         toasts.toast({
           tone: 'danger',
           message: `${strings.deleteFailed(page.title)} ${isDataError(error) ? error.message : strings.somethingWrong}`,
@@ -323,15 +334,20 @@ function useUndoableRemove(data: DataLayer, slug: string) {
       },
     );
   };
-  // Whatever still waits when the screen goes is deleted then.
+  // Whatever still waits when the screen goes, or the tab closes or reloads, is deleted then: never left half deleted.
   useEffect(() => {
     const pending = waiting.current;
-    return () => {
+    const flush = () => {
       for (const each of pending.values()) {
         clearTimeout(each.timer);
         each.send();
       }
       pending.clear();
+    };
+    globalThis.addEventListener('pagehide', flush);
+    return () => {
+      globalThis.removeEventListener('pagehide', flush);
+      flush();
     };
   }, []);
   const remove = (page: BookingPageView) => {
@@ -353,6 +369,8 @@ function useUndoableRemove(data: DataLayer, slug: string) {
             clearTimeout(held.timer);
             waiting.current.delete(page.id);
             back(page.id);
+            // Focus goes to the card that came back, rather than falling to the page with the toast.
+            focusLater(() => document.querySelector<HTMLElement>(`a[href$="/captures/links/${page.id}"]`) ?? undefined);
           },
         },
       },

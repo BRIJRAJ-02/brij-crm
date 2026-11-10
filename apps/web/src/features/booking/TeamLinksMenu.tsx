@@ -35,7 +35,7 @@ export function TeamLinksMenu({ slug, onNew }: TeamLinksMenuProps) {
   // While the pages load, the button holds its place (turned off) for anyone who may have something in it, so New
   // never shifts when it arrives (design review, 5 November 2026).
   if (list.status === 'loading' || rotations.status === 'loading') {
-    return canBookTeams || canManageForms ? (
+    return canBookTeams || canManageForms || canManageTeams ? (
       <Button iconRight="chevron-down" label={strings.teamLinks} isPending>
         {strings.teamLinks}
       </Button>

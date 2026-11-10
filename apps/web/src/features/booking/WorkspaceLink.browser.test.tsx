@@ -206,11 +206,13 @@ describe('Captures › Links: the Workspace group', () => {
       }),
       pageOf('3', 'Demo', { kind: 'round_robin' }),
     ]);
-    const headings = page
-      .getByRole('heading', { level: 2 })
-      .elements()
-      .map((each) => each.textContent);
-    expect(headings.slice(0, 2)).toEqual([strings.yourGroup, strings.workspaceGroup]);
+    const headings = () =>
+      page
+        .getByRole('heading', { level: 2 })
+        .elements()
+        .map((each) => each.textContent)
+        .slice(0, 2);
+    await expect.poll(headings).toEqual([strings.yourGroup, strings.workspaceGroup]);
     const workspace = page.getByRole('list', { name: strings.workspaceGroup });
     await expect.element(workspace.getByRole('heading', { level: 3, name: 'Talk to us' })).toBeVisible();
     await expect.element(workspace.getByText(strings.workspaceLink, { exact: false })).toBeVisible();

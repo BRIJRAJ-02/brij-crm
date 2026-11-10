@@ -825,3 +825,24 @@ function MovableSections() {
     </Stage>
   );
 }
+
+/** An item whose page needs a fix (`alert`): a small red dot after its name, its words read with the name. */
+export const Alert: Story = {
+  render: () => (
+    <Stage height="page">
+      <Sidebar workspace="Brightline" onQuickActions={() => undefined}>
+        <NavGroup label="Meeting" isLabelShown>
+          <NavItem icon="file-text" href="/details" isCurrent>
+            Details
+          </NavItem>
+          <NavItem icon="clock" href="/hours" alert="needs a fix">
+            Hours and limits
+          </NavItem>
+        </NavGroup>
+      </Sidebar>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'needs a fix' })).toBeInTheDocument();
+  },
+};

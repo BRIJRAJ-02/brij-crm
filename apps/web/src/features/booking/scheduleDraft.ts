@@ -31,7 +31,8 @@ export interface ScheduleDraft {
   readonly error: string | undefined;
   /** Changes the hours from what is shown now, so several changes in one event all land (Copy to days). */
   readonly change: (next: (current: BookingAvailability) => BookingAvailability) => void;
-  readonly save: () => void;
+  /** Saves the changes; answers whether they were stored (false when refused or with nothing to save). */
+  readonly save: () => Promise<boolean>;
   /** Puts the schedule's own hours back. */
   readonly discard: () => void;
 }
@@ -94,9 +95,9 @@ export function useScheduleDraft({
     setUnsaved((current) => next(current ?? schedule.availability));
   };
 
-  const save = () => {
+  const save = (): Promise<boolean> => {
     const hours = unsaved;
-    if (hours === undefined || isSaving || !availabilityIsValid(hours)) return;
+    if (hours === undefined || isSaving || !availabilityIsValid(hours)) return Promise.resolve(false);
     const from = base.current ?? { id: schedule.id, updatedAt: schedule.updatedAt };
     if (from.id !== schedule.id) {
       // What the hours were meant for changed under them (another tab stored, deleted or moved it).
@@ -104,7 +105,7 @@ export function useScheduleDraft({
       base.current = undefined;
       reload();
       onNotice({ tone: 'danger', message: scheduleStrings.stale });
-      return;
+      return Promise.resolve(false);
     }
     setSaving(true);
     setError(undefined);
@@ -128,9 +129,9 @@ export function useScheduleDraft({
         { availability: hours },
       );
     }
-    saving.then(
+    return saving.then(
       (stored) => {
-        if (!isMounted.current) return;
+        if (!isMounted.current) return true;
         setSaving(false);
         // Changes made while it was out stay unsaved, now on top of the stored version.
         if (latest.current === hours) {
@@ -140,9 +141,10 @@ export function useScheduleDraft({
           base.current = { id: stored.id, updatedAt: stored.updatedAt };
         }
         onNotice({ tone: 'success', message: scheduleStrings.hoursSaved(stored.name) });
+        return true;
       },
       (failure: unknown) => {
-        if (!isMounted.current) return;
+        if (!isMounted.current) return false;
         setSaving(false);
         if (isDataError(failure) && failure.code === 'STALE') {
           // Another tab or person saved first: theirs shows, and saying so beats replacing it unseen.
@@ -150,10 +152,11 @@ export function useScheduleDraft({
           base.current = undefined;
           reload();
           onNotice({ tone: 'danger', message: scheduleStrings.stale });
-          return;
+          return false;
         }
         // Kept on screen, unsaved; the bar says why and Save tries again.
         setError(`${scheduleStrings.hoursFailed} ${isDataError(failure) ? failure.message : strings.somethingWrong}`);
+        return false;
       },
     );
   };

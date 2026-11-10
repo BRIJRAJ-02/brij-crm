@@ -187,6 +187,9 @@ export const strings = {
   saveChanges: 'Save changes',
   noChangesYet: 'No changes yet',
   changesSaved: 'Changes saved',
+  changesSavedHidden: 'Changes saved. The page is still hidden.',
+  makeLive: 'Make live',
+  changesDiscarded: 'Changes discarded',
   notSaved: 'Not saved',
   discardChanges: 'Discard changes',
   versionHistory: 'Version history',
@@ -194,11 +197,16 @@ export const strings = {
   goTo: (section: string) => `Go to ${section}`,
   leaveTitle: (title: string) => `Save changes to ${title} before leaving?`,
   leaveText: 'You have edits that aren’t saved yet. Discard drops them; Save makes them live for guests.',
+  leaveTextHidden:
+    'You have edits that aren’t saved yet. Discard drops them; Save keeps them, and the page stays hidden.',
 
   /** Look's theme (the mock of 9 November 2026): Classic or Night, the workspace's own. */
   themeSection: 'Theme',
-  themeLine: 'Logo and colour come from your brand. Every booking page wears it.',
-  themeSaved: (name: string) => `Booking pages now wear ${name}.`,
+  themeLine: 'Logo and colour come from your brand. Every booking page, form and link page wears it.',
+  themeOther: (name: string) =>
+    `Your brand uses ${name}, which booking pages show as Classic. Pick one here to change it for every page.`,
+  themeAdminsOnly: 'Owners and admins change it',
+  themeSaved: (name: string) => `Every page now wears ${name}.`,
   shareTab: 'Share',
   hostsTab: 'Hosts',
   /** Said to screen readers after a tab's name when a field on it holds an error. */

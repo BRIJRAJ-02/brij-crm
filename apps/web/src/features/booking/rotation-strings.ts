@@ -194,6 +194,7 @@ export const strings = {
   peopleCount: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
   host: {
     whoMeets: 'Who meets the guest',
+    whoMeetsHelp: 'Set when the page is made. Make a new page to change it.',
     inTurns: 'One host, in turns',
     together: 'All hosts together',
     /** "Each booking goes to Priya, and one person from Sales." */
