@@ -722,3 +722,11 @@
 .tf-bkf-venue-preview > .tf-bkf-venue-table { margin-top: var(--space-16); }
 .tf-bkf-venue-preview__name { color: var(--text); font: 600 20px/28px var(--font-sans); }
 .tf-bkf-res__actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+/* A business page in the phone frame is a white site, so its grey fields read as fields. */
+.tf-bkf-guestmode__page[data-venue] .tf-bkf-guestmode__frame[data-device='phone'] { padding: 0; overflow: clip; background: var(--surface); }
+@container tf-venue-co (max-width: 30rem) {
+  .tf-bkf__pair { grid-template-columns: minmax(0, 1fr); }
+  /* On a phone the summary is the bar at the bottom: what's booked and the button, the venue is already on screen. */
+  .tf-bkf-venue-sum__head { display: none; }
+  .tf-bkf-venue-sum__lines { padding-block: 0; border: 0; }
+}
