@@ -732,11 +732,16 @@ describe('Find a setting (5 November 2026)', () => {
   it('sits under the head and filters the entries, a tab’s too, saying where each sits', async () => {
     await renderFrame({ current: 'profile', backHref: '/w/acme/start' }, { at: '/w/acme/settings/account/profile' });
     await field().fill('teams');
-    expect(nav()?.querySelector('span[role="status"]')?.textContent).toBe('1 setting');
+    // Settings › Teams, and Bookings settings, which Find a setting reaches by its moved pages' words (round robin's
+    // Teams moved there on 9 November 2026).
+    expect(nav()?.querySelector('span[role="status"]')?.textContent).toBe('2 settings');
     const links = [...(nav()?.querySelectorAll('a[href]') ?? [])].filter(
       (link) => link.getAttribute('aria-label') !== 'Leave settings',
     );
-    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/w/acme/settings/teams']);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/w/acme/settings/teams',
+      '/w/acme/bookings/settings',
+    ]);
     expect(links[0]?.textContent).toContain('People › Members');
     // Back to the whole list once the field is empty.
     await field().fill('');
