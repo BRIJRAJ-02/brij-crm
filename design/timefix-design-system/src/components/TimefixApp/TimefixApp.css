@@ -63,3 +63,18 @@
 .tf-recp__mini { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .tf-recp__mini li { display: flex; justify-content: space-between; gap: var(--space-12); padding: var(--space-8) 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle); color: var(--text); font: 400 14px/20px var(--font-sans); }
 @container tf-app (max-width: 60rem) { .tf-recp__body { grid-template-columns: minmax(0, 1fr); } }
+/* Inbox, Tasks, Notes: one calm column with its controls on top. */
+.tf-you { display: flex; flex-direction: column; gap: var(--space-16); width: 100%; max-width: calc(var(--size-dialog-wide) * 1.25); margin: 0 auto; }
+.tf-you__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); }
+.tf-you__select { width: calc(var(--size-menu) * 0.7); }
+.tf-you__list { padding: var(--space-8); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-you__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-you__h { display: flex; align-items: baseline; gap: var(--space-8); margin: 0; padding: 0 var(--space-4); color: var(--text); font: 600 15px/22px var(--font-sans); }
+.tf-you__h[data-tone='danger'] { color: var(--tag-red-text); }
+.tf-you__card { padding: var(--space-8) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
+.tf-you__open { align-self: flex-start; font-size: 13px; }
+.tf-you--note > .tf-rec__link { align-self: flex-start; font: 500 13px/20px var(--font-sans); }
+.tf-list__title { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-right: var(--space-8); }
+.tf-list__title strong { color: var(--text); font: 600 17px/24px var(--font-sans); }
+.tf-list__picked { display: flex; flex-direction: column; gap: var(--space-4); margin: var(--space-12) 0 0; padding: 0; list-style: none; }
+.tf-list__picked li { display: flex; justify-content: space-between; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--surface-subtle); font: 500 14px/20px var(--font-sans); }

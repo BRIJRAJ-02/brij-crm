@@ -4,6 +4,7 @@ import { Plus, Calendar, ChevronRight, CircleCheck } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
 import { Tag } from '../Tag/Tag.tsx';
+import { IconButton } from '../Button/Button.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import { NumberRoll, Collapse, DropIn } from '../Motion/Motion.tsx';
@@ -31,7 +32,7 @@ function dueOf(due: Date, now: Date): { readonly label: string; readonly overdue
   return { label, overdue };
 }
 
-function TaskRow({ task, checked, open, onChange }: { readonly task: Task; readonly checked: boolean; readonly open: boolean; readonly onChange: (v: boolean) => void }) {
+function TaskRow({ task, checked, open, onChange, onOpen }: { readonly task: Task; readonly checked: boolean; readonly open: boolean; readonly onChange: (v: boolean) => void; readonly onOpen?: (id: string) => void }) {
   const due = task.due && dueOf(task.due, new Date());
   return (
     <Collapse open={open}>
@@ -41,6 +42,7 @@ function TaskRow({ task, checked, open, onChange }: { readonly task: Task; reado
           {task.record && <RecordChip name={task.record.name} src={task.record.src} kind={task.record.kind === 'person' ? 'person' : 'company'} />}
           {due && <Tag size="sm" hue={due.overdue && !checked ? 'red' : 'gray'} icon={<Calendar size={12} strokeWidth={1.75} />}>{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}</Tag>}
           {task.assignee && <Tooltip label={`Assigned to ${task.assignee}`}><AriaButton className="tf-task__who" aria-label={`Assigned to ${task.assignee}`}><Avatar name={task.assignee} size={20} /></AriaButton></Tooltip>}
+          {onOpen && <IconButton size="sm" label={`Open ${task.title}`} onPress={() => onOpen(task.id)}><ChevronRight size={14} strokeWidth={1.75} /></IconButton>}
         </span>
       </div>
     </Collapse>
@@ -56,10 +58,12 @@ export interface TaskListProps {
   readonly onAdd?: (title: string) => void;
   /** Ids added since the list drew; they drop in. */
   readonly freshIds?: ReadonlySet<string>;
+  /** Opens a task to edit it (its due date, who, the record); draws an open arrow at the row's end. */
+  readonly onOpen?: (id: string) => void;
 }
 
 /** A record's or a person's tasks: round checks, due chips (red when overdue), the record and the assignee. A done task strikes through, then folds into "Completed". */
-export function TaskList({ tasks, onToggle, onAdd, freshIds }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen }: TaskListProps) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [folding, setFolding] = useState<ReadonlySet<string>>(new Set());
   const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
@@ -87,7 +91,7 @@ export function TaskList({ tasks, onToggle, onAdd, freshIds }: TaskListProps) {
       <ul className="tf-tasks__list">
         {open.map((t) => (
           <li key={t.id}><DropIn animate={(freshIds?.has(t.id) ?? false) || reopened.has(t.id)}>
-            <TaskRow task={t} checked={pending.has(t.id)} open={!folding.has(t.id)} onChange={(v) => complete(t.id, v)} />
+            <TaskRow task={t} checked={pending.has(t.id)} open={!folding.has(t.id)} onChange={(v) => complete(t.id, v)} onOpen={onOpen} />
           </DropIn></li>
         ))}
       </ul>

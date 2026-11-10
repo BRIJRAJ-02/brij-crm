@@ -13,19 +13,21 @@ import { appReducer, northwindCrm, type AppState, type ObjectId } from './data.t
 import { HomeScreen } from './home.tsx';
 import { RecordsScreen } from './records.tsx';
 import { RecordPage } from './record.tsx';
+import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
+import { ListScreen, NewListDialog } from './lists.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 
 /** Where the app is: a module, and for Records which object. */
-export type AppPage = 'home' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | 'lists' | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
+export type AppPage = 'home' | 'inbox' | 'tasks' | 'notes' | `records:${ObjectId}` | `list:${string}` | 'forms' | 'link' | 'insights' | 'settings' | 'bookings';
 
 const OBJECTS: ReadonlyArray<{ readonly id: ObjectId; readonly label: string; readonly icon: ReactNode }> = [
   { id: 'people', label: 'People', icon: <Users {...i16} /> }, { id: 'companies', label: 'Companies', icon: <Building2 {...i16} /> }, { id: 'deals', label: 'Deals', icon: <CircleDollarSign {...i16} /> },
 ];
 const TITLES: Readonly<Record<string, { readonly label: string; readonly icon: ReactNode }>> = {
   home: { label: 'Home', icon: <Home {...i16} /> }, inbox: { label: 'Inbox', icon: <Inbox {...i16} /> }, tasks: { label: 'Tasks', icon: <CheckSquare {...i16} /> }, notes: { label: 'Notes', icon: <NotebookPen {...i16} /> },
-  lists: { label: 'Lists', icon: <ListChecks {...i16} /> }, forms: { label: 'Forms', icon: <FileText {...i16} /> }, link: { label: 'Link page', icon: <IdCard {...i16} /> },
+forms: { label: 'Forms', icon: <FileText {...i16} /> }, link: { label: 'Link page', icon: <IdCard {...i16} /> },
   insights: { label: 'Insights', icon: <BarChart3 {...i16} /> }, settings: { label: 'Settings', icon: <Settings {...i16} /> },
   ...Object.fromEntries(OBJECTS.map((o) => [`records:${o.id}`, { label: o.label, icon: o.icon }])),
 };
@@ -49,6 +51,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
   const [bookings, setBookings] = useState<BookingsState>();
   const [openTab, setOpenTab] = useState<{ readonly tab: string; readonly n: number }>();
   const [search, setSearch] = useState(false);
+  const [newList, setNewList] = useState(false);
   const [record, setRecord] = useState<{ readonly object: ObjectId; readonly id: string }>();
   useCommandK(() => setSearch(true));
   const go = (p: AppPage) => { setPage(p); setRecord(undefined); };
@@ -88,8 +91,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       <NavSection title="Records" addLabel="New object" onAdd={() => go('settings')}>
         {OBJECTS.map((o) => <NavItem key={o.id} label={o.label} icon={o.icon} isCurrent={page === `records:${o.id}`} onPress={() => go(`records:${o.id}`)} />)}
       </NavSection>
-      <NavSection title="Lists" addLabel="New list" onAdd={() => go('lists')}>
-        <NavItem label="Q4 pipeline" icon={<ListChecks {...i16} />} isCurrent={page === 'lists'} onPress={() => go('lists')} />
+      <NavSection title="Lists" addLabel="New list" onAdd={() => setNewList(true)}>
+        {state.lists.map((l) => <NavItem key={l.id} label={l.name} icon={<ListChecks {...i16} />} count={l.entries.length || undefined} isCurrent={page === `list:${l.id}`} onPress={() => go(`list:${l.id}`)} />)}
       </NavSection>
       {bookingsSection}
       <NavSection title="Grow">
@@ -101,7 +104,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
     </>
   );
 
-  const head = TITLES[page];
+  const listOpen = page.startsWith('list:') ? state.lists.find((l) => `list:${l.id}` === page) : undefined;
+  const head = listOpen ? { label: listOpen.name, icon: <ListChecks {...i16} /> } : TITLES[page];
   const content: ReactNode = page === 'bookings' ? undefined : (
     <>
       <TopBar title={<span className="tf-app__title">{head?.icon}{head?.label}</span>}
@@ -109,6 +113,10 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
       <div className="tf-app__body">
         {page === 'home' ? <HomeScreen state={state} dispatch={dispatch} bookings={bookings} onGo={go} onBookings={openBookings} />
           : record ? <RecordPage key={`${record.object}-${record.id}`} state={state} dispatch={dispatch} object={record.object} id={record.id} onBack={() => setRecord(undefined)} onOpen={openRecord} />
+          : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+          : page === 'tasks' ? <TasksScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+          : page === 'notes' ? <NotesScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+          : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} />
           : page.startsWith('records:') ? <RecordsScreen key={page} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord} />
           : <Rebuilding page={page} onHome={() => go('home')} />}
       </div>
@@ -122,6 +130,7 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
           items={[{ id: 'home', label: 'Home', icon: <Home {...i16} /> }, { id: 'inbox', label: 'Inbox', icon: <Inbox {...i16} />, badge: unread }, { id: 'records', label: 'Records', icon: <Users {...i16} /> },
             { id: 'bookings', label: 'Bookings', icon: <CalendarDays {...i16} /> }, { id: 'settings', label: 'More', icon: <Settings {...i16} /> }]}
           onChange={(id) => (id === 'records' ? go('records:people') : id === 'bookings' ? openBookings('meetings') : go(id as AppPage))} />} />
+      {newList && <NewListDialog onClose={() => setNewList(false)} onCreate={(l) => { dispatch({ type: 'list/set', list: l }); setNewList(false); go(`list:${l.id}`); }} />}
       <CommandPalette isOpen={search} onOpenChange={setSearch} items={commands} onAction={onCommand} placeholder="Search people, companies, deals, or type a command…" />
     </>
   );

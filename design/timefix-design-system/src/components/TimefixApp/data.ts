@@ -35,6 +35,10 @@ export interface SavedView {
   readonly hidden: ReadonlyArray<string>; readonly isPrivate?: boolean;
 }
 
+/** A list: records of one object gathered for a purpose, with the list's own fields (a stage, a priority, the next step). */
+export interface ListEntry { readonly id: string; readonly recordId: string; readonly stage: string; readonly priority: 'High' | 'Medium' | 'Low'; readonly next: string; readonly added: Date }
+export interface CrmList { readonly id: string; readonly name: string; readonly object: ObjectId; readonly stages: ReadonlyArray<string>; readonly entries: ReadonlyArray<ListEntry>; readonly oncePerRecord: boolean }
+
 /** The CRM side of the app. */
 export interface AppState {
   readonly me: string;
@@ -51,6 +55,7 @@ export interface AppState {
   readonly setupDone: ReadonlyArray<string>;
   readonly setupHidden: boolean;
   readonly views: Readonly<Record<ObjectId, ReadonlyArray<SavedView>>>;
+  readonly lists: ReadonlyArray<CrmList>;
 }
 
 export type AppAction =
@@ -69,7 +74,9 @@ export type AppAction =
   | { readonly type: 'activity/add'; readonly activity: Activity }
   | { readonly type: 'setup/done'; readonly id: string }
   | { readonly type: 'setup/hide'; readonly hidden: boolean }
-  | { readonly type: 'views/set'; readonly object: ObjectId; readonly views: ReadonlyArray<SavedView> };
+  | { readonly type: 'views/set'; readonly object: ObjectId; readonly views: ReadonlyArray<SavedView> }
+  | { readonly type: 'list/set'; readonly list: CrmList }
+  | { readonly type: 'list/remove'; readonly id: string };
 
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
@@ -97,6 +104,8 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'setup/done': return state.setupDone.includes(a.id) ? state : { ...state, setupDone: [...state.setupDone, a.id] };
     case 'setup/hide': return { ...state, setupHidden: a.hidden };
     case 'views/set': return { ...state, views: { ...state.views, [a.object]: a.views } };
+    case 'list/set': return { ...state, lists: state.lists.some((l) => l.id === a.list.id) ? state.lists.map((l) => (l.id === a.list.id ? a.list : l)) : [...state.lists, a.list] };
+    case 'list/remove': return { ...state, lists: state.lists.filter((l) => l.id !== a.id) };
   }
 }
 
@@ -177,11 +186,11 @@ export function northwindCrm(now = new Date()): AppState {
   ];
   const i = (id: string, kind: InboxItem['kind'], actor: string, text: string, ago: number, read: boolean, extra: Partial<InboxItem> = {}): InboxItem => ({ id, kind, actor, text, at: new Date(now.getTime() - ago * 60_000), read, done: false, ...extra });
   const inbox: InboxItem[] = [
-    i('i-1', 'mention', 'Sam Kim', 'mentioned you on Globex platform', 12, false, { excerpt: '@Priya can you join the pricing call on Thursday?', record: { object: 'deals', id: 'd-globex' } }),
-    i('i-2', 'assignment', 'Jo Mendes', 'assigned you a task', 55, false, { excerpt: 'Book a security review with Amara', taskId: 't-2', record: { object: 'people', id: 'p-amara' } }),
+    i('i-1', 'mention', 'Sam Kim', 'mentioned you on', 12, false, { excerpt: '@Priya can you join the pricing call on Thursday?', record: { object: 'deals', id: 'd-globex' } }),
+    i('i-2', 'assignment', 'Jo Mendes', 'assigned you a task on', 55, false, { excerpt: 'Book a security review with Amara', taskId: 't-2', record: { object: 'people', id: 'p-amara' } }),
     i('i-3', 'booking', 'Pepper Potts', 'booked Discovery call', 130, false, { excerpt: 'Tomorrow, 11:00 – 11:30 AM' }),
-    i('i-4', 'reply', 'Ava Chen', 'replied in Stark stores', 300, true, { excerpt: 'They want a demo for the regional managers too.', record: { object: 'deals', id: 'd-stark' } }),
-    i('i-5', 'mention', 'Jo Mendes', 'mentioned you on Initech', 1500, true, { excerpt: '@Priya pricing sheet is in the files tab.', record: { object: 'companies', id: 'c-initech' } }),
+    i('i-4', 'reply', 'Ava Chen', 'replied in', 300, true, { excerpt: 'They want a demo for the regional managers too.', record: { object: 'deals', id: 'd-stark' } }),
+    i('i-5', 'mention', 'Jo Mendes', 'mentioned you on', 1500, true, { excerpt: '@Priya pricing sheet is in the files tab.', record: { object: 'companies', id: 'c-initech' } }),
   ];
   const comments: Comment[] = [
     { id: 'cm-1', record: { object: 'deals', id: 'd-globex' }, author: 'Sam Kim', body: '@Priya can you join the pricing call on Thursday?', at: new Date(now.getTime() - 12 * 60_000), resolved: false, replies: [] },
@@ -204,7 +213,23 @@ export function northwindCrm(now = new Date()): AppState {
       deals: [{ id: 'v-d-pipe', name: 'Pipeline', layout: 'board', filters: [], sorts: [{ field: 'amount', direction: 'descending' }], hidden: [] },
         { id: 'v-d-all', name: 'All deals', layout: 'table', filters: [], sorts: [{ field: 'close', direction: 'ascending' }], hidden: [] },
         { id: 'v-d-mine', name: 'My open deals', layout: 'table', filters: [{ id: 'f3', field: 'owner', operator: 'is', values: [me] }, { id: 'f4', field: 'stage', operator: 'is not', values: ['Won', 'Lost'] }], sorts: [{ field: 'close', direction: 'ascending' }], hidden: ['owner'], isPrivate: true }],
-    } };
+    },
+    lists: [
+      { id: 'l-q4', name: 'Q4 pipeline', object: 'deals', oncePerRecord: true, stages: ['To contact', 'Meeting booked', 'Negotiating', 'Closing'],
+        entries: [
+          { id: 'e1', recordId: 'd-acme', stage: 'Closing', priority: 'High', next: 'Send revised proposal', added: dayAt(now, -9) },
+          { id: 'e2', recordId: 'd-umbrella', stage: 'Negotiating', priority: 'High', next: 'Legal review', added: dayAt(now, -8) },
+          { id: 'e3', recordId: 'd-globex', stage: 'Meeting booked', priority: 'Medium', next: 'Pricing call Thursday', added: dayAt(now, -6) },
+          { id: 'e4', recordId: 'd-stark', stage: 'Meeting booked', priority: 'Medium', next: 'Demo for regional managers', added: dayAt(now, -4) },
+          { id: 'e5', recordId: 'd-wayne', stage: 'To contact', priority: 'Low', next: 'Find the fleet lead', added: dayAt(now, -2) },
+        ] },
+      { id: 'l-events', name: 'Conference follow-ups', object: 'people', oncePerRecord: true, stages: ['New', 'Emailed', 'Replied'],
+        entries: [
+          { id: 'e6', recordId: 'p-dinesh', stage: 'Replied', priority: 'Medium', next: 'Book intro', added: dayAt(now, -3) },
+          { id: 'e7', recordId: 'p-monica', stage: 'Emailed', priority: 'Low', next: 'Nudge next week', added: dayAt(now, -3) },
+          { id: 'e8', recordId: 'p-tom', stage: 'New', priority: 'Low', next: 'Send deck', added: dayAt(now, -1) },
+        ] },
+    ] };
 }
 
 /** ₹18,40,000 (Indian grouping). */
