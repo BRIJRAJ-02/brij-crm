@@ -75,6 +75,9 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
     <BookingFlow host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? `${page.hosts.length} hosts` : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
       location={{ kind: where.guest, label: where.label }} today={todayIn(getLocalTimeZone())}
       isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={ZONES} defaultTimeZone={HOST_ZONE} onBook={onBook}
+      team={page.hostMode !== 'one' && page.hosts.length > 1 ? page.hosts : undefined}
+      prefill={page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined}
+      guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}
       durations={page.durations} onDurationChange={onLength} places={page.places.map((k) => ({ id: k, label: PLACES[k].label }))} placeId={place ?? placeOf(page)} onPlaceChange={onPlace ? (k) => onPlace(k as PlaceKind) : undefined} />
   );
 }

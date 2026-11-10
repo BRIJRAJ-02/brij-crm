@@ -154,3 +154,21 @@
 .tf-booking__addguests { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--space-6); padding: var(--space-4) 0; border: 0; background: transparent; color: var(--link); font: 500 14px/20px var(--font-sans); cursor: pointer; outline: none; border-radius: var(--radius-sm); }
 .tf-booking__addguests[data-hovered] { text-decoration: underline; text-underline-offset: 3px; }
 .tf-booking__addguests[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+
+/* Quiet text actions: Not you?, See which times suit you, Disconnect. */
+.tf-booking__textbtn { display: inline-flex; align-items: center; gap: var(--space-6); padding: 0; border: 0; background: transparent; color: var(--link); font: 500 13px/20px var(--font-sans); cursor: pointer; outline: none; border-radius: var(--radius-xs); }
+.tf-booking__textbtn[data-hovered] { text-decoration: underline; text-underline-offset: 3px; }
+.tf-booking__textbtn[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-booking__textbtn[data-disabled] { color: var(--text-tertiary); cursor: default; text-decoration: none; }
+.tf-booking__connect { margin-top: var(--space-12); }
+.tf-booking__connect-note { margin: var(--space-12) 0 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+/* Best times: a time busy on the guest's own calendar steps back; the first free one is marked Best. */
+.tf-booking__time[data-busy] { color: var(--text-tertiary); border-style: dashed; }
+.tf-booking__mark { margin-left: var(--space-8); color: var(--text-tertiary); font: 500 11px/16px var(--font-sans); }
+.tf-booking__mark--best { padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); }
+/* Booking as: someone the form already knows, with a way out. */
+.tf-booking__as { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-12) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); }
+.tf-booking__as-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.tf-booking__as-label { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
+.tf-booking__as-text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-booking__as-email { overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
