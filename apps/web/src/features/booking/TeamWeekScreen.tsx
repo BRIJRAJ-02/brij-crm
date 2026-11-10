@@ -320,8 +320,8 @@ function Loaded({
   const navigate = useNavigate();
   const state = useScheduling(held);
   // A person whose usual week shows read only (a name the reader may not change), kept while the popup closes.
-  const [viewing, setViewing] = useState<TeamWeekRow | undefined>(undefined);
-  const onView = setViewing;
+  // Its id alone: the row is read again each render, so a change to their hours while it is open shows in it.
+  const [viewing, setViewing] = useState<string | undefined>(undefined);
   const store = data.scheduling.loaded()?.teamWeek;
   const shown: Week | undefined = state.status === 'ready' ? state.week : undefined;
   const isPast = shown !== undefined && week < shown.thisWeek;
@@ -356,7 +356,7 @@ function Loaded({
         // The name opens their usual week in a centred popup: to change it, or (otherwise) to read it.
         onOpen: () => {
           if (row.canChange && !isPast) onUsualFor([row.memberId]);
-          else onView(row);
+          else setViewing(row.memberId);
         },
         openLabel: words.openPerson(row.name),
         ...extraOf(
@@ -401,7 +401,7 @@ function Loaded({
         cells: row.days.map((day) => cellOf(row, day, locale)),
         isEditable: row.canChange && !isPast,
       })),
-    [shown, locale, week, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor, onView, health, healthStore, me],
+    [shown, locale, week, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor, health, healthStore, me],
   );
   const anyEditable = people.some((person) => person.isEditable);
   // Copy week from the toolbar: everyone on this page the reader may change, one confirm for all (Deputy's and
@@ -621,7 +621,7 @@ function Loaded({
               }}
             />
             <PersonHoursModal
-              row={viewing}
+              row={viewing === undefined ? undefined : rowOf(viewing)}
               slug={slug}
               locale={locale}
               at={Date.parse(`${week}T12:00:00Z`)}
@@ -922,13 +922,11 @@ function PersonHoursModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      // Read only: the close button and Esc close it (the sweep's §2 fix 6); the one way on is their Availability.
       actions={
-        <>
-          <ButtonLink href={availabilityHref(slug, shown.memberId)}>{words.openInAvailability}</ButtonLink>
-          <Button slot="close" variant="primary">
-            {words.done}
-          </Button>
-        </>
+        <ButtonLink href={availabilityHref(slug, shown.memberId)} iconRight="arrow-right">
+          {words.openInAvailability}
+        </ButtonLink>
       }
     >
       <HoursEditor
