@@ -51,11 +51,31 @@ export function noteConnectStart(store: NoteStore | undefined, start: ConnectSta
 const isStringList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((each) => typeof each === 'string');
 
-/**
- * Reads the note once (it is removed as it is read) and says which account the connect made, against the
- * connections the page has now. Never throws.
- */
+/** Forgets the note, once the page has acted on it. Never throws. */
+export function clearConnectStart(store: NoteStore | undefined): void {
+  try {
+    store?.removeItem(KEY);
+  } catch {
+    // Refused: it goes stale in ten minutes anyway.
+  }
+}
+
+/** Reads the note once and removes it: which account the connect made. Never throws. */
 export function takeConnectArrival(
+  store: NoteStore | undefined,
+  connections: readonly string[],
+  now: number,
+): ConnectArrival {
+  const arrival = readConnectArrival(store, connections, now);
+  clearConnectStart(store);
+  return arrival;
+}
+
+/**
+ * Says which account the connect made, against the connections the page has now, leaving the note in place (a route
+ * loader may run twice; the page clears it with `clearConnectStart` once it has acted). Never throws.
+ */
+export function readConnectArrival(
   store: NoteStore | undefined,
   connections: readonly string[],
   now: number,
@@ -63,7 +83,6 @@ export function takeConnectArrival(
   let raw: string | null;
   try {
     raw = store?.getItem(KEY) ?? null;
-    store?.removeItem(KEY);
   } catch {
     return { kind: 'unknown' };
   }

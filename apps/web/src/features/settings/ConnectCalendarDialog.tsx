@@ -3,8 +3,15 @@
 // on the provider's own screen, and come back to choose which of the new account's calendars block your times.
 // Main task: pick a provider. Leaves out: Apple (a parked proposal), and a "waiting" step: the provider's consent is a
 // whole page away, so the popup picks up again when the browser comes back (`?calendar=`).
-import type { CalendarConnectionView, CalendarItem, CalendarProvider } from '@crm/data';
 import {
+  type CalendarConnectionView,
+  type CalendarItem,
+  type CalendarProvider,
+  type CalendarStatus,
+  type Hue,
+} from '@crm/data';
+import {
+  Badge,
   Button,
   Callout,
   EmptyState,
@@ -33,6 +40,15 @@ export const PROVIDER = {
   CalendarProvider,
   { readonly mark: 'google-calendar' | 'outlook'; readonly name: string; readonly accounts: string }
 >;
+
+/** Each state's dot: green when it is up to date, blue while it connects, red once it needs reconnecting. */
+export const STATUS_HUE = {
+  syncing: 'blue',
+  connected: 'green',
+  expired: 'red',
+  revoked: 'red',
+  failed: 'red',
+} as const satisfies Record<CalendarStatus, Hue>;
 
 /** Props for ConnectCalendarDialog. */
 export interface ConnectCalendarDialogProps {
@@ -142,7 +158,7 @@ export function ConnectCalendarDialog({
           <SettingsRow
             title={account.accountEmail}
             leading={<ProviderMark provider={PROVIDER[account.provider].mark} isLabelled />}
-            description={strings.connected}
+            description={<Badge text={strings.status[account.status]} dot={STATUS_HUE[account.status]} />}
           />
         )}
         {calendars === 'loading' ? (
@@ -165,7 +181,7 @@ export function ConnectCalendarDialog({
         ) : (
           <div role="group" aria-label={strings.chooseTitle}>
             {calendars.map((calendar) => (
-              <SettingsRow key={calendar.id} title={calendar.name}>
+              <SettingsRow key={calendar.id} title={calendar.name} control="inline">
                 <Switch
                   label={strings.checkFor(calendar.name)}
                   isLabelHidden

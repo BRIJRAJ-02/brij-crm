@@ -582,6 +582,28 @@ export const ThingRows: Story = {
   },
 };
 
+/** Icon wide controls stay beside the text on a phone (`control="inline"`), the text wrapping instead. */
+export const InlineControls: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <SettingsLayout titleLevel={1} title="Calendars">
+        <Card>
+          <SettingsRow title="Quarterly planning and client onboarding" control="inline">
+            <Button variant="ghost" icon="ellipsis" label="Options for Quarterly planning" />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const title = canvas.getByText('Quarterly planning and client onboarding').getBoundingClientRect();
+    const button = canvas.getByRole('button', { name: 'Options for Quarterly planning' }).getBoundingClientRect();
+    // On the title's line, not under it.
+    await expect(button.top).toBeLessThan(title.bottom);
+  },
+};
+
 /** A row that just arrived washes in the accent's soft fill once, then rests (an account connected a moment ago). */
 export const NewRow: Story = {
   parameters: { crm: { screenshot: false } },

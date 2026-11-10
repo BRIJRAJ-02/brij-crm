@@ -138,6 +138,8 @@ export const TABS: readonly MeetingsTab[] = ['upcoming', 'requests', 'past', 'ca
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
 
+/** How long a booking that arrived stays marked new: its wash (`duration-pulse`) and a little more. */
+const ARRIVAL_SHOWN_MS = 2_000;
 /**
  * Where, as the card's row: a call by its provider ("Google Meet", never its address; Join is in the footer), a
  * phone call, or the place. A video call no calendar made a link for, still to come, says under it that the host
@@ -536,8 +538,8 @@ export function BookingCard({
   readonly personHref: string | undefined;
   readonly locale: string;
   readonly actions?: HostBookingActions | undefined;
-  /** In the week's popover: Reschedule, Cancel booking and Reassign are drawn by the screen (see useBookingActions),
-   * Reassign with the booking's live seats. */
+  /** In the week (the popup) and the Team day (the popover): Reschedule, Cancel and Reassign are asked of the screen,
+   * which draws their dialogs (see useBookingActions), Reassign with the booking's live seats. */
   readonly onAsk?: ((ask: BookingAsk, seats: readonly BookingAssignment[]) => void) | undefined;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
@@ -599,7 +601,13 @@ export function BookingCard({
   // where it lands as the popup opens again after the week's dialog its menu asked for was dismissed.
   const popupMore = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (variant === 'popup' && focusOnMount !== undefined && focusOnMount !== 'reassignAway') {
+    // Host away's Reassign and Add meeting link take focus to their own buttons (their own effects).
+    if (
+      variant === 'popup' &&
+      focusOnMount !== undefined &&
+      focusOnMount !== 'reassignAway' &&
+      focusOnMount !== 'meetingLink'
+    ) {
       focusLater(() => popupMore.current);
     }
     // Only as the popup opens again.
@@ -3222,8 +3230,23 @@ export function BookingsListScreen({
   const canConnectCalendar = useCanConnectCalendar() && canConnectProp;
   const personHref = usePersonHref(slug, objects);
   // Bookings guests made while the list is open: their rows wash in once as they arrive.
+  // Each stays marked a moment, past its wash, then is a row like the others, so a redraw never plays it again.
   const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => arrivals?.((arrival) => setArrived((before) => new Set([...before, arrival.bookingId]))), [arrivals]);
+  useEffect(() => {
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const stop = arrivals?.((arrival) => {
+      setArrived((before) => new Set([...before, arrival.bookingId]));
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        setArrived((before) => new Set([...before].filter((id) => id !== arrival.bookingId)));
+      }, ARRIVAL_SHOWN_MS);
+      timers.add(timer);
+    });
+    return () => {
+      stop?.();
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [arrivals]);
   // One clock for every time on the screen (C13): the member's zone, as the week and the popup read it.
   const format = useFormatSettings();
   const { timeZone } = format;

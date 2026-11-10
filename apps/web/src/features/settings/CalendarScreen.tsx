@@ -14,7 +14,6 @@ import {
   type CalendarItem,
   type CalendarListState,
   type CalendarProvider,
-  type CalendarStatus,
   type CalendarView,
   type DataLayer,
   type Hue,
@@ -48,10 +47,10 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { calendarOptions } from '../calendars/calendar-options.ts';
-import { noteConnectStart, sessionNotes, type ConnectArrival } from '../calendars/connect-start.ts';
+import { clearConnectStart, noteConnectStart, sessionNotes, type ConnectArrival } from '../calendars/connect-start.ts';
 import { isCalendarInUse } from '../calendars/in-use.ts';
 import { strings } from './calendar-strings.ts';
-import { ConnectCalendarDialog, PROVIDER, type ConnectStep } from './ConnectCalendarDialog.tsx';
+import { ConnectCalendarDialog, PROVIDER, STATUS_HUE, type ConnectStep } from './ConnectCalendarDialog.tsx';
 import type { ConnectResult } from './connect-result.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -78,14 +77,8 @@ export interface CalendarScreenProps {
 
 const number = new Intl.NumberFormat();
 
-/** Each state's dot: green when it is up to date, blue while it connects, red once it needs reconnecting. */
-const STATUS_HUE = {
-  syncing: 'blue',
-  connected: 'green',
-  expired: 'red',
-  revoked: 'red',
-  failed: 'red',
-} as const satisfies Record<CalendarStatus, Hue>;
+/** How long an arrived account stays marked new: its wash's beat and fade (`duration-modal` and `duration-pulse`), and a little more. */
+const ARRIVAL_SHOWN_MS = 2_000;
 
 /** A calendar's switches: Check for conflicts on its row, Show on my week and Log meetings to CRM in its menu. */
 type SwitchName = 'checkConflicts' | 'showInWeek' | 'sync';
@@ -126,10 +119,12 @@ function CalendarRow({
       }
       {...(calendar.sync ? { meta: <Badge text={strings.logsBadge} isWhole /> } : {})}
       {...(description === undefined ? {} : { description })}
+      control="inline"
     >
       <Switch
         label={strings.checkFor(calendar.name)}
         isLabelHidden
+        isDisabled={isStopped}
         isSelected={calendar.checkConflicts}
         onChange={(isOn) => actions.onSwitch(calendar, 'checkConflicts', isOn)}
       />
@@ -243,6 +238,7 @@ function AccountRow({
   return (
     <SettingsRow
       isNew={isNew}
+      control="inline"
       title={connection.accountEmail}
       leading={<ProviderMark provider={PROVIDER[connection.provider].mark} isLabelled />}
       description={
@@ -410,6 +406,12 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
   const [arrivedId, setArrivedId] = useState(() =>
     arrival?.kind === 'reconnected' ? arrival.connectionId : undefined,
   );
+  // Once its wash has played it is an account like the others, so a redraw never plays it again.
+  useEffect(() => {
+    if (arrivedId === undefined) return undefined;
+    const timer = setTimeout(() => setArrivedId(undefined), ARRIVAL_SHOWN_MS);
+    return () => clearTimeout(timer);
+  }, [arrivedId]);
 
   const connections = useMemo(() => (state.status === 'ready' ? state.connections : []), [state]);
   const providers = state.status === 'ready' && state.enabled ? state.providers : [];
@@ -422,6 +424,8 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
   useEffect(() => {
     if (result === undefined || resultRead.current) return;
     resultRead.current = true;
+    // The note the page left before the provider has done its work.
+    clearConnectStart(sessionNotes());
     if (result === 'connected' && arrival?.kind !== 'new') {
       toasts.toast({
         tone: 'success',
@@ -472,8 +476,9 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
     </Button>
   );
   const fellBack = list.status === 'ready' ? list.fellBack : undefined;
+  // An account the list doesn't hold yet (just connected, its first update still listing its calendars) is loading.
   const calendarsOf = (connectionId: string): readonly CalendarItem[] | 'loading' | 'error' =>
-    list.status === 'ready' ? (byAccount.get(connectionId) ?? []) : list.status;
+    list.status === 'ready' ? (byAccount.get(connectionId) ?? 'loading') : list.status;
   const retryCalendars = () => data.calendar.calendars(slug).reload();
 
   let body;
@@ -555,7 +560,7 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
             {state.connections.map((connection) => (
               <AccountCalendars
                 // Read again once its calendars arrive, so which ones show is read from the list, not from nothing.
-                key={`${connection.id}:${list.status}`}
+                key={`${connection.id}:${list.status}:${String(byAccount.has(connection.id))}`}
                 connection={connection}
                 calendars={calendarsOf(connection.id)}
                 actions={actions}
@@ -649,6 +654,8 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
             setArrivedId(step.connectionId);
           }
           setStep(undefined);
+          // Opened as the page loaded, it has no trigger to give focus back to: Connect calendar, by the accounts.
+          focusLater(() => connectRef.current);
         }}
       />
       <Modal
