@@ -17,10 +17,12 @@ export interface DayStripProps {
   readonly onPrevious?: () => void;
   readonly onNext?: () => void;
   readonly label?: string;
+  /** What the dots count, singular and plural ("meeting", "meetings"). */
+  readonly unit?: readonly [string, string];
 }
 
 /** A row of days (Mon 10 …) with meeting dots; the selected day's pill slides to it (transitions.dev tabs sliding). */
-export function DayStrip({ days, value, onChange, onPrevious, onNext, label = 'Day' }: DayStripProps) {
+export function DayStrip({ days, value, onChange, onPrevious, onNext, label = 'Day', unit = ['meeting', 'meetings'] }: DayStripProps) {
   // Tabs' measured pill (16 tabs sliding); a new week re-measures too.
   const bar = useSlidingIndicator(`${value}|${days.map((d) => d.id).join(',')}`);
   return (
@@ -30,7 +32,7 @@ export function DayStrip({ days, value, onChange, onPrevious, onNext, label = 'D
         <div ref={bar} className="tf-daystrip__bar">
           <span className="tf-daystrip__pill" aria-hidden="true" />
           {days.map((d) => (
-            <Radio key={d.id} value={d.id} aria-label={`${d.label}, ${d.count === 0 ? 'no meetings' : `${d.count} meeting${d.count === 1 ? '' : 's'}`}`}
+            <Radio key={d.id} value={d.id} aria-label={`${d.label}, ${d.count === 0 ? `no ${unit[1]}` : `${d.count} ${d.count === 1 ? unit[0] : unit[1]}`}`}
               className={cx('tf-daystrip__day', d.isToday && 'tf-daystrip__day--today')}>
               <span className="tf-daystrip__weekday">{d.isToday ? 'Today' : d.weekday}</span>
               <span className="tf-daystrip__date tf-num">{d.date}</span>

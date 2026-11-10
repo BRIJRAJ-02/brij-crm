@@ -24,5 +24,11 @@ Every request from the design session, checked in the prototype (light and dark)
 | Segmented control sliver on the left | fixed at the measuring hook |
 | After booking and Questions less crowded | settings rows; six booking question types |
 | Features on main missing from the prototype | roster overrides, copy week, usual hours, totals, search, zones, access; limits; time-off reason and cover; routing outcomes, tags, hidden fields, results; round robin modes, caps, count window; managed copies; page editors; emails; best times; team faces; booking as; add to calendar; profile page; list view; needs-a-host strip |
+| Guest page: Month, List and Chat like live, all in the same box | yes; List uses the day strip; pages choose which opens first |
+| Connect calendar: better overlap design | a Compare card (Google, Outlook); busy times hatched; Best marked; a live status line |
+| Success, error, booking, rescheduling all covered | green success moment; "Someone just booked that time" with Pick another time; manage, moved, cancelled, request sent |
+| Adding a guest | email chips with checks (format, not you, not twice, ten at most) |
+| Public side relook, less cramped, taller | details panel, headed main side, 52px days, 48px times, roomier small cards |
+| Powered by Timefix on every guest screen | yes |
 
 Not built: shifts with roles or places, labour cost and painting cells by drag (main doesn't have them either).

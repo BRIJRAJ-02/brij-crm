@@ -4,11 +4,12 @@ import {
 } from 'react-aria-components';
 import type { CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, CalendarCheck, CalendarDays, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Globe, MapPin, Phone, UserPlus, Video } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarDays, LayoutList, MessageCircle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Globe, MapPin, Phone, UserPlus, Video, X } from 'lucide-react';
 import { Avatar, AvatarGroup } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Logo } from '../Logo/Logo.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
+import { DayStrip } from '../DayStrip/DayStrip.tsx';
 import { cx } from '../../lib/cx.ts';
 import { formatClock, formatClockRange } from '../WeekCalendar/clock.ts';
 import { MenuTrigger, Menu, MenuItem } from '../Menu/Menu.tsx';
@@ -53,6 +54,10 @@ export interface BookingFlowProps {
   readonly prefill?: { readonly name: string; readonly email: string };
   /** The guest's own busy times once they connect a calendar, for "best times". Without it there is no Connect link. */
   readonly guestBusy?: (date: CalendarDate) => ReadonlyArray<{ readonly start: number; readonly end: number }>;
+  /** Which view opens first: Month, List or Chat (the page's setting). */
+  readonly defaultView?: 'month' | 'list' | 'chat';
+  /** Book by chat, drawn in the same box when Chat is chosen. Without it there is no Chat view. */
+  readonly chat?: ReactNode;
 }
 
 const asDate = (d: CalendarDate) => new Date(d.year, d.month - 1, d.day);
@@ -128,14 +133,28 @@ function TimeZoneSelect({ zones, value, onChange }: { readonly zones: ReadonlyAr
 const CLOCKS = [{ id: '12', label: '12h' }, { id: '24', label: '24h' }] as const;
 
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
-export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy }: BookingFlowProps) {
+export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat }: BookingFlowProps) {
   const [known, setKnown] = useState(prefill !== undefined);
-  const [layout, setLayout] = useState<'month' | 'list'>('month');
+  const [layout, setLayout] = useState<'month' | 'list' | 'chat'>(defaultView === 'chat' && !chat ? 'month' : defaultView ?? 'month');
+  const [listWeek, setListWeek] = useState(0);
   const [calendar, setCalendar] = useState<'off' | 'connecting' | 'on'>('off');
+  const [calendarFrom, setCalendarFrom] = useState('Google Calendar');
   const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
   const [lastGuests, setLastGuests] = useState<ReadonlyArray<string>>([]);
   const [guestsOpen, setGuestsOpen] = useState(false);
   const [guestText, setGuestText] = useState('');
+  const [guestList, setGuestList] = useState<ReadonlyArray<string>>([]);
+  const [guestError, setGuestError] = useState<string>();
+  /** Adds what was typed as a guest: a real-looking address, not the guest's own, not twice, ten at most. */
+  const addGuest = () => {
+    const v = guestText.trim().replace(/,$/, '').toLowerCase();
+    if (!v) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { setGuestError('That doesn’t look like an email address.'); return; }
+    if (v === guest.email.trim().toLowerCase()) { setGuestError('That’s you. Add someone else.'); return; }
+    if (guestList.includes(v)) { setGuestError('Already added.'); return; }
+    if (guestList.length >= 10) { setGuestError('Ten guests at most.'); return; }
+    setGuestList((l) => [...l, v]); setGuestText('');
+  };
   const [date, setDate] = useState<CalendarDate | undefined>(() => firstOpen(today, isDayOpen));
   const [focused, setFocused] = useState<CalendarDate>(() => date ?? today);
   const [dir, setDir] = useState<'forward' | 'back' | undefined>();
@@ -173,12 +192,12 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     e.preventDefault();
     if (!date || time === undefined) return;
     setPending(true); setFailed(false);
-    const guests = guestText.split(/[,\s]+/).map((x) => x.trim()).filter((x) => x.includes('@')).slice(0, 10);
+    const guests = guestList;
     try { await onBook({ ...guest, guests, date, minutes: time, timeZone: tz }); setLastGuests(guests); setStep('done'); }
     catch { setFailed(true); }
     finally { setPending(false); }
   };
-  const restart = () => { setStep('pick'); setTime(undefined); setAdded(new Set()); setGuest({ name: known && prefill ? prefill.name : '', email: known && prefill ? prefill.email : '', notes: '' }); setGuestText(''); setGuestsOpen(false); };
+  const restart = () => { setStep('pick'); setTime(undefined); setAdded(new Set()); setGuest({ name: known && prefill ? prefill.name : '', email: known && prefill ? prefill.email : '', notes: '' }); setGuestText(''); setGuestList([]); setGuestsOpen(false); };
 
   const rail = (
     <aside className="tf-booking__rail">
@@ -203,49 +222,12 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     </aside>
   );
 
-  // List: the next open days, each with its times; picking one goes straight to details.
-  const listDays = (() => {
-    if (layout !== 'list') return [];
-    const out: Array<{ d: CalendarDate; times: ReadonlyArray<number> }> = [];
-    for (let n = 0; n < 45 && out.length < 6; n += 1) { const d = today.add({ days: n }); if (isDayOpen(d)) { const t = slotsFor(d); if (t.length) out.push({ d, times: t.slice(0, 8) }); } }
-    return out;
-  })();
-  const layoutSwitch = <SegmentedControl aria-label="Show" size="sm" items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }]} selectedKey={layout} onSelectionChange={(k) => setLayout(k === 'list' ? 'list' : 'month')} />;
-  const list = (
-    <div className="tf-booking__list">
-      <header className="tf-booking__list-head"><h3 className="tf-booking__month">Next open days</h3>{layoutSwitch}</header>
-      {listDays.length === 0 && <p className="tf-booking__none">No open times in the next six weeks.</p>}
-      {listDays.map(({ d, times }) => (
-        <section key={d.toString()} className="tf-booking__list-day" aria-label={dayLabel(d, { weekday: 'long', day: 'numeric', month: 'long' })}>
-          <h4 className="tf-booking__list-date tf-num">{dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' })}</h4>
-          <div className="tf-booking__list-times">
-            {times.map((m) => <AriaButton key={m} className="tf-booking__time tf-booking__time--sm" onPress={() => { setDate(d); setTime(m); setStep('details'); }}>{formatClock(m, hour12)}</AriaButton>)}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-  const pick = layout === 'list' ? list : (
-    <div className="tf-booking__pick">
-      <Calendar aria-label="Date" value={date ?? null} onChange={pickDay} focusedValue={focused} onFocusChange={onFocus}
-        minValue={today} isDateUnavailable={(d) => !isDayOpen(d as CalendarDate)} className="tf-booking__cal">
-        <header className="tf-booking__cal-head">
-          <h3 className="tf-booking__month" key={monthKey} data-dir={dir}>
-            {dayLabel(focused, { month: 'long' })} <span className="tf-booking__year">{focused.year}</span>
-          </h3>
-          <span className="tf-booking__arrows">
-            {layoutSwitch}
-            <IconButton slot="previous" label="Previous month" size="sm"><ChevronLeft {...i16} /></IconButton>
-            <IconButton slot="next" label="Next month" size="sm"><ChevronRight {...i16} /></IconButton>
-          </span>
-        </header>
-        <div ref={gridWrap} className="tf-booking__grid-wrap">
-          <CalendarGrid className="tf-booking__grid" weekdayStyle="short">
-            <CalendarGridHeader>{(d) => <CalendarHeaderCell className="tf-booking__weekday">{d}</CalendarHeaderCell>}</CalendarGridHeader>
-            <CalendarGridBody>{(d) => <CalendarCell date={d} className="tf-booking__day" />}</CalendarGridBody>
-          </CalendarGrid>
-        </div>
-      </Calendar>
+  // The views: Month (a calendar beside the day's times), List (a week of days over the day's times) and Chat. All three
+  // draw in the same box, so switching moves nothing.
+  const views = [{ id: 'month', label: 'Month', icon: <CalendarDays size={14} strokeWidth={1.75} /> }, { id: 'list', label: 'List', icon: <LayoutList size={14} strokeWidth={1.75} /> },
+    ...(chat ? [{ id: 'chat', label: 'Chat', icon: <MessageCircle size={14} strokeWidth={1.75} /> }] : [])];
+  const layoutSwitch = <SegmentedControl aria-label="How to pick a time" size="sm" items={views} selectedKey={layout} onSelectionChange={(k) => setLayout(k === 'list' ? 'list' : k === 'chat' ? 'chat' : 'month')} />;
+  const slotsCol = (
       <div className="tf-booking__slots">
         <div className="tf-booking__slots-head">
           <h3 className="tf-booking__slots-day" key={date?.toString()} tabIndex={-1} data-autofocus={time === undefined || undefined}>
@@ -263,7 +245,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
               <li key={m} className="tf-booking__slot" data-chosen={chosen || undefined}>
                 <AriaButton className="tf-booking__time" data-busy={busy || undefined} aria-pressed={chosen} data-autofocus={chosen || undefined} onPress={() => setTime(m)}
                   aria-label={`${formatClock(m, hour12)}${busy ? ', busy on your calendar' : best ? ', best time for you' : ''}`}>
-                  {formatClock(m, hour12)}{busy && <span className="tf-booking__mark">Busy for you</span>}{best && <span className="tf-booking__mark tf-booking__mark--best">Best</span>}
+                  {formatClock(m, hour12)}{!chosen && busy && <span className="tf-booking__mark">You’re busy</span>}{!chosen && best && <span className="tf-booking__mark tf-booking__mark--best">Best</span>}
                 </AriaButton>
                 <span className="tf-booking__next-wrap" inert={!chosen}>
                   <AriaButton className="tf-booking__next" onPress={() => setStep('details')}>Next</AriaButton>
@@ -273,12 +255,63 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
           })}
           {date && slots.length === 0 && <li className="tf-booking__none">No times left on this day.</li>}
         </ul>
-        {guestBusy && date && slots.length > 0 && (calendar === 'on'
-          ? <p className="tf-booking__connect-note">Checked against your calendar. <AriaButton className="tf-booking__textbtn" onPress={() => setCalendar('off')}>Disconnect</AriaButton></p>
-          : <AriaButton className="tf-booking__textbtn tf-booking__connect" isDisabled={calendar === 'connecting'} onPress={() => { setCalendar('connecting'); window.setTimeout(() => setCalendar('on'), 700); }}>
-              <CalendarCheck size={14} strokeWidth={1.75} aria-hidden />{calendar === 'connecting' ? 'Connecting…' : 'See which times suit you'}
-            </AriaButton>)}
+        {guestBusy && date && slots.length > 0 && (calendar === 'on' ? (
+          <div className="tf-booking__overlay tf-booking__overlay--on" role="status">
+            <span className="tf-booking__overlay-dot" aria-hidden="true" />
+            <span className="tf-booking__overlay-text"><strong>Showing your {calendarFrom}</strong><span>Busy times are hatched. Nothing is shared with {host.name.split(' ')[0]}.</span></span>
+            <AriaButton className="tf-booking__textbtn" onPress={() => setCalendar('off')}>Hide</AriaButton>
+          </div>
+        ) : (
+          <div className="tf-booking__overlay">
+            <span className="tf-booking__overlay-icon" aria-hidden="true"><CalendarCheck size={16} strokeWidth={1.75} /></span>
+            <span className="tf-booking__overlay-text"><strong>Compare with your calendar</strong><span>{calendar === 'connecting' ? `Connecting to ${calendarFrom}…` : 'See which times you’re free. Nothing is shared.'}</span></span>
+            <span className="tf-booking__overlay-actions">
+              {(['Google', 'Outlook'] as const).map((p) => (
+                <Button key={p} size="sm" variant="secondary" isDisabled={calendar === 'connecting'} onPress={() => { setCalendarFrom(`${p} Calendar`); setCalendar('connecting'); window.setTimeout(() => setCalendar('on'), 800); }}>{p}</Button>
+              ))}
+            </span>
+          </div>
+        ))}
       </div>
+  );
+  const monday = today.subtract({ days: (asDate(today).getDay() + 6) % 7 }).add({ weeks: listWeek });
+  const week = Array.from({ length: 7 }, (_, n) => monday.add({ days: n })).filter((d) => d.compare(today) >= 0 || listWeek > 0);
+  const list = (
+    <div className="tf-booking__listview">
+      <DayStrip label="Day" unit={['open time', 'open times']} value={date?.toString() ?? ''}
+        days={week.map((d) => ({ id: d.toString(), weekday: dayLabel(d, { weekday: 'short' }), date: d.day, label: dayLabel(d, { weekday: 'long', day: 'numeric', month: 'long' }), count: isDayOpen(d) ? slotsFor(d).length : 0, isToday: d.compare(today) === 0 }))}
+        onChange={(id) => { const d = week.find((x) => x.toString() === id); if (d) pickDay(d); }}
+        onPrevious={listWeek > 0 ? () => setListWeek((w) => w - 1) : undefined} onNext={() => setListWeek((w) => w + 1)} />
+      {slotsCol}
+    </div>
+  );
+  const month = (
+    <div className="tf-booking__pick">
+      <Calendar aria-label="Date" value={date ?? null} onChange={pickDay} focusedValue={focused} onFocusChange={onFocus}
+        minValue={today} isDateUnavailable={(d) => !isDayOpen(d as CalendarDate)} className="tf-booking__cal">
+        <header className="tf-booking__cal-head">
+          <h3 className="tf-booking__month" key={monthKey} data-dir={dir}>
+            {dayLabel(focused, { month: 'long' })} <span className="tf-booking__year">{focused.year}</span>
+          </h3>
+          <span className="tf-booking__arrows">
+            <IconButton slot="previous" label="Previous month" size="sm"><ChevronLeft {...i16} /></IconButton>
+            <IconButton slot="next" label="Next month" size="sm"><ChevronRight {...i16} /></IconButton>
+          </span>
+        </header>
+        <div ref={gridWrap} className="tf-booking__grid-wrap">
+          <CalendarGrid className="tf-booking__grid" weekdayStyle="short">
+            <CalendarGridHeader>{(d) => <CalendarHeaderCell className="tf-booking__weekday">{d}</CalendarHeaderCell>}</CalendarGridHeader>
+            <CalendarGridBody>{(d) => <CalendarCell date={d} className="tf-booking__day" />}</CalendarGridBody>
+          </CalendarGrid>
+        </div>
+      </Calendar>
+      {slotsCol}
+    </div>
+  );
+  const pick = (
+    <div className="tf-booking__pane">
+      <div className="tf-booking__viewbar"><h2 className="tf-booking__pick-title">{layout === 'chat' ? 'Tell us when suits you' : 'Pick a date and time'}</h2>{layoutSwitch}</div>
+      {layout === 'chat' && chat ? <div className="tf-booking__chatview">{chat}</div> : layout === 'list' ? list : month}
     </div>
   );
 
@@ -298,12 +331,32 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
         <TextField label="Name" size="lg" isRequired autoComplete="name" value={guest.name} onChange={(name) => setGuest((g) => ({ ...g, name }))} errorMessage="Add your name." />
         <TextField label="Email" size="lg" isRequired type="email" autoComplete="email" value={guest.email} onChange={(email) => setGuest((g) => ({ ...g, email }))} errorMessage="Add an email we can send the invite to." />
       </>}
-      {guestsOpen
-        ? <TextField label="Guests" aside="Optional" size="lg" type="text" autoComplete="off" autoFocus value={guestText} onChange={setGuestText}
-            placeholder="sam@acme.com, jo@acme.com" description="Up to 10 people. They get the invite too." />
-        : <AriaButton className="tf-booking__addguests" onPress={() => setGuestsOpen(true)}><UserPlus {...i16} aria-hidden />Add guests</AriaButton>}
+      {guestsOpen ? (
+        <div className="tf-booking__guests">
+          <TextField label="Guests" aside={`${guestList.length} of 10`} size="lg" type="email" autoComplete="off" autoFocus value={guestText} onChange={(v) => { setGuestText(v); setGuestError(undefined); }}
+            placeholder="name@company.com" description="Press Enter to add. They get the invite too." isInvalid={guestError !== undefined} errorMessage={guestError}
+            isDisabled={guestList.length >= 10}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addGuest(); } }} onBlur={() => { if (guestText.trim()) addGuest(); }} />
+          {guestList.length > 0 && (
+            <ul className="tf-booking__guest-list" aria-label="Guests added">
+              {guestList.map((g) => (
+                <li key={g} className="tf-booking__guest-chip">
+                  <Avatar name={g} size={20} /><span>{g}</span>
+                  <AriaButton className="tf-booking__guest-x" aria-label={`Remove ${g}`} onPress={() => setGuestList((l) => l.filter((x) => x !== g))}><X size={12} strokeWidth={2} /></AriaButton>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : <AriaButton className="tf-booking__addguests" onPress={() => setGuestsOpen(true)}><UserPlus {...i16} aria-hidden />Add guests</AriaButton>}
       <TextArea label="Anything to share before the call?" aside="Optional" size="lg" rows={3} value={guest.notes} onChange={(notes) => setGuest((g) => ({ ...g, notes }))} />
-      {failed && <p className="tf-booking__error" role="alert">That time was just taken. Go back and pick another.</p>}
+      {failed && (
+        <div className="tf-booking__failed" role="alert">
+          <AlertTriangle size={16} strokeWidth={1.75} aria-hidden />
+          <span className="tf-booking__failed-text"><strong>Someone just booked that time</strong><span>Your details are kept. Pick another time and book again.</span></span>
+          <Button size="sm" variant="secondary" onPress={() => { setStep('pick'); setTime(undefined); }}>Pick another time</Button>
+        </div>
+      )}
       <Button type="submit" variant="primary" size="lg" isPending={pending} className="tf-booking__book">Book</Button>
     </Form>
   );
@@ -312,11 +365,14 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     <div className="tf-booking__done">
       {step === 'done' && (
         <>
-          <span className="tf-booking__check" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" pathLength={1} /></svg>
+          <span className="tf-booking__celebrate" aria-hidden="true">
+            <span className="tf-booking__ring" />
+            <span className="tf-booking__check">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" pathLength={1} /></svg>
+            </span>
           </span>
           <div className="tf-booking__reveal">
-            <h2 className="tf-booking__reveal-line tf-booking__done-title" tabIndex={-1} data-autofocus>You're booked</h2>
+            <h2 className="tf-booking__reveal-line tf-booking__done-title" tabIndex={-1} data-autofocus>You’re booked with {(team && team.length > 1 ? 'the team' : host.name.split(' ')[0])}</h2>
             <p className="tf-booking__reveal-line tf-booking__done-sub">An invitation is on its way to {guest.email || 'your inbox'}.</p>
           </div>
           <dl className="tf-booking__summary tf-booking__reveal-line">

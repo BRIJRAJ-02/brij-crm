@@ -21,10 +21,10 @@ import { GuestView, i14 } from './parts.tsx';
 import { PLACES, at, dayFrom, first, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
 
 /** What the guest view plays. */
-export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile';
+export type GuestScenario = 'book' | 'pending' | 'manage' | 'expired' | 'hidden' | 'offered' | 'chat' | 'profile' | 'taken';
 /** Each scenario's name in the Demo menu. */
 export const GUEST_SCENARIOS: ReadonlyArray<{ readonly id: GuestScenario; readonly label: string }> = [
-  { id: 'book', label: 'Book a time' }, { id: 'profile', label: 'Your profile page' }, { id: 'pending', label: 'A request waiting' }, { id: 'manage', label: 'Manage a booking' },
+  { id: 'book', label: 'Book a time' }, { id: 'profile', label: 'Your profile page' }, { id: 'pending', label: 'A request waiting' }, { id: 'taken', label: 'Someone takes the time first' }, { id: 'manage', label: 'Manage a booking' },
   { id: 'offered', label: 'Picked times only' }, { id: 'chat', label: 'Book by chat' }, { id: 'expired', label: 'An expired one-time link' }, { id: 'hidden', label: 'A hidden page' },
 ];
 
@@ -105,7 +105,7 @@ function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onG
   if (scenario === 'offered') return <Offered page={page} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
   if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} />;
-  return <Book page={page} state={state} onBooked={onBooked} />;
+  return <Book page={page} state={state} onBooked={onBooked} failFirst={scenario === 'taken'} />;
 }
 
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
@@ -144,7 +144,8 @@ function Profile({ owner, state, onBooked }: { readonly owner: string; readonly 
 }
 
 /** The booking page, with a length or place choice first when the page offers several. */
-function Book({ page, state, onBooked }: { readonly page: BookingPage; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
+function Book({ page, state, onBooked, failFirst = false }: { readonly page: BookingPage; readonly state: BookingsState; readonly failFirst?: boolean } & Pick<GuestPlayerProps, 'onBooked'>) {
+  const tries = useRef(0);
   const [length, setLength] = useState(lengthOf(page));
   const [place, setPlace] = useState<PlaceKind>(placeOf(page));
   const [requested, setRequested] = useState<string>();
@@ -152,8 +153,10 @@ function Book({ page, state, onBooked }: { readonly page: BookingPage; readonly 
   return (
     <div className="tf-bkf__guest">
       {page.whoCanBook === 'form' && <Callout tone="info" className="tf-bkf__guest-note">You answered the {page.formName} form. Now pick a time.</Callout>}
-      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace}
-        onBook={(r) => new Promise<void>((resolve) => { window.setTimeout(() => {
+      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace} chat={<Chat page={page} state={state} onBooked={onBooked} embedded />}
+        onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => {
+          tries.current += 1;
+          if (failFirst && tries.current === 1) { reject(new Error('taken')); return; }
           onBooked(page, { ...r, length, place });
           if (page.confirmFirst) setRequested(`${formatLongDay(new Date(r.date.year, r.date.month - 1, r.date.day))} · ${formatClockRange(r.minutes, r.minutes + length)}`);
           resolve();
@@ -197,7 +200,9 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
       <div className="tf-bkf__guest">
         <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setMode('view')}>Back to your booking</Button>
         <GuestView page={page} state={{ ...state, meetings: state.meetings.filter((m) => m.id !== meeting.id) }} length={(meeting.end.getTime() - meeting.start.getTime()) / 60_000}
-          onBook={(r) => new Promise<void>((resolve) => { window.setTimeout(() => { onGuestMove(meeting, at(new Date(r.date.year, r.date.month - 1, r.date.day), r.minutes)); setMode('moved'); resolve(); }, 600); })} />
+          onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => {
+          tries.current += 1;
+          if (failFirst && tries.current === 1) { reject(new Error('taken')); return; } onGuestMove(meeting, at(new Date(r.date.year, r.date.month - 1, r.date.day), r.minutes)); setMode('moved'); resolve(); }, 600); })} />
       </div>
     );
   }
@@ -255,7 +260,7 @@ function Offered({ page, onBooked }: { readonly page: BookingPage } & Pick<Guest
 }
 
 /** Booking by chat: the guest says when suits, the page offers times, one press books. */
-function Chat({ page, state, onBooked }: { readonly page: BookingPage; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
+function Chat({ page, state, onBooked, embedded = false }: { readonly page: BookingPage; readonly state: BookingsState; readonly embedded?: boolean } & Pick<GuestPlayerProps, 'onBooked'>) {
   const [lines, setLines] = useState<ReadonlyArray<BookingChatLine>>([{ id: 'h0', role: 'host', text: `Hi, I'm ${first(page.owner)}'s booking assistant. When works for you?`, suggestions: ['Tomorrow morning', 'Later this week', 'Next week'] }]);
   const [thinking, setThinking] = useState(false);
   const [booked, setBooked] = useState<BookingChatBooked>();
@@ -277,7 +282,7 @@ function Chat({ page, state, onBooked }: { readonly page: BookingPage; readonly 
     }, 900);
   };
   return (
-    <BookingChat host={{ name: page.owner }} title={page.name.includes(`${lengthOf(page)} min`) ? page.name : `${page.name} · ${lengthOf(page)} min`} lines={lines} isThinking={thinking} thinking={['Checking the calendar', 'Finding open times']} booked={booked}
+    <BookingChat bare={embedded} host={{ name: page.owner }} title={page.name.includes(`${lengthOf(page)} min`) ? page.name : `${page.name} · ${lengthOf(page)} min`} lines={lines} isThinking={thinking} thinking={['Checking the calendar', 'Finding open times']} booked={booked}
       onSend={send} onPickTime={(time) => new Promise<void>((resolve) => {
         window.setTimeout(() => {
           const [day, start] = time.id.split('T');

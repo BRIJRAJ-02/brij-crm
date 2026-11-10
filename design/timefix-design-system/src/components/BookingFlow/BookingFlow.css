@@ -163,7 +163,7 @@
 .tf-booking__connect { margin-top: var(--space-12); }
 .tf-booking__connect-note { margin: var(--space-12) 0 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 /* Best times: a time busy on the guest's own calendar steps back; the first free one is marked Best. */
-.tf-booking__time[data-busy] { color: var(--text-tertiary); border-style: dashed; }
+.tf-booking__time[data-busy] { border-style: dashed; color: var(--text-tertiary); background: repeating-linear-gradient(135deg, var(--surface-subtle) 0 var(--space-6), transparent var(--space-6) var(--space-12)); }
 .tf-booking__mark { margin-left: var(--space-8); color: var(--text-tertiary); font: 500 11px/16px var(--font-sans); }
 .tf-booking__mark--best { padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); }
 /* Booking as: someone the form already knows, with a way out. */
@@ -173,10 +173,93 @@
 .tf-booking__as-text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-booking__as-email { overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
 
-/* List: the next open days, each a date over a wrap of its times. */
-.tf-booking__list { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
-.tf-booking__list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
-.tf-booking__list-day { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-booking__list-date { margin: 0; color: var(--text); font: 500 14px/20px var(--font-sans); }
-.tf-booking__list-times { display: flex; flex-wrap: wrap; gap: var(--space-8); }
-.tf-booking__time--sm { width: auto; min-width: calc(var(--size-control-lg) * 2); height: var(--size-control); padding: 0 var(--space-12); }
+
+/* The three views share one box: a switch on top, then Month, List or Chat in the same space. */
+.tf-booking__pane { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
+.tf-booking__viewbar { display: flex; justify-content: flex-end; }
+.tf-booking__listview { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+.tf-booking__chatview { display: flex; height: calc(var(--size-row) * 9); min-width: 0; }
+.tf-booking__chatview > * { flex: 1; min-width: 0; }
+
+/* Guests: each address a chip with its face and a ×. */
+.tf-booking__guests { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-booking__guest-list { display: flex; flex-wrap: wrap; gap: var(--space-6); margin: 0; padding: 0; list-style: none; }
+.tf-booking__guest-chip { display: inline-flex; align-items: center; gap: var(--space-6); height: var(--size-control-sm); padding: 0 var(--space-4) 0 var(--space-4); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font: 400 13px/18px var(--font-sans);
+  animation: tf-booking-chip-in var(--duration-fast) var(--ease-bounce); }
+@keyframes tf-booking-chip-in { from { opacity: 0; transform: scale(var(--scale-medium)); } }
+.tf-booking__guest-x { display: grid; place-items: center; width: var(--space-20); height: var(--space-20); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-tertiary); cursor: pointer; outline: none; }
+.tf-booking__guest-x[data-hovered] { background: var(--surface-hover); color: var(--text); }
+.tf-booking__guest-x[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { .tf-booking__guest-chip { animation: none; } }
+
+/* Compare with your calendar: a quiet card under the times; once on, a status line with a live dot. */
+.tf-booking__overlay { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); margin-top: var(--space-12); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface-subtle); }
+.tf-booking__overlay--on { background: var(--success-soft); border-color: transparent; }
+.tf-booking__overlay-icon { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-md); background: var(--surface); color: var(--accent-text); }
+.tf-booking__overlay-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--success); box-shadow: 0 0 0 var(--space-4) color-mix(in srgb, var(--success) 20%, transparent); }
+.tf-booking__overlay-text { display: flex; flex: 1 1 calc(var(--size-menu) * 0.6); flex-direction: column; min-width: 0; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
+.tf-booking__overlay-text > strong { color: var(--text); font: 500 13px/18px var(--font-sans); }
+.tf-booking__overlay-actions { display: flex; gap: var(--space-6); }
+
+/* The time went while they typed: say so plainly, keep their details, one way back. */
+.tf-booking__failed { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); padding: var(--space-12); border: var(--border-width-hairline) solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: var(--radius-lg); background: var(--danger-soft); color: var(--danger); animation: tf-booking-chip-in var(--duration-fast) var(--ease-smooth-out); }
+.tf-booking__failed-text { display: flex; flex: 1 1 calc(var(--size-menu) * 0.7); flex-direction: column; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+.tf-booking__failed-text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
+
+/* ---------------------------------------------------------------- Relook (10 Nov): room to breathe.
+   The details sit in their own tinted panel; the main side has a heading and the view switch; the calendar and the times
+   are split by a rule; every step uses the same 32px insets. */
+.tf-booking { --tf-booking-day: calc(var(--size-control) + var(--space-12)); --tf-booking-slots: 15rem; --tf-booking-rail: 20rem;
+  --tf-booking-wide: calc(var(--tf-booking-rail) + var(--tf-booking-month) + var(--tf-booking-slots) + var(--space-32) * 3 + var(--space-24)); }
+.tf-booking__card { padding: 0; overflow: hidden; border-color: var(--border); box-shadow: var(--shadow-md); }
+.tf-booking__flow { grid-template-columns: var(--tf-booking-rail) minmax(0, 1fr); gap: 0; align-items: stretch; }
+.tf-booking__rail { gap: 0; padding: var(--space-32); background: var(--surface-subtle); border-right: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-booking__host { margin-top: var(--space-16); font-size: 14px; }
+.tf-booking__title { margin: var(--space-4) 0 var(--space-24); font: 500 26px/34px var(--font-sans); }
+.tf-booking__facts { gap: var(--space-12); }
+.tf-booking__facts > li { gap: var(--space-12); font-size: 15px; line-height: 22px; }
+.tf-booking__flow > :last-child { min-width: 0; }
+.tf-booking__flow .tf-booking__page { padding: var(--space-32); }
+.tf-booking__viewbar { align-items: center; justify-content: space-between; gap: var(--space-12); margin-bottom: var(--space-8); }
+.tf-booking__pick-title { margin: 0; color: var(--text); font: 500 18px/26px var(--font-sans); }
+.tf-booking__pane { gap: var(--space-20); }
+.tf-booking__pick { gap: 0; grid-template-columns: var(--tf-booking-month) minmax(var(--tf-booking-slots), 1fr); }
+.tf-booking__pick > .tf-booking__slots { margin-left: var(--space-24); padding-left: var(--space-24); border-left: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-booking__day { font-size: 15px; }
+.tf-booking__slot-list { gap: var(--space-8); }
+.tf-booking__form { gap: var(--space-20); max-width: 30rem; }
+.tf-booking__done { gap: var(--space-20); padding: var(--space-48) var(--space-32) var(--space-32); }
+.tf-booking__summary { max-width: 30rem; padding: var(--space-20); gap: var(--space-12) var(--space-20); }
+@container tf-booking (max-width: 54rem) {
+  .tf-booking__card { padding: 0; max-width: calc(var(--tf-booking-month) + var(--space-24) * 2); }
+  .tf-booking__flow { grid-template-columns: minmax(0, 1fr); }
+  .tf-booking__rail { padding: var(--space-24); border-right: 0; border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+  .tf-booking__flow .tf-booking__page { padding: var(--space-24); }
+  .tf-booking__pick { grid-template-columns: minmax(0, 1fr); gap: var(--space-24); }
+  .tf-booking__pick > .tf-booking__slots { margin-left: 0; padding-left: 0; border-left: 0; }
+  .tf-booking__viewbar { flex-wrap: wrap; }
+}
+
+/* The booked moment: a green band at the top of the card, a big check that draws itself inside a ring that pulses out once. */
+.tf-booking__done { position: relative; }
+.tf-booking__done::before { content: ""; position: absolute; inset: 0 0 auto; height: calc(var(--size-row) * 3.5); background: linear-gradient(to bottom, var(--success-soft), transparent); pointer-events: none; }
+.tf-booking__done > * { position: relative; }
+.tf-booking__celebrate { position: relative; display: grid; place-items: center; width: calc(var(--size-control-lg) * 1.6); height: calc(var(--size-control-lg) * 1.6); }
+.tf-booking__celebrate > .tf-booking__check { width: 100%; height: 100%; background: var(--success); color: var(--on-accent); box-shadow: 0 0 0 var(--space-6) var(--success-soft); }
+.tf-booking__ring { position: absolute; inset: 0; border-radius: var(--radius-full); border: var(--border-width-focus) solid var(--success); opacity: 0; animation: tf-booking-ring calc(var(--duration-very-slow) * 2) var(--ease-smooth-out) var(--duration-fast) both; }
+@keyframes tf-booking-ring { 0% { opacity: .5; transform: scale(1); } 100% { opacity: 0; transform: scale(1.6); } }
+.tf-booking__done-title { font-size: 26px; line-height: 34px; }
+.tf-booking__done .tf-booking__summary { background: var(--surface); border: var(--border-width-hairline) solid var(--border); }
+@media (prefers-reduced-motion: reduce) { .tf-booking__ring { animation: none; } }
+
+/* Height as well as width: a tall card, 52px days, 48px times, and room between the rows. */
+.tf-booking { --tf-booking-day: calc(var(--size-control) + var(--space-16)); }
+.tf-booking__card { min-height: calc(var(--size-row) * 14); }
+.tf-booking__flow { min-height: calc(var(--size-row) * 14); }
+.tf-booking__flow .tf-booking__page { padding: var(--space-48) var(--space-32); }
+.tf-booking__rail { padding-top: var(--space-48); padding-bottom: var(--space-48); }
+.tf-booking__cal-head { margin-bottom: var(--space-20); }
+.tf-booking__grid { border-spacing: 0 var(--space-6); }
+.tf-booking__slot-list { gap: var(--space-12); max-height: calc(var(--tf-booking-day) * 7 + var(--space-6) * 6); }
+.tf-booking__slots .tf-booking__time { min-height: calc(var(--size-control-lg) + var(--space-4)); }
+.tf-booking__viewbar { margin-bottom: var(--space-16); }

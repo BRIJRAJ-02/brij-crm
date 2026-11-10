@@ -22,6 +22,7 @@ const mark = readFileSync('src/components/Logo/mark.svg', 'utf8').replace(/\s+/g
 const icon = `data:image/svg+xml,${encodeURIComponent(mark)}`;
 const html = `<title>${title}</title>
 <link rel="icon" type="image/svg+xml" href="${icon}">
+<script>try{var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href=${JSON.stringify(icon)};document.head.appendChild(l);}catch(e){}</script>
 <style>${imports}
 ${tokens}
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${themed('dark')} color-scheme: dark; } }

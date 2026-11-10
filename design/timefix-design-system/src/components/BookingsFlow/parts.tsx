@@ -62,10 +62,12 @@ export function ScaledPreview({ children, designWidth, label, fill = false }: { 
 }
 
 /** A page's guest view (BookingFlow) wired to the flow's state. */
-export function GuestView({ page, state, onBook, length, place, onLength, onPlace }: {
+export function GuestView({ page, state, onBook, length, place, onLength, onPlace, chat }: {
   readonly page: BookingPage; readonly state: BookingsState; readonly onBook: (r: BookingRequest) => Promise<void>; readonly length?: number; readonly place?: PlaceKind;
   /** Given, the guest can switch length or place inside the booking card. */
   readonly onLength?: (n: number) => void; readonly onPlace?: (k: PlaceKind) => void;
+  /** Book by chat, offered as the third view. */
+  readonly chat?: ReactNode;
 }) {
   const now = new Date();
   const len = length ?? lengthOf(page);
@@ -78,6 +80,7 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
       team={page.hostMode !== 'one' && page.hosts.length > 1 ? page.hosts : undefined}
       prefill={page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined}
       guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}
+      defaultView={page.defaultView ?? 'month'} chat={chat}
       durations={page.durations} onDurationChange={onLength} places={page.places.map((k) => ({ id: k, label: PLACES[k].label }))} placeId={place ?? placeOf(page)} onPlaceChange={onPlace ? (k) => onPlace(k as PlaceKind) : undefined} />
   );
 }

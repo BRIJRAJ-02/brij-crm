@@ -143,6 +143,12 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} />
                   {draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
                   {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" size="sm" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
+                  <div className="tf-bkf__group">
+                    <span className="tf-bkf__label">Guests start in</span>
+                    <SegmentedControl aria-label="Guests start in" size="sm" selectedKey={draft.defaultView ?? 'month'} onSelectionChange={(k) => set({ defaultView: k === 'list' ? 'list' : k === 'chat' ? 'chat' : 'month' })}
+                      items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }, { id: 'chat', label: 'Chat' }]} />
+                    <span className="tf-bkf__muted">They can switch any time; their last choice is remembered.</span>
+                  </div>
                   <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder="What the meeting is for, in a line or two" />
                 </div>
               </Section>

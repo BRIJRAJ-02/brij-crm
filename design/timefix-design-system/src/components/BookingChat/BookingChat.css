@@ -82,3 +82,7 @@
   .tf-chat__line, .tf-chat__day, .tf-chat__suggest, .tf-chat__check, .tf-chat__booked > *, .tf-chat__caret { animation: none; }
   .tf-chat__time, .tf-chat__chip, .tf-chat__input, .tf-chat__foot { transition: none; }
 }
+
+/* Bare: the conversation alone, filling the box it is given (the booking page's Chat view). */
+.tf-chat--bare { align-items: stretch; height: 100%; }
+.tf-chat--bare .tf-chat__card { flex: 1; max-width: none; border-color: var(--border-subtle); box-shadow: none; border-radius: var(--radius-lg); }

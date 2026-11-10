@@ -43,10 +43,12 @@ export interface BookingChatProps {
   /** Books an offered time in place; the chip shows it working until this resolves. */
   readonly onPickTime: (time: BookingChatTime, day: string) => Promise<void> | void;
   readonly placeholder?: string;
+  /** Inside another card (the booking page's Chat view): no header, frame or foot of its own. */
+  readonly bare?: boolean;
 }
 
 /** The guest booking assistant: host bubbles on the left, the guest's on the right, offered times that book in place, replies that stream in, a thinking line while it looks, and a booked card at the end. */
-export function BookingChat({ host, title, lines, isThinking = false, thinking, booked, onSend, onPickTime, placeholder = 'When works for you?' }: BookingChatProps) {
+export function BookingChat({ host, title, lines, isThinking = false, thinking, booked, onSend, onPickTime, placeholder = 'When works for you?', bare = false }: BookingChatProps) {
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<string>();
   const thread = useRef<HTMLDivElement>(null);
@@ -80,15 +82,15 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
   };
 
   return (
-    <div className="tf-chat">
+    <div className={bare ? 'tf-chat tf-chat--bare' : 'tf-chat'}>
       <section className="tf-chat__card" aria-label={`Book with ${host.name}`}>
-        <header className="tf-chat__head">
+        {!bare && <header className="tf-chat__head">
           <Avatar name={host.name} src={host.avatarSrc} size={36} />
           <div className="tf-chat__who">
             <h2 className="tf-chat__name">{host.name}</h2>
             <p className="tf-chat__title">{title}</p>
           </div>
-        </header>
+        </header>}
 
         <div ref={thread} className="tf-chat__thread" role="log" aria-live="polite" aria-busy={busy} aria-label="Conversation" tabIndex={0}>
           {lines.map((line, n) => {
@@ -167,9 +169,9 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
           </IconButton>
         </form>
       </section>
-      <a className="tf-chat__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer">
+      {!bare && <a className="tf-chat__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer">
         <span>Powered by</span><Logo size={16} />
-      </a>
+      </a>}
     </div>
   );
 }

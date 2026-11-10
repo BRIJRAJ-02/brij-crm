@@ -101,6 +101,8 @@ export interface BookingPage {
   readonly drift?: Readonly<Record<string, ReadonlyArray<LockedPart>>>;
   /** Which emails go out (guest: confirm, change, cancel, after; host: booked, cancelled). Undefined is all of them. */
   readonly emails?: ReadonlyArray<string>;
+  /** Which view the guest page opens in. */
+  readonly defaultView?: 'month' | 'list' | 'chat';
   /** Who besides admins may edit this page. */
   readonly editors?: ReadonlyArray<string>;
   readonly groupId?: string;

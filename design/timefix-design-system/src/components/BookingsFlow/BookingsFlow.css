@@ -478,3 +478,11 @@
 .tf-bkf-profile__text { display: flex; flex: 1; flex-direction: column; min-width: 0; font: 400 13px/18px var(--font-sans); }
 .tf-bkf-profile__text > strong { font: 500 15px/22px var(--font-sans); }
 .tf-bkf__profile-back-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); }
+
+/* Relook of the small guest cards (picked times, request sent, manage, moved, expired): the booking card's room and type. */
+.tf-bkf__guest-card { gap: var(--space-16); max-width: 34rem; padding: var(--space-48) var(--space-32) var(--space-32); border-color: var(--border); box-shadow: var(--shadow-md); }
+.tf-bkf__guest-title { font: 500 22px/30px var(--font-sans); text-align: center; }
+.tf-bkf__guest-card--start .tf-bkf__guest-title { text-align: left; }
+.tf-bkf__guest-icon { width: calc(var(--size-control-lg) * 1.3); height: calc(var(--size-control-lg) * 1.3); }
+.tf-bkf__guest-card > .tf-bkf__answers { width: 100%; padding: var(--space-16) var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); gap: var(--space-12); text-align: left; }
+.tf-bkf__guest-card > .tf-bkf__answers > div { grid-template-columns: calc(var(--size-control-lg) * 2) minmax(0, 1fr); gap: var(--space-16); }
