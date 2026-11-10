@@ -81,6 +81,11 @@ test('a visitor books by chat and the host sees the conversation (spec 0042)', a
   const row = page.getByRole('listitem').filter({ hasText: 'Grace Hopper' });
   // The list's row opens by who it is with (its Reschedule and Cancel name the page too).
   await row.getByRole('button', { name: 'Grace Hopper', exact: true }).click();
+  // The popup folds the answers, how it was booked among them (the redesign's meeting popup).
+  await page
+    .getByRole('dialog', { name: 'Grace Hopper' })
+    .getByRole('button', { name: /^Answers/ })
+    .click();
   await expect(page.getByText('By chat on the booking page')).toBeVisible();
   await page.getByRole('button', { name: /^View chat/ }).click();
   await expect(page.getByText('I’m Grace Hopper, grace@navy.example')).toBeVisible();
