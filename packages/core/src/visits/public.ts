@@ -26,15 +26,15 @@ import { refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { placeDateOf } from '../hospitality/hours.ts';
 import { offerVisitTimes, placeVisit, type BookedVisit, type VisitDeps } from './book.ts';
-import { askForNews, type NewsAsked } from './news.ts';
+import { askForNews, newsWording, type NewsAsked } from './news.ts';
 import { cancelVisit, moveVisit } from './move.ts';
 import { guestPartyRange, placeTables, readTableService } from './table-service.ts';
 
 /** At most this many upcoming reservations per email per place (0065's limits). */
 export const UPCOMING_PER_EMAIL = 3;
 
-/** The wording a guest ticks for news and offers, stored with the consent (version 1). */
-export const MARKETING_WORDING = (business: string): string => `Send me news and offers from ${business}.`;
+/** The wording a guest ticks for news and offers, stored with the consent (version 1): news.ts holds it. */
+export const MARKETING_WORDING = newsWording;
 
 /** Who the guest is on the manage page: the link's token, or the lookup code with the email. */
 export type GuestKey = { readonly token: string } | { readonly code: string; readonly email: string };

@@ -70,6 +70,7 @@ import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
 import { mountPublicTables } from './public/tables.ts';
+import { mountPublicNews, NEWS_SUBSCRIBE_PATH, NEWS_UNSUBSCRIBE_PATH } from './public/news.ts';
 import { mountBrandCss } from './public/brand-css.ts';
 import { mountPublicBusiness } from './public/business.ts';
 import { mountBusinessPagePhotos } from './business-page-photos.ts';
@@ -486,6 +487,8 @@ export function createApp({
     if (c.req.path === GOOGLE_NOTIFY_PATH && c.req.method === 'POST') return next();
     // A mail service's one click unsubscribe (RFC 8058) carries no Origin: the link's signed token is its only key.
     if (c.req.path === EMAIL_UNSUBSCRIBE_PATH && c.req.method === 'POST') return next();
+    // A guest's one click unsubscribe from a business's email (RFC 8058, 10 Nov 2026) likewise: its signed token.
+    if (c.req.path === NEWS_UNSUBSCRIBE_PATH && c.req.method === 'POST') return next();
     // Graph's notices and its validation request likewise: the client state is their key (milestone 4, AC-1008).
     if (c.req.path === MICROSOFT_NOTIFY_PATH && c.req.method === 'POST') return next();
     const origin = c.get('origin');
@@ -493,6 +496,8 @@ export function createApp({
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/booking/')) return next();
     // A reservation page's own writes (reserve, change, cancel; spec 0066 B7) from the same public origin.
     if (origin === bookingOrigin && c.req.path.startsWith('/api/public/tables/')) return next();
+    // Subscribe again, from the same reservation page's unsubscribed screen.
+    if (origin === bookingOrigin && c.req.path === NEWS_SUBSCRIBE_PATH && c.req.method === 'POST') return next();
     // A link page's press beacon (spec 0051, AC-5125), from the public origin the page is served on; that one route.
     if (origin === bookingOrigin && LINK_PAGE_PRESS.test(c.req.path) && c.req.method === 'POST') return next();
     if (!origin || !allowedOrigins.has(origin)) {
@@ -859,6 +864,19 @@ export function createApp({
       uidDomain: new URL(env.APP_URL).hostname,
       publicOrigin: bookingOrigin,
       organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
+    },
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
+
+  // A guest's way out of a business's news and offers (10 Nov 2026, migration 0204): an unsubscribe link's signed
+  // token, no session; the one click passed the Origin check above with none.
+  mountPublicNews(app, {
+    db,
+    linkKey,
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    durable: {
+      consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost),
+      peekRateLimit: (key, rule) => identity.peekRateLimit(key, rule),
     },
     ...(services.now === undefined ? {} : { now: services.now }),
   });

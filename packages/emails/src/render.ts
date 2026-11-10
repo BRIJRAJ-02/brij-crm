@@ -34,6 +34,11 @@ export interface RenderOptions {
   /** The reader's email preferences page: set for an optional email only. */
   readonly preferencesUrl?: string;
   /**
+   * A guest's Unsubscribe page (`GuestUnsubscribe.pagePath`, joined to the app's origin): the footer's visible
+   * Unsubscribe link, on any email a business sends its guests that carries one (10 November 2026).
+   */
+  readonly unsubscribeUrl?: string;
+  /**
    * Other origins of ours this email may link to: the public booking pages (`BOOKING_PUBLIC_ORIGIN`) and the
    * hosted forms (`FORMS_PUBLIC_ORIGIN`), where those are served from their own host. A button on one of them
    * is still ours; a button anywhere else is refused, as it always was. The preferences and unsubscribe links
@@ -356,7 +361,10 @@ function preheader(text: string): ReactNode {
   );
 }
 
-/** The shared footer: the logo (one image per theme), why the reader got this, and their preferences when optional. */
+/**
+ * The shared footer: the logo (one image per theme), why the reader got this, a guest's Unsubscribe when the email
+ * carries one, and a member's preferences when optional.
+ */
 function footer(document: EmailDocument, options: RenderOptions): ReactNode {
   const tertiary = role('tertiary');
   const logos = wordmarkUrls(options.appOrigin);
@@ -417,6 +425,21 @@ function footer(document: EmailDocument, options: RenderOptions): ReactNode {
       },
       document.why,
     ),
+    options.unsubscribeUrl === undefined
+      ? null
+      : h(
+          Text,
+          { style: { ...small, paddingTop: SPACE[4], textAlign: 'center' } },
+          h(
+            Link,
+            {
+              href: onAppOrigin(options.unsubscribeUrl, options.appOrigin),
+              className: tertiary.className,
+              style: { ...type(TYPE.label), ...tertiary.style, textDecoration: 'underline' },
+            },
+            'Unsubscribe',
+          ),
+        ),
     options.preferencesUrl === undefined
       ? null
       : h(
@@ -617,6 +640,9 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
     }
   }
   out.push(`Powered by Timefix: ${poweredByUrl(options.medium)}`, document.why);
+  if (options.unsubscribeUrl !== undefined) {
+    out.push(`Unsubscribe: ${onAppOrigin(options.unsubscribeUrl, options.appOrigin)}`);
+  }
   if (options.preferencesUrl !== undefined) {
     out.push(`Email preferences: ${onAppOrigin(options.preferencesUrl, options.appOrigin)}`);
   }
@@ -654,6 +680,7 @@ export async function renderDocument(document: EmailDocument, options: RenderOpt
       for (const row of item.rows) if (row.url !== undefined) onAppOrigin(row.url, options.appOrigin);
   }
   if (options.preferencesUrl !== undefined) onAppOrigin(options.preferencesUrl, options.appOrigin);
+  if (options.unsubscribeUrl !== undefined) onAppOrigin(options.unsubscribeUrl, options.appOrigin);
   const subject = headerText(document.subject);
   const safe = { ...document, subject };
   const drawn = await renderHtml(h(EmailLayout, { document: safe, options }));

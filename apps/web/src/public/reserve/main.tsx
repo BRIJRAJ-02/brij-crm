@@ -11,6 +11,7 @@ import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type Po
 import { wearGuestScheme, wearStylesheet } from '../stylesheet.ts';
 import { ManageReservation } from './ManageReservation.tsx';
 import { NewsConfirm } from './NewsConfirm.tsx';
+import { NewsUnsubscribe } from './NewsUnsubscribe.tsx';
 import { lookHref, ReservePage } from './ReservePage.tsx';
 import { strings } from './strings.ts';
 
@@ -61,6 +62,16 @@ const newsOf = (hash: string): string | undefined => {
   return /^[A-Za-z0-9_.-]{1,1024}$/.test(token) ? token : '';
 };
 
+/**
+ * An unsubscribe link's token (`#unsubscribe=`, 10 November 2026), from the fragment like the news link's: present
+ * (a string, maybe one that opens nothing) only on that link.
+ */
+const unsubscribeOf = (hash: string): string | undefined => {
+  if (!hash.startsWith('#unsubscribe=')) return undefined;
+  const token = new URLSearchParams(hash.slice(1)).get('unsubscribe') ?? '';
+  return /^[A-Za-z0-9_.-]{1,1024}$/.test(token) ? token : '';
+};
+
 type Read =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly page: PublicTablePage }
@@ -70,6 +81,21 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
   const [read, setRead] = useState<Read>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [news] = useState(() => (isManage ? newsOf(globalThis.location.hash) : undefined));
+  const [unsubscribe, setUnsubscribe] = useState(() =>
+    isManage ? unsubscribeOf(globalThis.location.hash) : undefined,
+  );
+  // The signed up page's "Changed your mind?" link changes only the fragment, which reloads nothing.
+  useEffect(() => {
+    if (!isManage) return undefined;
+    const changed = () => {
+      const token = unsubscribeOf(globalThis.location.hash);
+      if (token !== undefined) setUnsubscribe(token);
+    };
+    globalThis.addEventListener('hashchange', changed);
+    return () => {
+      globalThis.removeEventListener('hashchange', changed);
+    };
+  }, [isManage]);
   const [manage, setManage] = useState<
     { readonly token: string | undefined; readonly isWelcome: boolean; readonly isNewsAsked?: boolean } | undefined
   >(isManage ? { token: tokenOf(globalThis.location.hash), isWelcome: false } : undefined);
@@ -96,6 +122,19 @@ function Page({ placeKey, isManage }: { readonly placeKey: string; readonly isMa
     };
   }, [placeKey, attempt]);
   if (read.status === 'loading') return <BookingMessage title={strings.reserveTable} isLoading />;
+  // A way out never depends on the place's page (10 November 2026): one moved to a new key, or gone, still unsubscribes
+  // by the token alone, so this comes before the page's own failure.
+  if (isManage && unsubscribe !== undefined) {
+    return (
+      <NewsUnsubscribe
+        key={unsubscribe}
+        client={client}
+        page={read.status === 'ready' ? read.page : undefined}
+        placeKey={placeKey}
+        token={unsubscribe === '' ? undefined : unsubscribe}
+      />
+    );
+  }
   if (read.status === 'error') {
     return (
       <BookingMessage

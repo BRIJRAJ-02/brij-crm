@@ -392,7 +392,7 @@ export const consentRecords = pgTable(
     check('consent_records_version', sql`${t.wordingVersion} >= 1`),
     check(
       'consent_records_source',
-      sql`${t.sourceType} in ('submission', 'member', 'site', 'appointment', 'event_registration') and (${t.sourceType} <> 'submission' or (${t.sourceId} is not null and ${t.questionId} is not null))`,
+      sql`${t.sourceType} in ('submission', 'member', 'site', 'appointment', 'event_registration', 'email_link') and (${t.sourceType} <> 'submission' or (${t.sourceId} is not null and ${t.questionId} is not null))`,
     ),
     check('consent_records_question', sql`${t.questionId} ~ '^[a-z0-9][a-z0-9_-]{0,39}$'`),
   ],
@@ -435,7 +435,7 @@ export const consentRequests = pgTable(
       .where(sql`${t.confirmedAt} is null`),
     check('consent_requests_purpose', sql`${t.purpose} ~ '^[a-z][a-z0-9_]{0,39}$'`),
     check('consent_requests_wording', sql`char_length(${t.wording}) between 1 and 2000`),
-    check('consent_requests_source', sql`${t.sourceType} in ('appointment')`),
+    check('consent_requests_source', sql`${t.sourceType} in ('appointment', 'email_link')`),
     check('consent_requests_expiry', sql`${t.expiresAt} > ${t.requestedAt}`),
   ],
 );

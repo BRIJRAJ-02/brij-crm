@@ -97,6 +97,10 @@ export const CATALOG: Catalog = {
       confirmPath: '/r/Zm9yLXJlc2VydmUx/manage#news=cnYxLnNhbXBsZS5zaWduYXR1cmU',
       expiresAt: AT,
       timeZone: 'Europe/London',
+      unsubscribe: {
+        pagePath: '/r/Zm9yLXJlc2VydmUx/manage#unsubscribe=bnUxLnNhbXBsZS5zaWduYXR1cmU',
+        oneClickPath: '/api/public/news/unsubscribe?t=bnUxLnNhbXBsZS5zaWduYXR1cmU',
+      },
     },
   },
   calendar_disconnected: {

@@ -8,7 +8,9 @@
 // tried again after Graphile's backoff, up to the queue row's 11 tries (about
 // ten hours); the last one, or a message the service will never take, records
 // the email `failed`. The log names the email, its kind, the outcome and the
-// service's error code, never an address or what it says.
+// service's error code, never an address or what it says. Every email with a
+// one click unsubscribe (a member's optional topic, or a guest's way out of a
+// business's email) goes with RFC 8058's two headers.
 import type { EmailLink, EmailLinkKey } from '@crm/core';
 import { emailLinkToken, finishEmail, loadEmail, type systemScope } from '@crm/core/system';
 import { renderEmail } from '@crm/emails';
@@ -125,6 +127,7 @@ export async function runEmail(deps: EmailTaskDeps, payload: unknown, attempt: E
     deps.log.error('email.failed', { emailId, kind: email.kind, code: 'params_invalid', error: errorName(error) });
     return 'finished';
   }
+  const oneClick = link === undefined ? drawn.listUnsubscribe : unsubscribeUrl(deps, link, email.createdAt);
   // The error's class and the service's code only, never its message: a mail service's message can quote the address.
   let failure: { readonly error: string; readonly refusal: MailRefusal | undefined } | undefined;
   try {
@@ -136,14 +139,11 @@ export async function runEmail(deps: EmailTaskDeps, payload: unknown, attempt: E
       ...(email.replyTo === undefined ? {} : { replyTo: email.replyTo }),
       ...(email.fromName === undefined ? {} : { fromName: email.fromName }),
       idempotencyKey: `email/${emailId}`,
-      ...(link === undefined
+      // RFC 8058's one click: a member's topic (its own token, signed now), or a guest's way out from a business's
+      // email (the params' `unsubscribe`, which the renderer joined to the app's origin).
+      ...(oneClick === undefined
         ? {}
-        : {
-            headers: {
-              'List-Unsubscribe': `<${unsubscribeUrl(deps, link, email.createdAt)}>`,
-              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-            },
-          }),
+        : { headers: { 'List-Unsubscribe': `<${oneClick}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
     });
   } catch (error) {
     failure = { error: errorName(error), refusal: refusalOf(error) };
