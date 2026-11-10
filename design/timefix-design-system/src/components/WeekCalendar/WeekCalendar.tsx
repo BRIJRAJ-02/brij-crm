@@ -22,6 +22,8 @@ export interface WeekEvent {
   readonly kind: WeekEventKind;
   readonly guests?: ReadonlyArray<string>;
   readonly location?: string;
+  /** A small mark before the title: where the event came from (the Timefix mark on a booking). */
+  readonly mark?: ReactNode;
 }
 /** Time another calendar holds: drawn hatched, never as an event. */
 export interface WeekBusy { readonly id: string; readonly day: number; readonly start: number; readonly end: number; readonly source: string }
@@ -356,10 +358,10 @@ function EventFace({ ev, start, end, conflict, hour12, showRange = false }: { re
       {/* A button centres overflowing content, so the body is pinned to the event's box. */}
       <span className={cx('tf-week__event-body', conflict && 'has-conflict')}>
         {short ? (
-          <span className="tf-week__event-line"><span className="tf-week__event-title">{ev.title}</span><span className="tf-week__event-time tf-num"> · {showRange ? formatClockRange(start, end, hour12) : formatClock(start, hour12)}</span></span>
+          <span className="tf-week__event-line">{ev.mark && <span className="tf-week__event-mark">{ev.mark}</span>}<span className="tf-week__event-title">{ev.title}</span><span className="tf-week__event-time tf-num"> · {showRange ? formatClockRange(start, end, hour12) : formatClock(start, hour12)}</span></span>
         ) : (
           <>
-            <span className="tf-week__event-title">{ev.title}</span>
+            <span className="tf-week__event-title">{ev.mark && <span className="tf-week__event-mark">{ev.mark}</span>}{ev.title}</span>
             <span className="tf-week__event-time tf-num">{formatClockRange(start, end, hour12)}</span>
           </>
         )}

@@ -1,6 +1,7 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Popover } from '../Popover/Popover.tsx';
+import { LogoMark } from '../Logo/Logo.tsx';
 import { parseDate, type CalendarDate } from '@internationalized/date';
 import { Ban, CalendarDays, CalendarOff, CalendarPlus, ChevronLeft, ChevronRight, Hand, LayoutList, Plus, UserPlus, Users, X } from 'lucide-react';
 import { MenuList, MenuItem } from '../Menu/Menu.tsx';
@@ -206,7 +207,7 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
   const events: WeekEvent[] = [
     ...scoped.filter((m) => m.status !== 'cancelled').flatMap((m) => {
       const day = days.findIndex((d) => d.toDateString() === m.start.toDateString());
-      return day === -1 ? [] : [{ id: m.id, title: whose === 'mine' ? m.title : `${m.title} · ${first(m.host)}`, day, start: minutesOf(m.start), end: minutesOf(m.end), kind: m.place === 'in-person' ? 'in-person' as const : 'meeting' as const, guests: [m.invitee.name], location: m.placeLabel }];
+      return day === -1 ? [] : [{ id: m.id, title: whose === 'mine' ? m.title : `${m.title} · ${first(m.host)}`, day, start: minutesOf(m.start), end: minutesOf(m.end), kind: m.place === 'in-person' ? 'in-person' as const : 'meeting' as const, guests: [m.invitee.name], location: m.placeLabel, mark: <LogoMark size={12} /> }];
     }),
     ...blocks.flatMap((b) => {
       const day = days.findIndex((d) => isoDay(d) === b.day);
@@ -334,8 +335,8 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
                   <button key={m.id} type="button" className={cx('tf-bkf-team__event', m.status === 'pending' && 'is-pending')} style={{ top: pct(minutesOf(m.start)), height: len(minutesOf(m.start), minutesOf(m.end)) }}
                     onClick={() => onOpen(m.id)} aria-label={`${m.title} with ${m.invitee.name}, ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}`}>
                     {m.end.getTime() - m.start.getTime() < 60 * 60_000
-                      ? <span className="tf-bkf-team__event-one"><span className="tf-bkf-team__event-title">{m.title}</span> · <span className="tf-num">{formatClock(minutesOf(m.start))}</span></span>
-                      : <><span className="tf-bkf-team__event-title">{m.title}</span><span className="tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span></>}
+                      ? <span className="tf-bkf-team__event-one"><LogoMark size={12} className="tf-bkf-team__mark" /><span className="tf-bkf-team__event-title">{m.title}</span> · <span className="tf-num">{formatClock(minutesOf(m.start))}</span></span>
+                      : <><span className="tf-bkf-team__event-title"><LogoMark size={12} className="tf-bkf-team__mark" />{m.title}</span><span className="tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span></>}
                   </button>
                 ))}
                 {sel && <span className="tf-bkf-team__sel" style={{ top: pct(sel.start), height: len(sel.start, sel.end) }} aria-hidden="true" />}

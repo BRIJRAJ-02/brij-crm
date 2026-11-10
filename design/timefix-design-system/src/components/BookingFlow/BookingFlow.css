@@ -131,8 +131,6 @@
 .tf-booking__add { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); }
 
 .tf-booking__foot { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-12); border-radius: var(--radius-full); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); text-decoration: none; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
-.tf-booking__foot:hover { background: var(--surface-hover); }
-.tf-booking__foot:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* A phone: one column, times run two across under the month. */
 @container tf-booking (max-width: 54rem) {
@@ -192,14 +190,6 @@
 .tf-booking__guest-x[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
 @media (prefers-reduced-motion: reduce) { .tf-booking__guest-chip { animation: none; } }
 
-/* Compare with your calendar: a quiet card under the times; once on, a status line with a live dot. */
-.tf-booking__overlay { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); margin-top: var(--space-12); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface-subtle); }
-.tf-booking__overlay--on { background: var(--success-soft); border-color: transparent; }
-.tf-booking__overlay-icon { display: grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border-radius: var(--radius-md); background: var(--surface); color: var(--accent-text); }
-.tf-booking__overlay-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--success); box-shadow: 0 0 0 var(--space-4) color-mix(in srgb, var(--success) 20%, transparent); }
-.tf-booking__overlay-text { display: flex; flex: 1 1 calc(var(--size-menu) * 0.6); flex-direction: column; min-width: 0; color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
-.tf-booking__overlay-text > strong { color: var(--text); font: 500 13px/18px var(--font-sans); }
-.tf-booking__overlay-actions { display: flex; gap: var(--space-6); }
 
 /* The time went while they typed: say so plainly, keep their details, one way back. */
 .tf-booking__failed { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); padding: var(--space-12); border: var(--border-width-hairline) solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: var(--radius-lg); background: var(--danger-soft); color: var(--danger); animation: tf-booking-chip-in var(--duration-fast) var(--ease-smooth-out); }
@@ -263,3 +253,84 @@
 .tf-booking__slot-list { gap: var(--space-12); max-height: calc(var(--tf-booking-day) * 7 + var(--space-6) * 6); }
 .tf-booking__slots .tf-booking__time { min-height: calc(var(--size-control-lg) + var(--space-4)); }
 .tf-booking__viewbar { margin-bottom: var(--space-16); }
+
+/* Chat fills the main side: the card's height less its insets, the heading row and the gaps under it. */
+.tf-booking__chatview { height: calc(var(--size-row) * 14 - var(--space-48) * 2 - var(--size-control-lg) - var(--space-16) - var(--space-20)); }
+
+/* Compare my calendar, top right beside the views; once on, a green chip with a ×. */
+.tf-booking__viewbar-end { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-8); }
+.tf-booking__compare-on { display: inline-flex; align-items: center; gap: var(--space-8); height: var(--size-control-sm); padding: 0 var(--space-4) 0 var(--space-12); border-radius: var(--radius-full); background: var(--success-soft); color: var(--text); font: 500 13px/18px var(--font-sans); }
+.tf-booking__overlay-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--success); box-shadow: 0 0 0 var(--space-2) color-mix(in srgb, var(--success) 25%, transparent); }
+.tf-booking__compare-x { display: grid; place-items: center; width: var(--space-20); height: var(--space-20); padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--text-secondary); cursor: pointer; outline: none; }
+.tf-booking__compare-x[data-hovered] { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--text); }
+.tf-booking__compare-x[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+/* List: the day's times in a grid; the chosen one widens to show Next. */
+.tf-booking__listview .tf-booking__slot-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-control-lg) * 3), 1fr)); max-height: none; overflow: visible; }
+.tf-booking__listview .tf-booking__slot[data-chosen] { grid-column: span 2; }
+/* The details form spans the main side, like the views above it. */
+.tf-booking__flow .tf-booking__form { max-width: none; }
+
+/* The foot: Powered by Timefix, then an invite to make your own page. */
+.tf-booking__foot { flex-wrap: wrap; justify-content: center; gap: var(--space-8); margin: 0; padding: 0; background: none; }
+.tf-booking__foot-brand, .tf-booking__foot-cta { display: inline-flex; align-items: center; gap: var(--space-6); padding: var(--space-4) var(--space-8); border-radius: var(--radius-full); color: inherit; text-decoration: none; outline: none; }
+.tf-booking__foot-cta { color: var(--link); font-weight: 500; }
+.tf-booking__foot-brand:hover, .tf-booking__foot-cta:hover { background: var(--surface-hover); }
+.tf-booking__foot-brand:focus-visible, .tf-booking__foot-cta:focus-visible { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+/* After booking: change it in place. */
+.tf-booking__manage { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-4); padding-top: var(--space-16); border-top: var(--border-width-hairline) solid var(--border-subtle); width: 100%; max-width: 30rem; }
+.tf-booking__inline { display: flex; align-items: flex-end; gap: var(--space-12); width: 100%; max-width: 30rem; text-align: left; }
+.tf-booking__inline > :first-child { flex: 1; min-width: 0; }
+.tf-booking__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); width: 100%; max-width: 30rem; padding: var(--space-16); border: var(--border-width-hairline) solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: var(--radius-lg); background: var(--danger-soft); text-align: left; }
+.tf-booking__confirm-text { display: flex; flex: 1 1 calc(var(--size-menu) * 0.8); flex-direction: column; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+.tf-booking__confirm-text > strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-booking__done--cancelled::before { background: linear-gradient(to bottom, var(--surface-subtle), transparent); }
+.tf-booking__done--cancelled .tf-booking__celebrate > .tf-booking__check { background: var(--text-secondary); box-shadow: 0 0 0 var(--space-6) var(--surface-subtle); }
+.tf-booking__done--cancelled .tf-booking__ring { border-color: var(--text-secondary); }
+.tf-booking__moving { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); padding: var(--space-12) var(--space-16); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--text); font: 400 14px/20px var(--font-sans); }
+.tf-booking__moving > svg { flex: none; color: var(--accent-text); }
+.tf-booking__moving > span { flex: 1; min-width: 0; }
+
+/* Smooth: a new view or a new day settles in softly (8px rise, 2px blur), times arrive one after another. */
+.tf-booking__pane > .tf-booking__pick, .tf-booking__pane > .tf-booking__listview, .tf-booking__pane > .tf-booking__chatview { animation: tf-booking-settle var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tf-booking-settle { from { opacity: 0; transform: translateY(var(--distance-base)); filter: blur(var(--blur-small)); } }
+.tf-booking__slot-list > .tf-booking__slot { animation: tf-booking-settle var(--duration-fast) var(--ease-smooth-out) both; animation-delay: calc(var(--tf-i, 0) * var(--duration-stagger)); }
+.tf-booking__time { transition: border-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out), transform var(--duration-quick) var(--ease-out); }
+.tf-booking__time[data-pressed] { transform: scale(var(--scale-medium)); }
+@media (prefers-reduced-motion: reduce) {
+  .tf-booking__pane > .tf-booking__pick, .tf-booking__pane > .tf-booking__listview, .tf-booking__pane > .tf-booking__chatview, .tf-booking__slot-list > .tf-booking__slot { animation: none; }
+  .tf-booking__time[data-pressed] { transform: none; }
+}
+
+/* ---------------------------------------------------------------- Phone (the card under 34rem): every pixel for picking.
+   No card inside the phone's own frame; the details shrink to a header; one row of controls; a month that fits;
+   times two to a row. */
+@container tf-booking (max-width: 34rem) {
+  .tf-booking { --tf-booking-day: calc((100cqw - var(--space-16) * 2 - var(--space-4) * 6) / 7); gap: var(--space-12); }
+  .tf-booking__card { min-height: 0; border: 0; border-radius: 0; box-shadow: none; background: var(--surface); overflow: visible; }
+  .tf-booking__foot-dot { display: none; }
+  .tf-booking__flow { min-height: 0; }
+  .tf-booking__rail { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-12); align-items: center; padding: var(--space-8) var(--space-16) var(--space-16); background: transparent; border-bottom: var(--border-width-hairline) solid var(--border-subtle); }
+  .tf-booking__rail > :first-child { grid-row: span 2; }
+  .tf-booking__host { margin: 0; font-size: 13px; }
+  .tf-booking__title { margin: 0; font-size: 20px; line-height: 28px; }
+  .tf-booking__when, .tf-booking__facts { grid-column: 1 / -1; }
+  .tf-booking__when-row { padding: var(--space-12) 0 0; }
+  .tf-booking__facts { flex-direction: row; flex-wrap: wrap; gap: var(--space-4) var(--space-16); margin-top: var(--space-12); }
+  .tf-booking__facts > li { gap: var(--space-6); min-height: var(--size-control-sm); font-size: 14px; }
+  .tf-booking__flow .tf-booking__page { padding: var(--space-16); }
+  .tf-booking__viewbar { flex-direction: column; align-items: stretch; gap: var(--space-12); margin-bottom: 0; }
+  .tf-booking__pick-title { font-size: 16px; line-height: 24px; }
+  .tf-booking__viewbar-end { flex-wrap: wrap; justify-content: flex-start; }
+  .tf-booking__switch { order: -1; width: 100%; }
+  .tf-booking__switch > * { width: 100%; }
+  .tf-booking__pane { gap: var(--space-16); }
+  .tf-booking__cal, .tf-booking__pick { width: 100%; }
+  .tf-booking__day { font-size: 14px; }
+  .tf-booking__slot-list, .tf-booking__listview .tf-booking__slot-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; }
+  .tf-booking__slot[data-chosen], .tf-booking__listview .tf-booking__slot[data-chosen] { grid-column: 1 / -1; }
+  .tf-booking__slots .tf-booking__time { min-height: var(--size-control-lg); }
+  .tf-booking__chatview { height: calc(var(--size-row) * 11); }
+  .tf-booking__done { padding: var(--space-32) var(--space-16) var(--space-24); }
+  .tf-booking__done-title { font-size: 22px; line-height: 30px; }
+  .tf-booking__inline { flex-direction: column; align-items: stretch; }
+}

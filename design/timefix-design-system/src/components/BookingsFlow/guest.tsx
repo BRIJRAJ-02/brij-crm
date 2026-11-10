@@ -15,7 +15,7 @@ import { Callout } from '../Callout/Callout.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button } from '../Button/Button.tsx';
 import { SuccessCheck } from '../Motion/Motion.tsx';
-import { formatClockRange } from '../WeekCalendar/clock.ts';
+import { formatClock, formatClockRange } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { GuestView, i14 } from './parts.tsx';
 import { PLACES, at, dayFrom, first, isoDay, lengthOf, meetingWhen, openTimes, pageUrl, parseDay, placeLabel, placeOf, type BookedMeeting, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
@@ -79,7 +79,13 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
 
 /** "Powered by Timefix" under the guest pages Timefix draws itself (BookingFlow and the chat carry their own). */
 function PoweredBy() {
-  return <a className="tf-bkf__powered" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>;
+  return (
+    <p className="tf-bkf__powered-row">
+      <a className="tf-bkf__powered" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
+      <span aria-hidden="true">·</span>
+      <a className="tf-bkf__powered tf-bkf__powered--cta" href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">Create your own booking page, free</a>
+    </p>
+  );
 }
 /** A guest card centred on the page, with the foot. */
 function GuestCard({ children, align = 'center' }: { readonly children: ReactNode; readonly align?: 'center' | 'start' }) {
@@ -268,8 +274,36 @@ function Chat({ page, state, onBooked, embedded = false }: { readonly page: Book
     const now = new Date();
     return Array.from({ length: 14 }, (_, n) => dayFrom(now, n + 1)).map((d) => ({ d, times: openTimes(page, state, d, now) })).filter((x) => x.times.length > 0);
   }, [page, state]);
+  // After a time is picked the assistant asks for a name, then an email, and only then books.
+  const [stage, setStage] = useState<'time' | 'name' | 'email' | 'booking'>('time');
+  const [chosen, setChosen] = useState<{ readonly d: Date; readonly m: number }>();
+  const [who, setWho] = useState('');
+  const say = (text: string) => setLines((l) => [...l, { id: `h${l.length}`, role: 'host', text }]);
+  const reply = (text: string, ms = 600) => { setThinking(true); window.setTimeout(() => { setThinking(false); say(text); }, ms); };
+  const book = (email: string) => {
+    if (!chosen) return;
+    setStage('booking'); setThinking(true);
+    window.setTimeout(() => {
+      setThinking(false);
+      onBooked(page, { name: who, email, notes: 'Booked by chat', date: new CalendarDate(chosen.d.getFullYear(), chosen.d.getMonth() + 1, chosen.d.getDate()), minutes: chosen.m, timeZone: 'Asia/Kolkata', length: lengthOf(page), place: placeOf(page) });
+      setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + lengthOf(page))}`, where: PLACES[placeOf(page)].label, email });
+    }, 800);
+  };
   const send = (text: string) => {
     setLines((l) => [...l, { id: `g${l.length}`, role: 'guest', text }]);
+    if (stage === 'name') {
+      const name = text.trim();
+      if (name.length < 2) { reply('What name should I put on the booking?'); return; }
+      setWho(name); setStage('email');
+      reply(`Thanks, ${name.split(' ')[0]}. What email should the invite go to?`);
+      return;
+    }
+    if (stage === 'email') {
+      const email = text.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { reply('That doesn’t look like an email address. Could you check it?'); return; }
+      book(email);
+      return;
+    }
     setThinking(true);
     window.setTimeout(() => {
       const morning = /morning/i.test(text);
@@ -277,21 +311,20 @@ function Chat({ page, state, onBooked, embedded = false }: { readonly page: Book
       setThinking(false);
       setLines((l) => [...l, {
         id: `h${l.length}`, role: 'host', text: later.length ? `Here's what's open${morning ? ' in the morning' : ''}:` : 'Nothing is open then. Try another week?',
-        days: later.map(({ d, times }) => ({ day: formatDay(d), times: times.filter((t) => !morning || t < 12 * 60).slice(0, 4).map((t) => ({ id: `${isoDay(d)}T${t}`, label: formatClockRange(t, t).split(' – ')[0] ?? '' })) })),
+        days: later.map(({ d, times }) => ({ day: formatDay(d), times: times.filter((t) => !morning || t < 12 * 60).slice(0, 4).map((t) => ({ id: `${isoDay(d)}T${t}`, label: formatClock(t) })) })),
       }]);
     }, 900);
   };
   return (
     <BookingChat bare={embedded} host={{ name: page.owner }} title={page.name.includes(`${lengthOf(page)} min`) ? page.name : `${page.name} · ${lengthOf(page)} min`} lines={lines} isThinking={thinking} thinking={['Checking the calendar', 'Finding open times']} booked={booked}
-      onSend={send} onPickTime={(time) => new Promise<void>((resolve) => {
-        window.setTimeout(() => {
-          const [day, start] = time.id.split('T');
-          const d = parseDay(day ?? isoDay(new Date()));
-          const m = Number(start);
-          onBooked(page, { name: 'Maria Bell', email: 'maria@acme.com', notes: 'Booked by chat', date: new CalendarDate(d.getFullYear(), d.getMonth() + 1, d.getDate()), minutes: m, timeZone: 'Asia/Kolkata', length: lengthOf(page), place: placeOf(page) });
-          setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(d)} · ${formatClockRange(m, m + lengthOf(page))}`, where: PLACES[placeOf(page)].label, email: 'maria@acme.com' });
-          resolve();
-        }, 700);
-      })} />
+      placeholder={stage === 'name' ? 'Your name' : stage === 'email' ? 'you@company.com' : 'When works for you?'}
+      onSend={send} onPickTime={(time) => {
+        const [day, start] = time.id.split('T');
+        const d = parseDay(day ?? isoDay(new Date()));
+        const m = Number(start);
+        setChosen({ d, m }); setStage('name');
+        setLines((l) => [...l, { id: `g${l.length}`, role: 'guest', text: `${formatDay(d)} at ${formatClock(m)}` }]);
+        reply(`${formatLongDay(d)} at ${formatClock(m)} is held for you. What name should I book it under?`, 500);
+      }} />
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
-import { AlertTriangle, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TopBar } from '../AppShell/AppShell.tsx';
 import { Sidebar, WorkspaceSwitcher, NavItem, NavSection, PersonRow } from '../Sidebar/Sidebar.tsx';
 import { ConfirmDialog } from '../Dialog/Dialog.tsx';
@@ -22,6 +22,7 @@ import { PagesTab } from './pages.tsx';
 import { PageEditor, type EditorSection } from './editor.tsx';
 import { AvailabilityTab } from './availability.tsx';
 import { RosterTab } from './roster.tsx';
+import { InsightsTab } from './insights.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
 import { GuestMode, GUEST_SCENARIOS, type GuestScenario } from './guest.tsx';
 import { FIRST_VISIT, NORTHWIND, northwind, uniqueSlug } from './seed.ts';
@@ -53,6 +54,7 @@ const SECTIONS = [
   { id: 'availability', label: 'Availability', icon: <Clock {...i16} /> },
   { id: 'roster', label: 'Roster', icon: <CalendarRange {...i16} /> },
   { id: 'routing', label: 'Routing', icon: <Route {...i16} /> },
+  { id: 'insights', label: 'Insights', icon: <BarChart3 {...i16} /> },
 ] as const;
 
 export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }: BookingsFlowProps) {
@@ -341,6 +343,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                 <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} />
               </div>)}
               {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
+              {tab === 'insights' && (<div className="tf-bkf__panel"><InsightsTab state={state} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>

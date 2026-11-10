@@ -172,6 +172,7 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
       {!bare && <a className="tf-chat__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer">
         <span>Powered by</span><Logo size={16} />
       </a>}
+      {!bare && <a className="tf-chat__foot tf-chat__foot--cta" href="https://www.timefix.com/signup" target="_blank" rel="noreferrer">Create your own booking page, free</a>}
     </div>
   );
 }

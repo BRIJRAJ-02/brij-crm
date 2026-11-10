@@ -48,6 +48,8 @@
 .tf-week__event-body { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: stretch; padding: var(--space-4) var(--space-6); overflow: hidden; }
 .tf-week__event-title, .tf-week__event-time { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-week__event-title { font-weight: 500; }
+/* A source mark before the title (the Timefix mark on bookings), sitting on the text's middle. */
+.tf-week__event-line > .tf-week__event-mark, .tf-week__event-mark { display: inline-flex; vertical-align: -2px; margin-right: var(--space-4); }
 .tf-week__event-time { opacity: 0.8; }
 /* Under 48px: one line, "Title · 10:00 AM", truncated as a whole. */
 .tf-week__event--short .tf-week__event-body { justify-content: center; padding-top: 0; padding-bottom: 0; }

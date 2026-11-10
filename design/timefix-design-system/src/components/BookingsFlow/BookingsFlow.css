@@ -180,6 +180,7 @@
 .tf-bkf-team__event:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 .tf-bkf-team__event.is-pending { background: var(--surface); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); }
 .tf-bkf-team__event-title { color: var(--accent); font-weight: 600; }
+.tf-bkf-team__mark { display: inline-block; vertical-align: -2px; margin-right: var(--space-4); }
 /* Under an hour the event is one line, "Title · 4:30 PM", like the week view's short events. */
 .tf-bkf-team__event-one { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-bkf-team__sel { position: absolute; left: var(--space-4); right: var(--space-4); border-radius: var(--radius-sm); background: var(--accent-soft); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--accent); pointer-events: none; }
@@ -458,7 +459,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tf-bkf__textbtn, .tf-bkf__reveal, .tf-bkf__reveal-clip, .tf-bkf__swapicon > svg, .tf-bkf__scaled, .tf-bkf__slide.is-resizing, .tf-bkf__slide-page, .tf-bkf__pagerow, .tf-bkf__pagerow-inner,
-  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event,   .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, }
+  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event, .tf-bkf-guestmode__back { transition: none; }
+  .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, .tf-bkf__guest-card, .tf-bkf-try__dest { animation: none; }
+}
 
 /* The profile page: who, then each public meeting as a row. */
 .tf-bkf-profile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); width: min(100%, var(--size-dialog)); }
@@ -486,3 +489,40 @@
 .tf-bkf__guest-icon { width: calc(var(--size-control-lg) * 1.3); height: calc(var(--size-control-lg) * 1.3); }
 .tf-bkf__guest-card > .tf-bkf__answers { width: 100%; padding: var(--space-16) var(--space-20); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); gap: var(--space-12); text-align: left; }
 .tf-bkf__guest-card > .tf-bkf__answers > div { grid-template-columns: calc(var(--size-control-lg) * 2) minmax(0, 1fr); gap: var(--space-16); }
+
+.tf-bkf__powered-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-8); margin: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-bkf__powered--cta { color: var(--link); font-weight: 500; }
+
+/* Insights: five numbers, then cards in two columns (the trend and the tables span both). */
+.tf-bkf-insights { display: flex; flex-direction: column; gap: var(--space-16); }
+.tf-bkf-insights__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--size-menu) * 0.8), 1fr)); gap: var(--space-12); }
+.tf-bkf-insights__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); align-items: start; }
+.tf-bkf-insights__wide { grid-column: 1 / -1; }
+@container tf-bkf-panel (max-width: 56rem) { .tf-bkf-insights__grid { grid-template-columns: minmax(0, 1fr); } }
+.tf-bkf-funnel { display: flex; flex-direction: column; gap: var(--space-16); margin: 0; padding: 0; list-style: none; }
+.tf-bkf-funnel__step { display: flex; flex-direction: column; gap: var(--space-6); }
+.tf-bkf-funnel__head { display: flex; justify-content: space-between; gap: var(--space-12); font: 400 13px/18px var(--font-sans); color: var(--text); }
+.tf-bkf-funnel__head strong { font-weight: 500; }
+.tf-bkf-funnel__bar { position: relative; height: var(--space-8); border-radius: var(--radius-full); background: var(--surface-subtle); overflow: hidden; }
+.tf-bkf-funnel__bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--tf-bkf-share) * 100%); border-radius: var(--radius-full); background: var(--accent); transition: width var(--duration-slow) var(--ease-smooth-out); }
+.tf-bkf-itable { display: flex; flex-direction: column; }
+.tf-bkf-itable__row { display: grid; grid-template-columns: minmax(0, 2.2fr) repeat(4, minmax(0, 1fr)); align-items: center; gap: var(--space-12); min-height: var(--size-row); font: 400 14px/20px var(--font-sans); }
+.tf-bkf-itable__row[data-by="host"] { grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr) minmax(0, 1fr); }
+.tf-bkf-itable__row + .tf-bkf-itable__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-itable__row--head { min-height: var(--size-control); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+.tf-bkf-itable__name { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.tf-bkf-itable__name strong { font-weight: 500; }
+.tf-bkf-itable__bookings { display: flex; align-items: center; gap: var(--space-8); }
+.tf-bkf-itable__bar { flex: none; width: calc(var(--tf-bkf-share) * var(--size-control-lg) * 1.6); height: var(--space-6); border-radius: var(--radius-full); background: var(--accent); }
+.tf-bkf-heat { display: grid; grid-template-columns: var(--size-control-lg) repeat(var(--tf-bkf-cols), minmax(0, 1fr)); gap: var(--space-4); }
+.tf-bkf-heat__row { display: contents; }
+.tf-bkf-heat__hour { color: var(--text-tertiary); font: 400 11px/16px var(--font-sans); text-align: center; }
+.tf-bkf-heat__day { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); align-self: center; }
+.tf-bkf-heat__cell { aspect-ratio: 1.4; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--accent) calc(var(--tf-bkf-heat) * 85%), var(--surface-subtle)); }
+
+/* The guest viewer's own bar on a phone: the address and label give way to the controls. */
+@media (max-width: 40rem) {
+  .tf-bkf-guestmode__url, .tf-bkf-guestmode__label { display: none; }
+  .tf-bkf-guestmode__page[data-device='phone'] { padding: var(--space-12) 0; }
+}
+.tf-bkf-guestmode__frame[data-device='phone'] { padding: var(--space-16) 0; }

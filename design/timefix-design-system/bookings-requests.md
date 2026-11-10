@@ -30,5 +30,14 @@ Every request from the design session, checked in the prototype (light and dark)
 | Adding a guest | email chips with checks (format, not you, not twice, ten at most) |
 | Public side relook, less cramped, taller | details panel, headed main side, 52px days, 48px times, roomier small cards |
 | Powered by Timefix on every guest screen | yes |
+| Chat asks for name and email before booking | yes, with an email check |
+| List times in a grid; form full width; chat full height | yes |
+| Compare calendar at the top right, no providers, no "nothing is shared" | yes |
+| Plus to add a guest; add guests, reschedule and cancel after booking | yes, all in the same card |
+| Smoother booking page | views and days settle in, times arrive one after another, presses ease |
+| Invite to create your own page beside Powered by | on every guest screen |
+| Timefix mark on bookings in the dashboard calendar | Week and Team day |
+| Bookings analytics | Insights page: five numbers, trend, funnel, sources, each page or host, when people book, how meetings ended |
+| Phone layout for the guest pages | compact header, one row of controls, a month that fits, two times a row |
 
 Not built: shifts with roles or places, labour cost and painting cells by drag (main doesn't have them either).

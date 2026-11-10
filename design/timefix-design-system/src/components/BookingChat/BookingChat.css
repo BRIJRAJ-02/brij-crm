@@ -86,3 +86,4 @@
 /* Bare: the conversation alone, filling the box it is given (the booking page's Chat view). */
 .tf-chat--bare { align-items: stretch; height: 100%; }
 .tf-chat--bare .tf-chat__card { flex: 1; max-width: none; border-color: var(--border-subtle); box-shadow: none; border-radius: var(--radius-lg); }
+.tf-chat__foot--cta { margin-top: calc(var(--space-12) * -1); color: var(--link); font-weight: 500; }
