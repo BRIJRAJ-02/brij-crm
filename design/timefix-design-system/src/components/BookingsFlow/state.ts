@@ -30,6 +30,8 @@ export const ZONES = [
   { id: 'America/Los_Angeles', label: 'Pacific Time (US)' },
   { id: 'Asia/Singapore', label: 'Singapore' },
 ];
+/** Minutes from UTC for each zone the prototype offers (November, so London is on GMT). */
+export const ZONE_OFFSET: Readonly<Record<string, number>> = { 'Asia/Kolkata': 330, 'Europe/London': 0, 'America/New_York': -300, 'America/Los_Angeles': -480, 'Asia/Singapore': 480 };
 /** First names, for short lines. */
 export const first = (name: string) => name.split(' ')[0] ?? name;
 
@@ -567,4 +569,13 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
   };
   const keys = Object.keys(names) as Array<keyof BookingPage>;
   return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];
+}
+
+/** Whether one person can take a meeting then: working, not away, no other meeting, nothing busy on their calendar. */
+export function personFree(state: BookingsState, name: string, day: Date, start: number, end: number, skipId?: string): boolean {
+  const at0 = (m: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(m / 60), m % 60);
+  const s = at0(start); const e = at0(end);
+  if (isOff(state, name, day, start, end)) return false;
+  if (state.meetings.some((x) => x.id !== skipId && x.host === name && x.status !== 'cancelled' && x.start < e && s < x.end)) return false;
+  return !busyOn(state, name, day).some((b) => b.start < end && start < b.end);
 }

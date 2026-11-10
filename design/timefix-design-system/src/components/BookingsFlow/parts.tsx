@@ -11,7 +11,7 @@ import { Switch } from '../Checkbox/Checkbox.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
-import { HOST, PLACES, ZONES, HOST_ZONE, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
+import { HOST, PLACES, ZONES, ZONE_OFFSET, HOST_ZONE, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind } from './state.ts';
 
 /** 16px and 14px Lucide icons. */
 export const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -62,7 +62,7 @@ export function ScaledPreview({ children, designWidth, label, fill = false }: { 
 }
 
 /** A page's guest view (BookingFlow) wired to the flow's state. */
-export function GuestView({ page, state, onBook, length, place, onLength, onPlace, chat, chatBooked }: {
+export function GuestView({ page, state, onBook, length, place, onLength, onPlace, chat, chatBooked, after, guestIs }: {
   readonly page: BookingPage; readonly state: BookingsState; readonly onBook: (r: BookingRequest) => Promise<void>; readonly length?: number; readonly place?: PlaceKind;
   /** Given, the guest can switch length or place inside the booking card. */
   readonly onLength?: (n: number) => void; readonly onPlace?: (k: PlaceKind) => void;
@@ -70,17 +70,21 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
   readonly chat?: ReactNode;
   /** The chat's booking, which moves the card to the success screen. */
   readonly chatBooked?: BookingFlowProps['chatBooked'];
+  /** What the guest does after booking (cancel, move, guests), passed through to the host side. */
+  readonly after?: Pick<BookingFlowProps, 'onCancelled' | 'onMoved' | 'onGuestsChange'>;
+  /** A guest we already know (moving their own booking): their name and email are filled in. */
+  readonly guestIs?: { readonly name: string; readonly email: string };
 }) {
   const now = new Date();
   const len = length ?? lengthOf(page);
   const where = PLACES[place ?? placeOf(page)];
   const slotsFor = (d: CalendarDate) => openTimes(page, state, new Date(d.year, d.month - 1, d.day), now, len);
   return (
-    <BookingFlow host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? `${page.hosts.length} hosts` : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
+    <BookingFlow {...after} zoneOffset={(tz) => ZONE_OFFSET[tz] ?? 330} host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? 'the team' : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
       location={{ kind: where.guest, label: where.label }} today={todayIn(getLocalTimeZone())}
       isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={ZONES} defaultTimeZone={HOST_ZONE} onBook={onBook}
       team={page.hostMode !== 'one' && page.hosts.length > 1 ? page.hosts : undefined}
-      prefill={page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined}
+      prefill={guestIs ?? (page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined)}
       guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}
       defaultView={page.defaultView ?? 'month'} chat={chat} chatBooked={chatBooked}
       changeCutoff={(page.cancelCutoff ?? 0) > 0 || (page.moveCutoff ?? 0) > 0 ? { cancelHours: page.cancelCutoff ?? 0, moveHours: page.moveCutoff ?? 0, message: page.tooLateMessage } : undefined}

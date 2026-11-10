@@ -56,9 +56,22 @@
 .tf-wsprev[data-focus='workspace'] [data-part='workspace'],
 .tf-wsprev[data-focus='link'] [data-part='link'],
 .tf-wsprev[data-focus='hours'] [data-part='hours'],
+.tf-wsprev[data-focus='meeting'] [data-part='meeting'],
 .tf-wsprev[data-focus='team'] [data-part='team'] { outline-color: var(--accent-border); }
 
 @media (prefers-reduced-motion: reduce) {
   .tf-wsprev__day, .tf-wsprev [data-part] { transition: none; }
   .tf-wsprev__pop { animation: none; }
 }
+/* Meeting length, the calendar buttons, and the "You're live" link card. */
+.tf-onb__group { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-onb__label { font: 500 13px/20px var(--font-sans); color: var(--text); }
+.tf-onb__connect { display: flex; flex-direction: column; gap: var(--space-12); }
+.tf-onb__connect > .tf-btn { justify-content: center; }
+.tf-onb__live { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
+.tf-onb__live-icon { display: grid; place-items: center; flex: none; width: var(--size-control); height: var(--size-control); border-radius: var(--radius-full); background: var(--success-soft); color: var(--success); }
+.tf-onb__live-text { display: flex; flex-direction: column; flex: 1 1 14rem; min-width: 0; font: 400 13px/18px var(--font-sans); color: var(--text-secondary); }
+.tf-onb__live-text strong { color: var(--text); font: 500 15px/22px var(--font-sans); }
+.tf-onb--live { animation: tf-onb-live var(--duration-slow) var(--ease-smooth-out) both; }
+@keyframes tf-onb-live { from { opacity: 0; transform: translateY(var(--distance-medium)); filter: blur(var(--blur-medium)); } }
+@media (prefers-reduced-motion: reduce) { .tf-onb--live { animation: none; } }

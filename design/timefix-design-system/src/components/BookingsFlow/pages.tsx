@@ -1,5 +1,6 @@
 // Pages: booking pages as rows (picture, name, length · place, who hosts, On/Hidden, Share, ⋯), Mine / Team.
 import { useState } from 'react';
+import type { EditorSection } from './editor.tsx';
 import { Button as AriaButton } from 'react-aria-components';
 import { AlertTriangle, Building2, FileText, Link2, Lock, Plus, Users } from 'lucide-react';
 import type { Key } from 'react-aria-components';
@@ -22,7 +23,7 @@ export interface PagesTabProps {
   readonly fresh: string | undefined;
   readonly leaving: ReadonlySet<string>;
   readonly onOpen: (id: string) => void;
-  readonly onFix: (id: string) => void;
+  readonly onFix: (id: string, section?: EditorSection) => void;
   readonly onToggle: (id: string, on: boolean) => void;
   readonly onShare: (p: BookingPage, how: ShareHow) => void;
   readonly onMore: (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => void;
@@ -77,7 +78,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                     <AriaButton className="tf-bkf__pagerow-open" onPress={() => onOpen(p.id)} aria-label={`Edit ${p.name}`}>
                       <PagePicture page={p} state={state} />
                       <span className="tf-bkf__pagerow-text">
-                        <span className="tf-bkf__pagerow-name">{p.name}{p.whoCanBook === 'form' && <Tag size="sm" hue="gray" icon={<FileText size={12} strokeWidth={2} />}>Through a form</Tag>}{p.confirmFirst && <Tag size="sm" hue="gray">Confirm first</Tag>}{p.visibility === 'link' && <Tag size="sm" hue="gray" icon={<Lock size={12} strokeWidth={2} />}>Link only</Tag>}{edited && <Tag size="sm" hue="orange">Draft changes</Tag>}</span>
+                        <span className="tf-bkf__pagerow-name">{p.name}{p.whoCanBook === 'form' && <Tag size="sm" hue="gray" icon={<FileText size={12} strokeWidth={2} />}>Through a form</Tag>}{p.confirmFirst && <Tag size="sm" hue="gray">Confirm first</Tag>}{p.visibility === 'link' && <Tag size="sm" hue="gray" icon={<Lock size={12} strokeWidth={2} />}>Link only</Tag>}{edited && <Tag size="sm" hue="orange">Unpublished changes</Tag>}</span>
                         <span className="tf-bkf__pagerow-sub tf-num"><PlaceIcon place={PLACES[placeOf(p)].meeting} />{pageSub(p)}</span>
                       </span>
                     </AriaButton>
@@ -95,7 +96,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                     {noTimes && (
                       <p className="tf-bkf__pagerow-warn" role="status">
                         <AlertTriangle {...i14} aria-hidden="true" /><span>Guests can’t book: no open times in the next two months</span><span aria-hidden="true">·</span>
-                        <AriaButton className="tf-bkf__textbtn" onPress={() => onOpen(p.id)} aria-label={`Check times for ${p.name}`}>Check</AriaButton>
+                        <AriaButton className="tf-bkf__textbtn" onPress={() => onFix(p.id, 'when')} aria-label={`Check times for ${p.name}`}>Check</AriaButton>
                       </p>
                     )}
                     {stuck && (

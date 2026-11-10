@@ -122,7 +122,7 @@ function RowActions({ m, onReschedule, onCancel, onCopyLink, onNoShow, onNote, o
           <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy meeting link</MenuItem>
           {open && <MenuItem id="reschedule" icon={<CalendarClock {...i16} />}>Reschedule</MenuItem>}
           <MenuItem id="note" icon={<StickyNote {...i16} />}>Add a note</MenuItem>
-          <MenuItem id="noshow" icon={<UserX {...i16} />}>Mark as no-show</MenuItem>
+          {m.end.getTime() <= Date.now() && m.status !== 'no-show' && m.status !== 'cancelled' && <MenuItem id="noshow" icon={<UserX {...i16} />}>Mark as no-show</MenuItem>}
           {open && <MenuSeparator />}
           {open && <MenuItem id="cancel" icon={<CalendarX2 {...i16} />} isDanger>Cancel meeting</MenuItem>}
         </Menu>

@@ -64,6 +64,8 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
   const [team, setTeam] = useState('all');
   const [usualOpen, setUsualOpen] = useState(false);
   const setHours = useSetHours(state, dispatch);
+  /** A person's calendar health; yours comes from your own connected calendars, so it matches the banner. */
+  const calOf = (name: string) => (name === HOST ? (state.calendars.some((c) => c.status === 'reconnect') ? 'reconnect' : state.calendars.length ? 'ok' : 'none') : state.memberCalendars?.[name] ?? 'ok');
   const now = new Date();
   const monday = dayFrom(mondayOf(now), week * 7);
   const days = Array.from({ length: 7 }, (_, n) => dayFrom(monday, n));
@@ -133,7 +135,7 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
                     {state.access?.[name] === 'admins' && <span className="tf-bkf-roster__total">Admins only</span>}
                     {state.memberZones?.[name] && <span className="tf-bkf-roster__total"><Globe size={12} strokeWidth={1.75} aria-hidden="true" /> {state.memberZones[name]} time</span>}
                     <span className="tf-bkf-roster__total tf-num">{Math.round(days.reduce((s, d) => s + (isOff(state, name, d) ? 0 : dayMinutes(hoursOn(state, name, d).hours)), 0) / 60)} h this week</span>
-                    {CAL_WORDS[state.memberCalendars?.[name] ?? 'ok'] && <span className={cx('tf-bkf-roster__cal', state.memberCalendars?.[name] === 'reconnect' && 'is-bad')}><CalendarX2 size={12} strokeWidth={1.75} aria-hidden="true" /> {CAL_WORDS[state.memberCalendars?.[name] ?? 'ok']}</span>}
+                    {CAL_WORDS[calOf(name)] && <span className={cx('tf-bkf-roster__cal', calOf(name) === 'reconnect' && 'is-bad')}><CalendarX2 size={12} strokeWidth={1.75} aria-hidden="true" /> {CAL_WORDS[calOf(name)]}</span>}
                   </span>
                 </AriaButton>
                 <MenuTrigger>
@@ -143,7 +145,7 @@ export function RosterTab({ state, dispatch, onReassignMany, onManageGroups }: R
                     else if (k === 'ask') toast({ message: `${first(name)} is asked by email to reconnect their calendar`, tone: 'success' });
                   }}>
                     <MenuItem id="copy" icon={<Copy {...i16} />}>Copy this week to next</MenuItem>
-                    {name !== HOST && (state.memberCalendars?.[name] ?? 'ok') !== 'ok' ? <MenuItem id="ask" icon={<CalendarX2 {...i16} />} description={CAL_WORDS[state.memberCalendars?.[name] ?? 'ok']}>Ask to reconnect</MenuItem> : null}
+                    {name !== HOST && (calOf(name)) !== 'ok' ? <MenuItem id="ask" icon={<CalendarX2 {...i16} />} description={CAL_WORDS[calOf(name)]}>Ask to reconnect</MenuItem> : null}
                     <MenuItem id="setup" icon={<Settings2 {...i16} />}>Usual hours and time off</MenuItem>
                   </Menu>
                 </MenuTrigger>

@@ -1,3 +1,4 @@
+import { saveFile, type SaveOutcome } from '../../lib/saveFile.ts';
 import { Children, useMemo, type ReactNode, type Ref } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { LogoMark } from '../Logo/Logo.tsx';
@@ -139,21 +140,12 @@ function standalone(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(copy);
 }
 
-function save(href: string, filename: string) {
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = filename;
-  document.body.append(a);
-  a.click();
-  a.remove();
-}
-
 /** Saves a drawn QrCode as `name.svg`, or `name.png` at `px` pixels wide (default 1024), always on white. */
-export async function downloadQr(svg: SVGSVGElement, name: string, format: 'svg' | 'png', px = 1024): Promise<void> {
+export async function downloadQr(svg: SVGSVGElement, name: string, format: 'svg' | 'png', px = 1024): Promise<SaveOutcome> {
   const text = standalone(svg);
+  if (format === 'svg') return saveFile(`${name}.svg`, new Blob([text], { type: 'image/svg+xml' }));
   const url = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
   try {
-    if (format === 'svg') { save(url, `${name}.svg`); return; }
     const img = new Image();
     img.src = url;
     await img.decode();
@@ -162,14 +154,11 @@ export async function downloadQr(svg: SVGSVGElement, name: string, format: 'svg'
     canvas.width = px;
     canvas.height = Math.round((px * vb.height) / vb.width);
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return 'failed';
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) return;
-    const png = URL.createObjectURL(blob);
-    save(png, `${name}.png`);
-    window.setTimeout(() => URL.revokeObjectURL(png), 1000);
+    return blob ? saveFile(`${name}.png`, blob) : 'failed';
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

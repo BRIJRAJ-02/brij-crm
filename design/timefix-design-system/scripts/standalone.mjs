@@ -3,7 +3,7 @@ import { build } from '/Users/brijraj/Desktop/brijraj/crm/node_modules/.pnpm/esb
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 const [name, title, outFile] = process.argv.slice(2);
 const tmp = `../standalone-out-${name}`;
-await build({ entryPoints: { app: `standalone/${name}.tsx` }, bundle: true, format: 'iife', minify: true, target: 'es2022', outdir: tmp, jsx: 'automatic',
+await build({ entryPoints: { app: `standalone/${name}.tsx` }, bundle: true, format: 'iife', minify: process.env.NOMIN ? false : true, target: 'es2022', outdir: tmp, jsx: 'automatic',
   loader: { '.svg': 'text', '.png': 'dataurl' }, nodePaths: ['/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules', '/Users/brijraj/Desktop/brijraj/crm/node_modules'],
   alias: { react: '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react', 'react-dom': '/Users/brijraj/Desktop/brijraj/crm/packages/ui/node_modules/react-dom' },
   define: { 'process.env.NODE_ENV': '"production"' }, legalComments: 'none', logLevel: 'warning' });

@@ -25,8 +25,10 @@ import { AvailabilityTab } from './availability.tsx';
 import { RosterTab } from './roster.tsx';
 import { InsightsTab } from './insights.tsx';
 import { RoutingTab, GroupsDialog } from './routing.tsx';
-import { GuestMode, GUEST_SCENARIOS, type GuestScenario } from './guest.tsx';
-import { FIRST_VISIT, NORTHWIND, northwind, uniqueSlug } from './seed.ts';
+import { GuestMode, GUEST_SCENARIOS, type BookedChange, type GuestScenario } from './guest.tsx';
+import { FIRST_VISIT, NORTHWIND, newPage, northwind, uniqueSlug } from './seed.ts';
+import { Onboarding, slugify, type OnboardingValues } from '../Onboarding/Onboarding.tsx';
+import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import {
   HOST, PLACES, TEAM, at, bookingsReducer, dayFrom, pageChanges, first, hostFor, isOff, isoDay, mondayOf, nextId, pageUrl, parseDay, placeLabel, plural,
   type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState,
@@ -86,6 +88,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const [reassignId, setReassignId] = useState<string>();
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [resetTo, setResetTo] = useState<'fresh' | 'northwind'>();
+  const [onboarding, setOnboarding] = useState(false);
   /** Bookings made in the guest view; the host side plays them when it closes, so the badge, the row and the count move in view. */
   const pending = useRef<Array<Extract<BookingsAction, { type: 'meeting/add' }>>>([]);
   /** Meetings whose cancel was undone, so "Guest emailed" is skipped. */
@@ -96,10 +99,12 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const meetingById = (id: string | undefined) => state.meetings.find((m) => m.id === id);
   const upcoming = state.meetings.filter((m) => m.status !== 'cancelled' && m.end > now && m.host === HOST).length;
   /** Changes to a teammate's hours made by someone else: they get an email and an inbox notice ten minutes later (changes in those ten minutes go in one email). */
+  const told = useRef<Record<string, number>>({});
   const tellOthers = (a: BookingsAction) => {
     dispatch(a);
     const who = a.type === 'member/hours' ? a.name : a.type === 'overrides/merge' ? Object.keys(a.patch).map((k) => k.split('|')[0] ?? '').find((n) => n && n !== HOST) : undefined;
-    if (who && who !== HOST) toast({ message: `${first(who)} gets an email about this change in 10 minutes` });
+    // Changes within ten minutes go in one email, so the note shows once per person in that window.
+    if (who && who !== HOST && Date.now() - (told.current[who] ?? 0) > 600_000) { told.current[who] = Date.now(); toast({ message: `${first(who)} gets one email about your changes in 10 minutes` }); }
   };
   const brokenCal = state.calendars.find((c) => c.status === 'reconnect');
   const waiting = state.meetings.filter((m) => m.status === 'pending' && m.end > now).length;
@@ -108,6 +113,20 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const setWhose = (w: Whose) => { setWhoseState(w); saveWhose(state.workspace, w); };
   const update = (m: BookedMeeting, text?: string) => dispatch({ type: 'meeting/update', meeting: text ? { ...m, activity: [...m.activity, { id: nextId('a'), text, at: new Date() }] } : m });
   useEffect(() => { setWhoseState(readWhose(state.workspace)); }, [state.workspace]);
+
+  /** A page's unpublished draft (with its live links, offers and numbers), or the page itself. */
+  const draftOf = (p: BookingPage): BookingPage => { const d = state.drafts?.[p.id]; return d ? { ...d, links: p.links, offers: p.offers, stats: p.stats } : p; };
+  /** Leaves the page editor from anywhere: unpublished changes are kept as a draft (guests still see the live page); none, and any old draft is cleared. */
+  const leaveEditor = () => {
+    const live = editor ? pageById(editor.id) : undefined;
+    if (editor && live) {
+      const d = { ...editor.draft, isOn: live.isOn };
+      const changed = pageChanges(live, d).length > 0;
+      dispatch({ type: 'draft/set', id: live.id, draft: changed ? d : undefined });
+      if (changed) { const kept = editor; toast({ message: 'Unpublished changes kept. Guests still see the live page.', action: { label: 'Open', onAction: () => setEditor(kept) } }); }
+    }
+    setEditor(undefined);
+  };
 
   /* Pages */
   const remove = (p: BookingPage) => {
@@ -120,15 +139,17 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       toast({ message: `${p.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'page/restore', page: p, index }); flash(setFreshPage, p.id); } } });
     }, 250);
   };
+  /** Routing that sends people to this page: rules, or Otherwise. */
+  const routedTo = (id: string) => state.routing.rules.some((r) => (r.outcome ?? 'page') === 'page' && r.pageId === id) || ((state.routing.fallbackOutcome ?? 'page') === 'page' && state.routing.fallbackPageId === id);
   const upcomingOn = (id: string) => state.meetings.filter((m) => m.pageId === id && m.status !== 'cancelled' && m.end > now).length;
   const onMore = (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => {
-    if (key === 'edit') setEditor({ id: p.id, draft: p });
+    if (key === 'edit') setEditor({ id: p.id, draft: draftOf(p) });
     else if (key === 'duplicate') {
       const copy = { ...p, id: nextId('page'), name: `${p.name} (copy)`, slug: uniqueSlug(`${p.slug}-copy`, state.pages), links: [], offers: [], stats: { views: 0, bookings: 0, showRate: 0 } };
       dispatch({ type: 'page/upsert', page: copy });
-      setEditor(undefined); setTab('pages'); flash(setFreshPage, copy.id);
+      leaveEditor(); setTab('pages'); flash(setFreshPage, copy.id);
       toast({ message: `${copy.name} made`, tone: 'success' });
-    } else if (upcomingOn(p.id) > 0) setConfirmDelete(p.id);
+    } else if (upcomingOn(p.id) > 0 || routedTo(p.id)) setConfirmDelete(p.id);
     else remove(p);
   };
   const onShare = (p: BookingPage, how: ShareHow) => {
@@ -171,13 +192,26 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       notification: { id, actor: name, action: p.confirmFirst ? 'asked to book' : 'booked', object: `${p.name} · ${r.length} min`, excerpt: `${formatDay(start)}, ${formatClockRange(r.minutes, r.minutes + r.length)}`, time: 'Just now', group: 'Today', read: false },
     });
   };
+  /** The guest changed the booking they just made: the queued booking takes the change before the host side sees it. */
+  const changeLastBooked = (c: BookedChange) => {
+    const i = pending.current.length - 1;
+    const e = pending.current[i];
+    if (!e) return;
+    const m = e.meeting;
+    const len = m.end.getTime() - m.start.getTime();
+    const next: BookedMeeting = c.kind === 'cancel' ? { ...m, status: 'cancelled', activity: [...m.activity, { id: nextId('a'), text: `Cancelled by ${m.invitee.name}`, at: new Date() }] }
+      : c.kind === 'move' ? (() => { const start = at(new Date(c.date.year, c.date.month - 1, c.date.day), c.minutes); return { ...m, start, end: new Date(start.getTime() + len), activity: [...m.activity, { id: nextId('a'), text: `Moved by ${m.invitee.name} to ${formatDay(start)}`, at: new Date() }] }; })()
+      : { ...m, guests: c.guests.length ? c.guests : undefined };
+    const note = e.notification && (c.kind === 'cancel' ? { ...e.notification, action: 'booked, then cancelled' } : c.kind === 'move' ? { ...e.notification, excerpt: `${formatDay(next.start)}, ${formatClockRange(minutesOf(next.start), minutesOf(next.end))}` } : e.notification);
+    pending.current[i] = { ...e, meeting: next, notification: note };
+  };
   const closeGuest = () => {
     setGuest(undefined);
     const booked = pending.current;
     pending.current = [];
     const last = booked[booked.length - 1];
     if (!last) return;
-    setEditor(undefined); setTab('meetings'); setView('list');
+    leaveEditor(); setTab('meetings'); setView('list');
     if (!(whose === 'everyone' || whose === last.meeting.host || (whose === 'mine' && last.meeting.host === HOST))) setWhose('everyone');
     window.setTimeout(() => {
       booked.forEach((b) => dispatch(b));
@@ -188,7 +222,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   };
 
   /* Meetings */
-  const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) update({ ...x, status: 'cancelled' }, `Cancelled by ${HOST}`); };
+  const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) cancelFromDrawer(x); };
   const cancelFromDrawer = (m: BookedMeeting) => {
     setMeetingId(undefined);
     update({ ...m, status: 'cancelled' }, `Cancelled by ${HOST}`);
@@ -198,15 +232,19 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   };
   const move = (m: BookedMeeting, start: Date, how: string) => {
     const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime()));
-    update({ ...m, start, end }, `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}`);
+    // A round robin set to ask the rotation again picks the host afresh for the new time.
+    const p = m.pageId ? pageById(m.pageId) : undefined;
+    const host = p?.hostMode === 'roundrobin' && p.rrReschedule === 'rotate' ? hostFor({ ...state, meetings: state.meetings.filter((x) => x.id !== m.id) }, p, start, minutesOf(start), minutesOf(end)) ?? m.host : m.host;
+    update({ ...m, start, end, host }, `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}${host !== m.host ? `; ${host} takes it` : ''}`);
     toast({ message: `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}. ${first(m.invitee.name)} ${how}.`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } });
   };
-  const freeTeammate = (m: BookedMeeting, pool: ReadonlyArray<string> = TEAM) => pool.find((n) => n !== m.host && !isOff(state, n, m.start, minutesOf(m.start), minutesOf(m.end))
-    && !state.meetings.some((x) => x.id !== m.id && x.host === n && x.status !== 'cancelled' && x.start < m.end && m.start < x.end));
+  const freeTeammate = (m: BookedMeeting, pool: ReadonlyArray<string> = TEAM, given: ReadonlyArray<BookedMeeting> = []) => pool.find((n) => n !== m.host && !isOff(state, n, m.start, minutesOf(m.start), minutesOf(m.end))
+    && ![...state.meetings, ...given].some((x) => x.id !== m.id && x.host === n && x.status !== 'cancelled' && x.start < m.end && m.start < x.end));
+  /** Hands several meetings on; each one counts the ones already handed on in this batch, so no one is double-booked. */
   const reassignMany = (list: ReadonlyArray<BookedMeeting>, pool?: ReadonlyArray<string>) => {
-    let n = 0;
-    list.forEach((m) => { const to = freeTeammate(m, pool); if (to) { n += 1; update({ ...m, host: to }, `Reassigned from ${m.host} to ${to}`); } });
-    return n;
+    const given: BookedMeeting[] = [];
+    list.forEach((m) => { const to = freeTeammate(m, pool, given); if (to) { given.push({ ...m, host: to }); update({ ...m, host: to }, `Reassigned from ${m.host} to ${to}`); } });
+    return given.length;
   };
   const confirm = (id: string) => { const m = meetingById(id); if (!m) return; update({ ...m, status: 'confirmed' }, `Confirmed by ${HOST}`); dispatch({ type: 'note/read', id, read: true }); toast({ message: `Confirmed · ${first(m.invitee.name)} gets an invitation`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } }); };
   const seeConflict = (m: Meeting) => {
@@ -239,7 +277,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       const group = state.groups[0];
       if (!group) { toast({ message: 'Start from Northwind first: it has a round robin team.' }); return; }
       dispatch({ type: 'groups/set', groups: state.groups.map((g) => (g.id === group.id ? { ...g, members: g.members.map((m) => ({ ...m, paused: true })) } : g)) });
-      setEditor(undefined); setTab('pages');
+      leaveEditor(); setTab('pages');
       toast({ message: `Everyone in ${group.name} is paused` });
       return;
     }
@@ -248,7 +286,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       if (mine.length === 0) { toast({ message: 'Book a meeting first, then try the clash.' }); return; }
       mine.forEach((m) => dispatch({ type: 'busy/add', block: { id: nextId('busy'), member: HOST, day: isoDay(m.start), start: minutesOf(m.start) - 15, end: minutesOf(m.end) + 15, source: 'Team offsite · Google Calendar' } }));
       if (!state.calendars.some((c) => c.checkConflicts && c.status === 'connected')) dispatch({ type: 'calendar/set', calendars: [...state.calendars, { id: nextId('cal'), provider: 'Google', email: 'priya@northwind.com', calendars: 3, status: 'connected', checkConflicts: true }] });
-      setEditor(undefined); setTab('meetings'); setView('list'); setFocusHour(undefined);
+      leaveEditor(); setTab('meetings'); setView('list'); setFocusHour(undefined);
       return;
     }
     const scenario = GUEST_SCENARIOS.find((s) => s.id === key)?.id;
@@ -262,6 +300,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   const editing = editor ? pageById(editor.id) : undefined;
   const openMeeting = meetingById(meetingId);
   const toDelete = pageById(confirmDelete);
+  /** Where routing goes instead when its page is deleted: the first other live page. */
+  const repointTo = (id: string) => state.pages.find((p) => p.id !== id && p.isOn);
   const deleteCount = toDelete ? upcomingOn(toDelete.id) : 0;
   const isTeam = state.pages.some((p) => p.hosts.length > 1) || state.routing.rules.length > 0;
 
@@ -281,7 +321,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
       <NavSection title="Bookings">
         {SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => (
-          <NavItem key={x.id} label={x.label} icon={x.icon} count={x.id === 'meetings' ? upcoming : undefined} isCurrent={tab === x.id} onPress={() => { setEditor(undefined); setTab(x.id); }} />
+          <NavItem key={x.id} label={x.label} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id} onPress={() => { leaveEditor(); setTab(x.id); }} />
         ))}
       </NavSection>
     </Sidebar>
@@ -319,44 +359,50 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
     </MenuTrigger>
   );
 
+  /** First run's answers become the workspace: its name, your hours, the first booking page, and a calendar if one was connected. */
+  const finishSetup = (v: OnboardingValues) => {
+    const hours = Object.fromEntries(HOURS_DAYS.map((d) => [d, v.hours.days.includes(d) ? { on: true, ranges: [{ id: nextId('r'), start: v.hours.start, end: v.hours.end }] } : { on: false, ranges: [] }])) as BookingsState['savedHours'][number]['hours'];
+    const page = newPage([], { name: v.meeting.name || 'Intro call', slug: slugify(v.meeting.name) || 'intro-call', durations: [v.meeting.length] });
+    dispatch({ type: 'reset', state: { ...FIRST_VISIT, workspace: v.workspace || 'My workspace', savedHours: [{ id: 'working', name: 'Working hours', hours }], pages: [page],
+      calendars: v.calendar ? [{ id: nextId('cal'), provider: v.calendar === 'google' ? 'Google' : 'Outlook', email: 'priya@northwind.com', calendars: 2, status: 'connected', checkConflicts: true }] : [] } });
+    setOnboarding(false); setTab('pages'); flash(setFreshPage, page.id);
+    toast({ message: v.invites.length ? `${plural(v.invites.length, 'invite')} sent. You’re set up.` : 'You’re set up. Share your link to get your first booking.', tone: 'success' });
+  };
+
   // Day-month order in date fields, matching how the app writes dates ("13 Nov"); times stay 12-hour through formatClock.
   return (
     <I18nProvider locale="en-GB">
-    {guest ? (
-      <GuestMode play={guest} state={state} onClose={closeGuest} onBooked={book}
+    {onboarding ? (
+      <Onboarding account="priya@northwind.com" owner={HOST} checkSlug={(slug) => new Promise((r) => { window.setTimeout(() => r(!['acme', 'demo', 'northwind-sales'].includes(slug)), 400); })}
+        onFinish={finishSetup} onSignOut={() => { setOnboarding(false); dispatch({ type: 'reset', state: northwind() }); }} />
+    ) : guest ? (
+      <GuestMode play={guest} state={state} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
         onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled' }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
         onGuestMove={(m, start) => update({ ...m, start, end: new Date(start.getTime() + (m.end.getTime() - m.start.getTime())) }, `Moved by ${m.invitee.name} to ${formatDay(start)}`)} />
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
       mobileNav={<TabBar aria-label="Bookings" current={tab}
         items={SECTIONS.filter((x) => (x.id !== 'routing' && x.id !== 'roster') || isTeam).map((x) => ({ id: x.id, label: SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
-        onChange={(id) => { setEditor(undefined); setTab(id); }} />}>
+        onChange={(id) => { leaveEditor(); setTab(id); }} />}>
       {editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
-          onBack={() => {
-            const kept = editor;
-            setEditor(undefined); setTab('pages');
-            // Leaving with changes keeps them as a draft; guests still see the live page.
-            if (JSON.stringify({ ...kept.draft, isOn: editing.isOn }) !== JSON.stringify(editing)) {
-              dispatch({ type: 'draft/set', id: editing.id, draft: { ...kept.draft, isOn: editing.isOn } });
-              toast({ message: 'Kept as a draft. Guests still see the live page.', action: { label: 'Open', onAction: () => setEditor(kept) } });
-            }
-          }}
+          onBack={() => { leaveEditor(); setTab('pages'); }}
           onKeepDraft={(d) => {
-            const same = JSON.stringify(d) === JSON.stringify(editing);
+            const same = pageChanges(editing, d).length === 0;
             dispatch({ type: 'draft/set', id: editing.id, draft: same ? undefined : d });
-            if (!same) toast({ message: 'Kept as a draft. Publish when it’s ready.' });
+            if (!same) toast({ message: 'Unpublished changes kept. Publish when they’re ready.' });
           }}
           onSave={(d) => new Promise<void>((resolve) => { window.setTimeout(() => {
             // Publishing keeps the page before as a version, so it can be restored.
             const { versions: _old, ...before } = editing;
             const versions = [{ id: nextId('v'), at: new Date(), by: HOST, changes: pageChanges(editing, d), page: before }, ...(editing.versions ?? [])].slice(0, 10);
-            const page = { ...d, versions };
+            // Links, offered times and numbers are live things: a draft or an old version never brings back stale ones.
+            const page = { ...d, links: editing.links, offers: editing.offers, stats: editing.stats, versions };
             dispatch({ type: 'page/upsert', page }); dispatch({ type: 'draft/set', id: d.id, draft: undefined });
             setEditor({ id: d.id, draft: page }); toast({ message: 'Published. Guests see it now.', tone: 'success' }); resolve();
           }, 700); })}
           onToggle={(on) => toggle(editing.id, on)} onShare={onShare} onMore={onMore} onGuest={() => setGuest({ scenario: 'book', pageId: editing.id })}
-          onMeetings={() => { setEditor(undefined); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} />
+          onMeetings={() => { leaveEditor(); setTab('meetings'); setView('list'); setWhose('everyone'); }} onManageGroups={() => setGroupsOpen(true)} />
       ) : (
         <>
           <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: SECTIONS.find((x) => x.id === tab)?.label ?? 'Bookings', icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
@@ -375,7 +421,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onOpen={setMeetingId} onCancel={cancelNow} onUndoCancel={(m) => { const x = meetingById(m.id); if (x) update({ ...x, status: 'confirmed' }, 'Cancel undone'); }}
                   onReschedule={setRescheduleId} onNoShow={(id) => { const m = meetingById(id); if (m) { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); } }}
                   onConfirm={confirm} onDecline={setDeclineId}
-                  onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn); if (p) onShare(p, 'copy'); }}
+                  onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn) ?? state.pages[0]; if (p) onShare(p, 'copy'); }}
                   onNewMeeting={(initial) => setNewMeeting({ initial })}
                   onBlock={(block) => { dispatch({ type: 'block/add', block }); toast({ message: `${formatDay(parseDay(block.day))}, ${formatClockRange(block.start, block.end)} is blocked`, action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
                   onHold={setHoldAt}
@@ -394,8 +440,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onSeeConflict={seeConflict} onJoin={(id) => toast({ message: `Opening ${meetingById(id)?.placeLabel ?? 'the meeting'}…` })} />
               </div>)}
               {tab === 'pages' && (<div className="tf-bkf__panel">
-                <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: state.drafts?.[id] ?? p }); }}
-                  onFix={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: state.drafts?.[id] ?? p, section: 'who' }); }}
+                <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p) }); }}
+                  onFix={(id, section) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p), section: section ?? 'who' }); }}
                   onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} />
               </div>)}
               {tab === 'availability' && (<div className="tf-bkf__panel">
@@ -411,7 +457,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       <CreateSheet isOpen={creating} state={state}
         onCreate={(page) => dispatch({ type: 'page/upsert', page })}
         onConnect={() => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'calendar/set', calendars: [...state.calendars, { id: nextId('cal'), provider: 'Google', email: 'priya@northwind.com', calendars: 2, status: 'connected', checkConflicts: true }] }); toast({ message: 'Google Calendar connected', tone: 'success' }); resolve(); }, 900); })}
-        onClose={(created) => { setCreating(false); if (created) { setEditor(undefined); setTab('pages'); flash(setFreshPage, created); } }}
+        onClose={(created) => { setCreating(false); if (created) { leaveEditor(); setTab('pages'); flash(setFreshPage, created); } }}
         onAfter={(page, what) => {
           if (what === 'email') { toast({ message: 'Email draft opened with your link', tone: 'success' }); return; }
           if (what === 'linkpage') { onShare(page, 'linkpage'); return; }
@@ -422,9 +468,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
       <ShareDialogs kind={share?.kind} page={pageById(share?.id)} state={state} onClose={() => setShare(undefined)}
         onUpdate={(p) => { dispatch({ type: 'page/upsert', page: p }); if (editor?.id === p.id) setEditor({ ...editor, draft: { ...editor.draft, links: p.links, offers: p.offers } }); }} />
       <ConfirmDialog isOpen={resetTo !== undefined} onOpenChange={(o) => { if (!o) setResetTo(undefined); }} tone="primary"
-        title={resetTo === 'fresh' ? 'Start fresh?' : 'Reload Northwind?'} consequence={resetTo === 'fresh' ? 'This demo clears every page and meeting, as on a first visit.' : 'This demo puts back the Northwind pages and meetings; your changes here go.'}
+        title={resetTo === 'fresh' ? 'Start fresh?' : 'Reload Northwind?'} consequence={resetTo === 'fresh' ? 'This demo clears every page and meeting and walks through setup, as on a first visit.' : 'This demo puts back the Northwind pages and meetings; your changes here go.'}
         confirmLabel={resetTo === 'fresh' ? 'Start fresh' : 'Reload Northwind'}
-        onConfirm={() => { dispatch({ type: 'reset', state: resetTo === 'fresh' ? FIRST_VISIT : northwind() }); setEditor(undefined); setTab('meetings'); setResetTo(undefined); }} />
+        onConfirm={() => { dispatch({ type: 'reset', state: resetTo === 'fresh' ? FIRST_VISIT : northwind() }); setEditor(undefined); setTab('meetings'); if (resetTo === 'fresh') setOnboarding(true); setResetTo(undefined); }} />
       <MeetingDrawer meeting={openMeeting} page={pageById(openMeeting?.pageId)} onClose={() => setMeetingId(undefined)}
         onUpdate={(m) => update(m)} onCancel={cancelFromDrawer} onReschedule={(m) => setRescheduleId(m.id)} onReassign={(m) => setReassignId(m.id)}
         onNoShow={(m) => { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); }}
@@ -456,8 +502,14 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
           return n;
         }} />
       <ConfirmDialog isOpen={toDelete !== undefined} onOpenChange={(o) => { if (!o) setConfirmDelete(undefined); }}
-        title={`Delete ${toDelete?.name ?? 'this page'}?`} consequence={`Its ${plural(deleteCount, 'upcoming meeting')} ${deleteCount === 1 ? 'stays' : 'stay'} booked.`}
-        confirmLabel="Delete page" onConfirm={() => { if (toDelete) remove(toDelete); }} />
+        title={`Delete ${toDelete?.name ?? 'this page'}?`}
+        consequence={[deleteCount > 0 ? `Its ${plural(deleteCount, 'upcoming meeting')} ${deleteCount === 1 ? 'stays' : 'stay'} booked.` : '', toDelete && routedTo(toDelete.id) ? `Routing sends people here; those rules will send them to ${repointTo(toDelete.id)?.name ?? 'no page'} instead.` : ''].filter(Boolean).join(' ')}
+        confirmLabel="Delete page" onConfirm={() => {
+          if (!toDelete) return;
+          const to = repointTo(toDelete.id)?.id ?? '';
+          if (routedTo(toDelete.id)) dispatch({ type: 'routing/set', routing: { ...state.routing, rules: state.routing.rules.map((r) => (r.pageId === toDelete.id ? { ...r, pageId: to } : r)), fallbackPageId: state.routing.fallbackPageId === toDelete.id ? to : state.routing.fallbackPageId } });
+          remove(toDelete);
+        }} />
     </AppShell>
     )}
     </I18nProvider>

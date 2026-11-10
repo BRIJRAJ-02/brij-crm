@@ -62,6 +62,12 @@ export interface BookingFlowProps {
   readonly changeCutoff?: { readonly cancelHours: number; readonly moveHours: number; readonly message?: string };
   /** Set when the chat has booked: the card moves to the same success screen a booking by the calendar shows. */
   readonly chatBooked?: { readonly name: string; readonly email: string; readonly date: CalendarDate; readonly minutes: number };
+  /** Minutes from UTC for a time zone id (now); with it, times show in the guest's chosen zone. Without it the zone only labels them. */
+  readonly zoneOffset?: (tz: string) => number;
+  /** After booking: the guest cancels, moves (date and minutes in the host's time) or changes who else comes. */
+  readonly onCancelled?: () => void;
+  readonly onMoved?: (date: CalendarDate, minutes: number) => void;
+  readonly onGuestsChange?: (guests: ReadonlyArray<string>) => void;
 }
 
 const asDate = (d: CalendarDate) => new Date(d.year, d.month - 1, d.day);
@@ -151,8 +157,22 @@ export function BrandCard({ className }: { readonly className?: string }) {
 }
 
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
-export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat, chatBooked, changeCutoff }: BookingFlowProps) {
+export function BookingFlow({ host, title, durationMinutes, location, today, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange, team, prefill, guestBusy, defaultView, chat, chatBooked, changeCutoff, zoneOffset, onCancelled, onMoved, onGuestsChange, isDayOpen: hostOpen, slotsFor: hostSlots }: BookingFlowProps) {
   const [known, setKnown] = useState(prefill !== undefined);
+  // Times are kept in the host's zone; the guest sees them in theirs. A time can cross midnight, so a guest's day draws on the host's day before and after.
+  const [tz, setTz] = useState(defaultTimeZone);
+  const shift = zoneOffset ? zoneOffset(tz) - zoneOffset(defaultTimeZone) : 0;
+  const slotsFor = (d: CalendarDate): ReadonlyArray<number> => (shift === 0 ? hostSlots(d)
+    : [...hostSlots(d.subtract({ days: 1 })).map((m) => m + shift - 1440), ...hostSlots(d).map((m) => m + shift), ...hostSlots(d.add({ days: 1 })).map((m) => m + shift + 1440)]
+      .filter((m) => m >= 0 && m < 1440).sort((a, b) => a - b));
+  const isDayOpen = (d: CalendarDate) => (shift === 0 ? hostOpen(d) : slotsFor(d).length > 0);
+  /** A guest's date and minutes back in the host's zone. */
+  const toHost = (d: CalendarDate, m: number): { readonly date: CalendarDate; readonly minutes: number } => {
+    const h = m - shift;
+    return h < 0 ? { date: d.subtract({ days: 1 }), minutes: h + 1440 } : h >= 1440 ? { date: d.add({ days: 1 }), minutes: h - 1440 } : { date: d, minutes: h };
+  };
+  /** When the booking starts, kept even while the guest looks for a new time, so cut-offs always count from it. */
+  const [bookedAt, setBookedAt] = useState<number>();
   const [layout, setLayout] = useState<'month' | 'list' | 'chat'>(defaultView === 'chat' && !chat ? 'month' : defaultView ?? 'month');
   const [listWeek, setListWeek] = useState(0);
   const [calendar, setCalendar] = useState<'off' | 'connecting' | 'on'>('off');
@@ -192,7 +212,6 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
   const [dir, setDir] = useState<'forward' | 'back' | undefined>();
   const [time, setTime] = useState<number>();
   const [hour12, setHour12] = useState(true);
-  const [tz, setTz] = useState(defaultTimeZone);
   const [step, setStep] = useState<'pick' | 'details' | 'done'>('pick');
   // After booking: manage it here (add guests, move it, cancel it), the same card, no new page.
   const [after, setAfter] = useState<'idle' | 'guests' | 'cancel' | 'cancelled' | 'moving' | 'moved'>('idle');
@@ -229,7 +248,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
   useEffect(() => {
     if (!chatBooked) return;
     setGuest({ name: chatBooked.name, email: chatBooked.email, notes: '' });
-    setDate(chatBooked.date); setTime(chatBooked.minutes); setLastGuests([]); setAfter('idle');
+    setDate(chatBooked.date); setTime(chatBooked.minutes + shift); setLastGuests([]); setAfter('idle'); setBookedAt(asDate(chatBooked.date).getTime() + chatBooked.minutes * 60_000);
     setBookedWhen(`${formatLongDay(asDate(chatBooked.date))}, ${formatClockRange(chatBooked.minutes, chatBooked.minutes + durationMinutes, hour12)}`);
     setStep('done');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per booking the chat makes
@@ -239,7 +258,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     if (!date || time === undefined) return;
     setPending(true); setFailed(false);
     const guests = guestList;
-    try { await onBook({ ...guest, guests, date, minutes: time, timeZone: tz }); setLastGuests(guests); setBookedWhen(when); setStep('done'); }
+    try { const h = toHost(date, time); await onBook({ ...guest, guests, date: h.date, minutes: h.minutes, timeZone: tz }); setLastGuests(guests); setBookedWhen(when); setBookedAt(asDate(date).getTime() + time * 60_000); setStep('done'); }
     catch { setFailed(true); }
     finally { setPending(false); }
   };
@@ -295,7 +314,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
                   {formatClock(m, hour12)}{!chosen && busy && <span className="tf-booking__mark">You’re busy</span>}{!chosen && best && <span className="tf-booking__mark tf-booking__mark--best">Best</span>}
                 </AriaButton>
                 <span className="tf-booking__next-wrap" inert={!chosen}>
-                  <AriaButton className="tf-booking__next" onPress={() => { if (after === 'moving') { setAfter('moved'); setBookedWhen(when); setStep('done'); } else setStep('details'); }}>{after === 'moving' ? 'Move here' : 'Next'}</AriaButton>
+                  <AriaButton className="tf-booking__next" onPress={() => { if (after === 'moving') { setAfter('moved'); setBookedWhen(when); if (date && time !== undefined) { setBookedAt(asDate(date).getTime() + time * 60_000); const h = toHost(date, time); onMoved?.(h.date, h.minutes); } setStep('done'); } else { setFailed(false); setStep('details'); } }}>{after === 'moving' ? 'Move here' : 'Next'}</AriaButton>
                 </span>
               </li>
             );
@@ -415,7 +434,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
         <div className="tf-booking__failed" role="alert">
           <AlertTriangle size={16} strokeWidth={1.75} aria-hidden />
           <span className="tf-booking__failed-text"><strong>Someone just booked that time</strong><span>Your details are kept. Pick another time and book again.</span></span>
-          <Button size="sm" variant="secondary" onPress={() => { setStep('pick'); setTime(undefined); }}>Pick another time</Button>
+          <Button size="sm" variant="secondary" onPress={() => { setFailed(false); setStep('pick'); setTime(undefined); }}>Pick another time</Button>
         </div>
       )}
       <Button type="submit" variant="primary" size="lg" isPending={pending} className="tf-booking__book">Book</Button>
@@ -469,7 +488,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
                   ))}
                 </ul>
               )}
-              <Button variant="primary" className="tf-booking__more-done" onPress={() => { setExtra(''); setAfter('idle'); }}>Done</Button>
+              <Button variant="primary" className="tf-booking__more-done" onPress={() => { setExtra(''); setAfter('idle'); onGuestsChange?.(lastGuests); }}>Done</Button>
             </div>
           )}
           {after === 'cancel' && (
@@ -477,7 +496,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
               <span className="tf-booking__confirm-text"><strong>Cancel this booking?</strong><span>{firstName === 'the team' ? 'The team is' : `${firstName} is`} told at once. This can’t be undone.</span></span>
               <span className="tf-row">
                 <Button size="sm" variant="ghost" onPress={() => setAfter('idle')}>Keep it</Button>
-                <Button size="sm" variant="danger" onPress={() => setAfter('cancelled')}>Cancel booking</Button>
+                <Button size="sm" variant="danger" onPress={() => { setAfter('cancelled'); onCancelled?.(); }}>Cancel booking</Button>
               </span>
             </div>
           )}
@@ -494,7 +513,7 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
               </div>
               {(() => {
                 // Too close to the start: the page's cut-offs hide Cancel or Reschedule and say why.
-                const hoursLeft = date && time !== undefined ? (asDate(date).getTime() + time * 60_000 - Date.now()) / 3_600_000 : Infinity;
+                const hoursLeft = bookedAt !== undefined ? (bookedAt - Date.now()) / 3_600_000 : Infinity;
                 const canMove = !changeCutoff || hoursLeft > changeCutoff.moveHours;
                 const canCancel = !changeCutoff || hoursLeft > changeCutoff.cancelHours;
                 return (

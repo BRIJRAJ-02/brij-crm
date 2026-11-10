@@ -16,9 +16,10 @@ import { ReferencePicker } from '../ComboBox/ComboBox.tsx';
 import { formatClock, formatClockRange, minutesOf } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay, relativeDayLabel } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
+import { useToast } from '../Toast/Toast.tsx';
 import { i14, i16 } from './parts.tsx';
 import { PEOPLE, searchPeople } from './meetings.tsx';
-import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
+import { HOST, HOST_ZONE, TEAM, ZONES, at, dayFrom, first, hostFor, isoDay, openTimes, personFree, plural, type BookedMeeting, type BookingPage, type BookingsState } from './state.ts';
 
 /** Props for MeetingDrawer. */
 export interface MeetingDrawerProps {
@@ -37,6 +38,7 @@ export interface MeetingDrawerProps {
 
 /** The meeting: time (both zones when they differ), guest, place with Join, answers, notes, the linked record and activity. */
 export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onReschedule, onReassign, onNoShow, onJoin, onConfirm, onDecline }: MeetingDrawerProps) {
+  const { toast } = useToast();
   const [last, setLast] = useState(meeting);
   if (meeting && meeting !== last) setLast(meeting);
   const m = meeting ?? last;
@@ -57,7 +59,7 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
           <Menu aria-label="Meeting actions" placement="bottom end" onAction={(k: Key) => {
             if (k === 'reassign') onReassign(m);
             else if (k === 'noshow') onNoShow(m);
-            else if (k === 'copy') void navigator.clipboard?.writeText(`https://timefix.com/m/${m.id.slice(-6)}`).catch(() => undefined);
+            else if (k === 'copy') { void navigator.clipboard?.writeText(`https://timefix.com/m/${m.id.slice(-6)}`).catch(() => undefined); toast({ message: 'Meeting link copied', tone: 'success' }); }
           }}>
             <MenuItem id="reassign" icon={<Users {...i16} />} isDisabled={!open}>Reassign</MenuItem>
             <MenuItem id="copy" icon={<Link2 {...i16} />}>Copy meeting link</MenuItem>
@@ -137,7 +139,12 @@ export function RescheduleDialog({ meeting, state, onClose, onMove }: { readonly
     const out: Array<{ day: Date; times: ReadonlyArray<number> }> = [];
     for (let n = 0; n < 14; n += 1) {
       const d = dayFrom(now, n);
-      const times = page ? openTimes(page, others, d, now, len) : d.getDay() === 0 || d.getDay() === 6 ? [] : [10, 11, 14, 15, 16].map((h) => h * 60);
+      // The page's open times, kept to ones this meeting's host can take (a round robin set to ask the rotation again may move it to whoever is free).
+      // Made by hand: the working day's hours, only ones still ahead and free for the host.
+      const rotate = page?.hostMode === 'roundrobin' && page.rrReschedule === 'rotate';
+      const base = page ? openTimes(page, others, d, now, len) : d.getDay() === 0 || d.getDay() === 6 ? [] : [10, 11, 14, 15, 16].map((h) => h * 60);
+      const ahead = (m: number) => n > 0 || m > now.getHours() * 60 + now.getMinutes();
+      const times = base.filter((m) => ahead(m) && (rotate || personFree(others, meeting.host, d, m, m + len, meeting.id)));
       if (times.length) out.push({ day: d, times });
     }
     return out;
@@ -183,7 +190,8 @@ export function ReassignDialog({ meeting, state, onClose, onReassign }: { readon
   const s = minutesOf(meeting.start);
   const e = minutesOf(meeting.end);
   const nextUp = page?.hostMode === 'roundrobin' ? hostFor(others, { ...page, hosts: page.hosts.filter((h) => h !== meeting.host) }, meeting.start, s, e) : undefined;
-  const free = (name: string) => !state.meetings.some((x) => x.id !== meeting.id && x.host === name && x.status !== 'cancelled' && x.start < meeting.end && meeting.start < x.end);
+  // Free means working, not away, no other meeting and nothing busy on their calendar.
+  const free = (name: string) => personFree(state, name, meeting.start, s, e, meeting.id);
   const pick = to === 'next' ? nextUp : to;
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} size="md" title={`Reassign ${meeting.title}`} description={`${meeting.invitee.name} keeps the same time; the new host gets the invitation.`}

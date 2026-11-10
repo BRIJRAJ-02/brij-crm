@@ -1,4 +1,5 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
+import { useToast } from '../Toast/Toast.tsx';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Popover } from '../Popover/Popover.tsx';
 import { LogoMark } from '../Logo/Logo.tsx';
@@ -88,6 +89,7 @@ function startsIn(start: Date, now: Date): string {
 /** The Meetings tab. */
 export function MeetingsTab(props: MeetingsTabProps) {
   const { state, view, onView, whose, onWhose, fresh } = props;
+  const { toast } = useToast();
   const now = new Date();
   const [range, setRange] = useState<Range>('upcoming');
   const mine = (m: BookedMeeting) => whose === 'everyone' || m.host === (whose === 'mine' ? HOST : whose);
@@ -150,7 +152,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
           <MeetingList isFullWidth meetings={shown(range === 'upcoming' ? lists.upcoming.slice(1) : lists[range])} requests={range === 'upcoming' ? shown(requests) : []} now={now} highlightId={fresh} conflictIds={new Set(clashes.map((m) => m.id))} onOpen={(m) => props.onOpen(m.id)}
             onCancel={props.onCancel} onUndoCancel={props.onUndoCancel} onReschedule={(m) => props.onReschedule(m.id)} onNoShow={(m) => props.onNoShow(m.id)}
             onConfirm={(m) => props.onConfirm(m.id)} onDecline={(m) => props.onDecline(m.id)}
-            onNote={(m) => props.onOpen(m.id)} onCopyLink={() => undefined}
+            onNote={(m) => props.onOpen(m.id)} onCopyLink={(m) => { void navigator.clipboard?.writeText(`https://timefix.com/m/${m.id.slice(-6)}`).catch(() => undefined); toast({ message: 'Meeting link copied', tone: 'success' }); }}
             emptyAction={range === 'upcoming' ? <Button size="sm" onPress={props.onCopyFirstLink}>Copy booking link</Button> : undefined} />
         </>
       )}
@@ -201,7 +203,9 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
   const now = new Date();
   const monday = mondayOf(now);
   monday.setDate(monday.getDate() + week * 7);
-  const days = Array.from({ length: 5 }, (_, n) => dayFrom(monday, n));
+  // Weekends show when the week has something on them.
+  const weekend = [5, 6].some((n) => scoped.some((m) => m.status !== 'cancelled' && m.start.toDateString() === dayFrom(monday, n).toDateString()));
+  const days = Array.from({ length: weekend ? 7 : 5 }, (_, n) => dayFrom(monday, n));
   const member = whose === 'mine' || whose === 'everyone' ? HOST : whose;
   const blocks = state.blocks.filter((b) => whose === 'everyone' || b.member === member);
   const events: WeekEvent[] = [
@@ -266,7 +270,9 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
   const close = () => setHeld(undefined);
   const now = new Date();
   const monday = dayFrom(mondayOf(now), week * 7);
-  const days = Array.from({ length: 5 }, (_, n) => dayFrom(monday, n));
+  const weekend = [5, 6].some((n) => state.meetings.some((m) => m.status !== 'cancelled' && m.start.toDateString() === dayFrom(monday, n).toDateString()));
+  const days = Array.from({ length: weekend ? 7 : 5 }, (_, n) => dayFrom(monday, n));
+  const [kb, setKb] = useState<{ readonly member: string; readonly at: number }>();
   const [dayId, setDayId] = useState(() => isoDay(days.find((d) => d.toDateString() === now.toDateString()) ?? days[0] ?? now));
   const day = days.find((d) => isoDay(d) === dayId) ?? days[0] ?? now;
   const [drag, setDrag] = useState<{ readonly member: string; readonly a: number; readonly b: number }>();
@@ -312,8 +318,15 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
             const sel = drag?.member === name ? { start: Math.min(drag.a, drag.b), end: Math.max(drag.a, drag.b) + 15 } : undefined;
             return (
               <div key={name} className="tf-bkf-team__col" tabIndex={0} role="group"
-                aria-label={`${name}, ${formatLongDay(day)}. ${plural(meetings.length, 'meeting')}. Enter picks 9:00 for half an hour.`}
-                onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPick({ member: name, day, start: 9 * 60, end: 9 * 60 + 30 }); } }}
+                aria-label={`${name}, ${formatLongDay(day)}. ${plural(meetings.length, 'meeting')}. Up and Down move the time, Enter picks half an hour.`}
+                aria-description={kb?.member === name ? formatClockRange(kb.at, kb.at + 30) : undefined}
+                onBlur={() => setKb(undefined)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  const at0 = kb?.member === name ? kb.at : 9 * 60;
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setKb({ member: name, at: Math.min(HOUR_TO * 60 - 30, Math.max(HOUR_FROM * 60, at0 + (e.key === 'ArrowDown' ? 30 : -30))) }); }
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick({ member: name, day, start: at0, end: at0 + 30 }); }
+                }}
                 onPointerDown={(e) => {
                   if ((e.target as HTMLElement).closest('button') || e.button !== 0) return;
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -340,6 +353,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
                   </button>
                 ))}
                 {sel && <span className="tf-bkf-team__sel" style={{ top: pct(sel.start), height: len(sel.start, sel.end) }} aria-hidden="true" />}
+                {!sel && kb?.member === name && <span className="tf-bkf-team__sel" style={{ top: pct(kb.at), height: len(kb.at, kb.at + 30) }} aria-hidden="true" />}
                 {!sel && held?.member === name && held.day.toDateString() === day.toDateString() && <span ref={heldRef} className="tf-bkf-team__sel" style={{ top: pct(held.start), height: len(held.start, held.end) }} aria-hidden="true" />}
               </div>
             );

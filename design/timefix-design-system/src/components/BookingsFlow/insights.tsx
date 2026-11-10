@@ -7,6 +7,7 @@ import { Button } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { MenuTrigger, Menu, MenuItem } from '../Menu/Menu.tsx';
 import { useToast } from '../Toast/Toast.tsx';
+import { saveFile } from '../../lib/saveFile.ts';
 import { StatCard } from '../Card/Card.tsx';
 import { BarChart, BarList, DonutChart } from '../Chart/Chart.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -100,7 +101,16 @@ export function InsightsTab({ state, pageId: only, dispatch }: {
         </>}
         count={state.insightsShared && dispatch ? <Tag size="sm" hue="blue" icon={<Link2 size={12} strokeWidth={2} />}>Shared by link</Tag> : <span className="tf-bkf__muted">Only your workspace sees these numbers.</span>}
         action={<span className="tf-row">
-          <Button size="sm" variant="secondary" icon={<Download {...i14} />} onPress={() => toast({ message: `Exported ${PERIODS.find((x) => x.id === period)?.label.toLowerCase() ?? ''} as insights.csv`, tone: 'success' })}>Export CSV</Button>
+          <Button size="sm" variant="secondary" icon={<Download {...i14} />} onPress={() => {
+            // One row a day: the date and its bookings, then the period's totals.
+            const rows = [['Date', 'Bookings'], ...data.perDay.map((x) => [`${x.d.getFullYear()}-${String(x.d.getMonth() + 1).padStart(2, '0')}-${String(x.d.getDate()).padStart(2, '0')}`, String(x.v)]),
+              [], ['Page views', String(data.views)], ['Bookings', String(data.bookings)], ['Met', String(data.held)], ['No-shows', String(data.noShows)], ['Cancelled', String(data.cancelled)]];
+            const name = `insights-${only ? (state.pages.find((p) => p.id === only)?.slug ?? 'page') : 'bookings'}-${period}-days.csv`;
+            void saveFile(name, rows.map((r) => r.join(',')).join('\n')).then((out) => {
+              if (out === 'saved') toast({ message: `${name} saved`, tone: 'success' });
+              else if (out === 'failed') toast({ message: 'The file couldn’t be saved here. Try again.' });
+            });
+          }}>Export CSV</Button>
           {dispatch && (
             <MenuTrigger>
               <Button size="sm" variant="secondary" icon={<Share2 {...i14} />}>Share</Button>

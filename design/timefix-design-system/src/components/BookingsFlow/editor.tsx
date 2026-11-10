@@ -28,7 +28,7 @@ import { formatDate, formatDay } from '../../lib/format.ts';
 import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
 import { uniqueSlug } from './seed.ts';
 import {
-  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
+  HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
   type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut,
 } from './state.ts';
 
@@ -36,7 +36,8 @@ const LENGTHS = [15, 30, 45, 60, 90];
 const BUFFERS = [0, 5, 10, 15, 30].map((n) => ({ id: String(n), label: n ? `${n} min` : 'None' }));
 const NOTICE = [{ id: '0', label: 'None' }, { id: '1', label: '1 hour' }, { id: '4', label: '4 hours' }, { id: '24', label: '1 day' }, { id: '48', label: '2 days' }];
 const AHEAD = [14, 30, 60, 90].map((n) => ({ id: String(n), label: `${n} days ahead` }));
-const CALENDARS = [{ id: 'work', label: 'Work', description: 'Google · priya@northwind.com' }, { id: 'personal', label: 'Personal', description: 'Google · priya@northwind.com' }, { id: 'outlook', label: 'Calendar', description: 'Outlook · needs reconnect', isDisabled: true }];
+/** Where new bookings can go: each connected account's calendars; one that needs reconnecting can't take them. */
+const calendarsOf = (state: BookingsState) => state.calendars.flatMap((c) => c.provider === 'Google' ? [{ id: 'work', label: 'Work', description: `Google · ${c.email}`, isDisabled: c.status !== 'connected' }, { id: 'personal', label: 'Personal', description: `Google · ${c.email}`, isDisabled: c.status !== 'connected' }] : [{ id: c.id, label: 'Calendar', description: `${c.provider} · ${c.status === 'connected' ? c.email : 'needs reconnect'}`, isDisabled: c.status !== 'connected' }]);
 const STEPS = [{ id: '0', label: 'Every 15 or 30 min' }, { id: '15', label: 'Every 15 min' }, { id: '30', label: 'Every 30 min' }, { id: '60', label: 'On the hour' }];
 const CUTOFFS = [{ id: '0', label: 'Up to the start' }, { id: '1', label: 'Until 1 hour before' }, { id: '4', label: 'Until 4 hours before' }, { id: '24', label: 'Until a day before' }, { id: '48', label: 'Until 2 days before' }];
 const FILE_TO = [{ id: 'people', label: 'People' }, { id: 'companies', label: 'Companies' }, { id: 'deals', label: 'Deals' }, { id: 'none', label: 'Don’t file' }];
@@ -82,7 +83,9 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
   const kept = state.drafts?.[page.id] !== undefined;
   const [save, setSave] = useState<SaveState>('idle');
   const now = new Date();
-  const dirty = JSON.stringify({ ...draft, isOn: page.isOn }) !== JSON.stringify(page);
+  // Only real changes count: a setting touched and put back is not a change.
+  const dirty = pageChanges(page, { ...draft, isOn: page.isOn }).length > 0;
+  const nameless = !draft.name.trim();
   const set = (patch: Partial<BookingPage>) => { onDraft({ ...draft, ...patch }); if (save === 'saved') setSave('idle'); };
   const sectionRef = useRef<HTMLDivElement>(null);
   const taken = state.pages.some((p) => p.id !== draft.id && p.slug === draft.slug);
@@ -90,7 +93,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
   const [tab, setTab] = useState<string>(section ?? 'basics');
   useEffect(() => { if (section) setTab(section); }, [section]);
   const doSave = () => {
-    if (!dirty || save === 'saving' || taken) return;
+    if (!dirty || save === 'saving' || taken || nameless) return;
     setSave('saving');
     void onSave({ ...draft, isOn: page.isOn }).then(() => { setSave('saved'); window.setTimeout(() => setSave((s) => (s === 'saved' ? 'idle' : s)), 1800); });
   };
@@ -119,7 +122,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
           <PageMoreMenu page={page} withEdit={false} onAction={(k) => onMore(page, k)} />
         </>} />
       <div className="tf-bkf__editor">
-        <AriaButton className="tf-bkf__stats" onPress={onMeetings} aria-label={`This month: ${page.stats.views} views, ${page.stats.bookings} bookings, ${page.stats.showRate}% showed up. Open this page's meetings.`}>
+        <AriaButton className="tf-bkf__stats" onPress={onMeetings} aria-label={`This month: ${page.stats.views} views, ${page.stats.bookings} bookings, ${page.stats.showRate}% showed up. Open Meetings.`}>
           <span><strong className="tf-num"><NumberRoll value={page.stats.views} /></strong> views</span>
           <span><strong className="tf-num"><NumberRoll value={page.stats.bookings} /></strong> bookings</span>
           <span><strong className="tf-num"><NumberRoll value={page.stats.showRate} />%</strong> showed up</span>
@@ -144,7 +147,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
               <TabPanel id="basics" className="tf-bkf__edpanel">
               <Section className="tf-bkf-card" title="Basics" description="What guests see first: the name, the link, how long and where.">
                 <div className="tf-bkf__stack">
-                  <TextField label="Name" value={draft.name} onChange={(name) => set({ name })} isRequired />
+                  <TextField label="Name" value={draft.name} onChange={(name) => set({ name })} isRequired isInvalid={nameless} errorMessage="Give the page a name." />
                   <TextField label="Link" value={draft.slug} className="tf-bkf__linkinput" icon={<span className="tf-bkf__prefix">timefix.com/priya/</span>}
                     onChange={(v) => set({ slug: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} isInvalid={taken} errorMessage="Another page has this link. Try another."
                     suffix={!taken && draft.slug !== page.slug ? <span className="tf-bkf__ok-word"><Check size={14} strokeWidth={2} aria-hidden="true" />Available</span> : undefined}
@@ -340,7 +343,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         items={[{ id: 'auto', label: 'At once' }, { id: 'me', label: 'I confirm first' }]} />
                     </SettingRow>
                     <SettingRow title="Calendar" description="Where new bookings are added.">
-                      <Select label="Add bookings to" isLabelHidden className="tf-bkf__inline-select" items={CALENDARS} value={draft.calendarId} onChange={(v) => { if (v) set({ calendarId: v }); }} />
+                      <Select label="Add bookings to" isLabelHidden className="tf-bkf__inline-select" items={calendarsOf(state).length ? calendarsOf(state) : [{ id: 'work', label: 'Work', description: 'Connect a calendar first' }]} value={draft.calendarId} onChange={(v) => { if (v) set({ calendarId: v }); }} />
                     </SettingRow>
                     <SettingRow title="File answers to" description={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'deals' ? 'Matched by email to the person’s open deal; a new deal if there is none.' : (draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'none' ? 'Answers stay on the meeting only.' : 'Matched by email; a new record if there is no match.'}>
                       <Select label="File answers to" isLabelHidden className="tf-bkf__inline-select" items={FILE_TO} value={draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')}
@@ -403,12 +406,12 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         </div>
         <footer className="tf-bkf__savefoot">
           <span className="tf-bkf__savenote" aria-live="polite">
-            <Tag size="sm" hue={dirty || kept ? 'orange' : 'green'}>{dirty || kept ? 'Live · edited' : 'Live'}</Tag>
+            <Tag size="sm" hue={dirty ? 'orange' : 'green'}>{dirty ? 'Unpublished changes' : 'Live'}</Tag>
             <TextSwap swapKey={dirty ? 'dirty' : 'clean'}>{dirty ? 'Guests still see the live version until you publish.' : 'Guests see what’s here.'}</TextSwap>
           </span>
-          {dirty && save !== 'saving' && <Button variant="ghost" onPress={() => { onDraft(page); onKeepDraft(page); }}>Discard</Button>}
+          {(dirty || kept) && save !== 'saving' && <Button variant="ghost" onPress={() => { onDraft(page); onKeepDraft(page); }}>Discard</Button>}
           {dirty && save !== 'saving' && <Button variant="secondary" onPress={() => onKeepDraft({ ...draft, isOn: page.isOn })}>Keep as draft</Button>}
-          <Button variant="primary" isDisabled={!dirty || taken} isPending={save === 'saving'} onPress={doSave} aria-keyshortcuts="Meta+S">
+          <Button variant="primary" isDisabled={!dirty || taken || nameless} isPending={save === 'saving'} onPress={doSave} aria-keyshortcuts="Meta+S">
             <TextSwap swapKey={save === 'saved' && !dirty ? 'saved' : 'save'}>{save === 'saved' && !dirty ? <span className="tf-bkf__saved"><SuccessCheck size={16} />Published</span> : 'Publish'}</TextSwap>
           </Button>
         </footer>

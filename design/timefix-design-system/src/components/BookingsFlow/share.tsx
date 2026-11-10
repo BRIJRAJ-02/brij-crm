@@ -1,7 +1,7 @@
 // Step 4, Share: Offer specific times, One-time links and Embed, each a short dialog over the page.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Link2, Plus } from 'lucide-react';
-import { QrCode } from '../QrCode/QrCode.tsx';
+import { QrCode, downloadQr } from '../QrCode/QrCode.tsx';
 import { Dialog, ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { TextField } from '../Field/Field.tsx';
@@ -165,14 +165,21 @@ function QrDialog({ isOpen, page, onClose }: { readonly isOpen: boolean; readonl
   const { toast } = useToast();
   const url = `https://${pageUrl(page.slug)}`;
   const file = page.slug || 'booking-page';
+  const svg = useRef<SVGSVGElement>(null);
+  const get = async (format: 'svg' | 'png') => {
+    if (!svg.current) return;
+    const out = await downloadQr(svg.current, file, format);
+    if (out === 'saved') toast({ message: `${file}.${format} saved`, tone: 'success' });
+    else if (out === 'failed') toast({ message: 'The file couldn’t be saved here. Try again.' });
+  };
   return (
     <Dialog isOpen={isOpen} onOpenChange={(o) => { if (!o) onClose(); }} title="QR code" description={`Scanning it opens ${page.name}.`}
       actions={<>
-        <Button variant="secondary" icon={<Download {...i14} />} onPress={() => toast({ message: `${file}.svg downloaded`, tone: 'success' })}>SVG</Button>
-        <Button variant="primary" icon={<Download {...i14} />} onPress={() => toast({ message: `${file}.png downloaded`, tone: 'success' })}>PNG</Button>
+        <Button variant="secondary" icon={<Download {...i14} />} onPress={() => void get('svg')}>SVG</Button>
+        <Button variant="primary" icon={<Download {...i14} />} onPress={() => void get('png')}>PNG</Button>
       </>}>
       <div className="tf-bkf-qr">
-        <QrCode value={url} label={`QR code for ${page.name}`} withLogo frameLabel="Book a time" />
+        <QrCode ref={svg} value={url} label={`QR code for ${page.name}`} withLogo frameLabel="Book a time" />
         <span className="tf-bkf__muted tf-num">{pageUrl(page.slug)}</span>
       </div>
     </Dialog>

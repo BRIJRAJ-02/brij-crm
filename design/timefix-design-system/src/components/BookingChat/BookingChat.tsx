@@ -1,6 +1,6 @@
 import { Button as AriaButton, Input, TextField } from 'react-aria-components';
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import { ArrowUp, CalendarPlus } from 'lucide-react';
+import { ArrowUp, CalendarPlus, Check } from 'lucide-react';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Logo } from '../Logo/Logo.tsx';
@@ -49,6 +49,7 @@ export interface BookingChatProps {
 
 /** The guest booking assistant: host bubbles on the left, the guest's on the right, offered times that book in place, replies that stream in, a thinking line while it looks, and a booked card at the end. */
 export function BookingChat({ host, title, lines, isThinking = false, thinking, booked, onSend, onPickTime, placeholder = 'When works for you?', bare = false }: BookingChatProps) {
+  const [added, setAdded] = useState<ReadonlyArray<string>>([]);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<string>();
   const thread = useRef<HTMLDivElement>(null);
@@ -154,7 +155,8 @@ export function BookingChat({ host, title, lines, isThinking = false, thinking, 
                 <dt>Where</dt><dd>{booked.where}</dd>
               </dl>
               <span className="tf-row tf-chat__add">
-                {['Google', 'Outlook', 'Apple'].map((p) => <Button key={p} size="sm" icon={<CalendarPlus size={14} strokeWidth={1.75} />}>{p}</Button>)}
+                {['Google', 'Outlook', 'Apple'].map((p) => <Button key={p} size="sm" variant={added.includes(p) ? 'ghost' : 'secondary'} onPress={() => setAdded((x) => (x.includes(p) ? x : [...x, p]))}
+                  icon={added.includes(p) ? <Check size={14} strokeWidth={2} /> : <CalendarPlus size={14} strokeWidth={1.75} />}>{added.includes(p) ? `In ${p}` : p}</Button>)}
               </span>
             </div>
           )}

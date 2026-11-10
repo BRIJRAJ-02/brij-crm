@@ -48,5 +48,11 @@ Every request from the design session, checked in the prototype (light and dark)
 | Chat booking goes to the success screen | yes, the same screen as a calendar booking |
 | Check every feature against main (10 Nov audit) | built: draft, publish and versions; link-only pages and booking inside held time; "can't be booked" warnings; start-time interval; guest cancel and move cut-offs with a message; round robin host on reschedule; QR code, email, WhatsApp and system share; workspace and team links; calendar-stopped-syncing banner, teammate calendar health and Ask to reconnect; email to a teammate when someone else changes their hours; live toast when a guest books; Insights export, view-only share link and Insights per page; filing answers to People, Companies or Deals; routing on CRM record fields |
 | Left for their own products | business booking (services, staff, business page, reservations) and the onboarding steps |
+| Week and Team day full height | yes; weekends show when they have meetings |
+| Geist font | decided: use Geist and Geist Mono (the prototype already does; the live app moves from Inter when this is ported) |
+| Real downloads | QR code as SVG or PNG and Insights as CSV are real files; inside the artifact the viewer confirms each save |
+| Roster extras (drag-paint, roles and places, labour cost) | dropped by the owner |
+| Onboarding | first booking page (name, length) and Connect your calendar steps, then "You’re live" with the link; Demo › Start fresh walks it |
+| 10 Nov review (25 findings) | all fixed: guest reschedule from Manage, guest changes after booking reach the host, time zones convert, chat keeps the chosen length and place, confirm-first says "request sent", unpublished changes kept on every exit, links never go stale on publish, name required, batch hand-on can't double-book, reassign and reschedule respect time off and busy time, one schedule email notice per person, cancel from a row has Undo, cut-offs can't be skipped, copy link confirms, no-show only after the meeting, Team day keyboard times, delete warns about routing, wording unified |
 
-Not built: shifts with roles or places, labour cost and painting cells by drag (main doesn't have them either).
+Not built: business booking (services, staff, business page, reservations) waits for the owner's call.
