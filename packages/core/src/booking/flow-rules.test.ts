@@ -30,7 +30,7 @@ import {
 import { createOneOffLink, listOneOffLinks, revokeOneOffLink } from './one-off-links.ts';
 import { createBookingPage, updateBookingPage } from './pages.ts';
 import { bookPublicSlot, getPublicBookingPage, readManagedBooking } from './public.ts';
-import { listRequests } from './requests.ts';
+import { listRequests, listWaitingRequests } from './requests.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -363,6 +363,23 @@ describe('review fixes (spec 0062, L1)', () => {
       code: 'NOT_FOUND',
     });
     expect(await listRequests(bo, { pageId: s.page.id })).toEqual([]);
+  });
+
+  it('lists every request the reader may answer across the pages, and none to a colleague or another workspace', async () => {
+    const s = await setup();
+    const other = await setup();
+    await s.set({ requiresConfirmation: true });
+    await other.set({ requiresConfirmation: true });
+    const booked = await s.book();
+    await other.book();
+    const waiting = await listWaitingRequests(s.host);
+    expect(waiting.map((each) => [each.bookingId, each.pageId])).toEqual([[booked.bookingId, s.page.id]]);
+    expect(waiting[0]).toMatchObject({ visitorName: 'Grace Hopper', visitorEmail: 'grace@navy.example' });
+    // A colleague who can't change the page and hosts none of it sees nothing.
+    expect(await listWaitingRequests(await colleague(s))).toEqual([]);
+    // Answered, it is gone.
+    await confirmBooking(hostTarget(s.host, booked.bookingId), { now: () => NOW });
+    expect(await listWaitingRequests(s.host)).toEqual([]);
   });
 
   it('refuses another page’s link, and reads another workspace’s hash as used', async () => {

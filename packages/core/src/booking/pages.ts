@@ -5,7 +5,7 @@
 // everyone's. A page the reader may not see answers as absent (NOT_FOUND).
 // Pages are settings, not CRM data: their writes store no outbox row.
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import {
   defaultAvailability,
   PERMISSIONS,
@@ -1610,4 +1610,70 @@ export async function editablePage(
 ): Promise<PageRecord> {
   requirePermission(scope, 'booking.manage');
   return pageToChange(tx, scope, pageId, lock);
+}
+
+/** A page as `pagesToChange` checks it: the columns `mayChange` reads. */
+export interface PageToCheck {
+  readonly id: string;
+  readonly ownerMemberId: string;
+  readonly kind: string;
+  readonly scope: string;
+}
+
+/**
+ * Which pages the reader may change, for a read across pages (Meetings › Requests), with the same rule
+ * `editablePage` applies to one page (`booking.manage`, then `mayChange` with the reach and the editors): `where`
+ * narrows `booking_pages` in SQL to a superset of them (undefined for `booking.admin`, every page; `false` without
+ * `booking.manage`, none), and `changeable` answers exactly which of the rows read through it the reader may change.
+ * A fixed number of queries, whatever the rows.
+ */
+export async function pagesToChange(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+): Promise<{
+  readonly where: SQL | undefined;
+  readonly changeable: (rows: readonly PageToCheck[]) => Promise<ReadonlySet<string>>;
+}> {
+  if (!can(scope.access, 'booking.manage')) {
+    return { where: sql`false`, changeable: () => Promise.resolve(new Set()) };
+  }
+  const reach = await pageReach(tx, scope);
+  const edits = await editedBy(tx, scope, 'booking_page');
+  const me = memberOf(scope);
+  const managed =
+    reach === undefined || reach.all === 'manage'
+      ? []
+      : [...reach.members.keys()].filter((id) => canActFor(reach, id, 'manage'));
+  const notRotation = sql`${bookingPages.kind} <> 'round_robin'`;
+  const personal = and(eq(bookingPages.scope, 'member'), notRotation);
+  const where = can(scope.access, 'booking.admin')
+    ? undefined
+    : (or(
+        edits.size === 0 ? undefined : inArray(bookingPages.id, [...edits]),
+        me === undefined ? undefined : and(eq(bookingPages.ownerMemberId, me), notRotation),
+        reach?.all === 'manage' ? personal : undefined,
+        managed.length === 0 ? undefined : and(personal, inArray(bookingPages.ownerMemberId, managed)),
+      ) ?? sql`false`);
+  return {
+    where,
+    async changeable(rows) {
+      // As `pageToChange`: someone else's page opens through the reach only while its owner is an active member.
+      const names = await managedOwners(
+        tx,
+        rows.filter((row) => isSomeoneElses(scope, row)).map((row) => row.ownerMemberId),
+      );
+      return new Set(
+        rows
+          .filter((row) =>
+            mayChange(
+              scope,
+              row,
+              isSomeoneElses(scope, row) && names.has(row.ownerMemberId) ? reach : undefined,
+              edits,
+            ),
+          )
+          .map((row) => row.id),
+      );
+    },
+  };
 }

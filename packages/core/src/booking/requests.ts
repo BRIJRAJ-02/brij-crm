@@ -1,16 +1,21 @@
 // A page's requests (spec 0062, AC-6203): the bookings on a page that requires confirmation that still wait for
 // their host's Confirm or Decline, soonest first, for the page editor's Requests card. Confirm and Decline
 // themselves are `confirmBooking` and `declineBooking` in `change.ts`, under the one booking rule.
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
 import { schema } from '@crm/db';
-import type { BookingRequestView, ListRequestsInput } from '@crm/contracts';
+import {
+  WAITING_REQUESTS_MAX,
+  type BookingRequestView,
+  type ListRequestsInput,
+  type WaitingRequestView,
+} from '@crm/contracts';
 import { inWorkspace } from '../access/run.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { REQUEST_LEAD_MS, REQUEST_WAIT_MS } from './mail.ts';
-import { editablePage } from './pages.ts';
+import { editablePage, pagesToChange } from './pages.ts';
 
-const { bookings } = schema;
+const { bookingPages, bookings } = schema;
 
 /** The most requests the card lists at once. */
 const REQUESTS_MAX = 50;
@@ -65,5 +70,74 @@ export async function listRequests(
       visitorEmail: row.visitorEmail,
       expiresAt: requestExpiry(row.createdAt, row.startsAt).toISOString(),
     }));
+  });
+}
+
+/**
+ * Every request the reader may answer, across the pages, soonest first (Meetings › Requests, the Bookings redesign),
+ * at most `WAITING_REQUESTS_MAX`: as `listRequests` answers page by page, every request on a page the reader may change,
+ * and their own on any other. A page that is deleted or a managed template lists none. One read of the pending index
+ * (`bookings_pending`) plus the page rule's fixed few, whatever the pages.
+ */
+export async function listWaitingRequests(scope: EngineScope): Promise<WaitingRequestView[]> {
+  return inWorkspace(scope, async (tx) => {
+    const me = scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
+    const pages = await pagesToChange(tx, scope);
+    // `where` undefined is every page (booking.admin); otherwise their pages or their own requests.
+    const reach =
+      pages.where === undefined
+        ? undefined
+        : or(pages.where, me === undefined ? undefined : eq(bookings.hostMemberId, me));
+    const rows = await tx
+      .select({
+        id: bookings.id,
+        startsAt: bookings.startsAt,
+        endsAt: bookings.endsAt,
+        createdAt: bookings.createdAt,
+        visitorName: bookings.visitorName,
+        visitorEmail: bookings.visitorEmail,
+        hostMemberId: bookings.hostMemberId,
+        pageId: bookingPages.id,
+        ownerMemberId: bookingPages.ownerMemberId,
+        kind: bookingPages.kind,
+        scope: bookingPages.scope,
+      })
+      .from(bookings)
+      .innerJoin(
+        bookingPages,
+        and(eq(bookingPages.workspaceId, bookings.workspaceId), eq(bookingPages.id, bookings.pageId)),
+      )
+      .where(
+        and(
+          // A literal, so the planner matches the partial index `bookings_pending`.
+          sql`${bookings.approval} = 'pending'`,
+          eq(bookings.status, 'confirmed'),
+          isNull(bookingPages.deletedAt),
+          sql`${bookingPages.kind} <> 'managed'`,
+          reach,
+        ),
+      )
+      .orderBy(asc(bookings.startsAt), asc(bookings.id))
+      .limit(WAITING_REQUESTS_MAX);
+    const distinct = [
+      ...new Map(
+        rows.map((row) => [
+          row.pageId,
+          { id: row.pageId, ownerMemberId: row.ownerMemberId, kind: row.kind, scope: row.scope },
+        ]),
+      ).values(),
+    ];
+    const changeable = await pages.changeable(distinct);
+    return rows
+      .filter((row) => changeable.has(row.pageId) || (me !== undefined && row.hostMemberId === me))
+      .map((row) => ({
+        bookingId: row.id,
+        pageId: row.pageId,
+        start: row.startsAt.toISOString(),
+        end: row.endsAt.toISOString(),
+        visitorName: row.visitorName,
+        visitorEmail: row.visitorEmail,
+        expiresAt: requestExpiry(row.createdAt, row.startsAt).toISOString(),
+      }));
   });
 }

@@ -3495,11 +3495,6 @@ export function BookingsListScreen({
   );
   // Read from the list as it is now: answered elsewhere, it closes.
   const openRequest = requestItems.find((item) => item.request.bookingId === openRequestId);
-  // The bookings read again (a realtime change, an answer from another tab): the requests with them, so the count and
-  // the list stay live on the data layer's own refresh. Subscribed to the held list, not its snapshot, so a render
-  // never reads them again by itself.
-  const { reload: reloadRequests } = requests;
-  useEffect(() => list.subscribe(reloadRequests), [list, reloadRequests]);
   const accept = (item: HeldRequest) => {
     if (accepting !== undefined) return;
     setOpenRequestId(undefined);

@@ -24,6 +24,7 @@ import type {
   TeamDayState,
 } from './bookings/store.ts';
 import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
+import type { RequestsHeld, RequestsState } from './bookings/requests.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
@@ -430,6 +431,14 @@ export function useTeamDay(view: TeamDayHeld): TeamDayState {
  */
 export function useMeetings(list: MeetingsHeld): MeetingsState {
   return useRetained(list);
+}
+
+/**
+ * Meetings › Requests: every request the reader may answer, re-rendering as it is read again (a `bookings` event, the
+ * person's return, an answer). Held while mounted.
+ */
+export function useRequests(held: RequestsHeld): RequestsState {
+  return useRetained(held);
 }
 
 /** Settings › Automations (parity #53): the held list and run log, re-rendering as they change. Held while mounted. */

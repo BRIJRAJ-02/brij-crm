@@ -532,6 +532,7 @@ export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts
 import type { SocialLinksAccess, SocialLinksStore } from './profile/socials.ts';
 export type { SocialLinksAccess, SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
 import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
+import { createRequestsStore, type RequestsHeld } from './bookings/requests.ts';
 import { createOperatorStore } from './operator/store.ts';
 import {
   createCalendarsStore,
@@ -711,6 +712,7 @@ export type {
   BookingPageView,
   BookingView,
   BookingRequestView,
+  WaitingRequestView,
   CreatedOneOffLink,
   OneOffLinkView,
   BookingAssignment,
@@ -989,6 +991,7 @@ export type {
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { MeetingsHeld, MeetingsQuery, MeetingsState } from './bookings/meetings.ts';
+export type { RequestsHeld, RequestsState } from './bookings/requests.ts';
 export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
 export {
   isFresh as isSessionFresh,
@@ -1873,6 +1876,7 @@ export function createDataLayer({
     dueTasks.clear();
     // The last person's meetings and calendars (names, attendees) never show to the next one in this tab.
     meetings.clear();
+    requests.clear();
     calendars.clear();
     void activity?.then((feeds) => {
       feeds.clear();
@@ -3042,6 +3046,14 @@ export function createDataLayer({
     },
     ...bookingsFresh,
   });
+  // Meetings › Requests: every request the reader may answer, across the pages, one held list per workspace.
+  const requests = createRequestsStore({
+    api: {
+      waiting: (workspace) =>
+        beforeRead(workspace).then(() => call((options) => api.bookingFlow.waiting({ workspace }, options))),
+    },
+    ...bookingsFresh,
+  });
   /**
    * Time off changed (spec 0037): what Bookings shows now reads again (Host away), each held read once, and so does
    * Home's Team today (Away).
@@ -3049,6 +3061,7 @@ export function createDataLayer({
   const refreshBookings = (workspace: string) => {
     bookingsLists.refreshHeld(workspace);
     meetings.refreshHeld(workspace);
+    requests.refreshHeld(workspace);
     homeReads.teamChanged(workspace);
   };
   // New bookings as they arrive (B-12, `bookings/arrivals.ts`): heard through the host's booking notice.
@@ -3068,6 +3081,7 @@ export function createDataLayer({
   const reloadBookings = (workspace: string) => {
     bookingsLists.reloadAll(workspace);
     meetings.reloadAll(workspace);
+    requests.refreshHeld(workspace);
   };
   // A booking linked to a record by hand (polish F2): at once everywhere it shows, back on a refusal.
   const linkBooking = createBookingLink({
@@ -4745,6 +4759,12 @@ export function createDataLayer({
         call((options) => api.bookingFlow.revokeLink({ workspace, pageId, linkId, mutationId: mintId() }, options)),
       requests: (workspace: string, pageId: string): Promise<BookingRequestView[]> =>
         call((options) => api.bookingFlow.requests({ workspace, pageId }, options)),
+      /**
+       * Meetings › Requests: every request the reader may answer, across the pages, soonest first, as a held list
+       * (`useRequests`). While held it is read again on the person's return, on a `bookings` event, and after an
+       * answer; `hide` takes one away at once while Accept or Decline is out.
+       */
+      waiting: (workspace: string): RequestsHeld => requests.view(workspace),
       confirm: (workspace: string, bookingId: string): Promise<boolean> =>
         bookingWrite(1, (mutationId) =>
           call((options) => api.bookingFlow.confirm({ workspace, bookingId, mutationId }, options)),
