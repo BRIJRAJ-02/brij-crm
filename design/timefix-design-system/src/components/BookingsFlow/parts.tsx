@@ -3,7 +3,7 @@ import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Clock, Code2, Copy, CopyPlus, LayoutList, Link2, MoreHorizontal, Pencil, Share2, Ticket, Trash2 } from 'lucide-react';
-import { BookingFlow, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
+import { BookingFlow, type BookingFlowProps, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
 import { MenuTrigger, Menu, MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
@@ -62,12 +62,14 @@ export function ScaledPreview({ children, designWidth, label, fill = false }: { 
 }
 
 /** A page's guest view (BookingFlow) wired to the flow's state. */
-export function GuestView({ page, state, onBook, length, place, onLength, onPlace, chat }: {
+export function GuestView({ page, state, onBook, length, place, onLength, onPlace, chat, chatBooked }: {
   readonly page: BookingPage; readonly state: BookingsState; readonly onBook: (r: BookingRequest) => Promise<void>; readonly length?: number; readonly place?: PlaceKind;
   /** Given, the guest can switch length or place inside the booking card. */
   readonly onLength?: (n: number) => void; readonly onPlace?: (k: PlaceKind) => void;
   /** Book by chat, offered as the third view. */
   readonly chat?: ReactNode;
+  /** The chat's booking, which moves the card to the success screen. */
+  readonly chatBooked?: BookingFlowProps['chatBooked'];
 }) {
   const now = new Date();
   const len = length ?? lengthOf(page);
@@ -80,7 +82,7 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
       team={page.hostMode !== 'one' && page.hosts.length > 1 ? page.hosts : undefined}
       prefill={page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined}
       guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}
-      defaultView={page.defaultView ?? 'month'} chat={chat}
+      defaultView={page.defaultView ?? 'month'} chat={chat} chatBooked={chatBooked}
       durations={page.durations} onDurationChange={onLength} places={page.places.map((k) => ({ id: k, label: PLACES[k].label }))} placeId={place ?? placeOf(page)} onPlaceChange={onPlace ? (k) => onPlace(k as PlaceKind) : undefined} />
   );
 }

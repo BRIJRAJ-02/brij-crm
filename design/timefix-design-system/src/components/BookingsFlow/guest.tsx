@@ -149,11 +149,12 @@ function Book({ page, state, onBooked, failFirst = false }: { readonly page: Boo
   const [length, setLength] = useState(lengthOf(page));
   const [place, setPlace] = useState<PlaceKind>(placeOf(page));
   const [requested, setRequested] = useState<string>();
+  const [chatBooked, setChatBooked] = useState<{ readonly name: string; readonly email: string; readonly date: CalendarDate; readonly minutes: number }>();
   if (requested) return <Pending page={page} when={requested} />;
   return (
     <div className="tf-bkf__guest">
       {page.whoCanBook === 'form' && <Callout tone="info" className="tf-bkf__guest-note">You answered the {page.formName} form. Now pick a time.</Callout>}
-      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace} chat={<Chat page={page} state={state} onBooked={onBooked} embedded />}
+      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace} chat={<Chat page={page} state={state} onBooked={onBooked} embedded onDone={setChatBooked} />} chatBooked={chatBooked}
         onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => {
           tries.current += 1;
           if (failFirst && tries.current === 1) { reject(new Error('taken')); return; }
@@ -260,7 +261,11 @@ function Offered({ page, onBooked }: { readonly page: BookingPage } & Pick<Guest
 }
 
 /** Booking by chat: the guest says when suits, the page offers times, one press books. */
-function Chat({ page, state, onBooked, embedded = false }: { readonly page: BookingPage; readonly state: BookingsState; readonly embedded?: boolean } & Pick<GuestPlayerProps, 'onBooked'>) {
+function Chat({ page, state, onBooked, embedded = false, onDone }: {
+  readonly page: BookingPage; readonly state: BookingsState; readonly embedded?: boolean;
+  /** Inside the booking card: hand the booking to the card's success screen instead of drawing a booked card in the thread. */
+  readonly onDone?: (b: { readonly name: string; readonly email: string; readonly date: CalendarDate; readonly minutes: number }) => void;
+} & Pick<GuestPlayerProps, 'onBooked'>) {
   const [lines, setLines] = useState<ReadonlyArray<BookingChatLine>>([{ id: 'h0', role: 'host', text: `Hi, I'm ${first(page.owner)}'s booking assistant. When works for you?`, suggestions: ['Tomorrow morning', 'Later this week', 'Next week'] }]);
   const [thinking, setThinking] = useState(false);
   const [booked, setBooked] = useState<BookingChatBooked>();
@@ -279,7 +284,9 @@ function Chat({ page, state, onBooked, embedded = false }: { readonly page: Book
     setStage('booking'); setThinking(true);
     window.setTimeout(() => {
       setThinking(false);
-      onBooked(page, { name: who, email, notes: 'Booked by chat', date: new CalendarDate(chosen.d.getFullYear(), chosen.d.getMonth() + 1, chosen.d.getDate()), minutes: chosen.m, timeZone: 'Asia/Kolkata', length: lengthOf(page), place: placeOf(page) });
+      const date = new CalendarDate(chosen.d.getFullYear(), chosen.d.getMonth() + 1, chosen.d.getDate());
+      onBooked(page, { name: who, email, notes: 'Booked by chat', date, minutes: chosen.m, timeZone: 'Asia/Kolkata', length: lengthOf(page), place: placeOf(page) });
+      if (onDone) { onDone({ name: who, email, date, minutes: chosen.m }); return; }
       setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + lengthOf(page))}`, where: PLACES[placeOf(page)].label, email });
     }, 800);
   };
