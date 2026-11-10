@@ -1,7 +1,7 @@
 /* The link page editor: blocks (or the edit panel) on the left, a phone preview on the right, PublishBar floating. */
 .tf-linked-host { container-type: inline-size; }
 .tf-linked {
-  position: relative; display: grid; grid-template-columns: minmax(0, var(--size-panel)) minmax(0, 1fr); gap: var(--space-24);
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--space-24);
   height: calc(var(--size-dialog) * 1.5); color: var(--text); font: 400 14px/20px var(--font-sans);
 }
 

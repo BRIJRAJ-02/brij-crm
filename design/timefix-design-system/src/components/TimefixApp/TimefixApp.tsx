@@ -16,6 +16,7 @@ import { RecordPage } from './record.tsx';
 import { InboxScreen, NotesScreen, TasksScreen } from './you.tsx';
 import { ListScreen, NewListDialog } from './lists.tsx';
 import { FormsScreen } from './forms.tsx';
+import { InsightsScreen, LinkPageScreen } from './grow.tsx';
 import './TimefixApp.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -117,6 +118,8 @@ function App({ initial, start = 'home' }: TimefixAppProps) {
           : page === 'inbox' ? <InboxScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'tasks' ? <TasksScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
           : page === 'notes' ? <NotesScreen state={state} dispatch={dispatch} onOpenRecord={openRecord} onBookings={openBookings} />
+          : page === 'link' ? <LinkPageScreen />
+          : page === 'insights' ? <InsightsScreen state={state} />
           : page === 'forms' ? <FormsScreen state={state} dispatch={dispatch} onOpenPerson={(id) => openRecord('people', id)} onBookings={openBookings} />
           : listOpen ? <ListScreen key={listOpen.id} state={state} dispatch={dispatch} listId={listOpen.id} onOpenRecord={openRecord} onDeleted={() => go('home')} />
           : page.startsWith('records:') ? <RecordsScreen key={page} state={state} dispatch={dispatch} object={page.slice(8) as ObjectId} onOpen={openRecord} />
