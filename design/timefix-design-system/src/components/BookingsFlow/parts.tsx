@@ -13,7 +13,7 @@ import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { SuccessCheck, TextMorph, TextSwap } from '../Motion/Motion.tsx';
 import { cx } from '../../lib/cx.ts';
-import { HOST, PLACES, ZONES, ZONE_OFFSET, HOST_ZONE, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind, placeLabel } from './state.ts';
+import { HOST, PLACES, ZONES, ZONE_OFFSET, HOST_ZONE, guestZone, offsetOf, zonesWithGuest, hoursFor, lengthOf, lengthsText, openTimes, placeOf, type BookingPage, type BookingsState, type PlaceKind, placeLabel } from './state.ts';
 
 /** 16px and 14px Lucide icons. */
 export const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -82,9 +82,9 @@ export function GuestView({ page, state, onBook, length, place, onLength, onPlac
   const where = PLACES[place ?? placeOf(page)];
   const slotsFor = (d: CalendarDate) => openTimes(page, state, new Date(d.year, d.month - 1, d.day), now, len);
   return (
-    <BookingFlow {...after} zoneOffset={(tz) => ZONE_OFFSET[tz] ?? 330} host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? 'the team' : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
+    <BookingFlow {...after} zoneOffset={(tz) => ZONE_OFFSET[tz] ?? offsetOf(tz)} host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? 'the team' : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
       location={{ kind: where.guest, label: placeLabel(page, place ?? placeOf(page)) }} today={todayIn(getLocalTimeZone())}
-      isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={ZONES} defaultTimeZone={HOST_ZONE} onBook={onBook}
+      isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={zonesWithGuest()} defaultTimeZone={guestZone()} onBook={onBook}
       team={page.hostMode !== 'one' && page.hosts.length > 1 ? page.hosts : undefined}
       prefill={guestIs ?? (page.whoCanBook === 'form' ? { name: 'Maya Chen', email: 'maya@acme.com' } : undefined)}
       guestBusy={(d) => (d.day % 2 === 0 ? [{ start: 9 * 60, end: 11 * 60 }, { start: 15 * 60, end: 16 * 60 }] : [{ start: 13 * 60, end: 14 * 60 + 30 }])}

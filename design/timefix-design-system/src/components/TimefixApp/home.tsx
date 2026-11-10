@@ -55,6 +55,10 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
   const wonDelta = wonBefore === 0 ? undefined : Math.round(((wonNow - wonBefore) / wonBefore) * 100);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   const week = (bookings?.meetings ?? []).filter((m) => m.status !== 'cancelled' && m.start >= monday && m.start < new Date(monday.getTime() + 7 * 86_400_000));
+  // Last week, for the change under each number (the references' "vs last week").
+  const lastWeek = (bookings?.meetings ?? []).filter((m) => m.status !== 'cancelled' && m.start >= new Date(monday.getTime() - 7 * 86_400_000) && m.start < monday).length;
+  const vs = (a: number, b: number) => (b === 0 ? (a === 0 ? { value: 'same as last week', direction: 'flat' as const } : { value: `+${a} vs last week`, direction: 'up' as const, isGood: true }) : a === b ? { value: 'same as last week', direction: 'flat' as const } : { value: `${a > b ? '+' : ''}${Math.round(((a - b) / b) * 100)}% vs last week`, direction: a > b ? 'up' as const : 'down' as const, isGood: a > b });
+  const newDeals = (from: Date, to: Date) => state.deals.filter((d) => d.created >= from && d.created < to);
   const steps: ReadonlyArray<ChecklistStep> = [
     // Each step ticks itself when the thing is really done, never on the click that leads there.
     { id: 'workspace', title: 'Create your workspace', icon: <IdCard {...i16} />, actionLabel: 'Open', isDone: true },
@@ -110,9 +114,9 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
         </Card>
       </div>}
       {!hidden.has('numbers') && <div className="tf-home__stats">
-        <StatCard label="Open pipeline" icon={<CircleDollarSign {...i16} />} value={open.reduce((n, d) => n + d.amount, 0)} format={inr} delta={{ value: `${open.length} deals`, direction: 'flat' }} />
+        <StatCard label="Open pipeline" icon={<CircleDollarSign {...i16} />} value={open.reduce((n, d) => n + d.amount, 0)} format={inr} delta={(() => { const now7 = newDeals(new Date(Date.now() - 7 * 86_400_000), new Date(Date.now() + 86_400_000)).length; const prev7 = newDeals(new Date(Date.now() - 14 * 86_400_000), new Date(Date.now() - 7 * 86_400_000)).length; return { ...vs(now7, prev7), value: `${open.length} deals · ${now7} new this week`, note: undefined }; })()} />
         <StatCard label="Won this quarter" icon={<Trophy {...i16} />} value={wonNow} format={inr} delta={wonDelta === undefined ? { value: wonBefore === 0 && wonNow > 0 ? 'First wins' : 'None yet', direction: 'flat' } : { value: `${wonDelta > 0 ? '+' : ''}${wonDelta}%`, direction: wonDelta > 0 ? 'up' : wonDelta < 0 ? 'down' : 'flat', note: 'vs last quarter', isGood: wonDelta >= 0 }} />
-        <StatCard label="Meetings this week" icon={<CalendarDays {...i16} />} value={week.length} delta={{ value: `${week.filter((m) => m.status === 'pending').length} to confirm`, direction: 'flat' }} />
+        <StatCard label="Meetings this week" icon={<CalendarDays {...i16} />} value={week.length} delta={{ ...vs(week.length, lastWeek), note: week.some((m) => m.status === 'pending') ? `${week.filter((m) => m.status === 'pending').length} to confirm` : undefined }} />
         <StatCard label="Overdue tasks" icon={<AlarmClock {...i16} />} value={mine.filter((t) => !t.done && t.due && t.due < new Date(now.getFullYear(), now.getMonth(), now.getDate())).length} delta={{ value: 'yours', direction: 'flat' }} />
       </div>}
       {(!hidden.has('link') || !hidden.has('team') || !hidden.has('reports')) && <div className="tf-home__grid">

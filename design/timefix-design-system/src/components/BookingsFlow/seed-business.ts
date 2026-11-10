@@ -81,7 +81,7 @@ export function lumen(now = new Date()): BookingsState {
 
 /** Olive Kitchen in Colaba: one table page, tables in Availability, reservations are meetings with a party and tables. */
 export function olive(now = new Date()): BookingsState {
-  const t = (id: string, name: string, seats: number, area: string, joinable = false): Table => ({ id, name, seats, area, online: true, joinable, code: `${name.toLowerCase()}-${(seats * 7919 + name.length * 31).toString(36)}` });
+  const t = (id: string, name: string, seats: number, area: string, joinable = false): Table => ({ id, name, seats, area, online: true, joinable, minParty: seats >= 8 ? 5 : seats >= 6 ? 3 : undefined, code: `${name.toLowerCase()}-${(seats * 7919 + name.length * 31).toString(36)}` });
   const tables: Table[] = [t('t1', 'T1', 2, 'Main room'), t('t2', 'T2', 2, 'Main room'), t('t3', 'T3', 4, 'Main room', true), t('t4', 'T4', 4, 'Main room', true), t('t5', 'T5', 6, 'Main room'),
     t('t6', 'T6', 2, 'Terrace', true), t('t7', 'T7', 2, 'Terrace', true), t('t8', 'T8', 4, 'Terrace'), { ...t('t9', 'T9', 8, 'Terrace'), online: false }];
   const table = newPage([], { id: 'p-table', name: 'Book a table', kind: 'table', party: { min: 1, max: 8 }, durations: [90], places: ['in-person'], address: '7 Apollo Bunder, Colaba',

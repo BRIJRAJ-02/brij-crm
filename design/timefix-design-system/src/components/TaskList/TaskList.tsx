@@ -3,14 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Plus, Calendar, ChevronRight, CircleCheck } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
-import { Tag } from '../Tag/Tag.tsx';
 import { IconButton } from '../Button/Button.tsx';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import { NumberRoll, Collapse, DropIn } from '../Motion/Motion.tsx';
 import { Kbd } from '../Kbd/Kbd.tsx';
 import { type AttributeRecordRef } from '../AttributeField/AttributeField.tsx';
-import { RecordChip } from '../RecordChip/RecordChip.tsx';
 import { formatDate, relativeDayLabel } from '../../lib/format.ts';
 import './TaskList.css';
 
@@ -39,10 +37,10 @@ function TaskRow({ task, checked, open, onChange, onOpen }: { readonly task: Tas
       <div className={cx('tf-task', checked && 'is-done')}>
         <Checkbox round isSelected={checked} onChange={onChange} className="tf-task__check">{task.title}</Checkbox>
         <span className="tf-task__meta">
-          {task.record && <RecordChip name={task.record.name} src={task.record.src} kind={task.record.kind === 'person' ? 'person' : 'company'} />}
-          {due && <Tag size="sm" hue={due.overdue && !checked ? 'red' : 'gray'} icon={<Calendar size={12} strokeWidth={1.75} />}>{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}</Tag>}
+          {task.record && <span className="tf-task__rec"><Avatar name={task.record.name} src={task.record.src} size={20} shape={task.record.kind === 'person' ? 'round' : 'square'} /><span className="tf-task__rec-name">{task.record.name}</span></span>}
+          {due && <span className="tf-task__due" data-overdue={due.overdue && !checked ? true : undefined}><Calendar size={14} strokeWidth={1.75} aria-hidden="true" />{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}</span>}
           {task.assignee && <Tooltip label={`Assigned to ${task.assignee}`}><AriaButton className="tf-task__who" aria-label={`Assigned to ${task.assignee}`}><Avatar name={task.assignee} size={20} /></AriaButton></Tooltip>}
-          {onOpen && <IconButton size="sm" label={`Open ${task.title}`} onPress={() => onOpen(task.id)}><ChevronRight size={14} strokeWidth={1.75} /></IconButton>}
+          {onOpen && <span className="tf-task__go"><IconButton size="sm" label={`Open ${task.title}`} onPress={() => onOpen(task.id)}><ChevronRight size={14} strokeWidth={1.75} /></IconButton></span>}
         </span>
       </div>
     </Collapse>
@@ -60,10 +58,12 @@ export interface TaskListProps {
   readonly freshIds?: ReadonlySet<string>;
   /** Opens a task to edit it (its due date, who, the record); draws an open arrow at the row's end. */
   readonly onOpen?: (id: string) => void;
+  /** Only done tasks, as plain rows (for a page that gives Completed its own section). Unticking one reopens it. */
+  readonly isDoneList?: boolean;
 }
 
 /** A record's or a person's tasks: round checks, due chips (red when overdue), the record and the assignee. A done task strikes through, then folds into "Completed". */
-export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen, isDoneList = false }: TaskListProps) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [folding, setFolding] = useState<ReadonlySet<string>>(new Set());
   const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
@@ -88,6 +88,11 @@ export function TaskList({ tasks, onToggle, onAdd, freshIds, onOpen }: TaskListP
   const done = tasks.filter((t) => t.done);
   const add = () => { const t = draft.trim(); if (t && onAdd) { onAdd(t); setDraft(''); } };
 
+  if (isDoneList) return (
+    <section className="tf-tasks" aria-label="Completed tasks">
+      <ul className="tf-tasks__list">{done.map((t) => <li key={t.id}><TaskRow task={t} checked open onChange={(v) => { if (!v) onToggle(t.id, false); }} onOpen={onOpen} /></li>)}</ul>
+    </section>
+  );
   return (
     <section className="tf-tasks" aria-label="Tasks">
       <ul className="tf-tasks__list">

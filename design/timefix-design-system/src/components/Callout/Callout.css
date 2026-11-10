@@ -26,6 +26,10 @@
 .tf-callout__action[data-hovered] svg { transform: translateX(var(--distance-micro)); }
 .tf-callout__action[data-hovered] { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .tf-callout__action[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+/* No title: one line of text with its action at the end of the line, wrapping under it when narrow. */
+.tf-callout__text:not(:has(.tf-callout__title)) { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--space-16); }
+.tf-callout__text:not(:has(.tf-callout__title)) .tf-callout__body { flex: 1 1 24rem; min-width: 0; }
+.tf-callout__text:not(:has(.tf-callout__title)) .tf-callout__action { margin-top: 0; }
 .tf-callout__close { margin: calc(var(--space-4) * -1) calc(var(--space-8) * -1) calc(var(--space-4) * -1) 0; }
 
 @media (prefers-reduced-motion: reduce) {

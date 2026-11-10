@@ -1,5 +1,6 @@
 // A restaurant's home: the host stand. One day at a time, split by service (Lunch, Dinner) with covers, each table booking moving
 // Booked → Seated → Left (or Late → No-show), plus Walk in, a waitlist and a floor view of every table. Same meetings underneath.
+import { Callout } from '../Callout/Callout.tsx';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { CalendarPlus, ChevronLeft, ChevronRight, Clock, LayoutGrid, LayoutList, MoreHorizontal, Pencil, Plus, Repeat, UserPlus, UserX, Users, X } from 'lucide-react';
@@ -22,7 +23,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import {
   HOST, PLACES, at, dayFrom, first, fitTables, heldTables, isoDay, nextId, plural, turnFor,
-  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay } from './state.ts';
+  type BookedMeeting, type BookingPage, type BookingsAction, type BookingsState, type Table, type WaitParty, venueDay, visitsOf } from './state.ts';
 
 /** Where a table booking is tonight. */
 type Stage = 'request' | 'booked' | 'late' | 'seated' | 'left' | 'no-show' | 'cancelled';
@@ -32,6 +33,8 @@ const stageOf = (m: BookedMeeting, now: Date, holdLate: number): Stage =>
       : now.getTime() > m.start.getTime() + holdLate * 60_000 ? 'late' : 'booked';
 
 const mins = (from: Date, to: Date) => Math.max(0, Math.round((to.getTime() - from.getTime()) / 60_000));
+/** 2nd, 3rd, 11th, 21st: how many times a guest has come. */
+const ordinal = (n: number) => { const t = n % 100; const s = t >= 11 && t <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'; return `${n}${s}`; };
 const OCCASIONS = ['Birthday', 'Anniversary', 'Date night', 'Business', 'Celebration'];
 const TAGS = ['VIP', 'Regular', 'Allergy', 'Wheelchair', 'High chair'];
 const QUOTES = [10, 15, 20, 30, 45, 60];
@@ -76,7 +79,11 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   const live = todays.filter((m) => m.status !== 'cancelled');
   const covers = live.filter((m) => m.status !== 'no-show').reduce((n, m) => n + (m.party ?? 0), 0);
   const seatedNow = live.filter((m) => stageOf(m, now, holdLate) === 'seated');
-  const wait = (state.waitlist ?? []).filter((w) => w.day === isoDay(day));
+  const allWait = (state.waitlist ?? []).filter((w) => w.day === isoDay(day));
+  const wait = allWait.filter((w) => !w.outcome);
+  // Earlier today: who was seated off the waitlist and who left, with the average wait, kept for the host's numbers.
+  const waitDone = allWait.filter((w) => w.outcome);
+  const waitAvg = (() => { const s = waitDone.filter((w) => w.outcome === 'seated' && w.endedAt); return s.length ? Math.round(s.reduce((n, w) => n + mins(w.added, w.endedAt ?? w.added), 0) / s.length) : undefined; })();
   const services = servicesOn(state, day);
   const tableName = (ids: ReadonlyArray<string> | undefined) => (ids ?? []).map((id) => state.tables?.find((t) => t.id === id)?.name ?? '').filter(Boolean).join(' + ') || 'No table';
 
@@ -139,6 +146,8 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
           <span className="tf-bkf-res__meta">
             {(m.tags ?? []).map((t) => <Tag key={t} size="sm" hue={t === 'VIP' ? 'purple' : t === 'Allergy' ? 'red' : 'gray'}>{t}</Tag>)}
             {m.occasion && <Tag size="sm" hue="yellow">{m.occasion}</Tag>}
+            {(() => { const v = visitsOf(state, m); return v.count > 0 ? <span className="tf-bkf__muted tf-num">{ordinal(v.count + 1)} visit{v.noShows ? ` · ${plural(v.noShows, 'no-show')} before` : ''}</span> : null; })()}
+            {m.source && m.source !== 'online' && !m.walkIn && <span className="tf-bkf__muted">{m.source === 'phone' ? 'By phone' : m.source === 'waitlist' ? 'From the waitlist' : 'Walk-in'}</span>}
             {m.area && <span className="tf-bkf__muted">Asked for {m.area}</span>}
             {m.notes && <span className="tf-bkf-res__note">{m.notes}</span>}
           </span>
@@ -152,8 +161,15 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   };
 
   const requests = live.filter((m) => m.status === 'pending');
+  // Parties past the late hold: the host decides (seat them or mark a no-show); their table is never given away silently.
+  const lateNow = isToday ? live.filter((m) => stageOf(m, now, holdLate) === 'late') : [];
+  const lateAlert = lateNow.length > 0 && (() => { const m = lateNow[0]; if (!m) return null; const mins = Math.max(0, Math.round((now.getTime() - m.start.getTime()) / 60_000));
+    return <Callout tone="warning" action={{ label: `Mark ${first(m.invitee.name)} as no-show`, onPress: () => noShow(m) }}>
+      {first(m.invitee.name)} ({m.party}) is {mins} min late for {formatClock(minutesOf(m.start))}; {tableName(m.tables)} is still held.{lateNow.length > 1 ? ` ${lateNow.length - 1} more late.` : ''}
+    </Callout>; })();
   const listView = (
     <div className="tf-bkf-res-list">
+      {lateAlert}
       {requests.length > 0 && (
         <section className="tf-bkf-res-group" aria-label="Requests">
           <h3 className="tf-bkf-res-group__h"><span>Requests</span><span className="tf-bkf__muted tf-num">{`${requests.length} to answer`}</span></h3>
@@ -218,7 +234,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
                     <Menu aria-label={`Actions for ${w.name}`} placement="bottom end" onAction={(k) => {
                       const list = state.waitlist ?? [];
                       if (k === 'notify') { dispatch({ type: 'waitlist/set', waitlist: list.map((x) => (x.id === w.id ? { ...x, notified: true } : x)) }); toast({ message: w.phone ? `Texted ${first(w.name)} at ${w.phone}: your table is ready` : `Marked as told. ${first(w.name)} left no phone, so call their name.`, tone: 'success' }); }
-                      else if (k === 'remove') { dispatch({ type: 'waitlist/set', waitlist: list.filter((x) => x.id !== w.id) }); toast({ message: `${first(w.name)} left the waitlist`, action: { label: 'Undo', onAction: () => dispatch({ type: 'waitlist/set', waitlist: list }) } }); }
+                      else if (k === 'remove') { dispatch({ type: 'waitlist/set', waitlist: list.map((x) => (x.id === w.id ? { ...x, endedAt: new Date(), outcome: 'left' as const } : x)) }); toast({ message: `${first(w.name)} left the waitlist`, action: { label: 'Undo', onAction: () => dispatch({ type: 'waitlist/set', waitlist: list }) } }); }
                     }}>
                       <MenuItem id="notify" icon={<Clock {...i16} />} description={w.phone || 'No phone: call their name'}>{w.phone ? 'Text: table ready' : 'Table ready (told in person)'}</MenuItem>
                       <MenuItem id="remove" icon={<X {...i16} />}>Remove</MenuItem>
@@ -230,6 +246,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
           })}
         </ul>
       )}
+      {waitDone.length > 0 && <p className="tf-bkf__muted tf-num">Earlier: {plural(waitDone.filter((w) => w.outcome === 'seated').length, 'party', 'parties')} seated{waitDone.some((w) => w.outcome === 'left') ? `, ${waitDone.filter((w) => w.outcome === 'left').length} left` : ''}{waitAvg !== undefined ? ` · average wait ${waitAvg} min` : ''}</p>}
     </aside>
   );
 
@@ -270,7 +287,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
         onSeat={(m, isNew) => {
           const where = tableName(m.tables);
           if (isNew) dispatch({ type: 'meeting/add', meeting: m }); else update(m, `Moved to ${where}`);
-          if (seating.kind === 'wait') dispatch({ type: 'waitlist/set', waitlist: (state.waitlist ?? []).filter((x) => x.id !== seating.wait.id) });
+          if (seating.kind === 'wait') dispatch({ type: 'waitlist/set', waitlist: (state.waitlist ?? []).map((x) => (x.id === seating.wait.id ? { ...x, endedAt: new Date(), outcome: 'seated' as const } : x)) });
           toast({ message: seating.kind === 'move' ? `${first(m.invitee.name)} moved to ${where}` : `${m.walkIn ? `Walk-in, ${m.party ?? 2}` : first(m.invitee.name)} seated at ${where}`, tone: 'success' });
           setSeating(undefined);
         }} />}
@@ -409,7 +426,7 @@ function SeatDialog({ state, page, ask, now, onClose, onSeat }: { readonly state
       id: nextId('m'), pageId: page.id, host: HOST, start, end: new Date(start.getTime() + turn * 60_000), title: `Table for ${party}`,
       invitee: { name: guest, email: '' }, place: PLACES['in-person'].meeting, placeLabel: chosen.label.split(' · ')[0] ?? '', status: 'confirmed', guestZone: 'Asia/Kolkata',
       notes: '', answers: [], activity: [{ id: nextId('a'), text: ask.kind === 'wait' ? 'Seated from the waitlist' : 'Walked in', at: new Date() }],
-      party, tables: chosen.tables, seating: 'seated', seatedAt: new Date(), walkIn: ask.kind === 'walkin', phone: ask.kind === 'wait' ? ask.wait.phone : undefined,
+      party, tables: chosen.tables, seating: 'seated', seatedAt: new Date(), walkIn: ask.kind === 'walkin', phone: ask.kind === 'wait' ? ask.wait.phone : undefined, source: ask.kind === 'wait' ? 'waitlist' : 'walk-in',
     }, true);
   };
   return (
@@ -465,6 +482,7 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
   const [time, setTime] = useState<number | undefined>(meeting ? minutesOf(meeting.start) : undefined);
   const [pick, setPick] = useState<string | undefined>(meeting?.tables?.join('+'));
   const [occasion, setOccasion] = useState(meeting?.occasion ?? '');
+  const [source, setSource] = useState<NonNullable<BookedMeeting['source']>>(meeting?.source ?? 'phone');
   const [tags, setTags] = useState<ReadonlyArray<string>>(meeting?.tags ?? []);
   const [notes, setNotes] = useState(meeting?.notes ?? '');
   // Its own date stays in the list, even when it has passed, so editing an old reservation never shows a blank date.
@@ -487,12 +505,13 @@ function ReservationDialog({ state, page, day, meeting, onClose, onSave }: {
     };
     onSave({
       ...base, start, end: new Date(start.getTime() + turn * 60_000), title: `Table for ${party}`, invitee: { ...base.invitee, name: name.trim(), email: email.trim() },
-      party, tables: chosen.tables, placeLabel: chosen.label.split(' · ')[0] ?? '', phone: phone.trim() || undefined, occasion: occasion || undefined, tags: tags.length ? tags : undefined, notes: notes.trim(),
+      party, tables: chosen.tables, placeLabel: chosen.label.split(' · ')[0] ?? '', phone: phone.trim() || undefined, occasion: occasion || undefined, tags: tags.length ? tags : undefined, notes: notes.trim(), source,
     }, !meeting);
   };
   const extras = Boolean(meeting?.occasion || meeting?.tags?.length || meeting?.notes);
   const fields = (
     <div className="tf-bkf__stack">
+      <Select label="Came in by" value={source} onChange={(v) => { if (v) setSource(v === 'online' ? 'online' : v === 'walk-in' ? 'walk-in' : v === 'waitlist' ? 'waitlist' : 'phone'); }} items={[{ id: 'phone', label: 'Phone' }, { id: 'online', label: 'Online' }, { id: 'walk-in', label: 'Walk-in' }, { id: 'waitlist', label: 'Waitlist' }]} />
       <Select label="Occasion" value={occasion || 'none'} onChange={(v) => setOccasion(v && v !== 'none' ? v : '')} items={[{ id: 'none', label: 'None' }, ...OCCASIONS.map((o) => ({ id: o, label: o }))]} />
       <ChoiceChips label="Tags" selectionMode="multiple" size="sm" selectedKeys={[...tags]} onSelectionChange={(k) => setTags([...k].map(String))} items={TAGS.map((t) => ({ id: t, label: t }))} />
       <TextArea label="Notes for the floor" rows={2} value={notes} onChange={setNotes} placeholder="Allergies, seating, a cake to bring out" />

@@ -1,9 +1,22 @@
 .tf-tasks { display: flex; flex-direction: column; font: 400 14px/20px var(--font-sans); color: var(--text); }
 .tf-tasks__list { margin: 0; padding: 0; list-style: none; }
-.tf-task { display: flex; align-items: center; gap: var(--space-12); min-height: var(--size-row); padding: 0 var(--space-8); border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
-.tf-task:hover { background: var(--surface-hover); }
+.tf-task { display: flex; align-items: center; gap: var(--space-12); min-height: calc(var(--size-row) + var(--space-8)); padding: 0 var(--space-8); border-radius: var(--radius-md); transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-tasks__list > li + li .tf-task { box-shadow: 0 calc(var(--border-width-hairline) * -1) 0 var(--border-subtle); }
+.tf-task:hover { background: var(--surface-subtle); }
+.tf-task:hover, .tf-tasks__list > li:hover + li .tf-task { box-shadow: none; }
 .tf-task__check { flex: 1; min-width: 0; }
-.tf-task__meta { display: inline-flex; align-items: center; gap: var(--space-6); flex: none; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+.tf-task__meta { display: inline-flex; align-items: center; gap: var(--space-16); flex: none; max-width: 55%; min-width: 0; transition: opacity var(--duration-fast) var(--ease-smooth-out); }
+/* Meta reads as quiet text, like Bookings' rows: the record with a small face, the day with an icon, red only when overdue. */
+.tf-task__rec { display: inline-flex; align-items: center; gap: var(--space-6); min-width: 0; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+.tf-task__rec-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-task__due { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-task__due svg { color: var(--text-tertiary); }
+.tf-task__due[data-overdue] { color: var(--tag-red-text); font-weight: 500; }
+.tf-task__due[data-overdue] svg { color: currentColor; }
+/* The open arrow shows on hover or keyboard focus; on touch it stays. */
+.tf-task__go { display: inline-grid; margin-left: calc(var(--space-8) * -1); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.tf-task:hover .tf-task__go, .tf-task:focus-within .tf-task__go { opacity: 1; }
+@media (hover: none) { .tf-task__go { opacity: 1; } }
 .tf-task.is-done .tf-task__meta { opacity: var(--opacity-disabled); }
 .tf-task__who { display: inline-grid; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; cursor: default; outline: none; }
 .tf-task__who[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
@@ -31,5 +44,5 @@
 .tf-tasks-demo { max-width: var(--size-measure); }
 
 @media (prefers-reduced-motion: reduce) {
-  .tf-task, .tf-task__meta, .tf-tasks__add, .tf-tasks__done-trigger, .tf-tasks__chev, .tf-tasks__done-panel, .tf-tasks__done-inner { transition: none; }
+  .tf-task, .tf-task__meta, .tf-task__go, .tf-tasks__add, .tf-tasks__done-trigger, .tf-tasks__chev, .tf-tasks__done-panel, .tf-tasks__done-inner { transition: none; }
 }

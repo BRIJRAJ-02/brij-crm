@@ -35,6 +35,12 @@ export interface HostedFormProps {
   readonly onUpload?: UploadFile;
   /** Thank-you words; the defaults are Tally's plain ones. */
   readonly thanks?: { readonly title: string; readonly line?: string };
+  /** The last button's words ("Submit" unless the owner set their own, like "Get my quote"). */
+  readonly submitLabel?: string;
+  /** Answers filled from the link (?email=…&name=…), by question id; hidden fields take theirs from here too. */
+  readonly prefill?: Readonly<Record<string, string>>;
+  /** Who the form is from: a cover band with their logo overlapping it, their name and a line under it. */
+  readonly brand?: { readonly name: string; readonly logoSrc?: string; readonly line?: string };
   /** Jumps between questions by answer (one question at a time). */
   readonly logic?: ReadonlyArray<FormRule>;
 }
@@ -191,8 +197,11 @@ function Thanks({ show, title, line, children }: { readonly show: boolean; reado
  * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), or every question on one
  * card. Required answers and emails are checked; a refused step shakes. Ends on a thank you with the sent answers.
  */
-export function HostedForm({ title, description, questions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
-  const [answers, setAnswers] = useState<FormAnswers>({});
+export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
+  // Hidden fields never show: they carry their value (from the link or the default) straight into the answers.
+  const questions = allQuestions.filter((q) => q.kind !== 'hidden');
+  const hiddenAnswers = Object.fromEntries(allQuestions.filter((q) => q.kind === 'hidden').map((q) => [q.id, prefill[q.id] ?? q.defaultValue ?? '']));
+  const [answers, setAnswers] = useState<FormAnswers>(() => Object.fromEntries(Object.entries(prefill).filter(([k]) => questions.some((q) => q.id === k))));
   const answersRef = useRef(answers); answersRef.current = answers;
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [attempt, setAttempt] = useState(0);
@@ -224,7 +233,7 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     if (sending) return;
     setSending(true); setFailed(false);
     const out = only && logic.length ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
-    try { await onSubmit(out); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
+    try { await onSubmit({ ...hiddenAnswers, ...out }); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
   };
   const last = questions.length - 1;
   /** Where the visitor came from, so Back retraces a jump instead of landing on a skipped question. */
@@ -281,7 +290,7 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
 
   const slot = (q: FormQuestion, n: number, large: boolean) => (
     <QuestionSlot key={q.id} question={q} index={n} value={answers[q.id]} onChange={setAnswer(q.id)} error={errors[q.id]} attempt={attempt}
-      large={large} onPicked={large && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating') ? picked : undefined} booking={booking} onUpload={onUpload} />
+      large={large} onPicked={large && (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating' || q.kind === 'yesno' || q.kind === 'scale' || q.kind === 'country') ? picked : undefined} booking={booking} onUpload={onUpload} />
   );
   const alert = failed && <p className="tf-hform__alert" role="alert"><CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />We couldn't send that. Check your connection and try again.</p>;
   const later = onFinishLater && <FinishLater onSave={() => onFinishLater(answers)} />;
@@ -306,7 +315,7 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
             <div className="tf-hform__actions">
               {(() => { const ends = n === last || after(n, answers) === 'end'; return (
                 <Button variant="primary" size="lg" onPress={next} isPending={sending && n === step} iconEnd={ends ? undefined : <Check size={16} strokeWidth={2} aria-hidden="true" />}>
-                  {ends ? 'Submit' : 'OK'}
+                  {ends ? submitLabel : 'OK'}
                 </Button>); })()}
               <span className="tf-hform__hint" aria-hidden="true">press <Kbd>Enter</Kbd><CornerDownLeft size={12} strokeWidth={1.75} /></span>
             </div>
@@ -328,7 +337,7 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
         </header>
         {questions.map((q, n) => slot(q, n, false))}
         {alert}
-        <Button type="submit" variant="primary" size="lg" isPending={sending} className="tf-hform__submit">Submit</Button>
+        <Button type="submit" variant="primary" size="lg" isPending={sending} className="tf-hform__submit">{submitLabel}</Button>
         {later}
       </form>,
       done,
@@ -337,7 +346,14 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
 
   return (
     <div className="tf-hform">
-      <div className="tf-hform__card">{mode === 'one' ? oneAtATime : onePage}</div>
+      <div className="tf-hform__card">
+        {brand && <div className="tf-hform__brand">
+          <span className="tf-hform__cover" aria-hidden="true" />
+          {brand.logoSrc ? <img className="tf-hform__logo" src={brand.logoSrc} alt="" /> : <span className="tf-hform__logo tf-hform__logo--initial" aria-hidden="true">{brand.name.slice(0, 1).toUpperCase()}</span>}
+          <span className="tf-hform__from"><strong>{brand.name}</strong>{brand.line && <span>{brand.line}</span>}</span>
+        </div>}
+        {mode === 'one' ? oneAtATime : onePage}
+      </div>
       <a className="tf-hform__foot" href="https://www.timefix.com" target="_blank" rel="noreferrer"><span>Powered by</span><Logo size={16} /></a>
     </div>
   );

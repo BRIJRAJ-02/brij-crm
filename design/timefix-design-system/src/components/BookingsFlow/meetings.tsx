@@ -28,7 +28,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import { Button as AriaButton, type Key } from 'react-aria-components';
 import {
-  HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, atLimit, busyOn, conflicted, dayFrom, first, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
+  HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, atLimit, busyOn, conflicted, dayFrom, first, hoursOn, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
   type BookedMeeting, type BookingsState, type PlaceKind, type TimeBlock,
 } from './state.ts';
 
@@ -291,8 +291,16 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
     return Math.min(to * 60 - 15, Math.max(from * 60, from * 60 + Math.floor(((e.clientY - r.top) / r.height) * total / 15) * 15));
   };
   const counts = (d: Date) => state.meetings.filter((m) => m.status !== 'cancelled' && m.start.toDateString() === d.toDateString()).length;
+  // The people who take bookings here: a salon's or restaurant's staff, else the team.
+  const staff: ReadonlyArray<string> = state.business ? [...new Set(state.pages.filter((p) => p.kind !== 'table').flatMap((p) => p.hosts))] : TEAM;
+  const isToday = day.toDateString() === now.toDateString();
+  const nowAt = minutesOf(now);
+  const doneToday = onDay.filter((m) => m.status === 'completed' || (m.status === 'confirmed' && m.end < now)).length;
+  /** How a booking reads in its block: tint and chip by where it stands. */
+  const standing = (m: BookedMeeting): { readonly key: string; readonly label: string } => m.status === 'pending' ? { key: 'pending', label: 'To confirm' } : m.status === 'no-show' ? { key: 'noshow', label: 'No-show' } : m.status === 'completed' || m.end < now ? { key: 'done', label: 'Done' } : m.start <= now && now < m.end ? { key: 'now', label: 'Now' } : { key: 'booked', label: 'Booked' };
   return (
     <div className="tf-bkf__stack tf-bkf__stack--12 tf-bkf__calfill">
+      <p className="tf-bkf-team__total tf-num"><strong>{onDay.length}</strong> {onDay.length === 1 ? 'booking' : 'bookings'} {isToday ? 'today' : `on ${formatLongDay(day)}`}{doneToday ? ` · ${doneToday} done` : ''}</p>
       <DayStrip label="Day" days={days.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: counts(d), isToday: d.toDateString() === now.toDateString() }))}
         value={dayId} onChange={setDayId} onPrevious={() => onWeek(week - 1)} onNext={() => onWeek(week + 1)} />
       {(() => {
@@ -306,18 +314,23 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
           </Callout>
         );
       })()}
-      <div className="tf-bkf-team" style={{ '--tf-bkf-cols': TEAM.length, '--tf-bkf-hours': to - from } as React.CSSProperties}>
+      <div className="tf-bkf-team" style={{ '--tf-bkf-cols': staff.length, '--tf-bkf-hours': to - from } as React.CSSProperties}>
         <div className="tf-bkf-team__head">
           <span />
-          {TEAM.map((name) => <span key={name} className="tf-bkf-team__who"><Avatar name={name} size={20} />{first(name)}{isOff(state, name, day) && <span className="tf-bkf__muted"> · off</span>}</span>)}
+          {staff.map((name) => { const n = onDay.filter((m) => m.host === name).length; return <span key={name} className="tf-bkf-team__who"><Avatar name={name} size={28} /><span className="tf-bkf-team__whotext"><strong>{name}</strong><span className="tf-bkf__muted tf-num">{isOff(state, name, day) ? 'Away' : `${plural(n, 'booking')}`}</span></span></span>; })}
         </div>
         <div className="tf-bkf-team__scroll">
         <div className="tf-bkf-team__body">
           <div className="tf-bkf-team__gutter" aria-hidden="true">
             {Array.from({ length: to - from }, (_, n) => <span key={n} style={{ top: pct((from + n) * 60) }}>{formatClock((from + n) * 60).replace(":00", "")}</span>)}
           </div>
-          {TEAM.map((name) => {
+          {staff.map((name, colIndex) => {
             const off = isOff(state, name, day);
+            // Their working hours: gaps between ranges are breaks; before and after is time they don't work.
+            const h = hoursOn(state, name, day).hours;
+            const ranges = h.on ? [...h.ranges].sort((a, b) => a.start - b.start) : [];
+            const breaks = ranges.slice(1).map((r, n) => ({ start: ranges[n]?.end ?? r.start, end: r.start })).filter((b) => b.end > b.start);
+            const closed = off ? [] : ranges.length === 0 ? [{ start: from * 60, end: to * 60 }] : [{ start: from * 60, end: Math.max(from * 60, ranges[0]?.start ?? from * 60) }, { start: Math.min(to * 60, ranges[ranges.length - 1]?.end ?? to * 60), end: to * 60 }].filter((c) => c.end > c.start);
             const meetings = state.meetings.filter((m) => m.host === name && m.status !== 'cancelled' && m.start.toDateString() === day.toDateString());
             const busy = busyOn(state, name, day);
             const sel = drag?.member === name ? { start: Math.min(drag.a, drag.b), end: Math.max(drag.a, drag.b) + 15 } : undefined;
@@ -349,15 +362,18 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
                 }}>
                 {Array.from({ length: to - from }, (_, n) => <span key={n} className="tf-bkf-team__line" style={{ top: pct((from + n) * 60) }} aria-hidden="true" />)}
                 {off && <span className="tf-bkf-team__off" style={{ top: 0, height: '100%' }}>{off.note || 'Time off'}</span>}
+                {closed.map((c) => <span key={`c${c.start}`} className="tf-bkf-team__closed" style={{ top: pct(c.start), height: len(c.start, c.end) }} aria-hidden="true">{c.end - c.start >= 60 ? 'Not working' : ''}</span>)}
+                {breaks.map((b) => <span key={`b${b.start}`} className="tf-bkf-team__break" style={{ top: pct(b.start), height: len(b.start, b.end) }} aria-hidden="true">Break</span>)}
+                {isToday && nowAt >= from * 60 && nowAt <= to * 60 && <span className="tf-bkf-team__now" style={{ top: pct(nowAt) }} aria-hidden="true">{colIndex === 0 && <span className="tf-bkf-team__nowpill tf-num">{formatClock(nowAt)}</span>}</span>}
                 {busy.map((b) => <span key={b.id} className={cx('tf-bkf-team__busy', b.kind !== 'calendar' && 'tf-bkf-team__busy--own')} style={{ top: pct(b.start), height: len(b.start, b.end) }}>{b.source.split(' · ')[0]}</span>)}
-                {meetings.map((m) => (
-                  <button key={m.id} type="button" className={cx('tf-bkf-team__event', m.status === 'pending' && 'is-pending')} style={{ top: pct(minutesOf(m.start)), height: len(minutesOf(m.start), minutesOf(m.end)) }}
-                    onClick={() => onOpen(m.id)} aria-label={`${m.title} with ${m.invitee.name}, ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}`}>
-                    {m.end.getTime() - m.start.getTime() < 60 * 60_000
-                      ? <span className="tf-bkf-team__event-one"><LogoMark size={12} className="tf-bkf-team__mark" /><span className="tf-bkf-team__event-title">{m.title}</span> · <span className="tf-num">{formatClock(minutesOf(m.start))}</span></span>
-                      : <><span className="tf-bkf-team__event-title"><LogoMark size={12} className="tf-bkf-team__mark" />{m.title}</span><span className="tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span></>}
+                {meetings.map((m) => { const st = standing(m); const mins = (m.end.getTime() - m.start.getTime()) / 60_000; return (
+                  <button key={m.id} type="button" className={cx('tf-bkf-team__event', m.status === 'pending' && 'is-pending')} data-standing={st.key} style={{ top: pct(minutesOf(m.start)), height: len(minutesOf(m.start), minutesOf(m.end)) }}
+                    onClick={() => onOpen(m.id)} aria-label={`${m.invitee.name}, ${m.title}, ${formatClockRange(minutesOf(m.start), minutesOf(m.end))}, ${st.label}`}>
+                    <span className="tf-bkf-team__evtop"><span className="tf-bkf-team__event-title">{m.invitee.name}</span>{mins >= 45 && <span className="tf-bkf-team__chip">{st.label}</span>}</span>
+                    <span className="tf-num tf-bkf-team__evtime">{formatClock(minutesOf(m.start))} › {formatClock(minutesOf(m.end))}</span>
+                    {mins >= 60 && <span className="tf-bkf-team__svc">{m.title}</span>}
                   </button>
-                ))}
+                ); })}
                 {sel && <span className="tf-bkf-team__sel" style={{ top: pct(sel.start), height: len(sel.start, sel.end) }} aria-hidden="true" />}
                 {!sel && kb?.member === name && <span className="tf-bkf-team__sel" style={{ top: pct(kb.at), height: len(kb.at, kb.at + kb.len) }} aria-hidden="true" />}
                 {!sel && held?.member === name && held.day.toDateString() === day.toDateString() && <span ref={heldRef} className="tf-bkf-team__sel" style={{ top: pct(held.start), height: len(held.start, held.end) }} aria-hidden="true" />}

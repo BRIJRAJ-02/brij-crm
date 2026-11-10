@@ -29,7 +29,8 @@ export interface PagesTabProps {
   readonly onToggle: (id: string, on: boolean) => void;
   readonly onShare: (p: BookingPage, how: ShareHow) => void;
   readonly onMore: (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => void;
-  readonly onCreate: () => void;
+  /** New page: a service for a business, otherwise a meeting page. */
+  readonly onCreate: (kind?: 'service' | 'meeting') => void;
   /** A business: saves its page, and opens it as a guest. */
   readonly dispatch?: (a: BookingsAction) => void;
   readonly onSeePage?: () => void;
@@ -53,7 +54,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
   if (state.business && dispatch && onSeePage) return <BusinessPages state={state} dispatch={dispatch} fresh={fresh} onOpen={onOpen} onToggle={onToggle} onShare={onShare} onMore={onMore} onCreate={onCreate} onSeePage={onSeePage} onSeeMenu={onSeeMenu} onEditMenu={onEditMenu} />;
   if (state.pages.length === 0) {
     return <EmptyState icon={<Link2 size={20} strokeWidth={1.75} />} title="No booking pages yet" description="A booking page lets people pick a time with you. It takes a minute."
-      action={<Button variant="primary" icon={<Plus {...i14} />} onPress={onCreate}>Create booking page</Button>} />;
+      action={<Button variant="primary" icon={<Plus {...i14} />} onPress={() => onCreate()}>Create booking page</Button>} />;
   }
   const pages = state.pages.filter((p) => (scope === 'mine' ? p.owner === HOST || p.hosts.includes(HOST) : p.owner !== HOST || p.hosts.length > 1));
   return (
@@ -73,7 +74,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
               </MenuSection>
             </Menu>
           </MenuTrigger>
-          <Button variant="primary" icon={<Plus {...i14} />} onPress={onCreate}>New page</Button>
+          <Button variant="primary" icon={<Plus {...i14} />} onPress={() => onCreate()}>New page</Button>
         </span>} />
       {pages.length === 0 ? <p className="tf-bkf__muted">No team pages yet. Make one from a page's Who section.</p> : (
         <ul className="tf-bkf__pages" aria-label="Booking pages">

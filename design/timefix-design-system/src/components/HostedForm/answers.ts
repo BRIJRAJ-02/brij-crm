@@ -1,7 +1,7 @@
 import type { CalendarDate } from '@internationalized/date';
 import {
   TextAlignStart, ArrowUpDown, AtSign, CalendarCheck, CalendarDays, SquareChevronDown, CircleDot, MapPin, Paperclip, PenLine,
-  Phone, SquareCheck, Star, Type, type LucideIcon,
+  Phone, SquareCheck, Star, Type, Globe, Hash, SquareCheckBig, ToggleLeft, Flag, Clock, CalendarClock, Gauge, EyeOff, ShieldCheck, TextQuote, type LucideIcon,
 } from 'lucide-react';
 import { PHONE_COUNTRIES, phoneToString, type PhoneValue } from '../PhoneField/PhoneField.tsx';
 import { formatClockRange } from '../WeekCalendar/clock.ts';
@@ -9,7 +9,8 @@ import { formatClockRange } from '../WeekCalendar/clock.ts';
 /** Every answer type a Timefix form can ask. */
 export type QuestionKind =
   | 'short' | 'long' | 'email' | 'phone' | 'choice' | 'multi' | 'dropdown' | 'rating'
-  | 'date' | 'file' | 'address' | 'ranking' | 'signature' | 'booking';
+  | 'date' | 'file' | 'address' | 'ranking' | 'signature' | 'booking'
+  | 'url' | 'number' | 'checkbox' | 'yesno' | 'country' | 'time' | 'datetime' | 'scale' | 'hidden' | 'consent' | 'statement';
 
 /** The name and icon of each answer type, shared by the hosted form, the builder's list and the type picker. */
 export const QUESTION_KINDS: Readonly<Record<QuestionKind, { readonly label: string; readonly icon: LucideIcon; readonly hint: string }>> = {
@@ -27,7 +28,31 @@ export const QUESTION_KINDS: Readonly<Record<QuestionKind, { readonly label: str
   ranking: { label: 'Ranking', icon: ArrowUpDown, hint: 'Drag into order' },
   signature: { label: 'Signature', icon: PenLine, hint: 'Draw or type' },
   booking: { label: 'Book a time', icon: CalendarCheck, hint: 'A meeting slot' },
+  url: { label: 'Website', icon: Globe, hint: 'A link, checked' },
+  number: { label: 'Number', icon: Hash, hint: 'With a lowest and highest' },
+  checkbox: { label: 'Checkbox', icon: SquareCheckBig, hint: 'One tick box' },
+  yesno: { label: 'Yes or no', icon: ToggleLeft, hint: 'Two big buttons' },
+  country: { label: 'Country', icon: Flag, hint: 'Searchable list' },
+  time: { label: 'Time', icon: Clock, hint: 'Hours and minutes' },
+  datetime: { label: 'Date and time', icon: CalendarClock, hint: 'A day and a time' },
+  scale: { label: 'Scale', icon: Gauge, hint: '0 to 10, with end words' },
+  hidden: { label: 'Hidden field', icon: EyeOff, hint: 'Filled from the link' },
+  consent: { label: 'Consent', icon: ShieldCheck, hint: 'Terms or marketing' },
+  statement: { label: 'Statement', icon: TextQuote, hint: 'Text, no answer' },
 };
+
+/** The type picker's sections, in the order people look for them. */
+export const QUESTION_GROUPS: ReadonlyArray<{ readonly title: string; readonly kinds: ReadonlyArray<QuestionKind> }> = [
+  { title: 'Text', kinds: ['short', 'long', 'email', 'phone', 'url', 'number', 'address'] },
+  { title: 'Choices', kinds: ['choice', 'multi', 'yesno', 'dropdown', 'country', 'checkbox', 'ranking'] },
+  { title: 'Scores', kinds: ['rating', 'scale'] },
+  { title: 'Dates and times', kinds: ['date', 'time', 'datetime', 'booking'] },
+  { title: 'Files and agreement', kinds: ['file', 'signature', 'consent'] },
+  { title: 'Layout and data', kinds: ['statement', 'hidden'] },
+];
+
+/** Countries a Country question offers, nearest markets first. */
+export const COUNTRIES: ReadonlyArray<string> = ['India', 'United Arab Emirates', 'United Kingdom', 'United States', 'Singapore', 'Australia', 'Canada', 'Germany', 'France', 'Netherlands', 'Saudi Arabia', 'Qatar', 'Sri Lanka', 'Nepal', 'Bangladesh', 'Japan', 'Spain', 'Italy', 'Ireland', 'New Zealand', 'South Africa', 'Kenya', 'Brazil', 'Mexico'];
 
 /** One question of a form. `options` feeds choice, multi, dropdown and ranking. */
 export interface FormQuestion {
@@ -38,6 +63,14 @@ export interface FormQuestion {
   readonly required?: boolean;
   readonly placeholder?: string;
   readonly options?: ReadonlyArray<string>;
+  /** Number and Scale: the lowest and highest allowed (Scale defaults to 0 to 10). */
+  readonly min?: number; readonly max?: number;
+  /** Scale: the words under each end ("Not likely", "Very likely"). */
+  readonly low?: string; readonly high?: string;
+  /** Hidden: the value sent when the link doesn't carry one. Checkbox and Consent: the words beside the box. */
+  readonly defaultValue?: string;
+  /** Consent: terms (required to go on) or marketing (optional). */
+  readonly consentKind?: 'terms' | 'marketing';
 }
 
 /** A postal address, each part as typed. */
@@ -71,6 +104,7 @@ export const isBooking = (v: AnswerValue | undefined): v is BookingAnswer => typ
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function isEmpty(q: FormQuestion, v: AnswerValue | undefined): boolean {
+  if (q.kind === 'statement' || q.kind === 'hidden') return false;
   if (v === undefined) return q.kind !== 'ranking';
   if (isText(v)) return v.trim() === '';
   if (isPhone(v)) return v.national === '';
@@ -83,7 +117,9 @@ function isEmpty(q: FormQuestion, v: AnswerValue | undefined): boolean {
 export function checkAnswer(q: FormQuestion, v: AnswerValue | undefined): string | undefined {
   if (isEmpty(q, v)) {
     if (!q.required) return undefined;
-    if (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating') return 'Pick one to go on.';
+    if (q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating' || q.kind === 'yesno' || q.kind === 'scale' || q.kind === 'country') return 'Pick one to go on.';
+    if (q.kind === 'checkbox' || q.kind === 'consent') return 'Tick the box to go on.';
+    if (q.kind === 'datetime') return 'Pick a day and a time to go on.';
     if (q.kind === 'multi') return 'Pick at least one to go on.';
     if (q.kind === 'booking') return 'Pick a time to go on.';
     if (q.kind === 'signature') return 'Sign to go on.';
@@ -94,9 +130,18 @@ export function checkAnswer(q: FormQuestion, v: AnswerValue | undefined): string
   if (q.kind === 'phone' && isPhone(v) && v.national.length < 6) return 'That number looks short.';
   if (q.kind === 'address' && isAddress(v) && (v.street.trim() === '' || v.city.trim() === '')) return 'Add the street and the city.';
   if (q.kind === 'file' && isFiles(v) && v.some((f) => f.progress !== undefined)) return 'Wait for the upload to finish.';
+  if (q.kind === 'url' && isText(v) && !/^(https?:\/\/)?[^\s/.]+(\.[^\s/.]+)+(\/\S*)?$/i.test(v.trim())) return 'That link looks incomplete, like example.com.';
+  if (q.kind === 'number' && isText(v)) {
+    const n = Number(v.replace(/,/g, ''));
+    if (!Number.isFinite(n)) return 'Type a number, like 12 or 3.5.';
+    if (q.min !== undefined && n < q.min) return `The lowest is ${q.min}.`;
+    if (q.max !== undefined && n > q.max) return `The highest is ${q.max}.`;
+  }
+  if (q.kind === 'datetime' && isText(v) && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return 'Pick both a day and a time.';
   return undefined;
 }
 
+const timeLabel = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, h ?? 0, m ?? 0)); };
 const dateLabel = (iso: string) => new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00`));
 
 /** An answer read back as one line for the sent answers and the builder's results. */
@@ -105,6 +150,11 @@ export function answerText(q: FormQuestion, v: AnswerValue | undefined, booking?
   if (v === undefined) return '';
   if (q.kind === 'signature' && isText(v)) return v.startsWith('data:') ? 'Signed' : v ? `Signed as ${v}` : '';
   if (q.kind === 'rating' && typeof v === 'number') return `${v} of 5`;
+  if (q.kind === 'scale' && typeof v === 'number') return `${v} of ${q.max ?? 10}`;
+  if ((q.kind === 'checkbox' || q.kind === 'consent') && isText(v)) return v ? 'Yes' : '';
+  if (q.kind === 'time' && isText(v)) return v ? timeLabel(v) : '';
+  if (q.kind === 'datetime' && isText(v)) return v.includes('T') ? `${dateLabel(v.slice(0, 10))}, ${timeLabel(v.slice(11, 16))}` : '';
+  if (q.kind === 'statement') return '';
   if (q.kind === 'date' && isText(v)) return v ? dateLabel(v) : '';
   if (isText(v)) return v.trim();
   if (typeof v === 'number') return String(v);

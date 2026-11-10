@@ -119,6 +119,8 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const [week, setWeek] = useState(0);
   const [focusHour, setFocusHour] = useState<number>();
   const [creating, setCreating] = useState(false);
+  /** A business's New service makes a service; everything else a meeting page. */
+  const [createKind, setCreateKind] = useState<BookingPage['kind']>();
   const [editor, setEditor] = useState<{ readonly id: string; readonly draft: BookingPage; readonly section?: EditorSection }>();
   const [guest, setGuest] = useState<{ readonly scenario: GuestScenario; readonly pageId: string; readonly meetingId?: string; readonly table?: string; readonly prefill?: { readonly name: string; readonly email: string } }>();
   const [meetingId, setMeetingId] = useState<string>();
@@ -259,7 +261,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       type: 'meeting/add',
       meeting: {
         id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.kind === 'table' ? `Table for ${r.party ?? 2}` : p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: tables ? tableText : placeLabel(p, r.place),
-        party: p.kind === 'table' ? r.party ?? 2 : undefined, tables, phone: r.phone, occasion: r.occasion, area: r.area,
+        party: p.kind === 'table' ? r.party ?? 2 : undefined, tables, phone: r.phone, occasion: r.occasion, area: r.area, source: p.kind === 'table' ? 'online' : undefined,
         status: p.confirmFirst ? 'pending' : 'confirmed', notes: p.kind === 'table' ? r.notes : '', answers: r.notes && p.kind !== 'table' ? [{ question: 'Anything to share before the call?', answer: r.notes }] : [], guestZone: r.timeZone,
         record: p.addToPeople ? { id: nextId('r'), name, kind: 'person', sub: r.email } : undefined, activity: [{ id: nextId('a'), text: `Booked by ${name}`, at: new Date() }],
       },
@@ -305,9 +307,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   };
   /* Meetings */
   const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) cancelFromDrawer(x); };
-  const cancelFromDrawer = (m: BookedMeeting, inline = false) => {
+  const cancelFromDrawer = (m: BookedMeeting, reason?: string, note?: string, inline = false) => {
     setMeetingId(undefined);
-    update({ ...m, status: 'cancelled' }, `Cancelled by ${HOST}`);
+    update({ ...m, status: 'cancelled', cancelledBy: 'host', cancelReason: reason }, `Cancelled by ${HOST}${reason ? `: ${reason}` : ''}${note ? ` · told them “${note}”` : ''}`);
     undone.current.delete(m.id); before.current.set(m.id, m);
     toast(inline ? { message: 'Cancelled' } : { message: 'Cancelled', action: { label: 'Undo', onAction: () => { undone.current.add(m.id); const now = meetingById(m.id); update(now ? { ...now, status: m.status } : m); } } });
     window.setTimeout(() => { if (!undone.current.has(m.id)) toast({ message: 'Cancelled · Guest emailed' }); }, ACTION_TOAST_TIMEOUT_MS);
@@ -489,7 +491,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     ) : guest ? (
       <GuestMode play={guest} state={guestState} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
         onWaitlist={(w) => dispatch({ type: 'waitlist/set', waitlist: [...(state.waitlist ?? []), { id: nextId('w'), name: w.name, phone: w.phone, party: w.party, day: w.day, wanted: w.wanted, added: new Date(), online: true }] })}
-        onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled' }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
+        onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled', cancelledBy: 'guest', cancelReason: reason || undefined }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
         onGuestMove={(m, start) => {
           const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime()));
           // A table booking needs a table that fits then; a meeting needs someone free. Neither is forced through.
@@ -531,7 +533,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
           <TopBar title={<Breadcrumbs size="title" items={[{ id: tab, label: (() => { const x = SECTIONS.find((y) => y.id === tab); return x ? labelOf(x) : 'Bookings'; })(), icon: SECTIONS.find((x) => x.id === tab)?.icon }]} />}
             actions={<>{demoMenu}{appActions ?? bell}</>} />
           {brokenCal && (
-            <div className="tf-bkf__banner">
+            <div className="tf-bkf__topalert">
               <Callout tone="warning" action={{ label: 'Reconnect', onPress: () => { dispatch({ type: 'calendar/set', calendars: state.calendars.map((c) => (c.id === brokenCal.id ? { ...c, status: 'connected' } : c)) }); toast({ message: `${brokenCal.provider} calendar reconnected`, tone: 'success' }); } }}>
                 Your {brokenCal.provider} calendar stopped syncing. Busy times on it aren’t checked, so guests could book over them.
               </Callout>
@@ -568,7 +570,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
               {tab === 'pages' && (<div className="tf-bkf__panel">
                 <PagesTab state={state} fresh={freshPage} leaving={leaving} onOpen={(id) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p) }); }}
                   onFix={(id, section) => { const p = pageById(id); if (p) setEditor({ id, draft: draftOf(p), section: section ?? 'who' }); }}
-                  onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} dispatch={dispatch} onSeePage={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'profile', pageId: p.id }); }}
+                  onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={(k) => { setCreateKind(k === 'service' ? 'service' : undefined); setCreating(true); }} dispatch={dispatch} onSeePage={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'profile', pageId: p.id }); }}
                   onSeeMenu={() => { const p = state.pages[0]; if (p) setGuest({ scenario: 'menu', pageId: p.id }); }} onEditMenu={() => setTab('menu')} />
               </div>)}
               {tab === 'menu' && state.menu && (<div className="tf-bkf__panel">
@@ -585,7 +587,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         </>
       ))}
 
-      <CreateSheet isOpen={creating} state={state}
+      <CreateSheet isOpen={creating} state={state} kind={createKind}
         onCreate={(page) => dispatch({ type: 'page/upsert', page })}
         onConnect={() => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'calendar/set', calendars: [...state.calendars, { id: nextId('cal'), provider: 'Google', email: 'priya@northwind.com', calendars: 2, status: 'connected', checkConflicts: true }] }); toast({ message: 'Google Calendar connected', tone: 'success' }); resolve(); }, 900); })}
         onClose={(created) => { setCreating(false); if (created) { leaveEditor(); setTab('pages'); flash(setFreshPage, created); } }}

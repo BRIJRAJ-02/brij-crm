@@ -5,6 +5,7 @@ import { type Key, Radio as AriaRadio, RadioGroup as AriaRadioGroup } from 'reac
 import { Clock, Link2, MoreHorizontal, UserRound, UserX, Users, Video, X } from 'lucide-react';
 import { Drawer } from '../Drawer/Drawer.tsx';
 import { Dialog } from '../Dialog/Dialog.tsx';
+import { Select } from '../Select/Select.tsx';
 import { PlaceIcon, MeetingStatusTag } from '../MeetingList/MeetingList.tsx';
 import { PersonLine } from '../Avatar/Avatar.tsx';
 import { Tag } from '../Tag/Tag.tsx';
@@ -28,7 +29,8 @@ export interface MeetingDrawerProps {
   readonly page: BookingPage | undefined;
   readonly onClose: () => void;
   readonly onUpdate: (m: BookedMeeting) => void;
-  readonly onCancel: (m: BookedMeeting) => void;
+  /** Cancel, after asking: the reason is kept on the meeting and the note goes to the guest. */
+  readonly onCancel: (m: BookedMeeting, reason?: string, note?: string) => void;
   readonly onReschedule: (m: BookedMeeting) => void;
   readonly onReassign: (m: BookedMeeting) => void;
   readonly onNoShow: (m: BookedMeeting) => void;
@@ -40,6 +42,9 @@ export interface MeetingDrawerProps {
 /** The meeting: time (both zones when they differ), guest, place with Join, answers, notes, the linked record and activity. */
 export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onReschedule, onReassign, onNoShow, onJoin, onConfirm, onDecline }: MeetingDrawerProps) {
   const { toast } = useToast();
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState('I can’t make it');
+  const [note, setNote] = useState('');
   const [last, setLast] = useState(meeting);
   if (meeting && meeting !== last) setLast(meeting);
   const m = meeting ?? last;
@@ -73,7 +78,7 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         <Button variant="ghost" onPress={() => onDecline(m)}>Decline</Button>
       </span> : open && !past ? <span className="tf-bkf__row">
         <Button variant="secondary" onPress={() => onReschedule(m)}>Reschedule</Button>
-        <Button variant="ghost" onPress={() => onCancel(m)}>Cancel meeting</Button>
+        <Button variant="ghost" onPress={() => { setReason('I can’t make it'); setNote(''); setAsking(true); }}>Cancel meeting</Button>
       </span> : undefined}>
       <dl className="tf-bkf__facts">
         <dt><Clock {...i16} aria-label="When" /></dt>
@@ -123,7 +128,14 @@ export function MeetingDrawer({ meeting, page, onClose, onUpdate, onCancel, onRe
         </ul>
       </section>
       {page && <p className="tf-bkf__muted">Booked through {page.name}.</p>}
-    </Drawer>
+    {asking && <Dialog isOpen onOpenChange={(o) => { if (!o) setAsking(false); }} title={`Cancel ${m.title}?`} description={`${m.invitee.name} gets an email that it’s off, with a link to book again.`}
+        actions={<><Button variant="ghost" slot="close">Keep it</Button><Button variant="danger" onPress={() => { setAsking(false); onCancel(m, reason, note.trim() || undefined); }}>Cancel meeting</Button></>}>
+        <div className="tf-bkf__stack">
+          <Select label="Why" value={reason} onChange={(v) => { if (v) setReason(v); }} items={['I can’t make it', 'They asked to cancel', 'Booked twice', 'Not a fit', 'Something else'].map((x) => ({ id: x, label: x }))} description="Kept on the meeting; the guest doesn’t see it." />
+          <TextArea label="A note to them" aside="Optional" rows={2} value={note} onChange={setNote} placeholder="Sorry, something came up. Grab another time?" />
+        </div>
+      </Dialog>}
+      </Drawer>
   );
 }
 

@@ -203,3 +203,33 @@
   .tf-hform__check path { animation: none; stroke-dashoffset: 0; }
 }
 .tf-hform__lede-one { display: block; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }
+
+/* Checkbox and Consent: one card with a square tick that fills when ticked. */
+.tf-hq__tick-card[data-invalid] { border-color: var(--danger); }
+.tf-hq__box-tick { display: inline-grid; place-items: center; flex: none; width: var(--size-control-sm); height: var(--size-control-sm); border: var(--border-width-hairline) solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: transparent; transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.tf-hq__tick-card[data-selected] .tf-hq__box-tick { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* Date and time side by side; Time as a filled field the same height as the others. */
+.tf-hq__pair { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-8); }
+.tf-hq__timebox { min-width: 0; }
+/* Scale: equal buttons in one row, the end words under the first and last. */
+.tf-hq__scale { display: flex; flex-direction: column; gap: var(--space-8); }
+.tf-hq__scale-row { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: var(--space-4); outline: none; }
+.tf-hq__scale-pick { display: grid; place-items: center; min-height: var(--size-control-lg); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); font: 500 15px/20px var(--font-sans); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out); }
+.tf-hq__scale-pick[data-hovered] { background: var(--surface-hover); border-color: var(--border-strong); }
+.tf-hq__scale-pick[data-selected] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tf-hq__scale-pick[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
+.tf-hq__scale-row[data-invalid] .tf-hq__scale-pick { border-color: var(--danger); }
+.tf-hq__scale-ends { display: flex; justify-content: space-between; gap: var(--space-12); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
+@media (max-width: 30rem) { .tf-hq__scale-pick { min-height: var(--size-control); font-size: 14px; } .tf-hq__pair { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .tf-hq__box-tick, .tf-hq__scale-pick { transition: none; } }
+
+/* Who the form is from (owner's 11 Nov reference): a cover band across the card's top, the logo overlapping it, then the name. */
+.tf-hform__brand { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; column-gap: var(--space-12); margin: calc(var(--space-24) * -1) calc(var(--space-32) * -1) var(--space-20); }
+.tf-hform__cover { grid-column: 1 / -1; height: calc(var(--size-control-lg) * 2); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--surface-subtle);
+  background-image: repeating-radial-gradient(circle at 88% 60%, transparent 0 var(--space-12), var(--border) var(--space-12) var(--space-16)); }
+.tf-hform__logo { grid-row: 2; width: calc(var(--size-control-lg) * 1.4); height: calc(var(--size-control-lg) * 1.4); margin: calc(var(--size-control-lg) * -0.7) 0 0 var(--space-32); border-radius: var(--radius-lg); object-fit: cover; box-shadow: 0 0 0 calc(var(--border-width-focus) * 2) var(--surface); background: var(--surface); }
+.tf-hform__logo--initial { display: grid; place-items: center; background: var(--text); color: var(--surface); font: 600 22px/1 var(--font-sans); }
+.tf-hform__from { grid-row: 2; display: flex; flex-direction: column; min-width: 0; padding-right: var(--space-32); }
+.tf-hform__from strong { overflow: hidden; color: var(--text); font: 600 15px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-hform__from span { overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+@container tf-hform (max-width: 34rem) { .tf-hform__brand { margin: calc(var(--space-16) * -1) calc(var(--space-20) * -1) var(--space-16); } .tf-hform__logo { margin-left: var(--space-20); } .tf-hform__from { padding-right: var(--space-20); } }

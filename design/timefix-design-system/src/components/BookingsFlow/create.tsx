@@ -50,10 +50,12 @@ export interface CreateSheetProps {
   readonly onAfter: (page: BookingPage, what: 'guest' | 'website' | 'email' | 'linkpage') => void;
   /** The same connect as Availability's. */
   readonly onConnect: () => Promise<void>;
+  /** A business making a service, not a meeting page: the new page is a service. */
+  readonly kind?: BookingPage['kind'];
 }
 
 /** One short sheet: name, length, where and when. Then "Your page is live" slides in (08 page side-by-side). */
-export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConnect }: CreateSheetProps) {
+export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConnect, kind }: CreateSheetProps) {
   const [draft, setDraft] = useState<BookingPage>(() => newPage(state.pages));
   const [step, setStep] = useState<0 | 1>(0);
   const [custom, setCustom] = useState(false);
@@ -83,7 +85,7 @@ export function CreateSheet({ isOpen, state, onCreate, onClose, onAfter, onConne
   };
   const setLength = (n: number) => set({ durations: [n], ...(nameTouched ? {} : { name: `${n} min meeting`, ...(slugTouched ? {} : { slug: uniqueSlug(`${n}-min-meeting`, state.pages) }) }) });
   const canCreate = draft.name.trim() !== '' && draft.slug !== '' && !taken;
-  const create = () => { if (step === 0 && canCreate) { onCreate(draft); setStep(1); } };
+  const create = () => { if (step === 0 && canCreate) { onCreate(kind ? { ...draft, kind } : draft); setStep(1); } };
   const close = () => onClose(step === 1 ? draft.id : undefined);
   const keys = (e: KeyboardEvent<HTMLElement>) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (step === 0) create(); else close(); } };
   const hours = hoursFor(draft, state);

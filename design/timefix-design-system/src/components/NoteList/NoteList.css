@@ -3,6 +3,11 @@
 .tf-notes__title { margin: 0; font: 500 14px/20px var(--font-sans); display: inline-flex; align-items: center; gap: var(--space-6); }
 .tf-notes__count { font: 500 12px/16px var(--font-sans); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .tf-notes__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+/* A card never grows past its column: long titles and meta end in an ellipsis instead of spilling under the next card. */
+.tf-notes__grid > li, .tf-notes__grid > li > * { min-width: 0; }
+.tf-note-card { min-width: 0; }
+.tf-note-card__meta > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tf-note-card__meta > :first-child { flex: none; }
 .tf-notes__empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); padding: var(--space-24) var(--space-16); border: var(--border-width-hairline) dashed var(--border-strong); border-radius: var(--radius-lg); text-align: center; color: var(--text-secondary); font: 400 13px/20px var(--font-sans); }
 .tf-notes__empty strong { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-notes__empty svg { color: var(--text-tertiary); margin-bottom: var(--space-4); }

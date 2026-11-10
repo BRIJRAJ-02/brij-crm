@@ -24,7 +24,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { companyPairs, duplicatePairs } from './duplicates.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { Attribute, AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { BUILT_IN_ATTRIBUTES, STAGES, liveEntries, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
+import { BUILT_IN_ATTRIBUTES, STAGES, STAGE_ODDS, STALE_DAYS, daysInStage, liveEntries, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -60,8 +60,9 @@ export function objectDef(id: ObjectId, state: AppState): ObjectDef {
     id, one: 'deal', many: 'deals', icon: <CircleDollarSign {...i16} />,
     columns: [{ id: 'name', name: 'Deal', type: 'name', width: 230, isSortable: true }, { id: 'company', name: 'Company', type: 'text', width: 160, isReadOnly: true, isSortable: true },
       { id: 'stage', name: 'Stage', type: 'status', width: 140, isSortable: true, options: STAGES.map((x) => ({ id: x, label: x, hue: STAGE_LOOK[x].hue, status: STAGE_LOOK[x].status })) },
-      { id: 'amount', name: 'Amount (₹)', type: 'number', width: 140, isSortable: true }, { id: 'close', name: 'Close date', type: 'date', width: 130, isSortable: true, isReadOnly: true }, { id: 'owner', name: 'Owner', type: 'person', width: 150, isSortable: true }],
-    rows: (s) => s.deals.map((d) => ({ id: d.id, kind: 'company', values: { name: d.name, company: coName(d.companyId), stage: d.stage, amount: d.amount, close: ymd(d.close), owner: d.owner } })),
+      { id: 'amount', name: 'Amount (₹)', type: 'number', width: 140, isSortable: true }, { id: 'weighted', name: 'Weighted (₹)', type: 'number', width: 140, isSortable: true, isReadOnly: true },
+      { id: 'inStage', name: 'Days in stage', type: 'number', width: 130, isSortable: true, isReadOnly: true }, { id: 'close', name: 'Close date', type: 'date', width: 130, isSortable: true, isReadOnly: true }, { id: 'owner', name: 'Owner', type: 'person', width: 150, isSortable: true }],
+    rows: (s) => s.deals.map((d) => ({ id: d.id, kind: 'company', values: { name: d.name, company: coName(d.companyId), stage: d.stage, amount: d.amount, weighted: Math.round((d.amount * STAGE_ODDS[d.stage]) / 100), inStage: daysInStage(d), close: ymd(d.close), owner: d.owner } })),
   };
 }
 
@@ -199,14 +200,14 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   const groups: ReadonlyArray<{ readonly id: string; readonly title: string; readonly status: BoardColumn['status']; readonly hue: BoardColumn['hue']; readonly field: string }> = byOwner
     ? state.members.map((m) => ({ id: m.name, title: m.name, status: 'draft' as const, hue: 'gray' as const, field: 'owner' }))
     : STAGES.map((stage) => ({ id: stage, title: stage, status: STAGE_LOOK[stage].status, hue: STAGE_LOOK[stage].hue, field: 'stage' }));
-  const board: ReadonlyArray<BoardColumn> = groups.map((g) => { const inCol = sorted.filter((r) => r.values[g.field] === g.id); const sum = inCol.reduce((n, r) => n + Number(r.values.amount ?? 0), 0); return { id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id), meta: sum ? inr(sum) : undefined,
-    cards: inCol.map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }; });
+  const board: ReadonlyArray<BoardColumn> = groups.map((g) => { const inCol = sorted.filter((r) => r.values[g.field] === g.id); const sum = inCol.reduce((n, r) => n + Number(r.values.amount ?? 0), 0); const wsum = inCol.reduce((n, r) => n + Number(r.values.weighted ?? 0), 0); return { id: g.id, title: g.title, status: g.status, hue: g.hue, isCollapsed: folded.has(g.id), meta: sum ? (wsum && wsum !== sum ? `${inr(sum)} · ${inr(wsum)} weighted` : inr(sum)) : undefined,
+    cards: inCol.map((r) => { const d = state.deals.find((x) => x.id === r.id); const open = d && d.stage !== 'Won' && d.stage !== 'Lost'; const days = d ? daysInStage(d) : 0; return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : '', open ? `${days}d in ${d.stage}` : ''].filter(Boolean).join(' · '), tags: open && days > STALE_DAYS ? [{ label: `Stale · no move in ${days}d`, hue: 'orange' as const }] : undefined, people: d ? [d.owner] : [], date: d?.close }; }) }; });
   const peekIndex = peek ? sorted.findIndex((r) => r.id === peek) : -1;
   const peekGone = peek !== undefined && !all.some((r) => r.id === peek);
   const pairs = pairCount;
   const shownRows = sorted.map((r) => (fresh.has(r.id) ? { ...r, isNew: true } : r));
   const total = object === 'deals' ? sorted.reduce((n, r) => n + Number(r.values.amount ?? 0), 0) : 0;
-  const summary = `${sorted.length === all.length ? `${sorted.length}` : `${sorted.length} of ${all.length}`} ${sorted.length === 1 ? def.one : def.many}${object === 'deals' ? ` · ${inr(total)} total · ${inr(sorted.length ? Math.round(total / sorted.length) : 0)} average` : ''}`;
+  const summary = `${sorted.length === all.length ? `${sorted.length}` : `${sorted.length} of ${all.length}`} ${sorted.length === 1 ? def.one : def.many}${object === 'deals' ? ` · ${inr(total)} total · ${inr(sorted.reduce((n, r) => n + Number(r.values.weighted ?? 0), 0))} weighted · ${inr(sorted.length ? Math.round(total / sorted.length) : 0)} average` : ''}`;
   const others = views.filter((v) => v.id !== view.id);
   /** After a bulk action the floating bar leaves; focus goes back to the table so keyboard use carries on. */
   const refocus = () => window.requestAnimationFrame(() => { if (document.activeElement === document.body) document.querySelector<HTMLElement>('.tf-rec__grid [role="grid"]')?.focus(); });
@@ -383,6 +384,7 @@ function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppSt
       {row({ id: 'amount', name: 'Amount', type: 'currency', currency: 'INR' }, d.amount, 'amount')}
       {row({ id: 'close', name: 'Close date', type: 'date' }, ymd(d.close), 'close')}
       {row(ownerAttr, { id: d.owner, name: d.owner }, 'owner')}
+      {d.stage !== 'Won' && d.stage !== 'Lost' && <p className="tf-rec__muted tf-num tf-rec__dealfacts">{STAGE_ODDS[d.stage]}% likely · {inr(Math.round((d.amount * STAGE_ODDS[d.stage]) / 100))} weighted · {daysInStage(d)} days in {d.stage}{daysInStage(d) > STALE_DAYS ? ', stale' : ''}</p>}
       <RecordSection title="Contact" count={contact ? 1 : 0}>{contact && <button type="button" className="tf-rec__rel" onClick={() => onOpen('people', contact.id)}><Avatar name={contact.name} size={20} />{contact.name}<span className="tf-rec__muted">{contact.title}</span></button>}</RecordSection>
     </div>
   );

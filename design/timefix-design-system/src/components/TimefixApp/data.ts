@@ -11,10 +11,17 @@ export type ObjectId = 'people' | 'companies' | 'deals';
 /** A deal's stage, in pipeline order. */
 export type Stage = 'Lead' | 'Qualified' | 'Proposal' | 'Won' | 'Lost';
 export const STAGES: ReadonlyArray<Stage> = ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost'];
+/** How likely a deal in each stage is to close, for weighted amounts and the forecast. */
+export const STAGE_ODDS: Readonly<Record<Stage, number>> = { Lead: 10, Qualified: 30, Proposal: 60, Won: 100, Lost: 0 };
+/** Days without a stage move before an open deal reads as stale. */
+export const STALE_DAYS = 21;
+/** Whole days a deal has sat in its stage. */
+export const daysInStage = (d: Deal, now = new Date()) => Math.max(0, Math.floor((now.getTime() - (d.stageAt ?? d.created).getTime()) / 86_400_000));
 
 export interface Company { readonly id: string; readonly name: string; readonly domain: string; readonly industry: string; readonly size: string; readonly city: string; readonly owner: string; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 export interface Person { readonly id: string; readonly name: string; readonly email: string; readonly phone?: string; readonly title: string; readonly companyId?: string; readonly owner: string; readonly tags: ReadonlyArray<string>; readonly lastContact?: Date; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
-export interface Deal { readonly id: string; readonly name: string; readonly companyId: string; readonly contactId?: string; readonly stage: Stage; readonly amount: number; readonly owner: string; readonly close: Date; readonly created: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
+export interface Deal { readonly id: string; readonly name: string; readonly companyId: string; readonly contactId?: string; readonly stage: Stage; readonly amount: number; readonly owner: string; readonly close: Date; readonly created: Date;
+  /** When it entered its stage, for days in stage and stale deals. */ readonly stageAt?: Date; /** Values of attributes owners added in Settings › Objects. */ readonly extra?: Readonly<Record<string, string>> }
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
@@ -45,11 +52,13 @@ export interface ListEntry { readonly id: string; readonly recordId: string; rea
 export interface CrmList { readonly id: string; readonly name: string; readonly object: ObjectId; /** Archived lists leave the sidebar; Settings › Lists brings them back. */ readonly archived?: boolean; readonly stages: ReadonlyArray<string>; readonly entries: ReadonlyArray<ListEntry>; readonly oncePerRecord: boolean }
 
 /** A form: its questions as you edit them, the live ones guests answer, where answers go and what happens after. */
-export interface FormResponse { readonly id: string; readonly at: Date; readonly answers: Readonly<Record<string, string>>; readonly spam?: boolean; readonly personId?: string }
+export interface FormResponse { readonly id: string; readonly at: Date; readonly answers: Readonly<Record<string, string>>; readonly spam?: boolean; readonly personId?: string;
+  /** The record it was filed as (a person, company, deal or an owner-made object's record). */ readonly record?: { readonly object: string; readonly id: string } }
 export interface AppForm {
   readonly id: string; readonly name: string; readonly slug: string; readonly status: 'draft' | 'live' | 'paused';
   readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page';
-  readonly saveTo: 'people' | 'none'; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking'; readonly message: string };
+  /** What each response becomes: 'people', 'companies', 'deals', an owner-made object's id, or 'none' (answers stay on the form). */
+  readonly saveTo: string; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking' | 'redirect'; readonly message: string; /** Redirect: where they go after sending. */ readonly url?: string };
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
   /** The published layout, name and after-send settings, so a change to any of them counts as an unpublished edit. */
   readonly liveConfig?: string;
@@ -59,6 +68,22 @@ export interface AppForm {
   readonly mapping?: Readonly<Record<string, string>>;
   /** "If <question> is <answer>, go to <question>" rules (one question at a time). */
   readonly logic?: ReadonlyArray<{ readonly id: string; readonly when: string; readonly is: string; readonly goto: string }>;
+  /** How a response finds the record it updates: 'email', 'phone', 'domain' or 'name'. A match is updated; otherwise a new one is added. */
+  readonly matchBy?: string;
+  /** People only: also open a deal for each new person, in this stage. */
+  readonly alsoDeal?: { readonly stage: string };
+  /** Tag the record with the form's name (on unless turned off). */
+  readonly tagWith?: boolean;
+  /** Also add the record to this list. */
+  readonly toList?: string;
+  /** Stops taking answers on this day (YYYY-MM-DD) or after this many, with the words visitors then see. */
+  readonly closesOn?: string; readonly maxResponses?: number; readonly closedMessage?: string;
+  /** Members emailed each response. */
+  readonly notify?: ReadonlyArray<string>;
+  /** An email to the person who answered, when a question gives their email. */
+  readonly confirmEmail?: { readonly subject: string; readonly line: string };
+  /** The last button's words. */
+  readonly submitLabel?: string;
 }
 
 /** An object's definition: its names and attributes. People, Companies and Deals come built in; owners add their own. */
@@ -164,6 +189,8 @@ export interface AppState {
   readonly notDupes: ReadonlyArray<string>;
   /** The published link page; until someone publishes, the starter page shows. */
   readonly linkPage?: LinkPageDraft;
+  /** The link page taken offline: kept as it is, but visitors see nothing until it's back. */
+  readonly linkOffline?: boolean;
   /** Link page changes not published yet: kept while you move around the app. */
   readonly linkDraft?: LinkPageDraft;
   /** Saved charts in Insights › Reports. */
@@ -204,6 +231,7 @@ export type AppAction =
   | { readonly type: 'form/remove'; readonly id: string }
   | { readonly type: 'form/insert'; readonly form: AppForm; readonly at: number }
   | { readonly type: 'link/publish'; readonly page: LinkPageDraft }
+  | { readonly type: 'link/offline'; readonly offline: boolean }
   | { readonly type: 'link/draft'; readonly page: LinkPageDraft | undefined }
   | { readonly type: 'report/set'; readonly report: Report }
   | { readonly type: 'report/remove'; readonly id: string }
@@ -251,10 +279,26 @@ export function appReducer(state: AppState, a: AppAction): AppState {
       return { ...state, ...kept, trash: [...binned, ...state.trash], history: [line(`${state.me} deleted ${binned.length === 1 ? binned[0]?.record.name ?? 'a record' : `${binned.length} ${a.object}`}`), ...state.history] };
     }
     case 'records/fields': {
-      const by = new Map(a.changes.map((c) => [c.id, c.patch]));
+      // A stage move stamps when it happened; every real change becomes a line on the record's timeline.
+      const list = a.object === 'people' ? state.people : a.object === 'companies' ? state.companies : state.deals;
+      const LABEL: Readonly<Record<string, string>> = { name: 'Name', title: 'Job title', email: 'Email', phone: 'Phone', stage: 'Stage', amount: 'Amount', owner: 'Owner', companyId: 'Company', close: 'Close date', industry: 'Industry', city: 'City', domain: 'Domain', size: 'Size' };
+      const show = (k: string, v: unknown) => (k === 'companyId' ? state.companies.find((c) => c.id === v)?.name ?? 'none' : k === 'amount' ? inr(Number(v) || 0) : v instanceof Date ? v.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : String(v ?? '') || 'empty');
+      const lines: Activity[] = [];
+      const changes = a.changes.map((c) => {
+        const was = list.find((x) => x.id === c.id) as Readonly<Record<string, unknown>> | undefined; if (!was) return c;
+        for (const [k, v] of Object.entries(c.patch)) {
+          if (k === 'tags' || k === 'stageAt') continue;
+          if (k === 'extra') { const ex = (v ?? {}) as Readonly<Record<string, string>>; const before = (was.extra ?? {}) as Readonly<Record<string, string>>; for (const [ek, ev] of Object.entries(ex)) { if (before[ek] === ev) continue; const name = state.objects.find((o) => o.id === a.object)?.attributes.find((x) => x.id === ek)?.name ?? ek; lines.push({ id: newId('a'), record: { object: a.object, id: c.id }, kind: 'changed', actor: state.me, text: ev ? `set ${name} to ${ev}` : `cleared ${name}`, at: new Date() }); } continue; }
+          if (!LABEL[k] || String(was[k] ?? '') === String(v ?? '')) continue;
+          lines.push({ id: newId('a'), record: { object: a.object, id: c.id }, kind: 'changed', actor: state.me, text: v === '' || v === undefined ? `cleared ${LABEL[k]}` : `changed ${LABEL[k]} to ${show(k, v)}`, at: new Date() });
+        }
+        return a.object === 'deals' && 'stage' in c.patch && c.patch.stage !== was.stage ? { ...c, patch: { ...c.patch, stageAt: new Date() } } : c;
+      });
+      const by = new Map(changes.map((c) => [c.id, c.patch]));
       // `extra` merges key by key, so an Undo of one custom field never touches the others.
       const apply = <T extends { readonly id: string }>(x: T): T => { const patch = by.get(x.id); if (!patch) return x; const ex = patch.extra as Readonly<Record<string, string>> | undefined; return { ...x, ...patch, ...(ex ? { extra: { ...((x as { readonly extra?: Readonly<Record<string, string>> }).extra ?? {}), ...ex } } : {}) }; };
-      return a.object === 'people' ? { ...state, people: state.people.map(apply) } : a.object === 'companies' ? { ...state, companies: state.companies.map(apply) } : { ...state, deals: state.deals.map(apply) };
+      const next = a.object === 'people' ? { ...state, people: state.people.map(apply) } : a.object === 'companies' ? { ...state, companies: state.companies.map(apply) } : { ...state, deals: state.deals.map(apply) };
+      return lines.length ? { ...next, activity: [...lines, ...next.activity] } : next;
     }
     case 'records/untrash': {
       const items = state.trash.filter((t) => a.ids.includes(t.record.id)); if (items.length === 0) return state;
@@ -291,7 +335,8 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
     case 'form/insert': return { ...state, forms: [...state.forms.slice(0, a.at), a.form, ...state.forms.slice(a.at)].filter((f, n, all) => all.findIndex((x) => x.id === f.id) === n) };
     case 'link/draft': return { ...state, linkDraft: a.page };
-    case 'link/publish': return { ...state, linkPage: a.page, linkDraft: undefined, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
+    case 'link/offline': return { ...state, linkOffline: a.offline, history: [line(`${state.me} took the link page ${a.offline ? 'offline' : 'back online'}`), ...state.history] };
+    case 'link/publish': return { ...state, linkPage: a.page, linkOffline: false, linkDraft: undefined, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
     case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
     case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
     case 'custom/set': { const list = state.customRecords[a.object] ?? []; return { ...state, customRecords: { ...state.customRecords, [a.object]: list.some((r) => r.id === a.record.id) ? list.map((r) => (r.id === a.record.id ? a.record : r)) : [a.record, ...list] } }; }
@@ -394,7 +439,7 @@ export function northwindCrm(now = new Date()): AppState {
     { ...p('p-liam2', 'Liam Ortiz', 'VP Ops', 'c-acme', 'Jo Mendes', [], 40, 3), email: 'l.ortiz@acme.com', phone: '+91 98200 11001' },
     { ...p('p-noor2', 'Noor H.', 'Chief Technology Officer', 'c-globex', 'Ava Chen', ['Technical'], undefined, 2), email: 'noor@globex.io' },
   ];
-  const d = (id: string, name: string, companyId: string, contactId: string, stage: Stage, amount: number, owner: string, closeIn: number, ago: number): Deal => ({ id, name, companyId, contactId, stage, amount, owner, close: dayAt(now, closeIn), created: dayAt(now, -ago) });
+  const d = (id: string, name: string, companyId: string, contactId: string, stage: Stage, amount: number, owner: string, closeIn: number, ago: number): Deal => ({ id, name, companyId, contactId, stage, amount, owner, close: dayAt(now, closeIn), created: dayAt(now, -ago), stageAt: dayAt(now, -Math.round(ago * 0.7)) });
   const deals: Deal[] = [
     d('d-acme', 'Acme rollout, 400 seats', 'c-acme', 'p-liam', 'Proposal', 1840000, 'Priya Raman', 12, 60),
     d('d-acme2', 'Acme support plan', 'c-acme', 'p-maria', 'Qualified', 420000, 'Priya Raman', 40, 20),

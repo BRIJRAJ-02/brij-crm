@@ -73,6 +73,15 @@
 .tf-you__h[data-tone='danger'] { color: var(--tag-red-text); }
 .tf-you__card { padding: var(--space-8) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); }
 .tf-you__open { align-self: flex-start; font-size: 13px; }
+/* Tasks › Completed: its own section at the bottom, open; the head folds it (transitions.dev 21 accordion). */
+.tf-you__fold { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-left: calc(var(--space-24) * -1); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.tf-you__fold[data-hovered] { color: var(--text-secondary); }
+.tf-you__fold[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); }
+.tf-you__foldchev { align-self: center; color: var(--text-tertiary); transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.tf-you__done[data-expanded] .tf-you__foldchev { transform: rotate(90deg); }
+.tf-you__donepanel { height: var(--disclosure-panel-height); overflow: clip; transition: height var(--duration-fast) var(--ease-smooth-out); }
+.tf-you__clear { display: flex; align-items: center; gap: var(--space-8); margin: 0; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+@media (prefers-reduced-motion: reduce) { .tf-you__foldchev, .tf-you__donepanel { transition: none; } }
 .tf-you--note > .tf-rec__link { align-self: flex-start; font: 500 13px/20px var(--font-sans); }
 .tf-list__title { display: inline-flex; align-items: baseline; gap: var(--space-8); margin-right: var(--space-8); }
 .tf-list__title { min-width: 0; }
@@ -90,7 +99,13 @@
 .tf-forms__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .tf-forms__name { width: calc(var(--size-menu) * 1.1); }
 .tf-forms__panel { display: flex; flex-direction: column; gap: var(--space-16); padding-top: var(--space-20); }
-.tf-forms__build { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-24); align-items: start; }
+.tf-forms__build { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--space-24); align-items: start; }
+/* The builder keeps the question's settings beside the list (never dropped below it), and only stacks when the page is narrow. */
+.tf-forms__build .tf-qbuilder { flex-wrap: nowrap; }
+.tf-forms__build .tf-qbuilder > :first-child { flex: 1 1 0; }
+.tf-forms__build .tf-qbuilder > :last-child { flex: 0 0 calc(var(--size-menu) + var(--space-48)); position: sticky; top: 0; }
+@container tf-app (max-width: 72rem) { .tf-forms__build { grid-template-columns: minmax(0, 1fr); } .tf-forms__preview { position: static; } }
+@container tf-app (max-width: 44rem) { .tf-forms__build .tf-qbuilder { flex-wrap: wrap; } .tf-forms__build .tf-qbuilder > :last-child { flex: 1 1 100%; position: static; } }
 .tf-forms__preview { position: sticky; top: 0; }
 .tf-forms__settings { display: flex; flex-direction: column; gap: var(--space-20); max-width: calc(var(--size-dialog) + var(--space-64)); }
 .tf-forms__link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); padding: var(--space-12) var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface-subtle); font: 500 15px/22px var(--font-sans); }
@@ -287,3 +302,17 @@
 .tf-set__brand[data-template='split'] .tf-set__brandside { align-items: flex-start; justify-content: center; padding: var(--space-20); background: var(--brand); color: var(--surface); }
 .tf-set__brand[data-template='split'] .tf-set__brandside span { color: var(--surface); opacity: 0.8; }
 .tf-set__brand[data-template='split'] .tf-set__brandmain { align-items: flex-start; padding: var(--space-20); }
+
+/* Forms › Records: question → field rows, the arrow between them. */
+.tf-forms__records { display: flex; flex-direction: column; gap: var(--space-16); max-width: calc(var(--size-dialog-wide) * 1.1); }
+.tf-forms__map { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-forms__map li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 16rem); align-items: center; gap: var(--space-12); padding: var(--space-8) 0; }
+.tf-forms__map li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-forms__mapq { display: flex; flex-direction: column; min-width: 0; }
+.tf-forms__mapq strong { overflow: hidden; color: var(--text); font: 500 14px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-forms__mapq span { font: 400 12px/16px var(--font-sans); }
+.tf-forms__arrow { color: var(--text-tertiary); }
+.tf-forms__mapsel { min-width: 0; }
+@container tf-app (max-width: 640px) { .tf-forms__map li { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); } .tf-forms__arrow { display: none; } }
+.tf-forms__key { padding: var(--space-2) var(--space-6); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); font: 400 12px/16px var(--font-mono); }
+.tf-rec__dealfacts { margin: var(--space-4) 0 0; font-size: 13px; }

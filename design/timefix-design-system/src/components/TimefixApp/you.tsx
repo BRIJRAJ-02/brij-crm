@@ -16,7 +16,8 @@ import { TextArea, TextField } from '../Field/Field.tsx';
 import { DatePicker } from '../DatePicker/DatePicker.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { parseDate } from '@internationalized/date';
-import { Inbox, CheckSquare, NotebookPen } from 'lucide-react';
+import { Inbox, CheckSquare, ChevronRight, NotebookPen } from 'lucide-react';
+import { Button as AriaButton, Disclosure, DisclosurePanel } from 'react-aria-components';
 import { isEmptyNote, newId, recordName, type AppAction, type AppState, type AppTask, type InboxItem, type ObjectId, type RecordLink, dayFrom, ymdOf } from './data.ts';
 
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
@@ -97,11 +98,8 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
     { id: 'upcoming', title: 'Upcoming', tasks: open.filter((t) => t.due && t.due >= tomorrow).sort((a, b) => (a.due?.getTime() ?? 0) - (b.due?.getTime() ?? 0)) },
     { id: 'none', title: 'No date', tasks: open.filter((t) => !t.due) },
   ].filter((g) => g.tasks.length > 0);
-  // Done tasks fold under the last group (the list's own Completed fold), never a group of their own.
-  const done = list.filter((t) => t.done);
-  const last = groups[groups.length - 1];
-  if (last && done.length) groups[groups.length - 1] = { ...last, tasks: [...last.tasks, ...done] };
-  else if (done.length) groups.push({ id: 'done', title: 'Done', tasks: done });
+  // Done tasks get their own section at the bottom, open, newest first; its head folds it away.
+  const done = list.filter((t) => t.done).reverse();
   const toggle = (id: string, done: boolean) => { const t = state.tasks.find((x) => x.id === id); if (!t) return; dispatch({ type: 'task/set', task: { ...t, done } }); toast({ message: done ? 'Task done' : 'Task reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); };
   return (
     <div className="tf-you">
@@ -110,17 +108,31 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
         <span className="tf-rec__spacer" />
         <Button variant="primary" icon={<Plus size={14} strokeWidth={1.75} />} onPress={() => setEditing('new')}>New task</Button>
       </div>
-      {groups.length === 0 ? <EmptyState icon={<CheckSquare size={20} strokeWidth={1.75} />} title={whose === 'mine' ? 'Nothing for you right now' : 'No tasks'}
+      {groups.length === 0 && done.length === 0 ? <EmptyState icon={<CheckSquare size={20} strokeWidth={1.75} />} title={whose === 'mine' ? 'Nothing for you right now' : 'No tasks'}
         description={whose === 'mine' && state.tasks.some((t) => !t.done && t.assignee !== state.me) ? 'Others on the team have open tasks.' : 'Add one here, or from any record.'}
         action={<span className="tf-set__row"><Button size="sm" variant="primary" onPress={() => setEditing('new')}>New task</Button>{whose === 'mine' && state.tasks.some((t) => !t.done && t.assignee !== state.me) && <Button size="sm" variant="secondary" onPress={() => setWhose('all')}>See everyone’s tasks</Button>}</span>} /> : groups.map((g) => (
-        <section key={g.id} className="tf-you__group" aria-label={g.title}>
-          <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}>{g.title}<span className="tf-rec__muted tf-num">{g.id === 'done' ? g.tasks.length : g.tasks.filter((t) => !t.done).length}</span></h3>
+        <Disclosure key={g.id} className="tf-you__group tf-you__done" defaultExpanded aria-label={g.title}>
+          <h3 className="tf-you__h" data-tone={g.id === 'overdue' ? 'danger' : undefined}><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />{g.title}<span className="tf-rec__muted tf-num">{g.tasks.filter((t) => !t.done).length}</span></AriaButton></h3>
+          <DisclosurePanel className="tf-you__donepanel">
           <div className="tf-you__card">
             <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
               record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
           </div>
-        </section>
+          </DisclosurePanel>
+        </Disclosure>
       ))}
+      {groups.length === 0 && done.length > 0 && <p className="tf-you__clear"><CheckSquare size={16} strokeWidth={1.75} aria-hidden="true" />Nothing open. Everything below is done.</p>}
+      {done.length > 0 && (
+        <Disclosure className="tf-you__group tf-you__done" defaultExpanded>
+          <h3 className="tf-you__h"><AriaButton slot="trigger" className="tf-you__fold"><ChevronRight className="tf-you__foldchev" size={16} strokeWidth={1.75} aria-hidden="true" />Completed<span className="tf-rec__muted tf-num">{done.length}</span></AriaButton></h3>
+          <DisclosurePanel className="tf-you__donepanel">
+            <div className="tf-you__card">
+              <TaskList isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
+                record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
+            </div>
+          </DisclosurePanel>
+        </Disclosure>
+      )}
       {editing && <TaskDialog state={state} record={editing === 'new' ? newFor : undefined} task={editing === 'new' ? undefined : editing} onClose={() => setEditing(undefined)} onOpenRecord={onOpenRecord}
         onSave={(t) => { dispatch({ type: 'task/set', task: t }); setEditing(undefined); toast({ message: editing === 'new' ? 'Task added' : 'Task saved', tone: 'success' }); }}
         onDelete={editing !== 'new' ? () => { const t = editing; dispatch({ type: 'task/remove', id: t.id }); setEditing(undefined); toast({ message: 'Task deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); } : undefined} />}

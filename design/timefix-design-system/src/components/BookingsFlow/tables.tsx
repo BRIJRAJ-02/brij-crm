@@ -82,17 +82,19 @@ export function TablesSection({ state, dispatch }: { readonly state: BookingsSta
 function TableDialog({ table, areas, taken, onClose, onSave }: { readonly table: Table; readonly areas: ReadonlyArray<string>; readonly taken: ReadonlyArray<string>; readonly onClose: () => void; readonly onSave: (t: Table) => void }) {
   const [name, setName] = useState(table.name);
   const [seats, setSeats] = useState(table.seats);
+  const [minParty, setMinParty] = useState(table.minParty ?? 1);
   const [area, setArea] = useState(table.area);
   const clash = taken.includes(name.trim().toLowerCase());
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={`Edit ${table.name}`}
-      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || clash} onPress={() => onSave({ ...table, name: name.trim(), seats, area })}>Save</Button></>}>
+      actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" isDisabled={!name.trim() || clash} onPress={() => onSave({ ...table, name: name.trim(), seats, area, minParty: minParty > 1 ? Math.min(minParty, seats) : undefined })}>Save</Button></>}>
       <div className="tf-bkf__stack">
         <TextField label="Name" value={name} onChange={setName} autoFocus isInvalid={clash || !name.trim()} errorMessage={clash ? 'Another table has this name' : !name.trim() ? 'Give it a name' : undefined} />
         <div className="tf-bkf__pair">
           <NumberField label="Seats" value={seats} onChange={(v) => setSeats(Math.max(1, Math.round(v || 1)))} minValue={1} maxValue={30} />
           <Select label="Area" value={area} onChange={(v) => { if (v) setArea(v); }} items={areas.map((a) => ({ id: a, label: a }))} />
         </div>
+        <NumberField label="Fewest guests" value={minParty} onChange={(v) => setMinParty(Math.max(1, Math.min(seats, Math.round(v || 1))))} minValue={1} maxValue={seats} description={minParty > 1 ? `Online, parties under ${minParty} don’t get this table. You can still seat them yourself.` : 'Any party that fits can have it.'} />
       </div>
     </Dialog>
   );

@@ -24,7 +24,7 @@ export interface BusinessPagesProps {
   readonly onToggle: (id: string, on: boolean) => void;
   readonly onShare: (p: BookingPage, how: ShareHow) => void;
   readonly onMore: (p: BookingPage, key: 'edit' | 'duplicate' | 'delete') => void;
-  readonly onCreate: () => void;
+  readonly onCreate: (kind?: 'service' | 'meeting') => void;
   readonly onSeePage: () => void;
   readonly onSeeMenu?: () => void;
   readonly onEditMenu?: () => void;
@@ -38,7 +38,9 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
   const [editing, setEditing] = useState(false);
   if (!b) return null;
   const cats = state.categories ?? [];
-  const services = state.pages.filter((p) => p.kind !== 'table');
+  const services = state.pages.filter((p) => p.kind === 'service');
+  // Calls and visits people book with you, next to tables or services (a private-dining enquiry, a bridal consultation).
+  const meetingPages = state.pages.filter((p) => p.kind !== 'table' && p.kind !== 'service');
   const tablePages = state.pages.filter((p) => p.kind === 'table');
   const shown = cat === 'all' ? services : services.filter((p) => p.categoryId === cat);
   const url = homeUrl(state);
@@ -103,7 +105,7 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
 
       {services.length > 0 && (
         <>
-          <TabToolbar count={`${plural(services.length, 'service')} · ${services.filter((p) => p.isOn).length} online`} action={<Button variant="primary" icon={<Plus {...i14} />} onPress={onCreate}>New service</Button>} />
+          <TabToolbar count={`${plural(services.length, 'service')} · ${services.filter((p) => p.isOn).length} online`} action={<Button variant="primary" icon={<Plus {...i14} />} onPress={() => onCreate('service')}>New service</Button>} />
           <div className="tf-bkf-menu">
             {cats.length > 0 && (
               <nav className="tf-bkf-menu__cats" aria-label="Categories">
@@ -131,6 +133,12 @@ export function BusinessPages({ state, dispatch, fresh, onOpen, onToggle, onShar
           </div>
         </>
       )}
+      <section className="tf-bkf-card" aria-label="Meeting pages">
+        <TabToolbar count={meetingPages.length ? `${plural(meetingPages.length, 'meeting page')} · ${meetingPages.filter((p) => p.isOn).length} online` : 'Meeting pages'}
+          action={<Button variant="secondary" icon={<Plus {...i14} />} onPress={() => onCreate('meeting')}>New meeting page</Button>} />
+        {meetingPages.length === 0 ? <p className="tf-bkf__muted">Calls and visits people book with you, like {b.kind === 'restaurant' ? 'a private-dining enquiry or a supplier call' : 'a consultation before a big appointment'}. Same booking pages as a team uses, with your hours and calendar.</p>
+          : <ul className="tf-bkf-svcs">{meetingPages.map(card)}</ul>}
+      </section>
       {editing && <EditPageDrawer state={state} business={b} onClose={() => setEditing(false)} onSave={(next, hours) => {
         dispatch({ type: 'business/set', business: next });
         if (hours) dispatch({ type: 'hours/set', id: state.defaultHoursId, hours });

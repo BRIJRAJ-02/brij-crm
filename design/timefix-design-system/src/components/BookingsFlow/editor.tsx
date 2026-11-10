@@ -34,8 +34,8 @@ import {
 
 const LENGTHS = [15, 30, 45, 60, 90];
 const BUFFERS = [0, 5, 10, 15, 30].map((n) => ({ id: String(n), label: n ? `${n} min` : 'None' }));
-const NOTICE = [{ id: '0', label: 'None' }, { id: '1', label: '1 hour' }, { id: '4', label: '4 hours' }, { id: '24', label: '1 day' }, { id: '48', label: '2 days' }];
-const AHEAD = [14, 30, 60, 90].map((n) => ({ id: String(n), label: `${n} days ahead` }));
+const NOTICE = [{ id: '0', label: 'None' }, { id: '1', label: '1 hour' }, { id: '4', label: '4 hours' }, { id: '24', label: '1 day' }, { id: '48', label: '2 days' }, { id: '72', label: '3 days' }, { id: '168', label: '1 week' }, { id: '336', label: '2 weeks' }];
+const AHEAD = [7, 14, 30, 60, 90, 180, 365].map((n) => ({ id: String(n), label: n === 365 ? 'A year ahead' : `${n} days ahead` }));
 /** Where new bookings can go: each connected account's calendars; one that needs reconnecting can't take them. */
 const calendarsOf = (state: BookingsState) => state.calendars.flatMap((c) => c.provider === 'Google' ? [{ id: 'work', label: 'Work', description: `Google · ${c.email}`, isDisabled: c.status !== 'connected' }, { id: 'personal', label: 'Personal', description: `Google · ${c.email}`, isDisabled: c.status !== 'connected' }] : [{ id: c.id, label: 'Calendar', description: `${c.provider} · ${c.status === 'connected' ? c.email : 'needs reconnect'}`, isDisabled: c.status !== 'connected' }]);
 const STEPS = [{ id: '0', label: 'Every 15 or 30 min' }, { id: '15', label: 'Every 15 min' }, { id: '30', label: 'Every 30 min' }, { id: '60', label: 'On the hour' }];

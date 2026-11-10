@@ -57,6 +57,17 @@
 
 /* Hero */
 .tf-linkpage__hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.tf-linkpage { --tf-lp-cover: var(--surface-subtle); --tf-lp-ring: var(--border); --tf-lp-ring-2: var(--tag-blue-text); }
+.tf-linkpage[data-look='bold'] { --tf-lp-cover: var(--text); --tf-lp-ring: var(--text-secondary); --tf-lp-ring-2: var(--surface); }
+.tf-linkpage[data-look='night'] { --tf-lp-cover: var(--surface-subtle); --tf-lp-ring: var(--border-strong); }
+.tf-linkpage[data-look='custom'] { --tf-lp-cover: var(--tf-lp-custom); --tf-lp-ring: var(--tf-lp-on-custom); --tf-lp-ring-2: var(--tf-lp-on-custom); }
+.tf-linkpage__cover { position: relative; height: calc(var(--size-avatar-lg) * 3); margin: calc(var(--space-32) * -1) 0 0; overflow: hidden; border-radius: var(--radius-xl); background: var(--tf-lp-cover); }
+.tf-linkpage__cover::before, .tf-linkpage__cover::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+/* Rings rising from the right, fading out to the left, with a second colour on every other band. */
+.tf-linkpage__cover::before { background: repeating-radial-gradient(circle at 88% 55%, transparent 0 var(--space-12), var(--tf-lp-ring) var(--space-12) var(--space-16)); opacity: 0.55; mask-image: linear-gradient(90deg, transparent 30%, #000 75%); }
+.tf-linkpage__cover::after { background: repeating-radial-gradient(circle at 88% 55%, transparent 0 var(--space-20), var(--tf-lp-ring-2) var(--space-20) var(--space-24), transparent var(--space-24) var(--space-40, 40px)); opacity: 0.35; mask-image: linear-gradient(90deg, transparent 55%, #000 90%); }
+.tf-linkpage__cover + .tf-linkpage__hero { margin-top: calc(var(--size-avatar-lg) * -1); position: relative; }
+.tf-linkpage__cover + .tf-linkpage__hero .tf-linkpage__avatar { border-radius: var(--radius-full); box-shadow: 0 0 0 calc(var(--border-width-focus) * 2) var(--tf-lp-bg); background: var(--tf-lp-bg); }
 /* The avatar at twice its largest size (the library's Avatar stops at 44). */
 .tf-linkpage__avatar { display: grid; place-items: center; width: calc(var(--size-avatar-lg) * 2); height: calc(var(--size-avatar-lg) * 2); }
 .tf-linkpage__avatar > * { transform: scale(2); }

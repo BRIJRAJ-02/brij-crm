@@ -566,8 +566,9 @@
 .tf-bkf-roster__cal { display: inline-flex; white-space: nowrap; align-items: center; gap: var(--space-4); color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
 .tf-bkf-roster__cal.is-bad { color: var(--tag-orange-text); }
 .tf-bkf-roster__cover { color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
-.tf-bkf__banner { padding: var(--space-12) var(--space-24) 0; }
-@media (max-width: 40rem) { .tf-bkf__banner { padding: var(--space-12) var(--space-16) 0; } }
+/* The page-wide alert above a tab's toolbar (a calendar that stopped syncing): full width, the page's gutter. */
+.tf-bkf__topalert { padding: var(--space-12) var(--space-24) 0; }
+@media (max-width: 40rem) { .tf-bkf__topalert { padding: var(--space-12) var(--space-16) 0; } }
 
 /* Week and Team day fill the page: the panel stops scrolling, the calendar takes what's left and scrolls its own hours. */
 .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-16); }
@@ -743,9 +744,12 @@
 .tf-bkf-dish__open .tf-bkf__muted { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-bkf-dish__name { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-bkf-dish.is-out .tf-bkf-dish__name, .tf-bkf-dish.is-out .tf-bkf-dish__img { opacity: var(--opacity-disabled); }
-.tf-bkf-dishform__top { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--size-control-lg) * 3.5); gap: var(--space-16); align-items: start; }
-.tf-bkf-dishform__photo { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-8); }
-.tf-bkf-dishform__img { width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-lg); }
+/* The dish photo has its own row first (a wide drop, or the picture with Remove), then the name and description. */
+.tf-bkf-dishform__top { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); align-items: start; }
+.tf-bkf-dishform__photo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-12); }
+.tf-bkf-dishform__photo > :first-child { flex: 1 1 16rem; min-width: 0; }
+.tf-bkf-dishform__photo > img:first-child { flex: none; }
+.tf-bkf-dishform__img { width: calc(var(--size-control-lg) * 2); max-width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-lg); }
 .tf-bkf-sizerow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-8); }
 .tf-bkf-addon { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-8); padding: var(--space-12); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); }
 .tf-bkf-addon > .tf-bkf-sizerow { width: 100%; }
@@ -767,3 +771,26 @@
 }
 .tf-bkf-venue-sum__when { color: var(--text); font: 500 14px/20px var(--font-sans); }
 .tf-bkf__error { margin: 0; color: var(--danger); font: 500 13px/18px var(--font-sans); }
+
+/* Team day as a staff calendar (owner's 11 Nov reference): a count above, each person with their bookings today,
+   blocks tinted by where they stand with a chip, striped breaks, hatched hours they don't work, and a now line. */
+.tf-bkf-team__total { margin: 0; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-bkf-team__total strong { color: var(--text); font: 600 20px/28px var(--font-sans); margin-right: var(--space-4); }
+.tf-bkf-team__whotext { display: flex; flex-direction: column; min-width: 0; }
+.tf-bkf-team__whotext strong { overflow: hidden; color: var(--text); font: 600 13px/18px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-team__whotext span { font: 400 12px/16px var(--font-sans); }
+.tf-bkf-team__event { gap: var(--space-2); border-left: var(--border-width-focus) solid var(--accent); }
+.tf-bkf-team__event[data-standing='booked'] { background: var(--tag-blue-bg); border-left-color: var(--tag-blue-text); }
+.tf-bkf-team__event[data-standing='now'] { background: var(--tag-purple-bg); border-left-color: var(--tag-purple-text); }
+.tf-bkf-team__event[data-standing='done'] { background: var(--tag-green-bg); border-left-color: var(--tag-green-text); }
+.tf-bkf-team__event[data-standing='pending'] { background: var(--surface); border-left-color: var(--tag-orange-text); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border-strong); }
+.tf-bkf-team__event[data-standing='noshow'] { background: var(--tag-red-bg); border-left-color: var(--tag-red-text); opacity: 0.85; }
+.tf-bkf-team__event .tf-bkf-team__event-title { overflow: hidden; color: var(--text); font: 600 12px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-team__evtop { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; min-width: 0; }
+.tf-bkf-team__evtime { color: var(--text-secondary); font: 400 11px/16px var(--font-sans); white-space: nowrap; }
+.tf-bkf-team__chip { flex: none; padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--surface); color: var(--text-secondary); font: 500 11px/16px var(--font-sans); }
+.tf-bkf-team__svc { max-width: 100%; overflow: hidden; padding: 0 var(--space-6); border-radius: var(--radius-full); box-shadow: inset 0 0 0 var(--border-width-hairline) var(--border); color: var(--text-secondary); font: 400 11px/16px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-bkf-team__break { position: absolute; left: 0; right: 0; display: grid; place-items: center; background: repeating-linear-gradient(135deg, var(--surface-subtle) 0 var(--space-6), transparent var(--space-6) var(--space-12)); color: var(--text-tertiary); font: 500 11px/16px var(--font-sans); letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+.tf-bkf-team__closed { position: absolute; left: 0; right: 0; display: grid; place-items: center; background: repeating-linear-gradient(45deg, var(--surface-hover) 0 var(--border-width-focus), transparent var(--border-width-focus) var(--space-8)); color: var(--text-tertiary); font: 500 11px/16px var(--font-sans); pointer-events: none; }
+.tf-bkf-team__now { position: absolute; left: 0; right: 0; z-index: 1; border-top: var(--border-width-focus) solid var(--danger); pointer-events: none; }
+.tf-bkf-team__nowpill { position: absolute; left: 0; top: 0; translate: 0 -50%; padding: 0 var(--space-6); border-radius: var(--radius-full); background: var(--danger); color: var(--surface); font: 600 11px/16px var(--font-sans); }

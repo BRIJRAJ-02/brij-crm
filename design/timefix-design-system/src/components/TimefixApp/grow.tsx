@@ -35,7 +35,8 @@ export const handleFor = (state: AppState, bookings: BookingsState | undefined) 
 export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void }) {
   const { toast } = useToast();
   const live = state.linkPage ?? STARTER;
-  const published = state.linkPage !== undefined || state.setupDone.includes('link');
+  const published = (state.linkPage !== undefined || state.setupDone.includes('link')) && !state.linkOffline;
+  const [offlineAsk, setOfflineAsk] = useState(false);
   const [seeing, setSeeing] = useState(false);
   const [qr, setQr] = useState(false);
   const url = `timefix.com/${handle}`;
@@ -59,11 +60,16 @@ export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly s
       <div className="tf-grow" hidden={seeing}>
         <div className="tf-rec__bar">
           <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>
-          <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : 'Not published'}</Tag>
+          <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : state.linkOffline ? 'Offline' : 'Not published'}</Tag>
           <span className="tf-rec__spacer" />
           <Button variant="ghost" icon={<Copy {...i14} />} isDisabled={!published} onPress={copy}>Copy link</Button>
           <Button variant="ghost" icon={<QrIcon {...i14} />} isDisabled={!published} onPress={() => setQr(true)}>QR code</Button>
           <Button variant="secondary" icon={<ExternalLink {...i14} />} isDisabled={!published} onPress={() => setSeeing(true)}>See it</Button>
+          {state.linkPage && (state.linkOffline
+            ? <Button variant="ghost" onPress={() => { dispatch({ type: 'link/offline', offline: false }); toast({ message: 'Your page is back online', tone: 'success' }); }}>Put back online</Button>
+            : <Button variant="ghost" onPress={() => setOfflineAsk(true)}>Take offline</Button>)}
+          {offlineAsk && <Dialog isOpen onOpenChange={(o) => { if (!o) setOfflineAsk(false); }} title="Take your page offline?" description={`Visitors to ${url} see that it’s not available. Nothing is deleted, and you can put it back any time.`}
+            actions={<><Button variant="ghost" slot="close">Keep it live</Button><Button variant="danger" onPress={() => { setOfflineAsk(false); dispatch({ type: 'link/offline', offline: true }); toast({ message: 'Your page is offline', action: { label: 'Undo', onAction: () => dispatch({ type: 'link/offline', offline: false }) } }); }}>Take offline</Button></>} />}
         </div>
         <LinkEditor live={live} booking={demoBooking} initialDraft={state.linkDraft} neverPublished={!published}
           forms={state.forms.map((f) => ({ slug: f.slug, name: f.name, live: f.status === 'live' }))}
@@ -76,7 +82,8 @@ export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly s
 }
 
 /** One QR code in a dialog, with Download. */
-function QrSheet({ url, name, onClose }: { readonly url: string; readonly name: string; readonly onClose: () => void }) {
+/** A QR code for any public address, with download. */
+export function QrSheet({ url, name, onClose }: { readonly url: string; readonly name: string; readonly onClose: () => void }) {
   const { toast } = useToast();
   const svg = useRef<SVGSVGElement>(null);
   return (
@@ -106,7 +113,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
   const rows: ReadonlyArray<{ readonly title: string; readonly rows: ReadonlyArray<ShareRow> }> = [
     { title: 'Your page', rows: business
       ? [{ id: 'home', icon: <Store {...i16} />, name: bookings?.workspace ?? 'Your business page', url: `timefix.com/${handle}`, live: business.published, off: 'Not published', numbers: `${upcoming()} upcoming bookings`, open: () => onBookingPage(undefined, 'profile'), edit: () => onBookings('pages'), editLabel: 'Edit page' }]
-      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: `${(state.linkPage ?? STARTER).blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length} links`, open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
+      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: !state.linkOffline && state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: `${(state.linkPage ?? STARTER).blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length} links`, open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
     { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
       numbers: `${upcoming(p.id)} upcoming`, open: () => onBookingPage(p.id, 'book'), edit: () => onBookings('pages'), editLabel: 'Edit in Bookings' })) },
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),

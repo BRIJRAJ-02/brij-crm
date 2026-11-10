@@ -403,3 +403,11 @@
 .tf-booking__toolate { display: flex; align-items: flex-start; gap: var(--space-8); max-width: 30rem; margin: 0; padding: var(--space-12) var(--space-16); border-radius: var(--radius-lg); background: var(--surface-subtle); color: var(--text-secondary); font: 400 13px/20px var(--font-sans); text-align: left; }
 .tf-booking__toolate svg { flex: none; margin-top: var(--space-2); }
 .tf-booking__bare { container: tf-booking / inline-size; --tf-booking-day: calc(var(--size-control) + var(--space-16)); }
+
+/* The rail's header (owner's 11 Nov reference): a cover strip across the rail's top with the host's face overlapping it.
+   Wide card only; the phone's compact rail keeps its row. */
+@container tf-booking (min-width: 54.01rem) {
+  .tf-booking__rail::before { content: ''; align-self: stretch; height: calc(var(--size-control-lg) * 1.8); margin: calc(var(--space-32) * -1) calc(var(--space-32) * -1) 0;
+    background: var(--surface-hover) repeating-radial-gradient(circle at 90% 70%, transparent 0 var(--space-12), var(--border) var(--space-12) var(--space-16)); }
+  .tf-booking__rail > :first-child { margin-top: calc(var(--size-control-lg) * -0.6); border-radius: var(--radius-full); box-shadow: 0 0 0 calc(var(--border-width-focus) * 2) var(--surface-subtle); }
+}

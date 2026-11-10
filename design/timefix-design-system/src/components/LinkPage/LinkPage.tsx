@@ -175,6 +175,8 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
   return (
     <div className="tf-linkpage" data-look={look} data-theme={look === 'night' ? 'dark' : undefined} style={style}>
       <PageColumn>
+        {/* A cover band in the page's colour, the face overlapping its lower edge (owner's 11 Nov reference). */}
+        <div className="tf-linkpage__cover" aria-hidden="true" />
         <header className="tf-linkpage__hero">
           <span className="tf-linkpage__avatar"><Avatar name={profile.name} src={profile.avatarSrc} size={44} /></span>
           <h1 className="tf-linkpage__name">{profile.name}</h1>

@@ -26,12 +26,21 @@ export const HOST_ZONE = 'Asia/Kolkata';
 /** Zones a guest can pick. */
 export const ZONES = [
   { id: 'Asia/Kolkata', label: 'India Standard Time' },
-  { id: 'Europe/London', label: 'London (GMT)' },
-  { id: 'America/New_York', label: 'Eastern Time (US)' },
-  { id: 'America/Los_Angeles', label: 'Pacific Time (US)' },
-  { id: 'Asia/Singapore', label: 'Singapore' },
+  { id: 'Asia/Dubai', label: 'Dubai' }, { id: 'Asia/Riyadh', label: 'Riyadh' }, { id: 'Asia/Karachi', label: 'Karachi' }, { id: 'Asia/Dhaka', label: 'Dhaka' },
+  { id: 'Asia/Singapore', label: 'Singapore' }, { id: 'Asia/Hong_Kong', label: 'Hong Kong' }, { id: 'Asia/Jakarta', label: 'Jakarta' }, { id: 'Asia/Tokyo', label: 'Tokyo' },
+  { id: 'Australia/Sydney', label: 'Sydney' }, { id: 'Pacific/Auckland', label: 'Auckland' },
+  { id: 'Europe/London', label: 'London (GMT)' }, { id: 'Europe/Berlin', label: 'Berlin, Paris (CET)' }, { id: 'Africa/Johannesburg', label: 'Johannesburg' }, { id: 'Africa/Nairobi', label: 'Nairobi' },
+  { id: 'America/New_York', label: 'Eastern Time (US)' }, { id: 'America/Chicago', label: 'Central Time (US)' }, { id: 'America/Denver', label: 'Mountain Time (US)' }, { id: 'America/Los_Angeles', label: 'Pacific Time (US)' },
+  { id: 'America/Toronto', label: 'Toronto' }, { id: 'America/Sao_Paulo', label: 'São Paulo' },
 ];
-/** Minutes from UTC for each zone the prototype offers (November, so London is on GMT). */
+/** Minutes from UTC for any zone, today (so summer time is right): worked out from the browser's own clock. */
+export function offsetOf(tz: string, at = new Date()): number {
+  try { const local = new Date(at.toLocaleString('en-US', { timeZone: tz })); const utc = new Date(at.toLocaleString('en-US', { timeZone: 'UTC' })); return Math.round((local.getTime() - utc.getTime()) / 60_000); } catch { return 330; }
+}
+/** The guest's own zone from their browser, offered first; falls back to India when the browser won't say. */
+export function guestZone(): string { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'; } catch { return 'Asia/Kolkata'; } }
+/** The zone list with the guest's own zone in it, even when it isn't one of ours. */
+export const zonesWithGuest = () => { const g = guestZone(); return ZONES.some((z) => z.id === g) ? ZONES : [{ id: g, label: g.split('/').pop()?.replace(/_/g, ' ') ?? g }, ...ZONES]; };
 export const ZONE_OFFSET: Readonly<Record<string, number>> = { 'Asia/Kolkata': 330, 'Europe/London': 0, 'America/New_York': -300, 'America/Los_Angeles': -480, 'Asia/Singapore': 480 };
 /** First names, for short lines. */
 export const first = (name: string) => name.split(' ')[0] ?? name;
@@ -192,10 +201,15 @@ export interface BookedMeeting extends Meeting {
   readonly tags?: ReadonlyArray<string>;
   /** Seated without a booking. */
   readonly walkIn?: boolean;
+  /** Cancelled: who did it and why, kept on the meeting. */
+  readonly cancelledBy?: 'host' | 'guest'; readonly cancelReason?: string;
+  /** Where a table booking came from: online, phone, walk-in or the waitlist. */
+  readonly source?: 'online' | 'phone' | 'walk-in' | 'waitlist';
 }
 /** A party waiting for a table: walked in tonight, or asked online to be told if one frees up. */
 export interface WaitParty { readonly id: string; readonly name: string; readonly phone: string; readonly party: number; readonly added: Date; readonly day: string;
-  /** Minutes quoted at the door; online it's the time they hoped for. */ readonly quote?: number; readonly wanted?: number; readonly online?: boolean; readonly notified?: boolean }
+  /** Minutes quoted at the door; online it's the time they hoped for. */ readonly quote?: number; readonly wanted?: number; readonly online?: boolean; readonly notified?: boolean;
+  /** Kept after they're seated or leave, for wait times: when it ended and how. */ readonly endedAt?: Date; readonly outcome?: 'seated' | 'left' }
 /** Time a member blocked or held by hand. */
 export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string }
 /** Time off: a day or a range, all day or some hours, with a note. */
@@ -267,6 +281,7 @@ export interface BusinessProfile {
 }
 /** A table: seats, area, bookable online, joins its neighbour for bigger parties. */
 export interface Table { readonly id: string; readonly name: string; readonly seats: number; readonly area: string; readonly online: boolean; readonly joinable: boolean;
+  /** Fewest guests it takes, so a couple doesn't fill the 8-top (1 when unset). */ readonly minParty?: number;
   /** The code in the table's QR (timefix.com/<handle>/menu?t=<code>). A new code stops old prints working. */ readonly code?: string }
 /** A restaurant's menus as you edit them; `live` is what guests see until you publish. */
 export interface MenuBook { readonly menus: ReadonlyArray<Menu>; readonly dishes: ReadonlyArray<MenuDish>; readonly addOns: ReadonlyArray<MenuAddOn> }
@@ -575,7 +590,7 @@ export function monthSpread(state: BookingsState, page: BookingPage, now: Date):
 export function fitTables(state: BookingsState, party: number, date: Date, start: number, length: number, onlineOnly = true, area?: string, skip?: string): ReadonlyArray<Table> | undefined {
   const held = heldTables(state, date, start, length, skip);
   const free = (state.tables ?? []).filter((t) => !held.has(t.id) && (!onlineOnly || t.online) && (!area || t.area === area));
-  const one = [...free].filter((t) => t.seats >= party).sort((a, b) => a.seats - b.seats)[0];
+  const one = [...free].filter((t) => t.seats >= party && (t.minParty ?? 1) <= party).sort((a, b) => a.seats - b.seats)[0];
   if (one) return [one];
   const pairs = free.flatMap((a, i) => free.slice(i + 1).filter((b) => a.joinable && b.joinable && a.area === b.area && a.seats + b.seats >= party).map((b) => [a, b]));
   return pairs.sort((x, y) => x.reduce((t, z) => t + z.seats, 0) - y.reduce((t, z) => t + z.seats, 0))[0];
@@ -587,9 +602,7 @@ export function heldTables(state: BookingsState, date: Date, start: number, leng
     if (m.id === skip || !m.tables || m.status === 'cancelled' || m.status === 'no-show' || m.seating === 'left' || m.start.toDateString() !== date.toDateString()) return;
     // A party still seated past its end keeps the table until they leave (counted as at least 15 more minutes).
     const today = new Date(); const isToday = date.toDateString() === today.toDateString(); const overrun = m.seating === 'seated' && isToday;
-    // A party that hasn't come once the page's late hold is up gives its table back, from now on.
-    const hold = state.pages.find((p) => p.id === m.pageId)?.holdLate ?? 15;
-    if (isToday && m.seating !== 'seated' && today.getTime() > m.start.getTime() + hold * 60_000 && start >= minutesOf(today)) return;
+    // A late party keeps its table until the host marks a no-show (the host stand shows them as Late); nothing is given away silently.
     const a = minutesOf(m.start); const b = overrun ? Math.max(minutesOf(m.end), minutesOf(today) + 15) : minutesOf(m.end);
     if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
   });
@@ -760,3 +773,12 @@ export function menuChanges(state: BookingsState): ReadonlyArray<string> {
 /** A table's own code for its QR: its name made safe for a link, plus a random tail so two tables with one name never share a link. */
 export const tableCode = (name: string) => `${slugify(name) || 'table'}-${Math.random().toString(36).slice(2, 7)}`;
 export const tableMenuUrl = (state: BookingsState, t: Table) => `timefix.com/${handleOf(state)}/menu?t=${encodeURIComponent(t.code ?? slugify(t.name))}`;
+/** A guest's visits here, found by email or phone: how many, the last one, and no-shows. */
+export function visitsOf(state: BookingsState, m: BookedMeeting): { readonly count: number; readonly last?: Date; readonly noShows: number } {
+  const email = m.invitee.email.trim().toLowerCase(); const phone = (m.phone ?? '').replace(/\D/g, '');
+  if (!email && phone.length < 6) return { count: 0, noShows: 0 };
+  const theirs = state.meetings.filter((x) => x.id !== m.id && x.tables && x.start < m.start && ((email && x.invitee.email.trim().toLowerCase() === email) || (phone.length >= 6 && (x.phone ?? '').replace(/\D/g, '') === phone)));
+  const been = theirs.filter((x) => x.status !== 'cancelled' && x.status !== 'no-show');
+  return { count: been.length, last: been.map((x) => x.start).sort((a, b) => b.getTime() - a.getTime())[0], noShows: theirs.filter((x) => x.status === 'no-show').length };
+}
+

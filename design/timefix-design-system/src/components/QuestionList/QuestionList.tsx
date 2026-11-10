@@ -1,5 +1,5 @@
 import {
-  Button as AriaButton, DialogTrigger, DropIndicator, GridList, GridListItem, ListBox, ListBoxItem, useDragAndDrop, type Key, type Selection,
+  Button as AriaButton, DialogTrigger, DropIndicator, GridList, GridListItem, Header, ListBox, ListBoxItem, ListBoxSection, useDragAndDrop, type Key, type Selection,
 } from 'react-aria-components';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CopyPlus, Ellipsis, GripVertical, MousePointerClick, Plus, Trash, X } from 'lucide-react';
@@ -11,14 +11,16 @@ import { TextArea, TextField } from '../Field/Field.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../Menu/Menu.tsx';
 import { Popover } from '../Popover/Popover.tsx';
 import { Select } from '../Select/Select.tsx';
+import { SearchField } from '../SearchField/SearchField.tsx';
+import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Count } from '../Tag/Tag.tsx';
-import { QUESTION_KINDS, type FormQuestion, type QuestionKind } from '../HostedForm/answers.ts';
+import { QUESTION_GROUPS, QUESTION_KINDS, type FormQuestion, type QuestionKind } from '../HostedForm/answers.ts';
 import { DropIn } from '../Motion/Motion.tsx';
 import './QuestionList.css';
 
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
 const HAS_OPTIONS: ReadonlySet<QuestionKind> = new Set(['choice', 'multi', 'dropdown', 'ranking']);
-const HAS_PLACEHOLDER: ReadonlySet<QuestionKind> = new Set(['short', 'long', 'email']);
+const HAS_PLACEHOLDER: ReadonlySet<QuestionKind> = new Set(['short', 'long', 'email', 'url', 'number']);
 
 /** The type's icon on a grey tile, the way every question and type option starts. */
 export function QuestionTypeTile({ kind, size = 'md' }: { readonly kind: QuestionKind; readonly size?: 'sm' | 'md' }) {
@@ -34,27 +36,46 @@ export function questionSummary(q: FormQuestion): string {
 }
 
 /** "+ Add question": a grid of every answer type in the shared Popover (05). The plus turns while it is open. */
-export function QuestionTypePicker({ onPick, label = 'Add question', only }: { readonly onPick: (kind: QuestionKind) => void; readonly label?: string; /** Offer just these types (a booking page needs a few, a form all). Six or fewer list in one column. */ readonly only?: ReadonlyArray<QuestionKind> }) {
+export function QuestionTypePicker({ onPick, label = 'Add question', only }: { readonly onPick: (kind: QuestionKind) => void; readonly label?: string; /** Offer just these types (a booking page needs a few, a form all). Six or fewer list in one column, without groups. */ readonly only?: ReadonlyArray<QuestionKind> }) {
   const [open, setOpen] = useState(false);
-  const kinds = (only ?? (Object.keys(QUESTION_KINDS) as QuestionKind[])).map((k) => ({ id: k }));
-  const short = kinds.length <= 6;
+  const [find, setFind] = useState('');
+  const allowed = new Set(only ?? (Object.keys(QUESTION_KINDS) as QuestionKind[]));
+  const short = allowed.size <= 6;
+  const q = find.trim().toLowerCase();
+  const fits = (k: QuestionKind) => allowed.has(k) && (!q || `${QUESTION_KINDS[k].label} ${QUESTION_KINDS[k].hint}`.toLowerCase().includes(q));
+  const groups = QUESTION_GROUPS.map((g) => ({ id: g.title, title: g.title, items: g.kinds.filter(fits).map((k) => ({ id: k })) })).filter((g) => g.items.length > 0);
+  const pick = (k: Key) => { onPick(String(k) as QuestionKind); setOpen(false); setFind(''); };
+  const item = (id: QuestionKind) => {
+    const info = QUESTION_KINDS[id];
+    return (
+      <ListBoxItem key={id} id={id} textValue={info.label} className="tf-qtypes__item">
+        <QuestionTypeTile kind={id} />
+        <span className="tf-qtypes__text"><span className="tf-qtypes__label">{info.label}</span><span className="tf-qtypes__hint">{info.hint}</span></span>
+      </ListBoxItem>
+    );
+  };
   return (
-    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
-      <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={2} className="tf-qlist__plus" aria-hidden="true" />} className="tf-qlist__add">{label}</Button>
+    <DialogTrigger isOpen={open} onOpenChange={(o) => { setOpen(o); if (!o) setFind(''); }}>
+      <Button variant="primary" size="sm" icon={<Plus size={14} strokeWidth={2} aria-hidden="true" />} className="tf-qlist__add">{label}</Button>
       <Popover label="Question types" placement="bottom end" offset={6} className={short ? undefined : 'tf-qtypes__pop'}>
-        {!short && <p className="tf-qtypes__head">Pick a type</p>}
-        <ListBox aria-label="Question types" layout={short ? 'stack' : 'grid'} items={kinds} className={short ? 'tf-qtypes tf-qtypes--list' : 'tf-qtypes'} autoFocus="first"
-          onAction={(k: Key) => { onPick(String(k) as QuestionKind); setOpen(false); }}>
-          {(it) => {
-            const info = QUESTION_KINDS[it.id];
-            return (
-              <ListBoxItem id={it.id} textValue={info.label} className="tf-qtypes__item">
-                <QuestionTypeTile kind={it.id} />
-                <span className="tf-qtypes__text"><span className="tf-qtypes__label">{info.label}</span><span className="tf-qtypes__hint">{info.hint}</span></span>
-              </ListBoxItem>
-            );
-          }}
-        </ListBox>
+        {short ? (
+          <ListBox aria-label="Question types" items={[...allowed].map((k) => ({ id: k }))} className="tf-qtypes tf-qtypes--list" autoFocus="first" onAction={pick}>{(it) => item(it.id)}</ListBox>
+        ) : (
+          <div className="tf-qtypes__wrap">
+            <SearchField label="Find a question type" placeholder="Find a type: date, scale, file…" size="sm" value={find} onChange={setFind} autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { const first = groups[0]?.items[0]; if (first) pick(first.id); } }} />
+            {groups.length === 0 ? <p className="tf-qtypes__none">No type matches “{find}”.</p> : (
+              <ListBox aria-label="Question types" items={groups} className="tf-qtypes tf-qtypes--groups" onAction={pick}>
+                {(g) => (
+                  <ListBoxSection id={g.id} className="tf-qtypes__sec">
+                    <Header className="tf-qtypes__head">{g.title}</Header>
+                    {g.items.map((it) => item(it.id))}
+                  </ListBoxSection>
+                )}
+              </ListBox>
+            )}
+          </div>
+        )}
       </Popover>
     </DialogTrigger>
   );
@@ -68,7 +89,8 @@ export interface QuestionListProps {
   readonly onSelect: (id: string | undefined) => void;
   /** The list in its new order after a drag or a keyboard move. */
   readonly onReorder: (questions: ReadonlyArray<FormQuestion>) => void;
-  readonly onRequiredChange: (id: string, required: boolean) => void;
+  /** Draws a Required switch on each row. Leave out when a settings panel sits beside the list (it has the switch). */
+  readonly onRequiredChange?: (id: string, required: boolean) => void;
   readonly onDuplicate: (id: string) => void;
   readonly onDelete: (id: string) => void;
   readonly onAdd: (kind: QuestionKind) => void;
@@ -106,7 +128,7 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
   return (
     <section className="tf-qlist" aria-label="Questions">
       <header className="tf-qlist__head">
-        <h3 className="tf-qlist__title">{title} <Count>{questions.length}</Count></h3>
+        {title ? <h3 className="tf-qlist__title">{title} <Count>{questions.length}</Count></h3> : <span className="tf-qlist__count tf-num">{questions.length} {questions.length === 1 ? 'question' : 'questions'}</span>}
         <QuestionTypePicker onPick={onAdd} only={kinds} />
       </header>
       {notice}
@@ -128,7 +150,8 @@ export function QuestionList({ questions, selectedId, onSelect, onReorder, onReq
                       <span className="tf-qlist__sub">{questionSummary(q)}</span>
                     </span>
                     <span className="tf-qlist__end">
-                      <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>
+                      {onRequiredChange ? <Switch isSelected={q.required ?? false} onChange={(v) => onRequiredChange(q.id, v)} aria-label={`Required: ${q.title || 'question'}`}>Required</Switch>
+                        : q.required ? <span className="tf-qlist__req">Required</span> : null}
                       <MenuTrigger>
                         <IconButton label={`More for ${q.title || 'question'}`} size="sm"><Ellipsis {...i16} /></IconButton>
                         <Menu placement="bottom end" onAction={(k) => (k === 'delete' ? onDelete(q.id) : onDuplicate(q.id))}>
@@ -184,10 +207,21 @@ export function QuestionSettings({ question: q, onChange, onClose }: QuestionSet
         <TextField label="Description" aside="Optional" value={q.description ?? ''} onChange={(description) => set({ description })} placeholder="A line of help under the question" />
         {HAS_PLACEHOLDER.has(q.kind) && <TextField label="Placeholder" aside="Optional" value={q.placeholder ?? ''} onChange={(placeholder) => set({ placeholder })} />}
         {HAS_OPTIONS.has(q.kind) && <OptionsEditor options={options} onChange={(next) => set({ options: next })} />}
-        <div className="tf-qset__row">
+        {(q.kind === 'number' || q.kind === 'scale') && <div className="tf-qset__pair">
+          <TextField label="Lowest" inputMode="numeric" value={q.min === undefined ? (q.kind === 'scale' ? '0' : '') : String(q.min)} onChange={(v) => set({ min: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
+          <TextField label="Highest" inputMode="numeric" value={q.max === undefined ? (q.kind === 'scale' ? '10' : '') : String(q.max)} onChange={(v) => set({ max: v.trim() === '' || Number.isNaN(Number(v)) ? undefined : Number(v) })} />
+        </div>}
+        {q.kind === 'scale' && <div className="tf-qset__pair">
+          <TextField label="Word under the lowest" value={q.low ?? ''} placeholder="Not likely" onChange={(low) => set({ low: low || undefined })} />
+          <TextField label="Word under the highest" value={q.high ?? ''} placeholder="Very likely" onChange={(high) => set({ high: high || undefined })} />
+        </div>}
+        {q.kind === 'consent' && <SegmentedControl aria-label="Consent for" selectedKey={q.consentKind ?? 'terms'} onSelectionChange={(k) => set({ consentKind: k === 'marketing' ? 'marketing' : 'terms', required: k !== 'marketing' })} items={[{ id: 'terms', label: 'Terms (must tick)' }, { id: 'marketing', label: 'Marketing (optional)' }]} />}
+        {(q.kind === 'checkbox' || q.kind === 'consent') && <TextField label="Words beside the box" value={q.defaultValue ?? ''} placeholder={q.kind === 'consent' ? (q.consentKind === 'marketing' ? 'Yes, email me news and offers' : 'I agree to the terms') : 'Yes'} onChange={(v) => set({ defaultValue: v || undefined })} />}
+        {q.kind === 'hidden' && <TextField label="Value when the link has none" value={q.defaultValue ?? ''} placeholder="website" description={`The link can set it: ?${(q.title || 'source').toLowerCase().replace(/[^a-z0-9]+/g, '_')}=newsletter`} onChange={(v) => set({ defaultValue: v || undefined })} />}
+        {q.kind !== 'statement' && q.kind !== 'hidden' && <div className="tf-qset__row">
           <span className="tf-qset__row-text"><span className="tf-qset__row-label">Required</span><span className="tf-qset__row-sub">Visitors can't go on without an answer.</span></span>
           <Switch isSelected={q.required ?? false} onChange={(required) => set({ required })} aria-label="Required" />
-        </div>
+        </div>}
       </div>
     </aside>
   );
@@ -221,8 +255,9 @@ function OptionsEditor({ options, onChange }: { readonly options: ReadonlyArray<
 let seq = 0;
 const newId = () => `q-${Date.now().toString(36)}-${(seq += 1)}`;
 const blank = (kind: QuestionKind): FormQuestion => ({
-  id: newId(), kind, title: '', required: false,
+  id: newId(), kind, title: kind === 'statement' ? 'A few words before the next part' : kind === 'consent' ? 'Before you send' : kind === 'scale' ? 'How likely are you to recommend us?' : '', required: kind === 'consent',
   ...(HAS_OPTIONS.has(kind) ? { options: ['Option 1', 'Option 2', 'Option 3'] } : {}),
+  ...(kind === 'scale' ? { min: 0, max: 10 } : {}),
 });
 
 /** Props for QuestionBuilder. */
@@ -272,7 +307,6 @@ export function QuestionBuilder({ questions, onChange, kinds, title }: QuestionB
         selectedId={selected}
         onSelect={setSelected}
         onReorder={onChange}
-        onRequiredChange={(id, required) => onChange(questions.map((q) => (q.id === id ? { ...q, required } : q)))}
         onDuplicate={(id) => { const n = questions.findIndex((q) => q.id === id); const q = questions[n]; if (q) insert({ ...q, id: newId(), title: q.title ? `${q.title} (copy)` : '' }, n + 1); }}
         onDelete={remove}
         onAdd={(kind) => insert(blank(kind), questions.length)}

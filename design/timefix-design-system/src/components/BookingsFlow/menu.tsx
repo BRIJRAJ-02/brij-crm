@@ -276,14 +276,14 @@ function DishDrawer({ book, dish, where, onClose, onSave, onDelete, onAddOns, on
         <section className="tf-bkf-card">
           <div className="tf-bkf__stack">
             <div className="tf-bkf-dishform__top">
-              <div className="tf-bkf__stack">
-                <TextField label="Name" value={d.name} onChange={(name) => patch({ name })} autoFocus={!dish} placeholder="Wood-fired octopus" isInvalid={dirty && !d.name.trim()} />
-                <TextArea label="Description" aside="Optional" rows={2} value={d.description ?? ''} onChange={(description) => patch({ description: description || undefined })} placeholder="What’s on the plate, in a line" />
-              </div>
               <div className="tf-bkf-dishform__photo">
                 {d.photo ? <img src={d.photo} alt="" className="tf-bkf-dishform__img" /> : <FileDrop variant="compact" label="Add a photo" allowsMultiple={false} acceptedFileTypes={['image/png', 'image/jpeg', 'image/webp']} onFiles={readPhoto} />}
                 {d.photo && <span className="tf-bkf__row"><Button size="sm" variant="ghost" onPress={() => patch({ photo: undefined })}>Remove</Button>{!dish && <Button size="sm" variant="ghost" onPress={() => patch({ photo: plate('#d9a066', '#6f8b5d') })}>Use a sample</Button>}</span>}
                 {!d.photo && <Button size="sm" variant="ghost" onPress={() => patch({ photo: plate('#d9a066', '#6f8b5d') })}>Use a sample photo</Button>}
+              </div>
+              <div className="tf-bkf__stack">
+                <TextField label="Name" value={d.name} onChange={(name) => patch({ name })} autoFocus={!dish} placeholder="Wood-fired octopus" isInvalid={dirty && !d.name.trim()} />
+                <TextArea label="Description" aside="Optional" rows={2} value={d.description ?? ''} onChange={(description) => patch({ description: description || undefined })} placeholder="What’s on the plate, in a line" />
               </div>
             </div>
             <div className="tf-bkf__group"><span className="tf-bkf__label">Pricing</span>

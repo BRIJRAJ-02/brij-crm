@@ -103,13 +103,14 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
   const confirmStep = steps.length - 1;
   const isTable = page?.kind === 'table';
   // A restaurant needs a phone to reach the party; email is how the confirmation and the change link arrive.
-  const detailsOk = name.trim() !== '' && (isTable ? phone.replace(/\D/g, '').length >= 8 && (waitMode || email.includes('@')) : email.includes('@'));
+  // A salon texts reminders too, so it asks for a mobile as well.
+  const detailsOk = name.trim() !== '' && phone.replace(/\D/g, '').length >= 8 && (isTable ? waitMode || email.includes('@') : email.includes('@'));
   const book = () => {
     if (!effective || !detailsOk) return;
     if (waitMode) { onWaitlist?.({ name: name.trim(), phone: phone.trim(), party, day: isoDay(day), wanted: time }); setDone(true); return; }
     if (time === undefined) return;
     const ok = onBooked(effective, { name: name.trim(), email: email.trim(), notes, date: new CalendarDate(day.getFullYear(), day.getMonth() + 1, day.getDate()), minutes: time, timeZone: 'Asia/Kolkata', length: len, place: placeOf(effective), party: isTable ? party : undefined,
-      phone: isTable ? phone.trim() : undefined, occasion: occasion || undefined, area: areaPick });
+      phone: phone.trim() || undefined, occasion: occasion || undefined, area: areaPick });
     if (ok === false) { setTaken(true); setTime(undefined); if (!isTable) setStep(people.length > 1 ? 2 : 1); return; }
     setTaken(false);
     setDone(true);
@@ -229,9 +230,10 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
         </div>
       ) : (
         <div className="tf-bkf__stack">
+          <TextField label="Name" size="lg" value={name} onChange={setName} isRequired autoComplete="name" />
           <div className="tf-bkf__pair">
-            <TextField label="Name" size="lg" value={name} onChange={setName} isRequired autoComplete="name" />
             <TextField label="Email" size="lg" type="email" value={email} onChange={setEmail} isRequired autoComplete="email" />
+            <TextField label="Mobile" size="lg" type="tel" value={phone} onChange={setPhone} isRequired autoComplete="tel" description="For a reminder text the day before." />
           </div>
           <TextArea label="Notes for your visit" aside="Optional" rows={3} size="lg" value={notes} onChange={setNotes} />
           {page && <p className="tf-bkf__muted">{(page.cancelCutoff ?? 0) > 0 || (page.moveCutoff ?? 0) > 0 ? `Free to change or cancel up to ${plural(Math.max(page.cancelCutoff ?? 0, page.moveCutoff ?? 0), 'hour')} before, from the link in your email.` : 'Free to change or cancel any time, from the link in your email.'}</p>}

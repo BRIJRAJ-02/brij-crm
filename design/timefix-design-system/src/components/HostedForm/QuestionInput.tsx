@@ -2,7 +2,7 @@ import {
   Button as AriaButton, Checkbox as AriaCheckbox, CheckboxGroup, DateInput, DatePicker as AriaDatePicker, DateSegment, DropIndicator,
   GridList, GridListItem, Group, ListBox, ListBoxItem, Radio, RadioGroup, Select, SelectValue, useDragAndDrop, type Key,
 } from 'react-aria-components';
-import { parseDate, type CalendarDate } from '@internationalized/date';
+import { parseDate, parseTime, type CalendarDate, type Time } from '@internationalized/date';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { CalendarDays, Check, ChevronDown, Eraser, GripVertical, Star } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
@@ -13,9 +13,10 @@ import { FileDrop, FileList, FileRow } from '../FileDrop/FileDrop.tsx';
 import { PhoneField } from '../PhoneField/PhoneField.tsx';
 import { Popover } from '../Popover/Popover.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
+import { TimeField } from '../TimeField/TimeField.tsx';
 import { formatClock } from '../WeekCalendar/clock.ts';
 import {
-  isAddress, isBooking, isFiles, isList, isPhone, isText,
+  COUNTRIES, isAddress, isBooking, isFiles, isList, isPhone, isText,
   type AddressValue, type AnswerValue, type BookingSource, type FileAnswer, type FormQuestion,
 } from './answers.ts';
 
@@ -72,6 +73,29 @@ export function QuestionInput(props: QuestionInputProps) {
       return <SignaturePad value={text} onChange={onChange} labelId={labelId} />;
     case 'booking':
       return props.booking ? <BookingPicker source={props.booking} value={isBooking(value) ? value : undefined} onChange={(v) => { onChange(v); }} labelId={labelId} /> : null;
+    case 'url':
+      return <TextField size="lg" type="url" inputMode="url" autoComplete="url" aria-labelledby={labelId} value={text} onChange={onChange} placeholder={q.placeholder ?? 'example.com'} isInvalid={isInvalid} />;
+    case 'number':
+      return <TextField size="lg" inputMode="decimal" aria-labelledby={labelId} value={text} onChange={(v) => onChange(v.replace(/[^\d.,-]/g, ''))} placeholder={q.placeholder ?? (q.min !== undefined && q.max !== undefined ? `${q.min} to ${q.max}` : 'A number')} isInvalid={isInvalid} />;
+    case 'yesno':
+      return <ChoiceCards {...props} question={{ ...q, kind: 'choice', options: ['Yes', 'No'] }} />;
+    case 'country':
+      return <Dropdown {...props} question={{ ...q, options: q.options?.length ? q.options : COUNTRIES }} />;
+    case 'checkbox':
+    case 'consent':
+      return <TickBox label={q.defaultValue || (q.kind === 'consent' ? (q.consentKind === 'marketing' ? 'Yes, email me news and offers' : 'I agree to the terms') : 'Yes')} checked={text === 'Yes'} onChange={(on) => onChange(on ? 'Yes' : '')} labelId={labelId} isInvalid={isInvalid} />;
+    case 'time':
+      return <TimeAnswer value={text} onChange={onChange} labelId={labelId} />;
+    case 'datetime': {
+      const [d = '', t = ''] = text.split('T');
+      const join = (dd: string, tt: string) => onChange(dd || tt ? `${dd}T${tt}` : '');
+      return <div className="tf-hq__pair"><DateAnswer value={d} onChange={(v) => join(v, t)} labelId={labelId} isInvalid={isInvalid} /><TimeAnswer value={t} onChange={(v) => join(d, v)} labelId={labelId} /></div>;
+    }
+    case 'scale':
+      return <Scale min={q.min ?? 0} max={q.max ?? 10} low={q.low ?? 'Not likely'} high={q.high ?? 'Very likely'} value={typeof value === 'number' ? value : undefined} onChange={(n) => { onChange(n); props.onPicked?.(); }} labelId={labelId} isInvalid={isInvalid} />;
+    case 'statement':
+    case 'hidden':
+      return null;
     default:
       return null;
   }
@@ -179,6 +203,36 @@ function DateAnswer({ value, onChange, labelId, isInvalid }: { readonly value: s
       </Group>
       <Popover placement="bottom start" label="Calendar"><Calendar /></Popover>
     </AriaDatePicker>
+  );
+}
+
+/** One tick box as a full-width card (Checkbox, Consent): ticking it is the answer. */
+function TickBox({ label, checked, onChange, labelId, isInvalid }: { readonly label: string; readonly checked: boolean; readonly onChange: (on: boolean) => void; readonly labelId: string; readonly isInvalid?: boolean }) {
+  return (
+    <AriaCheckbox isSelected={checked} onChange={onChange} isInvalid={isInvalid} aria-describedby={labelId} className="tf-hq__choice tf-hq__tick-card">
+      <span className="tf-hq__box-tick" aria-hidden="true"><Check size={14} strokeWidth={2.5} /></span>
+      <span className="tf-hq__choice-label">{label}</span>
+    </AriaCheckbox>
+  );
+}
+
+/** A time typed as hours and minutes; the answer is "HH:MM". */
+function TimeAnswer({ value, onChange, labelId }: { readonly value: string; readonly onChange: (v: string) => void; readonly labelId: string }) {
+  let parsed: Time | null = null;
+  try { parsed = value ? parseTime(value) : null; } catch { parsed = null; }
+  return <div className="tf-hq__timebox"><TimeField label="Time" isLabelHidden aria-labelledby={labelId} hourCycle={12} value={parsed} onChange={(t) => onChange(t ? `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}` : '')} /></div>;
+}
+
+/** A row of numbers from low to high (0–10 by default) with a word under each end; a pick goes on in a one-at-a-time form. */
+function Scale({ min, max, low, high, value, onChange, labelId, isInvalid }: { readonly min: number; readonly max: number; readonly low: string; readonly high: string; readonly value: number | undefined; readonly onChange: (n: number) => void; readonly labelId: string; readonly isInvalid?: boolean }) {
+  const nums = Array.from({ length: Math.max(1, max - min + 1) }, (_, n) => min + n);
+  return (
+    <div className="tf-hq__scale">
+      <RadioGroup aria-labelledby={labelId} orientation="horizontal" value={value === undefined ? null : String(value)} onChange={(v) => onChange(Number(v))} isInvalid={isInvalid} className="tf-hq__scale-row">
+        {nums.map((n) => <Radio key={n} value={String(n)} className="tf-hq__scale-pick">{n}</Radio>)}
+      </RadioGroup>
+      <span className="tf-hq__scale-ends" aria-hidden="true"><span>{low}</span><span>{high}</span></span>
+    </div>
   );
 }
 
