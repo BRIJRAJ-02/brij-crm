@@ -13,6 +13,7 @@ import { BookingFlowDemo } from './components/BookingFlow/BookingFlow.demo.tsx';
 import { BookingPagePictureDemo } from './components/BookingPagePicture/BookingPagePicture.demo.tsx';
 import { BookingsFlowDemo } from './components/BookingsFlow/BookingsFlow.demo.tsx';
 import { BreadcrumbsDemo } from './components/Breadcrumbs/Breadcrumbs.demo.tsx';
+import { BusinessFlowDemo } from './components/BusinessFlow/BusinessFlow.demo.tsx';
 import { BusinessPageDemo } from './components/BusinessPage/BusinessPage.demo.tsx';
 import { ButtonDemo } from './components/Button/Button.demo.tsx';
 import { CalendarConnectionsDemo } from './components/CalendarConnections/CalendarConnections.demo.tsx';
@@ -113,6 +114,7 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   BookingPagePicture: BookingPagePictureDemo,
   BookingsFlow: BookingsFlowDemo,
   Breadcrumbs: BreadcrumbsDemo,
+  BusinessFlow: BusinessFlowDemo,
   BusinessPage: BusinessPageDemo,
   Button: ButtonDemo,
   CalendarConnections: CalendarConnectionsDemo,

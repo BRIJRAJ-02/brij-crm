@@ -55,4 +55,5 @@ Every request from the design session, checked in the prototype (light and dark)
 | Onboarding | first booking page (name, length) and Connect your calendar steps, then "You’re live" with the link; Demo › Start fresh walks it |
 | 10 Nov review (25 findings) | all fixed: guest reschedule from Manage, guest changes after booking reach the host, time zones convert, chat keeps the chosen length and place, confirm-first says "request sent", unpublished changes kept on every exit, links never go stale on publish, name required, batch hand-on can't double-book, reassign and reschedule respect time off and busy time, one schedule email notice per person, cancel from a row has Undo, cut-offs can't be skipped, copy link confirms, no-show only after the meeting, Team day keyboard times, delete warns about routing, wording unified |
 
-Not built: business booking (services, staff, business page, reservations) waits for the owner's call.
+| Booking page editor too cluttered; earlier tabs better | back to the earlier tabs; new options under More options folds and the ⋯ menu |
+| Business booking | separate prototype "Timefix Business": salon (Calendar by person, Services with options and prices, Team with usual week, Business page) and restaurant (Reservations list and floor, Walk in, New booking, online rules, Tables); guests book from the business page |

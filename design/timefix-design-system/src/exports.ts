@@ -12,6 +12,7 @@ export * from './components/BookingFlow/BookingFlow.tsx';
 export * from './components/BookingPagePicture/BookingPagePicture.tsx';
 export * from './components/BookingsFlow/BookingsFlow.tsx';
 export * from './components/Breadcrumbs/Breadcrumbs.tsx';
+export * from './components/BusinessFlow/BusinessFlow.tsx';
 export * from './components/BusinessPage/BusinessPage.tsx';
 export * from './components/Button/Button.tsx';
 export * from './components/CalendarConnections/CalendarConnections.tsx';

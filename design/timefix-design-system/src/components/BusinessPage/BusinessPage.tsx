@@ -15,6 +15,11 @@ import './BusinessPage.css';
 export { ServiceMenu, type Service, type ServiceCategory, type ServiceMenuProps } from './ServiceMenu.tsx';
 export { PartyBand, type PartyBandProps } from './PartyBand.tsx';
 
+/** The booking card's part a business supplies. */
+export type BookingBase = Omit<BookingFlowProps, 'host' | 'title' | 'durationMinutes' | 'location'>;
+/** What the guest has chosen so far: a service (and who with), or a party size. */
+export interface BusinessChoice { readonly serviceId?: string; readonly staffId: string; readonly party: number }
+
 /** Someone a guest can book with. */
 export interface BusinessStaff { readonly id: string; readonly name: string; readonly role: string }
 
@@ -42,10 +47,12 @@ export interface BusinessPageProps {
   readonly staff?: ReadonlyArray<BusinessStaff>;
   /** The largest party booked online. */
   readonly partyMax?: number;
-  /** The booking card's calendar, times and booking; the page fills in who, what and where. */
-  readonly booking: Omit<BookingFlowProps, 'host' | 'title' | 'durationMinutes' | 'location'>;
+  /** The booking card's calendar, times and booking; the page fills in who, what and where. Give a function to get times for the guest's choice so far. */
+  readonly booking: BookingBase | ((choice: BusinessChoice) => BookingBase);
   /** A table's length in minutes. */
   readonly tableMinutes?: number;
+  /** Who does a service, when not everyone does everything. */
+  readonly staffFor?: (serviceId: string) => ReadonlyArray<BusinessStaff>;
 }
 
 /** 08 page side by side inside a box that eases to the showing step's height (01 card resize). */
@@ -78,17 +85,19 @@ function Steps({ step, pages }: { readonly step: number; readonly pages: Readonl
 }
 
 /** A Fresha-style public business page: cover, name, rating, address and whether it is open, the service menu or a party size, a person to see, then the booking card. */
-export function BusinessPage({ business, mode, categories = [], staff = [], partyMax = 8, booking, tableMinutes = 90 }: BusinessPageProps) {
+export function BusinessPage({ business, mode, categories = [], staff: allStaff = [], partyMax = 8, booking, tableMinutes = 90, staffFor }: BusinessPageProps) {
   const [step, setStep] = useState<'page' | 'staff' | 'book'>('page');
   const [service, setService] = useState<Service>();
   const [person, setPerson] = useState('any');
   const [party, setParty] = useState(2);
+  const staff = service && staffFor ? staffFor(service.id) : allStaff;
 
   const open = business.now >= business.opensAt && business.now < business.closesAt;
   const status = open ? `Open now · Closes at ${formatClock(business.closesAt)}` : `Closed · Opens at ${formatClock(business.opensAt)}`;
   const chosen = staff.find((s) => s.id === person);
-  const pickService = (s: Service) => { setService(s); setStep(staff.length > 0 ? 'staff' : 'book'); };
-  const back = () => setStep(step === 'book' && mode === 'services' && staff.length > 0 ? 'staff' : 'page');
+  const base = typeof booking === 'function' ? booking({ serviceId: service?.id, staffId: person, party }) : booking;
+  const pickService = (s: Service) => { setService(s); setStep(allStaff.length > 0 ? 'staff' : 'book'); };
+  const back = () => setStep(step === 'book' && mode === 'services' && allStaff.length > 0 ? 'staff' : 'page');
   const index = step === 'page' ? 0 : step === 'staff' ? 1 : 2;
 
   const head = (
@@ -147,7 +156,7 @@ export function BusinessPage({ business, mode, categories = [], staff = [], part
         <h2 className="tf-biz__h2" tabIndex={-1} data-autofocus>Pick a time</h2>
       </div>
       {step === 'book' && (
-        <BookingFlow {...booking}
+        <BookingFlow {...base} key={`${service?.id ?? ''}-${person}-${party}`}
           host={{ name: mode === 'table' ? business.name : chosen?.name ?? business.name }}
           title={mode === 'table' ? `Table for ${party}` : service?.name ?? ''}
           durationMinutes={mode === 'table' ? tableMinutes : service?.minutes ?? 30}
