@@ -418,6 +418,8 @@ const SENTENCES: SentenceTemplates = {
         return actor(`edited ${page}`);
       case 'look':
         return actor(`changed the look of ${page}`);
+      case 'photo':
+        return actor(`changed a photo on ${page}`);
       case 'live':
         return actor(`turned ${page} Live`);
       case 'private':

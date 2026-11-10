@@ -34,7 +34,7 @@ import {
   type PublicSocialLink,
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
-import { lockupLogoOf, publicIdentityOf } from '../profile/identity.ts';
+import { lockupLogoOf, memberNameOf, publicIdentityOf } from '../profile/identity.ts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { parsePartnerAccessToken } from '../partners/tokens.ts';
@@ -1648,11 +1648,24 @@ export async function enterLinkPage(
   );
   // Read in the owner's own workspace, under its row level security: their job title and its name are its own, and
   // so are the places a Menu or Reserve block names (spec 0065, AC-6528), read only from what was published.
-  const [identity, placeBlocks] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
+  // The name too (owner, 10 Nov 2026): the member's own in this workspace, which the page's editor changes, live on
+  // save like the title under it; the account's name only while the row has none.
+  const [identity, placeBlocks, name] = await deps.db.withWorkspace(owner.workspaceId, async (tx) => [
     await publicIdentityOf(tx, owner, isDraft ? 'draft' : 'published'),
     await publicPlaceBlocks(tx, owner.workspaceId, rows),
+    await memberNameOf(tx, owner.userId, owner.workspaceId),
   ]);
-  return { owner, rows: found.rows, pages, forms, skipped, pictures, identity, isDraft, placeBlocks };
+  return {
+    owner: name === undefined ? owner : { ...owner, name },
+    rows: found.rows,
+    pages,
+    forms,
+    skipped,
+    pictures,
+    identity,
+    isDraft,
+    placeBlocks,
+  };
 }
 
 /**

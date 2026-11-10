@@ -59,6 +59,7 @@ import { DraftLook } from './draft-look.tsx';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
 import { IdentityFields, identityOf, type PageIdentity } from './IdentityFields.tsx';
+import { PagePhotos } from './PagePhotos.tsx';
 import { SharingFields } from './SharingFields.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -1219,10 +1220,57 @@ function Blocks({
       </PreviewLayout>
     );
   }
+  // The page's photos and what changes them, for both cards that hold photo rows: Profile and Design.
+  const photoExtras = {
+    look: extrasRead,
+    photoSrc,
+    onPhoto: choosePhoto,
+    onRemovePhoto: removePhoto,
+    ...(sending === undefined ? {} : { sending }),
+  };
+  // What the page shows for its face while it has no photo of its own: the account photo, unless it is kept off.
+  const accountPhoto = profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image;
   return (
     <PreviewLayout preview={preview} previewShare="wide" notices={publishBar}>
-      {/* What is on the page comes first (its blocks, the archived ones, the social links), then how it looks:
-          content is what the editor is opened for (flow walks, 29 October 2026: L2). */}
+      {/* Who the page is from comes first, as on Linktree (owner, 10 November 2026): the profile photo, the cover, the
+          name and the title under it. The name and title are live the moment each saves; the photos wait for Publish
+          with the rest. On someone else's page (spec 0070) a page only person's name and title change here, anyone
+          else's are shown as they keep them (9 Nov 2026). */}
+      <Card title={strings.profile}>
+        {/* Why the title switch didn't save, until the next try: the card has no footer to say it in. */}
+        {!isTeam && identityRefusal !== undefined && <Callout tone="danger">{identityRefusal}</Callout>}
+        <PagePhotos
+          slots={['avatar', 'cover']}
+          extras={photoExtras}
+          {...(accountPhoto === undefined ? {} : { avatarStandIn: accountPhoto })}
+        />
+        {isTeam && member !== undefined && (
+          <IdentityFields
+            data={data}
+            slug={slug}
+            owner={
+              profile.managedBy === 'team'
+                ? { kind: 'team', member }
+                : { kind: 'kept', by: profile.managedBy === 'partner' ? 'partner' : 'self' }
+            }
+            identity={identity}
+            // Live on save (owner, 10 November 2026): nothing here is a draft, so Publish's bar has nothing to read.
+            onSaved={setIdentity}
+            onSwitchRefused={() => undefined}
+          />
+        )}
+        {!isTeam && (
+          <IdentityFields
+            data={data}
+            slug={slug}
+            identity={identity}
+            onSaved={setIdentity}
+            onSwitchRefused={setIdentityRefusal}
+          />
+        )}
+      </Card>
+      {/* Then what is on the page (its blocks, the archived ones, the social links), then how it looks: content is
+          what the editor is opened for (flow walks, 29 October 2026: L2). */}
       {/* No subtitle (owner, 5 November 2026): the views and clicks live in Insights, and the grips say drag. */}
       <Card
         title={strings.blocks}
@@ -1295,7 +1343,7 @@ function Blocks({
         // The template pictures draw this page: its owner's name and face, and its first rows (spec 0068, AC-6804).
         profile={{
           name: identity.name.trim() || handle,
-          ...(profile.image === undefined || profile.pictureHidden === true ? {} : { picture: profile.image }),
+          ...(accountPhoto === undefined ? {} : { picture: accountPhoto }),
           rows: previewBlocks
             .flatMap((block) => ('title' in block && typeof block.title === 'string' ? [block.title] : []))
             .slice(0, 3),
@@ -1306,56 +1354,32 @@ function Blocks({
             : { refusal: lookRefusal }
           : { refusal: themeRefusal })}
         extras={{
-          look: extrasRead,
+          ...photoExtras,
           colours: brand.colours,
           variables: lookVariables,
           quickPicks: brand.quickPicks,
-          photoSrc,
           onAccent: chooseAccent,
           onPreviewAccent: setDragged,
-          onPhoto: choosePhoto,
-          onRemovePhoto: removePhoto,
-          ...(sending === undefined ? {} : { sending }),
         }}
       />
-      {/* Who it's from, and how it shows when shared or searched, as one quiet card (owner, 5 November 2026). On
-          someone else's page (spec 0070) only the name and title: a page only person's change here, anyone else's are
-          shown as they keep them (9 Nov 2026). */}
-      {isTeam && member !== undefined && (
-        <Card title={strings.details}>
-          <IdentityFields
-            data={data}
-            slug={slug}
-            owner={
-              profile.managedBy === 'team'
-                ? { kind: 'team', member }
-                : { kind: 'kept', by: profile.managedBy === 'partner' ? 'partner' : 'self' }
-            }
-            identity={identity}
-            onSaved={(saved) => {
-              setIdentity(saved);
-              linkPage.publication.changed();
-            }}
-            onSwitchRefused={() => undefined}
-          />
-        </Card>
-      )}
+      {/* How it shows when shared or searched, and the company site and closing line, as one quiet card at the end
+          (owner, 5 November 2026); the name and title moved up to Profile (10 November 2026). Someone else's page
+          has none of these here. */}
       {!isTeam && (
         <Card title={strings.details}>
           {/* Why the last switch didn't save, until the next try: the card has no footer to say it in. */}
-          {(identityRefusal ?? indexableRefusal?.message) !== undefined && (
-            <Callout tone="danger">{identityRefusal ?? indexableRefusal?.message}</Callout>
-          )}
+          {indexableRefusal !== undefined && <Callout tone="danger">{indexableRefusal.message}</Callout>}
           <IdentityFields
             data={data}
             slug={slug}
+            part="details"
             identity={identity}
             onSaved={(saved) => {
               setIdentity(saved);
-              // Who the page is from is drafted (spec 0068): Publish's bar reads where the page stands now.
+              // The site and the closing line are drafted (spec 0068): Publish's bar reads where the page stands now.
               linkPage.publication.changed();
             }}
-            onSwitchRefused={setIdentityRefusal}
+            onSwitchRefused={() => undefined}
           />
           <SharingFields
             indexable={indexable}

@@ -242,9 +242,9 @@ Lean, as the owner's settings pages are: no page description, one Email section 
 
 Beside the picture in Your details, next to Sync Google photo: Upload photo (Change photo once there is one) is FileDrop's button, which opens the library's round cropper (`usePhotoCrop`, shape `circle`), then `preparePhoto(source, 'avatar', crop)` draws it again (512 square JPEG, a phone photo's location left behind) and `data.profile.uploadPicture` sends it, replacing Google's in every workspace; the route reads the profile again and a quiet toast says "Photo updated." Adjust crop crops the one there again. A refusal is the picker's own refusal line. The note under the name no longer says "From Google" (an upload isn't): "Shown on your pages and bookings.", and the switch's hint below no longer names Google either.
 
-## Settings › Account › Profile: Show my photo on booking pages (PhotoSwitch.tsx)
+## Settings › Account › Profile: Show my account photo on my pages (PhotoSwitch.tsx)
 
-- **Purpose**: whether the person's Google photo shows on their booking pages and their profile (owner ask A124, 23 October 2026). On by default.
+- **Purpose**: whether the person's account photo shows on their booking pages and their profile (owner ask A124, 23 October 2026). On by default. It covers the account photo only (10 November 2026): a photo set on a link page always shows on that page and on the booking pages under the same handle, and the row's one line under its title says so.
 - **Main task**: turn it off, and their initials show there instead, or on again. It saves at once through `data.profile.setPictureHidden` (shown at once, put back with a toast and Try again if refused), then a quiet toast with Undo, one toast at a time.
 - **Leaves out**: changing the photo itself (Google's, or initials) and the photo inside the app, which stays as it is.
 

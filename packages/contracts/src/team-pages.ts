@@ -16,11 +16,12 @@ import { WorkspaceScoped } from './workspaces.ts';
 export const PAGE_MEMBER_HEADER = 'x-crm-page-member';
 
 /**
- * What a change to someone else's link page was, as History words it (AC-7004): its blocks, its look, Live or Private,
- * its QR code's style, whether search engines list it, or a handle claimed for them. Publish, Discard and Restore keep
+ * What a change to someone else's link page was, as History words it (AC-7004): its blocks, its look, one of its
+ * photos (its own value since 10 Nov 2026, never folded into the look), Live or Private, its QR code's style, whether
+ * search engines list it, or a handle claimed for them. Publish, Discard and Restore keep
  * their own actions (`link_page.published` and the rest), whoever makes them.
  */
-export const LINK_PAGE_TEAM_CHANGES = ['blocks', 'look', 'live', 'private', 'qr', 'search', 'handle'] as const;
+export const LINK_PAGE_TEAM_CHANGES = ['blocks', 'look', 'photo', 'live', 'private', 'qr', 'search', 'handle'] as const;
 /** One kind of change to someone else's link page. */
 export type LinkPageTeamChange = (typeof LINK_PAGE_TEAM_CHANGES)[number];
 

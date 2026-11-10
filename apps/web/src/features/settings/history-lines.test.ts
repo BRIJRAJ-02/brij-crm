@@ -743,6 +743,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace edited Bea Rao’s link page',
   ],
   [
+    { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'photo' } },
+    'Ada Lovelace changed a photo on Bea Rao’s link page',
+  ],
+  [
     { ...base, action: 'link_page.changed_for', target: member(bea), params: { change: 'live' } },
     'Ada Lovelace turned Bea Rao’s link page Live',
   ],

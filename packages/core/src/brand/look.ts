@@ -164,7 +164,7 @@ export async function saveProfileImage(
       const saved = await tx.execute<{ previous: string | null }>(
         sql`select crm_save_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${slot}, ${image?.path ?? null}, ${image?.type ?? null}, ${image?.version ?? null}) as previous`,
       );
-      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'look');
+      await touchLinkPage(tx, scope, owner, scope.workspaceId, 'photo');
       const replaced = saved.rows[0]?.previous ?? undefined;
       // A photo guests still see (spec 0068: the change waits for Publish) stays in the store until it is replaced
       // there too.

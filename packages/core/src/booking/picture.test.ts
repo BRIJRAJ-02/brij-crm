@@ -11,7 +11,7 @@ import { enterBookingPage, enterLinkPage, findHandleOwner } from '../access/door
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
-import { getMyProfile, updateMyMemberProfile } from '../members/profile.ts';
+import { getMyProfile, showMyLinkPage, updateMyMemberProfile } from '../members/profile.ts';
 import { testScope } from '../testing.ts';
 import { greeting } from './chat/agent.ts';
 import { createBookingPage } from './pages.ts';
@@ -243,6 +243,40 @@ describe('a link page’s own profile photo (9 Nov 2026)', () => {
     await saveProfileImage(ada.scope, { slot: 'avatar' });
     await publishLinkPage(ada.scope);
     expect(readProfilePicture(await findHandleOwner({ db }, handle))).toBeUndefined();
+  });
+
+  // Owner, 10 Nov 2026: booking pages under the same handle wear the page photo, falling back to the account photo.
+  it('is the host picture on their booking pages too, while the page is Live, else the account picture', async () => {
+    const ada = await person('Ada Lovelace', GOOGLE);
+    const handle = `ada-${randomUUID().slice(0, 8)}`;
+    await updateMyMemberProfile(ada.scope, { handle });
+    const booking = await createBookingPage(ada.scope, { id: newId(), title: 'Intro call', timeZone: 'Europe/London' });
+    const entry = await enterBookingPage({ db }, booking.publicKey);
+    const account = pictureVersion(ada.userId, GOOGLE);
+    const path = `${pageImageFolder(ada.userId, ada.workspaceId)}${randomUUID()}.jpg`;
+    await saveProfileImage(ada.scope, { slot: 'avatar', image: { path, type: 'image/jpeg', version: 'abcdef012345' } });
+    // Drafted: not yet anybody's but the editor's, so the booking page keeps the account picture.
+    expect((await getPublicBookingPage(entry, pictures)).hostImage).toBe(
+      `/api/public/booking/${booking.publicKey}/picture?v=${account}`,
+    );
+
+    await publishLinkPage(ada.scope);
+    const version = pictureVersion(ada.userId, `page:${path}`);
+    const photo = { kind: 'stored', path, version };
+    expect((await getPublicBookingPage(entry, pictures)).hostImage).toBe(
+      `/api/public/booking/${booking.publicKey}/picture?v=${version}`,
+    );
+    expect(await readPagePicture(entry, pictures)).toEqual(photo);
+    // The account photo switch covers the account photo only: the page's own still shows.
+    await updateMyMemberProfile(ada.scope, { pictureHidden: true });
+    expect(await readPagePicture(entry, pictures)).toEqual(photo);
+
+    // A Private page's photo is its owner's alone: the booking page falls back, and with the account photo hidden,
+    // to none.
+    await showMyLinkPage(ada.scope, false);
+    expect(await readPagePicture(entry, pictures)).toBeUndefined();
+    await updateMyMemberProfile(ada.scope, { pictureHidden: false });
+    expect(await readPagePicture(entry, pictures)).toEqual({ kind: 'google', url: new URL(SIZED), version: account });
   });
 
   it('is read only for that page’s own folder', () => {

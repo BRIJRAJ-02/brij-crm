@@ -75,6 +75,21 @@ export async function jobTitleOf(tx: WorkspaceTx, userId: string, workspace: str
 }
 
 /**
+ * A member's name in this workspace, while they are active here; undefined when the row has none. A link page is the
+ * membership's (one per workspace), and its editor names the page through this row (`updateMyMemberProfile`, or
+ * `namePageOnlyPerson` for a page only person), so the page reads it live, as Profile does (owner, 10 Nov 2026).
+ */
+export async function memberNameOf(tx: WorkspaceTx, userId: string, workspace: string): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ name: members.name })
+    .from(members)
+    .where(and(eq(members.workspaceId, workspace), eq(members.userId, userId), eq(members.status, 'active')))
+    .limit(1);
+  const name = row?.name.trim() ?? '';
+  return name === '' ? undefined : name;
+}
+
+/**
  * What a visitor to `owner`'s link page is told of who it belongs to: their job title while they show it, the
  * workspace's name and logo path while they have set a site for them to link to, and their own foot line. Inside the
  * owner's own workspace transaction; nothing here is an email, an id or anything the owner didn't choose to show.

@@ -1,4 +1,4 @@
-// "Show my photo on booking pages" in Chromium (owner ask A124): every state of the row (loading, on, off, saving,
+// "Show my account photo on my pages" in Chromium (owner ask A124): every state of the row (loading, on, off, saving,
 // a failed read with Try again, read only), a change shown at once and confirmed in a quiet toast with Undo, a
 // refused one put back with no confirmation, and the switch by keyboard.
 import type { DataLayer, PictureChoiceHeld, PictureChoiceState } from '@crm/data';
@@ -16,7 +16,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { PhotoSwitch } from './PhotoSwitch.tsx';
 
-const TITLE = 'Show my photo on booking pages';
+const TITLE = 'Show my account photo on my pages';
 const SHOWN: PictureChoiceState = { status: 'ready', isHidden: false, isSaving: false, canChange: true };
 
 beforeAll(async () => {
@@ -130,12 +130,13 @@ async function pressSwitch() {
   await userEvent.keyboard(' ');
 }
 
-describe('Show my photo on booking pages', () => {
-  // Less text (5 November 2026): with a photo, the title says it all; no line under it.
-  it('starts on, with no line under its title', async () => {
+describe('Show my account photo on my pages', () => {
+  // The account photo only (owner, 10 Nov 2026): one line under the title says a link page's own photo always shows.
+  it('starts on, saying it never hides a link page’s own photo', async () => {
     const { layer } = fakeChoice(SHOWN);
     await render(layer);
     await expect.element(theSwitch()).toBeChecked();
+    await expect.element(page.getByText('A photo you add to your link page always shows there.')).toBeVisible();
     expect(page.getByText(/initials/).elements()).toEqual([]);
   });
 
@@ -146,14 +147,14 @@ describe('Show my photo on booking pages', () => {
     await expect.element(theSwitch()).not.toBeChecked();
     expect(sent.map((each) => each.isHidden)).toEqual([true]);
     sent[0]?.answer(true);
-    await expect.element(page.getByText('Photo hidden on booking pages')).toBeVisible();
+    await expect.element(page.getByText('Account photo hidden on your pages')).toBeVisible();
     await page.getByRole('button', { name: 'Undo' }).click();
     await expect.element(theSwitch()).toBeChecked();
     expect(sent.map((each) => each.isHidden)).toEqual([true, false]);
     sent[1]?.answer(true);
     await expect.element(page.getByText('Change undone')).toBeVisible();
     // One toast at a time: the change's own went when Undo's came.
-    await expect.element(page.getByText('Photo hidden on booking pages')).not.toBeInTheDocument();
+    await expect.element(page.getByText('Account photo hidden on your pages')).not.toBeInTheDocument();
   });
 
   it('is put back when refused, with no confirmation', async () => {
@@ -163,7 +164,7 @@ describe('Show my photo on booking pages', () => {
     await expect.element(theSwitch()).not.toBeChecked();
     sent[0]?.answer(false);
     await expect.element(theSwitch()).toBeChecked();
-    await expect.element(page.getByText('Photo hidden on booking pages')).not.toBeInTheDocument();
+    await expect.element(page.getByText('Account photo hidden on your pages')).not.toBeInTheDocument();
   });
 
   it('shows a spinner beside the title only while a slow save is on its way', async () => {
@@ -186,7 +187,7 @@ describe('Show my photo on booking pages', () => {
     await expect.element(theSwitch()).toBeChecked();
     expect(sent.map((each) => each.isHidden)).toEqual([false]);
     sent[0]?.answer(true);
-    await expect.element(page.getByText('Photo shown on booking pages')).toBeVisible();
+    await expect.element(page.getByText('Account photo shown on your pages')).toBeVisible();
   });
 
   it('holds its place while loading, then says a failed read with Try again', async () => {

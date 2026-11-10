@@ -1,8 +1,9 @@
 // Brief
 // Purpose: who the link page is from (3 Nov 2026, the owner's reference page; 9 Nov 2026, "an option to change the
 // name and an option to add title below the name"): the name at the top of the page, the title under it, their
-// company's site, and a line of their own. Drawn inside the editor's one Details card, with no hint that restates its
-// label.
+// company's site, and a line of their own. Drawn in two parts (owner, 10 Nov 2026, Linktree style): the name, the
+// title and its switch in the Profile card at the top, live on the page the moment each saves; the site and the
+// closing line in Details at the end, which wait for Publish. No hint restates a label.
 // Main task: change the name or the title right here, as on Linktree; each field saves on its own. A title typed here
 // is meant to show, so it turns on; the switch under it stays only to keep a title to the team.
 // Leaves out: the logo (Brand), and anything that replaces "Powered by Timefix". On someone else's page (spec 0070)
@@ -49,6 +50,11 @@ export interface IdentityFieldsProps {
   readonly slug: string;
   /** Whose page; the caller's own when absent. */
   readonly owner?: IdentityOwner;
+  /**
+   * Which fields: `profile` (the default) the name, the title and Show under my name, live on save; `details` the
+   * company site and the closing line, drafted until Publish. Someone else's page has the profile part only.
+   */
+  readonly part?: 'profile' | 'details';
   readonly identity: PageIdentity;
   /** A change the server kept, so the phone beside the editor shows it. */
   readonly onSaved: (identity: PageIdentity) => void;
@@ -78,6 +84,7 @@ export function IdentityFields({
   data,
   slug,
   owner = { kind: 'own' },
+  part = 'profile',
   identity,
   onSaved,
   onSwitchRefused,
@@ -143,6 +150,27 @@ export function IdentityFields({
     onSubmit: () => save(part, drafts[part].trim()),
     ...(problems[part] === undefined ? {} : { error: problems[part] }),
   });
+  if (part === 'details' && owner.kind !== 'own') return null;
+  if (part === 'details') {
+    return (
+      <>
+        <Field
+          label={strings.site}
+          type="url"
+          inputMode="url"
+          autoComplete="url"
+          placeholder={strings.sitePlaceholder}
+          {...text('site')}
+        />
+        <Field
+          label={strings.footLine}
+          placeholder={strings.footLinePlaceholder}
+          maxLength={80}
+          {...text('footLine')}
+        />
+      </>
+    );
+  }
   if (owner.kind === 'kept') {
     // Theirs to change, in their own Profile (or their partner's app): shown so the manager sees what the page says.
     const reason = owner.by === 'partner' ? teamStrings.nameFromPartner : teamStrings.nameTheirs;
@@ -186,15 +214,6 @@ export function IdentityFields({
           onChange={(next) => save('showJobTitle', next)}
         />
       )}
-      <Field
-        label={strings.site}
-        type="url"
-        inputMode="url"
-        autoComplete="url"
-        placeholder={strings.sitePlaceholder}
-        {...text('site')}
-      />
-      <Field label={strings.footLine} placeholder={strings.footLinePlaceholder} maxLength={80} {...text('footLine')} />
     </>
   );
 }

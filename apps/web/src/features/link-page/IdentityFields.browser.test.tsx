@@ -11,6 +11,7 @@ import { page, userEvent } from 'vitest/browser';
 import { applyTheme, axeViolations, resetTheme, THEMES } from '../../testing/axe.ts';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { IdentityFields, type IdentityOwner, type PageIdentity } from './IdentityFields.tsx';
+import { PagePhotos } from './PagePhotos.tsx';
 import { strings } from './strings.ts';
 
 let shown: InApp | undefined;
@@ -36,6 +37,7 @@ async function render(
   identity: PageIdentity = OFF,
   owner?: IdentityOwner,
   namePerson: (...args: unknown[]) => Promise<unknown> = vi.fn(),
+  part?: 'profile' | 'details',
 ) {
   const saved: PageIdentity[] = [];
   refused = [];
@@ -46,6 +48,7 @@ async function render(
           data={{ profile: { update }, teamPages: { namePerson } } as unknown as DataLayer}
           slug="acme"
           {...(owner === undefined ? {} : { owner })}
+          {...(part === undefined ? {} : { part })}
           identity={identity}
           onSaved={(kept) => saved.push(kept)}
           onSwitchRefused={(message) => refused.push(message)}
@@ -135,12 +138,31 @@ describe('who the page is from', () => {
     const update = vi.fn((_slug: string, _change: object) =>
       Promise.resolve(profile({ showJobTitle: false, site: 'https://acme.com/' })),
     );
-    await render(update);
+    await render(update, OFF, undefined, vi.fn(), 'details');
     const site = page.getByRole('textbox', { name: 'Company site' });
     await userEvent.fill(site, 'acme.com');
     await userEvent.tab();
     expect(update).toHaveBeenCalledWith('acme', { site: 'acme.com' });
     await expect.element(site).toHaveValue('https://acme.com/');
+  });
+
+  // Profile first (owner, 10 Nov 2026): the name, the title and its switch at the top, the site and line in Details.
+  it('splits into the profile part and the details part, each with only its own fields', async () => {
+    await render(vi.fn(), TITLED);
+    await expect.element(page.getByRole('textbox', { name: 'Name' })).toBeVisible();
+    await expect.element(page.getByRole('switch', { name: 'Show under my name' })).toBeInTheDocument();
+    expect(page.getByRole('textbox', { name: 'Company site' }).query()).toBeNull();
+    expect(page.getByRole('textbox', { name: 'Closing line' }).query()).toBeNull();
+    shown?.unmount();
+    await render(vi.fn(), TITLED, undefined, vi.fn(), 'details');
+    await expect.element(page.getByRole('textbox', { name: 'Company site' })).toBeVisible();
+    await expect.element(page.getByRole('textbox', { name: 'Closing line' })).toBeVisible();
+    expect(page.getByRole('textbox', { name: 'Name' }).query()).toBeNull();
+    expect(page.getByRole('switch', { name: 'Show under my name' }).query()).toBeNull();
+    shown?.unmount();
+    // Someone else's page has no details part at all.
+    await render(vi.fn(), TITLED, { kind: 'team', member: 'm-1' }, vi.fn(), 'details');
+    expect(page.getByRole('textbox').query()).toBeNull();
   });
 
   it('says an empty name on the field and sends nothing', async () => {
@@ -201,29 +223,47 @@ describe('on someone else’s page', () => {
 /** Where the lane's screenshots go, when it asks for them; never in CI. */
 const SHOT_DIR = import.meta.env.VITE_SHOT_DIR as string | undefined;
 
-describe.runIf(SHOT_DIR !== undefined && SHOT_DIR !== '')('the Details card, photographed', () => {
-  const owners: readonly (readonly [string, IdentityOwner, PageIdentity])[] = [
+describe.runIf(SHOT_DIR !== undefined && SHOT_DIR !== '')('the Profile and Details cards, photographed', () => {
+  // A small picture of a face's colours, so the photo rows draw something in the shot.
+  const photo =
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#c9b8a6"/><circle cx="32" cy="26" r="12" fill="#7a5c48"/><rect x="14" y="42" width="36" height="22" rx="11" fill="#7a5c48"/></svg>',
+    );
+  const photos = (look: Readonly<Record<string, string>>) =>
+    ({
+      look: { workspaceAccent: '#1f5fd6', ...look },
+      photoSrc: () => photo,
+      onPhoto: () => undefined,
+      onRemovePhoto: () => undefined,
+    }) as const;
+  const owners: readonly (readonly [string, IdentityOwner, PageIdentity, Readonly<Record<string, string>>])[] = [
     [
       'own',
       { kind: 'own' },
       { ...TITLED, showJobTitle: true, site: 'https://acme.com/', footLine: 'Replies within a day.' },
+      { avatar: 'v1', cover: 'v2' },
     ],
-    ['team', { kind: 'team', member: 'm-1' }, { ...OFF, name: 'Nick Page', jobTitle: 'Barista' }],
+    ['team', { kind: 'team', member: 'm-1' }, { ...OFF, name: 'Nick Page', jobTitle: 'Barista' }, {}],
     [
       'kept',
       { kind: 'kept', by: 'self' },
       { ...OFF, name: 'Priya Raman', jobTitle: 'Head of Sales', showJobTitle: true },
+      { avatar: 'v1' },
     ],
   ];
   it('in light and dark, at a desktop’s and a phone’s width', async () => {
-    for (const [name, owner, identity] of owners) {
+    for (const [name, owner, identity, look] of owners) {
+      const data = { profile: { update: vi.fn() }, teamPages: { namePerson: vi.fn() } } as unknown as DataLayer;
+      // The editor's column as it now runs (owner, 10 Nov 2026): Profile first, then the blocks, then Details last.
       shown = await renderInApp(
         () => (
           <main>
             <PreviewLayout previewShare="wide">
-              <Card title={strings.details}>
+              <Card title={strings.profile}>
+                <PagePhotos slots={['avatar', 'cover']} extras={photos(look)} />
                 <IdentityFields
-                  data={{ profile: { update: vi.fn() }, teamPages: { namePerson: vi.fn() } } as unknown as DataLayer}
+                  data={data}
                   slug="acme"
                   owner={owner}
                   identity={identity}
@@ -231,24 +271,37 @@ describe.runIf(SHOT_DIR !== undefined && SHOT_DIR !== '')('the Details card, pho
                   onSwitchRefused={() => undefined}
                 />
               </Card>
+              <Card title={strings.blocks}>{null}</Card>
+              {owner.kind === 'own' && (
+                <Card title={strings.details}>
+                  <IdentityFields
+                    data={data}
+                    slug="acme"
+                    part="details"
+                    identity={identity}
+                    onSaved={() => undefined}
+                    onSwitchRefused={() => undefined}
+                  />
+                </Card>
+              )}
             </PreviewLayout>
           </main>
         ),
         { data: {}, pattern: '/w/$slug/link-page', at: '/w/acme/link-page' },
       );
       for (const width of [1280, 390]) {
-        await page.viewport(width, 800);
+        await page.viewport(width, 1000);
         for (const theme of THEMES) {
           applyTheme(theme);
-          await page.screenshot({ path: `${SHOT_DIR ?? ''}/details-${name}-${theme}-${String(width)}.png` } as never);
+          await page.screenshot({ path: `${SHOT_DIR ?? ''}/profile-${name}-${theme}-${String(width)}.png` } as never);
         }
       }
       // Focus on the name, as a keyboard reaches it.
       if (owner.kind !== 'kept') {
-        await page.viewport(1280, 800);
+        await page.viewport(1280, 1000);
         applyTheme('light');
         await userEvent.click(page.getByRole('textbox', { name: 'Name' }));
-        await page.screenshot({ path: `${SHOT_DIR ?? ''}/details-${name}-focus.png` } as never);
+        await page.screenshot({ path: `${SHOT_DIR ?? ''}/profile-${name}-focus.png` } as never);
       }
       resetTheme();
       shown.unmount();
