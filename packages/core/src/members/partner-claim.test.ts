@@ -442,6 +442,45 @@ describe('a connected app’s person getting their own Timefix login (AC-7023)',
     expect(await rowsOf(hub.graceMember)).toMatchObject({ removed: true });
   });
 
+  it('lets the app keep or lower a claimed person’s role, never raise it (an unclaimed one’s still rises)', async () => {
+    const hub = await connected();
+    const put = (externalId: string, email: string, role: 'admin' | 'member') =>
+      putPartnerMember(
+        hub.partner,
+        { connectionId: hub.connectionId, externalId, person: { email, name: 'Someone', role } },
+        { users },
+      );
+    // Unclaimed (AC-7024 as is): a Member is raised to Admin.
+    const alan = await put('u-alan', `alan-${tag()}@example.com`, 'member');
+    expect((await put('u-alan', alan.member.email, 'admin')).member.role).toBe('admin');
+    // Claimed Grace, a Member: kept as Member, but never raised to Admin.
+    const sent = await inviteToClaimLogin(hub.owner, {
+      member: hub.graceMember,
+      email: `grace-q-${tag()}@example.com`,
+    });
+    await claim(sent.token);
+    expect((await put('u-grace', hub.hubEmail, 'member')).member.role).toBe('member');
+    await expect(put('u-grace', hub.hubEmail, 'admin')).rejects.toMatchObject({
+      refusal: {
+        code: 'FORBIDDEN',
+        message: 'This person has their own Timefix login. Their role can only be raised inside Timefix.',
+      },
+    });
+    const [row] = await testQuery<{ role: string }>(ownerUrl, 'select role from members where id = $1', [
+      hub.graceMember,
+    ]);
+    expect(row?.role).toBe('member');
+    // Let go of and asked for again as Admin: refused, and nothing written (she stays let go of).
+    await removePartnerMember(hub.partner, { connectionId: hub.connectionId, externalId: 'u-grace' }, { users });
+    expect(await refusalOf(put('u-grace', hub.hubEmail, 'admin'))).toEqual({ code: 'FORBIDDEN' });
+    expect(await rowsOf(hub.graceMember)).toMatchObject({ removed: true });
+    expect((await put('u-grace', hub.hubEmail, 'member')).member.role).toBe('member');
+    // Made an Admin in Timefix, the app may keep her there or lower her to Member.
+    await testQuery(ownerUrl, `update members set role = 'admin' where id = $1`, [hub.graceMember]);
+    expect((await put('u-grace', hub.hubEmail, 'admin')).member.role).toBe('admin');
+    expect((await put('u-grace', hub.hubEmail, 'member')).member.role).toBe('member');
+  });
+
   it('never lets the app bring back a login the workspace removed', async () => {
     const hub = await connected();
     const sent = await inviteToClaimLogin(hub.owner, {

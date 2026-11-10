@@ -18,9 +18,10 @@
 //   content stays; the same external id again brings back the same identity, and with it their handle and page.
 //
 // - Someone who set up their own Timefix login (AC-7023, migration 0206) stays the partner's: a PUT still changes their
-//   name and role, never their address (it is their login's), and the list and launch still find them. A DELETE only
-//   lets go of them (`member.app_released`): they stay a member with their login, their sessions in Timefix carry on,
-//   and only the partner's frame closes. A PUT with the same external id afterwards takes them back.
+//   name, and keeps or lowers their role (never raises it: 403), never their address (it is their login's), and the
+//   list and launch still find them. A DELETE only lets go of them (`member.app_released`): they stay a member with
+//   their login, their sessions in Timefix carry on, and only the partner's frame closes. A PUT with the same external
+//   id afterwards takes them back.
 //
 // Only the scope `enterAsPartner` minted reaches these, and only for the connection it names: any other connection's
 // id answers `NOT_FOUND`, as one that doesn't exist (AC-7025).
@@ -63,6 +64,13 @@ const NO_CONNECTION = 'There is no such connection.';
 const NO_MEMBER = 'This connection has no person with that external id.';
 const EMAIL_TAKEN =
   'Someone already in this workspace uses this email. A managed member needs an address nobody here uses.';
+const LOGIN_ROLE_RAISE = 'This person has their own Timefix login. Their role can only be raised inside Timefix.';
+/**
+ * How much a role reaches, to tell a raise from a lowering (a custom role on Member counts as Member). A role this
+ * list doesn't know ranks below every other, so any change to it reads as a raise and is refused (fails closed).
+ */
+const ROLE_RANK = { guest: 0, member: 1, admin: 2, owner: 3 } as const;
+const rankOf = (role: string): number => (role in ROLE_RANK ? ROLE_RANK[role as keyof typeof ROLE_RANK] : -1);
 const LOGIN_REMOVED =
   'This person has their own Timefix login and is no longer in the workspace. Only the workspace can invite them back.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only the workspace’s owners can remove them in Timefix.';
@@ -357,6 +365,11 @@ export async function putPartnerMember(
         // Let go of while they kept their login, and asked for again: the partner manages them again, unless the
         // workspace made them an owner since (AC-7024: the app never manages an owner it didn't have).
         if (found.removedAt !== null && active.role === 'owner') throw refuse('FORBIDDEN', OWNER_KEPT);
+        // Someone with their own login (coordinator, 10 Nov 2026): the app may keep or lower their role, never raise it,
+        // since a login carries it to all of Timefix, not only the app's frame. A raise is Timefix's to make.
+        if (hasLogin && active.role !== 'owner' && rankOf(role) > rankOf(active.role)) {
+          throw refuse('FORBIDDEN', LOGIN_ROLE_RAISE);
+        }
         if (found.removedAt !== null) {
           await tx
             .update(managedMembers)
