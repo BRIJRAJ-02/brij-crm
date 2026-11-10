@@ -619,7 +619,9 @@ export const SheetSide: Story = {
   play: async () => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Your picks');
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Finish the slide in rather than wait it out: a test page pauses animations, and in WebKit a slow runner was
+    // still mid slide after 400ms (10 Nov 2026).
+    await settleAnimations();
     const panel = dialog.getBoundingClientRect();
     await expect(Math.round(panel.right)).toBe(globalThis.innerWidth);
     await expect(Math.round(panel.bottom)).toBe(globalThis.innerHeight);
