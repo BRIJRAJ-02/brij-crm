@@ -55,6 +55,25 @@ describe('businessShell', () => {
     expect(html).toContain('"kind":"business"');
   });
 
+  it('shares the business’s own cover when it has one, leading the structured data’s pictures (AC-6513)', () => {
+    const cover = { id: 'c', width: 1200, height: 630, src: '/api/public/business/somewhere-nowhere/photos/c' };
+    const html = businessShell(SHELL, { ...PAGE, cover }, 'https://timefix.com', 1);
+    expect(html).toContain('content="https://timefix.com/api/public/business/somewhere-nowhere/photos/c"');
+    expect(html).toContain('<meta property="og:image:width" content="1200" />');
+    expect(html).toContain('<link rel="preload" as="image" href="/api/public/business/somewhere-nowhere/photos/c"');
+    const ld = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '{}') as {
+      readonly image?: readonly string[];
+    };
+    expect(ld.image).toEqual([
+      'https://timefix.com/api/public/business/somewhere-nowhere/photos/c',
+      'https://timefix.com/api/public/business/somewhere-nowhere/photos/a',
+    ]);
+    // A cover that isn't a picture's shape is left out, and the first photo leads again.
+    const read = businessOf({ ...PAGE, cover: 'nope' });
+    expect(read?.cover).toBeUndefined();
+    expect(businessShell(SHELL, read ?? PAGE, 'https://timefix.com', 1)).toContain('photos/a"');
+  });
+
   it('carries no structured data and says noindex for a place hidden from search engines', () => {
     const html = businessShell(SHELL, { ...PAGE, indexable: false }, 'https://timefix.com', 1);
     expect(html).not.toContain('application/ld+json');

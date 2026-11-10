@@ -38,6 +38,8 @@ export type BusinessPhoto = z.infer<typeof BusinessPhoto>;
 export const BusinessPageContent = z
   .strictObject({
     gallery: z.array(BusinessPhoto).max(L.photos, `A page shows up to ${String(L.photos)} photos.`),
+    /** The business's own cover photo (AC-6513, owner decision 10 Nov 2026); absent, the gallery's first leads. */
+    cover: BusinessPhoto.optional(),
     amenities: z.array(BusinessAmenityName).max(BUSINESS_AMENITIES.length),
     about: z
       .string()

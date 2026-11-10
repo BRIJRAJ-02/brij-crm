@@ -36,3 +36,23 @@ export async function forgetAfterCommit(
     log.warn('edge.cache.forget_failed', { ...fields, tags: tags.length, ...errorFields(error) });
   }
 }
+
+/**
+ * `forgetAfterCommit` for tags that must be read first (each business's own, `businessEdgeTags` in core): a read that
+ * fails is logged and the purge skipped, never turning the committed write into a refusal; the answers' short
+ * `s-maxage` still bounds how long the old copy lives.
+ */
+export async function forgetReadAfterCommit(
+  cache: EdgeCache,
+  tagsOf: () => Promise<readonly string[]>,
+  fields: Readonly<Record<string, unknown>> = {},
+): Promise<void> {
+  let tags: readonly string[];
+  try {
+    tags = await tagsOf();
+  } catch (error) {
+    log.warn('edge.cache.tags_failed', { ...fields, ...errorFields(error) });
+    return;
+  }
+  await forgetAfterCommit(cache, tags, fields);
+}

@@ -339,6 +339,7 @@ export const ACCESS_TABLE = {
   publishMenus: { permission: 'hospitality.manage' },
   discardMenuDraft: { permission: 'hospitality.manage' },
   menuPlaceIds: { anyMember: true },
+  businessEdgeTags: { anyMember: true },
   readMenuPhotoFile: { permission: 'hospitality.service' },
   requireMenuEditor: { permission: 'hospitality.manage' },
   // The visit engine (spec 0066, B0): the desk's offered times and booking, everyone's calendar's permission. B2 adds a

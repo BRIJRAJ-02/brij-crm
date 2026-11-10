@@ -7,7 +7,8 @@
 //   GET /public/menu/:key/tables/:code           the table a QR's code names (H2), counting the scan; never cached
 // Each enters through the menu door (`crm_menu_by_key`: ids only, and only while the workspace is live and Menu is
 // on), so a key that names nothing, a malformed one and a removed app all answer the same
-// 404 `no-store`. Answers are kept at the edge under the place's tag (`menu:<placeId>`) and the workspace's brand tag,
+// 404 `no-store`. Answers are kept at the edge under the place's tag (`menu:<placeId>`), the menu's under its business's
+// own `menu-ws:<opaque id>` too, and the workspace's brand tag (filed by the platform, never in a body),
 // so Publish, Sold out, a profile change, a brand change and removing the app purge them at once (Rules settled:
 // Routes); the browser always asks again (max-age 0), so a guest on the page sees Sold out on the next read. 60 reads a
 // minute per address, as the booking pages' reads; the `/m/<key>` render's reads count per guest and per key
@@ -15,6 +16,7 @@
 import {
   brandCacheTags,
   menuCacheTags,
+  menuWorkspaceTags,
   MENU_KEY_PATTERN,
   TABLE_CODE_PATTERN,
   type MenuPhotoSize,
@@ -22,7 +24,6 @@ import {
 import {
   enterMenuPage,
   menuLookStylesheet,
-  menuWorkspaceCacheTags,
   readMenuPhoto,
   readPublicMenu,
   scanTable,
@@ -116,11 +117,14 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     return entry;
   };
 
-  /** Files the answer under the place's and the brand's tags. */
-  const tag = (entry: MenuEntry) =>
+  /**
+   * Files the answer under the place's and the brand's tags, and the menu's under its business's own (`cacheId`, never
+   * shared by another business of the workspace). The brand's tag is filed by the platform only, never shown.
+   */
+  const tag = (entry: MenuEntry, cacheId?: string) =>
     deps.edgeCache?.tag([
       ...menuCacheTags(entry.placeId),
-      ...menuWorkspaceCacheTags(entry.workspaceId),
+      ...(cacheId === undefined ? [] : menuWorkspaceTags(cacheId)),
       ...brandCacheTags(entry.workspaceId),
     ]);
 
@@ -130,7 +134,7 @@ export function mountPublicMenu(app: Hono<{ Variables: Variables }>, deps: Publi
     const read = await readPublicMenu({ db: deps.db }, entry);
     // Before the first Publish there is no menu to show: the plain not found answer, never cached.
     if (read === undefined) return nothingHere();
-    tag(entry);
+    tag(entry, read.menu.cacheId);
     return Response.json(read.menu, {
       headers: { 'cache-control': MENU_CACHE_CONTROL, 'x-content-type-options': 'nosniff' },
     });

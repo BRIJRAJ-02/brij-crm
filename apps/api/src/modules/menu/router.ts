@@ -1,6 +1,6 @@
 import { brandCacheTags, menuCacheTags } from '@crm/contracts';
 import {
-  businessCacheTags,
+  businessEdgeTags,
   deleteItem,
   deleteMenu,
   deleteOptionGroup,
@@ -20,7 +20,7 @@ import {
   setItemSoldOut,
   setMenuHidden,
 } from '@crm/core';
-import { forgetAfterCommit } from '../../edge-cache.ts';
+import { forgetAfterCommit, forgetReadAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext } from '../../orpc.ts';
 import { errorFields, log } from '../../log.ts';
@@ -150,7 +150,9 @@ export const menuRouter = m.router({
     );
     await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
+    await forgetReadAfterCommit(context.edgeCache, () =>
+      businessEdgeTags(context.scope, { properties: [input.property], places: placeIds }),
+    );
     return draft;
   }),
   setHidden: m.setHidden.handler(async ({ context, input }) => {
@@ -159,7 +161,9 @@ export const menuRouter = m.router({
     );
     await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
+    await forgetReadAfterCommit(context.edgeCache, () =>
+      businessEdgeTags(context.scope, { properties: [input.property], places: placeIds }),
+    );
     return draft;
   }),
   // The guest look (spec 0065, AC-6570 as amended): live at once, so every guest page's edge copy goes once it has
@@ -170,9 +174,11 @@ export const menuRouter = m.router({
     );
     await forgetAfterCommit(context.edgeCache, [
       ...menuCacheTags(...placeIds),
-      ...businessCacheTags(context.scope.workspaceId, placeIds),
       ...brandCacheTags(context.scope.workspaceId),
     ]);
+    await forgetReadAfterCommit(context.edgeCache, () =>
+      businessEdgeTags(context.scope, { properties: [input.property], places: placeIds }),
+    );
     await removeFiles(context, removedPaths);
     return draft;
   }),
@@ -182,7 +188,9 @@ export const menuRouter = m.router({
     );
     await forgetAfterCommit(context.edgeCache, menuCacheTags(...placeIds));
     // The business page shows the menu too (spec 0066, AC-6642): its edge copies go with the guest menu's.
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(context.scope.workspaceId, placeIds));
+    await forgetReadAfterCommit(context.edgeCache, () =>
+      businessEdgeTags(context.scope, { properties: [input.property], places: placeIds }),
+    );
     await removeFiles(context, removedPaths);
     return draft;
   }),

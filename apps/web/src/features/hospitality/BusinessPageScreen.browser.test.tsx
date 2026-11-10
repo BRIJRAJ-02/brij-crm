@@ -228,6 +228,58 @@ describe('Settings › Business › Page', () => {
       .toEqual([PHOTO(1).id, PHOTO(2).id, PHOTO(3).id]);
   });
 
+  it('keeps a cover apart from the gallery, with Change, Adjust and Remove with Undo, in both themes (AC-6513)', async () => {
+    const drawn = (photoId: string) =>
+      `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9" id="p${photoId}"><rect width="16" height="9" fill="#${photoId.endsWith('9') ? '3d6b8f' : 'c9704f'}"/></svg>`)}`;
+    const cover = { id: '01900000-0000-7000-8000-000000000009', width: 1200, height: 630 };
+    const withCover: BusinessPageView = {
+      ...BASE,
+      handle: 'somewhere',
+      draft: { ...BASE.draft, cover, gallery: [PHOTO(1), PHOTO(2)] },
+    };
+    for (const width of [1280, 390]) {
+      for (const theme of THEMES) {
+        const { store } = await editorOf(withCover);
+        await show({ ...store, photoSrc: (_slug: string, photoId: string) => drawn(photoId) }, createToasts(), width);
+        applyTheme(theme);
+        await expect.element(page.getByRole('button', { name: 'Change cover photo' })).toBeVisible();
+        await expect.element(page.getByRole('button', { name: 'Remove cover photo' })).toBeVisible();
+        // With a cover, no gallery photo says it leads the page.
+        await expect.element(page.getByText('Leads the page', { exact: true })).not.toBeInTheDocument();
+        expect(await axeViolations()).toEqual([]);
+        if (SHOT_DIR !== undefined && SHOT_DIR !== '') {
+          await page.screenshot({ path: `${SHOT_DIR}/cover-${theme}-${String(width)}.png`, fullPage: true } as never);
+        }
+        shown?.unmount();
+        shown = undefined;
+        resetTheme();
+      }
+    }
+    // Remove takes it off the draft at once, and Undo puts it back.
+    const { store, calls } = await editorOf(withCover);
+    const { toasts, said } = recordingToasts();
+    await show({ ...store, photoSrc: (_slug: string, photoId: string) => drawn(photoId) }, toasts);
+    // Its description is typed beside it and saved on the cover, as each photo's is.
+    await userEvent.fill(page.getByRole('textbox', { name: 'Cover photo description' }), 'The terrace');
+    await expect.poll(() => calls.at(-1)?.draft?.cover?.alt).toBe('The terrace');
+    await userEvent.click(page.getByRole('button', { name: 'Remove cover photo' }));
+    await expect.poll(() => calls.at(-1)?.draft?.cover).toBeUndefined();
+    expect(calls.at(-1)?.kind).toBe('save');
+    // The remove button goes with the picture: focus lands on Upload, not the page.
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toBe('Upload cover photo');
+    const removed = said.find((content) => content.message === 'Cover photo removed.');
+    expect(removed?.action?.label).toBe('Undo');
+    removed?.action?.onAction();
+    await expect.poll(() => calls.at(-1)?.draft?.cover?.alt).toBe('The terrace');
+    // Without a cover, the first photo leads, as before, and the row offers an upload.
+    shown?.unmount();
+    shown = undefined;
+    const { store: bare } = await editorOf({ ...withCover, draft: { ...BASE.draft, gallery: [PHOTO(1)] } });
+    await show({ ...bare, photoSrc: (_slug: string, photoId: string) => drawn(photoId) });
+    await expect.element(page.getByText('Leads the page', { exact: true })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Upload cover photo' })).toBeVisible();
+  });
+
   it('asks before discarding, in the danger tone', async () => {
     const { store } = await editorOf({
       ...BASE,

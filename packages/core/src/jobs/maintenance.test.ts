@@ -25,6 +25,8 @@ import { deleteNote, saveNote } from '../notes/notes.ts';
 import { markSubmissionSpam } from '../forms/submissions.ts';
 import { createTask, deleteTask } from '../tasks/tasks.ts';
 import { addPageOnlyPerson, removePageOnlyPerson } from '../profile/page-only.ts';
+import { installApp } from '../hospitality/apps.ts';
+import { addBusinessPhoto, saveBusinessPage } from '../hospitality/business-page.ts';
 import { inviteToManagePage } from '../members/page-handover.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord } from '../engine/records.ts';
@@ -1076,6 +1078,59 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(
       await testQuery(ownerUrl, 'select handle from auth.public_profiles where workspace_id = $1', [t.workspaceId]),
     ).toEqual([{ handle: `${stem}-b` }]);
+  });
+
+  it('removes a business page’s pictures no draft or published page uses, a day after upload, cover kept (AC-6513)', async () => {
+    const t = await team([]);
+    await installApp(t.owner, {
+      app: 'table_seating',
+      business: {
+        name: 'Somewhere',
+        kind: 'restaurant',
+        place: { country: 'IN', timeZone: 'Asia/Kolkata', city: 'Bengaluru', addressLine: '1 MG Road' },
+        currency: 'INR',
+      },
+    });
+    const [cover, shown, unused, fresh] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    for (const id of [cover, shown, unused]) {
+      await addBusinessPhoto(t.owner, { id, type: 'image/png', bytes: 10, width: 10, height: 10 });
+    }
+    await saveBusinessPage(t.owner, {
+      draft: {
+        cover: { id: cover, width: 10, height: 10 },
+        gallery: [{ id: shown, width: 10, height: 10 }],
+        amenities: [],
+        hiddenPlaces: [],
+      },
+    });
+    await testQuery(
+      ownerUrl,
+      `update business_photos set created_at = now() - interval '2 days' where workspace_id = $1`,
+      [t.workspaceId],
+    );
+    // One just uploaded may still be on its way into the draft: it waits its day.
+    await addBusinessPhoto(t.owner, { id: fresh, type: 'image/png', bytes: 10, width: 10, height: 10 });
+    const removed: string[] = [];
+    const store = {
+      remove: (paths: readonly string[]) => {
+        removed.push(...paths);
+        return Promise.resolve();
+      },
+    };
+    await fanOut('2026-10-17', [t.workspaceId]);
+    const job = (await cleanups(t.workspaceId)).find((row) => row.once_key === maintenanceKey('2026-10-17'));
+    if (job === undefined) throw new Error('No cleanup was started.');
+    const withStore = jobKinds({ environment: 'local', queue, uploads: store });
+    expect((await drive(runnerFor(withStore, fakeClock()), t.workspaceId, job.id)).at(-1)).toBe('succeeded');
+    expect(removed).toEqual([`business-page/${t.workspaceId}/${unused}.png`]);
+    const left = await testQuery<{ id: string }>(
+      ownerUrl,
+      'select id::text from business_photos where workspace_id = $1 order by id',
+      [t.workspaceId],
+    );
+    expect(left.map((row) => row.id)).toEqual([cover, shown, fresh].sort());
+    const finished = await getJob(systemScope(db, t.workspaceId), withStore, job.id);
+    expect(finished.result).toMatchObject({ cleanup: { businessPhotos: 1 } });
   });
 
   it('refuses the page purge for anyone still a member, and in another workspace (migration 0203)', async () => {

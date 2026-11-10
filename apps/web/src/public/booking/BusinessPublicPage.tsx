@@ -7,7 +7,13 @@
 //
 // It draws the shell's copy at once when there is a recent one (boot.ts), and reads the page again behind it, so an
 // edge cached shell is never what stays. An old handle's or slug's address shows the current one in place.
-import { createBusinessClient, directionsLinks, isDataError, type PublicBusinessPage } from '@crm/data/business-page';
+import {
+  businessPhotosOf,
+  createBusinessClient,
+  directionsLinks,
+  isDataError,
+  type PublicBusinessPage,
+} from '@crm/data/business-page';
 
 // The page's read, for main.tsx's late check that a handle names a business: one lazy chunk carries the page and
 // its client (a separate dynamic import of the package split every app route into its own first load file).
@@ -143,7 +149,8 @@ export function BusinessPublicPage({ handle, slug, initial, onMoved }: BusinessP
       {...(logo !== undefined && VERSION.test(logo)
         ? { logo: `/api/public/business/${encodeURIComponent(shown.handle)}/look/logo?v=${logo}` }
         : {})}
-      photos={shown.gallery}
+      // The business's own cover leads (AC-6513), then the gallery; without one, the gallery's first photo does.
+      photos={businessPhotosOf(shown)}
       amenities={shown.amenities}
       // A place with no phone of its own takes the business's, so Call to book reaches somebody.
       place={{ ...place, phone: place.phone ?? shown.phone }}

@@ -168,7 +168,8 @@ export async function readPublicMenu(
     const snapshot = hidden ? { currency: parsed.data.currency, menus: [], items: {}, groups: {} } : parsed.data;
     const menu: PublicMenu = {
       placeId: entry.placeId,
-      cacheId: businessCacheId(entry.workspaceId),
+      // The place's own business's opaque id (owner decision, 10 Nov 2026): never shared by another business.
+      cacheId: businessCacheId(entry.workspaceId, place.propertyId),
       version: latest.version,
       business: {
         name: business?.name ?? place.name,

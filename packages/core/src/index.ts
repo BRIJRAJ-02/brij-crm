@@ -1159,6 +1159,7 @@ export {
 /** The business page's editor (spec 0066, B4 lite): its address, draft, places' slugs, photos and Publish. */
 export {
   addBusinessPhoto,
+  BUSINESS_HANDLES_PER_PERSON_DAILY,
   businessPhotoFolder,
   businessPhotoPath,
   claimBusinessHandle,
@@ -1170,9 +1171,13 @@ export {
   setPlaceSlug,
   type BusinessPageChange,
   type BusinessPagePublished,
+  type HandleBudget,
+  type HandleDeps,
 } from './hospitality/business-page.ts';
-/** The business's and its guest menus' edge cache tags (spec 0066): an opaque id, never its workspace's id. */
-export { businessCacheId, businessCacheTags, menuWorkspaceCacheTags } from './hospitality/cache-tags.ts';
+/** Each business's and its guest menus' edge cache tags (spec 0066): an opaque id per business, never its workspace's. */
+export { businessCacheId, businessCacheTags, menuBusinessCacheTags } from './hospitality/cache-tags.ts';
+/** The edge cache tags a committed write made stale, each business's own (owner decision, 10 Nov 2026). */
+export { businessEdgeTags, type EdgeTarget } from './hospitality/edge-tags.ts';
 /** The public business page's reads (spec 0066, B4 lite): no session, the handle is the only key. */
 export {
   bookingCompanyOf,

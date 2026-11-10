@@ -172,5 +172,5 @@ export { confirmNews, NEWS_LINK_DAYS, type NewsConfirmed } from './visits/news.t
 
 /** The business pages search engines may list (spec 0066, AC-6644), for sitemap-handles.xml. */
 export { bookingCompanyOf, listSitemapBusinesses } from './hospitality/public-page.ts';
-/** The business's and its guest menus' edge cache tags (spec 0066): an opaque id, never the workspace's id. */
-export { businessCacheTags, menuWorkspaceCacheTags } from './hospitality/cache-tags.ts';
+/** Each business's and its guest menus' edge cache tags (spec 0066): an opaque id per business, never the workspace's. */
+export { businessCacheTags, menuBusinessCacheTags } from './hospitality/cache-tags.ts';

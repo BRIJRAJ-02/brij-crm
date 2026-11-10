@@ -1,12 +1,13 @@
 import { brandCacheTags, linkPageCacheTags } from '@crm/contracts';
 import {
-  businessCacheTags,
+  businessEdgeTags,
   discardBrandTemplate,
   getWorkspaceBrand,
   publishBrandTemplate,
   saveWorkspaceBrand,
   workspaceHandles,
 } from '@crm/core';
+import { forgetReadAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -25,10 +26,9 @@ export const brandRouter = member.brand.router({
     );
     // Once committed, the edge's copies of every page's brand stylesheet and logo are deleted (AC-21), and the business
     // page's answer, which names its guest look's version (the accent is in it), so it never names an old one.
-    await context.edgeCache.forget([
-      ...brandCacheTags(context.scope.workspaceId),
-      ...businessCacheTags(context.scope.workspaceId),
-    ]);
+    await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
+    // Each business's own tag (never one they share): every business wears the kit until it has a look of its own.
+    await forgetReadAfterCommit(context.edgeCache, () => businessEdgeTags(context.scope, { every: true }));
     return saved;
   }),
   // The waiting template goes live (spec 0068): every public page's edge copies go once it has committed, the brand

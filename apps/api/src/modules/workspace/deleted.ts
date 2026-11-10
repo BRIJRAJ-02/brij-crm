@@ -1,5 +1,5 @@
-import { businessCacheTags, enterDeletedWorkspace, restoreWorkspace } from '@crm/core';
-import { forgetAfterCommit } from '../../edge-cache.ts';
+import { businessEdgeTags, enterDeletedWorkspace, restoreWorkspace } from '@crm/core';
+import { forgetReadAfterCommit } from '../../edge-cache.ts';
 import { commitWrite } from '../../hooks.ts';
 import { authed, memberDoor } from '../../orpc.ts';
 import { sourceOf } from '../../source.ts';
@@ -30,7 +30,7 @@ export const deletedWorkspaceRouter = {
     const { settings } = restoration;
     await followInDirectory('restore', () => context.directory.setWorkspaceDeleted(settings.id, false));
     // The edge may hold its business page's 404 from while it was deleted: those copies go (spec 0066, AC-6816).
-    await forgetAfterCommit(context.edgeCache, businessCacheTags(settings.id));
+    await forgetReadAfterCommit(context.edgeCache, () => businessEdgeTags(entry.scope, { every: true, menus: true }));
     // Everyone told it was deleted hears it is back, after the commit and without holding up the answer.
     context.keepAlive(tellMembersRestored(context, restoration));
     return settings;

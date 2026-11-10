@@ -55,6 +55,8 @@
 //    its cell names its id, and the row is at least a day old (so a file just uploaded onto a cell, or just
 //    copied by filing, is never swept before its value lands). Lazy, exactly as `uploads` is: clearing a cell,
 //    overwriting it, trashing or restoring a record and value history never delete bytes themselves.
+// 10. `business_photos` (owner decision, 10 Nov 2026): a business page's pictures no draft or published page of their
+//    business uses (gallery or cover), a day after upload, removed from the store and then their rows, 100 a batch.
 // The outbox is no phase: the fan out prunes it once for every workspace.
 // Its result holds the totals per phase; `done` counts every row it removed.
 import { sql } from 'drizzle-orm';
@@ -122,6 +124,7 @@ const PHASES = [
   'uploads',
   'record_files',
   'link_images',
+  'business_photos',
 ] as const;
 
 /** How long a booking page's view counts are kept (spec 0047, AC-1628): a year, by day. */
@@ -197,6 +200,8 @@ const Totals = z.object({
   recordFiles: Count.default(0),
   /** A link page's pictures no block used for a day (spec 0061); 0 in an older checkpoint. */
   linkImages: Count.default(0),
+  /** A business page's pictures neither its draft nor its published page used for a day (AC-6513); 0 in an older checkpoint. */
+  businessPhotos: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -232,6 +237,7 @@ const NO_TOTALS: Totals = {
   uploads: 0,
   recordFiles: 0,
   linkImages: 0,
+  businessPhotos: 0,
 };
 
 /**
@@ -305,6 +311,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   uploads: totals.uploads + (more.uploads ?? 0),
   recordFiles: totals.recordFiles + (more.recordFiles ?? 0),
   linkImages: totals.linkImages + (more.linkImages ?? 0),
+  businessPhotos: totals.businessPhotos + (more.businessPhotos ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -1070,6 +1077,50 @@ async function unusedLinkImages(
 }
 
 /**
+ * The last phase (owner decision, 10 Nov 2026; AC-6513's cover): a business page's pictures that neither its draft nor
+ * its published page uses (the gallery or the cover), uploaded more than a day ago, in this workspace only. Publish
+ * drops the unused ones of the business it publishes; this catches an upload never published, or left behind by a
+ * Discard, so the store never keeps a picture nobody can see. The rows go first, each checked unused again in the
+ * delete itself, then their files, in one transaction: a store that fails rolls the rows back and the job retries.
+ * Without a store the rows wait.
+ */
+async function unusedBusinessPhotos(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  if (store === undefined) return outcome(nextPhase(at, at.totals), at, at.totals, 0);
+  const unused = sql`
+    bp.workspace_id = ${scope.workspaceId}
+    and bp.created_at < now() - interval '1 day'
+    and not exists (
+      select 1 from business_pages pg
+      cross join lateral (values (pg.draft), (pg.published)) as v(content)
+      where pg.workspace_id = bp.workspace_id and pg.property_id = bp.property_id and v.content is not null
+        and (v.content -> 'cover' ->> 'id' = bp.id::text
+          or coalesce(v.content -> 'gallery', '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('id', bp.id::text))))`;
+  const found = await tx.execute<{ id: string }>(sql`
+    select bp.id::text from business_photos bp where ${unused}
+    order by bp.created_at limit ${UPLOADS_BATCH}
+    for update of bp skip locked
+  `);
+  let removed = 0;
+  if (found.rows.length > 0) {
+    const ids = JSON.stringify(found.rows.map((row) => row.id));
+    const gone = await tx.execute<{ path: string }>(sql`
+      delete from business_photos bp
+      where bp.id in (select jsonb_array_elements_text(${ids}::jsonb)::uuid) and ${unused}
+      returning bp.path
+    `);
+    if (gone.rows.length > 0) await store.remove(gone.rows.map((row) => row.path));
+    removed = gone.rows.length;
+  }
+  const totals = plus(at.totals, { businessPhotos: removed });
+  return outcome(found.rows.length === UPLOADS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
+/**
  * Phase 9 (27 Oct 2026): a record's own copy of a file whose cell no longer names it, live or in history. Nothing
  * deletes these bytes eagerly: a cleared or overwritten cell, a trashed record and a restore all leave the history
  * row that names the id, and the file goes only once that row has gone too (an erase, a purge, or history past
@@ -1173,6 +1224,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return orphanRecordFiles(context, at, uploads);
         case 'link_images':
           return unusedLinkImages(context, at, uploads);
+        case 'business_photos':
+          return unusedBusinessPhotos(context, at, uploads);
       }
     },
   });

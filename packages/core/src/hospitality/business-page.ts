@@ -10,7 +10,8 @@
 // One page per business (spec 0065 H7, AC-6592): every call works in the business it names (`propertyId`, the
 // switcher's choice), else the first. The first business keeps the workspace's handle and claims a new one at once, as
 // before. Another business's address is only a wish (`pending_handle`) until its first Publish claims it, so nobody can
-// hold names by the dozen; and a workspace makes at most 5 new handles a day (crm_claim_business_handle). Which business
+// hold names by the dozen; a workspace makes at most 5 new handles a day (crm_claim_business_handle), and a person at
+// most 10 across every workspace (`HandleBudget`, owner decision 10 Nov 2026). Which business
 // a handle belongs to is `property_handles`, so an old handle keeps finding its own business's page.
 import {
   APPOINTMENT_KINDS,
@@ -259,13 +260,48 @@ function claimRefusal(error: unknown): Error {
 /** How many addresses one business may have held (AC-6640's 20, now per business). */
 const HANDLES_PER_BUSINESS = 20;
 
+/** How many new business addresses one person may take a day, across every workspace (owner decision, 10 Nov 2026). */
+export const BUSINESS_HANDLES_PER_PERSON_DAILY = 10;
+
+/** The refusal for a person past their daily new addresses, in the one error shape. */
+const PERSON_DAILY_REFUSAL = `You’ve taken ${String(BUSINESS_HANDLES_PER_PERSON_DAILY)} new addresses today. Try again tomorrow.`;
+
+/**
+ * The person's own budget of new business addresses (owner decision, 10 Nov 2026): 10 a day across every workspace
+ * they work in, on top of each workspace's 5. The api backs it with the durable limiter keyed by the person's user id,
+ * so it holds across instances and workspaces. `take` spends one at once and answers whether it was there to spend,
+ * in one atomic step, so parallel claims can never pass the cap together; a claim refused after it (the workspace's 5,
+ * an address taken meanwhile) still costs the person one, the price of a cap nobody can race.
+ */
+export interface HandleBudget {
+  readonly take: () => Promise<boolean>;
+}
+
+/** What the page's handle writes take beyond the scope: the person's budget, when the caller has one. */
+export interface HandleDeps {
+  readonly handleBudget?: HandleBudget | undefined;
+}
+
 /**
  * Takes `handle` for `property` (AC-6592): held for the workspace through crm_handle's definer (anybody else's is
- * `SLUG_TAKEN`; past 5 new ones today, `LIMIT_REACHED`), then for this business in `property_handles`: one another of
+ * `SLUG_TAKEN`; past 5 new ones today, `LIMIT_REACHED`; a new one past the person's budget, `LIMIT_REACHED` first), then for this business in `property_handles`: one another of
  * the workspace's businesses holds or held is `SLUG_TAKEN` too, and one business holds at most 20. Its own old one is
- * its own again, free.
+ * its own again, free. Answers whether the handle was a new one (nobody held it before).
  */
-async function takeHandle(tx: WorkspaceTx, workspaceId: string, propertyId: string, handle: string): Promise<void> {
+async function takeHandle(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  propertyId: string,
+  handle: string,
+  budget?: HandleBudget,
+): Promise<boolean> {
+  // A handle nobody holds or held is a new one, the only kind the person's daily budget counts: their own business's
+  // old address is theirs again for free, and one somebody else holds is refused below whatever the budget says.
+  const taken = await tx.execute<{ taken: boolean }>(sql`select crm_handle_taken(${handle}) as taken`);
+  const isNew = taken.rows[0]?.taken !== true;
+  if (isNew && budget !== undefined && !(await budget.take())) {
+    throw refuseOn('LIMIT_REACHED', PERSON_DAILY_REFUSAL, 'handle');
+  }
   try {
     await tx.transaction((savepoint) =>
       savepoint.execute(sql`select crm_claim_business_handle(${workspaceId}::uuid, ${handle})`),
@@ -282,7 +318,7 @@ async function takeHandle(tx: WorkspaceTx, workspaceId: string, propertyId: stri
     if (holder.propertyId !== propertyId) {
       throw refuseOn('SLUG_TAKEN', 'Another of your businesses has, or had, this address. Pick another.', 'handle');
     }
-    return;
+    return false;
   }
   const [held] = await tx
     .select({ n: count() })
@@ -292,6 +328,7 @@ async function takeHandle(tx: WorkspaceTx, workspaceId: string, propertyId: stri
     throw refuseOn('LIMIT_REACHED', 'A business can change its address up to 20 times.', 'handle');
   }
   await tx.insert(propertyHandles).values({ workspaceId, handle, propertyId });
+  return isNew;
 }
 
 /**
@@ -321,6 +358,8 @@ export interface BusinessPageChange {
   readonly view: BusinessPageView;
   /** The handles whose public answers changed (the old one too, after a new address). */
   readonly stale: boolean;
+  /** Whether the write took an address nobody held before (and so spent one of the person's daily budget). */
+  readonly madeHandle?: true;
 }
 
 /**
@@ -331,6 +370,7 @@ export interface BusinessPageChange {
 export async function claimBusinessHandle(
   scope: EngineScope,
   input: { readonly handle: string } & InBusiness,
+  deps: HandleDeps = {},
 ): Promise<BusinessPageChange> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
@@ -353,7 +393,7 @@ export async function claimBusinessHandle(
       await auditSetup(tx, scope, 'business_page.address', audit);
       return { view: await viewOf(tx, scope.workspaceId, property), stale: false };
     }
-    await takeHandle(tx, scope.workspaceId, property.id, input.handle);
+    const made = await takeHandle(tx, scope.workspaceId, property.id, input.handle, deps.handleBudget);
     await tx
       .update(businessPages)
       .set({ handle: input.handle, pendingHandle: null, updatedAt: sql`now()`, updatedByMemberId: by })
@@ -364,7 +404,11 @@ export async function claimBusinessHandle(
       await listBusiness(tx, scope.workspaceId, property.id);
     }
     await auditSetup(tx, scope, 'business_page.address', audit);
-    return { view: await viewOf(tx, scope.workspaceId, property), stale: before?.handle !== input.handle };
+    return {
+      view: await viewOf(tx, scope.workspaceId, property),
+      stale: before?.handle !== input.handle,
+      ...(made ? { madeHandle: true as const } : {}),
+    };
   });
 }
 
@@ -442,8 +486,8 @@ export async function setPlaceSlug(
 }
 
 /**
- * Saves the draft, whole (spec 0068, AC-6810): guests keep seeing the published page. Every gallery picture must be
- * one of the business's own, and every hidden place one of its places.
+ * Saves the draft, whole (spec 0068, AC-6810): guests keep seeing the published page. Every gallery picture and the
+ * cover (AC-6513) must be one of the business's own, and every hidden place one of its places.
  */
 export async function saveBusinessPage(
   scope: EngineScope,
@@ -454,7 +498,11 @@ export async function saveBusinessPage(
   return inWorkspace(scope, async (tx) => {
     await requireAnyApp(tx, scope.workspaceId);
     const property = await businessOf(tx, scope, input);
-    const photoIds = input.draft.gallery.map((photo) => photo.id);
+    // The gallery's pictures and the cover (AC-6513): each one of this business's own uploads.
+    const photoIds = [
+      ...input.draft.gallery.map((photo) => photo.id),
+      ...(input.draft.cover === undefined ? [] : [input.draft.cover.id]),
+    ];
     if (photoIds.length > 0) {
       const found = await tx
         .select({ id: businessPhotos.id })
@@ -465,8 +513,15 @@ export async function saveBusinessPage(
             eq(businessPhotos.propertyId, property.id),
             sql`${businessPhotos.id} = any(${`{${photoIds.join(',')}}`}::uuid[])`,
           ),
-        );
-      if (found.length !== new Set(photoIds).size) throw inputInvalid('gallery', 'A photo was removed. Add it again.');
+        )
+        // Held until the draft commits: the daily cleanup's delete of an unused picture waits, then finds it used.
+        .for('key share');
+      if (found.length !== new Set(photoIds).size) {
+        const coverGone = input.draft.cover !== undefined && !found.some((photo) => photo.id === input.draft.cover?.id);
+        throw coverGone
+          ? inputInvalid('cover', 'The cover photo was removed. Add it again.')
+          : inputInvalid('gallery', 'A photo was removed. Add it again.');
+      }
     }
     if (input.draft.hiddenPlaces.length > 0) {
       const ids = new Set((await pagePlaces(tx, scope.workspaceId, property.id)).map((place) => place.id));
@@ -533,7 +588,11 @@ export async function syncBusinessListing(tx: WorkspaceTx, workspaceId: string, 
  * page publishes it again, harmlessly. Pictures neither the draft nor the snapshot uses any more are dropped, and
  * their paths answered so the caller removes them from the store.
  */
-export async function publishBusinessPage(scope: EngineScope, where: InBusiness = {}): Promise<BusinessPagePublished> {
+export async function publishBusinessPage(
+  scope: EngineScope,
+  where: InBusiness = {},
+  deps: HandleDeps = {},
+): Promise<BusinessPagePublished> {
   requirePermission(scope, 'hospitality.manage');
   const by = hospitalityMember(scope);
   return inWorkspace(scope, async (tx) => {
@@ -544,13 +603,14 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
     await ensurePlaceSlugs(tx, scope.workspaceId, property.id);
     const before = await viewOf(tx, scope.workspaceId, property);
     if (before.problem !== undefined) throw refuseOn('VALIDATION_FAILED', before.problem.message, before.problem.fix);
+    let made = false;
     if (before.handleOnPublish === true && before.handle !== undefined) {
       // The first Publish takes the address it waited for (AC-6592); taken since, it says so on the address. A word
       // kept for Timefix since the wish is refused as a claim would be.
       if (isReservedHandle(before.handle)) {
         throw refuseOn('SLUG_TAKEN', 'That address is kept for Timefix. Pick another.', 'handle');
       }
-      await takeHandle(tx, scope.workspaceId, property.id, before.handle);
+      made = await takeHandle(tx, scope.workspaceId, property.id, before.handle, deps.handleBudget);
       await tx
         .update(businessPages)
         .set({ handle: before.handle, pendingHandle: null })
@@ -569,7 +629,10 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
       })
       .where(thePage(scope.workspaceId, property.id));
     await listBusiness(tx, scope.workspaceId, property.id);
-    const used = new Set(before.draft.gallery.map((photo) => photo.id));
+    const used = new Set([
+      ...before.draft.gallery.map((photo) => photo.id),
+      ...(before.draft.cover === undefined ? [] : [before.draft.cover.id]),
+    ]);
     const unused = await tx
       .delete(businessPhotos)
       .where(
@@ -590,6 +653,7 @@ export async function publishBusinessPage(scope: EngineScope, where: InBusiness 
       view: await viewOf(tx, scope.workspaceId, property),
       stale: true,
       unusedPaths: unused.map((row) => row.path),
+      ...(made ? { madeHandle: true as const } : {}),
     };
   });
 }
