@@ -91,17 +91,16 @@ function ShareButton({
           });
     void done.finally(() => setSharing(false));
   };
-  return isAlone ? (
+  // Share and Save contact are an equal pair (the v5 mock): each says what it does.
+  return (
     <Button variant="secondary" size="touch" icon="upload" isFullWidth="center" onPress={share}>
-      {strings.sharePage}
+      {isAlone ? strings.sharePage : strings.share}
     </Button>
-  ) : (
-    <Button variant="secondary" size="touch" icon="upload" label={strings.sharePage} onPress={share} />
   );
 }
 
-/** Past this many rows (headings aside), a search sits above them (AC-5133). */
-const SEARCH_FROM = 8;
+/** Past this many rows (headings aside), a search sits above them (AC-5133; the v5 mock: more than 5). */
+const SEARCH_FROM = 5;
 /** How long typing rests before the search reads. */
 const SEARCH_WAIT_MS = 250;
 
@@ -449,8 +448,7 @@ export function ProfilePage({ handle, initial, onMoved, isBusiness }: ProfilePag
             },
           })}
       {...(profile.footLine === undefined ? {} : { footLine: profile.footLine })}
-      // The page's own address, as a visitor reads it, with a press to copy it.
-      address={{ label: addressOf(current), value: `${globalThis.location.origin}/${current}` }}
+      // No address pill (the v5 mock): Share passes the address on, and copies it where there is no share sheet.
       share={
         <ShareButton
           address={`${globalThis.location.origin}/${current}`}
@@ -462,11 +460,11 @@ export function ProfilePage({ handle, initial, onMoved, isBusiness }: ProfilePag
       // yet, and the pass took a row of its own above everything the page is for. `LinkPage` still takes a
       // `walletHref`, and the pass itself is still served at /api/public/handles/<handle>/pass.pkpass, so offering
       // it again, further down or after a visitor acts, is passing that prop back.
-      // Their own set of networks, the row of circles under the actions (booking socials): never a block.
+      // Their own set of networks, small marks under the bio (booking socials, the v5 mock): never a block.
       {...(profile.socials === undefined || profile.socials.length === 0
         ? {}
         : {
-            socials: <SocialLinks variant="round" links={profile.socials} label={strings.socials(profile.name)} />,
+            socials: <SocialLinks links={profile.socials} label={strings.socials(profile.name)} />,
           })}
       blocks={blocks}
       // The look its owner picked (spec 0054), which lands with the content, in one step.

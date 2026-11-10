@@ -111,20 +111,23 @@ export function blocksOf(
             ...sized(item),
           },
         ];
-      case 'page':
+      case 'page': {
+        const next = context.times?.get(item.id);
         return [
           {
             kind: 'page',
             id: item.id,
             title: item.title,
             href: `/${encodeURIComponent(handle)}/${encodeURIComponent(item.slug)}`,
-            facts: [
-              ...item.durations.map((minutes) => strings.minutesShort(minutes)),
-              ...(item.isTeam ? [strings.team] : []),
-            ].join(' · '),
+            facts: [strings.lengths(item.durations), ...(item.isTeam ? [strings.team] : [])]
+              .filter((part) => part !== '')
+              .join(' · '),
+            // Its next open time, once read (the v5 mock), by the times read a next times block uses.
+            ...(next === undefined ? {} : { times: next }),
             ...(item.size === undefined ? {} : { size: item.size }),
           },
         ];
+      }
       case 'socials': {
         // The person's own set, as a block wherever they put it (AC-6104). With none, the block simply isn't drawn.
         const links = context.socials ?? [];

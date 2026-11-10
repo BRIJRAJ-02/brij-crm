@@ -665,16 +665,39 @@ function ChatLoading() {
 /** No day is open until the times arrive. */
 const NO_DAYS: ReadonlySet<string> = new Set();
 
-/** Every zone this browser knows, the current one first, each with its offset. */
-function zoneItems(current: string, at: number, clock: string): readonly DeferredSelectItem[] {
+/**
+ * The time zone picker's rows (the v5 mock, the owner's "this should be better"): Suggested first (the zone in use, and
+ * the visitor's own when that is another), then All time zones. Each row names its city ("London"), its offset as
+ * meta and the time there now; the rail keeps "London time". Only the zone in use is built while the list is shut,
+ * since every row reads two clocks.
+ */
+function zoneItems(
+  current: string,
+  detected: string,
+  at: number,
+  locale: string,
+  hour12: boolean,
+  isOpen: boolean,
+): readonly DeferredSelectItem[] {
+  const now = new Date(at).toISOString();
+  const row = (zone: string, group: string): DeferredSelectItem => {
+    const label = zoneName(zone);
+    return {
+      id: zone,
+      label,
+      listLabel: label.replace(/ time$/u, ''),
+      description: offsetLabel(zone, at),
+      trailing: timeLabel(now, zone, locale, hour12),
+      group,
+    };
+  };
+  const suggested = [...new Set([current, detected])];
+  if (!isOpen) return [row(current, strings.zoneSuggested)];
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  return [current, ...listed.filter((zone) => zone !== current)].map((zone) => ({
-    id: zone,
-    label: zoneName(zone),
-    // The zone in use shows its time now beside its offset ("GMT+7 · 14:06"), as Calendly's does, so a visitor
-    // checks the zone at a glance. Look only: what the zone does is unchanged.
-    description: zone === current ? `${offsetLabel(zone, at)} · ${clock}` : offsetLabel(zone, at),
-  }));
+  return [
+    ...suggested.map((zone) => row(zone, strings.zoneSuggested)),
+    ...listed.filter((zone) => !suggested.includes(zone)).map((zone) => row(zone, strings.zoneAll)),
+  ];
 }
 
 /** Every typed word must match the zone's name, city or offset ("york", "+8", "asia sing"). */
@@ -856,7 +879,12 @@ function Booking({
   // turn, so a page left open never shows a stale time.
   const minute = useMinute(now);
   const clockNow = timeLabel(new Date(minute).toISOString(), zone, locale, hour12);
-  const zones = useMemo(() => zoneItems(zone, now(), clockNow), [zone, now, clockNow]);
+  // The picker's rows are built in full only while it is open (each reads two clocks); shut, just the zone in use.
+  const [isZoneOpen, setZoneOpen] = useState(false);
+  const zones = useMemo(
+    () => zoneItems(zone, detected, minute, locale, hour12, isZoneOpen),
+    [zone, detected, minute, locale, hour12, isZoneOpen],
+  );
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {
     // As the share preview names it (critic C3): "Intro call with Ada Lovelace". A team page's title stands alone.
@@ -1175,9 +1203,11 @@ function Booking({
     reachedSteps.current.add(reachedStep);
     client.event(page.publicKey, { kind: 'step', step: reachedStep });
   }, [client, page.publicKey, isEditorPreview, reachedStep]);
-  // The clock (12h or 24h), in the time zone list's foot (critic A24): the picker's corner keeps the view alone.
+  // The clock (12h or 24h), beside the time zone list's search (critic A24, the v5 mock): the picker's corner keeps the
+  // view alone.
   const clockSwitch = (
     <SegmentedControl
+      size="compact"
       label={strings.clock}
       value={hour12 ? '12' : '24'}
       onChange={(next) => {
@@ -1236,17 +1266,19 @@ function Booking({
           showsDescription
           isSearchable
           searchLabel={strings.zoneSearch}
+          searchPlaceholder={strings.zoneSearchPlaceholder}
+          chosenLook="filled"
           placeholder={strings.zoneChoose}
           filter={zoneMatches}
+          onOpenChange={setZoneOpen}
           value={zone}
           onChange={(next) => {
             if (next === null || next === zone) return;
             setZone(next);
             resetChoice();
           }}
-          // The clock goes with the zone (critic A24), as Calendly keeps it: in the list's foot, out of the picker's
-          // corner. Book by chat follows it too.
-          popoverFoot={clockSwitch}
+          // The clock goes with the zone (critic A24), beside its search (the v5 mock). Book by chat follows it too.
+          searchAside={clockSwitch}
           triggerRef={zoneTrigger}
         />
       ),
@@ -1439,6 +1471,8 @@ function Booking({
     // A page that confirms each booking first sends a request (spec 0062, AC-6203).
     isRequest: page.requiresConfirmation === true,
     needsPhone: page.location.type === 'phone',
+    // Name and Email side by side, the page's questions, the guests' rows, then the note (the v5 mock).
+    arrangement: 'paired' as const,
     // The page's own questions (spec 0057), after the note; a page with none draws nothing more (AC-5704).
     ...(asked.length === 0
       ? {}
@@ -1637,6 +1671,14 @@ function Booking({
           initial={booked.booking}
           {...(manageHrefOf === undefined ? {} : { manageHref: manageHrefOf(booked.token) })}
         />
+      </Suspense>
+    );
+  // Booked on the page itself (not inside a site's embed): the booked moment takes the whole page, as the v5 mock
+  // draws it, the check landing over "You're booked" and the card centred, the address already the guest page's.
+  if (booked !== undefined && manageHrefOf === undefined)
+    return (
+      <Suspense fallback={null}>
+        <ManagePage token={booked.token} isWelcome locale={locale} now={now} initial={booked.booking} />
       </Suspense>
     );
   const cover =

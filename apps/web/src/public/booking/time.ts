@@ -183,6 +183,13 @@ export function longDate(instant: string, zone: string, locale: string): string 
   }).format(new Date(instant));
 }
 
+/** The day in full without its year, as the booked moment's card leads ("Monday 9 November", "Monday, November 9"). */
+export function fullDay(instant: string, zone: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long' }).format(
+    new Date(instant),
+  );
+}
+
 /** The hour the small hours end: before it, tomorrow's first hours are still tonight as people say it. */
 const SMALL_HOURS_END = 4;
 

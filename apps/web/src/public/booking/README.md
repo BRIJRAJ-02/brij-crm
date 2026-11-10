@@ -37,3 +37,11 @@ While it's ahead, the card ends with BookingChanges (milestone 2): **Move to ano
 ## The business page (`BusinessPublicPage.tsx`, spec 0066 B4 lite)
 
 `/<company-handle>` and `/<company-handle>/<place-slug>` draw `BusinessPage` from `@crm/ui/public-booking` with the published page `@crm/data/business-page` reads. The handle shell (`business-shell.ts`) answers a business when the handle names no person (or the slug no booking page), with its meta block, JSON-LD and crawler text and a `business` boot block, so the page draws at once; without a shell (locally, or a missed read) `ProfilePage`'s `isBusiness` and the address lookup's not found ask the business read before the not found card. The brand's accent comes through `/api/public/business/<handle>/look/brand.css?v=`; the foot is tagged `business_page`.
+
+## The v5 mock (10 November 2026, lane 5.5)
+
+- The time zone picker: its search ("Search a city or GMT+4") with the 12h / 24h switch beside it, Suggested (the zone in use, and the visitor's own when that is another) over All time zones, each row's city, offset and the time there now, the chosen one filled and ticked. Every row is built only while the list is open.
+- The details step is BookingDetails' `paired` arrangement: Name and Email side by side, the page's questions, the guests one email a row ("Guests (up to 10)", Add guests, Add another guest), then the note, with Back and Confirm in one foot band (held to a phone's foot).
+- Booked on the page itself, the booked moment takes the whole page (ManagePage at `placement="page"`, `isWelcome`): the check lands over "You're booked", who will see you and where the details went, then the card. Inside a site's embed it stays the card's last step. The guest page opened later draws the same card as "Your booking", without the check.
+- The guest page's Guests lists who is invited with Remove, then "Invite more (up to N)" as the same rows, sent at once by Invite / "Invite 2".
+- The link page's booking page rows carry their next open time (the same read a next times block makes, which the access door now opens for a page block too), Share and Save contact are an equal pair, the networks sit under the bio, no address pill (Share passes the address on, and copies it where there is no share sheet), and a search shows past 5 rows.
