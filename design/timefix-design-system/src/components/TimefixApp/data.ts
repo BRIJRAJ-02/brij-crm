@@ -1,3 +1,4 @@
+import type { FormQuestion } from '../HostedForm/answers.ts';
 // The whole app's CRM data for the prototype: Northwind's team, the people, companies and deals they work, tasks, notes and the inbox.
 // Bookings keeps its own state (BookingsFlow); everything else reads this. One pure reducer, new objects only.
 
@@ -39,6 +40,15 @@ export interface SavedView {
 export interface ListEntry { readonly id: string; readonly recordId: string; readonly stage: string; readonly priority: 'High' | 'Medium' | 'Low'; readonly next: string; readonly added: Date }
 export interface CrmList { readonly id: string; readonly name: string; readonly object: ObjectId; readonly stages: ReadonlyArray<string>; readonly entries: ReadonlyArray<ListEntry>; readonly oncePerRecord: boolean }
 
+/** A form: its questions as you edit them, the live ones guests answer, where answers go and what happens after. */
+export interface FormResponse { readonly id: string; readonly at: Date; readonly answers: Readonly<Record<string, string>>; readonly spam?: boolean; readonly personId?: string }
+export interface AppForm {
+  readonly id: string; readonly name: string; readonly slug: string; readonly status: 'draft' | 'live' | 'paused';
+  readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page';
+  readonly saveTo: 'people' | 'none'; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking'; readonly message: string };
+  readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
+}
+
 /** The CRM side of the app. */
 export interface AppState {
   readonly me: string;
@@ -56,6 +66,7 @@ export interface AppState {
   readonly setupHidden: boolean;
   readonly views: Readonly<Record<ObjectId, ReadonlyArray<SavedView>>>;
   readonly lists: ReadonlyArray<CrmList>;
+  readonly forms: ReadonlyArray<AppForm>;
 }
 
 export type AppAction =
@@ -76,7 +87,9 @@ export type AppAction =
   | { readonly type: 'setup/hide'; readonly hidden: boolean }
   | { readonly type: 'views/set'; readonly object: ObjectId; readonly views: ReadonlyArray<SavedView> }
   | { readonly type: 'list/set'; readonly list: CrmList }
-  | { readonly type: 'list/remove'; readonly id: string };
+  | { readonly type: 'list/remove'; readonly id: string }
+  | { readonly type: 'form/set'; readonly form: AppForm }
+  | { readonly type: 'form/remove'; readonly id: string };
 
 const upsert = <T extends { readonly id: string }>(list: ReadonlyArray<T>, item: T): ReadonlyArray<T> => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [item, ...list]);
 
@@ -106,6 +119,8 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'views/set': return { ...state, views: { ...state.views, [a.object]: a.views } };
     case 'list/set': return { ...state, lists: state.lists.some((l) => l.id === a.list.id) ? state.lists.map((l) => (l.id === a.list.id ? a.list : l)) : [...state.lists, a.list] };
     case 'list/remove': return { ...state, lists: state.lists.filter((l) => l.id !== a.id) };
+    case 'form/set': return { ...state, forms: upsert(state.forms, a.form) };
+    case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
   }
 }
 
@@ -229,7 +244,8 @@ export function northwindCrm(now = new Date()): AppState {
           { id: 'e7', recordId: 'p-monica', stage: 'Emailed', priority: 'Low', next: 'Nudge next week', added: dayAt(now, -3) },
           { id: 'e8', recordId: 'p-tom', stage: 'New', priority: 'Low', next: 'Send deck', added: dayAt(now, -1) },
         ] },
-    ] };
+    ],
+    forms: [contactForm(now), feedbackForm(now)] };
 }
 
 /** ₹18,40,000 (Indian grouping). */
@@ -240,4 +256,36 @@ export function recordName(state: AppState, r: RecordLink): { readonly name: str
   if (r.object === 'companies') { const x = state.companies.find((y) => y.id === r.id); return { name: x?.name ?? 'Deleted company', sub: x?.domain ?? '' }; }
   const x = state.deals.find((y) => y.id === r.id); const co = state.companies.find((y) => y.id === x?.companyId);
   return { name: x?.name ?? 'Deleted deal', sub: x ? `${co?.name ?? ''} · ${inr(x.amount)}` : '' };
+}
+
+/** "Talk to sales": live, saving people, with a fortnight of answers. */
+function contactForm(now: Date): AppForm {
+  const q: ReadonlyArray<FormQuestion> = [
+    { id: 'q-name', kind: 'short', title: 'Your name', required: true },
+    { id: 'q-email', kind: 'email', title: 'Work email', required: true },
+    { id: 'q-company', kind: 'short', title: 'Company' },
+    { id: 'q-size', kind: 'choice', title: 'How big is your team?', options: ['Just me', '2–10', '11–50', '51–200', '200+'], required: true },
+    { id: 'q-need', kind: 'long', title: 'What are you hoping to fix?' },
+  ];
+  const r = (id: string, mins: number, name: string, email: string, company: string, size: string, need: string, extra: Partial<FormResponse> = {}): FormResponse =>
+    ({ id, at: new Date(now.getTime() - mins * 60_000), answers: { 'q-name': name, 'q-email': email, 'q-company': company, 'q-size': size, 'q-need': need }, ...extra });
+  return { id: 'f-contact', name: 'Talk to sales', slug: 'talk-to-sales', status: 'live', questions: q, live: q, mode: 'one', saveTo: 'people', owner: 'Priya Raman', views: 1284, updated: new Date(now.getTime() - 2 * 86_400_000),
+    after: { kind: 'booking', message: 'Thanks! Pick a time and we’ll walk you through it.' },
+    responses: [
+      r('r1', 35, 'Pepper Potts', 'pepper@stark.store', 'Stark Retail', '51–200', 'Our stores book demos by phone. We lose half of them.', { personId: 'p-pepper' }),
+      r('r2', 300, 'Arjun Mehta', 'arjun@zylo.in', 'Zylo', '11–50', 'Need round robin across 6 reps.'),
+      r('r3', 1500, 'Sana Iqbal', 'sana@brightpath.org', 'Brightpath', '2–10', 'Want booking pages for our counsellors.'),
+      r('r4', 2900, 'Buy cheap followers', 'promo@spam.biz', '', 'Just me', 'click here', { spam: true }),
+      r('r5', 4300, 'Neel Bhatt', 'neel@orbit.dev', 'Orbit', '200+', 'Replacing our old CRM this quarter.'),
+    ] };
+}
+/** "Event feedback": a draft, not shared yet. */
+function feedbackForm(now: Date): AppForm {
+  const q: ReadonlyArray<FormQuestion> = [
+    { id: 'q-r', kind: 'rating', title: 'How was the session?', required: true },
+    { id: 'q-best', kind: 'long', title: 'What was most useful?' },
+    { id: 'q-more', kind: 'multi', title: 'What should we cover next?', options: ['Routing', 'Round robin', 'Reports', 'Integrations'] },
+  ];
+  return { id: 'f-feedback', name: 'Event feedback', slug: 'event-feedback', status: 'draft', questions: q, mode: 'page', saveTo: 'none', owner: 'Priya Raman', views: 0, updated: new Date(now.getTime() - 3 * 3_600_000),
+    after: { kind: 'thanks', message: 'Thanks for helping us get better.' }, responses: [] };
 }
