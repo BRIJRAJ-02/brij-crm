@@ -636,8 +636,15 @@ function Blocks({
   // A photo picked, or the one there cropped again (spec 0068, AC-6809): the cover in its 3:1 frame, the profile
   // photo square, the background free, then drawn again for its kind and sent.
   const cropping = usePhotoCrop();
+  // Why the profile photo or the cover didn't save, said in Profile where they are; the background's stays in Design.
+  const [profileRefusal, setProfileRefusal] = useState<DataError | undefined>(undefined);
+  const refusePhoto = (slot: PhotoSlot, refused: DataError) => {
+    if (slot === 'ground') setLookRefusal(refused);
+    else setProfileRefusal(refused);
+  };
   const choosePhoto = (slot: PhotoSlot, source: File | string) => {
     setLookRefusal(undefined);
+    setProfileRefusal(undefined);
     void cropping.crop(source, slot === 'cover' ? 'cover' : slot === 'avatar' ? 'square' : 'free').then((crop) => {
       if (crop === undefined) return;
       setSending(slot);
@@ -651,7 +658,7 @@ function Blocks({
         )
         .then((answer) => {
           if (answer === 'same') toasts.toast({ tone: 'info', message: strings.samePhoto });
-          else if (answer !== undefined) setLookRefusal(answer);
+          else if (answer !== undefined) refusePhoto(slot, answer);
           // The photos are drafted (spec 0068): Publish's bar reads where the page stands now.
           else linkPage.publication.changed();
         })
@@ -662,8 +669,9 @@ function Blocks({
   };
   const removePhoto = (slot: PhotoSlot) => {
     setLookRefusal(undefined);
+    setProfileRefusal(undefined);
     void brand.removePhoto(slug, slot).then((refused) => {
-      if (refused !== undefined) setLookRefusal(refused);
+      if (refused !== undefined) refusePhoto(slot, refused);
       else linkPage.publication.changed();
     });
   };
@@ -674,6 +682,14 @@ function Blocks({
   const indexable = switched ?? profile.indexable ?? true;
   // Who the page is from (3 Nov 2026), as last saved, so the phone follows a change before the profile is read again.
   const [identity, setIdentity] = useState<PageIdentity>(() => identityOf(profile));
+  // The name, title and its switch are live on save (owner, 10 November 2026), with no Publish to wait for: one quiet
+  // toast says so, the last save's only, so a run of edits never stacks them.
+  const liveToast = useRef<string | undefined>(undefined);
+  const identityLive = (saved: PageIdentity) => {
+    setIdentity(saved);
+    if (liveToast.current !== undefined) toasts.dismiss(liveToast.current);
+    liveToast.current = toasts.toast({ tone: 'success', message: strings.identityLive });
+  };
   // Why the job title switch didn't save, said in the Details card's foot until it saves.
   const [identityRefusal, setIdentityRefusal] = useState<string | undefined>(undefined);
   const chooseIndexable = (next: boolean) => {
@@ -1237,8 +1253,8 @@ function Blocks({
           with the rest. On someone else's page (spec 0070) a page only person's name and title change here, anyone
           else's are shown as they keep them (9 Nov 2026). */}
       <Card title={strings.profile}>
-        {/* Why the title switch didn't save, until the next try: the card has no footer to say it in. */}
-        {!isTeam && identityRefusal !== undefined && <Callout tone="danger">{identityRefusal}</Callout>}
+        {/* Why a photo here didn't save, until the next try: the card has no footer to say it in. */}
+        {profileRefusal !== undefined && <Callout tone="danger">{profileRefusal.message}</Callout>}
         <PagePhotos
           slots={['avatar', 'cover']}
           extras={photoExtras}
@@ -1255,7 +1271,7 @@ function Blocks({
             }
             identity={identity}
             // Live on save (owner, 10 November 2026): nothing here is a draft, so Publish's bar has nothing to read.
-            onSaved={setIdentity}
+            onSaved={identityLive}
             onSwitchRefused={() => undefined}
           />
         )}
@@ -1264,10 +1280,12 @@ function Blocks({
             data={data}
             slug={slug}
             identity={identity}
-            onSaved={setIdentity}
+            onSaved={identityLive}
             onSwitchRefused={setIdentityRefusal}
           />
         )}
+        {/* Why the title switch didn't save, right under it until the next try. */}
+        {!isTeam && identityRefusal !== undefined && <Callout tone="danger">{identityRefusal}</Callout>}
       </Card>
       {/* Then what is on the page (its blocks, the archived ones, the social links), then how it looks: content is
           what the editor is opened for (flow walks, 29 October 2026: L2). */}

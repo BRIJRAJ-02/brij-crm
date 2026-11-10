@@ -7,7 +7,7 @@
 export const strings = {
   title: 'Show my account photo on my pages',
   /** Under the title while it can change: what it doesn't cover, so a page photo never seems to be switched off. */
-  hint: 'A photo you add to your link page always shows there.',
+  hint: 'Your link page’s own photo shows instead, once published.',
   /** No photo yet (an email code account has none): why the switch is off and can't turn on. */
   noPhoto: 'Add a photo first. Your pages show your initials.',
   /** A member with no sign in of their own, which the app never shows today: nothing to hide. */

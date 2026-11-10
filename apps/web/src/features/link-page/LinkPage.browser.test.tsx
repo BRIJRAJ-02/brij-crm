@@ -435,7 +435,7 @@ describe('the page’s three photos (9 Nov 2026; Profile first, 10 Nov 2026)', (
     ));
     const uploads = ['Upload profile photo', 'Upload cover photo', 'Upload background photo'];
     const hints = [
-      'Above the name, here and on booking pages',
+      'Above the name, also on booking pages',
       'The wide photo at the top',
       'Fills the page behind everything',
     ];

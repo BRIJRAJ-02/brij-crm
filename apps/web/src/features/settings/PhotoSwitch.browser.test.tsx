@@ -136,7 +136,7 @@ describe('Show my account photo on my pages', () => {
     const { layer } = fakeChoice(SHOWN);
     await render(layer);
     await expect.element(theSwitch()).toBeChecked();
-    await expect.element(page.getByText('A photo you add to your link page always shows there.')).toBeVisible();
+    await expect.element(page.getByText('Your link page’s own photo shows instead, once published.')).toBeVisible();
     expect(page.getByText(/initials/).elements()).toEqual([]);
   });
 

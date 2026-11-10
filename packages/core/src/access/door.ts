@@ -1218,11 +1218,22 @@ async function draftOwner(db: Database, owner: HandleOwner): Promise<HandleOwner
 export async function findHandleOwner(
   deps: { readonly db: Database },
   handle: string,
-  options: LinkPageViewer = {},
+  options: LinkPageViewer & {
+    /**
+     * The name the page shows (10 Nov 2026): the member's own in the page's workspace, which its editor changes,
+     * read in that workspace's transaction; the account's name while the row has none. For what carries the name
+     * (the wallet pass), not the picture routes, which never need it.
+     */
+    readonly withPageName?: boolean;
+  } = {},
 ): Promise<HandleOwner> {
-  const owner = await shownOwner(deps.db, handle, options);
+  const owner = await shownOwner(deps.db, handle, options.viewer === undefined ? {} : { viewer: options.viewer });
   if (owner === undefined) throw refuse('NOT_FOUND', 'No one has this address.');
-  return owner;
+  if (options.withPageName !== true) return owner;
+  const name = await deps.db.withWorkspace(owner.workspaceId, (tx) =>
+    memberNameOf(tx, owner.userId, owner.workspaceId),
+  );
+  return name === undefined ? owner : { ...owner, name };
 }
 
 /**
