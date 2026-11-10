@@ -11,7 +11,8 @@
 //   60 seconds per range (a failure is never kept, so it is asked again;
 //   `forget` clears a member's when a switch or the destination changes). Each
 //   calendar's answer stands alone (AC-995): one that errors, or an account
-//   that doesn't answer within 3 seconds, is skipped (`skipped`, and its
+//   that doesn't answer within 3 seconds, or whose stored tokens won't open
+//   (skipped as a refused grant), is skipped (`skipped`, and its
 //   warning written on the calendar for its member), and the busy times come
 //   from the rest. A member is `blocked` (offered nothing, fail closed) only
 //   when every conflict calendar failed, or the account holding their
@@ -50,7 +51,7 @@ import {
   type ProviderEvent,
 } from './provider.ts';
 import { liveTokens } from './sync.ts';
-import type { TokenBinding, TokenKey } from './tokens.ts';
+import { isUnreadableTokens, type TokenBinding, type TokenKey } from './tokens.ts';
 
 /** The widest range one `freeBusy` reads (AC-615). */
 export const FREE_BUSY_MAX_DAYS = 62;
@@ -171,6 +172,8 @@ export interface CalendarEventsDeps {
   readonly cacheMax?: number;
   /** How long one account has to answer free and busy (tests make it short). */
   readonly timeoutMs?: number;
+  /** Where a read past calendar is reported for operators (ids and codes only, never tokens or addresses). */
+  readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
 }
 
 /** A connection as the events services read it. */
@@ -313,6 +316,16 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
         })(),
       );
     } catch (error) {
+      // Stored tokens that won't open (another key, a damaged row) are a grant gone until the member reconnects: the
+      // account's calendars are skipped as refused, so the closed rule still holds, and the read never fails.
+      if (isUnreadableTokens(error)) {
+        deps.log?.warn('calendar.busy.tokens_unreadable', {
+          workspaceId: scope.workspaceId,
+          connectionId: connection.id,
+          memberId: connection.member_id,
+        });
+        return failAll('CALENDAR_AUTH_REVOKED');
+      }
       if (!isProviderError(error)) throw error;
       return failAll(error.code);
     }

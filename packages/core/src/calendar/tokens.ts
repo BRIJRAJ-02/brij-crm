@@ -68,15 +68,28 @@ export function sealTokens(key: TokenKey, tokens: CalendarTokens, binding: Token
   return Buffer.concat([Buffer.from([VERSION]), iv, cipher.getAuthTag(), sealed]);
 }
 
+/** The stable code on every error `openTokens` throws: the stored tokens can't be used until the member reconnects. */
+export const TOKENS_UNREADABLE = 'CALENDAR_TOKENS_UNREADABLE';
+
+/** An error whose `code` says the sealed tokens would not open; the message never quotes the value. */
+function unreadable(message: string): Error & { readonly code: typeof TOKENS_UNREADABLE } {
+  return Object.assign(new Error(message), { name: 'CalendarTokensError', code: TOKENS_UNREADABLE } as const);
+}
+
+/** Whether `error` is `openTokens` refusing a stored value (as opposed to anything else that failed). */
+export function isUnreadableTokens(error: unknown): boolean {
+  return error instanceof Error && (error as { readonly code?: unknown }).code === TOKENS_UNREADABLE;
+}
+
 /**
  * Opens sealed tokens. Throws for another version, a malformed value, the
  * wrong key, another connection's binding, or any tampering: never a token
- * it can't vouch for. The message never quotes the value.
+ * it can't vouch for, each with the `TOKENS_UNREADABLE` code. The message never quotes the value.
  */
 export function openTokens(key: TokenKey, stored: Uint8Array, binding: TokenBinding): CalendarTokens {
   const bytes = Buffer.from(stored);
   if (bytes.length < 1 + IV_BYTES + TAG_BYTES + 1 || bytes[0] !== VERSION) {
-    throw new Error('The stored calendar tokens are not in a form this version can open.');
+    throw unreadable('The stored calendar tokens are not in a form this version can open.');
   }
   const iv = bytes.subarray(1, 1 + IV_BYTES);
   const tag = bytes.subarray(1 + IV_BYTES, 1 + IV_BYTES + TAG_BYTES);
@@ -88,12 +101,17 @@ export function openTokens(key: TokenKey, stored: Uint8Array, binding: TokenBind
   try {
     plain = Buffer.concat([decipher.update(sealed), decipher.final()]).toString('utf8');
   } catch {
-    throw new Error('The stored calendar tokens did not open: another key, another connection, or tampered with.');
+    throw unreadable('The stored calendar tokens did not open: another key, another connection, or tampered with.');
   }
-  const parsed: unknown = JSON.parse(plain);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(plain);
+  } catch {
+    throw unreadable('The stored calendar tokens opened, but are not tokens.');
+  }
   const field = (name: string): string => {
     const value = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>)[name] : undefined;
-    if (typeof value !== 'string') throw new Error('The stored calendar tokens opened, but are not tokens.');
+    if (typeof value !== 'string') throw unreadable('The stored calendar tokens opened, but are not tokens.');
     return value;
   };
   return { accessToken: field('accessToken'), refreshToken: field('refreshToken'), expiresAt: field('expiresAt') };

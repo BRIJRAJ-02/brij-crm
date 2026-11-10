@@ -365,6 +365,7 @@ export function createApp({
           // The booking's meeting row stores its `meetings` event like any background write; the relay polls it.
           hooks: backgroundHooks(),
           isFreeDomain: calendar.isFreeDomain,
+          log,
         });
   // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
   const booking =
