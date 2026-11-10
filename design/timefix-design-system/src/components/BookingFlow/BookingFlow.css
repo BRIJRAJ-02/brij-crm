@@ -386,3 +386,17 @@
 /* Adding guests after booking: the field, the chips under it, then Done on its own line at the end. Same width as the summary. */
 .tf-booking__more { display: flex; flex-direction: column; gap: var(--space-12); width: 100%; max-width: 30rem; text-align: left; }
 .tf-booking__more-done { align-self: flex-end; min-width: calc(var(--size-control-lg) * 2); }
+
+/* Tighter: 32px around the main side and the rail, 8px under the view bar; the chat and the times keep the height the card gives. */
+.tf-booking__flow .tf-booking__page { padding: var(--space-32); }
+.tf-booking__rail { padding-top: var(--space-32); padding-bottom: var(--space-32); }
+.tf-booking__viewbar { margin-bottom: var(--space-4); }
+.tf-booking__chatview { height: calc(var(--tf-booking-h) - var(--space-32) * 2 - var(--size-control-lg) - var(--space-4) - var(--space-4)); }
+@container tf-booking (max-width: 54rem) { .tf-booking__flow .tf-booking__page, .tf-booking__rail { padding: var(--space-24); } }
+@container tf-booking (max-width: 34rem) {
+  .tf-booking__flow .tf-booking__page { padding: var(--space-16); }
+  .tf-booking__rail { padding: var(--space-8) var(--space-16) var(--space-16); }
+  .tf-booking__chatview { height: calc(var(--size-row) * 11); }
+}
+.tf-booking__slot-list { gap: var(--space-8); max-height: calc(var(--tf-booking-day) * 7 + var(--space-8) * 6); }
+.tf-booking__slots .tf-booking__time { min-height: var(--size-control-lg); }

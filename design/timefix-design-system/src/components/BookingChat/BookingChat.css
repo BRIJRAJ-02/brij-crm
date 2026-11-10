@@ -89,7 +89,9 @@
 .tf-chat__foot--cta { margin-top: calc(var(--space-12) * -1); color: var(--link); font-weight: 500; }
 /* Bare (inside the booking card): the thread takes all the height the card gives, so the composer sits on the floor; chips match the card's 14px controls. */
 .tf-chat--bare .tf-chat__card { min-height: 0; }
-.tf-chat--bare .tf-chat__thread { flex: 1; height: auto; min-height: 0; padding: var(--space-20); }
+.tf-chat--bare .tf-chat__thread { flex: 1; height: auto; min-height: 0; padding: var(--space-12) var(--space-16); }
+.tf-chat--bare .tf-chat__composer { padding: var(--space-8) var(--space-12) var(--space-12); }
+.tf-chat--bare .tf-chat__bubble { font-size: 15px; line-height: 22px; }
 .tf-chat--bare { font-size: 15px; line-height: 22px; }
 .tf-chat--bare .tf-chat__chip, .tf-chat--bare .tf-chat__time { height: var(--size-control); padding: 0 var(--space-12); font-size: 14px; line-height: 20px; }
 /* The booked card reads like the booking page's success screen: a soft green wash from the top, a solid green check in a ring, a larger title, the summary on a bordered card. */
