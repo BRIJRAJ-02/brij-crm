@@ -88,6 +88,10 @@ Reasoning, options and the calls taken on the owner's behalf: see [rationale.md]
 - **AC-5135**: Appearance shows the colour picker only under the Colour background, the one choice it changes; no control is shown that does nothing.
 - **AC-5136**: A heading that folds its section shut hides the blocks under it on the public page until the visitor opens it. The fold's panel never overrides the `hidden` attribute, and the library's story checks that a folded link is not drawn, not only its role.
 
+*Amended 9 November 2026 (owner: "is there a option to change the name and an option to add title below the name")*
+
+- **AC-5137**: The editor's Details card opens with **Name** and **Title** fields. They write the person's own profile (`profile.update` `name` and `jobTitle`), the same values Settings › Profile edits, and the page's edge cache is purged when either changes. Each saves on blur or Enter, only when changed, with a refusal shown on the field. An empty Name is refused on the field ("Enter a name.") without a request. A first title typed where there was none turns **Show under my name** on in the same save; clearing the title turns it off, so a later title never appears on the page unasked; rewording a title leaves the switch as it was. The switch (once "Show my job title") shows only while there is a title. The old "Add a job title in Profile" link is gone. For someone else's page on Team pages, see spec 0070 AC-7047.
+
 ## Decision
 
 **Chosen option**: Option 1 in the rationale. One ordered item list per account, in schema `auth`, written and read only through `crm_handle` definer functions, with the booking pages joining that list as items rather than keeping an ordering of their own.

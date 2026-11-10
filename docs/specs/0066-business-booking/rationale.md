@@ -41,6 +41,9 @@ The owner then pointed at Luma: event pages with a cover, date, hosts and one Re
 
 ## Calls made on the owner's behalf
 
+- News and offers from a reservation are double opt in (10 Nov 2026): the address was typed by an anonymous visitor, so only its inbox can say yes. The link lasts 7 days, long enough to find the email and short enough that an old one can't be reused.
+- A confirm from the inbox outweighs an earlier withdrawal, because it is the inbox's owner acting now; a tick alone still never does.
+- Durable reservation limits live in `auth.rate_limit` because the in memory limiter holds per instance and forgets on every restart. The per place limit counts only checked input, so a flood of junk can't close a restaurant's bookings.
 - One engine with presets; Table seating rebuilt as a preset (0065's reservation tables dropped).
 - Staff without login; optional member link.
 - Least booked "Any professional".

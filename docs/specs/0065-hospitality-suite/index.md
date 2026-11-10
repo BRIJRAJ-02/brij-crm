@@ -14,6 +14,15 @@
 
 **Changed 6 Nov 2026 by the owner**:
 - The business apps are on by default for every workspace, new and existing, with no early access and no install step. Owners and admins can switch an app off in Settings > Apps, and it stays off. This replaces AC-6501's early access rule and all of AC-6502. AC-6503 to AC-6505 still hold, with Install now reading as switching back on. Switching an app on creates no public page, handle or email. Events stays "On its way".
+- Built 9 Nov 2026 (migration 0195):
+  - Every workspace has Menu, Menu QR, Table seating and Appointments on, with nothing to activate. Settings › Apps is an off switch for anyone with `workspace.manage` (owners and admins), shown in every workspace.
+  - `workspace_apps` stores only what differs from the default: a row with `removed_at` is a switch off, held through every release. No backfill, and no write for a new workspace.
+  - A workspace whose early access Timefix had turned off while it had apps installed does not come back live: 0195 switches those apps off, as an owner's switch off, and an owner turns them on again in Settings › Apps.
+  - The menu and table public doors (`crm_menu_by_key`, `crm_table_place_by_key`) read the switch off rule, not `workspaces.early_access`.
+  - The operator console's early access write (`operator.setEarlyAccess`) and the early access column in Super admin › Users are gone. The console still writes elsewhere (the partner registry of 0070), so its "first write" wording above is history.
+  - Installing no longer asks for the business card first (`BUSINESS_NEEDED` is gone). Each business screen's first view sets the business up (StartBusiness), and setting it up seeds the Floor staff role. This replaces AC-6506's "first install asks".
+  - A booking checks that the app its services belong to is on (`visits/book.ts`), so switching Appointments off holds on its own.
+  - An app still being built (Events) reads as off whatever its row says, so an old Events row can't keep a business page live.
 - A workspace can hold many properties: see [H7](0065-properties.md), which owns AC-6512 to AC-6519 and AC-6590 to AC-6597. It changes the data model below: `business_profiles` becomes `properties`, and "workspace currency" reads "the property's currency" everywhere.
 
 ## Structure
@@ -91,13 +100,13 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 
 *H3. Table seating*
 - **AC-6550**: A place has one reservation page at `timefix.com/r/<key>` (and embeddable with the existing widget: `data-timefix-reserve="KEY"`, popup and inline, same panel as booking and forms). Reservation rules are set per place: party sizes taken online (1 to 20, default 1 to 8), slot step (15 or 30 minutes), how long a table is held by party size (default 1 to 2: 90 minutes, 3 to 4: 105, 5 to 6: 120, 7+: 150), minimum notice (default 2 hours), how far ahead (default 60 days), when reservations are taken (the opening hours, or narrower reservation hours per day, default last seating 90 minutes before close), and the most guests starting in any 15 minutes (pacing, optional).
-- **AC-6551**: The guest flow: party size, then a date (closed days and full days crossed out), then the times grouped by Lunch and Dinner (by the hour ranges) with the nearest times first if the chosen one is full, then name, email, phone (required, with the existing phone field), an optional note, and optional occasion (birthday, anniversary, business, other). Up to 6 extra questions from the booking questions model (spec 0057). Then a confirmation with Add to calendar, Change and Cancel.
+- **AC-6551**: The guest flow: party size, then a date (closed days and full days crossed out), then the times grouped by Lunch and Dinner (by the hour ranges) with the nearest times first if the chosen one is full, then name, email, phone (required, with the existing phone field), an optional note, and optional occasion (birthday, anniversary, business, other). Up to 6 extra questions from the booking questions model (spec 0057). Then a confirmation with Add to calendar, Change and Cancel. A "Send me news and offers" box asks the guest to confirm by email before any consent is kept (spec 0066 AC-6672).
 - **AC-6552**: Availability is a pure function next to `computeSlots`: for each candidate start, a time is offered when some bookable table, or a joinable set of tables, seats the party and is free for the whole hold, inside reservation hours, after notice, within pacing. It reuses the engine's stepping, notice and window helpers. Tables are matched best fit: the smallest single table that seats the party, else the smallest joined set, never a table whose fewest guests is above the party.
 - **AC-6553**: A reservation holds its tables with a database guard: a `reservation_tables` row per table with a time range, and an exclusion constraint so one table can never hold two overlapping live reservations. Booking takes a lock per place, recomputes, fits, inserts, and refuses `SLOT_TAKEN` with the next free times when it lost a race. Two guests racing for the last table: exactly one gets it.
 - **AC-6554**: Parties above the online maximum see "For 9 or more, send a request" which makes a request (spec 0062 L1 requires confirmation semantics: holds nothing, staff confirm with a table). A place can also make every reservation a request.
 - **AC-6555**: Guests get the confirmation email, a reminder 24 hours and 3 hours before (through the existing mail queue and templates, in the business's brand), and Change and Cancel links (the manage token pattern) with the place's cutoffs (default: change until 2 hours before, cancel until 2 hours before; later shows "Call us" with the phone). The place's staff with Run service get an email for every new reservation, change and cancel, which they can turn off.
 - **AC-6556**: Each reservation matches or creates a Person in the CRM by email, then phone (the existing match rules), and the Person page shows a Visits panel: past and upcoming reservations, party size, no shows, notes. Guest notes ("Nut allergy", "Likes table 12") live on the Person and show on every later reservation.
-- **AC-6557**: The public reservation endpoints use the existing public limiter (reads 60 per minute per address, bookings 5 per minute) and the booking pages' bot checks. Nothing about other guests (names, which tables are taken) is ever in a public answer: times are offered or not.
+- **AC-6557**: The public reservation endpoints use the existing public limiter (reads 60 per minute per address, bookings 5 per minute) and the booking pages' bot checks. Nothing about other guests (names, which tables are taken) is ever in a public answer: times are offered or not. Since 10 Nov 2026 the reserve and news posts also pass durable limits (spec 0066 AC-6673).
 
 *H4. Service screen*
 - **AC-6560**: Service shows one place's day: a list grouped by service (Lunch, Dinner) with time, name, party size, table, status, notes and occasion icons; a count of covers booked, seated and still to come; and a date switcher. A table view shows each table as a row with its reservations as blocks along the day's hours.
@@ -204,7 +213,7 @@ Each step is one lane; review (security, design, UX, state) before landing; migr
 ## Consequences
 
 - Timefix gains its first concept of installable apps; billing (#38, #42) plugs into `workspace_apps.plan` and `appInstalled` with no new gate.
-- The operator console's early access switch goes away with the gate (6 Nov 2026). The `early_access` column stays until a later clean up.
+- The operator console's early access switch goes away with the gate (6 Nov 2026, built in 0195). The `early_access` column, `crm_set_early_access`, its `crm_operator` grant and the lookup roles' read of the column stay until a later contract migration, since expand comes before contract. No running code reads them.
 - Every workspace sees the Business group in its sidebar, including those that only use the CRM (6 Nov 2026).
 - Reservations sit beside bookings, not inside them: the booking engine's helpers are shared, but reports and the CRM timeline show both kinds through the Person page, not one table.
 - Three new public routes (`/m/`, `/q/`, `/r/`) join `/b/` and `/f/` on timefix.com and later custom domains (0064 slice 1).
@@ -221,6 +230,7 @@ Each step is one lane; review (security, design, UX, state) before landing; migr
 - Menu translations (the 0064 visitor language work).
 - Analytics: menu views, item opens, scans per table and the reservation funnel feed spec 0067.
 - `/sync` to add the Hospitality area to AGENTS.md once H0 lands.
+- A contract migration that drops `workspaces.early_access`, `crm_set_early_access`, its `crm_operator` grant and the lookup roles' read of the column, once 0195 has been live a release.
 
 ## Rationale
 

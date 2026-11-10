@@ -42,6 +42,7 @@ Checklabs' guest app is the reference the owner likes: phone first 448 pixel col
 
 - Separate reservation storage (above), then superseded on 4 Nov by the visit engine of 0066, which serves tables, salons and clinics alike.
 - Operator early access (above).
+- Business apps on for everyone (owner, 6 Nov 2026; built in 0195). Only a switch off is stored, so a new workspace costs no write. Apps a workspace had lost with early access stay off, because reopening a page, menu or reservations nobody asked for would surprise its owner.
 - One currency per workspace (the workspace's), as in 0062 L5.
 - Text message reminders, deposits and waitlist wait for 0062 L5 (Twilio and Stripe).
 - No ordering or payment at the table in this spec.

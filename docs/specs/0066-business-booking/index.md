@@ -91,6 +91,21 @@ Reasoning and every call made on the owner's behalf: [rationale.md](rationale.md
 *B7. Table seating as a preset*
 - **AC-6670**: Installing Table seating creates a service "Table" in capacity mode party (no staff, needs one table resource or joined tables) with holds by party size (0065 AC-6550's defaults), and the reservation rules of 0065 AC-6550 map onto place and service settings. The guest flow is 0065 AC-6551 (party size first) on this engine; the public address is `timefix.com/<handle>/reserve` (and `/r/<key>` kept as a short link).
 - **AC-6671**: Service screen (0065 H4) is the Calendar in resource mode plus a Floor view: a grid of table tiles (after the owner's references) coloured by state (free, booked soon, seated, needs attention), each with its timer since seating and the next booking ("Booking at 20:30"), joined tables drawn as one tile with a link mark, an area switcher at the bottom, and walk in from any free tile.
+- **AC-6672**: News and offers on `/r/<key>` are double opt in (built 10 Nov 2026, migration 0202). A ticked "Send me news and offers" box writes no consent. It writes a `consent_requests` row (a tenant table) and queues a `reservation_news` email to the address the guest typed.
+  - The email links to `/r/<key>/manage#news=<token>`. The token is signed (`rn1`, an HMAC under a key derived from the link key for `reservation-news`), carries the workspace, the place and the request id, lasts 7 days, and is never stored.
+  - The page asks first and posts only when the guest presses Yes, because link scanners open links. `POST /api/public/tables/:key/news` confirms once, only while the request is open, unexpired and its Person not deleted, and in the same transaction inserts the granted consent (source `appointment`, the visit's id, wording version 1).
+  - A second press answers `already`, but only while the Person's latest consent is still that yes. After a withdrawal the old link answers `NOT_FOUND`.
+  - Confirming from the inbox grants even over an earlier withdrawal, because the inbox's owner said yes. A tick alone still never opts someone back in (this amends spec 0023's rule for this one path).
+  - If the Person's latest consent is already a yes, a tick asks nothing.
+  - Just after reserving with the box ticked, the receipt says "To get news and offers, confirm from the email we sent you." The page decides this itself. The API answer never says what the tick came to, so an anonymous visitor can't learn whether an email had already opted in.
+  - The daily cleanup deletes requests that ran out unconfirmed. The purge deletes requests with their Person, and a merge moves them.
+- **AC-6673**: The reservation posts pass durable limits held in `auth.rate_limit` (through the identity store, `consumeRateLimit` and `peekRateLimit`), behind the in memory limiter as the first gate (built 10 Nov 2026). From `BOOKING_LIMITS`:
+  - per address, 5 a minute on `POST /reserve`, counted before the body is read;
+  - per place, 50 a minute, counted only after the input parses and the bot checks pass, so junk can't lock a restaurant out;
+  - per place and guest email, 5 an hour, read before the reservation and spent after a new one (requests racing past the read are bounded by the 3 upcoming per email under the place lock);
+  - per address on `POST /news`, 20 a minute, every request.
+
+  The instance ceiling (50 a second) stays in memory only. Keys are `public-tables:<kind>:<HMAC>` under a key derived from the link key, so no address or email is stored in the clear or can be brute forced back from the table.
 
 *B8. Events and classes (after Luma)*
 - **AC-6680**: An event has a title, cover image, description (rich text), start and end in the place's zone (or online with a video link shown only to registered guests), a place or a free address, hosts (staff profiles or members), a capacity (or unlimited), and optional registration questions (the forms question model, 0057). It holds its hosts and its room through the engine's holds (AC-6602), so nobody can book the yoga teacher or the studio during the class.
@@ -222,6 +237,8 @@ Each slice gets the security, design, UX and state reviews, and screenshots in t
 
 - Classes and group sessions; deposits and no show fees; text messages; waitlist; packages, memberships and gift cards; discovery marketplace; staff day by email; rebook reminders; POS, tips; static map image; converging booking pages into services.
 - `/sync` to add a visits area to AGENTS.md once B0 lands.
+- `book.ts`'s `consent` input, which grants at once, is now unused by tables. Remove it, or route it through `askForNews`, when the visits engine's lane allows.
+- **Open, not decided (owner)**: **how a guest withdraws news consent.** No guest facing unsubscribe exists for these consents yet, and the confirm page promises none. Decide the way out (a link in each news email, the manage page, or both) before any news email is sent from these consents.
 
 ## Rationale
 

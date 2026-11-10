@@ -19,6 +19,17 @@ The owner's answers: the hub is a client's product; one workspace owner signs in
 - A one time launch address keeps every long lived secret on servers.
 - Building team link pages first gives every workspace something useful even if the partner work stalls, and it is the piece the hub's super admin needs most.
 
+## Calls made while building slice 5 (9 and 10 Nov 2026)
+
+- **Page only people reuse `managed_members` with no partner.** It brings every slice 3 guarantee for free, and a null partner never matches a partner's query.
+- **A hand over converts the identity, it never moves the page.** The page is keyed by user id across many `auth` tables and file paths, and AC-7021 forbids merging.
+- **A hand over needs `members.invite` too.** It lets a person in with a login, so it is an invitation in all but name.
+- **The invitation lasts 7 days**, as every email invitation does.
+- **Only plain Members are handed over.** A custom role or a partner's person brings questions (AC-7023) nobody has answered yet.
+- **The purge keeps the member row, named.** Nearly every actor column points at members, so deleting the row would break History.
+- **A purged handle goes into the 90 day hold**, as late trap #73 settled: a freed name taken at once by someone else would open a stranger's page from old links and printed QR codes.
+- **Admins never rename people who have a login.** Their name is theirs, set in their own Profile.
+
 ## References
 
 - OAuth 2.0 authorization code with PKCE (RFC 7636).

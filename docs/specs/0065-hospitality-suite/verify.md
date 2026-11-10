@@ -3,9 +3,9 @@
 Each check is run in the real app (both productions after landing) or by the named test.
 
 ## H0
-- A workspace without early access: Settings > Apps shows no Hospitality apps; calling a menu procedure answers `APP_NOT_INSTALLED`.
-- Operator turns on early access: the audit log has the operator and the switch.
-- A member (not admin) cannot install; an admin installs Menu; removing it hides Menus and makes `/m/<key>` the not found page; reinstalling restores the same menus.
+- Since 0195 (9 Nov 2026): a new workspace shows Menu, Menu QR, Table seating and Appointments on in Settings › Apps with no activation, and Events "On its way". Switching Menu off makes a menu procedure answer `APP_NOT_INSTALLED` and `/m/<key>` the not found page, and it stays off after a deploy. Switching Appointments off refuses a new booking. A workspace that had apps installed without early access before 0195 finds them switched off.
+- A member (not admin) cannot switch an app; an admin switches Menu off, which hides Menus; switching it on again restores the same menus.
+- The first view of a business screen sets the business up and seeds the Floor staff role.
 - Hours crossing midnight (18:00 to 02:00) read open at 01:30 and closed at 02:30 in the place's zone, including on a DST change night (unit tests).
 - Floor staff role sees Service and the guests of reservations, and no other records (access door test).
 - Guard tests: every new table forces RLS with a policy; cross workspace reads return nothing; new lookup roles are listed in `guards.test.ts`.
@@ -31,6 +31,8 @@ Each check is run in the real app (both productions after landing) or by the nam
 - Reminder emails arrive 24 h and 3 h before; Cancel inside the cutoff says to call with the phone.
 - The guest becomes a Person (or matches an existing one by email, then phone); the Visits panel lists it.
 - Public answers carry no other guest's data (inspect the responses).
+- News double opt in (0066 AC-6672): reserve with the box ticked; no consent row exists and a `reservation_news` email arrives. Opening its link shows a question and writes nothing; Yes writes one granted consent; Yes again answers `already`; after a withdrawal the same link answers `NOT_FOUND`; a link older than 7 days is refused. The reserve answer is the same with or without an earlier yes.
+- Durable limits (0066 AC-6673): a sixth reserve from one address in a minute is refused, also across two function instances; junk input never counts toward the place's 50; a sixth reservation for one email at a place in an hour is refused; `auth.rate_limit` holds no address or email in the clear.
 
 ## H4
 - Two tablets on Service: seat a party on one, the other shows it within a second.
@@ -40,3 +42,11 @@ Each check is run in the real app (both productions after landing) or by the nam
 
 ## H5
 - SN on Warm with its brand kit: screenshots at 390 and 1280, light and dark where the preset allows, reviewed against SN's current menu site before turning on.
+
+## H7 (properties, 0198 to 0201)
+- A workspace with one business reads exactly as before; adding a second shows the switcher, and each business keeps its own menus, draft and Publish.
+- A dish can't be placed in another business's menu (the server refuses). Copy to another business copies a menu without photos and a service offline, in no category.
+- A second business's address is a wish until its first Publish; a sixth new handle in 24 hours is refused; an address another page took meanwhile makes Publish answer `SLUG_TAKEN` on the field.
+- At a business's own address with two places taking reservations, Reserve asks for the place first; with one, it goes straight there; `/r/<key>` and printed QR codes still open their place.
+- A member limited to one place: sees that business with its other places left out, gets `FORBIDDEN` on its profile, menus, Sold out and Publish, and `NOT_FOUND`, the same as a missing id, on another place's reservation in every hospitality procedure (the slice 4 test). History says "limited Bea to 1 business and 2 places". The switcher follows mid session after the change.
+- Removing a business someone is limited to answers `IN_USE` with the Members hint.

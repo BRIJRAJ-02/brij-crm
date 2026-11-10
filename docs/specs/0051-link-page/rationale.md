@@ -80,6 +80,8 @@ The owner delegates product and user experience calls (21 October 2026, "do it y
 10. **No theme, no colours, no fonts in this spec.** The references show appearance editors on every one of these products. It is the most visible and the least urgent part, it is where the design system would get stretched, and it is named as the first follow up.
 11. **Five slices, in that order.** Links first, because a link is the whole feature in one row; then the list; then the contact card, which is the event use case; then the QR, which is cheap; then the numbers, which only matter once there is something to count.
 12. **No server rendering for the page's meta tags.** The page is handed over in person and by QR, not crawled. Named as a follow up rather than built, because it changes how the public bundle is served.
+13. **Name and Title in the editor write the person's own profile** (9 Nov 2026, AC-5137). One name and one title everywhere, so Settings › Profile, Team day and the roster never disagree with the page.
+14. **Show under my name stays as its own switch.** The job title also feeds Team day and the roster, so someone may want a title for the team and not on their page. A first title turns it on, so the common case needs no second step.
 
 ## Open for the owner
 

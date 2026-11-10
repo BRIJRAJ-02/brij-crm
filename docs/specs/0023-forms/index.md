@@ -98,7 +98,7 @@ All of these come earlier in the build order (forms sit in Slice 15).
 
 *Consent*
 - **AC-578**: A consent block shows its exact wording. Its answer, the wording, its version and the time are stored as a consent record on the person, with the submission as its source.
-- **AC-579**: A person's consent attribute for a purpose (such as marketing email) reflects their latest consent record for it. A member can record a withdrawal, which adds a record rather than editing the old one.
+- **AC-579**: A person's consent attribute for a purpose (such as marketing email) reflects their latest consent record for it. A member can record a withdrawal, which adds a record rather than editing the old one. A tick with a typed email never opts someone back in after a withdrawal; a confirm from that inbox does (reservation news, spec 0066 AC-6672, 10 Nov 2026).
 
 *Analytics*
 - **AC-580**: Each form shows views, starts, submissions and conversion over time, by embed location and by page.

@@ -38,9 +38,9 @@ How `/check verify` proves each criterion on the real app. Screenshots are taken
 | AC-4 | Browser tests on a team booking page, a personal one and a form: accent on buttons, chosen day, links and focus, logo in the header. Existing booking and form flows pass on CI unchanged. |
 | AC-8 | Browser test: the gallery shows 14 thumbnails, picking one updates the preview and saves. |
 | AC-9 | Browser test and screenshot: six Customise rows, each a visual tile row, keyboard reachable. |
-| AC-10 | Screenshot set of every ground, gradient and pattern in light and dark. |
+| AC-10 | Screenshot set of every ground, gradient and pattern in light and dark. A background photo on each of the four templates draws `data-page-ground="image"` with the column on its solid sheet. |
 | AC-12 | Each pack renders its heading and body font (computed `font-family` and the font file requested), and only that pack's files load. |
-| AC-13 | Screenshots of the three headers and three avatar shapes, and a cover upload cropped to 3:1. |
+| AC-13 | Screenshots of the three headers and three avatar shapes, and a cover upload cropped to 3:1. A page with its own profile photo shows it in the header, the share card and the vCard; removing it shows the account picture again. |
 | AC-14 | Browser test: with no own accent the link page follows the workspace, with one set the link page and its personal booking page both use it, a team page keeps the workspace accent. |
 | AC-15 | Emulated light and dark system settings flip a follow visitor page and leave a fixed mode page alone. |
 | AC-16 | Browser test: the block draft preview and phone preview carry the look's data attributes and variables. |
