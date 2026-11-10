@@ -28,7 +28,7 @@ import {
   queueConfirmation,
 } from './change.ts';
 import { createOneOffLink, listOneOffLinks, revokeOneOffLink } from './one-off-links.ts';
-import { createBookingPage, updateBookingPage } from './pages.ts';
+import { createBookingPage, deleteBookingPage, updateBookingPage } from './pages.ts';
 import { bookPublicSlot, getPublicBookingPage, readManagedBooking } from './public.ts';
 import { listRequests, listWaitingRequests } from './requests.ts';
 
@@ -380,6 +380,35 @@ describe('review fixes (spec 0062, L1)', () => {
     // Answered, it is gone.
     await confirmBooking(hostTarget(s.host, booked.bookingId), { now: () => NOW });
     expect(await listWaitingRequests(s.host)).toEqual([]);
+  });
+
+  it('lists a member only their own pages’ requests, a guest only those they host, and a deleted page none', async () => {
+    const s = await setup();
+    await s.set({ requiresConfirmation: true });
+    const bo = await colleague(s);
+    const theirs = await createBookingPage(bo, { id: newId(), title: 'Bo call', timeZone: 'UTC' }, NOW);
+    await updateBookingPage(bo, { pageId: theirs.id, settings: { requiresConfirmation: true } }, NOW);
+    const entry = await enterBookingPage({ db }, theirs.publicKey);
+    const booked = await s.book();
+    const boBooked = await bookPublicSlot(entry, s.deps, {
+      idempotencyKey: newId(),
+      start: MONDAY_10,
+      duration: 30,
+      name: 'Alan Turing',
+      email: 'alan@example.com',
+      timeZone: 'Europe/London',
+    });
+    const ids = async (scope: typeof bo) => (await listWaitingRequests(scope)).map((each) => each.bookingId);
+    // The admin answers every page; the member only their own (not the admin's page, which they can't change).
+    expect(await ids(s.host)).toEqual([booked.bookingId, boBooked.bookingId]);
+    expect(await ids(bo)).toEqual([boBooked.bookingId]);
+    // A guest holds no booking.manage: only the requests they host.
+    const guest = rescope(bo, { role: 'guest' });
+    expect(await ids(guest)).toEqual([boBooked.bookingId]);
+    // A deleted page lists none.
+    await deleteBookingPage(bo, { pageId: theirs.id });
+    expect(await ids(s.host)).toEqual([booked.bookingId]);
+    expect(await ids(bo)).toEqual([]);
   });
 
   it('refuses another page’s link, and reads another workspace’s hash as used', async () => {

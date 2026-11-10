@@ -113,6 +113,27 @@ describe('requests store', () => {
     expect(names(held)).toEqual(['Guest 1']);
   });
 
+  it('tells nobody when a read answers the same as shown', async () => {
+    const { store, answers } = setup();
+    const held = store.view('acme');
+    held.retain();
+    await flush();
+    let told = 0;
+    held.subscribe(() => {
+      told += 1;
+    });
+    const before = held.getSnapshot();
+    answers.items = [{ ...request(1) }];
+    store.refreshHeld('acme');
+    await flush();
+    expect(told).toBe(0);
+    expect(held.getSnapshot()).toBe(before);
+    answers.items = [request(1), request(2)];
+    store.refreshHeld('acme');
+    await flush();
+    expect(told).toBe(1);
+  });
+
   it('forgets every list on clear', async () => {
     const { store } = setup();
     const held = store.view('acme');
