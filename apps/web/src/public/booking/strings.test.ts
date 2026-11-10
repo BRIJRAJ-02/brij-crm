@@ -16,3 +16,11 @@ describe('the guest page’s promises', () => {
     }
   });
 });
+
+describe('the pick step’s button (the owner’s Next, 10 November 2026)', () => {
+  it('moves on with Next, or Request on a page that confirms first, naming the time after a dot', () => {
+    expect(strings.book).toBe('Next');
+    expect(strings.bookAt('Tue, Oct 20', '9:30 AM')).toBe('Next · Tue, Oct 20 at 9:30 AM');
+    expect(strings.requestAt('Tue, Oct 20', '9:30 AM')).toBe('Request · Tue, Oct 20 at 9:30 AM');
+  });
+});
