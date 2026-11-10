@@ -304,6 +304,11 @@ export const PartnerMemberView = z.object({
   role: z.enum(['owner', 'admin', 'member', 'guest']),
   handle: z.string().optional(),
   addedAt: Timestamp,
+  /**
+   * They set up their own Timefix login (spec 0070, AC-7023): they also sign in to Timefix directly, and `email` is
+   * their login's, which a PUT no longer changes. Absent while they have none.
+   */
+  hasTimefixLogin: z.literal(true).optional(),
 });
 /** A managed member as the partner reads them. */
 export type PartnerMemberView = z.infer<typeof PartnerMemberView>;

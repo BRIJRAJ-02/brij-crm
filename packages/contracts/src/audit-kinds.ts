@@ -21,6 +21,8 @@ export const AUDIT_KINDS = {
     // Where a member may work in the business apps (spec 0065 H7).
     'member.reach_changed',
     'member.removed',
+    // A connected app let go of someone with their own login (spec 0070, AC-7023): they stay a member.
+    'member.app_released',
     'member.left',
     'workspace.ownership_transferred',
     'account.deleted',

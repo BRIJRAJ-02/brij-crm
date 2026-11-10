@@ -157,6 +157,12 @@ const READS: ReadonlySet<string> = new Set([
   // Add a page's handle check and suggestion as it is typed (9 Nov 2026).
   'teamPages.checkHandle',
   'teamPages.suggestHandle',
+  // A connected app's person's own Timefix login (spec 0070, AC-7023): the caller's own status read, and the invitation
+  // and its cancel, which no screen follows live, so they store no outbox row (each writes its History row, as API keys
+  // do); both still go through commitWrite. Core's partner-claim tests cover them.
+  'teamPages.myLogin',
+  'teamPages.inviteLogin',
+  'teamPages.cancelLoginInvite',
   // The Menu app's draft (spec 0065, H1).
   'menu.draft',
   // Table seating's reads (spec 0066 B7 lite).

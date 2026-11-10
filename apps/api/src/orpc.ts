@@ -218,6 +218,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
     | 'dropMembership'
     | 'claimPageOnlyUser'
     | 'unclaimPageOnlyUser'
+    | 'claimManagedUser'
+    | 'unclaimManagedUser'
   >;
   /**
    * Makes a save link for one wallet (26 Oct 2026), or undefined for a wallet this environment has no credentials

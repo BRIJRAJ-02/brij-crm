@@ -17,6 +17,12 @@
 //   every feature's removal runs, and once it commits their sessions end and the directory forgets them. Their page's
 //   content stays; the same external id again brings back the same identity, and with it their handle and page.
 //
+// - Someone who set up their own Timefix login (AC-7023, migration 0206) stays the partner's: a PUT still changes their
+//   name, and keeps or lowers their role (never raises it: 403), never their address (it is their login's), and the
+//   list and launch still find them. A DELETE only lets go of them (`member.app_released`): they stay a member with
+//   their login, their sessions in Timefix carry on, and only the partner's frame closes. A PUT with the same external
+//   id afterwards takes them back.
+//
 // Only the scope `enterAsPartner` minted reaches these, and only for the connection it names: any other connection's
 // id answers `NOT_FOUND`, as one that doesn't exist (AC-7025).
 import {
@@ -58,6 +64,15 @@ const NO_CONNECTION = 'There is no such connection.';
 const NO_MEMBER = 'This connection has no person with that external id.';
 const EMAIL_TAKEN =
   'Someone already in this workspace uses this email. A managed member needs an address nobody here uses.';
+const LOGIN_ROLE_RAISE = 'This person has their own Timefix login. Their role can only be raised inside Timefix.';
+/**
+ * How much a role reaches, to tell a raise from a lowering (a custom role on Member counts as Member). A role this
+ * list doesn't know ranks below every other, so any change to it reads as a raise and is refused (fails closed).
+ */
+const ROLE_RANK = { guest: 0, member: 1, admin: 2, owner: 3 } as const;
+const rankOf = (role: string): number => (role in ROLE_RANK ? ROLE_RANK[role as keyof typeof ROLE_RANK] : -1);
+const LOGIN_REMOVED =
+  'This person has their own Timefix login and is no longer in the workspace. Only the workspace can invite them back.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only the workspace’s owners can remove them in Timefix.';
 const REMOVED_IN_TIMEFIX =
   'This person was removed from the workspace in Timefix. Send DELETE for them first if they should come back.';
@@ -89,6 +104,7 @@ async function lockManaged(tx: WorkspaceTx, workspaceId: string, partnerId: stri
       memberId: managedMembers.memberId,
       userId: managedMembers.userId,
       removedAt: managedMembers.removedAt,
+      claimedAt: managedMembers.claimedAt,
       createdAt: managedMembers.createdAt,
     })
     .from(managedMembers)
@@ -176,6 +192,7 @@ function viewOf(
   member: { readonly id: string; readonly name: string; readonly email: string; readonly role: string },
   addedAt: string | Date,
   handle: string | undefined,
+  hasLogin = false,
 ): PartnerMemberView {
   return {
     externalId,
@@ -185,6 +202,7 @@ function viewOf(
     role: storedRole(member.role),
     ...(handle === undefined ? {} : { handle }),
     addedAt: new Date(addedAt).toISOString(),
+    ...(hasLogin ? { hasTimefixLogin: true as const } : {}),
   };
 }
 
@@ -246,7 +264,12 @@ export async function putPartnerMember(
   await inWorkspace(scope, async (tx) => {
     await lockConnection(tx, principal.connectionId);
     const [row] = await tx
-      .select({ memberId: managedMembers.memberId, removedAt: managedMembers.removedAt, status: members.status })
+      .select({
+        memberId: managedMembers.memberId,
+        removedAt: managedMembers.removedAt,
+        claimedAt: managedMembers.claimedAt,
+        status: members.status,
+      })
       .from(managedMembers)
       .innerJoin(
         members,
@@ -257,6 +280,15 @@ export async function putPartnerMember(
     if (row !== undefined && row.removedAt === null && row.status !== 'active') {
       throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
     }
+    // Someone with their own login whom the workspace removed (or who left) is the workspace's to bring back, by an
+    // invitation they accept: never the app's PUT, whatever its own DELETE did (security review, 10 Nov 2026).
+    if (row !== undefined && row.claimedAt !== null && row.status !== 'active') {
+      throw refuse('FORBIDDEN', LOGIN_REMOVED);
+    }
+    // Someone with their own login stays a member when the partner lets go of them, so a PUT takes them back as they
+    // are; their address is their login's, so the one given is never checked or used.
+    const claimed = row !== undefined && row.claimedAt !== null && row.status === 'active';
+    if (claimed) return;
     const keeps = row !== undefined && row.removedAt === null ? row.memberId : undefined;
     if (await emailTaken(tx, scope.workspaceId, email, keeps)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
     if (keeps === undefined) await checkSeats(tx, scope, 1);
@@ -279,6 +311,9 @@ export async function putPartnerMember(
         // Removed in Timefix (Members, or they left): a routine PUT never undoes the workspace's own removal.
         if (found !== undefined && found.removedAt === null && active === undefined) {
           throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
+        }
+        if (found !== undefined && found.claimedAt !== null && active === undefined) {
+          throw refuse('FORBIDDEN', LOGIN_REMOVED);
         }
         if (found === undefined || active === undefined) {
           // New, or back after the partner's own removal: a new member row on the same identity.
@@ -326,16 +361,45 @@ export async function putPartnerMember(
             created: true,
           };
         }
+        const hasLogin = found.claimedAt !== null;
+        // Let go of while they kept their login, and asked for again: the partner manages them again, unless the
+        // workspace made them an owner since (AC-7024: the app never manages an owner it didn't have).
+        if (found.removedAt !== null && active.role === 'owner') throw refuse('FORBIDDEN', OWNER_KEPT);
+        // Someone with their own login (coordinator, 10 Nov 2026): the app may keep or lower their role, never raise it,
+        // since a login carries it to all of Timefix, not only the app's frame. A raise is Timefix's to make.
+        if (hasLogin && active.role !== 'owner' && rankOf(role) > rankOf(active.role)) {
+          throw refuse('FORBIDDEN', LOGIN_ROLE_RAISE);
+        }
+        if (found.removedAt !== null) {
+          await tx
+            .update(managedMembers)
+            .set({ removedAt: null, connectionId: principal.connectionId, updatedAt: sql`now()` })
+            .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, found.id)));
+          await writeAudit(
+            tx,
+            scope.workspaceId,
+            scope.actor,
+            {
+              action: 'member.added',
+              targetType: 'member',
+              targetId: active.id,
+              after: { role: storedRole(active.role) },
+            },
+            source,
+          );
+          context.record({ members: [active.id] });
+        }
         // An owner (the workspace made them one) is the workspace's: nothing about them changes (AC-7024).
         if (active.role === 'owner') {
-          return { member: viewOf(externalId, active, found.createdAt, undefined), created: false };
+          return { member: viewOf(externalId, active, found.createdAt, undefined, hasLogin), created: false };
         }
         // An existing person: their name, address and role as given, each only when it changed.
         const nextRole: Role = role;
         // A custom role on top of Member counts as Member; anything else that differs moves.
         const roleChanges = active.role !== nextRole;
         const nameChanges = active.name !== name;
-        const emailChanges = active.email.toLowerCase() !== email;
+        // A login's address is its own (AC-7023): the partner's copy of it never moves it.
+        const emailChanges = !hasLogin && active.email.toLowerCase() !== email;
         if (roleChanges && active.role === 'guest') await checkSeats(tx, scope, 1);
         if (roleChanges || nameChanges || emailChanges) {
           await tx
@@ -386,7 +450,13 @@ export async function putPartnerMember(
         if (roleChanges) context.record({ members: [active.id], access: [active.id] });
         else if (nameChanges || emailChanges) context.record({ members: [active.id] });
         return {
-          member: viewOf(externalId, { id: active.id, name, email, role: nextRole }, found.createdAt, undefined),
+          member: viewOf(
+            externalId,
+            { id: active.id, name, email: emailChanges || !hasLogin ? email : active.email, role: nextRole },
+            found.createdAt,
+            undefined,
+            hasLogin,
+          ),
           created: false,
         };
       },
@@ -421,13 +491,32 @@ export async function removePartnerMember(
       if (found === undefined) throw refuse('NOT_FOUND', NO_MEMBER);
       const active = found.member?.status === 'active' ? found.member : undefined;
       if (active?.role === 'owner') throw refuse('FORBIDDEN', OWNER_KEPT);
+      // Someone with their own login (AC-7023): the partner lets go of them, and they stay a member here.
+      if (found.claimedAt !== null && active !== undefined) {
+        if (found.removedAt !== null) return { removed: false, userId: found.userId, memberId: active.id, kept: true };
+        await tx
+          .update(managedMembers)
+          .set({ removedAt: sql`now()`, updatedAt: sql`now()`, connectionId: principal.connectionId })
+          .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, found.id)));
+        await writeAudit(
+          tx,
+          scope.workspaceId,
+          scope.actor,
+          { action: 'member.app_released', targetType: 'member', targetId: active.id },
+          source,
+        );
+        context.record({ members: [active.id] });
+        return { removed: true, userId: found.userId, memberId: active.id, kept: true };
+      }
       if (found.removedAt === null) {
         await tx
           .update(managedMembers)
           .set({ removedAt: sql`now()`, updatedAt: sql`now()`, connectionId: principal.connectionId })
           .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, found.id)));
       }
-      if (active === undefined) return { removed: false, userId: found.userId, memberId: found.memberId };
+      if (active === undefined) {
+        return { removed: false, userId: found.userId, memberId: found.memberId, kept: false };
+      }
       const by = actorRow(scope.actor);
       await tx
         .update(members)
@@ -457,13 +546,14 @@ export async function removePartnerMember(
       await runRemovalEffects(context, active.id, source);
       // Everyone's member list reads them again, and their own tabs are cut off.
       context.record({ members: [active.id], access: [active.id] });
-      return { removed: true, userId: found.userId, memberId: active.id };
+      return { removed: true, userId: found.userId, memberId: active.id, kept: false };
     },
     hooks,
   );
   // Once committed: their sessions end at once (slice 4's embedded ones too), and their switcher forgets the workspace.
+  // Someone who kept their login loses only the partner's frame (the identity store ends embedded sessions alone).
   await deps.users.endManagedUserSessions(result.userId);
-  await deps.users.dropMembership(result.userId, scope.workspaceId, result.memberId);
+  if (!result.kept) await deps.users.dropMembership(result.userId, scope.workspaceId, result.memberId);
   return { removed: result.removed };
 }
 
@@ -483,6 +573,7 @@ export async function listPartnerMembers(
         name: members.name,
         email: members.email,
         role: members.role,
+        claimedAt: managedMembers.claimedAt,
       })
       .from(managedMembers)
       .innerJoin(
@@ -499,5 +590,7 @@ export async function listPartnerMembers(
       .orderBy(asc(managedMembers.createdAt), asc(managedMembers.id))
       .limit(PARTNER_MEMBERS_LIST_MAX);
   });
-  return { members: rows.map((row) => viewOf(row.externalId, row, row.createdAt, undefined)) };
+  return {
+    members: rows.map((row) => viewOf(row.externalId, row, row.createdAt, undefined, row.claimedAt !== null)),
+  };
 }

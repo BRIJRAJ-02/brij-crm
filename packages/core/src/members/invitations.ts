@@ -108,7 +108,7 @@ export interface InviteWriteOptions {
 }
 
 /** The actor's role as the invitation rules judge it: a member's own, the system as an owner. */
-function actingRole(scope: EngineScope): Role | undefined {
+export function actingRole(scope: EngineScope): Role | undefined {
   const { principal } = scope.access;
   if (principal.kind === 'system') return 'owner';
   return principal.kind === 'member' ? principal.role : undefined;
@@ -711,6 +711,8 @@ export interface HeldInvitation {
   readonly slug: string;
   /** The page only person whose page it hands over (Team pages), when it is one. */
   readonly memberId?: string;
+  /** The role of the member who last sent it, while they are an active member here. */
+  readonly senderRole?: Role;
 }
 
 /**
@@ -808,6 +810,9 @@ export async function readInvitation(
     workspaceName: row.workspaceName,
     slug: row.slug,
     ...(row.memberId === null ? {} : { memberId: row.memberId }),
+    ...(row.senderStatus === 'active' && row.senderRole !== null && isRole(row.senderRole)
+      ? { senderRole: row.senderRole }
+      : {}),
   };
   return held;
 }
@@ -818,7 +823,14 @@ export async function readInvitation(
  * invitation now (malformed, unknown, expired, revoked or used) answers the
  * same `INVITE_INVALID`. The caller limits it to 20 a minute per IP.
  */
-export async function peekInvite(deps: { readonly db: Database }, token: string): Promise<InvitePeek> {
+export async function peekInvite(
+  deps: {
+    readonly db: Database;
+    /** A partner's name by its id, from the registry (spec 0070): a login claim's page says which app keeps them. */
+    readonly partnerName?: (partnerId: string) => Promise<string | undefined>;
+  },
+  token: string,
+): Promise<InvitePeek> {
   const { scope, ...entered } = await enterInvitation(deps, token);
   const { held, page, isClaimed } = await inWorkspace(scope, async (tx) => {
     const found = await readInvitation(tx, scope.workspaceId, entered, false);
@@ -834,15 +846,26 @@ export async function peekInvite(deps: { readonly db: Database }, token: string)
       isClaimed: false,
     };
   });
-  // A page's hand over whose person is no page only person here any more opens nothing.
+  // A page's hand over whose person is no page only person here any more opens nothing; nor does a login claim whose
+  // person the partner removed, or who claimed it another way.
   if (held.memberId !== undefined && page === undefined) throw inviteInvalid();
+  const partnerId = page?.partnerId;
+  // A failed read of the name still opens the page; it then names no app.
+  const app = partnerId === undefined ? undefined : await deps.partnerName?.(partnerId).catch(() => undefined);
   return {
     workspaceName: held.workspaceName,
     inviterName: held.inviterName ?? '',
     role: held.role,
     roleLabel: held.customRole?.name ?? ROLE_LABELS[held.role],
     ...(held.kind === 'email' ? { invitedEmailMasked: maskEmail(held.email) } : {}),
-    ...(page === undefined ? {} : { page }),
+    ...(page === undefined
+      ? {}
+      : { page: { name: page.name, ...(page.handle === undefined ? {} : { handle: page.handle }) } }),
+    ...(partnerId === undefined
+      ? {}
+      : {
+          login: app === undefined ? {} : { app },
+        }),
     ...(isClaimed ? { isClaimed: true } : {}),
   };
 }

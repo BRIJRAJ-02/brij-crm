@@ -367,7 +367,7 @@ export async function deleteWorkspace(
             eq(members.workspaceId, scope.workspaceId),
             eq(members.status, 'active'),
             // Someone with no login of their own (a partner's, or a page only person) gets no email from us (AC-7023).
-            sql`not exists (select 1 from managed_members mm where mm.workspace_id = ${members.workspaceId} and mm.member_id = ${members.id} and mm.removed_at is null)`,
+            sql`not exists (select 1 from managed_members mm where mm.workspace_id = ${members.workspaceId} and mm.member_id = ${members.id} and mm.removed_at is null and mm.claimed_at is null)`,
           ),
         );
       const actor = scope.actor.type === 'member' ? scope.actor.id : undefined;

@@ -51,6 +51,8 @@ export const AUDIT_ACTIONS = [
   // Spec 0065 H7 (AC-6597): where a member may work in the business apps.
   'member.reach_changed',
   'member.removed',
+  // Spec 0070, AC-7023: a connected app removed someone who had claimed their own login; they stay a member.
+  'member.app_released',
   'member.left',
   'workspace.ownership_transferred',
   'workspace.updated',
@@ -295,6 +297,11 @@ export const InvitePeek = z.object({
   page: z.object({ name: z.string(), handle: z.string().optional() }).optional(),
   /** A page's hand over already taken (the link opened again): its login stands, and signing in is what is left. */
   isClaimed: z.boolean().optional(),
+  /**
+   * With `page`: a partner's person's own login (spec 0070, AC-7023), not a hand over. The app that added them keeps
+   * managing them; `app` is its name when the registry gave one. Someone in the workspace always sent it.
+   */
+  login: z.object({ app: z.string().optional() }).optional(),
 });
 /** What an invitation shows before accepting. */
 export type InvitePeek = z.infer<typeof InvitePeek>;

@@ -110,9 +110,15 @@ export interface PartnerIdentity {
    * goes; anything else is left alone. Answers whether it went.
    */
   dropPageOnlyUser(userId: string): Promise<boolean>;
-  /** Ends every session of a managed identity (AC-7022); any other identity's are never touched. Answers how many. */
+  /**
+   * Ends every session of a managed identity (AC-7022); any other identity's are never touched. One that claimed its own
+   * login (AC-7023) loses only its embedded sessions: its own sign ins are a login's. Answers how many.
+   */
   endManagedUserSessions(userId: string): Promise<number>;
-  /** Whether this identity is a partner's managed member's (AC-7023): such an identity never starts a session itself. */
+  /**
+   * Whether this identity is a managed member's with no login of its own (AC-7023): such an identity never starts a
+   * session itself. One that claimed its login (migration 0206) is no longer one.
+   */
   isManagedUser(userId: string): Promise<boolean>;
   /**
    * Ends every embedded session of these connections at once (spec 0070, AC-7013, AC-7035): a disconnect, or the
@@ -134,6 +140,31 @@ export interface PartnerIdentity {
    * meanwhile ends. Only while it still holds `email`. Best effort for the caller.
    */
   unclaimPageOnlyUser(claim: PageOnlyClaim): Promise<void>;
+  /**
+   * A partner's person claims their own login (spec 0070, AC-7023, migration 0206): their managed identity becomes an
+   * ordinary login at `email`, verified by the invitation it was mailed, so signing in there opens the same member,
+   * page, handle and history. Unlike a page's hand over the partner keeps them: the `auth.managed_users` row stays,
+   * marked claimed, so the partner's PUT keyed by its external id finds the same identity, and their embedded sessions
+   * carry on. Only the unclaimed identity of this workspace, partner and external id. Answers `taken` when another login
+   * already holds the address (never merged, AC-7021), `gone` when it is no such identity any more, else `claimed`.
+   */
+  claimManagedUser(claim: ManagedClaim): Promise<'claimed' | 'taken' | 'gone'>;
+  /**
+   * Undoes `claimManagedUser` when the workspace's half was refused after it (a race): the identity goes back to its
+   * made up address, unverified and unclaimed, and any session but an embedded one that it started meanwhile ends.
+   * Only while it still holds `email`. Best effort for the caller.
+   */
+  unclaimManagedUser(claim: ManagedClaim): Promise<void>;
+}
+
+/** A partner's person's identity claimed at an address: the identity, its workspace, partner and external id. */
+export interface ManagedClaim {
+  readonly userId: string;
+  readonly workspaceId: string;
+  readonly partnerId: string;
+  readonly externalId: string;
+  /** Lowercase, as the invitation holds it. */
+  readonly email: string;
 }
 
 /** A page only identity handed to the person at an address: the identity, its workspace and person, and the address. */
@@ -442,6 +473,86 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
       });
     },
 
+    async claimManagedUser(claim) {
+      const { userId, workspaceId, partnerId, externalId } = claim;
+      const email = claim.email.trim().toLowerCase();
+      if (
+        !UUID.test(userId) ||
+        !UUID.test(workspaceId) ||
+        !UUID.test(partnerId) ||
+        !EXTERNAL_ID.test(externalId) ||
+        !email.includes('@')
+      ) {
+        return 'gone';
+      }
+      if (isManagedAddress(email)) return 'taken';
+      try {
+        return await db.transaction(async (tx) => {
+          const [held] = await tx
+            .select({ userId: managedUsers.userId })
+            .from(managedUsers)
+            .where(
+              and(
+                eq(managedUsers.userId, userId),
+                eq(managedUsers.workspaceId, workspaceId),
+                eq(managedUsers.partnerId, partnerId),
+                eq(managedUsers.externalId, externalId),
+                isNull(managedUsers.claimedAt),
+              ),
+            )
+            .for('update');
+          if (held === undefined) return 'gone';
+          const [other] = await tx
+            .select({ id: user.id })
+            .from(user)
+            .where(and(sql`lower(${user.email}) = ${email}`, sql`${user.id} <> ${userId}::uuid`))
+            .limit(1);
+          if (other !== undefined) return 'taken';
+          await tx
+            .update(user)
+            .set({ email, emailVerified: true, updatedAt: sql`now()` })
+            .where(eq(user.id, userId));
+          await tx
+            .update(managedUsers)
+            .set({ claimedAt: sql`now()` })
+            .where(eq(managedUsers.userId, userId));
+          // None should exist (the session hook refused it), but a login starts with none from before; the partner's
+          // frame keeps its own.
+          await tx.delete(session).where(and(eq(session.userId, userId), isNull(session.embedConnectionId)));
+          return 'claimed';
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) return 'taken';
+        throw error;
+      }
+    },
+
+    async unclaimManagedUser(claim) {
+      const { userId, workspaceId, partnerId, externalId } = claim;
+      const email = claim.email.trim().toLowerCase();
+      if (!UUID.test(userId) || !UUID.test(workspaceId) || !UUID.test(partnerId)) return;
+      await db.transaction(async (tx) => {
+        const back = await tx
+          .update(user)
+          .set({ email: `${userId}@${MANAGED_DOMAIN}`, emailVerified: false, updatedAt: sql`now()` })
+          .where(and(eq(user.id, userId), sql`lower(${user.email}) = ${email}`))
+          .returning({ id: user.id });
+        if (back.length === 0) return;
+        await tx
+          .update(managedUsers)
+          .set({ claimedAt: null })
+          .where(
+            and(
+              eq(managedUsers.userId, userId),
+              eq(managedUsers.workspaceId, workspaceId),
+              eq(managedUsers.partnerId, partnerId),
+              eq(managedUsers.externalId, externalId),
+            ),
+          );
+        await tx.delete(session).where(and(eq(session.userId, userId), isNull(session.embedConnectionId)));
+      });
+    },
+
     async endManagedUserSessions(userId) {
       if (!UUID.test(userId)) return 0;
       const ended = await db
@@ -449,7 +560,8 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
         .where(
           and(
             eq(session.userId, userId),
-            sql`exists (select 1 from ${managedUsers} where ${managedUsers.userId} = ${userId}::uuid)`,
+            // A claimed identity is a login: only the partner's frame's sessions are the partner's to end.
+            sql`exists (select 1 from ${managedUsers} where ${managedUsers.userId} = ${userId}::uuid and (${managedUsers.claimedAt} is null or ${session.embedConnectionId} is not null))`,
           ),
         )
         .returning({ id: session.id });
@@ -461,7 +573,7 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
       const [row] = await db
         .select({ userId: managedUsers.userId })
         .from(managedUsers)
-        .where(eq(managedUsers.userId, userId))
+        .where(and(eq(managedUsers.userId, userId), isNull(managedUsers.claimedAt)))
         .limit(1);
       return row !== undefined;
     },
@@ -480,7 +592,8 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
 
 /**
  * The managed identity for this workspace, partner (none for a page only person) and external id, its name brought up
- * to date, or a new one under `.invalid`. Two calls at once answer the same id.
+ * to date (never a claimed login's, which is its person's own), or a new one under `.invalid`. Two calls at once
+ * answer the same id.
  */
 async function ensureManaged(
   db: NodePgDatabase<Record<string, unknown>>,
@@ -500,13 +613,15 @@ async function ensureManaged(
   );
   const existing = async (tx: Tx) => {
     const [row] = await tx
-      .select({ userId: managedUsers.userId, name: user.name })
+      .select({ userId: managedUsers.userId, name: user.name, claimedAt: managedUsers.claimedAt })
       .from(managedUsers)
       .innerJoin(user, eq(user.id, managedUsers.userId))
       .where(keyed)
       .limit(1);
     if (row === undefined) return undefined;
-    if (row.name !== name) {
+    // A claimed identity is the person's own login (AC-7023): its account name is theirs, in every workspace; the
+    // partner names them only on their member row here.
+    if (row.name !== name && row.claimedAt === null) {
       await tx
         .update(user)
         .set({ name, updatedAt: sql`now()` })

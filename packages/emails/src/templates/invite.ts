@@ -20,6 +20,7 @@ const withArticle = (name: string): string => `${/^[aeiou]/i.test(name) ? 'an' :
 /** An invitation to join a workspace. */
 export const memberInvite: Template<MemberInviteEmail> = (params, context) => {
   const workspace = workspaceOf(context);
+  if (params.login !== undefined) return ownLogin(params, context);
   if (params.page !== undefined) return pageHandover(params, context);
   // A custom role by its own name (spec 0037), else the built in role.
   const role = params.roleName === undefined ? ROLES[params.role] : withArticle(params.roleName);
@@ -67,5 +68,34 @@ const pageHandover: Template<MemberInviteEmail> = (params, context) => {
       },
     ],
     why: `You got this email because ${params.inviterName} invited this address to manage a page in ${workspace}.`,
+  };
+};
+
+/**
+ * A connected app's person's own Timefix login (spec 0070, AC-7023): they keep using the app as before, and can also
+ * sign in to Timefix directly, to the same page. Same layout and the same one button as a page's hand over.
+ */
+const ownLogin: Template<MemberInviteEmail> = (params, context) => {
+  const workspace = workspaceOf(context);
+  const until = formatShortDay(params.expiresAt);
+  const handle = params.page?.handle;
+  const page = handle === undefined ? 'your link page' : `your link page, /${handle}`;
+  const app = params.login?.app ?? 'the app you use now';
+  // Someone in the workspace always sends it (never the person): it says who, so nothing reads as if they asked.
+  const asked = `${params.inviterName} set up a Timefix login for you in ${workspace}.`;
+  return {
+    subject: 'Set up your Timefix login',
+    preheader: `Sign in to Timefix to manage ${page}. The invitation works until ${until}.`,
+    eyebrow: workspace,
+    heading: 'Set up your Timefix login',
+    blocks: [
+      { type: 'paragraph', text: `${asked} Sign in to Timefix to manage ${page}. You can keep using ${app} too.` },
+      { type: 'button', label: 'Set up your login', url: context.link(params.acceptPath) },
+      {
+        type: 'note',
+        text: `The invitation works until ${until}, and only for this address. If you weren’t expecting it, you can ignore this email.`,
+      },
+    ],
+    why: `You got this email because ${params.inviterName} set up a Timefix login for this address in ${workspace}.`,
   };
 };

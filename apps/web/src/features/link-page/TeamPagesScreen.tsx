@@ -82,8 +82,14 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   // A page only person being handed their page, and one whose open invitation is being cancelled.
   const [inviting, setInviting] = useState<TeamLinkPage | undefined>(undefined);
   const [uninviting, setUninviting] = useState<TeamLinkPage | undefined>(undefined);
-  // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks).
+  // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks);
+  // the frame has no workspace access to read, so it is never drawn there (AC-7046).
   const canInvite = useCan('members.invite');
+  // A connected app's person with no Timefix login yet: Set up their Timefix login, and their open invitation (spec
+  // 0070, AC-7023). In Timefix only, with Members' invite permission too: never inside the app's frame, which never
+  // reaches those calls (coordinator, 10 Nov 2026).
+  const canSetUpLogin = (page: TeamLinkPage) =>
+    !place.isEmbedded && canInvite && page.isFromApp === true && page.hasLogin !== true && !page.isSelf;
   /** One row put back in the list as the server answered it. */
   const replaceRow = (memberId: string, change: (page: TeamLinkPage) => TeamLinkPage) => {
     setState((was) =>
@@ -143,8 +149,8 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
         onAction={(key) => {
           if (key === 'edit' || key === 'claim') openPage(page);
           if (key === 'remove') setRemoving(page);
-          if (key === 'invite') setInviting(page);
-          if (key === 'uninvite') setUninviting(page);
+          if (key === 'invite' || key === 'login') setInviting(page);
+          if (key === 'uninvite' || key === 'unlogin') setUninviting(page);
           if (page.handle === undefined) return;
           if (key === 'copy') copy(page.handle);
           // One download at a time: a second press while one is drawn waits for it rather than being lost.
@@ -198,6 +204,25 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
             <MenuItem id="remove" icon="user-x" isDanger>
               {strings.removePerson}
             </MenuItem>
+          </>
+        )}
+        {canSetUpLogin(page) && (
+          <>
+            <MenuSeparator />
+            {page.invite === undefined ? (
+              <MenuItem id="login" icon="key">
+                {strings.loginInvite}
+              </MenuItem>
+            ) : (
+              <>
+                <MenuItem id="login" icon="send">
+                  {strings.resendInvite}
+                </MenuItem>
+                <MenuItem id="unlogin" icon="x" isDanger>
+                  {strings.revokeInvite}
+                </MenuItem>
+              </>
+            )}
           </>
         )}
       </Menu>
@@ -413,6 +438,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 data={data}
                 slug={slug}
                 page={inviting}
+                {...(inviting.isFromApp === true ? { kind: { kind: 'login' } } : {})}
                 onClose={() => setInviting(undefined)}
                 onSent={(invite, sent) => {
                   const sentFor = { ...inviting, invite };
@@ -434,6 +460,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
               data={data}
               slug={slug}
               page={uninviting}
+              {...(uninviting?.isFromApp === true ? { kind: 'login' as const } : {})}
               onClose={() => setUninviting(undefined)}
               onCancelled={(page) => {
                 setUninviting(undefined);

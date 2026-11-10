@@ -672,6 +672,8 @@ async function removedManagedPages(
     join members m on m.workspace_id = mm.workspace_id and m.id = mm.member_id
     where mm.workspace_id = ${workspaceId}::uuid
       and mm.removed_at < now() - ${MANAGED_PAGES_KEPT}::interval and m.status = 'removed'
+      -- Someone who set up their own Timefix login (spec 0070, AC-7023) is a login's page: never purged as managed.
+      and mm.claimed_at is null
       ${at.after === undefined ? sql`` : sql`and mm.id > ${at.after}::uuid`}
     order by mm.id
     limit ${MANAGED_PAGES_BATCH}

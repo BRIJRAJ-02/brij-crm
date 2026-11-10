@@ -17,7 +17,7 @@
 //   `managed_members` row goes (no page only person, nothing for the 30 day purge), and the invitation is used. A
 //   refusal after the identity changed puts it back. Signing in there by code then opens the workspace.
 import type { PageInviteCancelled, PageInviteSent } from '@crm/contracts';
-import { schema, type Database, type PageOnlyClaim, type WorkspaceTx } from '@crm/db';
+import { schema, type Database, type ManagedClaim, type PageOnlyClaim, type WorkspaceTx } from '@crm/db';
 import { and, count, eq, sql } from 'drizzle-orm';
 import { enterInvitation, inviteInvalid } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
@@ -37,9 +37,16 @@ import {
   readInvitation,
   senderOf,
   type InviteSender,
+  type HeldInvitation,
   type InviteWriteOptions,
 } from './invitations.ts';
-import { handedPerson, handoverView as viewOf, type HandedPerson } from './page-handover-read.ts';
+import {
+  claimingPerson,
+  handedPerson,
+  handoverView as viewOf,
+  type ClaimingPerson,
+  type HandedPerson,
+} from './page-handover-read.ts';
 import type { RemovalEffect } from './removal-effect.ts';
 
 const { invitations, managedMembers, members } = schema;
@@ -52,8 +59,8 @@ const HAS_LOGIN =
   'This email already has a Timefix login, and a page can’t move into another login. Ask for the invitation to go to another address.';
 const ADDRESS_IN_USE = 'Someone in this workspace already uses this email, so it can’t take over this page.';
 
-/** The open hand over naming `memberId`, locked when `lock`. */
-async function openHandover(tx: WorkspaceTx, workspaceId: string, memberId: string, lock: boolean) {
+/** The open hand over (or login claim) naming `memberId`, locked when `lock`. */
+export async function openHandover(tx: WorkspaceTx, workspaceId: string, memberId: string, lock: boolean) {
   const query = tx
     .select({
       id: invitations.id,
@@ -71,7 +78,7 @@ async function openHandover(tx: WorkspaceTx, workspaceId: string, memberId: stri
 }
 
 /** Whether an active member other than `except` uses `email`, or an open invitation other than `invitation` names it. */
-async function addressTaken(
+export async function addressTaken(
   tx: WorkspaceTx,
   workspaceId: string,
   email: string,
@@ -105,6 +112,121 @@ async function addressTaken(
     )
     .limit(1);
   return named !== undefined;
+}
+
+/**
+ * Writes the invitation that names a person (`invitations.member_id`), inside the caller's write under the
+ * invitations lock, once they and the address have passed their checks: to the address of their open one, it is sent
+ * again in place (a new token, so the old link stops, and a fresh 7 days); to another, the open one is cancelled and a
+ * new one made, within the open invitation cap (`INVITES_LIMIT`). One History row, `invitation.created` or
+ * `invitation.resent`, carrying `mark` (`page` for a hand over, `login` for a connected app's person's own login).
+ * Answers the token to mail (never stored), the invitation and how many times it went out.
+ */
+export async function writeNamedInvite(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  named: {
+    readonly memberId: string;
+    readonly email: string;
+    readonly open: { readonly id: string; readonly email: string | null } | undefined;
+    readonly mark: { readonly page: true } | { readonly login: true };
+  },
+  source: AuditSource | undefined,
+): Promise<{ readonly token: string; readonly invitationId: string; readonly sendCount: number }> {
+  const { email, open } = named;
+  const { token, hash } = mintToken();
+  const by = touched(scope);
+  let invitationId: string;
+  let sendCount: number;
+  // To another address, the open one is cancelled and a new one made, so History says where it went each time.
+  if (open !== undefined && open.email !== email) {
+    await tx
+      .update(invitations)
+      .set({ status: 'revoked', ...by })
+      .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)));
+    await writeAudit(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      {
+        action: 'invitation.revoked',
+        targetType: 'invitation',
+        targetId: open.id,
+        before: { status: 'open' },
+        after: { status: 'revoked' },
+      },
+      source,
+    );
+  }
+  if (open !== undefined && open.email === email) {
+    const [row] = await tx
+      .update(invitations)
+      .set({
+        email,
+        tokenHash: hash,
+        sendCount: sql`${invitations.sendCount} + 1`,
+        lastSentAt: sql`now()`,
+        expiresAt: INVITE_WINDOW,
+        ...by,
+      })
+      .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
+      .returning({ sendCount: invitations.sendCount });
+    invitationId = open.id;
+    sendCount = row?.sendCount ?? 1;
+    await writeAudit(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      { action: 'invitation.resent', targetType: 'invitation', targetId: open.id, after: { ...named.mark } },
+      source,
+    );
+  } else {
+    const [openCount] = await tx
+      .select({ n: count() })
+      .from(invitations)
+      .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.status, 'open')));
+    const cap = limitsOf(scope).openInvitations;
+    if ((openCount?.n ?? 0) + 1 > cap) {
+      throw refuse('INVITES_LIMIT', `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`);
+    }
+    invitationId = newId();
+    sendCount = 1;
+    await tx.insert(invitations).values({
+      workspaceId: scope.workspaceId,
+      id: invitationId,
+      kind: 'email',
+      email,
+      role: 'member',
+      customRoleId: null,
+      memberId: named.memberId,
+      tokenHash: hash,
+      maxUses: 1,
+      sendCount: 1,
+      lastSentAt: sql`now()`,
+      expiresAt: INVITE_WINDOW,
+      createdByType: by.updatedByType,
+      createdById: by.updatedById,
+      createdByMemberId: by.updatedByMemberId,
+      updatedByType: by.updatedByType,
+      updatedById: by.updatedById,
+      updatedByMemberId: by.updatedByMemberId,
+    });
+    // The address stays in `invitations`: the log names the invitation, never personal data it can't drop.
+    await writeAudit(
+      tx,
+      scope.workspaceId,
+      scope.actor,
+      {
+        action: 'invitation.created',
+        targetType: 'invitation',
+        targetId: invitationId,
+        // A login claim gives no role: the person keeps the one they hold.
+        after: { ...('page' in named.mark ? { role: 'member' } : {}), ...named.mark, memberId: named.memberId },
+      },
+      source,
+    );
+  }
+  return { token, invitationId, sendCount };
 }
 
 /** Refuses anyone but a page only person holding plain Member (`handedPerson` read them). */
@@ -163,100 +285,12 @@ export async function inviteToManagePage(
       if (await addressTaken(tx, scope.workspaceId, email, person.memberId, open?.id)) {
         throw refuseOn('UNIQUE_CONFLICT', ADDRESS_TAKEN, 'email');
       }
-      const { token, hash } = mintToken();
-      const by = touched(scope);
-      let invitationId: string;
-      let sendCount: number;
-      // To another address, the open one is cancelled and a new one made, so History says where it went each time.
-      if (open !== undefined && open.email !== email) {
-        await tx
-          .update(invitations)
-          .set({ status: 'revoked', ...by })
-          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)));
-        await writeAudit(
-          tx,
-          scope.workspaceId,
-          scope.actor,
-          {
-            action: 'invitation.revoked',
-            targetType: 'invitation',
-            targetId: open.id,
-            before: { status: 'open' },
-            after: { status: 'revoked' },
-          },
-          options.source,
-        );
-      }
-      if (open !== undefined && open.email === email) {
-        const [row] = await tx
-          .update(invitations)
-          .set({
-            email,
-            tokenHash: hash,
-            sendCount: sql`${invitations.sendCount} + 1`,
-            lastSentAt: sql`now()`,
-            expiresAt: INVITE_WINDOW,
-            ...by,
-          })
-          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
-          .returning({ sendCount: invitations.sendCount });
-        invitationId = open.id;
-        sendCount = row?.sendCount ?? 1;
-        await writeAudit(
-          tx,
-          scope.workspaceId,
-          scope.actor,
-          { action: 'invitation.resent', targetType: 'invitation', targetId: open.id, after: { page: true } },
-          options.source,
-        );
-      } else {
-        const [openCount] = await tx
-          .select({ n: count() })
-          .from(invitations)
-          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.status, 'open')));
-        const cap = limitsOf(scope).openInvitations;
-        if ((openCount?.n ?? 0) + 1 > cap) {
-          throw refuse(
-            'INVITES_LIMIT',
-            `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`,
-          );
-        }
-        invitationId = newId();
-        sendCount = 1;
-        await tx.insert(invitations).values({
-          workspaceId: scope.workspaceId,
-          id: invitationId,
-          kind: 'email',
-          email,
-          role: 'member',
-          customRoleId: null,
-          memberId: person.memberId,
-          tokenHash: hash,
-          maxUses: 1,
-          sendCount: 1,
-          lastSentAt: sql`now()`,
-          expiresAt: INVITE_WINDOW,
-          createdByType: by.updatedByType,
-          createdById: by.updatedById,
-          createdByMemberId: by.updatedByMemberId,
-          updatedByType: by.updatedByType,
-          updatedById: by.updatedById,
-          updatedByMemberId: by.updatedByMemberId,
-        });
-        // The address stays in `invitations`: the log names the invitation, never personal data it can't drop.
-        await writeAudit(
-          tx,
-          scope.workspaceId,
-          scope.actor,
-          {
-            action: 'invitation.created',
-            targetType: 'invitation',
-            targetId: invitationId,
-            after: { role: 'member', page: true, memberId: person.memberId },
-          },
-          options.source,
-        );
-      }
+      const { token, invitationId, sendCount } = await writeNamedInvite(
+        tx,
+        scope,
+        { memberId: person.memberId, email, open, mark: { page: true } },
+        options.source,
+      );
       const sent = await openHandover(tx, scope.workspaceId, person.memberId, false);
       if (sent === undefined) throw new Error('A hand over just sent was not read back.');
       return {
@@ -275,7 +309,9 @@ export async function inviteToManagePage(
 
 /**
  * Cancels a page only person's open hand over: its link stops working at once. `link_pages.manage_team`, then
- * `members.invite`. One `invitation.revoked` History row. Answers `cancelled: false` when none was open.
+ * `members.invite`. Anyone who isn't a page only person here is `NOT_FOUND` (a connected app's person's login
+ * invitation is `cancelLoginInvite`'s). One `invitation.revoked` History row. Answers `cancelled: false` when none
+ * was open.
  */
 export async function cancelPageInvite(
   scope: EngineScope,
@@ -289,6 +325,9 @@ export async function cancelPageInvite(
     scope,
     async ({ tx }) => {
       await lockInvitations(tx, scope.workspaceId);
+      // A page only person's only: a connected app's person's login invitation is `cancelLoginInvite`'s, which the
+      // app's frame never reaches (security review, 10 Nov 2026).
+      checkHandable(await handedPerson(tx, scope, input.member, true));
       const open = await openHandover(tx, scope.workspaceId, input.member, true);
       if (open === undefined) return { cancelled: false };
       await tx
@@ -315,22 +354,55 @@ export async function cancelPageInvite(
   return result;
 }
 
-/** What taking over a page needs of the identity store. */
+/** What taking over a page, or a partner's person's own login (spec 0070, AC-7023), needs of the identity store. */
 export interface PageClaimUsers {
   claimPageOnlyUser(claim: PageOnlyClaim): Promise<'claimed' | 'taken' | 'gone'>;
   unclaimPageOnlyUser(claim: PageOnlyClaim): Promise<void>;
+  claimManagedUser(claim: ManagedClaim): Promise<'claimed' | 'taken' | 'gone'>;
+  unclaimManagedUser(claim: ManagedClaim): Promise<void>;
+}
+
+/** Whom an invitation naming a person makes a login for, as it was read before the identity changed. */
+type Claimant =
+  | { readonly kind: 'page'; readonly person: HandedPerson }
+  | { readonly kind: 'login'; readonly person: ClaimingPerson };
+
+/**
+ * Whom an open invitation names, if they can still take it: a plain Member page only person, or a partner's person.
+ * A partner's person's role is read again when it is opened (security review, 10 Nov 2026): made an owner since, only
+ * an owner's invitation still opens, as only an owner sets one up for an owner.
+ */
+async function claimantOf(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  held: HeldInvitation,
+  lock: boolean,
+): Promise<Claimant | undefined> {
+  const memberId = held.memberId;
+  if (memberId === undefined) return undefined;
+  const page = await handedPerson(tx, scope, memberId, lock);
+  if (page !== undefined) {
+    return page.role === 'member' && page.customRoleId === null ? { kind: 'page', person: page } : undefined;
+  }
+  const person = await claimingPerson(tx, scope, memberId, lock);
+  if (person === undefined) return undefined;
+  if (person.role === 'owner' && held.senderRole !== 'owner') return undefined;
+  return { kind: 'login', person };
 }
 
 /**
- * Takes over a page from its hand over (no session: the token is the invited inbox's). The invitation must open now
- * (open, unexpired, single use, its sender still holding what sending it took) and name a page only person still
- * handable here; anything else is the one `INVITE_INVALID`. An address someone else here took since is
- * `UNIQUE_CONFLICT`, and so is one that already has a Timefix login (never merged, AC-7021). Then the identity becomes
- * a login at the invited address, and in one transaction the member row takes the address, their `managed_members`
- * row goes, the invitation is used by them, and one `invitation.accepted` History row (`via: page`) and the `members`
- * and `access` outbox rows are written; refused there, the identity goes back. The same link opened again once it
- * stood answers the workspace again. Answers the workspace's address, where signing in by code at that address leads,
- * and that address (the token is its inbox's), for the sign in to start from.
+ * Takes over a page from its hand over (no session: the token is the invited inbox's), or sets up a partner's person's
+ * own login from theirs (spec 0070, AC-7023). The invitation must open now (open, unexpired, single use, its sender
+ * still holding what sending it took, or the person themselves still here) and name a page only person still handable
+ * here, or a partner's person still the partner's with no login yet; anything else is the one `INVITE_INVALID`. An
+ * address someone else here took since is `UNIQUE_CONFLICT`, and so is one that already has a Timefix login (never
+ * merged, AC-7021). Then the identity becomes a login at the invited address, and in one transaction the member row
+ * takes the address, the invitation is used by them, and one `invitation.accepted` History row (`via: page` or
+ * `login`) and the `members` and `access` outbox rows are written. A page only person's `managed_members` row goes; a
+ * partner's person's stays, marked claimed, so the partner keeps managing them. Refused there, the identity goes back.
+ * The same link opened again once it stood answers the workspace again. Answers the workspace's address, where
+ * signing in by code at that address leads, and that address (the token is its inbox's), for the sign in to start
+ * from.
  */
 export async function claimPageInvite(
   deps: { readonly db: Database; readonly users: PageClaimUsers },
@@ -347,31 +419,27 @@ export async function claimPageInvite(
       return { slug: held.slug, email: held.email, done: true as const };
     }
     if (!opensNow(held)) throw inviteInvalid();
-    const person = await handedPerson(tx, scope, held.memberId, false);
-    if (person === undefined || person.role !== 'member' || person.customRoleId !== null) throw inviteInvalid();
-    if (await addressTaken(tx, scope.workspaceId, held.email, person.memberId, held.id)) {
+    const claimant = await claimantOf(tx, scope, held, false);
+    if (claimant === undefined) throw inviteInvalid();
+    if (await addressTaken(tx, scope.workspaceId, held.email, claimant.person.memberId, held.id)) {
       throw refuseOn('UNIQUE_CONFLICT', ADDRESS_IN_USE, 'email');
     }
-    return { slug: held.slug, done: false as const, person, email: held.email };
+    return { slug: held.slug, done: false as const, claimant, email: held.email };
   });
   if (first.done) return { slug: first.slug, email: first.email };
-  const claim: PageOnlyClaim = {
-    userId: first.person.userId,
-    workspaceId: scope.workspaceId,
-    personId: first.person.personId,
-    email: first.email,
-  };
-  const made = await deps.users.claimPageOnlyUser(claim);
+  const { claimant, email } = first;
+  const identity = identityClaim(deps.users, scope.workspaceId, claimant, email);
+  const made = await identity.claim();
   if (made === 'gone') throw inviteInvalid();
   if (made === 'taken') throw refuseOn('UNIQUE_CONFLICT', HAS_LOGIN, 'email');
   try {
-    const { result } = await runWrite(scope, (context) => takeOver(context, entered, first.person, source), hooks);
-    return { ...result, email: first.email };
+    const { result } = await runWrite(scope, (context) => takeOver(context, entered, claimant, source), hooks);
+    return { ...result, email };
   } catch (error) {
-    // Refused after the identity became a login (a race): it is a page only identity again. Should that fail too, the
+    // Refused after the identity became a login (a race): it is a managed identity again. Should that fail too, the
     // identity would be a working login nobody meant: that is no refusal, so it throws on, reported, never quiet.
     try {
-      await deps.users.unclaimPageOnlyUser(claim);
+      await identity.undo();
     } catch (undo) {
       throw new Error('A page hand over refused after its login was made could not be undone.', { cause: undo });
     }
@@ -379,20 +447,40 @@ export async function claimPageInvite(
   }
 }
 
-/** The workspace's half of a take over, under the invitation's and the person's locks. */
+/** The identity store's two calls for a claimant: make their identity a login at `email`, and put it back. */
+function identityClaim(users: PageClaimUsers, workspaceId: string, claimant: Claimant, email: string) {
+  if (claimant.kind === 'page') {
+    const claim: PageOnlyClaim = {
+      userId: claimant.person.userId,
+      workspaceId,
+      personId: claimant.person.personId,
+      email,
+    };
+    return { claim: () => users.claimPageOnlyUser(claim), undo: () => users.unclaimPageOnlyUser(claim) };
+  }
+  const claim: ManagedClaim = {
+    userId: claimant.person.userId,
+    workspaceId,
+    partnerId: claimant.person.partnerId,
+    externalId: claimant.person.externalId,
+    email,
+  };
+  return { claim: () => users.claimManagedUser(claim), undo: () => users.unclaimManagedUser(claim) };
+}
+
+/** The workspace's half of a take over or a login claim, under the invitation's and the person's locks. */
 async function takeOver(
   context: WriteContext,
   entered: Parameters<typeof readInvitation>[2],
-  before: HandedPerson,
+  before: Claimant,
   source: AuditSource,
 ): Promise<{ readonly slug: string }> {
   const { tx, scope } = context;
   const held = await readInvitation(tx, scope.workspaceId, entered, true);
-  if (held?.memberId !== before.memberId || !opensNow(held)) throw inviteInvalid();
-  const person = await handedPerson(tx, scope, before.memberId, true);
-  if (person?.userId !== before.userId || person.role !== 'member' || person.customRoleId !== null) {
-    throw inviteInvalid();
-  }
+  if (held?.memberId !== before.person.memberId || !opensNow(held)) throw inviteInvalid();
+  const now = await claimantOf(tx, scope, held, true);
+  if (now?.kind !== before.kind || now.person.userId !== before.person.userId) throw inviteInvalid();
+  const { person } = now;
   if (await addressTaken(tx, scope.workspaceId, held.email, person.memberId, held.id)) {
     throw refuseOn('UNIQUE_CONFLICT', ADDRESS_IN_USE, 'email');
   }
@@ -400,9 +488,17 @@ async function takeOver(
     .update(members)
     .set({ email: held.email, ...touched(scope) })
     .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, person.memberId)));
-  await tx
-    .delete(managedMembers)
-    .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, person.personId)));
+  if (now.kind === 'page') {
+    await tx
+      .delete(managedMembers)
+      .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, person.personId)));
+  } else {
+    // The partner keeps them (owner, 10 Nov 2026): their row stays, marked claimed.
+    await tx
+      .update(managedMembers)
+      .set({ claimedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(and(eq(managedMembers.workspaceId, scope.workspaceId), eq(managedMembers.id, person.personId)));
+  }
   await tx
     .update(invitations)
     .set({ status: 'used', uses: sql`${invitations.uses} + 1`, usedByMemberId: person.memberId, ...touched(scope) })
@@ -415,7 +511,7 @@ async function takeOver(
       action: 'invitation.accepted',
       targetType: 'member',
       targetId: person.memberId,
-      after: { via: 'page', invitationId: held.id },
+      after: { via: now.kind, invitationId: held.id },
     },
     source,
   );

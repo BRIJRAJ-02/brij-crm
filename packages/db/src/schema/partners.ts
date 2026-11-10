@@ -173,6 +173,12 @@ export const managedMembers = pgTable(
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     /** When the partner removed them; none while they are in. */
     removedAt: timestamptz('removed_at'),
+    /**
+     * When a partner's person claimed their own Timefix login (spec 0070, AC-7023, migration 0206): the same member,
+     * page and history, now signing in directly too, while the partner keeps managing them. Their address is then their
+     * login's, never changed by the partner's PUT, and a partner's DELETE ends only the partner's hold on them.
+     */
+    claimedAt: timestamptz('claimed_at'),
   },
   (t) => [
     primaryKey({ name: 'managed_members_pkey', columns: [t.workspaceId, t.id] }),
@@ -202,6 +208,8 @@ export const managedMembers = pgTable(
       'managed_members_kind',
       sql`(${t.partnerId} is not null and ${t.connectionId} is not null and ${t.createdByMemberId} is null) or (${t.partnerId} is null and ${t.connectionId} is null and ${t.createdByMemberId} is not null and ${t.externalId} = ${t.id}::text)`,
     ),
+    // Only a partner's person is claimed; a page only person's row goes on a hand over (migration 0203).
+    check('managed_members_claimed', sql`${t.claimedAt} is null or ${t.partnerId} is not null`),
     index('managed_members_created_by_ix').on(t.workspaceId, t.createdByMemberId),
     uniqueIndex('managed_members_external').on(t.workspaceId, t.partnerId, t.externalId),
     uniqueIndex('managed_members_member_ix').on(t.workspaceId, t.memberId),

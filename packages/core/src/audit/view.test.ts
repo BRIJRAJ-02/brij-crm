@@ -135,6 +135,8 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'member.removed': [
     row('member.removed', 'member', bea, { before: { status: 'active' }, after: { status: 'removed' } }),
   ],
+  // A connected app let go of someone who kept their own login (spec 0070, AC-7023).
+  'member.app_released': [row('member.app_released', 'member', bea)],
   'member.left': [
     row('member.left', 'member', bea, {
       actor: 'bea',

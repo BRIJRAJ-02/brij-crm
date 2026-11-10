@@ -159,6 +159,7 @@ import type {
   PageOnlyRemoved,
   PageInviteSent,
   PageInviteCancelled,
+  MyTimefixLogin,
   SocialLink,
   SubmissionsBeyond,
   WorkspaceSettings,
@@ -891,6 +892,7 @@ export type {
   PageOnlyRemoved,
   PageInviteSent,
   PageInviteCancelled,
+  MyTimefixLogin,
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
@@ -6565,6 +6567,19 @@ export function createDataLayer({
       /** Cancels a page only person's open hand over: its link stops at once. */
       cancelInvite: (workspace: string, member: string): Promise<PageInviteCancelled> =>
         call((options) => api.teamPages.cancelInvite({ workspace, member, mutationId: mintId() }, options)),
+      /**
+       * Set up a Timefix login (spec 0070, AC-7023): an invitation for a connected app's person, `member`, to sign in to
+       * Timefix directly at `email`; from Team pages in Timefix only, by a manager with both permissions. Waits for the server, as Invite to
+       * manage their page does. `sent` false: it stands, its email didn't go, and sending again tries once more.
+       */
+      inviteLogin: (workspace: string, member: string, email: string): Promise<PageInviteSent> =>
+        call((options) => api.teamPages.inviteLogin({ workspace, member, email, mutationId: mintId() }, options)),
+      /** Cancels a connected app's person's open login invitation: its link stops at once. */
+      cancelLoginInvite: (workspace: string, member: string): Promise<PageInviteCancelled> =>
+        call((options) => api.teamPages.cancelLoginInvite({ workspace, member, mutationId: mintId() }, options)),
+      /** The caller's own Timefix login, as their page in a connected app's frame shows it. Read when the page opens. */
+      myLogin: (workspace: string): Promise<MyTimefixLogin> =>
+        call((options) => api.teamPages.myLogin({ workspace }, options)),
       /** Removes a page only person: their handle stops and their content is kept 30 days. */
       removePerson: (workspace: string, member: string): Promise<PageOnlyRemoved> =>
         call((options) => api.teamPages.removePerson({ workspace, member, mutationId: mintId() }, options)),

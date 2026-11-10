@@ -258,6 +258,11 @@ export const MemberInviteEmail = z.strictObject({
    * at its handle when it has one, rather than to join.
    */
   page: z.strictObject({ handle: Line.optional() }).optional(),
+  /**
+   * A partner's person's own login (spec 0070, AC-7023, with `page`): the email asks them to set up a Timefix login for
+   * the page they already have, and says the app that added them (`app`, when known) keeps working as before.
+   */
+  login: z.strictObject({ app: Line.optional() }).optional(),
 });
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;

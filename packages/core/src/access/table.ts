@@ -274,6 +274,11 @@ export const ACCESS_TABLE = {
   // A page's hand over (9 Nov 2026): Team pages' permission first, then `members.invite` (it lets someone in).
   inviteToManagePage: { permission: 'link_pages.manage_team' },
   cancelPageInvite: { permission: 'link_pages.manage_team' },
+  // A connected app's person's own Timefix login (spec 0070, AC-7023): Team pages' permission, then `members.invite`,
+  // for anyone but the person themselves, who asks for (or cancels) their own with neither; their own status.
+  inviteToClaimLogin: { permission: 'link_pages.manage_team' },
+  cancelLoginInvite: { permission: 'link_pages.manage_team' },
+  readMyLogin: { anyMember: true },
   namePageOnlyPerson: { permission: 'link_pages.manage_team' },
   checkTeamHandle: { permission: 'link_pages.manage_team' },
   suggestTeamHandle: { permission: 'link_pages.manage_team' },

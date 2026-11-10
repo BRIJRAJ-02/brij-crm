@@ -597,6 +597,9 @@ export function createApp({
           // A page handed over (9 Nov 2026): its identity made a login at the invited address, or put back.
           claimPageOnlyUser: (claim) => identity.claimPageOnlyUser(claim),
           unclaimPageOnlyUser: (claim) => identity.unclaimPageOnlyUser(claim),
+          // A connected app's person's own login (spec 0070, AC-7023): made, or put back, keeping the app's hold.
+          claimManagedUser: (claim) => identity.claimManagedUser(claim),
+          unclaimManagedUser: (claim) => identity.unclaimManagedUser(claim),
         },
         // Add to Wallet (26 Oct 2026): one maker per wallet, or nothing where this environment has no credentials.
         walletLink: walletLinks,
