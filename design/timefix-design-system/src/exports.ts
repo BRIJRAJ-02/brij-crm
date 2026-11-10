@@ -94,6 +94,7 @@ export * from './components/TaskList/TaskList.tsx';
 export * from './components/TeamList/TeamList.tsx';
 export * from './components/Text/Text.tsx';
 export * from './components/TimeField/TimeField.tsx';
+export * from './components/TimefixApp/TimefixApp.tsx';
 export * from './components/Toast/Toast.tsx';
 export * from './components/Tooltip/Tooltip.tsx';
 export * from './components/VenuePage/VenuePage.tsx';

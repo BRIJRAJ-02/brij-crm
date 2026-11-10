@@ -1,0 +1,30 @@
+/* The whole app: a page title with its icon, the body that scrolls, Home's day-first layout. */
+.tf-app__title { display: inline-flex; align-items: center; gap: var(--space-8); color: var(--text); font: 500 15px/22px var(--font-sans); }
+.tf-app__body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-24) var(--space-24) var(--space-48); container: tf-app / inline-size; }
+.tf-app__empty { display: grid; place-items: center; min-height: 60%; }
+.tf-home { display: flex; flex-direction: column; gap: var(--space-24); width: 100%; max-width: calc(var(--size-dialog-wide) * 1.5); margin: 0 auto; }
+.tf-home__head { display: flex; flex-direction: column; gap: var(--space-4); }
+.tf-home__title { margin: 0; color: var(--text); font: 600 28px/36px var(--font-sans); letter-spacing: -0.02em; }
+.tf-home__sub { margin: 0; color: var(--text-secondary); font: 400 15px/22px var(--font-sans); }
+.tf-home__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); align-items: start; }
+.tf-home__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-16); }
+.tf-home__none { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-12); color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+.tf-home__none p { margin: 0; }
+.tf-home__agenda { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-home__meet { display: grid; grid-template-columns: calc(var(--size-control-lg) * 3) minmax(0, 1fr) auto; align-items: center; gap: var(--space-12); padding: var(--space-12) 0; }
+.tf-home__meet + .tf-home__meet { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-home__meet[data-state='past'] { opacity: var(--opacity-disabled); }
+.tf-home__time { color: var(--text); font: 500 13px/20px var(--font-sans); }
+.tf-home__what { display: flex; flex-direction: column; min-width: 0; }
+.tf-home__what strong { overflow: hidden; color: var(--text); font: 500 14px/20px var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.tf-home__muted { display: inline-flex; align-items: center; gap: var(--space-4); overflow: hidden; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); white-space: nowrap; }
+.tf-home__now { padding: 0 var(--space-8); border-radius: var(--radius-full); background: var(--success-soft); color: var(--tag-green-text); font: 600 12px/20px var(--font-sans); }
+@container tf-app (max-width: 56rem) {
+  .tf-home__grid { grid-template-columns: minmax(0, 1fr); }
+  .tf-home__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container tf-app (max-width: 30rem) {
+  .tf-app__body { padding: var(--space-16); }
+  .tf-home__title { font-size: 24px; line-height: 32px; }
+  .tf-home__stats { grid-template-columns: minmax(0, 1fr); }
+}

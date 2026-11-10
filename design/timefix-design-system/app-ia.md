@@ -1,0 +1,90 @@
+# Timefix app structure (prototype rebuild)
+
+## What's wrong with main's structure
+- **Captures** is a container label that mixes booking pages and forms. People look for "Forms", and booking pages already live in Bookings.
+- **Reports** is hidden: it's only reachable from Home and ⌘K, while Insights sits in the sidebar. These are two analytics homes, and one of them can't be browsed to.
+- **Settings › Scheduling** repeats Bookings' own Availability and Routing pages. **Settings › Business** repeats the restaurant and salon pages.
+- **Ten or more items at the top level**, with member-ordered sections and a stored but unused Favourites, make the sidebar hard to scan.
+
+## Sidebar
+
+**Header**
+- The workspace menu: workspaces, Create workspace, Shortcuts, Leave workspace, Sign out.
+- A **Search ⌘K** button.
+
+**You** (personal):
+- **Home**: today's agenda, my tasks, the setup checklist, a few numbers.
+- **Inbox**: mentions, replies, assignments and booking notices, with an unread badge.
+- **Tasks**
+- **Notes**
+
+**Records** (folds open):
+- People, Companies, Deals, and any custom objects.
+- **+ New object** for owners.
+
+**Lists** (folds open):
+- Each list, and **+ New list**.
+
+**Bookings** (folds open; the module already built):
+- Meetings (Reservations for a restaurant), Booking pages, Availability, Roster (teams), Routing (teams).
+- Restaurants add Menu; a salon gets Team day.
+
+**Forms**: the form list. Each form opens its editor (Questions, Share, Responses, Results).
+
+**Link page**: the editor with the phone preview.
+
+**Insights** (one analytics home):
+- **Pages**: forms, booking pages, the link page.
+- **Reports**: saved CRM charts and New report.
+- Bookings' own Insights moves here.
+
+**Foot**: Settings and Help.
+
+Members can hide or reorder items, and the rail mode stays. The Records and Lists folds remember whether they're open. On a phone, a tab bar shows Home, Inbox, Records, Bookings and More.
+
+## Labels
+- **Captures** is gone. Booking pages live in Bookings, Forms is its own item.
+- **Submissions** becomes **Responses**: it's the guest's word, as in Tally and Typeform.
+- **Objects** stay **Records** in the sidebar and **Objects** in Settings › Data, where they're defined.
+- **Business** becomes **Bookings** for salons and restaurants too. It is one module, as the owner asked on 10 Nov.
+
+## Settings (with "Find a setting")
+**Account**:
+- **Profile**: name, photo, Delete account.
+- **Preferences**: theme, time zone, date format, week start, start page, Home sections.
+- **Notifications**: email switches, daily digest.
+- **Sign in and security**: two factor, devices, sign-ins.
+- **Calendars**: connected calendars, where bookings go.
+
+**Workspace**:
+- **General**: name, address, time zone, currency, country, Brand (logo and colour) in the same page, Delete workspace.
+- **Members**: members, invitations, invite link, email domain and join requests, plus a Teams tab.
+- **Roles and access**: roles, "What can X do", Sign in rules.
+- **Apps and connections**: business apps (Menu, Table seating, Appointments) and connected apps.
+- **History**: changes and sign-ins.
+
+**Data**:
+- **Objects**: attributes, configuration, access.
+- **Lists**: general, fields.
+- **Trash**
+
+**Bookings**: only workspace-wide rules.
+- Round robin groups, Scheduling access, Business profile (places, page, services, staff, shifts).
+- Everyday pages (availability, routing, tables) stay in the Bookings module. Each setting here links to its page there.
+
+**Developer**: API keys, webhooks, automations. Parked on main, so they're shown as "Coming soon".
+
+**Super admin**: operators only.
+
+## Build order in the prototype
+1. App shell (sidebar, ⌘K, phone tab bar) and Home.
+2. Records: table, board, filters, views, bulk, record panel, record page (tabs), new record, import, duplicates, trash.
+3. Lists.
+4. Inbox, Tasks, Notes.
+5. Forms: gallery, editor, share, responses, results, and the public form.
+6. Link page: the editor and the public page.
+7. Insights and Reports.
+8. Settings, the whole tree.
+9. Auth (sign in, verify, two factor), first run, invite and join, the deleted workspace, the public extras.
+
+Bookings slots into the shell as the Bookings section. Every module gets one pass with the design skills (journey, ux-heuristics, subtractive-design, impeccable, interaction-design) before it's built.

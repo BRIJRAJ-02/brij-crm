@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
 import { AlertTriangle, BarChart3, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
@@ -49,6 +50,16 @@ export interface BookingsFlowProps {
   readonly showDemoMenu?: boolean;
   /** Switch to another workspace (the salon or the restaurant); with it the workspace menu lists them. */
   readonly onWorkspace?: (id: WorkspaceId) => void;
+  /** Inside the whole Timefix app: the app's own sidebar items around the Bookings section, its content when another module is open,
+   *  its phone tab bar, and a call when a Bookings item is picked. Bookings stays mounted, so its state is kept. */
+  readonly appNav?: (bookings: ReactNode) => ReactNode;
+  readonly appContent?: ReactNode;
+  readonly appMobileNav?: ReactNode;
+  readonly onBookingsNav?: () => void;
+  /** Hears every change to Bookings' state, for the app around it (Home's agenda, search). */
+  readonly onState?: (state: BookingsState) => void;
+  /** Opens a Bookings page from outside (the app's Home or search); bump `n` to open it again. */
+  readonly openTab?: { readonly tab: string; readonly n: number };
 }
 
 const readWhose = (workspace: string): Whose => { try { return window.localStorage.getItem(`tf-bkf-whose:${workspace}`) ?? 'mine'; } catch { return 'mine'; } };
@@ -68,10 +79,12 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace }: BookingsFlowProps) {
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab }: BookingsFlowProps) {
   const [state, dispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
   const [tab, setTab] = useState('meetings');
+  useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openTab) setTab(openTab.tab); }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [view, setView] = useState(initialState.business?.kind === 'salon' ? 'team' : 'list');
   const [whose, setWhoseState] = useState<Whose>(() => readWhose(initialState.workspace));
   const [week, setWeek] = useState(0);
@@ -331,6 +344,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const restaurant = state.business?.kind === 'restaurant';
   const labelOf = (x: { readonly id: string; readonly label: string }) => (restaurant && x.id === 'meetings' ? 'Reservations' : x.label);
 
+  const bookingsNav = (
+      <NavSection title="Bookings">
+        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined)).map((x) => (
+          <NavItem key={x.id} label={labelOf(x)} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id && appContent === undefined} onPress={() => { leaveEditor(); setTab(x.id); onBookingsNav?.(); }} />
+        ))}
+      </NavSection>
+  );
   const sidebar = (
     <Sidebar isCollapsed={collapsed} onCollapsedChange={setCollapsed}
       header={<WorkspaceSwitcher name={state.workspace} plan={state.business ? state.business.kindLabel : 'Team plan · 4 members'} mark={<LogoMark size={28} />} onAction={(k) => { const id = String(k); if (id.startsWith('ws:')) switchTo(id.slice(3) as WorkspaceId); }}>
@@ -343,15 +363,13 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         <MenuSeparator />
         <MenuItem id="signout" icon={<LogOut {...i16} />}>Sign out</MenuItem>
       </PersonRow>}>
+      {appNav ? appNav(bookingsNav) : <>
       <NavItem label="Home" icon={<Home {...i16} />} onPress={() => undefined} />
       <NavItem label="Inbox" icon={<Inbox {...i16} />} badge={unread} onPress={() => undefined} />
       <NavItem label="People" icon={<Users {...i16} />} onPress={() => undefined} />
       <NavItem label="Forms" icon={<FileText {...i16} />} onPress={() => undefined} />
-      <NavSection title="Bookings">
-        {SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined)).map((x) => (
-          <NavItem key={x.id} label={labelOf(x)} icon={x.icon} badge={x.id === 'meetings' && waiting > 0 ? waiting : undefined} isCurrent={tab === x.id} onPress={() => { leaveEditor(); setTab(x.id); }} />
-        ))}
-      </NavSection>
+        {bookingsNav}
+      </>}
     </Sidebar>
   );
 
@@ -413,10 +431,10 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         onGuestMove={(m, start) => update({ ...m, start, end: new Date(start.getTime() + (m.end.getTime() - m.start.getTime())) }, `Moved by ${m.invitee.name} to ${formatDay(start)}`)} />
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
-      mobileNav={<TabBar aria-label="Bookings" current={tab}
+      mobileNav={appMobileNav ?? <TabBar aria-label="Bookings" current={tab}
         items={SECTIONS.filter((x) => ((x.id !== 'routing' && x.id !== 'roster') || isTeam) && !(x.id === 'routing' && hideRouting) && (x.id !== 'menu' || state.menu !== undefined)).map((x) => ({ id: x.id, label: restaurant && x.id === 'meetings' ? 'Bookings' : SHORT[x.id] ?? x.label, icon: x.icon, badge: x.id === 'meetings' ? waiting : undefined }))}
         onChange={(id) => { leaveEditor(); setTab(id); }} />}>
-      {editor && editing ? (
+      {appContent !== undefined ? appContent : (editor && editing ? (
         <PageEditor key={editing.id} page={editing} draft={editor.draft} state={state} section={editor.section} onDraft={(draft) => setEditor({ id: editing.id, draft, section: editor.section })}
           onBack={() => { leaveEditor(); setTab('pages'); }}
           onKeepDraft={(d) => {
@@ -492,7 +510,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>
-      )}
+      ))}
 
       <CreateSheet isOpen={creating} state={state}
         onCreate={(page) => dispatch({ type: 'page/upsert', page })}

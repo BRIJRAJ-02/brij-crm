@@ -95,6 +95,7 @@ import { TaskListDemo } from './components/TaskList/TaskList.demo.tsx';
 import { TeamListDemo } from './components/TeamList/TeamList.demo.tsx';
 import { TextDemo } from './components/Text/Text.demo.tsx';
 import { TimeFieldDemo } from './components/TimeField/TimeField.demo.tsx';
+import { TimefixAppDemo } from './components/TimefixApp/TimefixApp.demo.tsx';
 import { ToastDemo } from './components/Toast/Toast.demo.tsx';
 import { TooltipDemo } from './components/Tooltip/Tooltip.demo.tsx';
 import { VenuePageDemo } from './components/VenuePage/VenuePage.demo.tsx';
@@ -197,6 +198,7 @@ export const demos: Readonly<Record<string, ComponentType>> = {
   TeamList: TeamListDemo,
   Text: TextDemo,
   TimeField: TimeFieldDemo,
+  TimefixApp: TimefixAppDemo,
   Toast: ToastDemo,
   Tooltip: TooltipDemo,
   VenuePage: VenuePageDemo,
