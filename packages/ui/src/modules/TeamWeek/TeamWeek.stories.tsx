@@ -164,6 +164,33 @@ export const ReadOnly: Story = {
   },
 };
 
+/** `onOpen`: each name opens that person's hours (the Roster's centred popup); the zone under it keeps to one line. */
+export const OpensPerson: Story = {
+  render: function Render(args) {
+    const [opened, setOpened] = useState('');
+    return (
+      <Stage width="fill">
+        <TeamWeek
+          {...args}
+          people={people().map((each) => ({
+            ...each,
+            meta: 'India time (GMT+5:30) · Mon to Fri, 9:00 am – 5:00 pm',
+            onOpen: () => {
+              setOpened(each.name);
+            },
+            openLabel: `Open ${each.name}’s hours`,
+          }))}
+        />
+        <output>{opened}</output>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Open Grace Hopper’s hours' }));
+    await expect(canvas.getByText('Grace Hopper', { selector: 'output' })).toBeInTheDocument();
+  },
+};
+
 /** Staff with their own colours (spec 0066 B1, the Shifts grid): a hue on each tile in place of one from the id. */
 export const StaffColours: Story = {
   render: (args) => (

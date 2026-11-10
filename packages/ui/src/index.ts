@@ -34,6 +34,8 @@ export { Code, type CodeProps, type CodeVariant } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
 export { DragHandle, type DragHandleManual, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
 export { FileIcon, fileIconName, type FileIconProps } from './atoms/FileIcon/FileIcon.tsx';
+/** The one error line under a control: for a composite control a screen lays out itself (time off's month and times). */
+export { FieldError, type FieldErrorProps } from './atoms/FieldError/FieldError.tsx';
 export { Icon, type IconProps, type IconSize, type IconTone } from './atoms/Icon/Icon.tsx';
 export type { IconName } from './atoms/Icon/icons.ts';
 export { Kbd, type KbdProps, type KbdTone } from './atoms/Kbd/Kbd.tsx';
@@ -147,11 +149,13 @@ export {
   DateRangePicker,
   dayIn,
   MonthCalendar,
+  MonthRangeCalendar,
   quickPicks,
   type DatePickerProps,
   type DateRange,
   type DateRangePickerProps,
   type MonthCalendarProps,
+  type MonthRangeCalendarProps,
 } from './molecules/DatePicker/DatePicker.tsx';
 export { DateNav, weekRangeLabel, type DateNavProps } from './molecules/DateNav/DateNav.tsx';
 /** Whether the window is a phone's width, for a screen choosing a default or a control by it. */

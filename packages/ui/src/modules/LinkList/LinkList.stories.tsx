@@ -425,6 +425,59 @@ export const CompactInCard: Story = {
   },
 };
 
+/** `hasRowMotion`: a deleted row fades and closes up, then `onLeft` drops it; an added row drops in. */
+export const CompactRowMotion: Story = {
+  args: { density: 'compact', placement: 'card', isToolbarHidden: true, hasRowMotion: true },
+  render: function Render(args) {
+    const [rows, setRows] = useState<readonly LinkRow[]>([
+      { id: 'a', title: 'Fri 13 Nov', address: 'Away 2:00 – 6:00 pm · Dentist', chips: [] },
+      { id: 'b', title: 'Sat 21 Nov', address: 'Away all day · Family wedding', chips: [] },
+    ]);
+    const withActions = rows.map((row) => ({
+      ...row,
+      actions: (
+        <Button
+          variant="ghost-danger"
+          icon="trash"
+          label={`Delete ${row.title}`}
+          onPress={() => {
+            setRows((all) => all.map((each) => (each.id === row.id ? { ...each, isLeaving: true } : each)));
+          }}
+        />
+      ),
+    }));
+    return (
+      <Stage>
+        <Card title="Time off">
+          <LinkList
+            {...args}
+            rows={withActions}
+            onLeft={(id) => {
+              setRows((all) => all.filter((each) => each.id !== id));
+            }}
+          />
+          <Button
+            icon="plus"
+            onPress={() => {
+              setRows((all) => [...all, { id: 'c', title: 'Mon 30 Nov', address: 'Away all day', chips: [] }]);
+            }}
+          >
+            Add time off
+          </Button>
+        </Card>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete Fri 13 Nov' }));
+    await waitFor(async () => {
+      await expect(canvas.getAllByRole('row')).toHaveLength(1);
+    });
+    await userEvent.click(canvas.getByRole('button', { name: 'Add time off' }));
+    await expect(canvas.getAllByRole('row')).toHaveLength(2);
+  },
+};
+
 /** Compact while loading: one line skeleton rows. */
 export const CompactLoading: Story = {
   args: { density: 'compact', isToolbarHidden: true, status: 'loading' },

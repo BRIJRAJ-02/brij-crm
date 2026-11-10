@@ -97,6 +97,12 @@ export interface ModalProps {
    * nothing the body needs. Only `window` takes it.
    */
   readonly aside?: ReactNode;
+  /**
+   * A column at the body's start, beside the fields (a month to pick days from, as Cal.com's date overrides put it):
+   * it keeps its own width and the fields take the rest; on a narrow screen it stacks above them. Unlike `aside` it is
+   * part of the form, so it is never left out. Not for a confirm or the palette.
+   */
+  readonly lead?: ReactNode;
   /** A window's header icon (a peek draws none). */
   readonly icon?: IconName;
   /** A window's header detail after the title: the record or list it works on. A peek shows it first, as a crumb. */
@@ -197,6 +203,7 @@ export function Modal({
   variant = 'dialog',
   isWide = false,
   aside,
+  lead,
   icon,
   context,
   headerActions,
@@ -266,7 +273,16 @@ export function Modal({
                 {description}
               </p>
             )}
-            <PageEdge value={false}>{children}</PageEdge>
+            {lead === undefined ? (
+              <PageEdge value={false}>{children}</PageEdge>
+            ) : (
+              <div className={styles.split}>
+                <div className={styles.lead}>{lead}</div>
+                <div className={styles.main}>
+                  <PageEdge value={false}>{children}</PageEdge>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

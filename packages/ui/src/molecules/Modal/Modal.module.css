@@ -170,6 +170,35 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* A body with a `lead` column: the column a menu's width (a month fits it), the fields beside it taking the rest,
+     both from the top; one column on a phone, the lead first. */
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, var(--size-menu)) minmax(0, 1fr);
+    gap: var(--space-24);
+    align-items: start;
+  }
+
+  .lead {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+
+  @media (width < 700px) {
+    .split {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-16);
+    }
+  }
+
   /* A window's body beside its side pane (`aside`): the body takes the room left, the pane a panel's width. */
   .panes {
     display: flex;

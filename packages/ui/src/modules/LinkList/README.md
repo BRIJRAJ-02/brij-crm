@@ -144,6 +144,10 @@ A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:0
 - A row's `href` says where opening it goes. `onOpen` still opens it; the row carries `data-href`, so the app loads that page while a pointer rests on the row (a pending row carries none).
 - `emptyState` shows with no rows at all, with no search. A screen whose list is empty draws its EmptyState in a centred PageColumn (`align="center"`), with the New button in it.
 
+## Rows that come and go (10 November 2026)
+
+- `hasRowMotion` makes the list's changes read where they happen (Bookings › Availability's time off): a row that arrives after the first draw drops in (a fade with a small rise at `duration-popover`, as `media` rows do), and a row marked `isLeaving` fades at `duration-exit` while it closes up at `duration-modal`, so the rows under it rise into its place, then `onLeft(id)` tells the screen to stop drawing it (it goes anyway after 600ms should its motion never run). A leaving row can't be opened or pressed. Reduced motion keeps the fade and drops the rise and the close up. Why a prop: a list whose rows are deleted with Undo in a toast, rather than after a confirm, has to show which row went; a Table's rows can't close up.
+
 ## States
 
 Both densities: rows, off (badge and switch), not published (badge, switch disabled), pending, searched and no matches, loading (skeleton rows), failed (Try again), no access, empty (the caller's EmptyState). Hover on a row (pointer only), focus (the inset ring); the controls' own hover, focus and pressed states. With `onMove`: grips (the skeleton rows keep their place too), a row lifted while it moves, and no grips while a search narrows the rows.

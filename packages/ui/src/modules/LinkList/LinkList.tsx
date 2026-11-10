@@ -106,6 +106,11 @@ export interface LinkRow {
    * a home in the row's menu too.
    */
   readonly quickAction?: ReactNode;
+  /**
+   * The row is on its way out (deleted, with Undo in a toast): it fades and closes up, can't be opened, and the
+   * list's `onLeft` says when it is gone, so the screen stops drawing it. With `hasRowMotion`.
+   */
+  readonly isLeaving?: boolean;
 }
 
 /** Props for LinkList. */
@@ -185,6 +190,14 @@ export interface LinkListProps {
    * has put them away), so they stay under a SectionList's `isTitleInset` titles.
    */
   readonly isTileInset?: boolean;
+  /**
+   * Rows move as they come and go (Availability's time off): a row that arrives after the first draw drops in (a
+   * fade with a small rise, as `media` rows do), and a row marked `isLeaving` fades and closes up, then `onLeft` names
+   * it. Why a prop: a list whose rows are added and deleted in place, with Undo, reads the change where it happened.
+   */
+  readonly hasRowMotion?: boolean;
+  /** With `hasRowMotion`: a leaving row finished closing up (or its motion couldn't run), so the screen drops it. */
+  readonly onLeft?: (id: string) => void;
 }
 
 /** Props for LinkListToolbar. */
@@ -233,6 +246,9 @@ export function LinkListToolbar({
   );
 }
 
+/** How long a leaving row may take before it goes anyway: well past its motion (`duration-modal`). */
+const LEAVE_FALLBACK_MS = 600;
+
 /** How many skeleton rows stand in while the list loads. */
 const SKELETON_ROWS = 3;
 
@@ -273,21 +289,35 @@ export function LinkList({
   leadingLoading,
   footer,
   isTileInset = false,
+  hasRowMotion = false,
+  onLeft,
 }: LinkListProps) {
   const hasLeading = leadingLoading !== undefined;
   const isCompact = density === 'compact';
   const isMedia = density === 'media';
   // Rows that arrive after the list first drew (an item added) ease in; the first draw just stands there.
   const [isSettled, setSettled] = useState(false);
+  const arrives = isMedia || hasRowMotion;
   useEffect(() => {
-    if (!isMedia) return;
+    if (!arrives) return;
     const frame = requestAnimationFrame(() => {
       setSettled(true);
     });
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [isMedia]);
+  }, [arrives]);
+  // A leaving row's motion ends in `onLeft`; should it never run (a hidden tab, animations off), it still goes.
+  const leavingKey = rows.flatMap((row) => (row.isLeaving === true ? [row.id] : [])).join(' ');
+  useEffect(() => {
+    if (leavingKey === '' || onLeft === undefined) return undefined;
+    const timer = setTimeout(() => {
+      for (const id of leavingKey.split(' ')) onLeft(id);
+    }, LEAVE_FALLBACK_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [leavingKey, onLeft]);
   const isCard = isCompact && placement === 'card';
   const [ownQuery, setOwnQuery] = useState('');
   const query = heldQuery ?? ownQuery;
@@ -301,7 +331,8 @@ export function LinkList({
     'data-placement': isCompact ? placement : undefined,
     'data-reorderable': moves === undefined ? undefined : '',
     'data-leading': hasLeading ? '' : undefined,
-    'data-settled': isMedia && isSettled ? '' : undefined,
+    'data-settled': arrives && isSettled ? '' : undefined,
+    'data-motion': hasRowMotion ? '' : undefined,
     'data-tile-inset': isMedia && isTileInset && moves === undefined ? '' : undefined,
   };
   const foot =
@@ -379,7 +410,7 @@ export function LinkList({
       items={shown}
       // A row draws again when its grip comes or goes (a search puts the grips away), not only when its item changes.
       dependencies={[grip]}
-      disabledKeys={shown.flatMap((row) => (row.isPending === true ? [row.id] : []))}
+      disabledKeys={shown.flatMap((row) => (row.isPending === true || row.isLeaving === true ? [row.id] : []))}
       onAction={(key) => {
         onOpen(String(key));
       }}
@@ -395,6 +426,12 @@ export function LinkList({
           data-href={row.isPending === true ? undefined : row.href}
           data-variant={row.variant === 'section' ? 'section' : undefined}
           data-density={isMedia ? 'media' : undefined}
+          data-leaving={row.isLeaving === true || undefined}
+          onAnimationEnd={(event) => {
+            // The close up is the last of a leaving row's motion (a fade alone with reduced motion).
+            if (row.isLeaving === true && event.target === event.currentTarget && /row-close/.test(event.animationName))
+              onLeft?.(row.id);
+          }}
         >
           {moves !== undefined && (
             <span className={styles.grip}>

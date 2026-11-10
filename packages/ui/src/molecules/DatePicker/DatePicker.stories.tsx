@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Form } from '../Form/Form.tsx';
-import { DatePicker, DateRangePicker, MonthCalendar } from './DatePicker.tsx';
+import { DatePicker, DateRangePicker, MonthCalendar, MonthRangeCalendar, type DateRange } from './DatePicker.tsx';
 
 const meta = {
   title: 'Molecules/DatePicker',
@@ -191,6 +191,36 @@ export const InlineWeekShown: Story = {
     await expect(shown.map((day) => day.textContent)).toEqual(['12', '13', '14', '15', '16', '17', '18']);
     await expect(canvasElement.querySelector('[data-shown-start]')).toHaveTextContent('12');
     await expect(canvasElement.querySelector('[data-shown-end]')).toHaveTextContent('18');
+  },
+};
+
+/** MonthRangeCalendar: the month inline, a run of days picked as one band, days already taken dotted, the past shut. */
+export const InlineRange: Story = {
+  render: function Render() {
+    const [range, setRange] = useState<DateRange | null>({ start: '2026-10-19', end: '2026-10-21' });
+    return (
+      <Stage width="narrow">
+        <MonthRangeCalendar
+          label="Days"
+          value={range}
+          onChange={setRange}
+          minValue="2026-10-08"
+          marked={['2026-10-13', '2026-10-27']}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-selection-start]')).toHaveTextContent('19');
+    await expect(canvasElement.querySelector('[data-selection-end]')).toHaveTextContent('21');
+    await expect([...canvasElement.querySelectorAll('[data-marked]')].map((day) => day.textContent)).toEqual([
+      '13',
+      '27',
+    ]);
+    await userEvent.click(canvas.getByRole('button', { name: /October 23, 2026|23 October 2026/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /October 23, 2026|23 October 2026/ }));
+    await expect(canvasElement.querySelector('[data-selection-start]')).toHaveTextContent('23');
+    await expect(canvasElement.querySelector('[data-selection-end]')).toHaveTextContent('23');
   },
 };
 

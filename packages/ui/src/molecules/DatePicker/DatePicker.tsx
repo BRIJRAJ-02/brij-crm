@@ -308,9 +308,12 @@ function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readon
 function Grid({
   today,
   shown,
+  marked,
 }: {
   readonly today: CalendarDate;
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
+  /** Days carrying something already (time off planned): a small dot under the number. */
+  readonly marked?: ReadonlySet<string> | undefined;
 }) {
   return (
     <div className={styles.weeks}>
@@ -326,6 +329,7 @@ function Grid({
                 date={date}
                 className={styles.day}
                 data-today-mark={isSameDay(date, today) ? '' : undefined}
+                data-marked={marked?.has(date.toString()) === true ? '' : undefined}
                 data-shown={isShown ? '' : undefined}
                 // A week running over the month's edge ends its band at the month's first or last day.
                 data-shown-start={isShown && (isSameDay(date, shown.start) || date.day === 1) ? '' : undefined}
@@ -345,10 +349,12 @@ function Grid({
 function CalendarBody({
   today,
   shown,
+  marked,
   hasTodayPick = false,
 }: {
   readonly today: CalendarDate;
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
+  readonly marked?: ReadonlySet<string> | undefined;
   /** The quick picks under it hold Today, so the header leaves its own out. */
   readonly hasTodayPick?: boolean;
 }) {
@@ -369,7 +375,7 @@ function CalendarBody({
           }}
         />
       ) : (
-        <Grid today={today} shown={shown} />
+        <Grid today={today} shown={shown} marked={marked} />
       )}
     </>
   );
@@ -816,5 +822,49 @@ export function MonthCalendar({ label, value, onChange, shown, autoFocus = false
         shown={shown === undefined ? undefined : { start: parseDate(shown.start), end: parseDate(shown.end) }}
       />
     </Calendar>
+  );
+}
+
+/** Props for MonthRangeCalendar. */
+export interface MonthRangeCalendarProps {
+  /** What the days are for, the month's accessible name ("Days"). */
+  readonly label: string;
+  /** The picked days, first to last (one day is a range of one), or none yet. */
+  readonly value: DateRange | null;
+  readonly onChange: (value: DateRange) => void;
+  /** The first day that can be picked (`YYYY-MM-DD`): time off starts today at the earliest. */
+  readonly minValue?: DateString;
+  /** Days that already carry something (planned time off), marked with a small dot. */
+  readonly marked?: readonly DateString[];
+}
+
+/**
+ * MonthCalendar's range variant: the month inline, a run of days picked on it as DateRangePicker's popover picks them
+ * (press the first day, then the last; the same day twice is one day), with days already taken marked. For a popup
+ * whose main choice is the days themselves, as Cal.com's date overrides put the month beside the hours.
+ */
+export function MonthRangeCalendar({ label, value, onChange, minValue, marked }: MonthRangeCalendarProps) {
+  const today = useToday();
+  const { weekStart } = useFormatSettings();
+  const range = toRange(value);
+  const markedDays = marked === undefined ? undefined : new Set(marked);
+  return (
+    <RangeCalendar
+      className={styles.calendar}
+      data-inline=""
+      data-range=""
+      aria-label={label}
+      {...(range === undefined || range === null ? {} : { value: range })}
+      {...(minValue === undefined ? {} : { minValue: parseDate(minValue) })}
+      defaultFocusedValue={range?.start ?? today}
+      onChange={(next) => {
+        const start = fromDate(next.start);
+        const end = fromDate(next.end);
+        if (start !== null && end !== null) onChange({ start, end });
+      }}
+      {...firstDay(weekStart)}
+    >
+      <CalendarBody today={today} marked={markedDays} />
+    </RangeCalendar>
   );
 }

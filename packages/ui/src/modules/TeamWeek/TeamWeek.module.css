@@ -74,11 +74,39 @@
     color: var(--text);
   }
 
+  /* The name as the button that opens the person's hours (`onOpen`): the name's look, underlined under the pointer. */
+  .name[data-opens] {
+    display: block;
+    max-inline-size: 100%;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    text-align: start;
+    outline: none;
+  }
+
+  .name[data-opens][data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .name[data-opens][data-hovered] {
+      text-decoration: underline;
+      text-decoration-color: var(--border-strong);
+      text-underline-offset: var(--space-2);
+    }
+  }
+
+  /* One line, however long the zone: the cell never wraps, it cuts with an ellipsis. */
   .meta {
+    overflow: hidden;
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .actions {

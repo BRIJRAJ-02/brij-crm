@@ -24,6 +24,8 @@ Field keeps its own error line, with the same look: it fades in on the field tha
 - `kind="standalone"` is a plain line with an `id`, for a control that points `aria-describedby` at it itself (ChoiceChips).
 - `inset="check"` starts the line past a checkbox's box, under its words.
 
+- Exported (10 November 2026) as `kind="standalone"`'s line for a control a screen lays out from parts: Availability's time off popup says "Pick the days." under its month and "End after the start time." under its times away.
+
 ## States
 
 Shown only with a message (and, in a field, only while the field is invalid). It has no other state.

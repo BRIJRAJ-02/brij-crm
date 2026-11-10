@@ -53,6 +53,13 @@ export interface TeamWeekPerson {
   readonly extra?: ReactNode;
   /** The row's actions at the end of the person's cell: a MenuTrigger with an options Button. */
   readonly actions?: ReactNode;
+  /**
+   * Opens the person's own hours (their usual week, in a popup): their name becomes a button that does it, named
+   * `openLabel` ("Open Priya Nair's hours"). Left out, the name is text.
+   */
+  readonly onOpen?: () => void;
+  /** With `onOpen`: what the name's button is called for a screen reader. */
+  readonly openLabel?: string;
   /** One per day, in the days' order. */
   readonly cells: readonly TeamWeekCell[];
   /** Whether the reader may change this person's cells; read only cells are text, never buttons. */
@@ -275,9 +282,20 @@ function PersonCell({ person }: { readonly person: TeamWeekPerson }) {
         />
       </span>
       <span className={styles.who}>
-        <span className={styles.name}>
-          <TruncatedText>{person.name}</TruncatedText>
-        </span>
+        {person.onOpen === undefined ? (
+          <span className={styles.name}>
+            <TruncatedText>{person.name}</TruncatedText>
+          </span>
+        ) : (
+          <AriaButton
+            className={styles.name}
+            data-opens=""
+            aria-label={person.openLabel ?? person.name}
+            onPress={person.onOpen}
+          >
+            <TruncatedText>{person.name}</TruncatedText>
+          </AriaButton>
+        )}
         <span className={styles.meta}>{meta}</span>
         {person.extra}
       </span>

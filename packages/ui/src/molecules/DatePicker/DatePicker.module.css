@@ -304,6 +304,27 @@
     border-end-end-radius: var(--radius-full);
   }
 
+  /* A day that already carries something (MonthRangeCalendar's `marked`): a small dot under its number. */
+  .day[data-marked] {
+    position: relative;
+  }
+
+  .day[data-marked]::after {
+    position: absolute;
+    inset-block-end: var(--space-2);
+    inset-inline-start: 50%;
+    inline-size: var(--space-4);
+    block-size: var(--space-4);
+    border-radius: var(--radius-full);
+    background: var(--text-tertiary);
+    content: '';
+    translate: -50% 0;
+  }
+
+  .day[data-marked][data-selected]::after {
+    background: currentcolor;
+  }
+
   .day[data-disabled],
   .day[data-unavailable] {
     color: var(--text-tertiary);
