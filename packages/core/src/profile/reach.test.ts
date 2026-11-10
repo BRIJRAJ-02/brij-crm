@@ -386,9 +386,24 @@ describe('insights (AC-6116 to AC-6120)', () => {
     const read = await visitorRead(ada.handle);
     const pageRow = read.items.find((item) => item.kind === 'page' && item.slug === page.slug);
     expect(pageRow).toBeDefined();
-    expect((await enterTimesBlock({ db }, ada.handle, pageRow?.id ?? '')).entry.pageId).toBe(page.id);
+    expect((await enterTimesBlock({ db }, ada.handle, pageRow?.id ?? '', 'page')).entry.pageId).toBe(page.id);
+    // Each kind answers only for itself: a page row asked as a times block, or a times block as a row, reads nothing.
+    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, pageRow?.id ?? ''))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, times.id, 'page'))).toMatchObject({ code: 'NOT_FOUND' });
     const site = await add(ada, { kind: 'link', title: 'Site', url: 'https://ada.dev' });
-    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, site.id))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, site.id, 'page'))).toMatchObject({ code: 'NOT_FOUND' });
+    // Through someone else's handle, or once the page is Link only, its row reads nothing.
+    expect(await refusalOf(enterTimesBlock({ db }, bob.handle, pageRow?.id ?? '', 'page'))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute(sql`update booking_pages set is_private = true where id = ${page.id}`),
+    );
+    expect(await refusalOf(enterTimesBlock({ db }, ada.handle, pageRow?.id ?? '', 'page'))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 
   it('writes a CSV with the formula guard, and refuses more than 365 days', async () => {

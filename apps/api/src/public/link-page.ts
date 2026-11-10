@@ -1,7 +1,7 @@
 // A link page's public reads beyond the page itself (spec 0061), outside the RPC router, with no session:
 //
 //   GET /api/public/profiles/:handle/images/:imageId        a picture a live block of that page uses (AC-6101, AC-6129)
-//   GET /api/public/profiles/:handle/items/:itemId/times    ?tz: a next times or booking page block's next open times (AC-6110)
+//   GET /api/public/profiles/:handle/items/:itemId/times    ?tz&row: a next times block's next open times, or with row=page a booking page row's (AC-6110)
 //   GET /api/public/sitemap-handles.xml                     ?after: the handles search engines may list (AC-6123)
 //   GET /api/public/robots.txt                              the public origin's robots file, naming the sitemap
 //
@@ -78,6 +78,9 @@ export const LINK_PAGE_LIMITS = {
   imagesPerHandle: { max: 2_400, windowMs: 60_000 },
   timesPerAddress: { max: 60, windowMs: 60_000 },
   timesPerHandle: { max: 600, windowMs: 60_000 },
+  // A booking page row's next time (the v5 mock): its own budget, so a page of rows never starves a next times block.
+  pageTimesPerAddress: { max: 60, windowMs: 60_000 },
+  pageTimesPerHandle: { max: 600, windowMs: 60_000 },
   crawlPerAddress: { max: 30, windowMs: 60_000 },
 } as const satisfies Readonly<Record<string, LimitRule>>;
 
@@ -222,13 +225,22 @@ export function mountLinkPageRoutes<E extends Env>(app: Hono<E>, deps: LinkPageR
     if (!HANDLE_PATTERN.test(handle) || !isUuid(itemId)) return missing('There are no times here.');
     const zone = TimeZoneName.safeParse(c.req.query('tz'));
     if (!zone.success) return deps.answer('INPUT_INVALID', 'Send the time zone to show the times in.');
-    const refused = deps.limited([
-      [`link-page:times:${deps.addressOf(c)}`, LINK_PAGE_LIMITS.timesPerAddress],
-      [`link-page:times-handle:${handle}`, LINK_PAGE_LIMITS.timesPerHandle],
-    ]);
+    // A booking page row (`?row=page`) reads on its own budget, and the door answers only a page block for it.
+    const kind = c.req.query('row') === 'page' ? 'page' : 'times';
+    const refused = deps.limited(
+      kind === 'page'
+        ? [
+            [`link-page:page-times:${deps.addressOf(c)}`, LINK_PAGE_LIMITS.pageTimesPerAddress],
+            [`link-page:page-times-handle:${handle}`, LINK_PAGE_LIMITS.pageTimesPerHandle],
+          ]
+        : [
+            [`link-page:times:${deps.addressOf(c)}`, LINK_PAGE_LIMITS.timesPerAddress],
+            [`link-page:times-handle:${handle}`, LINK_PAGE_LIMITS.timesPerHandle],
+          ],
+    );
     if (refused !== undefined) return refused;
     try {
-      const { owner, entry } = await enterTimesBlock({ db: deps.db }, handle, itemId);
+      const { owner, entry } = await enterTimesBlock({ db: deps.db }, handle, itemId, kind);
       const from = deps.now();
       const to = new Date(from.getTime() + PROFILE_TIMES_DAYS * 86_400_000);
       const page = await readTimesPage(entry);
