@@ -117,7 +117,8 @@ describe('the question card (T40)', () => {
     await expect.element(page.getByRole('textbox', { name: 'Question', exact: true })).toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => latest.length).toBe(2);
-    await expect.element(page.getByRole('button', { name: 'Add a question' })).toHaveFocus();
+    // Focus comes back once the taken back card has left; on a busy CI runner that outlasts the default second.
+    await expect.element(page.getByRole('button', { name: 'Add a question' }), { timeout: 5_000 }).toHaveFocus();
   });
 
   it('works by keyboard alone: the new question takes focus; its head holds Required and ⋯, its body starts with the type (forms QA, fixes 3)', async () => {
