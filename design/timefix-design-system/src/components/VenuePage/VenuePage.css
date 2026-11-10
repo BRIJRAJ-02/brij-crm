@@ -12,7 +12,7 @@
 .tf-venue__link:focus-visible { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 /* Photos: one large on the left, two stacked on the right. */
-.tf-venue__photos { position: relative; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: var(--space-8); height: calc(var(--size-row) * 9); margin-top: var(--space-24); }
+.tf-venue__photos { position: relative; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: var(--space-8); height: calc(var(--size-row) * 9); }
 .tf-venue__photos.is-single { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .tf-venue__photo { width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: var(--radius-lg); background: var(--surface-subtle); }
 .tf-venue__photo:first-child { grid-row: 1 / -1; }
@@ -130,3 +130,17 @@
 .tf-venue-co__nav .tf-venue-co__crumbs { margin: 0; }
 .tf-venue__hours > li > span:last-child { white-space: pre-line; text-align: right; }
 .tf-venue__fullmenu { align-self: flex-start; }
+
+/* Profile header: logo, then name, kind and meta. Over photos, the logo overlaps their bottom edge with a ring in the page colour. */
+.tf-venue__head { gap: var(--space-12); }
+.tf-venue__id { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.tf-venue__kind { margin: 0; color: var(--text-secondary); font: 400 15px/22px var(--font-sans); }
+.tf-venue__id .tf-venue__line { margin-top: var(--space-4); }
+.tf-venue__logo { display: inline-flex; width: max-content; border-radius: var(--radius-lg); }
+.tf-venue__logo .tf-avatar { border-radius: var(--radius-lg); }
+.tf-venue__head--cover { margin-top: calc(var(--space-32) * -1); padding-left: var(--space-24); }
+.tf-venue__head--cover .tf-venue__logo { box-shadow: 0 0 0 var(--space-4) var(--surface); }
+.tf-venue__head--cover .tf-venue__share { top: calc(var(--space-32) + var(--space-8)); }
+@container tf-venue (max-width: 40rem) { .tf-venue__head--cover { padding-left: var(--space-16); } }
+/* Narrow: the meta line wraps, so its dots would dangle at line ends; drop them and let the gap separate. */
+@container tf-venue (max-width: 44rem) { .tf-venue__line { column-gap: var(--space-12); } .tf-venue__line > span[aria-hidden='true'] { display: none; } }

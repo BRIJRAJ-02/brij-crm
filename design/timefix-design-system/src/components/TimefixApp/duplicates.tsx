@@ -12,7 +12,7 @@ import type { AppAction, AppState, Company, Person } from './data.ts';
 /** Ids of everything that points at a record, so a merge's Undo moves back only those. */
 function linkedTo(state: AppState, object: 'people' | 'companies', id: string): ReadonlyArray<string> {
   const at = (r?: { readonly object: string; readonly id: string }) => r?.object === object && r.id === id;
-  return [...state.tasks.filter((x) => at(x.record)), ...state.notes.filter((x) => at(x.record)), ...state.comments.filter((x) => at(x.record)), ...state.activity.filter((x) => at(x.record)),
+  return [...state.tasks.filter((x) => at(x.record) || (x.also ?? []).some((r) => at(r))), ...state.notes.filter((x) => at(x.record)), ...state.comments.filter((x) => at(x.record)), ...state.activity.filter((x) => at(x.record)),
     ...state.inbox.filter((x) => at(x.record)), ...state.files.filter((x) => at(x.record)), ...state.deals.filter((d) => (object === 'people' ? d.contactId : d.companyId) === id),
     ...(object === 'companies' ? state.people.filter((p) => p.companyId === id) : []),
     ...state.lists.flatMap((l) => (l.object === object ? l.entries.filter((e) => e.recordId === id) : [])), ...(object === 'people' ? state.forms.flatMap((f) => f.responses.filter((r) => r.personId === id)) : [])].map((x) => x.id);

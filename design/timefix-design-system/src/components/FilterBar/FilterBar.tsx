@@ -86,10 +86,12 @@ export interface FilterBarProps {
   readonly totalCount?: number;
   /** Plural noun for the records ("companies"). */
   readonly noun?: string;
+  /** Opens "+ Filter" straight at this field's operators (a column menu's "Filter by this"); bump `seq` to open it again. */
+  readonly startFilter?: { readonly field: string; readonly seq: number };
 }
 
 /** A view's toolbar: Linear-style filter chips with three clickable parts, + Filter, sort pills, view settings and the hidden-by-filters line. Replaces FilterChip, FilterBuilder, ConditionRow, SortBuilder and ViewSettings. */
-export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSortsChange, columns, onColumnsChange, density = 'comfortable', onDensityChange, hiddenCount = 0, totalCount, noun = 'records' }: FilterBarProps) {
+export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSortsChange, columns, onColumnsChange, density = 'comfortable', onDensityChange, hiddenCount = 0, totalCount, noun = 'records', startFilter }: FilterBarProps) {
   const [clearing, setClearing] = useState<ReadonlySet<string>>(new Set());
   const [justCleared, setJustCleared] = useState(false);
   const latest = useRef(filters);
@@ -111,7 +113,7 @@ export function FilterBar({ fields, filters, onFiltersChange, sorts = [], onSort
   return (
     <div className="tf-fbar">
       <div className="tf-fbar__row">
-        <AddFilter fields={fields} filters={filters} onFiltersChange={onFiltersChange} />
+        <AddFilter fields={fields} filters={filters} onFiltersChange={onFiltersChange} start={startFilter} />
         {filters.map((rule) => {
           const field = fieldOf(rule.field);
           if (!field) return null;
@@ -230,9 +232,10 @@ function ResizeBox({ children }: { readonly children: ReactNode }) {
 type Step = { readonly step: 'field' } | { readonly step: 'op'; readonly field: FilterField } | { readonly step: 'value'; readonly field: FilterField; readonly op: string; readonly ruleId: string };
 
 /** "+ Filter": attributes, then operators, then values, in one popover that eases to each step's height. */
-function AddFilter({ fields, filters, onFiltersChange }: { readonly fields: ReadonlyArray<FilterField>; readonly filters: ReadonlyArray<FilterRule>; readonly onFiltersChange: (f: ReadonlyArray<FilterRule>) => void }) {
+function AddFilter({ fields, filters, onFiltersChange, start }: { readonly fields: ReadonlyArray<FilterField>; readonly filters: ReadonlyArray<FilterRule>; readonly onFiltersChange: (f: ReadonlyArray<FilterRule>) => void; readonly start?: { readonly field: string; readonly seq: number } }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>({ step: 'field' });
+  useEffect(() => { const f = start && fields.find((x) => x.id === start.field); if (f) { setStep({ step: 'op', field: f }); setOpen(true); } }, [start?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
   const close = () => window.setTimeout(() => setOpen(false), CLOSE_AFTER_PICK_MS);
   const rule = step.step === 'value' ? filters.find((f) => f.id === step.ruleId) : undefined;
   const put = (r: FilterRule) => onFiltersChange(filters.some((f) => f.id === r.id) ? filters.map((f) => (f.id === r.id ? r : f)) : [...filters, r]);
@@ -244,7 +247,7 @@ function AddFilter({ fields, filters, onFiltersChange }: { readonly fields: Read
   };
   const putValues = (field: FilterField, op: string, ruleId: string, values: ReadonlyArray<string>) => put({ id: ruleId, field: field.id, operator: op, values });
   return (
-    <DialogTrigger isOpen={open} onOpenChange={(o) => { setOpen(o); if (o) setStep({ step: 'field' }); }}>
+    <DialogTrigger isOpen={open} onOpenChange={(o) => { setOpen(o); if (o && !(start && step.step === 'op')) setStep({ step: 'field' }); }}>
       <Button size="sm" icon={<ListFilter {...i14} />}>Filter</Button>
       <Popover label="Add filter" width="menu">
         <ResizeBox>

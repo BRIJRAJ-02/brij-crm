@@ -57,7 +57,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
   const link = { object, id };
   const same = (r: { readonly object: ObjectId; readonly id: string } | undefined) => r?.object === object && r.id === id;
   const { name, sub } = recordName(state, link);
-  const tasks = state.tasks.filter((t) => same(t.record));
+  const tasks = state.tasks.filter((t) => same(t.record) || (t.also ?? []).some((r) => same(r)));
   const notes = state.notes.filter((n) => same(n.record));
   const comments = state.comments.filter((c) => same(c.record));
   const activity = state.activity.filter((a) => same(a.record));

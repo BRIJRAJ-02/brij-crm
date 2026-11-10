@@ -22,6 +22,8 @@ export interface Task {
   readonly dueTime?: boolean;
   readonly assignee?: string;
   readonly record?: AttributeRecordRef;
+  /** How many more records it's about: "+2" after the name. */
+  readonly more?: number;
 }
 
 /** A due chip's words and whether the day has passed: Yesterday, Today and Tomorrow by name, other days as "13 Nov". */
@@ -39,7 +41,7 @@ function TaskRow({ task, checked, open, onChange, onOpen }: { readonly task: Tas
       <div className={cx('tf-task', checked && 'is-done')}>
         <Checkbox round isSelected={checked} onChange={onChange} className="tf-task__check">{task.title}</Checkbox>
         <span className="tf-task__meta">
-          {task.record && <span className="tf-task__rec"><Avatar name={task.record.name} src={task.record.src} size={20} shape={task.record.kind === 'person' ? 'round' : 'square'} /><span className="tf-task__rec-name">{task.record.name}</span></span>}
+          {task.record && <span className="tf-task__rec"><Avatar name={task.record.name} src={task.record.src} size={20} shape={task.record.kind === 'person' ? 'round' : 'square'} /><span className="tf-task__rec-name">{task.record.name}</span>{task.more ? <span className="tf-task__rec-more tf-num" aria-label={`and ${task.more} more`}>+{task.more}</span> : null}</span>}
           {due && <span className="tf-task__due" data-overdue={due.overdue && !checked ? true : undefined}><Calendar size={14} strokeWidth={1.75} aria-hidden="true" />{due.overdue && !checked ? `Overdue · ${due.label}` : due.label}{task.dueTime && task.due ? ` ${task.due.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}</span>}
           {task.assignee && <Tooltip label={`Assigned to ${task.assignee}`}><AriaButton className="tf-task__who" aria-label={`Assigned to ${task.assignee}`}><Avatar name={task.assignee} size={20} /></AriaButton></Tooltip>}
           {onOpen && <span className="tf-task__go"><IconButton size="sm" label={`Open ${task.title}`} onPress={() => onOpen(task.id)}><ChevronRight size={14} strokeWidth={1.75} /></IconButton></span>}

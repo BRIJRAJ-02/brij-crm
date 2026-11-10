@@ -139,7 +139,11 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
     const first = form.status === 'draft'; set({ status: form.status === 'paused' ? 'paused' : 'live', live: form.questions, liveConfig: configOf(form) });
     toast({ message: first ? 'Your form is live. Share the link.' : form.status === 'paused' ? 'Published. Visitors see it when you resume answers.' : 'Published. Visitors see the new version.', tone: 'success', action: first ? { label: 'Copy link', onAction: copy } : undefined });
   };
+  // A live form made before settings were versioned (the seed) gets its current settings as the published ones, so later edits wait for Publish.
+  useEffect(() => { if (form.status !== 'draft' && form.liveConfig === undefined) dispatch({ type: 'form/patch', id: form.id, patch: (f) => ({ liveConfig: configOf(f), live: f.live ?? f.questions }) }); }, [form.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownToVisitors = liveView(form);
+  // Visitors to a live form get what was published after sending (thanks, button, booking or website), not the draft.
+  const after = form.status === 'live' ? shownToVisitors.after : form.after;
   const questions = shownToVisitors.questions;
   const target = form.saveTo;
   const targetName = (n: number) => objectWord(state, target, n);
@@ -166,6 +170,9 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
   const filedAs = (r: FormResponse) => r.record ?? (r.personId ? { object: 'people', id: r.personId } : undefined);
   const finishes = form.responses.filter((r) => !r.spam).length;
   const live = form.status === 'live';
+  // A visit to the live page counts as a view; each question reached feeds "Where people stop".
+  useEffect(() => { if (guest && live && !closedNow(form) && form.status === 'live') dispatch({ type: 'form/patch', id: form.id, patch: (f) => ({ views: f.views + 1 }) }); }, [guest]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reach = (qid: string) => dispatch({ type: 'form/patch', id: form.id, patch: (f) => ({ reached: { ...(f.reached ?? {}), [qid]: (f.reached?.[qid] ?? 0) + 1 } }) });
   if (guest && toBooking) return <BookingCountdown name={toBooking.name} onGo={() => { const w = toBooking; setToBooking(undefined); setGuest(false); onBookGuest?.(w); }} onStay={() => { setToBooking(undefined); setGuest(false); }} />;
   if (guest) {
     return (
@@ -173,7 +180,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
         <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => { setGuest(false); setPrefill(undefined); }}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
           {!live && <Tag size="sm" hue="orange">Preview · answers aren’t saved</Tag>}</div>
         {form.status === 'paused' || closedNow(form) ? <EmptyState icon={<Pause size={20} strokeWidth={1.75} />} title="This form is closed" description={form.closedMessage || `${form.owner.split(' ')[0]} isn't taking answers right now.`} /> : (
-          <HostedForm title={live ? shownToVisitors.name : form.name} description={live ? shownToVisitors.subtitle : form.subtitle} logic={(live ? shownToVisitors.mode : form.mode) === 'one' ? (live ? shownToVisitors.logic : form.logic) : undefined} questions={live ? questions : form.questions} mode={live ? shownToVisitors.mode : form.mode} thanks={{ title: 'Thanks, we got it.', line: form.after.kind === 'redirect' && form.after.url ? `${form.after.message} Visitors now go to ${form.after.url}.` : form.after.message }} submitLabel={form.submitLabel || undefined} prefill={prefill} brand={{ name: state.prefs.workspace.name, logoSrc: state.prefs.workspace.logo, line: form.owner ? `Answers go to ${form.owner.split(' ')[0]}` : undefined }}
+          <HostedForm title={live ? shownToVisitors.name : form.name} description={live ? shownToVisitors.subtitle : form.subtitle} logic={(live ? shownToVisitors.mode : form.mode) === 'one' ? (live ? shownToVisitors.logic : form.logic) : undefined} questions={live ? questions : form.questions} mode={live ? shownToVisitors.mode : form.mode} thanks={{ title: 'Thanks, we got it.', line: after.kind === 'redirect' && after.url ? `${after.message} Visitors now go to ${after.url}.` : after.message, action: after.kind === 'thanks' && after.button?.label && after.button.url ? { label: after.button.label, href: after.button.url } : undefined }} onReach={live ? reach : undefined} submitLabel={form.submitLabel || undefined} prefill={prefill} brand={{ name: state.prefs.workspace.name, logoSrc: state.prefs.workspace.logo, line: form.owner ? `Answers go to ${form.owner.split(' ')[0]}` : undefined }}
             onSubmit={(answers) => new Promise<void>((resolve) => {
               const flat = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' || typeof v === 'number' ? String(v) : Array.isArray(v) ? v.join(', ') : '']));
               window.setTimeout(() => {
@@ -185,7 +192,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
                   const told = [...(form.notify ?? []), ...(form.confirmEmail && w.email ? [w.email] : [])];
                   if (told.length) toast({ message: `Emailed ${told.map((x) => x.split(' ')[0]).join(', ')}` });
                 }
-                if (form.after.kind === 'booking' && onBookGuest) setToBooking(w);
+                if (after.kind === 'booking' && onBookGuest) setToBooking(w);
                 resolve();
               }, 500);
             })} />
@@ -260,6 +267,9 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
               <SegmentedControl aria-label="After they send" selectedKey={form.after.kind} onSelectionChange={(k) => set({ after: { ...form.after, kind: k === 'booking' ? 'booking' : k === 'redirect' ? 'redirect' : 'thanks' } })} items={[{ id: 'thanks', label: 'Say thanks' }, { id: 'booking', label: 'Book a meeting' }, { id: 'redirect', label: 'Go to a website' }]} />
               {form.after.kind === 'redirect' && <TextField label="Website" value={form.after.url ?? ''} placeholder="https://example.com/thanks" onChange={(url) => set({ after: { ...form.after, url } })} isInvalid={Boolean(form.after.url) && !/^https?:\/\/\S+\.\S+/.test(form.after.url ?? '')} errorMessage="Start with https:// and include the domain." />}
               <TextArea label="Message" rows={2} value={form.after.message} onChange={(message) => set({ after: { ...form.after, message } })} />
+              {form.after.kind === 'thanks' && <div className="tf-set__switch"><span><strong>Add a button</strong><span className="tf-rec__muted">Under the message, like “See our pricing”. Opens in a new tab.</span></span><Switch aria-label="Add a button" isSelected={Boolean(form.after.button)} onChange={(on) => set({ after: { ...form.after, button: on ? { label: 'Visit our website', url: '' } : undefined } })} /></div>}
+              {form.after.kind === 'thanks' && form.after.button && <div className="tf-bkf__pair"><TextField label="Button words" value={form.after.button.label} onChange={(label) => set({ after: { ...form.after, button: { url: form.after.button?.url ?? '', label } } })} onBlur={() => { if (!form.after.button?.label.trim()) set({ after: { ...form.after, button: { url: form.after.button?.url ?? '', label: 'Visit our website' } } }); }} />
+                <TextField label="Button link" placeholder="https://example.com/pricing" value={form.after.button.url} onChange={(url) => set({ after: { ...form.after, button: { label: form.after.button?.label ?? '', url } } })} isInvalid={Boolean(form.after.button.url) && !/^https?:\/\/\S+\.\S+/.test(form.after.button.url)} errorMessage="Start with https:// and include the domain." description={form.after.button.url ? undefined : 'Without a link the button stays hidden.'} /></div>}
               {form.after.kind === 'booking' && <p className="tf-rec__muted">They go straight to your booking page with their name and email filled in, so they only pick a time.</p>}
             </div>
           </div>
@@ -358,9 +368,10 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
           <div className="tf-home__stats">
             <StatCard label="Views" value={form.views} />
             <StatCard label="Responses" value={finishes} />
-            <StatCard label="Of views" value={form.views ? Math.round((finishes / form.views) * 100) : 0} format={(n) => `${n}%`} />
+            <StatCard label="Of views" value={form.views ? Math.round((finishes / form.views) * 1000) / 10 : 0} format={(n) => `${n.toLocaleString('en-IN', { maximumFractionDigits: 1 })}%`} />
             <StatCard label="Filed in People" value={form.responses.filter((r) => r.personId && !r.spam).length} />
           </div>
+          <DropOff form={form} questions={questions} sent={form.responses.length} />
           {finishes === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No answers to sum up yet" description="Once people answer, each choice question shows how they answered." /> : (
             <section className="tf-recp__sec"><h3>How people answered</h3>
               {questions.filter((q) => q.kind === 'choice' || q.kind === 'dropdown' || q.kind === 'rating').map((q) => {
@@ -390,6 +401,27 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onOpenRecord,
   );
 }
 
+
+/** Where people stop (Tally's drop-off): of those who started, how many reached each question, and the biggest drop flagged. One at a time only. */
+function DropOff({ form, questions, sent }: { readonly form: AppForm; readonly questions: ReadonlyArray<FormQuestion>; readonly sent: number }) {
+  const shown = questions.filter((q) => q.kind !== 'hidden');
+  if (form.mode !== 'one' || shown.length < 2) return null;
+  const started = form.reached?.[shown[0]?.id ?? ''] ?? 0;
+  const rows = [...shown.map((q) => ({ id: q.id, label: q.title || 'Untitled question', n: form.reached?.[q.id] ?? 0 })), { id: 'sent', label: 'Sent', n: sent }];
+  // The biggest fall between one step and the next, by people lost.
+  const worst = rows.slice(1).reduce<{ readonly at: number; readonly lost: number }>((w, r, n) => { const lost = (rows[n]?.n ?? 0) - r.n; return lost > w.lost ? { at: n + 1, lost } : w; }, { at: -1, lost: 0 });
+  return (
+    <section className="tf-recp__sec"><h3>Where people stop</h3>
+      {started === 0 ? <p className="tf-rec__muted">Nobody has started this form since it went live. Share the link and this fills in as people answer.</p> : <>
+        <p className="tf-rec__muted tf-num">{started.toLocaleString('en-IN')} started · {form.views ? Math.round((started / form.views) * 100) : 0}% of views · {Math.round((sent / started) * 100)}% of starts sent it</p>
+        <ul className="tf-forms__drop tf-forms__drop--funnel">
+          {rows.map((r, n) => { const pct = Math.round((Math.min(r.n, started) / started) * 100); return (
+            <li key={r.id} data-worst={n === worst.at || undefined}><span className="tf-forms__funq"><span className="tf-num tf-rec__muted">{r.id === 'sent' ? '' : n + 1}</span>{r.label}{n === worst.at && <Tag size="sm" hue="orange">Most leave here</Tag>}</span>
+              <span className="tf-forms__bar" aria-hidden><span data-w={Math.round(pct / 10) * 10} /></span><span className="tf-num tf-rec__muted">{r.n.toLocaleString('en-IN')} · {pct}%</span></li>); })}
+        </ul></>}
+    </section>
+  );
+}
 
 /** After a form that books: a short count, then the booking page, with a way to stay. */
 function BookingCountdown({ name, onGo, onStay }: { readonly name: string; readonly onGo: () => void; readonly onStay: () => void }) {

@@ -21,7 +21,7 @@ import { CreateSheet } from './create.tsx';
 import { ShareDialogs, type ShareDialogKind } from './share.tsx';
 import { ReservationsTab } from './reservations.tsx';
 import { MenuTab } from './menu.tsx';
-import { MeetingsTab, NewMeetingDialog, DeclineDialog, HoldDialog, meetingFrom, type PickedTime, type Whose } from './meetings.tsx';
+import { MeetingsTab, NewMeetingDialog, DeclineDialog, HoldDialog, meetingFrom, type NewMeetingInput, type PickedTime, type Whose } from './meetings.tsx';
 import { MeetingDrawer, RescheduleDialog, ReassignDialog } from './drawer.tsx';
 import { PagesTab } from './pages.tsx';
 import { PageEditor, type EditorSection } from './editor.tsx';
@@ -309,6 +309,15 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   };
   /* Meetings */
   const cancelNow = (m: Meeting) => { const x = meetingById(m.id); if (x) cancelFromDrawer(x); };
+  /** A meeting booked by hand (the New meeting dialog or a week's quick create): added, flashed, and the guest invited. */
+  const bookNew = (input: NewMeetingInput) => {
+    const m = meetingFrom(input, state);
+    setNewMeeting(undefined);
+    dispatch({ type: 'meeting/add', meeting: m });
+    setTab('meetings');
+    flash(setFreshMeeting, m.id);
+    toast({ message: `Booked · ${first(input.with.name)} gets an invitation`, tone: 'success', action: { label: 'Open', onAction: () => setMeetingId(m.id) } });
+  };
   const cancelFromDrawer = (m: BookedMeeting, reason?: string, note?: string, inline = false) => {
     setMeetingId(undefined);
     update({ ...m, status: 'cancelled', cancelledBy: 'host', cancelReason: reason }, `Cancelled by ${HOST}${reason ? `: ${reason}` : ''}${note ? ` · told them “${note}”` : ''}`);
@@ -552,7 +561,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                   onReschedule={setRescheduleId} onNoShow={(id) => { const m = meetingById(id); if (m) { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'No-show undone' }) } }); } }}
                   onConfirm={confirm} onDecline={setDeclineId}
                   onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn) ?? state.pages[0]; if (p) onShare(p, 'copy'); }}
-                  onNewMeeting={(initial) => setNewMeeting({ initial })}
+                  onNewMeeting={(initial) => setNewMeeting({ initial })} onQuickMeeting={bookNew}
                   onBlock={(block) => { dispatch({ type: 'block/add', block }); toast({ message: `${formatDay(parseDay(block.day))}, ${formatClockRange(block.start, block.end)} is blocked`, action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }}
                   onHold={setHoldAt}
                   onTimeOff={(p) => {
@@ -614,15 +623,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         onMove={(m, start) => { setRescheduleId(undefined); move(m, start, 'gets an email with the new time'); }} />
       <ReassignDialog meeting={meetingById(reassignId)} state={state} onClose={() => setReassignId(undefined)}
         onReassign={(m, host) => { setReassignId(undefined); update({ ...m, host }, `Reassigned from ${m.host} to ${host}`); toast({ message: `${m.title} is ${first(host)}'s now`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { host: m.host }, note: 'Reassign undone' }) } }); }} />
-      <NewMeetingDialog isOpen={newMeeting !== undefined} state={state} initial={newMeeting?.initial} onClose={() => setNewMeeting(undefined)}
-        onBook={(input) => {
-          const m = meetingFrom(input, state);
-          setNewMeeting(undefined);
-          dispatch({ type: 'meeting/add', meeting: m });
-          setTab('meetings');
-          flash(setFreshMeeting, m.id);
-          toast({ message: `Booked · ${first(input.with.name)} gets an invitation`, tone: 'success', action: { label: 'Open', onAction: () => setMeetingId(m.id) } });
-        }} />
+      <NewMeetingDialog isOpen={newMeeting !== undefined} state={state} initial={newMeeting?.initial} onClose={() => setNewMeeting(undefined)} onBook={bookNew} />
       <DeclineDialog meeting={meetingById(declineId)} onClose={() => setDeclineId(undefined)}
         onDecline={(m, reason) => { setDeclineId(undefined); setMeetingId(undefined); update({ ...m, status: 'cancelled' }, `Declined by ${HOST}${reason ? `: “${reason}”` : ''}`); dispatch({ type: 'note/read', id: m.id, read: true }); toast({ message: `Declined · ${first(m.invitee.name)} is told`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'Decline undone' }) } }); }} />
       <HoldDialog picked={holdAt} onClose={() => setHoldAt(undefined)}

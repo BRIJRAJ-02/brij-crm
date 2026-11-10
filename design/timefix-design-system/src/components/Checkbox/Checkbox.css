@@ -1,4 +1,5 @@
-.tf-check, .tf-switch { display: inline-flex; align-items: center; gap: var(--space-8); cursor: pointer; font: 400 14px/20px var(--font-sans); color: var(--text); outline: none; -webkit-tap-highlight-color: transparent; }
+/* position: relative keeps React Aria's hidden input inside the control, so it can't stretch a scrolling page. */
+.tf-check, .tf-switch { position: relative; display: inline-flex; align-items: center; gap: var(--space-8); cursor: pointer; font: 400 14px/20px var(--font-sans); color: var(--text); outline: none; -webkit-tap-highlight-color: transparent; }
 .tf-check[data-disabled], .tf-switch[data-disabled] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 .tf-check__box { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--control-border); border-radius: var(--radius-xs); background: var(--surface); transition: background-color var(--duration-quick) var(--ease-smooth-out), border-color var(--duration-quick) var(--ease-smooth-out), transform var(--duration-quick) var(--ease-smooth-out); }
 .tf-check[data-hovered] .tf-check__box { border-color: var(--text-secondary); }

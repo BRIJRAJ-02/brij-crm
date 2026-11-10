@@ -3,17 +3,20 @@ import {
   type Selection, type SortDescriptor,
 } from 'react-aria-components';
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, EyeOff, ListFilter, Plus, Settings2 } from 'lucide-react';
 import { Checkbox } from '../Checkbox/Checkbox.tsx';
 import { Avatar, PersonLine } from '../Avatar/Avatar.tsx';
 import { Tag, type Hue } from '../Tag/Tag.tsx';
 import { Skeleton } from '../Motion/Motion.tsx';
 import type { StatusShape } from '../Icon/StatusIcon.tsx';
 import { Popover } from '../Popover/Popover.tsx';
-import { MenuList, MenuItem, CLOSE_AFTER_PICK_MS } from '../Menu/Menu.tsx';
+import { Menu, MenuList, MenuItem, MenuSeparator, MenuTrigger, CLOSE_AFTER_PICK_MS } from '../Menu/Menu.tsx';
 import { formatDate } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import './DataGrid.css';
+
+/** What a column's header menu can do (Attio's column menu). */
+export type ColumnAction = 'ascending' | 'descending' | 'filter' | 'hide' | 'edit';
 
 /** How a column draws and edits its values. `text`, `select` and `status` edit in place. */
 export type GridColumnType = 'name' | 'text' | 'number' | 'select' | 'status' | 'person' | 'date';
@@ -69,6 +72,10 @@ export interface DataGridProps {
   readonly emptyState?: ReactNode;
   /** A line under the rows: counts and sums for what's shown ("5 deals · ₹48,20,000 total"). */
   readonly summary?: ReactNode;
+  /** Gives each header a menu: sort either way, filter by it, hide it (never the first column), edit its field. Leave out an action by not handling it. */
+  readonly onColumnAction?: (columnId: string, action: ColumnAction) => void;
+  /** Which actions the menu offers; all of them by default. */
+  readonly columnActions?: ReadonlyArray<ColumnAction>;
 }
 
 const SKELETON_ROWS = ['sk1', 'sk2', 'sk3', 'sk4', 'sk5'];
@@ -79,7 +86,7 @@ const WASH_MS = 1000;
 type Editing = { readonly rowId: string; readonly colId: string; readonly anchor: HTMLElement };
 
 /** The record table: pinned name, sortable and resizable columns, checkbox selection, inline edits, skeleton loading. Replaces DataGrid, Table and SampleTable. */
-export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
+export function DataGrid({ onColumnAction, columnActions, label, columns, rows, sortDescriptor, onSortChange, selectedKeys, onSelectionChange, onCellChange, onRowAction, onAddRow, addLabel = 'New record', isLoading = false, emptyState, summary }: DataGridProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [washed, setWashed] = useState<ReadonlySet<string>>(new Set());
   const revealing = useReveal(isLoading);
@@ -161,6 +168,15 @@ export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, s
                       <ArrowUp data-icon="ascending" size={14} strokeWidth={1.75} />
                       <ArrowDown data-icon="descending" size={14} strokeWidth={1.75} />
                     </span>
+                    {onColumnAction && (
+                      <MenuTrigger>
+                        <AriaButton className="tf-grid__thmenu" aria-label={`${c.name} column options`}><ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" /></AriaButton>
+                        <Menu placement="bottom start" aria-label={`${c.name} column`} onAction={(k) => onColumnAction(c.id, String(k) as ColumnAction)}
+                          disabledKeys={[...((c.isSortable ?? true) ? [] : ['ascending', 'descending']), ...(i === 0 ? ['hide'] : [])]}>
+                          {menuFor(columnActions).map((a) => a === 'sep' ? <MenuSeparator key="sep" /> : <MenuItem key={a.id} id={a.id} icon={<a.icon size={16} strokeWidth={1.75} />}>{a.label}</MenuItem>)}
+                        </Menu>
+                      </MenuTrigger>
+                    )}
                     <ColumnResizer className="tf-grid__resizer" />
                   </div>
                 )}
@@ -221,6 +237,17 @@ export function DataGrid({ label, columns, rows, sortDescriptor, onSortChange, s
       )}
     </div>
   );
+}
+
+/** The column menu's items in Attio's order, with a rule between sorting and the rest. */
+const COLUMN_ITEMS: ReadonlyArray<{ readonly id: ColumnAction; readonly label: string; readonly icon: ComponentType<{ size?: number; strokeWidth?: number }> }> = [
+  { id: 'ascending', label: 'Sort ascending', icon: ArrowUp }, { id: 'descending', label: 'Sort descending', icon: ArrowDown },
+  { id: 'filter', label: 'Filter by this', icon: ListFilter }, { id: 'hide', label: 'Hide column', icon: EyeOff }, { id: 'edit', label: 'Edit field', icon: Settings2 },
+];
+function menuFor(only?: ReadonlyArray<ColumnAction>) {
+  const items = COLUMN_ITEMS.filter((a) => !only || only.includes(a.id));
+  const sorts = items.filter((a) => a.id === 'ascending' || a.id === 'descending'); const rest = items.filter((a) => a.id !== 'ascending' && a.id !== 'descending');
+  return [...sorts, ...(sorts.length && rest.length ? ['sep' as const] : []), ...rest];
 }
 
 function CellEditor({ column, value, draftRef, onCommit, onCancel }: { readonly column: GridColumn; readonly value: string; readonly draftRef: { current: string | undefined }; readonly onCommit: (v: string) => void; readonly onCancel: () => void }) {

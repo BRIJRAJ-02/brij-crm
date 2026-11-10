@@ -1,13 +1,13 @@
 // The "You" pages: Inbox (mentions, replies, assignments and booking notices; Done keeps the handled ones), Tasks (grouped by when
 // they're due, yours or everyone's, with a dialog to add or edit), and Notes (every note you can see, opened full page).
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { SearchField } from '../SearchField/SearchField.tsx';
 import { NotificationList } from '../NotificationList/NotificationList.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Select } from '../Select/Select.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
-import { Button } from '../Button/Button.tsx';
+import { Button, IconButton } from '../Button/Button.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { TaskList } from '../TaskList/TaskList.tsx';
 import { NoteList, NotePage } from '../NoteList/NoteList.tsx';
@@ -116,7 +116,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <DisclosurePanel className="tf-you__donepanel">
           <div className="tf-you__card">
             <TaskList tasks={g.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
-              record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
+              record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
           </div>
           </DisclosurePanel>
         </Disclosure>
@@ -128,7 +128,7 @@ export function TasksScreen({ state, dispatch, onOpenRecord, startNew, openTask,
           <DisclosurePanel className="tf-you__donepanel">
             <div className="tf-you__card">
               <TaskList isDoneList tasks={done.map((t) => ({ id: t.id, title: t.title, done: t.done, due: t.due, dueTime: t.dueTime, assignee: t.assignee === state.me ? undefined : t.assignee,
-                record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
+                record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length }))} onToggle={toggle} onOpen={(id) => setEditing(state.tasks.find((x) => x.id === id))} />
             </div>
           </DisclosurePanel>
         </Disclosure>
@@ -148,9 +148,11 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
   const [assignee, setAssignee] = useState(task?.assignee ?? state.me);
   const [rec, setRec] = useState(task?.record ? `${task.record.object}:${task.record.id}` : record ? `${record.object}:${record.id}` : '');
   const [description, setDescription] = useState(task?.description ?? '');
+  const [also, setAlso] = useState<ReadonlyArray<string>>(() => (task?.also ?? []).map((r) => `${r.object}:${r.id}`));
   const records = [...state.people.map((p) => ({ id: `people:${p.id}`, label: p.name, description: 'Person' })), ...state.companies.map((c) => ({ id: `companies:${c.id}`, label: c.name, description: 'Company' })), ...state.deals.map((d) => ({ id: `deals:${d.id}`, label: d.name, description: 'Deal' }))];
-  const link = (): RecordLink | undefined => { if (!rec) return undefined; const [o, i] = rec.split(':') as [ObjectId, string]; return { object: o, id: i }; };
-  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? (() => { const d = dayFrom(due, 17); if (!d || at === 'none') return d; return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(Number(at) / 60), Number(at) % 60); })() : undefined, dueTime: Boolean(due) && at !== 'none', assignee, record: link(), description: description.trim() || undefined, created: task?.created ?? new Date() }); };
+  const toLink = (key: string): RecordLink => { const [o, i] = key.split(':') as [ObjectId, string]; return { object: o, id: i }; };
+  const link = (): RecordLink | undefined => (rec ? toLink(rec) : undefined);
+  const save = () => { if (title.trim()) onSave({ id: task?.id ?? newId('t'), title: title.trim(), done: task?.done ?? false, due: due ? (() => { const d = dayFrom(due, 17); if (!d || at === 'none') return d; return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(Number(at) / 60), Number(at) % 60); })() : undefined, dueTime: Boolean(due) && at !== 'none', assignee, record: link(), also: also.filter((k) => k !== rec).length ? also.filter((k) => k !== rec).map(toLink) : undefined, description: description.trim() || undefined, created: task?.created ?? new Date() }); };
   return (
     <Dialog isOpen onOpenChange={(o) => { if (!o) onClose(); }} title={task ? 'Task' : 'New task'}
       actions={<>{onDelete && <Button variant="ghost" onPress={onDelete}>Delete</Button>}<span className="tf-rec__spacer" /><Button variant="ghost" slot="close">Cancel</Button>
@@ -166,6 +168,13 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
         </div>
         <Select label="About" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="A person, company or deal" items={records} />
         {rec && onOpenRecord && <button type="button" className="tf-rec__link tf-you__open" onClick={() => { const l = link(); if (!l) return; if (title.trim()) save(); else onClose(); onOpenRecord(l.object, l.id); }}>Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</button>}
+        {/* More records it's about (Attio links a task to several): the task shows on each one's page. */}
+        {rec && <div className="tf-bkf__group">
+          <Select label="Also about" searchable value={null} onChange={(v) => { if (v && v !== rec && !also.includes(v)) setAlso((a) => [...a, v]); }} placeholder="Add another record" items={records.filter((r) => r.id !== rec && !also.includes(r.id))} />
+          {also.length > 0 && <ul className="tf-you__also" aria-label="Also about">{also.map((k) => { const l = toLink(k); return (
+            <li key={k}><span>{recordName(state, l).name}<span className="tf-rec__muted"> · {l.object === 'people' ? 'Person' : l.object === 'companies' ? 'Company' : 'Deal'}</span></span>
+              <IconButton size="sm" label={`Remove ${recordName(state, l).name}`} onPress={() => setAlso((a) => a.filter((x) => x !== k))}><X size={14} strokeWidth={1.75} /></IconButton></li>); })}</ul>}
+        </div>}
         <TextArea label="Details" aside="Optional" rows={3} value={description} onChange={setDescription} />
       </div>
     </Dialog>

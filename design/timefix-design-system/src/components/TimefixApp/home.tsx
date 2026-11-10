@@ -50,7 +50,7 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
   const due = mine.filter((t) => !t.done && t.due && t.due <= endOfToday);
   const shown = [...due, ...mine.filter((t) => !t.done && (!t.due || t.due > endOfToday))].slice(0, 6);
   const toTask = (t: (typeof mine)[number]): Task => ({ id: t.id, title: t.title, done: t.done, due: t.due, assignee: t.assignee === state.me ? undefined : t.assignee,
-    record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined });
+    record: t.record ? { id: t.record.id, name: recordName(state, t.record).name, kind: t.record.object === 'people' ? 'person' : t.record.object === 'companies' ? 'company' : 'deal' } : undefined, more: t.also?.length });
   const open = state.deals.filter((d) => d.stage !== 'Won' && d.stage !== 'Lost');
   // This quarter against the last one, from the deals' own close dates; no made-up trend.
   const q0 = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1); const qPrev = new Date(q0.getFullYear(), q0.getMonth() - 3, 1);

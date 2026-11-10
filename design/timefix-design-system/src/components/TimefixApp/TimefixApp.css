@@ -123,7 +123,7 @@
 .tf-forms__sum:first-of-type { border-top: 0; padding-top: 0; }
 .tf-forms__sumq { margin: 0; display: flex; align-items: baseline; gap: var(--space-8); font: 500 14px/20px var(--font-sans); color: var(--text); }
 .tf-forms__drop { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
-.tf-forms__drop li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto; align-items: center; gap: var(--space-12); font: 400 14px/20px var(--font-sans); }
+.tf-forms__drop li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) 6rem; align-items: center; gap: var(--space-12); font: 400 14px/20px var(--font-sans); }
 .tf-forms__bar { height: var(--space-8); border-radius: var(--radius-full); background: var(--surface-subtle); overflow: hidden; }
 .tf-forms__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .tf-forms__bar > span[data-w='0'] { width: 0%; }
@@ -326,3 +326,13 @@
 .tf-home__recentbtn > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-forms__summary .tf-set__facts > div { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-8); padding: var(--space-8) 0; }
 .tf-forms__summary .tf-set__facts dd { text-align: right; }
+/* Where people stop: the step number, the question, and a flag on the biggest drop. */
+.tf-forms__funq { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.tf-forms__funq > span:first-child { flex: none; width: var(--space-16); }
+.tf-forms__drop--funnel li[data-worst] .tf-forms__bar > span { background: var(--warning); }
+
+.tf-forms__drop li > span:last-child { text-align: right; }
+/* A task's other records: a quiet list with a remove button on each. */
+.tf-you__also { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tf-you__also li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-height: var(--size-control-sm); font: 400 14px/20px var(--font-sans); }
+.tf-you__also li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }

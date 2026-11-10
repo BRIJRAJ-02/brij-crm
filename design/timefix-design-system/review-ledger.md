@@ -352,3 +352,15 @@ Owner: "new pages don't look polished as bookings" and "make sure all settings a
 - [x] Salon: a price per length (a 45 min cut ₹1,200, 60 min ₹1,500); the list reads "from" the lowest, the guest's total follows the length they pick. Returning guests get their last stylist when free; a closed venue says when it next opens.
 - [x] Restaurant: turn time by party size bands in the editor.
 - [ ] Still to do: Forms analytics and drop-off, endings with buttons, look options; Restaurant shifts and 15 minute pacing, reminders, guest profile; Records column menu and related sections; salon client record; meetings fixed plus rotating hosts; tasks linked to several records; setup steps rail and the week quick-create popover (references).
+
+## Owner round, 11 Nov, wave 4 (forms results, column menu, references)
+- [x] Forms › Results: "Where people stop" (Tally's drop-off): starts, each question's reach as a bar, the biggest drop flagged "Most leave here", and how many sent it; visits to the live form count views and reaches. "Of views" shows a decimal when under 1%.
+- [x] Forms › Settings › Say thanks: an optional button under the message (words + link, opens in a new tab; hidden until the link is valid).
+- [x] Records: a column menu on every header (Attio): Sort ascending/descending, Filter by this (opens the filter at that field's operators), Hide column with Undo, Edit field (Settings › Objects). The first column can't hide; the caret floats so names keep their width.
+- [x] Business page (profile header reference): the photos are the cover, the logo (or initials tile) overlaps their edge, then name, kind and the meta line; at phone width the meta line drops its dots.
+- [x] Week view (Totoro reference): a picked time opens a quick create: who it's with, then Book (or More options for the full dialog); Block, Hold and Time off stay below. Same on Team day.
+- [x] Tasks can be about several records: "Also about" in the task, "+1" on the row, and the task shows on each record's page (merges carry the links over).
+- [x] Library fix: Switch, Checkbox and Radio keep React Aria's hidden input inside the control; before, a Switch low in a scrolling pane stretched the whole page (found on Forms › Settings). A sweep now checks no screen or tab makes the page scroll.
+- [x] Forms publish fix: visitors to a live form get the published after-send settings (thanks, button, booking, website), not the draft; a live form without a stored baseline (the seed) gets one when opened, so its settings edits wait for Publish and show "Edited, not published".
+- [x] Setup steps rail (reference): onboarding already uses Steps with done ticks and the current halo; kept the approved split layout.
+- [ ] Next wave: restaurant guest profile, salon client record, forms look options, restaurant shifts + 15 min pacing, meetings rotating hosts; marketing candidates (frosted rim, dot chart, boxed labels, dot week).

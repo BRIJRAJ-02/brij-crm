@@ -28,6 +28,8 @@ export interface Venue {
   readonly hours?: ReadonlyArray<{ readonly day: string; readonly text: string; readonly isToday?: boolean; readonly isOpen: boolean }>;
   /** Meets online only: no directions or map. */
   readonly isOnline?: boolean;
+  /** The business's logo; its initials on a tile when there is none. */
+  readonly logo?: string;
 }
 /** A dish or product shown on the page (not booked from it). */
 export interface VenueMenuItem { readonly name: string; readonly description?: string; readonly price: string; readonly tag?: string }
@@ -68,8 +70,19 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
   const shown = cats.length ? items.filter((i) => i.categoryId === cat) : items;
   return (
     <div className="tf-venue">
-      <header className="tf-venue__head">
+      {venue.photos.length > 0 && (
+        <div className={cx('tf-venue__photos', venue.photos.length < 3 && 'is-single')}>
+          {venue.photos.slice(0, allPhotos ? undefined : 3).map((src, n) => <img key={n} src={src} alt="" className="tf-venue__photo" />)}
+          {!allPhotos && venue.photos.length > 3 && <Button size="sm" variant="secondary" className="tf-venue__allphotos" icon={<Images size={14} strokeWidth={1.75} />} onPress={() => setAllPhotos(true)}>See all photos</Button>}
+        </div>
+      )}
+
+      <header className={cx('tf-venue__head', venue.photos.length > 0 && 'tf-venue__head--cover')}>
+        {/* A profile header (owner's 11 Nov reference): the photos are the cover, the logo sits over their edge, then name, kind and the meta line. */}
+        <span className="tf-venue__logo"><Avatar name={venue.name} src={venue.logo} size={64} shape="square" /></span>
+        <div className="tf-venue__id">
         <h1 className="tf-venue__name">{venue.name}</h1>
+        <p className="tf-venue__kind">{venue.kind}</p>
         <p className="tf-venue__line">
           {[
             venue.rating !== undefined ? <span key="r" className="tf-venue__rating" role="img" aria-label={`Rated ${venue.rating.toFixed(1)} out of 5${venue.reviews !== undefined ? ` from ${venue.reviews.toLocaleString('en-IN')} reviews` : ''}`}><span className="tf-num">{venue.rating.toFixed(1)}</span><span className="tf-venue__stars" aria-hidden="true">{Array.from({ length: 5 }, (_, n) => <Star key={n} size={13} strokeWidth={0} fill="currentColor" />)}</span>{venue.reviews !== undefined && <span className="tf-venue__muted tf-num">({venue.reviews.toLocaleString('en-IN')})</span>}</span> : null,
@@ -78,15 +91,9 @@ export function VenuePage({ venue, items = [], categories, itemsTitle = 'Service
           ].filter(Boolean).flatMap((el, n) => (n === 0 ? [el] : [<span key={`d${n}`} aria-hidden="true">·</span>, el]))}
           {!venue.isOnline && <a className="tf-venue__link" href={`https://maps.google.com/?q=${encodeURIComponent(venue.address)}`} target="_blank" rel="noreferrer">Get directions</a>}
         </p>
+        </div>
         <IconButton label="Share this page" className="tf-venue__share"><Share2 size={16} strokeWidth={1.75} /></IconButton>
       </header>
-
-      {venue.photos.length > 0 && (
-        <div className={cx('tf-venue__photos', venue.photos.length < 3 && 'is-single')}>
-          {venue.photos.slice(0, allPhotos ? undefined : 3).map((src, n) => <img key={n} src={src} alt="" className="tf-venue__photo" />)}
-          {!allPhotos && venue.photos.length > 3 && <Button size="sm" variant="secondary" className="tf-venue__allphotos" icon={<Images size={14} strokeWidth={1.75} />} onPress={() => setAllPhotos(true)}>See all photos</Button>}
-        </div>
-      )}
 
       <div className="tf-venue__body">
         <main className="tf-venue__main">

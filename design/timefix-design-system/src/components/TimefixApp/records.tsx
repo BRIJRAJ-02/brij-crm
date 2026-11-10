@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Selection, SortDescriptor } from 'react-aria-components';
 import { Building2, CircleDollarSign, Copy, Download, LayoutGrid, LayoutList, ListPlus, MoreHorizontal, PenLine, Pencil, Plus, Star, Trash2, Upload, UserRound, Users } from 'lucide-react';
-import { DataGrid, type GridColumn, type GridRecord } from '../DataGrid/DataGrid.tsx';
+import { DataGrid, type ColumnAction, type GridColumn, type GridRecord } from '../DataGrid/DataGrid.tsx';
 import { Board, type BoardColumn } from '../Board/Board.tsx';
 import { FilterBar, type FilterField, type FilterRule, type SortRule, type ViewColumn } from '../FilterBar/FilterBar.tsx';
 import { BulkActionBar, BarButton } from '../FloatingBar/FloatingBar.tsx';
@@ -153,6 +153,15 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   // A guest sees only what's shared with them; nothing is yet in the prototype.
   if (state.previewRole === 'Guest') return <div className="tf-app__empty"><EmptyState icon={<Users size={20} strokeWidth={1.75} />} title={`No ${def.many} shared with you`} description={`As a guest you see only lists and records someone shares with you. Ask an admin of ${state.prefs.workspace.name} to share one.`} /></div>;
   const edit = (patch: Partial<SavedView>) => { setDraft({ ...view, ...patch }); if (patch.filters) setSelected(new Set()); };
+  const [startFilter, setStartFilter] = useState<{ readonly field: string; readonly seq: number } | undefined>();
+  // The header's column menu (Attio): sort, filter by it, hide it with Undo, or change the field in Settings.
+  const columnAction = (id: string, a: ColumnAction) => {
+    if (a === 'ascending' || a === 'descending') { edit({ sorts: [{ field: id, direction: a }] }); return; }
+    if (a === 'filter') { setStartFilter((f) => ({ field: id, seq: (f?.seq ?? 0) + 1 })); return; }
+    if (a === 'edit') { onAttributes?.(); return; }
+    const was = view.hidden; const name = def.columns.find((c) => c.id === id)?.name ?? 'Column';
+    edit({ hidden: [...was, id] }); toast({ message: `${name} hidden. Show it again from View.`, action: { label: 'Undo', onAction: () => edit({ hidden: was }) } });
+  };
   const q = query.trim().toLowerCase();
   const rows = all.filter((r) => view.filters.every((f) => passes(r, f)) && (!q || Object.values(r.values).some((v) => String(v ?? '').toLowerCase().includes(q))));
   const sorted = [...rows].sort((a, b) => {
@@ -270,7 +279,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
       {!canEdit && <Callout tone="info">You’re previewing as a {state.previewRole?.toLowerCase()}: you can look, but not change {def.many}.</Callout>}
       {pairs > 0 && onDuplicates && <Callout tone="info" action={{ label: 'Review', onPress: onDuplicates }}>{pairs === 1 ? `1 pair of ${def.many} looks like a duplicate.` : `${pairs} pairs of ${def.many} look like duplicates.`}</Callout>}
       <FilterBar fields={fields} filters={view.filters} onFiltersChange={(filters) => edit({ filters })} sorts={view.sorts} onSortsChange={(sorts) => edit({ sorts })}
-        columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} />
+        columns={viewColumns} onColumnsChange={(cols) => edit({ hidden: cols.filter((c) => !c.isShown).map((c) => c.id) })} totalCount={all.length} hiddenCount={all.length - rows.length} noun={def.many} startFilter={startFilter} />
       <div className="tf-rec__split">
       {view.layout === 'board' ? (
         <div className="tf-rec__board">
@@ -286,6 +295,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
           <DataGrid label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} summary={summary}
             sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined}
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
+            onColumnAction={columnAction} columnActions={onAttributes && canEdit ? undefined : ['ascending', 'descending', 'filter', 'hide']}
             onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${def.one}`}
             emptyState={q || view.filters.length ? <span>No {def.many} match. <button type="button" className="tf-rec__link" onClick={() => { setQuery(''); if (view.filters.length) edit({ filters: [] }); }}>{view.filters.length ? 'Clear filters' : 'Clear search'}</button></span> : <span>No {def.many} yet.{canEdit ? <>{' '}<button type="button" className="tf-rec__link" onClick={() => setCreating(true)}>Add one</button>{onImport ? <> or <button type="button" className="tf-rec__link" onClick={() => onImport()}>import a CSV</button></> : null}.</> : null}</span>} />
         </div>

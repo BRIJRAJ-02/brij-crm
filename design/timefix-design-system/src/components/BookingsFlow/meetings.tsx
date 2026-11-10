@@ -70,6 +70,8 @@ export interface MeetingsTabProps {
   readonly onConfirm: (id: string) => void; readonly onDecline: (id: string) => void;
   readonly onCreatePage: () => void; readonly onCopyFirstLink: () => void;
   readonly onNewMeeting: (at?: PickedTime) => void;
+  /** Books straight from a picked time's popover (who, then Book); the full dialog stays a click away. */
+  readonly onQuickMeeting?: (input: NewMeetingInput) => void;
   readonly onBlock: (block: TimeBlock) => void; readonly onHold: (picked: PickedTime) => void; readonly onTimeOff: (picked: PickedTime) => void; readonly onMoveBlock: (block: TimeBlock) => void;
   readonly onMove: (id: string, day: Date, start: number, end: number) => void;
   readonly onSeeConflict: (m: Meeting) => void;
@@ -159,7 +161,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
       )}
       {view === 'week' && <WeekView {...props} scoped={scoped} />}
       {view === 'team' && <TeamDay state={state} week={props.week} onWeek={props.onWeek} onOpen={props.onOpen} onReassignMany={props.onReassignMany}
-        menu={(p, close) => <PickedMenu picked={p} close={close} onBook={() => props.onNewMeeting(p)}
+        menu={(p, close) => <PickedMenu picked={p} close={close} onBook={() => props.onNewMeeting(p)} onQuick={props.onQuickMeeting ? (who) => props.onQuickMeeting?.(quickInput(state, p, who)) : undefined}
           onBlock={() => props.onBlock({ id: nextId('blk'), member: p.member, day: isoDay(p.day), start: p.start, end: p.end, kind: 'block', label: 'Blocked' })}
           onHold={() => props.onHold(p)} onTimeOff={() => props.onTimeOff(p)} />} />}
     </div>
@@ -174,27 +176,40 @@ function lengthLabel(min: number): string {
 }
 
 /** What a dragged span of the week can become: the time on top, then four plain actions. Picking one closes it. */
-function PickedMenu({ picked, close, onBook, onBlock, onHold, onTimeOff }: { readonly picked: PickedTime; readonly close: () => void; readonly onBook: () => void; readonly onBlock: () => void; readonly onHold: () => void; readonly onTimeOff: () => void }) {
+function PickedMenu({ picked, close, onBook, onBlock, onHold, onTimeOff, onQuick }: { readonly picked: PickedTime; readonly close: () => void; readonly onBook: () => void; readonly onBlock: () => void; readonly onHold: () => void; readonly onTimeOff: () => void; readonly onQuick?: (who: RecordRef) => void }) {
   const run = (fn: () => void) => { close(); window.setTimeout(fn, 150); };
+  const [who, setWho] = useState<RecordRef>();
   return (
     <div className="tf-bkf-pickmenu">
       <div className="tf-bkf-pickmenu__head">
         <span className="tf-bkf-pickmenu__time tf-num">{formatClockRange(picked.start, picked.end)}</span>
         <span className="tf-bkf-pickmenu__sub tf-num">{picked.member !== HOST ? `${first(picked.member)} · ` : ''}{formatLongDay(picked.day)} · {lengthLabel(picked.end - picked.start)}</span>
       </div>
+      {/* Quick create (Totoro's week): who it's with, then Book; anything more opens the full dialog. */}
+      {onQuick && <div className="tf-bkf-pickmenu__quick">
+        {who ? <div className="tf-bkf__record"><span className="tf-bkf__muted">With</span><strong>{who.name}</strong><span className="tf-bkf__spacer" /><Button size="sm" variant="ghost" onPress={() => setWho(undefined)}>Change</Button></div>
+          : <ReferencePicker label="With" placeholder="Search People…" recent={PEOPLE.filter((p) => p.kind === 'person').slice(0, 3)} search={searchPeople} onSelect={setWho} onCreate={(name) => setWho({ id: nextId('r'), name, kind: 'person' })} />}
+        <div className="tf-bkf-pickmenu__acts"><Button size="sm" variant="ghost" onPress={() => run(onBook)}>More options</Button><Button size="sm" variant="primary" isDisabled={!who} onPress={() => { if (who) { const w = who; run(() => onQuick(w)); } }}>Book</Button></div>
+      </div>}
       <MenuList aria-label="Use this time" onAction={(k: Key) => {
         if (k === 'book') run(onBook);
         else if (k === 'block') run(onBlock);
         else if (k === 'hold') run(onHold);
         else if (k === 'off') run(onTimeOff);
       }}>
-        <MenuItem id="book" icon={<UserPlus {...i16} />}>Book someone in</MenuItem>
+        {!onQuick && <MenuItem id="book" icon={<UserPlus {...i16} />}>Book someone in</MenuItem>}
         <MenuItem id="block" icon={<Ban {...i16} />}>Block this time</MenuItem>
         <MenuItem id="hold" icon={<Hand {...i16} />}>Hold for someone</MenuItem>
         <MenuItem id="off" icon={<CalendarOff {...i16} />}>Time off</MenuItem>
       </MenuList>
     </div>
   );
+}
+
+/** A picked span booked as is: its own length, the first live page's place (or a video call), the host it was picked under. */
+function quickInput(state: BookingsState, p: PickedTime, who: RecordRef): NewMeetingInput {
+  const page = state.pages.find((x) => x.isOn && x.kind !== 'table');
+  return { pageId: undefined, length: p.end - p.start, day: p.day, start: p.start, with: who, guests: [], place: page ? placeOf(page) : 'meet', host: p.member };
 }
 
 /** Week view: bookings only, or every calendar with busy time hatched; drag empty time to pick it. */
@@ -244,7 +259,7 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
           const d = days[sel.day];
           if (!d) return null;
           const picked: PickedTime = { member, day: d, start: sel.start, end: sel.end };
-          return <PickedMenu picked={picked} close={close} onBook={() => props.onNewMeeting(picked)}
+          return <PickedMenu picked={picked} close={close} onBook={() => props.onNewMeeting(picked)} onQuick={props.onQuickMeeting ? (who) => props.onQuickMeeting?.(quickInput(state, picked, who)) : undefined}
             onBlock={() => props.onBlock({ id: nextId('blk'), member, day: isoDay(d), start: sel.start, end: sel.end, kind: 'block', label: 'Blocked' })}
             onHold={() => props.onHold(picked)} onTimeOff={() => props.onTimeOff(picked)} />;
         }}

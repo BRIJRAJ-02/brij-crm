@@ -25,7 +25,7 @@ export interface Deal { readonly id: string; readonly name: string; readonly com
 /** Which record a task, note or comment belongs to. */
 export interface RecordLink { readonly object: ObjectId; readonly id: string }
 
-export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; readonly description?: string; readonly created: Date }
+export interface AppTask { readonly id: string; readonly title: string; readonly done: boolean; readonly due?: Date; /** The due day has a time too (else it's due by the end of the day). */ readonly dueTime?: boolean; readonly assignee: string; readonly record?: RecordLink; /** More records the task is about (a deal and its two people); it shows on each one's page. */ readonly also?: ReadonlyArray<RecordLink>; readonly description?: string; readonly created: Date }
 export interface AppNote { readonly id: string; readonly title: string; readonly body: string; readonly author: string; readonly record: RecordLink; readonly updated: Date; /** The editor's document, so formatting survives a save. */ readonly doc?: import('@tiptap/react').JSONContent }
 /** One thing for you in the Inbox. */
 export interface InboxItem {
@@ -58,8 +58,10 @@ export interface AppForm {
   readonly id: string; readonly name: string; readonly slug: string; readonly status: 'draft' | 'live' | 'paused';
   readonly questions: ReadonlyArray<FormQuestion>; readonly live?: ReadonlyArray<FormQuestion>; readonly mode: 'one' | 'page';
   /** What each response becomes: 'people', 'companies', 'deals', an owner-made object's id, or 'none' (answers stay on the form). */
-  readonly saveTo: string; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking' | 'redirect'; readonly message: string; /** Redirect: where they go after sending. */ readonly url?: string };
+  readonly saveTo: string; readonly owner: string; readonly after: { readonly kind: 'thanks' | 'booking' | 'redirect'; readonly message: string; /** Redirect: where they go after sending. */ readonly url?: string; /** Say thanks: an optional button under the message ("See our pricing"). */ readonly button?: { readonly label: string; readonly url: string } };
   readonly responses: ReadonlyArray<FormResponse>; readonly views: number; readonly updated: Date;
+  /** How many visitors reached each question (one at a time), by question id: where people stop. */
+  readonly reached?: Readonly<Record<string, number>>;
   /** The published layout, name and after-send settings, so a change to any of them counts as an unpublished edit. */
   readonly liveConfig?: string;
   /** A line under the title on the form. */
@@ -315,7 +317,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
       const hit = (r: RecordLink | undefined, id: string) => r !== undefined && r.object === a.from.object && r.id === a.from.id && (!a.only || a.only.includes(id));
       const mv = <T extends { readonly id: string; readonly record?: RecordLink }>(x: T): T => (hit(x.record, x.id) ? { ...x, record: a.to } : x);
       const ok = (id: string) => !a.only || a.only.includes(id);
-      return { ...state, tasks: state.tasks.map(mv), notes: state.notes.map(mv), comments: state.comments.map(mv), activity: state.activity.map(mv), inbox: state.inbox.map(mv), files: state.files.map(mv),
+      return { ...state, tasks: state.tasks.map((t) => { const m = mv(t); return m.also ? { ...m, also: m.also.map((r) => (r.object === a.from.object && r.id === a.from.id && ok(t.id) ? a.to : r)) } : m; }), notes: state.notes.map(mv), comments: state.comments.map(mv), activity: state.activity.map(mv), inbox: state.inbox.map(mv), files: state.files.map(mv),
         deals: state.deals.map((d) => (a.from.object === 'people' && d.contactId === a.from.id && ok(d.id) ? { ...d, contactId: a.to.id } : a.from.object === 'companies' && d.companyId === a.from.id && ok(d.id) ? { ...d, companyId: a.to.id } : d)),
         people: a.from.object === 'companies' ? state.people.map((p) => (p.companyId === a.from.id && ok(p.id) ? { ...p, companyId: a.to.id } : p)) : state.people,
         lists: state.lists.map((l) => (l.object !== a.from.object ? l : { ...l, entries: l.entries.map((e) => (e.recordId === a.from.id && ok(e.id) && !(l.oncePerRecord && l.entries.some((x) => x.recordId === a.to.id)) ? { ...e, recordId: a.to.id } : e)) })),
@@ -455,7 +457,7 @@ export function northwindCrm(now = new Date()): AppState {
   const me = 'Priya Raman';
   const t = (id: string, title: string, due: number | undefined, assignee: string, record?: RecordLink, done = false): AppTask => ({ id, title, due: due === undefined ? undefined : dayAt(now, due, 17), assignee, record, done, created: dayAt(now, -3) });
   const tasks: AppTask[] = [
-    t('t-1', 'Send the revised proposal to Liam', 0, me, { object: 'deals', id: 'd-acme' }),
+    { ...t('t-1', 'Send the revised proposal to Liam', 0, me, { object: 'deals', id: 'd-acme' }), also: [{ object: 'people', id: 'p-liam' }] },
     t('t-2', 'Book a security review with Amara', 1, me, { object: 'people', id: 'p-amara' }),
     t('t-3', 'Chase signed order form', -2, me, { object: 'deals', id: 'd-umbrella' }),
     t('t-4', 'Prepare QBR deck for Globex', 3, 'Sam Kim', { object: 'companies', id: 'c-globex' }),
@@ -579,6 +581,7 @@ function contactForm(now: Date): AppForm {
   const r = (id: string, mins: number, name: string, email: string, company: string, size: string, need: string, extra: Partial<FormResponse> = {}): FormResponse =>
     ({ id, at: new Date(now.getTime() - mins * 60_000), answers: { 'q-name': name, 'q-email': email, 'q-company': company, 'q-size': size, 'q-need': need }, ...extra });
   return { id: 'f-contact', name: 'Talk to sales', slug: 'talk-to-sales', status: 'live', questions: q, live: q, mode: 'one', saveTo: 'people', owner: 'Priya Raman', views: 1284, updated: new Date(now.getTime() - 2 * 86_400_000),
+    reached: { 'q-name': 64, 'q-email': 41, 'q-company': 33, 'q-size': 14, 'q-need': 9 },
     after: { kind: 'booking', message: 'Thanks! Pick a time and we’ll walk you through it.' },
     responses: [
       r('r1', 35, 'Pepper Potts', 'pepper@stark.store', 'Stark Retail', '51–200', 'Our stores book demos by phone. We lose half of them.', { personId: 'p-pepper' }),

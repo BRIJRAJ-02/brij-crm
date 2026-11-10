@@ -1,6 +1,6 @@
 import { Button as AriaButton } from 'react-aria-components';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Copy, CornerDownLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, CircleAlert, Copy, CornerDownLeft } from 'lucide-react';
 import { cx } from '../../lib/cx.ts';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { useShake } from '../Field/Field.tsx';
@@ -34,7 +34,9 @@ export interface HostedFormProps {
   readonly booking?: BookingSource;
   readonly onUpload?: UploadFile;
   /** Thank-you words; the defaults are Tally's plain ones. */
-  readonly thanks?: { readonly title: string; readonly line?: string };
+  readonly thanks?: { readonly title: string; readonly line?: string; /** A button on the thank you ("See our pricing"), opening its link in a new tab. */ readonly action?: { readonly label: string; readonly href: string } };
+  /** Each question the visitor reaches, once per visit (one at a time only): feeds "Where people stop". */
+  readonly onReach?: (questionId: string) => void;
   /** The last button's words ("Submit" unless the owner set their own, like "Get my quote"). */
   readonly submitLabel?: string;
   /** Answers filled from the link (?email=…&name=…), by question id; hidden fields take theirs from here too. */
@@ -176,7 +178,7 @@ export function FinishLater({ onSave }: { readonly onSave: () => Promise<string>
 }
 
 /** The thank you: a drawn green check (10 success check), the words revealing (18), then what was sent. */
-function Thanks({ show, title, line, children }: { readonly show: boolean; readonly title: string; readonly line?: string; readonly children: ReactNode }) {
+function Thanks({ show, title, line, action, children }: { readonly show: boolean; readonly title: string; readonly line?: string; readonly action?: { readonly label: string; readonly href: string }; readonly children: ReactNode }) {
   return (
     <div className="tf-hform__done">
       {show && (
@@ -185,6 +187,7 @@ function Thanks({ show, title, line, children }: { readonly show: boolean; reado
           <div className="tf-hform__reveal">
             <h2 className="tf-hform__reveal-line tf-hform__done-title" tabIndex={-1} data-autofocus>{title}</h2>
             {line && <p className="tf-hform__reveal-line tf-hform__done-sub">{line}</p>}
+            {action && /^https?:\/\//.test(action.href) && <span className="tf-hform__reveal-line"><Button variant="primary" iconEnd={<ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />} onPress={() => { window.open(action.href, '_blank', 'noopener'); }}>{action.label}</Button></span>}
           </div>
           <div className="tf-hform__reveal-line tf-hform__done-sent">{children}</div>
         </>
@@ -197,7 +200,7 @@ function Thanks({ show, title, line, children }: { readonly show: boolean; reado
  * The form a guest fills in: one question at a time with a progress bar, Back and OK (Enter goes on), or every question on one
  * card. Required answers and emails are checked; a refused step shakes. Ends on a thank you with the sent answers.
  */
-export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
+export function HostedForm({ title, description, questions: allQuestions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], submitLabel = 'Submit', prefill = {}, brand, onReach, thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
   // Hidden fields never show: they carry their value (from the link or the default) straight into the answers.
   const questions = allQuestions.filter((q) => q.kind !== 'hidden');
   const hiddenAnswers = Object.fromEntries(allQuestions.filter((q) => q.kind === 'hidden').map((q) => [q.id, prefill[q.id] ?? q.defaultValue ?? '']));
@@ -207,6 +210,8 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const [attempt, setAttempt] = useState(0);
   const [step, setStep] = useState(0);
   const [sent, setSent] = useState(false);
+  const seen = useRef(new Set<string>());
+  useEffect(() => { const q = questions[step]; if (mode !== 'one' || !q || !onReach || seen.current.has(q.id)) return; seen.current.add(q.id); onReach(q.id); }, [step, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const advance = useRef<number | undefined>(undefined);
@@ -295,7 +300,7 @@ export function HostedForm({ title, description, questions: allQuestions, mode =
   const alert = failed && <p className="tf-hform__alert" role="alert"><CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />We couldn't send that. Check your connection and try again.</p>;
   const later = onFinishLater && <FinishLater onSave={() => onFinishLater(answers)} />;
   const done = (
-    <Thanks show={sent} title={thanks.title} line={thanks.line}>
+    <Thanks show={sent} title={thanks.title} line={thanks.line} action={thanks.action}>
       <SentAnswers questions={questions} answers={answers} booking={booking} />
     </Thanks>
   );
