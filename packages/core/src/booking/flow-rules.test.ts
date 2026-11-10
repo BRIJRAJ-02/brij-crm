@@ -382,7 +382,7 @@ describe('review fixes (spec 0062, L1)', () => {
     expect(await listWaitingRequests(s.host)).toEqual([]);
   });
 
-  it('lists a member only their own pages’ requests, a guest only those they host, and a deleted page none', async () => {
+  it('lists a member only their own pages’ requests, refuses a guest, and lists a deleted page none', async () => {
     const s = await setup();
     await s.set({ requiresConfirmation: true });
     const bo = await colleague(s);
@@ -402,9 +402,9 @@ describe('review fixes (spec 0062, L1)', () => {
     // The admin answers every page; the member only their own (not the admin's page, which they can't change).
     expect(await ids(s.host)).toEqual([booked.bookingId, boBooked.bookingId]);
     expect(await ids(bo)).toEqual([boBooked.bookingId]);
-    // A guest holds no booking.manage: only the requests they host.
+    // A guest holds no booking.manage: refused, as every Bookings read is.
     const guest = rescope(bo, { role: 'guest' });
-    expect(await ids(guest)).toEqual([boBooked.bookingId]);
+    expect(await refusalOf(listWaitingRequests(guest))).toMatchObject({ code: 'FORBIDDEN' });
     // A deleted page lists none.
     await deleteBookingPage(bo, { pageId: theirs.id });
     expect(await ids(s.host)).toEqual([booked.bookingId]);

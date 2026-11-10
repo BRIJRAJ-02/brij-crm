@@ -9,6 +9,7 @@ import {
   type ListRequestsInput,
   type WaitingRequestView,
 } from '@crm/contracts';
+import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -80,6 +81,8 @@ export async function listRequests(
  * (`bookings_pending`) plus the page rule's fixed few, whatever the pages.
  */
 export async function listWaitingRequests(scope: EngineScope): Promise<WaitingRequestView[]> {
+  // As every Bookings read: booking.manage first (403), as `listRequests` refuses through `editablePage`.
+  requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const me = scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
     const pages = await pagesToChange(tx, scope);

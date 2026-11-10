@@ -776,6 +776,8 @@ describe('the walk: a principal without the access is refused', () => {
           // A page's requests: a host who may not change the page sees their own, so it answers empty, not absent
           // (flow-rules.test.ts: a colleague reads none).
           'listRequests',
+          // Every page's requests at once: the same, a colleague reading none (flow-rules.test.ts).
+          'listWaitingRequests',
           // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
           // assignments are its host's (assignments are checked on the row, rotations.test.ts); a reassign is checked
           // on the booking and over both hosts (rotation.test.ts).
