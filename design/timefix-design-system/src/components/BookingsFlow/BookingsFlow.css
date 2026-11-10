@@ -13,6 +13,10 @@
 /* Sections: a title, a grey one-liner, the content; 32px and a hairline between. Never a card. */
 .tf-bkf-sections { display: flex; flex-direction: column; min-width: 0; }
 .tf-bkf-sections > * + * { margin-top: var(--space-32); padding-top: var(--space-32); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+/* Cards: each settings section sits in its own white card with a clear edge; cards stack with a 16px gap, no hairlines between. */
+.tf-bkf-cards { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+.tf-bkf-card { padding: var(--space-20) var(--space-24); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-xs); }
+.tf-bkf-card > .tf-bkf-section { gap: var(--space-16); }
 .tf-bkf-section { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
 .tf-bkf-section__head { display: flex; align-items: flex-start; gap: var(--space-12); }
 .tf-bkf-section__titles { flex: 1; min-width: 0; }
@@ -147,10 +151,6 @@
 .tf-bkf__narrow { max-width: calc(var(--size-dialog-wide) - var(--space-64)); }
 .tf-bkf__whose { width: calc(var(--size-menu) - var(--space-64)); }
 .tf-bkf__weeknav { display: inline-flex; align-items: center; gap: var(--space-4); font: 500 13px/20px var(--font-sans); }
-.tf-bkf__picked { position: sticky; bottom: 0; z-index: var(--z-sticky); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
-  border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-md); font: 400 13px/20px var(--font-sans);
-  animation: tf-bkf-rise var(--duration-fast) var(--ease-smooth-out); }
-.tf-bkf__picked strong { font-weight: 600; }
 
 /* Team day: members side by side for one day. */
 .tf-bkf-team { --tf-bkf-hour: calc(var(--size-row) + var(--space-4)); --tf-bkf-team-cols: calc(var(--size-control-lg) + var(--space-8)) repeat(var(--tf-bkf-cols), minmax(0, 1fr));
@@ -257,39 +257,51 @@
 .tf-bkf__otl-label { font: 500 14px/20px var(--font-sans); }
 
 /* ---------------------------------------------------------------- Availability */
-.tf-bkf__avail { display: grid; grid-template-columns: minmax(0, 1fr); }
-.tf-bkf__avail > * + * { margin-top: var(--space-32); padding-top: var(--space-32); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf__avail { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); }
 @container tf-bkf-panel (min-width: 60rem) {
-  .tf-bkf__avail { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: var(--space-48); }
+  .tf-bkf__avail { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: var(--space-16); }
   .tf-bkf__avail-main { grid-column: 1; grid-row: 1; }
-  .tf-bkf__avail-side { grid-column: 2; grid-row: 1; margin-top: 0; padding-top: 0; border-top: 0; }
+  .tf-bkf__avail-side { grid-column: 2; grid-row: 1; }
   .tf-bkf__avail-wide { grid-column: 1 / -1; }
 }
 .tf-bkf__off { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); min-height: var(--size-row); font: 400 14px/20px var(--font-sans); animation: tf-bkf-rise var(--duration-fast) var(--ease-smooth-out); }
 .tf-bkf__off + .tf-bkf__off { border-top: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-bkf__off > svg { flex: none; color: var(--text-secondary); }
-.tf-bkf-tw { display: flex; flex-direction: column; overflow-x: auto; }
-.tf-bkf-tw__row { display: grid; grid-template-columns: calc(var(--size-control-lg) * 4) repeat(var(--tf-bkf-days), minmax(calc(var(--size-control-lg) * 3), 1fr)); }
-.tf-bkf-tw__row + .tf-bkf-tw__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-bkf-tw__corner, .tf-bkf-tw__day { padding: var(--space-8); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
-.tf-bkf-tw__whocell { display: flex; align-items: center; padding: var(--space-4); }
-.tf-bkf-tw__who { display: flex; align-items: center; gap: var(--space-8); width: 100%; min-height: var(--size-control-lg); padding: 0 var(--space-8); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); font: 500 14px/20px var(--font-sans); text-align: left; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
-.tf-bkf-tw__who[data-hovered] { background: var(--surface-hover); }
-.tf-bkf-tw__who[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
-.tf-bkf-tw__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tf-bkf-tw__go { flex: none; color: var(--text-tertiary); }
-.tf-bkf-tw__hint { margin-top: var(--space-12); }
-.tf-bkf-tw__cell { display: flex; flex-direction: column; justify-content: center; gap: var(--space-4); min-height: var(--size-row); padding: var(--space-8); border-left: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-bkf-tw__hours { font: 500 12px/16px var(--font-sans); }
-.tf-bkf-tw__bar { position: relative; height: var(--space-4); overflow: hidden; border-radius: var(--radius-full); background: var(--surface-subtle); }
-.tf-bkf-tw__bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--tf-bkf-share) * 100%); border-radius: var(--radius-full); background: var(--accent); transition: width var(--duration-fast) var(--ease-smooth-out); }
 
 /* ---------------------------------------------------------------- Routing and groups */
-.tf-bkf-routing { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--size-panel) - var(--space-64))); gap: var(--space-48); align-items: start; }
+.tf-bkf-routing { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--size-panel) - var(--space-64))); gap: var(--space-24); align-items: start; }
 @container tf-bkf-panel (max-width: 56rem) {
   .tf-bkf-routing { grid-template-columns: minmax(0, 1fr); }
   .tf-bkf-try { position: static; }
 }
+/* Roster: people down the side, seven days across; each day is a shift chip that opens its editor. */
+.tf-bkf-roster { display: flex; flex-direction: column; overflow-x: auto; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-xs); }
+.tf-bkf-roster__row { display: grid; grid-template-columns: calc(var(--size-menu) - var(--space-32)) repeat(7, minmax(calc(var(--size-control-lg) * 2.5), 1fr)); min-width: calc(var(--size-dialog-wide) + var(--size-menu)); }
+.tf-bkf-roster__row + .tf-bkf-roster__row { border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-roster__row--head { background: var(--surface-subtle); }
+.tf-bkf-roster__corner, .tf-bkf-roster__day { display: flex; align-items: center; gap: var(--space-4); height: var(--size-control-lg); padding: 0 var(--space-12); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
+.tf-bkf-roster__day.is-today { color: var(--accent); }
+.tf-bkf-roster__whocell { display: flex; align-items: center; padding: var(--space-6); border-right: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-roster__who { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-6) var(--space-8); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); text-align: left; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tf-bkf-roster__who[data-hovered] { background: var(--surface-hover); }
+.tf-bkf-roster__who[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-bkf-roster__whotext { display: flex; flex-direction: column; min-width: 0; }
+.tf-bkf-roster__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/20px var(--font-sans); }
+.tf-bkf-roster__total { color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
+.tf-bkf-roster__cell { display: flex; padding: var(--space-6); }
+.tf-bkf-roster__cell + .tf-bkf-roster__cell { border-left: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-roster__hint { margin-top: var(--space-12); }
+.tf-bkf-shift { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: var(--space-2); min-height: calc(var(--size-control-lg) + var(--space-8)); padding: var(--space-6) var(--space-8); border: var(--border-width-hairline) solid transparent; border-radius: var(--radius-md); text-align: left; cursor: pointer; outline: none;
+  transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out); }
+.tf-bkf-shift--on { background: var(--accent-soft); color: var(--text); }
+.tf-bkf-shift--off { background: transparent; color: var(--text-tertiary); border-style: dashed; border-color: var(--border-subtle); }
+.tf-bkf-shift--away { background: var(--warning-soft); color: var(--tag-orange-text); }
+.tf-bkf-shift[data-hovered] { border-color: var(--border-strong); }
+.tf-bkf-shift[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
+.tf-bkf-shift__time { font: 500 13px/18px var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-bkf-shift__count { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
+.tf-bkf-shiftedit { display: flex; flex-direction: column; gap: var(--space-12); width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-8); }
+.tf-bkf-shiftedit__title { color: var(--text); font: 500 14px/20px var(--font-sans); }
 /* The drag menu on Week: the picked time on top, the menu's actions under it. */
 .tf-bkf-pickmenu { display: flex; flex-direction: column; gap: var(--space-4); width: calc(var(--size-menu) + var(--space-32)); }
 .tf-bkf-pickmenu__head { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-8) var(--space-8) var(--space-4); }
@@ -299,24 +311,27 @@
 .tf-bkf-flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .tf-bkf-flow__step { position: relative; display: grid; grid-template-columns: var(--size-control) minmax(0, 1fr); gap: var(--space-12); padding-bottom: var(--space-12); }
 .tf-bkf-flow__step:last-child { padding-bottom: 0; }
-.tf-bkf-flow__step:not(:last-child)::before { content: ""; position: absolute; top: var(--size-control); bottom: 0; left: calc(var(--size-control) / 2); border-left: var(--border-width-hairline) solid var(--border); }
+/* The rail runs between circles, never through them: from 4px under this circle to 4px above the next. */
+.tf-bkf-flow__step:not(:last-child)::before { content: ""; position: absolute; top: calc(var(--space-8) + var(--size-control) + var(--space-4)); bottom: calc(var(--space-4) * -1); left: calc(var(--size-control) / 2); border-left: var(--border-width-hairline) solid var(--border-strong); }
 .tf-bkf-flow__num { display: grid; place-items: center; width: var(--size-control); height: var(--size-control); margin-top: var(--space-8); border-radius: var(--radius-full); background: var(--surface-subtle); color: var(--text-secondary); font: 500 13px/1 var(--font-sans);
   transition: background-color var(--duration-fast) var(--ease-smooth-out), color var(--duration-fast) var(--ease-smooth-out); }
 .tf-bkf-flow__step[data-hit] .tf-bkf-flow__num { background: var(--accent); color: var(--on-accent); }
-.tf-bkf-flow__card { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; padding: var(--space-12) var(--space-16) var(--space-16); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface);
+.tf-bkf-flow__card { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; overflow: hidden; padding: var(--space-12) var(--space-16) 0; border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs);
   transition: border-color var(--duration-fast) var(--ease-smooth-out), box-shadow var(--duration-fast) var(--ease-smooth-out); }
 .tf-bkf-flow__step[data-hit] .tf-bkf-flow__card { border-color: var(--accent-border); box-shadow: 0 0 0 var(--border-width-focus) var(--accent-soft); }
 .tf-bkf-flow__step--else .tf-bkf-flow__card { border-style: dashed; background: transparent; }
 .tf-bkf-flow__step--else[data-hit] .tf-bkf-flow__card { border-style: solid; }
 .tf-bkf-flow__head { display: flex; align-items: center; gap: var(--space-8); min-height: var(--size-control-sm); }
 .tf-bkf-flow__title { color: var(--text); font: 500 14px/20px var(--font-sans); }
-.tf-bkf-flow__then { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding-top: var(--space-12); border-top: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-bkf-flow__then--flush { padding-top: 0; border-top: 0; }
-.tf-bkf-flow__word { color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
+/* The outcome sits under a divider at the card's foot: Book [page] with [team], the two selects sharing the width. */
+.tf-bkf-flow__then { display: flex; align-items: center; gap: var(--space-8); margin: 0 calc(var(--space-16) * -1); padding: var(--space-12) var(--space-16); border-top: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-flow__then > .tf-bkf__inline-select { flex: 1 1 0; min-width: 0; max-width: calc(var(--size-menu) - var(--space-16)); }
+.tf-bkf-flow__then--flush { margin-top: 0; }
+.tf-bkf-flow__word { flex: none; color: var(--text-secondary); font: 400 14px/20px var(--font-sans); }
 /* "Book" sits in the Sentence's lead column, so it lines up under "When". */
-.tf-bkf-flow__word--lead { width: calc(var(--size-control-lg) + var(--space-20)); text-align: right; }
+.tf-bkf-flow__word--lead { flex: none; width: calc(var(--size-control-lg) + var(--space-20)); text-align: right; }
 /* The Try panel: a raised surface that stays in view while the rules scroll. */
-.tf-bkf-try { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-subtle); }
+.tf-bkf-try { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--space-16); padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--surface-subtle); }
 .tf-bkf-try__head { display: flex; align-items: center; gap: var(--space-8); color: var(--text-secondary); }
 .tf-bkf-try__fields { display: flex; flex-direction: column; gap: var(--space-12); }
 .tf-bkf-try__result { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-16); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
@@ -341,6 +356,10 @@
 .tf-bkf__editor-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-24); }
 .tf-bkf__editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--size-panel) - var(--space-32))); gap: var(--space-24); align-items: start; }
 .tf-bkf__sections { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+.tf-bkf-sheet__preview { flex: 1; padding: var(--space-16); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-xl); background: var(--canvas); overflow: hidden; }
+/* Editor tabs: the tab strip, then one card per tab. */
+.tf-bkf__edtabs { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+.tf-bkf__edpanel { outline: none; }
 .tf-bkf__editor-preview { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
 .tf-bkf__checks { display: flex; flex-direction: column; gap: var(--space-8); }
 .tf-bkf__weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--size-control-lg) * 4), 1fr)); gap: var(--space-12); }
@@ -363,7 +382,8 @@
 .tf-bkf-guestmode__back[data-hovered] { background: var(--surface-hover); }
 .tf-bkf-guestmode__back[data-pressed] { transform: scale(var(--scale-medium)); }
 .tf-bkf-guestmode__back[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
-.tf-bkf-guestmode__page { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-48) var(--space-24); }
+/* The guest page sits in the middle of the screen, both ways; tall pages still scroll from the top. */
+.tf-bkf-guestmode__page { display: flex; flex-direction: column; justify-content: safe center; flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-48) var(--space-24); }
 .tf-bkf-guestmode__page[data-device='phone'] { padding: var(--space-24); }
 .tf-bkf-guestmode__frame { width: 100%; margin: 0 auto; animation: tf-bkf-soft var(--duration-fast) var(--ease-in-out); }
 .tf-bkf-guestmode__frame[data-device='phone'] { width: 390px; max-width: 100%; padding: var(--space-24) 0; border: var(--border-width-hairline) solid var(--border-strong); border-radius: var(--radius-xl); background: var(--canvas); box-shadow: var(--shadow-lg); }
@@ -384,6 +404,4 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tf-bkf__textbtn, .tf-bkf__reveal, .tf-bkf__reveal-clip, .tf-bkf__swapicon > svg, .tf-bkf__scaled, .tf-bkf__slide.is-resizing, .tf-bkf__slide-page, .tf-bkf__pagerow, .tf-bkf__pagerow-inner,
-  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-try__dest, .tf-bkf-team__event, .tf-bkf-tw__bar::after, .tf-bkf-guestmode__back { transition: none; }
-  .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, .tf-bkf__picked, .tf-bkf__guest-card { animation: none; }
-}
+  .tf-bkf-scrim, .tf-bkf-sheet, .tf-bkf-tile, .tf-bkf-tile__icon, .tf-bkf-tile__badge, .tf-bkf__hosts, .tf-bkf__stats, .tf-bkf-flow__num, .tf-bkf-flow__card, .tf-bkf-shift, .tf-bkf-roster__who, .tf-bkf-try__dest, .tf-bkf-team__event,   .tf-bkf__soft, .tf-bkf-guestmode__frame, .tf-bkf__pagerow.is-new, .tf-bkf__pagerow.is-new .tf-bkf__pagerow-inner, .tf-bkf__off, .tf-bkf__otl.is-new, }

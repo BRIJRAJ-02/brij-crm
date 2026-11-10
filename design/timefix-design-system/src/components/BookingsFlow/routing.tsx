@@ -60,7 +60,7 @@ export function RoutingTab({ state, dispatch }: { readonly state: BookingsState;
         count={plural(routing.rules.length, 'rule')}
         action={<Button variant="primary" icon={<Plus {...i14} />} onPress={addRule}>Add rule</Button>} />
       <div className="tf-bkf-routing">
-        <div className="tf-bkf-sections">
+        <div className="tf-bkf-cards">
           <Section title="Rules" description={`Checked top to bottom. The first match decides where the answer to ${routing.formName} books.`}>
             <ol className="tf-bkf-flow">
               {routing.rules.map((r, n) => {
@@ -114,7 +114,7 @@ export function RoutingTab({ state, dispatch }: { readonly state: BookingsState;
               </li>
             </ol>
           </Section>
-          <Section title="Who takes routed meetings" description="A rule books a team. Whoever on it has the fewest upcoming meetings goes next.">
+          <Section className="tf-bkf-card" title="Who takes routed meetings" description="A rule books a team. Whoever on it has the fewest upcoming meetings goes next.">
             <ul className="tf-bkf__list-plain">
               {TEAM.map((name) => (
                 <li key={name} className="tf-bkf-skill">
@@ -125,7 +125,7 @@ export function RoutingTab({ state, dispatch }: { readonly state: BookingsState;
               ))}
             </ul>
           </Section>
-          <Section title="Reporting" description="Tells you which rules bring in business.">
+          <Section className="tf-bkf-card" title="Reporting" description="Tells you which rules bring in business.">
             <Select label="A routed meeting counts as won when" className="tf-bkf__field-w" items={WON} value={routing.wonMeans} onChange={(v) => { if (v) set({ wonMeans: v }); }} />
           </Section>
         </div>

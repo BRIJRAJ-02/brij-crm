@@ -8,9 +8,9 @@ import { SoftText } from '../Motion/Motion.tsx';
 import './GuestLook.css';
 
 /** The faces a guest page can wear. */
-export type GuestFont = 'sans' | 'mono' | 'serif';
+export type GuestFont = 'sans' | 'mono';
 /** One of the four looks, or Custom once anything is changed by hand. */
-export type GuestLookId = 'calm' | 'ink' | 'warm' | 'night' | 'custom';
+export type GuestLookId = 'calm' | 'ink' | 'slate' | 'night' | 'custom';
 
 /** What the guest pages wear: a look, its accent, face and light or dark. */
 export interface GuestLookValue {
@@ -25,14 +25,13 @@ export interface GuestLookValue {
 export const GUEST_LOOKS: ReadonlyArray<{ readonly id: Exclude<GuestLookId, 'custom'>; readonly title: string; readonly description: string; readonly value: Omit<GuestLookValue, 'look'> }> = [
   { id: 'calm', title: 'Calm', description: 'Light, Timefix blue', value: { accent: '#1F5FD6', font: 'sans', scheme: 'light' } },
   { id: 'ink', title: 'Ink', description: 'Light, black and mono', value: { accent: '#111111', font: 'mono', scheme: 'light' } },
-  { id: 'warm', title: 'Warm', description: 'Light, rust and serif', value: { accent: '#C2410C', font: 'serif', scheme: 'light' } },
-  { id: 'night', title: 'Night', description: 'Dark, violet', value: { accent: '#7C3AED', font: 'sans', scheme: 'dark' } },
+  { id: 'slate', title: 'Slate', description: 'Light, deep teal', value: { accent: '#0F766E', font: 'sans', scheme: 'light' } },
+  { id: 'night', title: 'Night', description: 'Dark, Timefix blue', value: { accent: '#3B74E6', font: 'sans', scheme: 'dark' } },
 ];
 
 const FONTS: Readonly<Record<GuestFont, { readonly label: string; readonly family: string }>> = {
   sans: { label: 'Geist', family: 'var(--font-sans)' },
   mono: { label: 'Geist Mono', family: 'var(--font-mono)' },
-  serif: { label: 'Serif', family: 'ui-serif, Georgia, serif' },
 };
 
 const lookVars = (v: Omit<GuestLookValue, 'look'>) => ({

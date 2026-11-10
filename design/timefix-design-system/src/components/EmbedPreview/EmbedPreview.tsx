@@ -59,6 +59,7 @@ export function EmbedPreview({ page, url, words = 'Book a call', accent = '#1F5F
         { id: 'popup', label: 'Popup button', icon: <MousePointerClick {...i14} /> },
         { id: 'floating', label: 'Floating button', icon: <MessageCircle {...i14} /> },
       ]} />
+      <p className="tf-embed__caption">{caption}.</p>
 
       <figure className="tf-embed__frame" role="img" aria-label={`Preview: ${caption}`} style={brand}>
         <div className="tf-embed__chrome" aria-hidden="true">
@@ -86,14 +87,16 @@ export function EmbedPreview({ page, url, words = 'Book a call', accent = '#1F5F
           )}
         </div>
       </figure>
-      <p className="tf-embed__caption">{caption}</p>
 
       <div className="tf-embed__code">
-        <pre className="tf-embed__pre" key={now} tabIndex={0} aria-label="Embed code"><code>{code}</code></pre>
+        <div className="tf-embed__codehead">
+          <span className="tf-embed__codetitle">Paste this into your site’s HTML</span>
         <Button size="sm" variant="secondary" onPress={copy} className="tf-embed__copy"
           icon={<span className="tf-embed__icon" data-copied={copied || undefined}><Copy {...i14} className="tf-embed__icon-a" /><Check {...i14} className="tf-embed__icon-b" /></span>}>
           <TextMorph text={copied ? 'Copied' : 'Copy code'} />
         </Button>
+        </div>
+        <pre className="tf-embed__pre" key={now} tabIndex={0} aria-label="Embed code"><code>{code}</code></pre>
         <span className="tf-sr-only" role="status">{copied ? 'Code copied' : ''}</span>
       </div>
     </div>

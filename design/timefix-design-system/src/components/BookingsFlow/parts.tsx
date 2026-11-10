@@ -62,8 +62,10 @@ export function ScaledPreview({ children, designWidth, label, fill = false }: { 
 }
 
 /** A page's guest view (BookingFlow) wired to the flow's state. */
-export function GuestView({ page, state, onBook, length, place }: {
+export function GuestView({ page, state, onBook, length, place, onLength, onPlace }: {
   readonly page: BookingPage; readonly state: BookingsState; readonly onBook: (r: BookingRequest) => Promise<void>; readonly length?: number; readonly place?: PlaceKind;
+  /** Given, the guest can switch length or place inside the booking card. */
+  readonly onLength?: (n: number) => void; readonly onPlace?: (k: PlaceKind) => void;
 }) {
   const now = new Date();
   const len = length ?? lengthOf(page);
@@ -72,7 +74,8 @@ export function GuestView({ page, state, onBook, length, place }: {
   return (
     <BookingFlow host={{ name: page.hosts.length > 1 && page.hostMode !== 'one' ? `${page.hosts.length} hosts` : page.hosts[0] ?? HOST }} title={page.name || 'Untitled page'} durationMinutes={len}
       location={{ kind: where.guest, label: where.label }} today={todayIn(getLocalTimeZone())}
-      isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={ZONES} defaultTimeZone={HOST_ZONE} onBook={onBook} />
+      isDayOpen={(d) => slotsFor(d).length > 0} slotsFor={slotsFor} timeZones={ZONES} defaultTimeZone={HOST_ZONE} onBook={onBook}
+      durations={page.durations} onDurationChange={onLength} places={page.places.map((k) => ({ id: k, label: PLACES[k].label }))} placeId={place ?? placeOf(page)} onPlaceChange={onPlace ? (k) => onPlace(k as PlaceKind) : undefined} />
   );
 }
 /** onBook for previews: nothing happens. */

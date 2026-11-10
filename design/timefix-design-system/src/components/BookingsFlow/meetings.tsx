@@ -1,5 +1,6 @@
 // Meetings, the home: List / Week / Team day, whose meetings, Upcoming / Past / Cancelled, requests, New meeting, and drag to block, hold or book.
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { Popover } from '../Popover/Popover.tsx';
 import { parseDate, type CalendarDate } from '@internationalized/date';
 import { Ban, CalendarDays, CalendarOff, CalendarPlus, ChevronLeft, ChevronRight, Hand, LayoutList, Plus, UserPlus, Users, X } from 'lucide-react';
 import { MenuList, MenuItem } from '../Menu/Menu.tsx';
@@ -86,7 +87,6 @@ export function MeetingsTab(props: MeetingsTabProps) {
   const { state, view, onView, whose, onWhose, fresh } = props;
   const now = new Date();
   const [range, setRange] = useState<Range>('upcoming');
-  const [picked, setPicked] = useState<PickedTime>();
   const mine = (m: BookedMeeting) => whose === 'everyone' || m.host === (whose === 'mine' ? HOST : whose);
   const scoped = state.meetings.filter(mine);
   const upcomingAll = scoped.filter((m) => m.status !== 'cancelled' && m.end > now);
@@ -127,7 +127,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
     <div className="tf-bkf__meetings">
       <TabToolbar
         start={<>
-          <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={(v) => { setPicked(undefined); onView(v); }}
+          <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={onView}
             items={[{ id: 'list', label: 'List', icon: <LayoutList {...i14} /> }, { id: 'week', label: 'Week', icon: <CalendarDays {...i14} /> }, { id: 'team', label: 'Team day', icon: <Users {...i14} /> }]} />
           {view !== 'team' && <Select label="Whose meetings" isLabelHidden className="tf-bkf__whose" items={whoseItems} value={whose} onChange={(v) => { if (v) onWhose(v); }} />}
           {view === 'list' && <Select label="Which meetings" isLabelHidden className="tf-bkf__whose" value={range} onChange={(k) => { if (k) setRange(k as Range); }}
@@ -151,31 +151,15 @@ export function MeetingsTab(props: MeetingsTabProps) {
             emptyAction={range === 'upcoming' ? <Button size="sm" onPress={props.onCopyFirstLink}>Copy booking link</Button> : undefined} />
         </>
       )}
-      {view === 'week' && <WeekView {...props} scoped={scoped} onPick={setPicked} />}
-      {view === 'team' && <TeamDay state={state} week={props.week} onWeek={props.onWeek} onPick={setPicked} onOpen={props.onOpen} />}
-      {picked && view !== 'list' && (
-        <PickedBar picked={picked} onClose={() => setPicked(undefined)}
-          onBlock={() => { props.onBlock({ id: nextId('blk'), member: picked.member, day: isoDay(picked.day), start: picked.start, end: picked.end, kind: 'block', label: 'Blocked' }); setPicked(undefined); }}
-          onHold={() => { props.onHold(picked); setPicked(undefined); }}
-          onBook={() => { props.onNewMeeting(picked); setPicked(undefined); }} />
-      )}
+      {view === 'week' && <WeekView {...props} scoped={scoped} />}
+      {view === 'team' && <TeamDay state={state} week={props.week} onWeek={props.onWeek} onOpen={props.onOpen}
+        menu={(p, close) => <PickedMenu picked={p} close={close} onBook={() => props.onNewMeeting(p)}
+          onBlock={() => props.onBlock({ id: nextId('blk'), member: p.member, day: isoDay(p.day), start: p.start, end: p.end, kind: 'block', label: 'Blocked' })}
+          onHold={() => props.onHold(p)} onTimeOff={() => props.onTimeOff(p)} />} />}
     </div>
   );
 }
 
-/** The picked empty time and its three uses: block it, hold it for someone, or book a meeting. */
-function PickedBar({ picked, onBlock, onHold, onBook, onClose }: { readonly picked: PickedTime; readonly onBlock: () => void; readonly onHold: () => void; readonly onBook: () => void; readonly onClose: () => void }) {
-  return (
-    <div className="tf-bkf__picked" role="group" aria-label="Picked time" onKeyDown={(e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }}>
-      <span className="tf-num"><strong>{formatDay(picked.day)}, {formatClockRange(picked.start, picked.end)}</strong>{picked.member !== HOST ? ` · ${picked.member}` : ''}</span>
-      <span className="tf-bkf__spacer" />
-      <Button size="sm" variant="ghost" icon={<Ban {...i14} />} onPress={onBlock}>Block this time</Button>
-      <Button size="sm" variant="ghost" icon={<Hand {...i14} />} onPress={onHold}>Hold for someone</Button>
-      <Button size="sm" variant="secondary" icon={<CalendarPlus {...i14} />} onPress={onBook}>Book a meeting</Button>
-      <IconButton size="sm" label="Clear the picked time" onPress={onClose}><X {...i14} /></IconButton>
-    </div>
-  );
-}
 
 /** "1 hr 30 min", "45 min", "2 hr". */
 function lengthLabel(min: number): string {
@@ -190,7 +174,7 @@ function PickedMenu({ picked, close, onBook, onBlock, onHold, onTimeOff }: { rea
     <div className="tf-bkf-pickmenu">
       <div className="tf-bkf-pickmenu__head">
         <span className="tf-bkf-pickmenu__time tf-num">{formatClockRange(picked.start, picked.end)}</span>
-        <span className="tf-bkf-pickmenu__sub tf-num">{formatLongDay(picked.day)} · {lengthLabel(picked.end - picked.start)}</span>
+        <span className="tf-bkf-pickmenu__sub tf-num">{picked.member !== HOST ? `${first(picked.member)} · ` : ''}{formatLongDay(picked.day)} · {lengthLabel(picked.end - picked.start)}</span>
       </div>
       <MenuList aria-label="Use this time" onAction={(k: Key) => {
         if (k === 'book') run(onBook);
@@ -208,7 +192,7 @@ function PickedMenu({ picked, close, onBook, onBlock, onHold, onTimeOff }: { rea
 }
 
 /** Week view: bookings only, or every calendar with busy time hatched; drag empty time to pick it. */
-function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<BookedMeeting>; readonly onPick: (p: PickedTime | undefined) => void }) {
+function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<BookedMeeting> }) {
   const { state, week, onWeek, focusHour, scoped, whose } = props;
   const [all, setAll] = useState(true);
   const now = new Date();
@@ -272,7 +256,11 @@ const HOUR_FROM = 8;
 const HOUR_TO = 20;
 
 /** Team day: members side by side for one day, with their hours, time off, busy time and meetings. Drag (or Enter) on empty time picks it. */
-function TeamDay({ state, week, onWeek, onPick, onOpen }: { readonly state: BookingsState; readonly week: number; readonly onWeek: (w: number) => void; readonly onPick: (p: PickedTime | undefined) => void; readonly onOpen: (id: string) => void }) {
+function TeamDay({ state, week, onWeek, menu, onOpen }: { readonly state: BookingsState; readonly week: number; readonly onWeek: (w: number) => void; readonly menu: (p: PickedTime, close: () => void) => ReactNode; readonly onOpen: (id: string) => void }) {
+  const [held, setHeld] = useState<PickedTime>();
+  const heldRef = useRef<HTMLSpanElement>(null);
+  const onPick = (p: PickedTime) => setHeld(p);
+  const close = () => setHeld(undefined);
   const now = new Date();
   const monday = dayFrom(mondayOf(now), week * 7);
   const days = Array.from({ length: 5 }, (_, n) => dayFrom(monday, n));
@@ -338,12 +326,18 @@ function TeamDay({ state, week, onWeek, onPick, onOpen }: { readonly state: Book
                   </button>
                 ))}
                 {sel && <span className="tf-bkf-team__sel" style={{ top: pct(sel.start), height: len(sel.start, sel.end) }} aria-hidden="true" />}
+                {!sel && held?.member === name && held.day.toDateString() === day.toDateString() && <span ref={heldRef} className="tf-bkf-team__sel" style={{ top: pct(held.start), height: len(held.start, held.end) }} aria-hidden="true" />}
               </div>
             );
           })}
         </div>
         </div>
       </div>
+      {held && (
+        <Popover triggerRef={heldRef} isOpen onOpenChange={(o) => { if (!o) close(); }} placement="end top" offset={8} label={`${held.member}, ${formatLongDay(held.day)}, ${formatClockRange(held.start, held.end)}`}>
+          {menu(held, close)}
+        </Popover>
+      )}
     </div>
   );
 }

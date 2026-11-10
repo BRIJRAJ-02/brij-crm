@@ -45,10 +45,10 @@ export function AvailabilityTab({ state, dispatch, onReassignMany }: Availabilit
     <div className="tf-bkf__tab">
       <TabToolbar start={set && <SavedHoursSwitch state={state} dispatch={dispatch} set={set} onPick={setCurrent} />} />
       <div className="tf-bkf__avail">
-        <div className="tf-bkf-sections tf-bkf__avail-main">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div>
-        <div className="tf-bkf-sections tf-bkf__avail-side">
-          <TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} />
-          <CalendarsSection state={state} dispatch={dispatch} />
+        <div className="tf-bkf-cards tf-bkf__avail-main"><div className="tf-bkf-card">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div></div>
+        <div className="tf-bkf-cards tf-bkf__avail-side">
+          <div className="tf-bkf-card"><TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} /></div>
+          <div className="tf-bkf-card"><CalendarsSection state={state} dispatch={dispatch} /></div>
         </div>
       </div>
     </div>

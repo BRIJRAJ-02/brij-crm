@@ -2,7 +2,7 @@ GuestLook is where an owner picks what their guest pages wear: one of four looks
 
 **Use it for**: the Design settings of booking pages, forms, menus and business pages, so they all read as one product. **Don't use it for** the app's own theme (that is the user's appearance setting) or for a single page's colour field alone (use AccentPicker).
 
-**The consumer provides**: `value` (`look`, `accent` as "#RRGGBB", `font` of sans, mono or serif, `scheme`) and `onChange`; optional `host` and `title` for the preview. `GUEST_LOOKS` lists the four looks; `GuestLookPreview` draws the preview alone.
+**The consumer provides**: `value` (`look`, `accent` as "#RRGGBB", `font` of sans (Geist) or mono (Geist Mono), `scheme`) and `onChange`; optional `host` and `title` for the preview. `GUEST_LOOKS` lists the four looks; `GuestLookPreview` draws the preview alone.
 
 **States**: Calm, Ink, Warm and Night pick a whole look; changing the accent, face or appearance by hand makes it Custom, and Custom remembers the last look made by hand. Each tile carries a swatch drawn in its own look. The preview's Book button and picked day use the accent with white or ink text, whichever reads.
 

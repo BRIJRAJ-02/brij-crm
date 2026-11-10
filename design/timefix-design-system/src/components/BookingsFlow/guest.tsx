@@ -116,13 +116,7 @@ function Book({ page, state, onBooked }: { readonly page: BookingPage; readonly 
   return (
     <div className="tf-bkf__guest">
       {page.whoCanBook === 'form' && <Callout tone="info" className="tf-bkf__guest-note">You answered the {page.formName} form. Now pick a time.</Callout>}
-      {(page.durations.length > 1 || page.places.length > 1) && (
-        <div className="tf-bkf__guest-pick">
-          {page.durations.length > 1 && <ChoiceChips label="How long" size="md" selectedKeys={[String(length)]} items={page.durations.map((d) => ({ id: String(d), label: `${d} min` }))} onSelectionChange={(k) => setLength(Number([...k][0] ?? length))} />}
-          {page.places.length > 1 && <ChoiceChips label="Where" size="md" selectedKeys={[place]} items={page.places.map((k) => ({ id: k, label: placeLabel(page, k) }))} onSelectionChange={(k) => setPlace(([...k][0] as PlaceKind | undefined) ?? place)} />}
-        </div>
-      )}
-      <GuestView key={`${length}-${place}`} page={page} state={state} length={length} place={place}
+      <GuestView page={page} state={state} length={length} place={place} onLength={setLength} onPlace={setPlace}
         onBook={(r) => new Promise<void>((resolve) => { window.setTimeout(() => {
           onBooked(page, { ...r, length, place });
           if (page.confirmFirst) setRequested(`${formatLongDay(new Date(r.date.year, r.date.month - 1, r.date.day))} · ${formatClockRange(r.minutes, r.minutes + length)}`);

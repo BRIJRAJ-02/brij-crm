@@ -118,10 +118,10 @@ export function SocialLinksEditor({ links, onChange }: SocialLinksEditorProps) {
   const [removed, setRemoved] = useState<{ readonly link: SocialLink; readonly index: number }>();
   const undoTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(undoTimer.current), []);
-  const used = new Set(links.map((l) => l.network));
   const detected = detectNetwork(text);
-  const network = picked ?? (detected && !used.has(detected) ? detected : null);
-  const taken = network !== null && used.has(network);
+  const network = picked ?? detected ?? null;
+  // Any number of links per network (two GitHubs, a personal and a work LinkedIn); only the exact same link twice is refused.
+  const taken = network !== null && text.trim() !== '' && links.some((l) => l.url === socialUrl(network, text));
 
   const add = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -155,13 +155,13 @@ export function SocialLinksEditor({ links, onChange }: SocialLinksEditorProps) {
     renderDropIndicator: (target) => <DropIndicator target={target} className="tf-socialed__slot" />,
   });
 
-  const options = NETWORK_ORDER.map((n) => ({ id: n, label: SOCIAL_NETWORKS[n].name, icon: <SocialMark network={n} size={16} />, isDisabled: used.has(n) }));
+  const options = NETWORK_ORDER.map((n) => ({ id: n, label: SOCIAL_NETWORKS[n].name, icon: <SocialMark network={n} size={16} />,  }));
   return (
     <div className="tf-socialed">
       <form className="tf-socialed__add" onSubmit={add}>
         <TextField className="tf-socialed__url" label="Link or handle" placeholder="Paste a link, e.g. instagram.com/priya" value={text} onChange={(v) => { setText(v); setPicked(null); }}
           icon={<span className="tf-socialed__detected" key={network ?? 'none'}>{network ? <SocialMark network={network} size={16} /> : <Plus size={16} strokeWidth={1.75} />}</span>}
-          errorMessage={taken ? `${SOCIAL_NETWORKS[network ?? 'website'].name} is already on the list.` : undefined} isInvalid={taken} />
+          errorMessage={taken ? 'This link is already on the list.' : undefined} isInvalid={taken} />
         <Select className="tf-socialed__net" label="Network" items={options} value={network} onChange={(id) => setPicked(id as SocialNetwork | null)} placeholder="Detect" />
         <Button type="submit" className="tf-socialed__submit" isDisabled={network === null || taken || text.trim() === ''}>Add</Button>
       </form>

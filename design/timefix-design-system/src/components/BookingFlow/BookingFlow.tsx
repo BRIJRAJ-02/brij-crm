@@ -4,7 +4,7 @@ import {
 } from 'react-aria-components';
 import type { CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, CalendarDays, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock, Globe, MapPin, Phone, Video } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock, Globe, MapPin, Phone, UserPlus, Video } from 'lucide-react';
 import { Avatar } from '../Avatar/Avatar.tsx';
 import { Button, IconButton } from '../Button/Button.tsx';
 import { Logo } from '../Logo/Logo.tsx';
@@ -21,7 +21,7 @@ const i16 = { size: 16, strokeWidth: 1.75 } as const;
 /** A time zone the guest can view times in. */
 export interface BookingTimeZone { readonly id: string; readonly label: string }
 /** What the guest typed on the details page. */
-export interface BookingGuest { readonly name: string; readonly email: string; readonly notes: string }
+export interface BookingGuest { readonly name: string; readonly email: string; readonly notes: string; /** Other people to invite, up to 10. */ readonly guests?: ReadonlyArray<string> }
 /** The booking the flow hands to `onBook`. */
 export interface BookingRequest extends BookingGuest { readonly date: CalendarDate; readonly minutes: number; readonly timeZone: string }
 
@@ -40,6 +40,13 @@ export interface BookingFlowProps {
   readonly defaultTimeZone: string;
   /** Resolves when the booking is made; a rejection keeps the guest on the details page. */
   readonly onBook: (request: BookingRequest) => Promise<void>;
+  /** Several lengths to choose from: the length line becomes a switch. */
+  readonly durations?: ReadonlyArray<number>;
+  readonly onDurationChange?: (minutes: number) => void;
+  /** Several places to choose from: the place line becomes a switch. */
+  readonly places?: ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  readonly placeId?: string;
+  readonly onPlaceChange?: (id: string) => void;
 }
 
 const asDate = (d: CalendarDate) => new Date(d.year, d.month - 1, d.day);
@@ -115,7 +122,9 @@ function TimeZoneSelect({ zones, value, onChange }: { readonly zones: ReadonlyAr
 const CLOCKS = [{ id: '12', label: '12h' }, { id: '24', label: '24h' }] as const;
 
 /** The public booking card: rail, month, times, details, then the booked moment, with a "Powered by Timefix" foot. */
-export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook }: BookingFlowProps) {
+export function BookingFlow({ host, title, durationMinutes, location, today, isDayOpen, slotsFor, timeZones, defaultTimeZone, onBook, durations, onDurationChange, places, placeId, onPlaceChange }: BookingFlowProps) {
+  const [guestsOpen, setGuestsOpen] = useState(false);
+  const [guestText, setGuestText] = useState('');
   const [date, setDate] = useState<CalendarDate | undefined>(() => firstOpen(today, isDayOpen));
   const [focused, setFocused] = useState<CalendarDate>(() => date ?? today);
   const [dir, setDir] = useState<'forward' | 'back' | undefined>();
@@ -153,11 +162,12 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
     e.preventDefault();
     if (!date || time === undefined) return;
     setPending(true); setFailed(false);
-    try { await onBook({ ...guest, date, minutes: time, timeZone: tz }); setStep('done'); }
+    const guests = guestText.split(/[,\s]+/).map((x) => x.trim()).filter((x) => x.includes('@')).slice(0, 10);
+    try { await onBook({ ...guest, guests, date, minutes: time, timeZone: tz }); setStep('done'); }
     catch { setFailed(true); }
     finally { setPending(false); }
   };
-  const restart = () => { setStep('pick'); setTime(undefined); setGuest({ name: '', email: '', notes: '' }); };
+  const restart = () => { setStep('pick'); setTime(undefined); setGuest({ name: '', email: '', notes: '' }); setGuestText(''); setGuestsOpen(false); };
 
   const rail = (
     <aside className="tf-booking__rail">
@@ -171,8 +181,12 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
         </div>
       </div>
       <ul className="tf-booking__facts">
-        <li><Clock {...i16} aria-hidden /><span className="tf-num">{durationMinutes} min</span></li>
-        <li><LocationIcon kind={location.kind} /><span>{location.label}</span></li>
+        <li><Clock {...i16} aria-hidden />{durations && durations.length > 1 && onDurationChange
+          ? <SegmentedControl aria-label="How long" size="sm" items={durations.map((d) => ({ id: String(d), label: `${d} min` }))} selectedKey={String(durationMinutes)} onSelectionChange={(k) => onDurationChange(Number(k))} />
+          : <span className="tf-num">{durationMinutes} min</span>}</li>
+        <li><LocationIcon kind={location.kind} />{places && places.length > 1 && onPlaceChange && placeId !== undefined
+          ? <SegmentedControl aria-label="Where" size="sm" items={places.map((p) => ({ id: p.id, label: p.label }))} selectedKey={placeId} onSelectionChange={onPlaceChange} />
+          : <span>{location.label}</span>}</li>
         <li className="tf-booking__tz-row"><TimeZoneSelect zones={timeZones} value={tz} onChange={setTz} /></li>
       </ul>
     </aside>
@@ -231,6 +245,10 @@ export function BookingFlow({ host, title, durationMinutes, location, today, isD
       </div>
       <TextField label="Name" size="lg" isRequired autoComplete="name" value={guest.name} onChange={(name) => setGuest((g) => ({ ...g, name }))} errorMessage="Add your name." />
       <TextField label="Email" size="lg" isRequired type="email" autoComplete="email" value={guest.email} onChange={(email) => setGuest((g) => ({ ...g, email }))} errorMessage="Add an email we can send the invite to." />
+      {guestsOpen
+        ? <TextField label="Guests" aside="Optional" size="lg" type="text" autoComplete="off" autoFocus value={guestText} onChange={setGuestText}
+            placeholder="sam@acme.com, jo@acme.com" description="Up to 10 people. They get the invite too." />
+        : <AriaButton className="tf-booking__addguests" onPress={() => setGuestsOpen(true)}><UserPlus {...i16} aria-hidden />Add guests</AriaButton>}
       <TextArea label="Anything to share before the call?" aside="Optional" size="lg" rows={3} value={guest.notes} onChange={(notes) => setGuest((g) => ({ ...g, notes }))} />
       {failed && <p className="tf-booking__error" role="alert">That time was just taken. Go back and pick another.</p>}
       <Button type="submit" variant="primary" size="lg" isPending={pending} className="tf-booking__book">Book</Button>

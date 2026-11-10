@@ -10,7 +10,8 @@ import { NumberField } from '../NumberField/NumberField.tsx';
 import { Select } from '../Select/Select.tsx';
 import { ChoiceChips } from '../ChoiceChips/ChoiceChips.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
-import { DisclosureGroup, DisclosureItem, ShowMore } from '../Disclosure/Disclosure.tsx';
+import { ShowMore } from '../Disclosure/Disclosure.tsx';
+import { Tabs, TabPanel } from '../Tabs/Tabs.tsx';
 import { Checkbox, RadioGroup, Radio, Switch } from '../Checkbox/Checkbox.tsx';
 import { HoursEditor } from '../HoursEditor/HoursEditor.tsx';
 import { QuestionBuilder } from '../QuestionList/QuestionList.tsx';
@@ -65,15 +66,9 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
   const set = (patch: Partial<BookingPage>) => { onDraft({ ...draft, ...patch }); if (save === 'saved') setSave('idle'); };
   const sectionRef = useRef<HTMLDivElement>(null);
   const taken = state.pages.some((p) => p.id !== draft.id && p.slug === draft.slug);
-  useEffect(() => {
-    if (!section) return undefined;
-    const t = window.setTimeout(() => {
-      const el = sectionRef.current?.querySelector<HTMLElement>(`[data-section="${section}"]`);
-      el?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-      el?.querySelector<HTMLElement>('input:not([disabled])')?.focus();
-    }, 300);
-    return () => window.clearTimeout(t);
-  }, [section]);
+  // A link into one part of the page ("Fix hosts") opens on that tab.
+  const [tab, setTab] = useState<string>(section ?? 'basics');
+  useEffect(() => { if (section) setTab(section); }, [section]);
   const doSave = () => {
     if (!dirty || save === 'saving' || taken) return;
     setSave('saving');
@@ -113,7 +108,17 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
           <div className="tf-bkf__editor-grid">
             <div className="tf-bkf__sections" ref={sectionRef}>
               {!page.isOn && <Callout tone="neutral" action={{ label: 'Turn it on', onPress: () => onToggle(true) }}>This page is hidden. Its link tells guests it isn't taking bookings right now.</Callout>}
-              <Section title="Basics" description="What guests see first: the name, the link, how long and where.">
+              <Tabs aria-label="Page settings" className="tf-bkf__edtabs" selectedKey={tab} onSelectionChange={setTab}
+                items={[
+                  { id: 'basics', label: 'Basics' },
+                  { id: 'when', label: 'When', icon: <CalendarDays {...i14} /> },
+                  { id: 'who', label: 'Who', icon: stuck ? <AlertTriangle {...i14} /> : <Users {...i14} /> },
+                  { id: 'questions', label: 'Questions', icon: <MessageSquareText {...i14} /> },
+                  { id: 'after', label: 'After booking', icon: <Check {...i14} /> },
+                  { id: 'look', label: 'Look', icon: <Palette {...i14} /> },
+                ]}>
+              <TabPanel id="basics" className="tf-bkf__edpanel">
+              <Section className="tf-bkf-card" title="Basics" description="What guests see first: the name, the link, how long and where.">
                 <div className="tf-bkf__stack">
                   <TextField label="Name" value={draft.name} onChange={(name) => set({ name })} isRequired />
                   <TextField label="Link" value={draft.slug} className="tf-bkf__linkinput" icon={<span className="tf-bkf__prefix">timefix.com/priya/</span>}
@@ -130,8 +135,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                   <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder="What the meeting is for, in a line or two" />
                 </div>
               </Section>
-              <DisclosureGroup variant="plain" allowsMultipleExpanded defaultExpandedKeys={section ? [section] : []}>
-                <DisclosureItem id="when" title="When" description={whenSummary(draft, state)} icon={<CalendarDays {...i16} />}>
+              </TabPanel>
+                <TabPanel id="when" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="When" description={whenSummary(draft, state)}>
                   <div className="tf-bkf__stack" data-section="when">
                     <RadioGroup label="Hours" value={draft.hoursFrom} onChange={(v) => set({ hoursFrom: v, customHours: v === 'custom' ? draft.customHours ?? hoursFor(draft, state) : draft.customHours })}>
                       {state.savedHours.map((h) => <Radio key={h.id} value={h.id === state.defaultHoursId ? 'working' : h.id}>{h.id === state.defaultHoursId ? `Your ${h.name.toLowerCase()}` : h.name}</Radio>)}
@@ -157,9 +162,9 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       )}
                     </div>
                   </div>
-                </DisclosureItem>
-                <DisclosureItem id="who" title="Who" description={whoSummary(draft, state, now)} icon={<Users {...i16} />}
-                  end={stuck ? <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} />}>No hosts available</Tag> : undefined}>
+                </Section></TabPanel>
+                <TabPanel id="who" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Who" description={whoSummary(draft, state, now)}
+                  action={stuck ? <Tag size="sm" hue="orange" icon={<AlertTriangle size={12} strokeWidth={2} />}>No hosts available</Tag> : undefined}>
                   <div className="tf-bkf__stack" data-section="who">
                     {stuck && <Callout tone="warning">Everyone on this page is away or paused, so guests can't book it. Add a host who's free.</Callout>}
                     <RadioGroup label="Who hosts" value={draft.hostMode} onChange={(v) => setMode(v as HostMode)}>
@@ -211,14 +216,14 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     </RadioGroup>
                     {draft.whoCanBook === 'form' && <Select label="Form" items={FORMS} value={draft.formName} onChange={(v) => { if (v) set({ formName: v }); }} description="Guests see times after they send the form." />}
                   </div>
-                </DisclosureItem>
-                <DisclosureItem id="questions" title="Questions" description={questionsSummary(draft)} icon={<MessageSquareText {...i16} />}>
+                </Section></TabPanel>
+                <TabPanel id="questions" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Questions" description={questionsSummary(draft)}>
                   <div className="tf-bkf__stack" data-section="questions">
                     <p className="tf-bkf__muted">Name and email are always asked. Add anything else here.</p>
                     <QuestionBuilder questions={draft.questions} onChange={(questions) => set({ questions })} />
                   </div>
-                </DisclosureItem>
-                <DisclosureItem id="after" title="After booking" description={afterSummary(draft)} icon={<Check {...i16} />}>
+                </Section></TabPanel>
+                <TabPanel id="after" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="After booking" description={afterSummary(draft)}>
                   <div className="tf-bkf__stack" data-section="after">
                     <RadioGroup label="Confirm" value={draft.confirmFirst ? 'me' : 'auto'} onChange={(v) => set({ confirmFirst: v === 'me' })}>
                       <Radio value="auto">Confirm at once</Radio>
@@ -244,8 +249,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       </div>
                     </ShowMore>
                   </div>
-                </DisclosureItem>
-                <DisclosureItem id="look" title="Look" description={lookSummary(draft)} icon={<Palette {...i16} />}>
+                </Section></TabPanel>
+                <TabPanel id="look" className="tf-bkf__edpanel"><Section className="tf-bkf-card" title="Look" description={lookSummary(draft)}>
                   <div className="tf-bkf__stack" data-section="look">
                     <GuestLook value={draft.look} onChange={(look) => set({ look })} host={draft.owner} title={draft.name} />
                     <Switch isSelected={draft.showPhoto} onChange={(showPhoto) => set({ showPhoto })}>Show your photo on the page</Switch>
@@ -254,8 +259,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <SocialLinksEditor links={draft.socials} onChange={(socials) => set({ socials })} />
                     </div>
                   </div>
-                </DisclosureItem>
-              </DisclosureGroup>
+                </Section></TabPanel>
+              </Tabs>
             </div>
             <aside className="tf-bkf__editor-preview" aria-label="Preview">
               <Eyebrow><Eye {...i14} aria-hidden="true" /> What guests see</Eyebrow>

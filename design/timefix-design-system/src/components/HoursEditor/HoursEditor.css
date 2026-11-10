@@ -52,7 +52,7 @@
 .tf-hours__apply { margin-top: var(--space-4); }
 
 /* A narrow card: the switch sits over its ranges. */
-@container (max-width: 34rem) { .tf-hours__row { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); } }
+@container (max-width: 28rem) { .tf-hours__row { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); } }
 
 @media (prefers-reduced-motion: reduce) {
   .tf-hours__range-wrap, .tf-hours__error { transition: none; }

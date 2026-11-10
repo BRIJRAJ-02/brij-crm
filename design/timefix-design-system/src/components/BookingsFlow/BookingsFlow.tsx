@@ -135,7 +135,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
   };
 
   /* Guest bookings */
-  const book = (p: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly date: { readonly year: number; readonly month: number; readonly day: number }; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: keyof typeof PLACES }) => {
+  const book = (p: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly guests?: ReadonlyArray<string>; readonly date: { readonly year: number; readonly month: number; readonly day: number }; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: keyof typeof PLACES }) => {
     const day = new Date(r.date.year, r.date.month - 1, r.date.day);
     const start = at(day, r.minutes);
     const id = nextId('m');
@@ -144,7 +144,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
     pending.current.push({
       type: 'meeting/add',
       meeting: {
-        id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.name, invitee: { name, email: r.email }, place: PLACES[r.place].meeting, placeLabel: placeLabel(p, r.place),
+        id, pageId: p.id, host, start, end: new Date(start.getTime() + r.length * 60_000), title: p.name, invitee: { name, email: r.email }, guests: r.guests && r.guests.length ? r.guests : undefined, place: PLACES[r.place].meeting, placeLabel: placeLabel(p, r.place),
         status: p.confirmFirst ? 'pending' : 'confirmed', notes: '', answers: r.notes ? [{ question: 'Anything to share before the call?', answer: r.notes }] : [], guestZone: r.timeZone,
         record: p.addToPeople ? { id: nextId('r'), name, kind: 'person', sub: r.email } : undefined, activity: [{ id: nextId('a'), text: `Booked by ${name}`, at: new Date() }],
       },
