@@ -99,7 +99,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
   const [freshPage, setFreshPage] = useState<string>();
   const [freshMeeting, setFreshMeeting] = useState<string>();
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
-  const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1200);
+  const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 900);
   const [newMeeting, setNewMeeting] = useState<{ readonly initial?: PickedTime }>();
   const [declineId, setDeclineId] = useState<string>();
   const [holdAt, setHoldAt] = useState<PickedTime>();
