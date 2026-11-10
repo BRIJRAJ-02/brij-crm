@@ -403,9 +403,9 @@ export const strings = {
       example: 'With 60 days, on 1 March the last day offered is 30 April.',
     },
     daily: {
-      // The page's own cap; the person's cap across every page lives in Availability › Meeting limits, and the lower
-      // one wins (the simplicity sweep's finding 6).
-      text: 'Meetings from this page in one day. Your limit across all pages is in Availability, and the lower one wins.',
+      // The page's own cap; the person's cap across every page lives in Bookings settings › Meeting limits, and the
+      // lower one wins (the simplicity sweep's finding 6).
+      text: 'Meetings from this page in one day. Your limit across all pages is in Bookings settings › Meeting limits. The lower one wins.',
       example: 'With 3, a day with three meetings from this page is full.',
     },
     cancelCutoff: {

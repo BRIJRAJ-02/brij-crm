@@ -93,6 +93,8 @@ export const strings = {
   peopleYou: (name: string) => `${name} (you)`,
   peopleMe: 'You',
   peopleTeam: 'Whole team',
+  /** The Whole team's note for someone who sees the Team day but not everyone's bookings: picking it opens Day. */
+  peopleTeamDay: 'Day view',
   /** An empty week's way on: the day of the reader's next booking after it. */
   nextBooking: (day: string) => `Next booking: ${day}`,
   weekLabel: (range: string) => `Bookings, ${range}`,
@@ -129,7 +131,6 @@ export const strings = {
   allCalendars: 'All calendars',
   /** Whose bookings an admin sees (the phone's View menu; the People picker on a wider page). */
   hostsLabel: 'Whose bookings',
-  hosts: { mine: 'Mine', all: 'Everyone' },
   /** A colleague's booking on the week (an admin's Everyone): the guest, then whose it is. */
   withHost: (guest: string, host: string) => `${guest} · ${host}`,
   /** A colleague's booking's card: whose it is. */

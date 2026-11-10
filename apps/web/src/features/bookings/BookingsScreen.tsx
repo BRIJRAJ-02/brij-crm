@@ -417,9 +417,12 @@ type PeopleChoice = 'me' | 'team';
 function PeoplePicker({
   value,
   onChange,
+  isDayOnly = false,
 }: {
   readonly value: PeopleChoice;
   readonly onChange: (next: PeopleChoice) => void;
+  /** The Whole team is only the Team day here (no Everyone): its option says so. */
+  readonly isDayOnly?: boolean;
 }) {
   const me = useMyName();
   const name = me === undefined ? strings.peopleMe : strings.peopleYou(me.name);
@@ -436,7 +439,13 @@ function PeoplePicker({
             ? { icon: 'user' as const }
             : { leading: <Avatar name={me.name} id={me.id} size="xs" isDecorative /> }),
         },
-        { id: 'team', label: strings.peopleTeam, icon: 'users', isApart: true },
+        {
+          id: 'team',
+          label: strings.peopleTeam,
+          icon: 'users',
+          isApart: true,
+          ...(isDayOnly ? { description: strings.peopleTeamDay } : {}),
+        },
       ]}
       value={value}
       onChange={(next) => {
@@ -473,9 +482,14 @@ function peopleChoiceOf({
       if (view === 'team') onView('day');
     }
   };
-  // Day with the Whole team picked is the Team day, so the switch's Day keeps the team.
-  const pick = (next: MeetingsViewName) => onView(next === 'day' && value === 'team' && hasTeam ? 'team' : next);
-  return { value, choose, pick };
+  // Day with the Whole team picked is the Team day, so the switch's Day (and D) keeps the team; leaving the Team day
+  // for the week or the list keeps the Whole team too, as an admin's Everyone.
+  const pick = (next: MeetingsViewName) => {
+    if (value === 'team' && next !== 'day') hosts?.onChange('all');
+    onView(next === 'day' && value === 'team' && hasTeam ? 'team' : next);
+  };
+  // Without Everyone, the Whole team is only the Team day: its option says so, since picking it changes the view.
+  return { value, choose, pick, isDayOnly: hosts === undefined };
 }
 
 /**
@@ -494,6 +508,8 @@ function ViewMenu({
   readonly hosts: HostsChoice | undefined;
 }) {
   const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
+  // Whose, in the People picker's words: the reader by name, or the Whole team.
+  const me = useMyName();
   return (
     <MenuTrigger>
       <Button icon="eye" iconRight="chevron-down" label={strings.viewMenuLabel(VIEW_LABEL[view])}>
@@ -524,8 +540,8 @@ function ViewMenu({
               hosts.onChange(first(keys) === 'all' ? 'all' : 'mine');
             }}
           >
-            <MenuItem id="mine">{strings.hosts.mine}</MenuItem>
-            <MenuItem id="all">{strings.hosts.all}</MenuItem>
+            <MenuItem id="mine">{me === undefined ? strings.peopleMe : strings.peopleYou(me.name)}</MenuItem>
+            <MenuItem id="all">{strings.peopleTeam}</MenuItem>
           </MenuSection>
         )}
       </Menu>
@@ -1997,7 +2013,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   /** Today, the next or previous week (a day in the day view), or the view: the bar's buttons and their keys. */
   const go = (action: WeekKeyAction) => {
     if (action === 'day' || action === 'week') {
-      setView(action);
+      // D and W move as the switch does: Day with the Whole team picked is the Team day.
+      (people?.pick ?? setView)(action);
       return;
     }
     if (action === 'today') {
@@ -2040,7 +2057,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   );
   // The week shows one calendar at a time, or all (the switch in its bar, kept per workspace in this browser), of
   // those on the member's week; the List tab's panel picks several.
-  const switchable = calendarList.status === 'ready' ? switchCalendars(accountsOnWeek(calendarList)) : undefined;
+  const weekAccounts = calendarList.status === 'ready' ? accountsOnWeek(calendarList) : undefined;
+  const switchable = weekAccounts === undefined ? undefined : switchCalendars(weekAccounts);
   const { choice, choose } = useCalendarChoice(slug, switchable);
   const shows = useMemo(() => showsOf(choice), [choice]);
   const isShownEvent = useCallback(
@@ -2289,7 +2307,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             {strings.calendarsRetry}
           </Button>
         ) : switchable === undefined || switchable.length === 0 ? undefined : (
-          <CalendarSwitch calendars={switchable} choice={choice} onChoose={choose} />
+          <CalendarSwitch accounts={weekAccounts ?? []} calendars={switchable} choice={choice} onChoose={choose} />
         )
       }
       end={
@@ -2316,7 +2334,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
             <ViewMenu view={view} views={views} onView={setView} hosts={view === 'team' ? undefined : hostsChoice} />
           ) : (
             <>
-              {people !== undefined && <PeoplePicker value={people.value} onChange={people.choose} />}
+              {people !== undefined && (
+                <PeoplePicker value={people.value} onChange={people.choose} isDayOnly={people.isDayOnly} />
+              )}
               <MeetingsViewSwitch view={view} views={views} onView={people?.pick ?? setView} />
             </>
           )}
@@ -3136,7 +3156,9 @@ function ListBar({
               <ViewMenu view="list" views={views} onView={onView} hosts={hosts} />
             ) : (
               <>
-                {people !== undefined && <PeoplePicker value={people.value} onChange={people.choose} />}
+                {people !== undefined && (
+                  <PeoplePicker value={people.value} onChange={people.choose} isDayOnly={people.isDayOnly} />
+                )}
                 <MeetingsViewSwitch view="list" views={views} onView={people?.pick ?? onView} />
               </>
             ))}

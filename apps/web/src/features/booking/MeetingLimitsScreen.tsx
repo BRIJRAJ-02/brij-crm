@@ -3,12 +3,12 @@
 // Main task: pick a day's and a week's limit; a reader who reaches a colleague's scheduling picks whose limits show first.
 // Leaves out: a page's own daily limit (the page's Limits), rotation caps (the team's settings), and any new setting.
 import type { DataLayer, VisibleMember } from '@crm/data';
-import { Select } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { LimitsCard, LimitsCardPending } from './LimitsCard.tsx';
 import { meetingLimitsHref } from './links.ts';
 import { limitsStrings as strings } from './limits-strings.ts';
+import { WhoseSelect } from './WhoseSelect.tsx';
 
 /** Props for the page. */
 export interface MeetingLimitsScreenProps {
@@ -34,22 +34,14 @@ export function MeetingLimitsScreen({ data, slug, member, members, me }: Meeting
       {...(hasColleagues
         ? {
             actions: (
-              <Select
+              <WhoseSelect
                 label={strings.whose}
-                isLabelHidden
-                size="sm"
-                isSearchable
-                showsDescription
-                items={members.map((each) => ({
-                  id: each.id,
-                  label: each.id === me ? strings.whoseMine : strings.whoseTheirs(each.name),
-                  ...(each.id === me || each.canManage ? {} : { description: strings.seeOnlyShort }),
-                }))}
+                mine={strings.whoseMine}
+                theirs={strings.whoseTheirs}
+                members={members}
+                me={me}
                 value={whose?.id ?? me}
-                onChange={(id) => {
-                  if (id !== null && id !== (whose?.id ?? me))
-                    void navigate({ href: meetingLimitsHref(slug, id === me ? undefined : id) });
-                }}
+                onChange={(id) => void navigate({ href: meetingLimitsHref(slug, id === me ? undefined : id) })}
               />
             ),
           }

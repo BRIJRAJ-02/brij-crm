@@ -5,7 +5,9 @@ export const scheduleStrings = {
   schedule: 'Schedule',
   newSchedule: 'New schedule',
   /** New schedule's note in the schedules list once the member holds as many as they may. */
-  newScheduleFull: 'At the limit of 20',
+  newScheduleFull: (max: number) => `${String(max)} is the most. Delete one first.`,
+  /** The ⋯ menu's way to the person's limits, which left this tab for Bookings settings (10 November 2026). */
+  meetingLimits: 'Meeting limits',
   createSchedule: 'Create schedule',
   creatingSchedule: 'Creating',
   name: 'Name',

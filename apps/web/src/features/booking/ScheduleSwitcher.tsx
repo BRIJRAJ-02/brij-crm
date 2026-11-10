@@ -4,7 +4,8 @@
 // Leaves out: the hours (the tab's editor), and acting on the virtual default before its first save.
 import type { ScheduleView } from '@crm/data';
 import type { Ref } from 'react';
-import { Button, Menu, MenuItem, MenuTrigger, Select, type IconName, type SelectItem } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Select, type IconName, type SelectItem } from '@crm/ui';
+import { SCHEDULES_MAX } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 
 /** Props for ScheduleSwitcher. */
@@ -35,9 +36,11 @@ export interface ScheduleSwitcherProps {
    * Absent where the reader can't make one (read only), so no dead option stands there.
    */
   readonly onNew?: () => void;
+  /** Where the person's meeting limits are (Bookings settings › Meeting limits): the ⋯ menu's last item. */
+  readonly limitsHref?: string;
 }
 
-/** New schedule's key in the Select: never a schedule's id (those are uuids) nor the virtual default's. */
+/** The full list's muted New schedule: never a schedule's id (those are uuids) nor the virtual default's. */
 const NEW_SCHEDULE = 'new-schedule';
 
 /** A schedule's key in the Select: its id, or the virtual default's. */
@@ -64,6 +67,7 @@ export function ScheduleSwitcher({
   onDuplicate,
   onDelete,
   onNew,
+  limitsHref,
 }: ScheduleSwitcherProps) {
   const isVirtual = current.id === null;
   const isPending = !isVirtual && current.updatedAt === null;
@@ -121,31 +125,31 @@ export function ScheduleSwitcher({
             // A copy on its way can't be opened until the server made it.
             ...(schedule.id !== null && schedule.updatedAt === null ? { isDisabled: true } : {}),
           }))
+          // Full, New schedule stays in the list, muted, saying why, rather than vanishing (a disabled option is
+          // skipped while the list is closed, as Select's own New line is).
           .concat(
-            onNew === undefined
-              ? []
-              : [
+            onNew !== undefined && isFull
+              ? [
                   {
                     id: NEW_SCHEDULE,
                     label: scheduleStrings.newSchedule,
                     icon: 'plus',
                     isApart: true,
-                    // Full, it stays in the list, saying why it can't be made, rather than vanishing.
-                    ...(isFull ? { isDisabled: true, description: scheduleStrings.newScheduleFull } : {}),
+                    isDisabled: true,
+                    description: scheduleStrings.newScheduleFull(SCHEDULES_MAX),
                   },
-                ],
+                ]
+              : [],
           )}
+        // Select's own New line, set apart at the list's foot: the trigger's keys and typeahead never fire it.
+        {...(onNew !== undefined && !isFull ? { onNew: { label: scheduleStrings.newSchedule, onPress: onNew } } : {})}
         value={keyOf(current)}
         onChange={(id) => {
-          if (id === NEW_SCHEDULE) {
-            onNew?.();
-            return;
-          }
           const chosen = schedules.find((each) => keyOf(each) === id);
           if (chosen !== undefined && keyOf(chosen) !== keyOf(current)) onOpen(chosen);
         }}
       />
-      {actions.length > 0 && (
+      {(actions.length > 0 || limitsHref !== undefined) && (
         <MenuTrigger>
           <Button variant="ghost" icon="ellipsis" label={scheduleStrings.actionsFor(current.name)} />
           <Menu
@@ -159,6 +163,12 @@ export function ScheduleSwitcher({
                 {action.label}
               </MenuItem>
             ))}
+            {actions.length > 0 && limitsHref !== undefined && <MenuSeparator />}
+            {limitsHref !== undefined && (
+              <MenuItem id="limits" icon="timer" href={limitsHref}>
+                {scheduleStrings.meetingLimits}
+              </MenuItem>
+            )}
           </Menu>
         </MenuTrigger>
       )}

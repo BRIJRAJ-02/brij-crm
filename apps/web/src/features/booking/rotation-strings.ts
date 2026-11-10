@@ -52,7 +52,7 @@ export const strings = {
   hidden: 'Only admins see this',
   priorities: ['Lowest', 'Low', 'Medium', 'High', 'Highest'] as const,
   noCap: 'No limit',
-  /** The caps' columns' help: which count it is, beside the member's own meeting limits (Availability). */
+  /** The caps' columns' help: which count it is, beside the member's own meeting limits (Bookings settings › Meeting limits). */
   capInfo: 'The most meetings this group gives them a day. Their own meeting limits still apply.',
   weeklyInfo: 'The most meetings this group gives them a week. Their own meeting limits still apply.',
   isOn: 'On',
