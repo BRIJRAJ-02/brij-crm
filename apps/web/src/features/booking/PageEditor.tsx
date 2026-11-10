@@ -2104,7 +2104,8 @@ export interface PageEditorPendingProps {
  * the editor lands where they stood (the owner, 20 Oct 2026). Hours draws a one on one page's, the usual kind.
  */
 const PENDING_SECTIONS: Readonly<Record<PageTab, readonly string[]>> = {
-  details: [strings.title, strings.description],
+  // Details is bare fields, with no cards (the redesign): its skeleton is fields too.
+  details: [],
   hosts: [rotationStrings.host.teams, rotationStrings.host.always],
   hours: [scheduleStrings.schedule, strings.weeklyHours, strings.daysOff, strings.limitGroups.buffers],
   questions: [questionStrings.questions],
@@ -2148,11 +2149,15 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             {...(notices === undefined ? {} : { notices })}
           >
             <SettingsStack variant="flush">
-              {PENDING_SECTIONS[tab].map((title) => (
-                <Card key={title} title={title} isBusy>
-                  <Skeleton lines={3} />
-                </Card>
-              ))}
+              {PENDING_SECTIONS[tab].length === 0 ? (
+                <Skeleton lines={6} />
+              ) : (
+                PENDING_SECTIONS[tab].map((title) => (
+                  <Card key={title} title={title} isBusy>
+                    <Skeleton lines={3} />
+                  </Card>
+                ))
+              )}
             </SettingsStack>
           </PreviewLayout>
         ),
