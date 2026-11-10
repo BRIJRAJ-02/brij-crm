@@ -15,6 +15,12 @@ import { contract, type PartnerModule } from '@crm/contracts';
 /** What a procedure belongs to: a module the connection must have, or the embedded session's own read. */
 export type EmbedReach = PartnerModule | 'session';
 
+/**
+ * Team pages procedures the frame never reaches: setting up a person's own Timefix login (spec 0070, AC-7023;
+ * coordinator, 10 Nov 2026), which is Timefix's alone, so an app can't mint logins at addresses it controls.
+ */
+const TEAM_PAGES_LEFT_OUT: ReadonlySet<string> = new Set(['inviteLogin', 'cancelLoginInvite']);
+
 /** The link page procedures the frame doesn't offer: other modules' choices. */
 const LINK_PAGE_LEFT_OUT: ReadonlySet<string> = new Set(['pageChoices', 'formChoices', 'placeChoices']);
 
@@ -26,7 +32,11 @@ export const EMBED_PROCEDURES: Readonly<Record<string, EmbedReach>> = Object.fre
       .filter((name) => !LINK_PAGE_LEFT_OUT.has(name))
       .map((name) => [`profile.${name}`, 'link_pages' as const]),
   ),
-  ...Object.fromEntries(Object.keys(contract.teamPages).map((name) => [`teamPages.${name}`, 'link_pages' as const])),
+  ...Object.fromEntries(
+    Object.keys(contract.teamPages)
+      .filter((name) => !TEAM_PAGES_LEFT_OUT.has(name))
+      .map((name) => [`teamPages.${name}`, 'link_pages' as const]),
+  ),
   'brand.get': 'link_pages',
 });
 

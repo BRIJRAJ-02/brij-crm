@@ -1,11 +1,13 @@
-// A connected app's person sets up their own Timefix login (spec 0070, AC-7023; owner, 10 Nov 2026) against the real
-// Postgres: the person themselves (from the app's frame) or a manager sends the invitation; opening it makes their own
-// managed identity a login at that address, the same member and page; the app keeps managing them (list, PUT, launch);
-// an address that already has a login is refused and never merged (AC-7021); the app's DELETE afterwards only lets go
-// of them, and they stay a member with their login.
+// A connected app's person gets their own Timefix login (spec 0070, AC-7023; owner and coordinator, 10 Nov 2026)
+// against the real Postgres: only a manager in Timefix holding both permissions sends the invitation, never the person
+// or anyone from the app's frame; opening it makes their own managed identity a login at that address, the same member
+// and page, with their role read again; the app keeps managing them (list, PUT, launch); an address that already has a
+// login is refused and never merged (AC-7021); the app's DELETE afterwards only lets go of them, and they stay a
+// member with their login.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { enterAsPartner, enterWorkspace, NO_RULE_SOURCE } from '../access/door.ts';
 import { startWorkspace } from '../account/account.ts';
@@ -175,27 +177,22 @@ async function rowsOf(memberId: string) {
   return row;
 }
 
-describe('a connected app’s person setting up their own Timefix login (AC-7023)', () => {
-  it('turns their own identity into a login, and the app keeps managing them', async () => {
+describe('a connected app’s person getting their own Timefix login (AC-7023)', () => {
+  it('turns their own identity into a login, set up from Timefix, and the app keeps managing them', async () => {
     const hub = await connected();
     expect(await identity.isManagedUser(hub.graceUser)).toBe(true);
-    expect(await readMyLogin(hub.grace)).toEqual({
-      canSetUp: true,
-      hasLogin: false,
-      memberId: hub.graceMember,
-      email: hub.hubEmail,
-    });
-    // Grace asks for her own, as a plain Member with no Members permission.
+    // Her own page in the frame only tells her whom to ask.
+    expect(await readMyLogin(hub.grace)).toEqual({ canSetUp: true, hasLogin: false });
+    // The owner (both permissions) sets it up, in Timefix.
     const address = `grace-own-${tag()}@example.com`;
-    const sent = await inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: address });
+    const sent = await inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: address });
     expect(sent.invite.email).toBe(address);
-    expect((await readMyLogin(hub.grace)).invite?.email).toBe(address);
     const row = (await listTeamLinkPages(hub.owner)).pages.find((page) => page.memberId === hub.graceMember);
     expect(row).toMatchObject({ isFromApp: true, invite: { email: address } });
     expect(row?.hasLogin).toBeUndefined();
 
     const peek = await peekInvite({ db, partnerName }, sent.token);
-    expect(peek).toMatchObject({ page: { name: 'Grace Hopper' }, login: { app: hub.partnerName } });
+    expect(peek).toMatchObject({ page: { name: 'Grace Hopper' }, login: { app: hub.partnerName }, inviterName: 'Ada' });
 
     expect(await claim(sent.token)).toEqual({ slug: hub.slug, email: address });
     expect(await rowsOf(hub.graceMember)).toEqual({
@@ -210,7 +207,7 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     });
     // A login now: the session hook lets it in, and Team pages and her own card say so.
     expect(await identity.isManagedUser(hub.graceUser)).toBe(false);
-    expect(await readMyLogin(hub.grace)).toEqual({ canSetUp: false, hasLogin: true, memberId: hub.graceMember });
+    expect(await readMyLogin(hub.grace)).toEqual({ canSetUp: false, hasLogin: true });
     const now = (await listTeamLinkPages(hub.owner)).pages.find((page) => page.memberId === hub.graceMember);
     expect(now).toMatchObject({ isFromApp: true, hasLogin: true });
     expect(now?.invite).toBeUndefined();
@@ -245,7 +242,7 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
       login: { app: hub.partnerName },
     });
     expect(await claim(sent.token)).toEqual({ slug: hub.slug, email: address });
-    // History: the invitation and the login, as the person.
+    // History: the invitation by the owner, and the login, as the person.
     const actions = await testQuery<{ action: string; after: Record<string, unknown> }>(
       ownerUrl,
       `select action, after from audit_events where workspace_id = $1 and action like 'invitation.%' order by at`,
@@ -261,7 +258,7 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     const hub = await connected();
     const taken = `taken-${tag()}@example.com`;
     await createTestUser(identityUrl, { email: taken, name: 'Someone' });
-    const sent = await inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: taken });
+    const sent = await inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: taken });
     expect(await refusalOf(claim(sent.token))).toEqual({ code: 'UNIQUE_CONFLICT', field: 'email' });
     expect(await rowsOf(hub.graceMember)).toMatchObject({
       verified: false,
@@ -272,28 +269,83 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     expect(await identity.isManagedUser(hub.graceUser)).toBe(true);
   });
 
-  it('lets a manager send one with both permissions, and nobody else', async () => {
+  it('is set up only in Timefix, by someone holding both permissions', async () => {
     const hub = await connected();
     const address = `grace-m-${tag()}@example.com`;
+    // Grace herself (a plain Member, in the app's frame) can't, for herself or anyone.
+    expect(await refusalOf(inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: address }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
     // A plain member who isn't Grace holds neither permission.
     const other = rescope(hub.owner, { role: 'member' });
     expect(await refusalOf(inviteToClaimLogin(other, { member: hub.graceMember, email: address }))).toMatchObject({
       code: 'FORBIDDEN',
     });
-    // The owner (both permissions) sends it; it opens though Grace never sent it.
+    // An admin of the app (Admin here, so both permissions), from inside the app's frame: refused there.
+    const admin = await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-admin',
+        person: { email: `admin-${tag()}@example.com`, name: 'Alan Admin', role: 'admin' },
+      },
+      { users },
+    );
+    const adminScope = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: await memberUser(admin.member.memberId), slug: hub.slug, session: signedInNow() },
+    );
+    expect(
+      await refusalOf(
+        inviteToClaimLogin(adminScope, { member: hub.graceMember, email: address }, [], { fromFrame: true }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(
+      await refusalOf(
+        inviteToClaimLogin(adminScope, { member: admin.member.memberId, email: address }, [], { fromFrame: true }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(
+      await refusalOf(cancelLoginInvite(adminScope, { member: hub.graceMember }, [], { fromFrame: true })),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    // The owner sends it; sent again to another address, the first stops; cancelled, the second stops too.
     const sent = await inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: address });
-    // Sent again to another address: the first stops.
     const again = await inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: `x-${address}` });
     expect(await refusalOf(claim(sent.token))).toMatchObject({ code: 'INVITE_INVALID' });
-    // Cancelled: the second stops too.
-    expect(await cancelLoginInvite(hub.owner, { member: hub.graceMember })).toEqual({ cancelled: true });
-    expect(await refusalOf(claim(again.token))).toMatchObject({ code: 'INVITE_INVALID' });
-    // Grace cancels or sends her own; someone else can't cancel hers without the permissions.
-    const mine = await inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: address });
     expect(await refusalOf(cancelLoginInvite(other, { member: hub.graceMember }))).toMatchObject({
       code: 'FORBIDDEN',
     });
-    expect(await claim(mine.token)).toEqual({ slug: hub.slug, email: address });
+    expect(await cancelLoginInvite(hub.owner, { member: hub.graceMember })).toEqual({ cancelled: true });
+    expect(await refusalOf(claim(again.token))).toMatchObject({ code: 'INVITE_INVALID' });
+  });
+
+  it('reads the role again when it is opened: made an owner since, only an owner’s invitation opens', async () => {
+    const hub = await connected();
+    // An admin sends it for Grace, a Member (Alan, Admin here, sending in Timefix).
+    const alan = await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-alan',
+        person: { email: `alan-${tag()}@example.com`, name: 'Alan Admin', role: 'admin' },
+      },
+      { users },
+    );
+    const ed = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: await memberUser(alan.member.memberId), slug: hub.slug, session: signedInNow() },
+    );
+    const sent = await inviteToClaimLogin(ed, { member: hub.graceMember, email: `grace-o-${tag()}@example.com` });
+    // Made an owner before she opens it.
+    await testQuery(ownerUrl, `update members set role = 'owner' where id = $1`, [hub.graceMember]);
+    expect(await refusalOf(claim(sent.token))).toMatchObject({ code: 'INVITE_INVALID' });
+    expect(await rowsOf(hub.graceMember)).toMatchObject({ verified: false, claimed: false, identity_claimed: false });
+    // The owner sends it: it opens.
+    const fromOwner = await inviteToClaimLogin(hub.owner, {
+      member: hub.graceMember,
+      email: `grace-p-${tag()}@example.com`,
+    });
+    expect((await claim(fromOwner.token)).slug).toBe(hub.slug);
   });
 
   it('is only for a connected app’s person: never a page only person or someone with a login', async () => {
@@ -320,14 +372,14 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     // An address someone else here uses is refused before anything is written.
     const ownerEmail = (await rowsOf(ownerMember))?.member_email ?? '';
     expect(
-      await refusalOf(inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: ownerEmail })),
+      await refusalOf(inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: ownerEmail })),
     ).toMatchObject({ code: 'UNIQUE_CONFLICT', field: 'email' });
   });
 
   it('keeps them a member with their login when the app lets go of them, and takes them back on a PUT', async () => {
     const hub = await connected();
     const address = `grace-k-${tag()}@example.com`;
-    const sent = await inviteToClaimLogin(hub.grace, { member: hub.graceMember, email: address });
+    const sent = await inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: address });
     await claim(sent.token);
     expect(
       await removePartnerMember(hub.partner, { connectionId: hub.connectionId, externalId: 'u-grace' }, { users }),
@@ -369,7 +421,7 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
 
   it('never lets the app bring back a login the workspace removed', async () => {
     const hub = await connected();
-    const sent = await inviteToClaimLogin(hub.grace, {
+    const sent = await inviteToClaimLogin(hub.owner, {
       member: hub.graceMember,
       email: `grace-r-${tag()}@example.com`,
     });
@@ -388,84 +440,22 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     );
     expect(await refusalOf(again)).toMatchObject({ code: 'FORBIDDEN' });
     expect(await rowsOf(hub.graceMember)).toMatchObject({ status: 'removed' });
-  });
-});
-
-describe('inside a connected app’s frame (security review, 10 Nov 2026)', () => {
-  it('reaches only that app’s own people, holding plain Member', async () => {
-    const hub = await connected();
-    const frame = { frame: { connectionId: hub.connectionId } };
-    // Its own Member, from its own frame: allowed (the person, or the app's admin for them).
-    const mine = await inviteToClaimLogin(
-      hub.grace,
-      { member: hub.graceMember, email: `grace-f-${tag()}@example.com` },
-      [],
-      frame,
+    // Removed more than 30 days ago, her page is still a login's: the purge's definer itself refuses it (0206).
+    await testQuery(
+      ownerUrl,
+      `update managed_members set removed_at = now() - interval '31 days' where workspace_id = $1 and member_id = $2`,
+      [hub.workspaceId, hub.graceMember],
     );
-    expect(mine.isSelf).toBe(true);
-    expect(await peekInvite({ db, partnerName }, mine.token)).toMatchObject({ login: { isSelf: true } });
-    // A frame of another app (a connection this workspace can't see) never reaches her.
-    const other = await connected();
-    expect(
-      await refusalOf(
-        inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: `x-${tag()}@example.com` }, [], {
-          frame: { connectionId: other.connectionId },
-        }),
-      ),
-    ).toMatchObject({ code: 'NOT_FOUND' });
-    expect(
-      await refusalOf(
-        cancelLoginInvite(hub.owner, { member: hub.graceMember }, [], {}, { connectionId: other.connectionId }),
-      ),
-    ).toMatchObject({ code: 'NOT_FOUND' });
-    // The app's admin's own login is never set up from the frame: it would carry Admin out of it.
-    const admin = await putPartnerMember(
-      hub.partner,
-      {
-        connectionId: hub.connectionId,
-        externalId: 'u-admin',
-        person: { email: `admin-${tag()}@example.com`, name: 'Alan Admin', role: 'admin' },
-      },
-      { users },
-    );
-    const adminScope = await enterWorkspace(
-      { db, identity, rules: NO_RULE_SOURCE },
-      { userId: await memberUser(admin.member.memberId), slug: hub.slug, session: signedInNow() },
-    );
-    expect(
-      await refusalOf(
-        inviteToClaimLogin(
-          adminScope,
-          { member: admin.member.memberId, email: `alan-${tag()}@example.com` },
-          [],
-          frame,
-        ),
-      ),
-    ).toMatchObject({ code: 'FORBIDDEN' });
-    // Sent from the frame for a Member, then made the app's admin before it is opened: it opens nothing.
-    const late = await inviteToClaimLogin(
-      hub.grace,
-      { member: hub.graceMember, email: `grace-late-${tag()}@example.com` },
-      [],
-      frame,
-    );
-    await putPartnerMember(
-      hub.partner,
-      {
-        connectionId: hub.connectionId,
-        externalId: 'u-grace',
-        person: { email: hub.hubEmail, name: 'Grace Hopper', role: 'admin' },
-      },
-      { users },
-    );
-    expect(await refusalOf(claim(late.token))).toMatchObject({ code: 'INVITE_INVALID' });
-    expect(await rowsOf(hub.graceMember)).toMatchObject({ verified: false, claimed: false, identity_claimed: false });
-    expect(await identity.isManagedUser(hub.graceUser)).toBe(true);
-    // In Timefix, the workspace's owner sets it up for them.
-    const fromTimefix = await inviteToClaimLogin(hub.owner, {
-      member: admin.member.memberId,
-      email: `alan-${tag()}@example.com`,
-    });
-    expect(fromTimefix.isSelf).toBe(false);
+    const purge = () =>
+      db.withWorkspace(hub.workspaceId, (tx) =>
+        tx.execute<{ path: string | null }>(sql`select path from crm_purge_managed_page(${hub.graceUser}::uuid)`),
+      );
+    expect((await purge()).rows).toEqual([]);
+    const pages = () => testQuery(ownerUrl, 'select 1 from auth.public_profiles where user_id = $1', [hub.graceUser]);
+    expect(await pages()).toHaveLength(1);
+    // The same person unclaimed would go: the refusal is the claim, nothing else.
+    await testQuery(ownerUrl, `update managed_members set claimed_at = null where member_id = $1`, [hub.graceMember]);
+    expect((await purge()).rows.length).toBeGreaterThan(0);
+    expect(await pages()).toEqual([]);
   });
 });

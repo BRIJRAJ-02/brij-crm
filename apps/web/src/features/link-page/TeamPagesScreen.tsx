@@ -86,13 +86,10 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   // the frame has no workspace access to read, so it is never drawn there (AC-7046).
   const canInvite = useCan('members.invite');
   // A connected app's person with no Timefix login yet: Set up their Timefix login, and their open invitation (spec
-  // 0070, AC-7023). Inside the app's frame its admin sets them up (Team pages' own say stands in; the server checks
-  // both permissions and holds the frame to the app's own Members).
+  // 0070, AC-7023). In Timefix only, with Members' invite permission too: never inside the app's frame, which never
+  // reaches those calls (coordinator, 10 Nov 2026).
   const canSetUpLogin = (page: TeamLinkPage) =>
-    (place.isEmbedded ? place.canManageTeam : canInvite) &&
-    page.isFromApp === true &&
-    page.hasLogin !== true &&
-    !page.isSelf;
+    !place.isEmbedded && canInvite && page.isFromApp === true && page.hasLogin !== true && !page.isSelf;
   /** One row put back in the list as the server answered it. */
   const replaceRow = (memberId: string, change: (page: TeamLinkPage) => TeamLinkPage) => {
     setState((was) =>
@@ -441,7 +438,7 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
                 data={data}
                 slug={slug}
                 page={inviting}
-                {...(inviting.isFromApp === true ? { kind: { kind: 'login', appName: place.appName } } : {})}
+                {...(inviting.isFromApp === true ? { kind: { kind: 'login' } } : {})}
                 onClose={() => setInviting(undefined)}
                 onSent={(invite, sent) => {
                   const sentFor = { ...inviting, invite };

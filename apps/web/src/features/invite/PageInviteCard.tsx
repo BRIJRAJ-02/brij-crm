@@ -5,8 +5,8 @@
 // Sign in with that address, which is filled in for him.
 // Leaves out: joining as a new member (the invitation is for the person who already has the page), roles, and any
 // other account: one already signed in signs out first, since a page never moves into another login.
-// The same card sets up a connected app's person's own Timefix login (spec 0070, AC-7023), in that case's words: the
-// app keeps managing them.
+// The same card sets up a connected app's person's own Timefix login (spec 0070, AC-7023), in that case's words: a
+// workspace member set it up for them, and the app keeps managing them.
 import { isDataError, type DataLayer, type InvitePeek, type SignedInUser } from '@crm/data';
 import { AuthLayout, Button, Callout, sharedStrings } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';

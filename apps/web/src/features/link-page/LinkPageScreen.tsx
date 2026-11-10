@@ -492,7 +492,7 @@ function Blocks({
   const navigate = useNavigate();
   // Embedded in a partner's frame (spec 0070, AC-7033): only Link pages is shared, so no block of another module
   // (booking pages, forms, places) is offered, and none opens that module's editor.
-  const { isEmbedded, appName } = useLinkPagePlace(slug);
+  const { isEmbedded, workspaceName } = useLinkPagePlace(slug);
   const held = linkPage.view(slug);
   const state = useLinkPage(held);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
@@ -1233,7 +1233,9 @@ function Blocks({
           personImage={faceImage}
           editedBy={editedBy}
           {...(isTeam ? { title: teamStrings.theirPage } : {})}
-          {...(isEmbedded && !isTeam ? { login: <TimefixLoginCard data={data} slug={slug} appName={appName} /> } : {})}
+          {...(isEmbedded && !isTeam
+            ? { login: <TimefixLoginCard data={data} slug={slug} workspaceName={workspaceName} /> }
+            : {})}
         />
       </PreviewLayout>
     );

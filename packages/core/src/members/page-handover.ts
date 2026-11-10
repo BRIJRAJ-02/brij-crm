@@ -130,8 +130,6 @@ export async function writeNamedInvite(
     readonly email: string;
     readonly open: { readonly id: string; readonly email: string | null } | undefined;
     readonly mark: { readonly page: true } | { readonly login: true };
-    /** The embedded session's connection it was sent from, if any (a login claim from inside the app's frame). */
-    readonly frameConnectionId?: string | undefined;
   },
   source: AuditSource | undefined,
 ): Promise<{ readonly token: string; readonly invitationId: string; readonly sendCount: number }> {
@@ -169,7 +167,6 @@ export async function writeNamedInvite(
         sendCount: sql`${invitations.sendCount} + 1`,
         lastSentAt: sql`now()`,
         expiresAt: INVITE_WINDOW,
-        frameConnectionId: named.frameConnectionId ?? null,
         ...by,
       })
       .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
@@ -202,7 +199,6 @@ export async function writeNamedInvite(
       role: 'member',
       customRoleId: null,
       memberId: named.memberId,
-      frameConnectionId: named.frameConnectionId ?? null,
       tokenHash: hash,
       maxUses: 1,
       sendCount: 1,
@@ -367,9 +363,9 @@ type Claimant =
   | { readonly kind: 'login'; readonly person: ClaimingPerson };
 
 /**
- * Whom an open invitation names, if they can still take it: a plain Member page only person, or a partner's person;
- * one sent from inside a connected app's frame only while they still hold plain Member (security review, 10 Nov 2026:
- * the app could otherwise make them its admin between sending and opening).
+ * Whom an open invitation names, if they can still take it: a plain Member page only person, or a partner's person.
+ * A partner's person's role is read again when it is opened (security review, 10 Nov 2026): made an owner since, only
+ * an owner's invitation still opens, as only an owner sets one up for an owner.
  */
 async function claimantOf(
   tx: WorkspaceTx,
@@ -385,7 +381,7 @@ async function claimantOf(
   }
   const person = await claimingPerson(tx, scope, memberId, lock);
   if (person === undefined) return undefined;
-  if (held.fromFrame === true && (person.role !== 'member' || person.customRoleId !== null)) return undefined;
+  if (person.role === 'owner' && held.senderRole !== 'owner') return undefined;
   return { kind: 'login', person };
 }
 

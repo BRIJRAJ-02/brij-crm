@@ -170,13 +170,9 @@ function isVouchedFor(sent: {
   /** A page's hand over (Team pages), and what the sender's custom role grants beside their role. */
   readonly isPage?: boolean;
   readonly senderGrants?: readonly string[] | null;
-  /** The person it names sent it themselves: a partner's person asking for their own login (spec 0070, AC-7023). */
-  readonly isSelf?: boolean;
 }): boolean {
   if (sent.sentByType === 'system') return true;
   if (sent.sentByType !== 'member' || sent.senderStatus !== 'active') return false;
-  // Their own login, asked for by themselves: it stands while they are still here.
-  if (sent.isPage === true && sent.isSelf === true) return true;
   const senderRole = sent.senderRole ?? '';
   if (!isRole(senderRole)) return false;
   if (sent.role === 'owner') return senderRole === 'owner';
@@ -715,10 +711,8 @@ export interface HeldInvitation {
   readonly slug: string;
   /** The page only person whose page it hands over (Team pages), when it is one. */
   readonly memberId?: string;
-  /** The person it names sent it themselves (a connected app's person's own login, spec 0070, AC-7023). */
-  readonly isSelfSent?: boolean;
-  /** Sent from inside a connected app's frame (migration 0206): it opens only for a plain Member. */
-  readonly fromFrame?: boolean;
+  /** The role of the member who last sent it, while they are an active member here. */
+  readonly senderRole?: Role;
 }
 
 /**
@@ -758,8 +752,6 @@ export async function readInvitation(
       usedBy: invitations.usedByMemberId,
       memberId: invitations.memberId,
       sentByType: invitations.updatedByType,
-      sentByMember: invitations.updatedByMemberId,
-      frameConnectionId: invitations.frameConnectionId,
       inviterName: inviter.name,
       senderStatus: inviter.status,
       senderRole: inviter.role,
@@ -814,13 +806,13 @@ export async function readInvitation(
       senderRole: row.senderRole,
       isPage: row.memberId !== null,
       senderGrants: row.senderGrants,
-      isSelf: row.memberId !== null && row.sentByMember === row.memberId,
     }),
     workspaceName: row.workspaceName,
     slug: row.slug,
     ...(row.memberId === null ? {} : { memberId: row.memberId }),
-    ...(row.memberId !== null && row.sentByMember === row.memberId ? { isSelfSent: true } : {}),
-    ...(row.frameConnectionId === null ? {} : { fromFrame: true }),
+    ...(row.senderStatus === 'active' && row.senderRole !== null && isRole(row.senderRole)
+      ? { senderRole: row.senderRole }
+      : {}),
   };
   return held;
 }
@@ -872,10 +864,7 @@ export async function peekInvite(
     ...(partnerId === undefined
       ? {}
       : {
-          login: {
-            ...(app === undefined ? {} : { app }),
-            ...(held.isSelfSent === true ? { isSelf: true } : {}),
-          },
+          login: app === undefined ? {} : { app },
         }),
     ...(isClaimed ? { isClaimed: true } : {}),
   };

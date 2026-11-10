@@ -247,9 +247,9 @@ await timefix(connection, `/members/${encodeURIComponent(user.id)}`, {
 
 `role` reads `owner` for someone the workspace made an owner in Timefix: you can't change or remove them.
 
-**Their own Timefix login.** A person you added can also set up their own Timefix login, from their page inside your
-frame (or their admin can, for them, from Team pages). Timefix emails them a link; once they open it they sign in to
-Timefix directly too, to the same page. They stay yours: launch, `PUT` and the list work for them as before, and the
+**Their own Timefix login.** An admin of the workspace can set up a Timefix login for a person you added, from Team
+pages in Timefix (never from inside your frame: your page there only tells them whom to ask). Timefix emails them a
+link; once they open it they sign in to Timefix directly too, to the same page. They stay yours: launch, `PUT` and the list work for them as before, and the
 answer carries `"hasTimefixLogin": true`. From then on `email` is their login's: a `PUT` still changes their name and
 role, but never their address.
 

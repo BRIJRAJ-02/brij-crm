@@ -1,7 +1,7 @@
 // Brief
 // Purpose: hand a page only person their own page (9 Nov 2026): Taylor invites Nick, who sets up a login and keeps
 // timefix.com/nick, its blocks and its history. The same dialog sets up a Timefix login for a connected app's person
-// (spec 0070, AC-7023): the person themselves, or their manager, and the app keeps managing them.
+// (spec 0070, AC-7023), from Timefix only, and the app keeps managing them.
 // Main task: check or type their email, then Send invitation; or, with one already out, cancel it after a confirm.
 // Leaves out: the role (they keep theirs), and anything about the page itself.
 import { isDataError, type DataLayer, type TeamLinkPage } from '@crm/data';
@@ -14,12 +14,9 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * What the invitation sets up: a page only person's hand over (`page`), or a connected app's person's own Timefix
- * login, for someone else (`login`, with the app's name) or for the caller (`own`).
+ * login (`login`, with the app's name when known).
  */
-export type InviteKind =
-  | { readonly kind: 'page' }
-  | { readonly kind: 'login'; readonly appName?: string | undefined }
-  | { readonly kind: 'own' };
+export type InviteKind = { readonly kind: 'page' } | { readonly kind: 'login'; readonly appName?: string | undefined };
 
 /** Props for Invite to manage their page, and Set up a Timefix login. */
 export interface PageInviteDialogProps {
@@ -56,8 +53,8 @@ export function PageInviteDialog({
   const send = () => {
     if (isBusy) return;
     const wanted = email.trim();
-    const missing = kind.kind === 'own' ? strings.ownEmailMissing : strings.inviteEmailMissing;
-    const wrong = wanted === '' ? missing : EMAIL_SHAPE.test(wanted) ? undefined : strings.inviteEmailInvalid;
+    const wrong =
+      wanted === '' ? strings.inviteEmailMissing : EMAIL_SHAPE.test(wanted) ? undefined : strings.inviteEmailInvalid;
     if (wrong !== undefined) {
       setProblem(wrong);
       field.current?.focus();
@@ -89,20 +86,8 @@ export function PageInviteDialog({
   };
   return (
     <Modal
-      title={
-        kind.kind === 'page'
-          ? strings.inviteTitle(page.name)
-          : kind.kind === 'login'
-            ? strings.loginTitle(page.name)
-            : strings.ownLoginAction
-      }
-      description={
-        kind.kind === 'page'
-          ? strings.inviteText
-          : kind.kind === 'login'
-            ? strings.loginText(kind.appName)
-            : strings.ownLoginDialogText
-      }
+      title={kind.kind === 'page' ? strings.inviteTitle(page.name) : strings.loginTitle(page.name)}
+      description={kind.kind === 'page' ? strings.inviteText : strings.loginText(kind.appName)}
       isOpen
       isDismissable={!isEdited}
       isBusy={isBusy}
@@ -115,7 +100,7 @@ export function PageInviteDialog({
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={send}>
-            {isBusy ? strings.inviting : kind.kind === 'own' ? strings.ownLoginSend : strings.inviteAction}
+            {isBusy ? strings.inviting : strings.inviteAction}
           </Button>
         </>
       }
@@ -168,10 +153,9 @@ export function CancelPageInvite({
   readonly slug: string;
   readonly page: CancelledInvite | undefined;
   /**
-   * A page only person's hand over (`page`), a connected app's person's login invitation (`login`), or the caller's
-   * own (`own`, in their own words).
+   * A page only person's hand over (`page`), or a connected app's person's login invitation (`login`).
    */
-  readonly kind?: 'page' | 'login' | 'own';
+  readonly kind?: 'page' | 'login';
   readonly onClose: () => void;
   readonly onCancelled: (page: CancelledInvite) => void;
 }) {
@@ -202,7 +186,7 @@ export function CancelPageInvite({
   };
   return (
     <Modal
-      title={kind === 'own' ? strings.ownLoginCancelTitle : strings.revokeInviteTitle(shown.name)}
+      title={strings.revokeInviteTitle(shown.name)}
       variant="confirm"
       tone="danger"
       isOpen={page !== undefined}
@@ -216,7 +200,7 @@ export function CancelPageInvite({
       actions={
         <>
           <Button slot="close" isDisabled={isBusy}>
-            {kind === 'own' ? strings.ownLoginKeep : strings.keepInvite}
+            {strings.keepInvite}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} onPress={cancel}>
             {strings.revokeInvite}
@@ -225,9 +209,7 @@ export function CancelPageInvite({
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {kind === 'own'
-        ? strings.ownLoginCancelText(shown.invite?.email ?? '')
-        : strings.revokeInviteText(shown.invite?.email ?? '')}
+      {strings.revokeInviteText(shown.invite?.email ?? '')}
     </Modal>
   );
 }

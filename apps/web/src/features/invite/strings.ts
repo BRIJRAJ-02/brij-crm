@@ -51,13 +51,11 @@ export const strings = {
    * sign in to Timefix directly.
    */
   loginTitle: 'Set up your Timefix login',
-  loginInvited: (inviter: string, workspace: string, login: { readonly app?: string; readonly isSelf?: boolean }) => {
+  loginInvited: (inviter: string, workspace: string, login: { readonly app?: string }) => {
     const asked =
-      login.isSelf === true
-        ? `You asked for a Timefix login in ${workspace}.`
-        : inviter === ''
-          ? `You’re invited to set up a Timefix login in ${workspace}.`
-          : `${inviter} asked for a Timefix login for you in ${workspace}.`;
+      inviter === ''
+        ? `A Timefix login was set up for you in ${workspace}.`
+        : `${inviter} set up a Timefix login for you in ${workspace}.`;
     return `${asked} You can keep using ${login.app ?? 'the app you use now'} too.`;
   },
   loginSignedIn: (email: string) => `You’re signed in as ${email}. Sign out first to set up your own login.`,

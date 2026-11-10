@@ -81,10 +81,8 @@ const ownLogin: Template<MemberInviteEmail> = (params, context) => {
   const handle = params.page?.handle;
   const page = handle === undefined ? 'your link page' : `your link page, /${handle}`;
   const app = params.login?.app ?? 'the app you use now';
-  const asked =
-    params.login?.isSelf === true
-      ? `You asked for a Timefix login in ${workspace}.`
-      : `${params.inviterName} asked for a Timefix login for you in ${workspace}.`;
+  // Someone in the workspace always sends it (never the person): it says who, so nothing reads as if they asked.
+  const asked = `${params.inviterName} set up a Timefix login for you in ${workspace}.`;
   return {
     subject: 'Set up your Timefix login',
     preheader: `Sign in to Timefix to manage ${page}. The invitation works until ${until}.`,
@@ -98,9 +96,6 @@ const ownLogin: Template<MemberInviteEmail> = (params, context) => {
         text: `The invitation works until ${until}, and only for this address. If you weren’t expecting it, you can ignore this email.`,
       },
     ],
-    why:
-      params.login?.isSelf === true
-        ? `You got this email because a Timefix login was asked for with this address in ${workspace}.`
-        : `You got this email because ${params.inviterName} asked for a Timefix login for this address in ${workspace}.`,
+    why: `You got this email because ${params.inviterName} set up a Timefix login for this address in ${workspace}.`,
   };
 };

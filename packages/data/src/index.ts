@@ -6568,8 +6568,8 @@ export function createDataLayer({
       cancelInvite: (workspace: string, member: string): Promise<PageInviteCancelled> =>
         call((options) => api.teamPages.cancelInvite({ workspace, member, mutationId: mintId() }, options)),
       /**
-       * Set up a Timefix login (spec 0070, AC-7023): an invitation for a connected app's person, `member` (the caller,
-       * or someone a manager picks), to sign in to Timefix directly at `email`. Waits for the server, as Invite to
+       * Set up a Timefix login (spec 0070, AC-7023): an invitation for a connected app's person, `member`, to sign in to
+       * Timefix directly at `email`; from Team pages in Timefix only, by a manager with both permissions. Waits for the server, as Invite to
        * manage their page does. `sent` false: it stands, its email didn't go, and sending again tries once more.
        */
       inviteLogin: (workspace: string, member: string, email: string): Promise<PageInviteSent> =>

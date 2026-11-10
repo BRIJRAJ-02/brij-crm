@@ -122,7 +122,6 @@ function EmbedLinkPageRoute() {
           ...(theme === undefined ? {} : { theme }),
           canManageTeam: session.canManageTeam,
           workspaceName: session.workspaceName,
-          appName: session.partner.name,
         }}
       >
         <EmbeddedLayout>{screen}</EmbeddedLayout>

@@ -1,9 +1,9 @@
 // A connected app's person's own Timefix login (spec 0070, AC-7023) in Chromium with a fake data layer: Team pages
-// offers Set up their Timefix login on an app's person's row (with Members' invite permission in the app, or to the
-// app's admin inside its frame), sends it and revokes it through the login calls; the person's own card inside the
-// frame sets one up, shows it sent, and draws nothing once they have one. axe is clean in light and dark. With
-// VITE_SHOT_DIR set, each state is photographed there at 1280 and 390, light and dark, the card also in the overview it
-// sits under.
+// offers Set up their Timefix login on an app's person's row, in Timefix only and with Members' invite permission
+// (never inside the app's frame), sends it and revokes it through the login calls; the person's own card inside the
+// frame is one line of information with no action, and draws nothing once they have a login. axe is clean in light
+// and dark. With VITE_SHOT_DIR set, each state is photographed there at 1280 and 390, light and dark, the card in the
+// overview it sits under.
 import '@crm/ui/styles.css';
 import type { DataLayer, LinkPageStore, MyTimefixLogin, TeamLinkPage } from '@crm/data';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -90,9 +90,7 @@ const sentInvite = (email: string) => ({
 });
 
 /** The fake layer: Team pages' list, and the login calls. */
-function layerWith(
-  mine: MyTimefixLogin = { canSetUp: true, hasLogin: false, memberId: GRACE, email: 'grace@hub.example' },
-) {
+function layerWith(mine: MyTimefixLogin = { canSetUp: true, hasLogin: false }) {
   const inviteLogin = vi.fn((_slug: string, _member: string, email: string) => Promise.resolve(sentInvite(email)));
   const cancelLoginInvite = vi.fn((_slug: string, _member: string) => Promise.resolve({ cancelled: true }));
   const myLogin = vi.fn((_slug: string) => Promise.resolve(mine));
@@ -113,9 +111,7 @@ async function renderTeam(data: Partial<DataLayer>, permissions: readonly string
   shown = await renderInApp(
     () =>
       inFrame ? (
-        <EmbeddedLinkPages
-          place={{ base: '/embed/hub/link-page', canManageTeam: true, workspaceName: 'Acme', appName: 'Hub' }}
-        >
+        <EmbeddedLinkPages place={{ base: '/embed/hub/link-page', canManageTeam: true, workspaceName: 'Acme' }}>
           <TeamPagesScreen data={data as DataLayer} slug="acme" />
         </EmbeddedLinkPages>
       ) : (
@@ -125,12 +121,30 @@ async function renderTeam(data: Partial<DataLayer>, permissions: readonly string
   );
 }
 
-async function renderCard(data: Partial<DataLayer>) {
-  shown = await renderInApp(() => <TimefixLoginCard data={data as DataLayer} slug="acme" appName="Hub" />, {
-    data,
-    pattern: '/embed/$clientId/link-page',
-    at: '/embed/hub/link-page',
-  });
+/** The card where it sits: under the person's own page card, inside the app's frame. */
+async function renderOwnPage(data: Partial<DataLayer>) {
+  shown = await renderInApp(
+    () => (
+      <EmbeddedLinkPages place={{ base: '/embed/hub/link-page', canManageTeam: false, workspaceName: 'Acme' }}>
+        <main>
+          <LinkPageOverview
+            slug="acme"
+            handle="grace"
+            address="https://timefix.com/grace"
+            isPublic
+            isEmpty={false}
+            onEdit={() => undefined}
+            onAdd={() => undefined}
+            onGoLive={() => undefined}
+            linkPage={linkPageStore}
+            items={[]}
+            login={<TimefixLoginCard data={data as DataLayer} slug="acme" workspaceName="Acme" />}
+          />
+        </main>
+      </EmbeddedLinkPages>
+    ),
+    { data, pattern: '/embed/$clientId/link-page', at: '/embed/hub/link-page' },
+  );
 }
 
 async function shot(name: string) {
@@ -147,6 +161,13 @@ describe('Set up their Timefix login, on Team pages', () => {
     clear();
     await renderTeam(layerWith().data, BOTH);
     await userEvent.click(page.getByRole('button', { name: 'Actions for Hal Finney' }));
+    await expect.element(page.getByRole('menuitem', { name: 'Edit page' })).toBeVisible();
+    expect(document.body.textContent).not.toContain('Set up their Timefix login');
+  });
+
+  it('is never offered inside the app’s frame, even to its admin', async () => {
+    await renderTeam(layerWith().data, BOTH, true);
+    await userEvent.click(page.getByRole('button', { name: 'Actions for Grace Hopper' }));
     await expect.element(page.getByRole('menuitem', { name: 'Edit page' })).toBeVisible();
     expect(document.body.textContent).not.toContain('Set up their Timefix login');
   });
@@ -173,48 +194,30 @@ describe('Set up their Timefix login, on Team pages', () => {
     await userEvent.click(page.getByRole('button', { name: 'Revoke invitation' }));
     await vi.waitFor(() => expect(cancelLoginInvite).toHaveBeenCalledWith('acme', GRACE));
   });
-
-  it('is the app’s admin’s inside the app’s frame, naming the app', async () => {
-    await renderTeam(layerWith().data, [], true);
-    await userEvent.click(page.getByRole('button', { name: 'Actions for Grace Hopper' }));
-    await userEvent.click(page.getByRole('menuitem', { name: 'Set up their Timefix login' }));
-    await expect.element(page.getByText(/They keep using Hub, and can also sign in to Timefix/)).toBeVisible();
-  });
 });
 
 describe('the person’s own Timefix login card, inside the app’s frame', () => {
-  it('sets one up, then says it went and offers to send again or cancel', async () => {
-    const { data, inviteLogin, cancelLoginInvite } = layerWith();
-    await renderCard(data);
+  it('says whom to ask, with no action, and passes axe', async () => {
+    const { data, inviteLogin } = layerWith();
+    await renderOwnPage(data);
     await expect
-      .element(page.getByText('Keep using Hub as before. You can also sign in to Timefix directly.'))
+      .element(page.getByText('Want to sign in to Timefix directly? Ask an admin of Acme to set up your login.'))
       .toBeVisible();
+    expect(page.getByRole('button', { name: /Timefix login/ }).query()).toBeNull();
+    expect(inviteLogin).not.toHaveBeenCalled();
     for (const theme of THEMES) {
       applyTheme(theme);
       expect(await axeViolations()).toEqual([]);
     }
-    await userEvent.click(page.getByRole('button', { name: 'Set up your Timefix login' }));
-    await expect.element(page.getByRole('dialog', { name: 'Set up your Timefix login' })).toBeVisible();
-    await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'grace@personal.example');
-    await userEvent.click(page.getByRole('button', { name: 'Email me the link' }));
-    await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
-    expect(inviteLogin).toHaveBeenCalledWith('acme', GRACE, 'grace@personal.example');
-    await expect.element(page.getByText(/Invitation sent to grace@personal\.example\. Open the link/)).toBeVisible();
-    await userEvent.click(page.getByRole('button', { name: 'Revoke invitation' }));
-    await expect.element(page.getByRole('alertdialog', { name: 'Revoke your invitation?' })).toBeVisible();
-    await expect.element(page.getByText(/The link sent to grace@personal\.example stops working/)).toBeVisible();
-    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Revoke invitation' }));
-    await vi.waitFor(() => expect(cancelLoginInvite).toHaveBeenCalledWith('acme', GRACE));
-    await expect.element(page.getByRole('button', { name: 'Set up your Timefix login' })).toBeVisible();
   });
 
-  it('draws nothing once they have a login, or for someone who can’t set one up', async () => {
+  it('draws nothing once they have a login, or for someone a login can’t be set up for', async () => {
     for (const mine of [
-      { canSetUp: false, hasLogin: true, memberId: GRACE },
-      { canSetUp: false, hasLogin: false, memberId: GRACE },
+      { canSetUp: false, hasLogin: true },
+      { canSetUp: false, hasLogin: false },
     ]) {
       const { data, myLogin } = layerWith(mine);
-      await renderCard(data);
+      await renderOwnPage(data);
       await vi.waitFor(() => expect(myLogin).toHaveBeenCalled());
       expect(document.body.textContent).not.toContain('Timefix login');
       clear();
@@ -248,46 +251,10 @@ describe('pictures', () => {
           await shot(`team-invited-${at}`);
           clear();
 
-          // The card where it sits: under the person's own page card, inside the app's frame.
-          const { data } = layerWith();
-          shown = await renderInApp(
-            () => (
-              <EmbeddedLinkPages
-                place={{ base: '/embed/hub/link-page', canManageTeam: false, workspaceName: 'Acme', appName: 'Hub' }}
-              >
-                <main>
-                  <LinkPageOverview
-                    slug="acme"
-                    handle="grace"
-                    address="https://timefix.com/grace"
-                    isPublic
-                    isEmpty={false}
-                    onEdit={() => undefined}
-                    onAdd={() => undefined}
-                    onGoLive={() => undefined}
-                    linkPage={linkPageStore}
-                    items={[]}
-                    login={<TimefixLoginCard data={data as DataLayer} slug="acme" appName="Hub" />}
-                  />
-                </main>
-              </EmbeddedLinkPages>
-            ),
-            { data, pattern: '/embed/$clientId/link-page', at: '/embed/hub/link-page' },
-          );
+          await renderOwnPage(layerWith().data);
           applyTheme(theme);
-          await expect.element(page.getByRole('button', { name: 'Set up your Timefix login' })).toBeVisible();
+          await expect.element(page.getByText(/Ask an admin of Acme/)).toBeVisible();
           await shot(`own-card-${at}`);
-          await userEvent.click(page.getByRole('button', { name: 'Set up your Timefix login' }));
-          await expect.element(page.getByRole('dialog')).toBeVisible();
-          await settled();
-          await shot(`own-dialog-${at}`);
-          await userEvent.click(page.getByRole('button', { name: 'Email me the link' }));
-          await vi.waitFor(() => expect(openDialog('dialog')).toBeNull());
-          await shot(`own-invited-${at}`);
-          await userEvent.click(page.getByRole('button', { name: 'Revoke invitation' }));
-          await expect.element(page.getByRole('alertdialog')).toBeVisible();
-          await settled();
-          await shot(`own-revoke-${at}`);
           clear();
         }
       }

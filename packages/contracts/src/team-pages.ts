@@ -206,11 +206,10 @@ export const PageInviteSent = z.object({
 export type PageInviteSent = z.infer<typeof PageInviteSent>;
 
 /**
- * Set up your Timefix login (spec 0070, AC-7023; owner, 10 Nov 2026): an email invitation for a connected app's person
- * to make their own identity a Timefix login at that address, the same member with the same page, handle and history,
- * while the app keeps managing them. The person asks for their own (`member` is them, no permission), or someone with
- * `link_pages.manage_team` and `members.invite` asks for them: inside the app's frame that is the app's admin. Sent
- * again, it replaces the open one. An address someone else here uses, or another open invitation names, is refused
+ * Set up their Timefix login (spec 0070, AC-7023; owner, 10 Nov 2026): an email invitation for a connected app's
+ * person to make their own identity a Timefix login at that address, the same member with the same page, handle and
+ * history, while the app keeps managing them. Only from Timefix, by someone holding `link_pages.manage_team` and
+ * `members.invite`: never from inside the app's frame (refused there). Sent again, it replaces the open one. An address someone else here uses, or another open invitation names, is refused
  * (`UNIQUE_CONFLICT` on `email`); one that already has a Timefix login is refused when the link is opened (AC-7021).
  */
 export const InviteLoginInput = WorkspaceScoped.extend({
@@ -220,22 +219,16 @@ export const InviteLoginInput = WorkspaceScoped.extend({
 });
 /** Set up your Timefix login. */
 export type InviteLoginInput = z.infer<typeof InviteLoginInput>;
-/** Cancels the open login invitation naming a connected app's person: the person themselves, or a manager. */
+/** Cancels the open login invitation naming a connected app's person: as setting one up, from Timefix only. */
 export const CancelLoginInviteInput = WorkspaceScoped.extend({ member: Uuid, mutationId: Uuid });
 /** Cancels a login invitation. */
 export type CancelLoginInviteInput = z.infer<typeof CancelLoginInviteInput>;
 /**
- * The caller's own Timefix login, as their page inside a connected app's frame shows it (AC-7023): whether they can set
- * one up (a connected app's person with none yet), whether they have one, the address the app gave, and their open
- * invitation. Anyone else reads `canSetUp: false`.
+ * The caller's own Timefix login, as their page inside a connected app's frame tells them whom to ask (AC-7023):
+ * whether one can be set up for them (a connected app's person with none yet), or they have one. Anyone else reads
+ * `canSetUp: false`.
  */
-export const MyTimefixLogin = z.object({
-  canSetUp: z.boolean(),
-  hasLogin: z.boolean(),
-  memberId: Uuid.optional(),
-  email: z.string().optional(),
-  invite: PageInviteSent.shape.invite.optional(),
-});
+export const MyTimefixLogin = z.object({ canSetUp: z.boolean(), hasLogin: z.boolean() });
 /** The caller's own Timefix login. */
 export type MyTimefixLogin = z.infer<typeof MyTimefixLogin>;
 /** Cancels a page only person's open hand over: its link stops working at once. */
@@ -266,7 +259,7 @@ export type LinkPageEditedBy = z.infer<typeof LinkPageEditedBy>;
 /**
  * The team pages namespace. Everything but `editedBy` and `myLogin` (any member's own) needs
  * `link_pages.manage_team`: the list, a claim, and adding, removing and naming a page only person; `inviteLogin` and
- * `cancelLoginInvite` take it with `members.invite`, or no permission for the caller's own.
+ * `cancelLoginInvite` take it with `members.invite`, from Timefix only (never an app's frame).
  */
 export const teamPagesContract = {
   list: oc.input(WorkspaceScoped).output(TeamLinkPages),

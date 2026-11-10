@@ -108,25 +108,16 @@ export const teamStrings = {
   keepInvite: 'Keep invitation',
   inviteRevoked: (email: string) => `Invitation to ${email} revoked.`,
   /**
-   * A connected app's person's own Timefix login (spec 0070, AC-7023, 10 Nov 2026): asked for by a manager on Team
-   * pages, or by the person on their own page inside the app's frame. The app keeps them either way.
+   * A connected app's person's own Timefix login (spec 0070, AC-7023, 10 Nov 2026): set up by a manager on Team pages,
+   * in Timefix only. Inside the app's frame the person reads only whom to ask. The app keeps them either way.
    */
   loginInvite: 'Set up their Timefix login',
   loginTitle: (name: string) => `Set up a Timefix login for ${firstOf(name)}`,
   loginText: (app: string | undefined) =>
     `They keep using ${app ?? 'the app that added them'}, and can also sign in to Timefix. The link works for 7 days.`,
   ownLoginTitle: 'Timefix login',
-  ownLoginText: (app: string | undefined) =>
-    `Keep using ${app ?? 'this app'} as before. You can also sign in to Timefix directly.`,
-  ownLoginAction: 'Set up your Timefix login',
-  ownLoginDialogText: 'We’ll email you a link. It works for 7 days.',
-  ownLoginSend: 'Email me the link',
-  ownEmailMissing: 'Add your email.',
-  ownLoginInvited: (email: string) => `Invitation sent to ${email}. Open the link in it to finish.`,
-  ownLoginExpired: (email: string) => `The invitation to ${email} expired.`,
-  ownLoginCancelTitle: 'Revoke your invitation?',
-  ownLoginCancelText: (email: string) => `The link sent to ${email} stops working. You can send a new one later.`,
-  ownLoginKeep: 'Keep invitation',
+  ownLoginText: (workspace: string | undefined) =>
+    `Want to sign in to Timefix directly? Ask an admin of ${workspace === undefined || workspace === '' ? 'your workspace' : workspace} to set up your login.`,
   /** The member's page, opened by a manager. */
   memberTitle: (name: string) => `${firstOf(name)}’s page`,
   /** The page card's title on someone else's page, where "Your page" would be wrong. */

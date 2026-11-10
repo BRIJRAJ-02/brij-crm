@@ -64,11 +64,6 @@ export const invitations = pgTable(
      * login at the invited address, so they stay the same member. Only a Member email invitation names one (0203).
      */
     memberId: uuid('member_id'),
-    /**
-     * The connected app's embedded session (its connection) a login invitation was last sent from (spec 0070,
-     * AC-7023, migration 0206); none from Timefix. Such an invitation opens only while its person holds plain Member.
-     */
-    frameConnectionId: uuid('frame_connection_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -99,8 +94,6 @@ export const invitations = pgTable(
       'invitations_member_shape',
       sql`${t.memberId} is null or (${t.kind} = 'email' and ${t.role} = 'member' and ${t.customRoleId} is null)`,
     ),
-    // Only a login invitation naming a person comes from a connected app's frame (migration 0206).
-    check('invitations_frame', sql`${t.frameConnectionId} is null or ${t.memberId} is not null`),
     check('invitations_kind', sql`${t.kind} in ('email', 'link')`),
     check('invitations_status', sql`${t.status} in ('open', 'used', 'revoked')`),
     check(

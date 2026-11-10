@@ -3054,7 +3054,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.user_prefs.user_id INSERT',
       'auth.user_prefs.user_id SELECT',
       // Who a purged page was (migration 0203): removed 30 days ago, and no member here any more, read by
-      // crm_purge_managed_page alone under the tables' row level security.
+      // crm_purge_managed_page alone under the tables' row level security; and (0206) whether they claimed a login.
+      'managed_members.claimed_at SELECT',
       'managed_members.removed_at SELECT',
       'managed_members.user_id SELECT',
       'managed_members.workspace_id SELECT',

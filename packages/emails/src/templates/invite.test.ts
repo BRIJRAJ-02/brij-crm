@@ -57,7 +57,7 @@ describe('the invitation email', () => {
     );
     expect(email.subject).toBe('Set up your Timefix login');
     expect(email.text).toContain(
-      'Ada Lovelace asked for a Timefix login for you in Acme. Sign in to Timefix to manage your link page, /grace. You can keep using Hub too.',
+      'Ada Lovelace set up a Timefix login for you in Acme. Sign in to Timefix to manage your link page, /grace. You can keep using Hub too.',
     );
     expect(email.text).toContain(`Set up your login: ${ORIGIN}/invite/0123456789abcdefghijklmnopqrstuv`);
     const unnamed = await renderMemberInvite(
@@ -65,13 +65,8 @@ describe('the invitation email', () => {
       { appOrigin: ORIGIN, workspaceName: 'Acme' },
     );
     expect(unnamed.text).toContain('You can keep using the app you use now too.');
-    // Asked for by themselves: no inviter named.
-    const own = await renderMemberInvite(
-      { ...PARAMS, role: 'member', login: { app: 'Hub', isSelf: true } },
-      { appOrigin: ORIGIN, workspaceName: 'Acme' },
-    );
-    expect(own.text).toContain('You asked for a Timefix login in Acme.');
-    expect(own.text).not.toContain('Ada Lovelace');
+    // Nothing says they asked for it themselves.
+    expect(email.text).not.toMatch(/You asked|you asked/);
   });
 
   it('refuses an accept link off the app, and params it doesn’t know', async () => {
