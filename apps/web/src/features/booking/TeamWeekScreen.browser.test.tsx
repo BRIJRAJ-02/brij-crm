@@ -151,7 +151,8 @@ describe('the Team week', () => {
     const popup = page.getByRole('dialog', { name: 'Priya Shah’s hours' });
     await expect.element(popup).toBeVisible();
     await expect.element(popup.getByRole('link', { name: 'Open in Availability' })).toBeVisible();
-    await popup.getByRole('button', { name: 'Done' }).click();
+    // Read only: no Done, the close button closes it.
+    await popup.getByRole('button', { name: 'Close' }).click();
     await expect.element(popup).not.toBeInTheDocument();
   });
 

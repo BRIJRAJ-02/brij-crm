@@ -17,8 +17,9 @@ import {
   Callout,
   DescriptionList,
   Field,
-  FieldError,
+  FieldGroup,
   Form,
+  FormRow,
   Modal,
   MonthRangeCalendar,
   SegmentedControl,
@@ -29,7 +30,16 @@ import {
 } from '@crm/ui';
 import { useId, useState } from 'react';
 import { clockOfMinute } from '../bookings/meeting-format.ts';
-import { awayOf, datesBetween, todayIn, weeklyOn, withDayOff, withHoursAway, withOverride } from './hours.ts';
+import {
+  awayOf,
+  datesBetween,
+  hoursLessAway,
+  todayIn,
+  weeklyOn,
+  withDayOff,
+  withHoursAway,
+  withOverride,
+} from './hours.ts';
 import { firstName } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 
@@ -234,6 +244,18 @@ function TimeOffForm({
     const dates = datesBetween(picked.start, picked.end);
     const taken = aways.map((each): readonly [string, string] => [clock(each.from), clock(each.to)]);
     const replacing = override?.date;
+    // Hours away that take nothing (a day with no hours, times outside them) would save a change that changes nothing.
+    if (mode === 'some') {
+      const takes = dates.some((date) => {
+        const own = hours.availability.overrides.find((each) => each.date === date);
+        const within = own === undefined || date === replacing ? weeklyOn(hours.availability, date) : own.ranges;
+        return JSON.stringify(hoursLessAway(within, taken)) !== JSON.stringify(hoursLessAway(within, []));
+      });
+      if (!takes) {
+        setErrors({ away: strings.notWorking });
+        return;
+      }
+    }
     setBusy(true);
     setErrors({});
     void hours
@@ -247,7 +269,11 @@ function TimeOffForm({
       })
       .then((stored) => {
         setBusy(false);
-        if (!stored) return;
+        // Refused: said here, in the popup, as the whole days path says its refusals.
+        if (!stored) {
+          setErrors({ form: strings.hoursFailed });
+          return;
+        }
         onHoursSaved?.(isNew);
         onClose();
       });
@@ -368,19 +394,18 @@ function TimeOffForm({
       }}
       // The days first, as Cal.com's date overrides put the month beside the hours.
       lead={
-        <>
-          <MonthRangeCalendar
-            label={strings.days}
-            value={range}
-            minValue={today}
-            marked={marked}
-            onChange={(next) => {
-              setRange(next);
-              setErrors((was) => ({ ...was, days: undefined }));
-            }}
-          />
-          {errors.days !== undefined && <FieldError kind="standalone">{errors.days}</FieldError>}
-        </>
+        <MonthRangeCalendar
+          label={strings.days}
+          value={range}
+          minValue={today}
+          marked={marked}
+          markedLabel={strings.markedDay}
+          {...(errors.days === undefined ? {} : { error: errors.days })}
+          onChange={(next) => {
+            setRange(next);
+            setErrors((was) => ({ ...was, days: undefined }));
+          }}
+        />
       }
       actions={
         <>
@@ -444,7 +469,13 @@ function TimeOffForm({
           />
         )}
         {isHours && mode === 'some' && (
-          <>
+          <FieldGroup
+            label={strings.hoursAway}
+            // Some hours changes the open schedule alone: said where the hours are.
+            {...(hours === undefined ? {} : { hint: strings.scheduleOnly(hours.scheduleName) })}
+            {...(errors.away === undefined ? {} : { error: errors.away })}
+            isLive
+          >
             {aways.map((each, index) => (
               <Sentence
                 key={each.id}
@@ -485,27 +516,24 @@ function TimeOffForm({
                 />
               </Sentence>
             ))}
-            {errors.away !== undefined && <FieldError kind="standalone">{errors.away}</FieldError>}
-            <div>
-              <Button
-                variant="ghost"
-                icon="plus"
-                onPress={() => {
-                  const last = aways.at(-1);
-                  const from = Math.min((last?.to ?? 480) + 60, 1380);
-                  setAways((all) => [
-                    ...all,
-                    { id: Math.max(0, ...all.map((other) => other.id)) + 1, from, to: Math.min(from + 60, 1440) },
-                  ]);
-                }}
-              >
-                {strings.addAway}
-              </Button>
-            </div>
-          </>
+            <Button
+              variant="ghost"
+              icon="plus"
+              onPress={() => {
+                const last = aways.at(-1);
+                const from = Math.min((last?.to ?? 480) + 60, 1380);
+                setAways((all) => [
+                  ...all,
+                  { id: Math.max(0, ...all.map((other) => other.id)) + 1, from, to: Math.min(from + 60, 1440) },
+                ]);
+              }}
+            >
+              {strings.addAway}
+            </Button>
+          </FieldGroup>
         )}
         {!isHours && (
-          <>
+          <FormRow>
             <Select
               label={strings.reason}
               items={REASONS.map((each) => ({ id: each, label: strings.reasons[each] }))}
@@ -541,7 +569,7 @@ function TimeOffForm({
               }}
               {...(errors.standin === undefined ? {} : { error: errors.standin })}
             />
-          </>
+          </FormRow>
         )}
         <Field
           label={strings.note}
@@ -550,8 +578,6 @@ function TimeOffForm({
           maxLength={isHours ? HOURS_NOTE_MAX : NOTE_MAX}
           value={note}
           onChange={setNote}
-          // Some hours changes the open schedule alone: said once, where the hours are.
-          {...(isHours && hours !== undefined ? { hint: strings.scheduleOnly(hours.scheduleName) } : {})}
         />
       </Form>
     </Modal>

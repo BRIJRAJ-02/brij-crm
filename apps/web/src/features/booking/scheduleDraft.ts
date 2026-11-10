@@ -32,7 +32,7 @@ export interface ScheduleDraft {
   /** Changes the hours from what is shown now, so several changes in one event all land (Copy to days). */
   readonly change: (next: (current: BookingAvailability) => BookingAvailability) => void;
   /** Saves the changes; answers whether they were stored (false when refused or with nothing to save). */
-  readonly save: () => Promise<boolean>;
+  readonly save: (given?: BookingAvailability) => Promise<boolean>;
   /** Puts the schedule's own hours back. */
   readonly discard: () => void;
   /**
@@ -100,70 +100,99 @@ export function useScheduleDraft({
     setUnsaved((current) => next(current ?? schedule.availability));
   };
 
-  const save = (): Promise<boolean> => {
-    const hours = unsaved;
+  // One write at a time, Save and the changes saved at once alike, each on the version the last one stored (a delete,
+  // then its Undo, before the list redraws; a Save still out when time off is added).
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const lastStored = useRef<ScheduleView | undefined>(undefined);
+  const now = useRef(schedule);
+  useEffect(() => {
+    now.current = schedule;
+  }, [schedule]);
+  /** The newest version known: the list's, or the last answer when the list hasn't redrawn yet. */
+  const newest = (): ScheduleView => {
+    const stored = lastStored.current;
+    return stored !== undefined &&
+      stored.id === now.current.id &&
+      (stored.updatedAt ?? '') > (now.current.updatedAt ?? '')
+      ? stored
+      : now.current;
+  };
+  const queue = (run: () => Promise<boolean>): Promise<boolean> => {
+    const result = chain.current.then(run, run);
+    chain.current = result;
+    return result;
+  };
+
+  /** Saves the unsaved hours (or `given`, the virtual default's first save from a change saved at once). */
+  const save = (given?: BookingAvailability): Promise<boolean> => {
+    const hours = given ?? unsaved;
     if (hours === undefined || isSaving || !availabilityIsValid(hours)) return Promise.resolve(false);
-    const from = base.current ?? { id: schedule.id, updatedAt: schedule.updatedAt };
-    if (from.id !== schedule.id) {
-      // What the hours were meant for changed under them (another tab stored, deleted or moved it).
-      setUnsaved(undefined);
-      base.current = undefined;
-      reload();
-      onNotice({ tone: 'danger', message: scheduleStrings.stale });
-      return Promise.resolve(false);
-    }
     setSaving(true);
     setError(undefined);
-    let saving: Promise<ScheduleView>;
-    if (schedule.id === null) {
-      newId.current ??= data.schedules.newId();
-      onAdopt?.(newId.current);
-      saving = data.schedules.create(slug, schedule.memberId, {
-        id: newId.current,
-        name: schedule.name,
-        timeZone: hours.timeZone,
-        availability: hours,
-        isDefault: true,
-        forMember,
-      });
-    } else {
-      // Against the version the changes started from, so a save another tab made meanwhile answers STALE.
-      saving = data.schedules.update(
-        slug,
-        { ...schedule, updatedAt: from.updatedAt ?? schedule.updatedAt },
-        { availability: hours },
-      );
-    }
-    return saving.then(
-      (stored) => {
-        if (!isMounted.current) return true;
+    return queue(() => {
+      const current = newest();
+      const from = base.current ?? { id: current.id, updatedAt: current.updatedAt };
+      if (from.id !== current.id) {
+        // What the hours were meant for changed under them (another tab stored, deleted or moved it).
         setSaving(false);
-        // Changes made while it was out stay unsaved, now on top of the stored version.
-        if (latest.current === hours) {
-          setUnsaved(undefined);
-          base.current = undefined;
-        } else {
-          base.current = { id: stored.id, updatedAt: stored.updatedAt };
-        }
-        onNotice({ tone: 'success', message: scheduleStrings.hoursSaved(stored.name) });
-        return true;
-      },
-      (failure: unknown) => {
-        if (!isMounted.current) return false;
-        setSaving(false);
-        if (isDataError(failure) && failure.code === 'STALE') {
-          // Another tab or person saved first: theirs shows, and saying so beats replacing it unseen.
-          setUnsaved(undefined);
-          base.current = undefined;
-          reload();
-          onNotice({ tone: 'danger', message: scheduleStrings.stale });
+        setUnsaved(undefined);
+        base.current = undefined;
+        reload();
+        onNotice({ tone: 'danger', message: scheduleStrings.stale });
+        return Promise.resolve(false);
+      }
+      let saving: Promise<ScheduleView>;
+      if (current.id === null) {
+        newId.current ??= data.schedules.newId();
+        onAdopt?.(newId.current);
+        saving = data.schedules.create(slug, current.memberId, {
+          id: newId.current,
+          name: current.name,
+          timeZone: hours.timeZone,
+          availability: hours,
+          isDefault: true,
+          forMember,
+        });
+      } else {
+        // Against the version the changes started from, so a save another tab made meanwhile answers STALE.
+        saving = data.schedules.update(
+          slug,
+          { ...current, updatedAt: from.updatedAt ?? current.updatedAt },
+          { availability: hours },
+        );
+      }
+      return saving.then(
+        (stored) => {
+          lastStored.current = stored;
+          if (!isMounted.current) return true;
+          setSaving(false);
+          // Changes made while it was out stay unsaved, now on top of the stored version.
+          if (latest.current === hours) {
+            setUnsaved(undefined);
+            base.current = undefined;
+          } else {
+            base.current = { id: stored.id, updatedAt: stored.updatedAt };
+          }
+          onNotice({ tone: 'success', message: scheduleStrings.hoursSaved(stored.name) });
+          return true;
+        },
+        (failure: unknown) => {
+          if (!isMounted.current) return false;
+          setSaving(false);
+          if (isDataError(failure) && failure.code === 'STALE') {
+            // Another tab or person saved first: theirs shows, and saying so beats replacing it unseen.
+            setUnsaved(undefined);
+            base.current = undefined;
+            reload();
+            onNotice({ tone: 'danger', message: scheduleStrings.stale });
+            return false;
+          }
+          // Kept on screen, unsaved; the bar says why and Save tries again.
+          setError(`${scheduleStrings.hoursFailed} ${isDataError(failure) ? failure.message : strings.somethingWrong}`);
           return false;
-        }
-        // Kept on screen, unsaved; the bar says why and Save tries again.
-        setError(`${scheduleStrings.hoursFailed} ${isDataError(failure) ? failure.message : strings.somethingWrong}`);
-        return false;
-      },
-    );
+        },
+      );
+    });
   };
 
   const discard = () => {
@@ -172,38 +201,32 @@ export function useScheduleDraft({
     setError(undefined);
   };
 
-  // One change at a time, each on the version the last one stored (a delete, then its Undo, before the list redraws).
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
-  const lastStored = useRef<ScheduleView | undefined>(undefined);
-  const now = useRef(schedule);
-  useEffect(() => {
-    now.current = schedule;
-  }, [schedule]);
   const commit = (next: (current: BookingAvailability) => BookingAvailability): Promise<boolean> => {
-    // The virtual default isn't stored yet: the change joins the hours and its first save stores them all.
+    // The virtual default isn't stored yet: the change joins its hours, and they are stored now, all together.
     if (schedule.id === null) {
-      change(next);
-      return Promise.resolve(true);
+      const hours = next(latest.current ?? schedule.availability);
+      base.current ??= { id: schedule.id, updatedAt: schedule.updatedAt };
+      latest.current = hours;
+      setUnsaved(hours);
+      return save(hours);
     }
-    const run = (): Promise<boolean> => {
-      const stored = lastStored.current;
-      const from =
-        stored !== undefined && stored.id === now.current.id && (stored.updatedAt ?? '') > (now.current.updatedAt ?? '')
-          ? stored
-          : now.current;
+    return queue(() => {
+      const from = newest();
       return data.schedules.update(slug, from, { availability: next(from.availability) }).then(
         (answer) => {
           lastStored.current = answer;
           if (!isMounted.current) return true;
-          // Hours waiting for Save keep the change, and now build on the version just stored.
           if (latest.current !== undefined) {
+            // Hours waiting for Save keep the change. They build on the version just stored only when they were
+            // built on the one it replaced; otherwise their Save still answers STALE, so nobody's week is lost.
             setUnsaved((current) => (current === undefined ? current : next(current)));
-            base.current = { id: answer.id, updatedAt: answer.updatedAt };
+            if (base.current?.updatedAt === from.updatedAt)
+              base.current = { id: answer.id, updatedAt: answer.updatedAt };
           }
           return true;
         },
         (failure: unknown) => {
-          if (!isMounted.current) return false;
+          // Said even once the editor has gone (an Undo pressed from the toast after opening another schedule).
           const isStale = isDataError(failure) && failure.code === 'STALE';
           if (isStale) reload();
           onNotice({
@@ -215,10 +238,7 @@ export function useScheduleDraft({
           return false;
         },
       );
-    };
-    const result = chain.current.then(run, run);
-    chain.current = result;
-    return result;
+    });
   };
 
   return {

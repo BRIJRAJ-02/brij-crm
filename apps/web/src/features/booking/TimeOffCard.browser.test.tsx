@@ -108,7 +108,9 @@ async function render(
           me={ME}
           nameOf={nameOf}
           people={PEOPLE}
-          onNotice={(notice) => made.notices.push(notice)}
+          onNotice={(notice) => {
+            if (notice !== undefined) made.notices.push(notice);
+          }}
           onOpenBookings={() => undefined}
         />
       </PageColumn>
@@ -157,10 +159,8 @@ describe('Time off', () => {
     await expect.element(dialog.getByText('Pick the days.')).toBeVisible();
     // All day first, with no Some hours offered where no schedule is open.
     expect(dialog.getByText('Some hours').elements()).toHaveLength(0);
-    // Today, twice: a run of one day.
-    const today = dialog.getByRole('button', { name: /^Today/ });
-    await today.click();
-    await today.click();
+    // One press on today is a run of one day.
+    await dialog.getByRole('button', { name: /^Today/ }).click();
     await dialog.getByRole('button', { name: 'Add time off' }).click();
     const inside = page.getByRole('dialog', { name: 'Time off saved' });
     // The meetings inside as a count, with Open Bookings for the list (spec 0058, AC-15).

@@ -2,7 +2,14 @@
 // Purpose: Availability's Time off card (spec 0037, AC-1286): the whole days a member is away, which close every page that books them, and the open schedule's own dates beside them (a day off in it, or some hours away), one row each, soonest first.
 // Main task: see what is planned, Add time off in the card's head, open a row to change it, and delete one with its trash (gone at once, Undo in the toast; the simplicity sweep's rule 2, no confirm).
 // Leaves out: a colleague's reason, note and stand in for someone who may only See them ("Away" and the days alone), and the Team week (Bookings › Roster).
-import type { BookingAvailability, DataLayer, DateOverride, TimeOffEntry, TimeOffSaved } from '@crm/data';
+import {
+  isDataError,
+  type BookingAvailability,
+  type DataLayer,
+  type DateOverride,
+  type TimeOffEntry,
+  type TimeOffSaved,
+} from '@crm/data';
 import { useScheduling } from '@crm/data/react';
 import {
   Button,
@@ -50,8 +57,8 @@ export interface TimeOffCardProps {
   readonly nameOf: (memberId: string) => string | undefined;
   /** Who may cover: the workspace's members. */
   readonly people: readonly StandinChoice[];
-  /** A saved or deleted entry, as a toast (one at a time: the screen replaces the last). */
-  readonly onNotice: (notice: TimeOffNotice) => void;
+  /** A saved or deleted entry, as a toast (one at a time: the screen replaces the last); undefined takes it away. */
+  readonly onNotice: (notice: TimeOffNotice | undefined) => void;
   /** Open Bookings (after a save over meetings). */
   readonly onOpenBookings: () => void;
   /**
@@ -190,21 +197,50 @@ function Loaded({
       })
       .then(
         () => say(strings.restored),
-        () => onNotice({ tone: 'danger', message: strings.restoreFailed }),
+        (error: unknown) =>
+          onNotice({
+            tone: 'danger',
+            message: `${strings.restoreFailed} ${isDataError(error) ? error.message : ''}`.trim(),
+          }),
       );
   };
-  const remove = (row: Row) => {
-    setLeaving((all) => [...all, row]);
+  const stopLeaving = (id: string) => setLeaving((all) => all.filter((each) => each.id !== id));
+  const remove = (row: Row, isPast = false) => {
+    // An upcoming row folds away where it stood; a past one simply goes (the store takes it out at once).
+    if (!isPast) setLeaving((all) => [...all, row]);
     // The row goes with its button: focus lands on Add time off, which always stays.
     focusLater(() => addRef.current);
     if (row.kind === 'entry') {
-      say(strings.deleted, () => restoreEntry(row.entry));
-      void store.remove(slug, row.entry);
+      const removal = store.remove(slug, row.entry);
+      // Undo waits for the delete: a refused one is back already, so nothing is made twice.
+      say(strings.deleted, () => void removal.then((landed) => (landed ? restoreEntry(row.entry) : undefined)));
+      void removal.then((landed) => {
+        if (landed) return;
+        // Refused: the store put the row back and says why; the Deleted toast goes.
+        stopLeaving(row.id);
+        onNotice(undefined);
+      });
       return;
     }
     const was = row.override;
-    say(strings.deleted, () => void daysOff?.onCommit?.((current) => withOverride(current, was.date, was)));
-    void daysOff?.onCommit?.((current) => withOverride(current, was.date, undefined));
+    const commit = daysOff?.onCommit;
+    if (commit === undefined) return;
+    const removal = commit((current) => withOverride(current, was.date, undefined));
+    say(
+      strings.deleted,
+      () =>
+        void removal.then((landed) =>
+          landed
+            ? commit((current) => withOverride(current, was.date, was)).then((back) => {
+                if (back) say(strings.restored);
+              })
+            : undefined,
+        ),
+    );
+    // Refused: the commit's own toast says why, in the Deleted toast's place, and the row stays.
+    void removal.then((landed) => {
+      if (!landed) stopLeaving(row.id);
+    });
   };
   const linkRow = (row: Row): LinkRow => {
     const title = titleOf(row);
@@ -285,7 +321,7 @@ function Loaded({
           <Table
             label={strings.past}
             columns={list.canManage ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions')}
-            rows={pastEntries.filter((row) => !leavingIds.has(row.id))}
+            rows={pastEntries}
             isHeaderHidden
             getRowId={(row) => row.id}
             renderCell={(row, column) =>
@@ -294,12 +330,14 @@ function Loaded({
               ) : column === 'what' ? (
                 detailOf(row)
               ) : (
-                <Button
-                  variant="ghost-danger"
-                  icon="trash"
-                  label={strings.deleteFor(titleOf(row))}
-                  onPress={() => remove(row)}
-                />
+                <Tooltip content={strings.deleteAction}>
+                  <Button
+                    variant="ghost-danger"
+                    icon="trash"
+                    label={strings.deleteFor(titleOf(row))}
+                    onPress={() => remove(row, true)}
+                  />
+                </Tooltip>
               )
             }
           />

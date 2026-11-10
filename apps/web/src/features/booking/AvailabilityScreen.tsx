@@ -128,13 +128,17 @@ export function AvailabilityScreen({
   useEffect(() => {
     if (isUnknown) void navigate({ href: onPath(here, scheduleHref(slug, 'default', member)), replace: true });
   }, [isUnknown, navigate, slug, member, here]);
-  const toast = (notice: {
-    readonly tone: 'success' | 'danger';
-    readonly message: string;
-    readonly action?: { readonly label: string; readonly onAction: () => void };
-  }) => {
+  const toast = (
+    notice:
+      | {
+          readonly tone: 'success' | 'danger';
+          readonly message: string;
+          readonly action?: { readonly label: string; readonly onAction: () => void };
+        }
+      | undefined,
+  ) => {
     if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
-    lastToast.current = toasts.toast(notice);
+    lastToast.current = notice === undefined ? undefined : toasts.toast(notice);
   };
   const failed = (message: string) => (error: unknown) => {
     toast({ tone: 'danger', message: `${message} ${isDataError(error) ? error.message : strings.somethingWrong}` });

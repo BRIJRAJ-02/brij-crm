@@ -21,9 +21,9 @@ export const timeOffStrings = {
   awayAllDay: 'Away all day',
   awayHours: (hours: string) => `Away ${hours}`,
   /** A date whose own hours run past its usual day: its hours, as they are. */
-  hoursOn: (hours: string) => `Open ${hours}`,
+  hoursOn: (hours: string) => `Working ${hours}`,
   undo: 'Undo',
-  restored: 'Time off back',
+  restored: 'Time off restored',
   restoreFailed: 'Couldn’t put the time off back. Add it again.',
   away: 'Away',
   reasons: {
@@ -63,6 +63,11 @@ export const timeOffStrings = {
   /** Under Some hours' note: it changes the open schedule alone. */
   scheduleOnly: (schedule: string) => `Changes ${schedule} only.`,
   optional: '(optional)',
+  hoursAway: 'Hours away',
+  notWorking: 'You’re not working then. Pick hours inside your day.',
+  hoursFailed: 'Couldn’t save the time off. Try again.',
+  markedDay: 'time off planned',
+  deleteFailed: 'Couldn’t delete the time off.',
   reason: 'Reason',
   standin: 'Who covers',
   nobody: 'Nobody',
