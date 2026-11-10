@@ -281,7 +281,8 @@
 .tf-bkf-roster__row--head { background: var(--surface-subtle); }
 .tf-bkf-roster__corner, .tf-bkf-roster__day { display: flex; align-items: center; gap: var(--space-4); height: var(--size-control-lg); padding: 0 var(--space-12); color: var(--text-secondary); font: 500 12px/16px var(--font-sans); }
 .tf-bkf-roster__day.is-today { color: var(--accent); }
-.tf-bkf-roster__whocell { display: flex; align-items: center; padding: var(--space-6); border-right: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-roster__whocell { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-6); border-right: var(--border-width-hairline) solid var(--border-subtle); }
+.tf-bkf-roster__whocell > .tf-bkf-roster__who { flex: 1; min-width: 0; }
 .tf-bkf-roster__who { display: flex; align-items: center; gap: var(--space-8); width: 100%; padding: var(--space-6) var(--space-8); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); text-align: left; cursor: pointer; outline: none; transition: background-color var(--duration-quick) var(--ease-out); }
 .tf-bkf-roster__who[data-hovered] { background: var(--surface-hover); }
 .tf-bkf-roster__who[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
@@ -290,18 +291,29 @@
 .tf-bkf-roster__total { color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
 .tf-bkf-roster__cell { display: flex; padding: var(--space-6); }
 .tf-bkf-roster__cell + .tf-bkf-roster__cell { border-left: var(--border-width-hairline) solid var(--border-subtle); }
-.tf-bkf-roster__hint { margin-top: var(--space-12); }
+.tf-bkf-roster__hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-16); margin-top: var(--space-12); }
+.tf-bkf-roster__legend { display: inline-flex; align-items: center; gap: var(--space-6); color: var(--text); }
+.tf-bkf-roster__search { width: calc(var(--size-menu) - var(--space-64) - var(--space-16)); }
+.tf-bkf-roster__empty { margin: 0; padding: var(--space-16); }
+/* Each day's totals: who is working and the span the team covers. */
+.tf-bkf-roster__row--foot { border-top: var(--border-width-hairline) solid var(--border); background: var(--surface-subtle); }
+.tf-bkf-roster__foot { display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); min-height: var(--size-row); padding: var(--space-6) var(--space-12); font: 500 12px/16px var(--font-sans); }
+.tf-bkf-roster__foot + .tf-bkf-roster__foot, .tf-bkf-roster__row--foot > .tf-bkf-roster__corner + .tf-bkf-roster__foot { border-left: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-bkf-shift { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: var(--space-2); min-height: calc(var(--size-control-lg) + var(--space-8)); padding: var(--space-6) var(--space-8); border: var(--border-width-hairline) solid transparent; border-radius: var(--radius-md); text-align: left; cursor: pointer; outline: none;
   transition: background-color var(--duration-quick) var(--ease-out), border-color var(--duration-quick) var(--ease-out); }
 .tf-bkf-shift--on { background: var(--accent-soft); color: var(--text); }
 .tf-bkf-shift--off { background: transparent; color: var(--text-tertiary); border-style: dashed; border-color: var(--border-subtle); }
 .tf-bkf-shift--away { background: var(--warning-soft); color: var(--tag-orange-text); }
 .tf-bkf-shift[data-hovered] { border-color: var(--border-strong); }
+/* A date-only change: the accent edge marks it apart from the usual week. */
+.tf-bkf-shift--date { border-color: var(--accent); border-style: solid; }
+.tf-bkf-shift--key { flex: none; display: inline-block; width: var(--space-16); height: var(--space-12); min-height: 0; padding: 0; border-radius: var(--radius-xs); cursor: default; }
 .tf-bkf-shift[data-focus-visible] { box-shadow: 0 0 0 var(--border-width-focus) var(--focus-ring); }
 .tf-bkf-shift__time { font: 500 13px/18px var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tf-bkf-shift__count { color: var(--text-secondary); font: 400 12px/16px var(--font-sans); }
-.tf-bkf-shiftedit { display: flex; flex-direction: column; gap: var(--space-12); width: calc(var(--size-menu) + var(--space-48)); padding: var(--space-8); }
+.tf-bkf-shiftedit { display: flex; flex-direction: column; gap: var(--space-12); width: calc(var(--size-menu) + var(--space-64) + var(--space-16)); padding: var(--space-8); }
 .tf-bkf-shiftedit__title { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-bkf-shiftedit__usual { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding-top: var(--space-8); border-top: var(--border-width-hairline) solid var(--border-subtle); }
 /* The drag menu on Week: the picked time on top, the menu's actions under it. */
 .tf-bkf-pickmenu { display: flex; flex-direction: column; gap: var(--space-4); width: calc(var(--size-menu) + var(--space-32)); }
 .tf-bkf-pickmenu__head { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-8) var(--space-8) var(--space-4); }

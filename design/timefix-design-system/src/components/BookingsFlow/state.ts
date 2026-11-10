@@ -1,5 +1,5 @@
 // The Bookings flow's model: types, the one reducer, and the pure rules (open times, summaries, routing).
-import type { WeekHours } from '../HoursEditor/HoursEditor.tsx';
+import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { HOURS_DAYS, summarizeHours } from '../HoursEditor/HoursEditor.tsx';
 import type { Meeting, MeetingPlace } from '../MeetingList/MeetingList.tsx';
 import type { Notification } from '../NotificationList/NotificationList.tsx';
@@ -160,6 +160,8 @@ export interface BookingsState {
   readonly defaultHoursId: string;
   /** Each teammate's hours, when they differ from the default. */
   readonly memberHours: Readonly<Record<string, WeekHours>>;
+  /** One person's hours on one date only ("Name|YYYY-MM-DD"); the usual week applies everywhere else. */
+  readonly overrides?: Readonly<Record<string, DayHours>>;
   readonly timeOff: ReadonlyArray<TimeOff>;
   readonly calendars: ReadonlyArray<CalendarAccount>;
   readonly health: CalendarHealth;
@@ -183,6 +185,8 @@ export type BookingsAction =
   | { readonly type: 'hours/saved'; readonly savedHours: ReadonlyArray<SavedHours>; readonly defaultHoursId: string }
   | { readonly type: 'timeoff/set'; readonly timeOff: ReadonlyArray<TimeOff> }
   | { readonly type: 'member/hours'; readonly name: string; readonly hours: WeekHours }
+  /** Sets (or, with null, clears) date-only hours; keys are "Name|YYYY-MM-DD". */
+  | { readonly type: 'overrides/merge'; readonly patch: Readonly<Record<string, DayHours | null>> }
   | { readonly type: 'calendar/set'; readonly calendars: ReadonlyArray<CalendarAccount>; readonly health?: CalendarHealth }
   | { readonly type: 'busy/add'; readonly block: BusyBlock }
   | { readonly type: 'block/add'; readonly block: TimeBlock }
@@ -214,6 +218,11 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'hours/saved': return { ...state, savedHours: action.savedHours, defaultHoursId: action.defaultHoursId };
     case 'timeoff/set': return { ...state, timeOff: action.timeOff };
     case 'member/hours': return { ...state, memberHours: { ...state.memberHours, [action.name]: action.hours } };
+    case 'overrides/merge': {
+      const next: Record<string, DayHours> = { ...(state.overrides ?? {}) };
+      Object.entries(action.patch).forEach(([k, v]) => { if (v) next[k] = v; else delete next[k]; });
+      return { ...state, overrides: next };
+    }
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
@@ -266,6 +275,13 @@ export function hoursFor(page: BookingPage, state: BookingsState): WeekHours {
 }
 const EMPTY_WEEK: WeekHours = { mon: { on: false, ranges: [] }, tue: { on: false, ranges: [] }, wed: { on: false, ranges: [] }, thu: { on: false, ranges: [] }, fri: { on: false, ranges: [] }, sat: { on: false, ranges: [] }, sun: { on: false, ranges: [] } };
 /** A member's weekly hours. */
+/** The key a date-only override is stored under. */
+export const overrideKey = (name: string, date: Date) => `${name}|${isoDay(date)}`;
+/** One person's hours on a date: a date-only override when there is one, else their usual week. */
+export function hoursOn(state: BookingsState, name: string, date: Date): { readonly hours: DayHours; readonly isOverride: boolean } {
+  const o = state.overrides?.[overrideKey(name, date)];
+  return o ? { hours: o, isOverride: true } : { hours: memberHours(state, name)[dayKey(date)], isOverride: false };
+}
 export const memberHours = (state: BookingsState, name: string): WeekHours => state.memberHours[name] ?? (state.savedHours.find((h) => h.id === state.defaultHoursId)?.hours ?? EMPTY_WEEK);
 
 /** Whether a member is off at a time on a day (all day, or within the hours of a partial day off). */
@@ -334,7 +350,8 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   const startOfToday = dayFrom(now, 0);
   const ahead = Math.round((date.getTime() - startOfToday.getTime()) / 86_400_000);
   if (ahead < 0 || ahead > page.daysAhead) return [];
-  const day = hoursFor(page, state)[dayKey(date)];
+  // A date-only change to the host's hours wins over the page's usual week.
+  const day = state.overrides?.[overrideKey(page.hosts[0] ?? '', date)] ?? hoursFor(page, state)[dayKey(date)];
   if (!day.on) return [];
   const mine = state.meetings.filter((m) => m.pageId === page.id && m.status !== 'cancelled');
   if (page.perDay > 0 && mine.filter((m) => m.start.toDateString() === date.toDateString()).length >= page.perDay) return [];
