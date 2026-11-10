@@ -14,13 +14,18 @@ const other = ['spacing', 'radius', 'size', 'duration', 'easing', 'distance', 's
   + Object.entries(t.type.families).map(([k, s]) => `--font-${k}:${s};`).join('');
 const tokens = `:root{${other}} :root,[data-theme="light"]{${themed('light')}} [data-theme="dark"]{${themed('dark')}}`;
 let css = readFileSync(`${tmp}/app.css`, 'utf8');
-const imports = (css.match(/@import url\([^)]*\);/g) ?? []).join('\n');
-css = css.replace(/@import url\([^)]*\);/g, '');
+// Font imports become <link> tags at the top: an @import left inside the bundle sits after other rules, where browsers ignore it.
+const importRe = /@import\s*(?:url\()?\s*["']([^"']+)["']\s*\)?\s*;?/g;
+const fontLinks = [...css.matchAll(importRe)].map((m) => `<link rel="stylesheet" href="${m[1]}">`).join('\n');
+css = css.replace(importRe, '');
+const imports = '';
 const js = readFileSync(`${tmp}/app.js`, 'utf8').replaceAll('</script', '<\\/script');
 // The Timefix mark as the tab icon, beside the page's title.
 const mark = readFileSync('src/components/Logo/mark.svg', 'utf8').replace(/\s+/g, ' ').trim();
 const icon = `data:image/svg+xml,${encodeURIComponent(mark)}`;
 const html = `<title>${title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+${fontLinks}
 <link rel="icon" type="image/svg+xml" href="${icon}">
 <script>try{var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href=${JSON.stringify(icon)};document.head.appendChild(l);}catch(e){}</script>
 <style>${imports}
