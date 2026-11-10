@@ -151,6 +151,14 @@ export interface BookingPage {
   readonly categoryId?: string;
   /** A table page: the smallest and largest party booked online. */
   readonly party?: { readonly min: number; readonly max: number };
+  /** A table page: most guests whose tables start at one time, so the kitchen isn't hit at once; 0 or unset is no cap. */
+  readonly pacing?: number;
+  /** A table page: how long a late table is held before it's given away (minutes). */
+  readonly holdLate?: number;
+  /** A table page: guests can ask for an area (Terrace, Main room). */
+  readonly pickArea?: boolean;
+  /** A table page: bigger parties stay longer; the turn time for parties of this size or more. */
+  readonly bigTurn?: { readonly from: number; readonly minutes: number };
 }
 
 /** One published version of a page, kept so it can be restored. */
@@ -173,7 +181,20 @@ export interface BookedMeeting extends Meeting {
   /** A table booking: how many guests and which tables. */
   readonly party?: number;
   readonly tables?: ReadonlyArray<string>;
+  /** A table booking at the host stand: seated (when), then left. Unset is still to come. */
+  readonly seating?: 'seated' | 'left';
+  readonly seatedAt?: Date;
+  /** A table booking: the guest's phone, the occasion, the area asked for, and tags the floor staff see (VIP, Allergy). */
+  readonly phone?: string;
+  readonly occasion?: string;
+  readonly area?: string;
+  readonly tags?: ReadonlyArray<string>;
+  /** Seated without a booking. */
+  readonly walkIn?: boolean;
 }
+/** A party waiting for a table: walked in tonight, or asked online to be told if one frees up. */
+export interface WaitParty { readonly id: string; readonly name: string; readonly phone: string; readonly party: number; readonly added: Date; readonly day: string;
+  /** Minutes quoted at the door; online it's the time they hoped for. */ readonly quote?: number; readonly wanted?: number; readonly online?: boolean; readonly notified?: boolean }
 /** Time a member blocked or held by hand. */
 export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string }
 /** Time off: a day or a range, all day or some hours, with a note. */
@@ -278,6 +299,8 @@ export interface BookingsState {
   readonly business?: BusinessProfile;
   readonly categories?: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   readonly tables?: ReadonlyArray<Table>;
+  /** A restaurant's waitlist, every day. */
+  readonly waitlist?: ReadonlyArray<WaitParty>;
   /** Each teammate's calendar: connected, some calendars skipped, needs reconnecting, or none. */
   readonly memberCalendars?: Readonly<Record<string, MemberCalendar>>;
   /** Insights shared by a read-only link. */
@@ -295,6 +318,7 @@ export type BookingsAction =
   | { readonly type: 'insights/share'; readonly on: boolean }
   | { readonly type: 'business/set'; readonly business: BusinessProfile }
   | { readonly type: 'tables/set'; readonly tables: ReadonlyArray<Table> }
+  | { readonly type: 'waitlist/set'; readonly waitlist: ReadonlyArray<WaitParty> }
   | { readonly type: 'page/delete'; readonly id: string }
   | { readonly type: 'page/restore'; readonly page: BookingPage; readonly index: number }
   | { readonly type: 'meeting/add'; readonly meeting: BookedMeeting; readonly notification?: Notification }
@@ -357,6 +381,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'insights/share': return { ...state, insightsShared: action.on };
     case 'business/set': return { ...state, business: action.business };
     case 'tables/set': return { ...state, tables: action.tables };
+    case 'waitlist/set': return { ...state, waitlist: action.waitlist };
     case 'calendar/set': return { ...state, calendars: action.calendars, health: action.health ?? state.health };
     case 'busy/add': return { ...state, busy: [...state.busy, action.block] };
     case 'block/add': return { ...state, blocks: [...state.blocks, action.block] };
@@ -507,21 +532,32 @@ export function monthSpread(state: BookingsState, page: BookingPage, now: Date):
 
 /** The open start times of a page on a day: its hours, minus notice, limits, time off, busy time and meetings with buffers. */
 /** The best tables for a party then: the smallest free one that seats them, else two joinable ones in one area. */
-export function fitTables(state: BookingsState, party: number, date: Date, start: number, length: number, onlineOnly = true): ReadonlyArray<Table> | undefined {
-  const held = new Set<string>();
-  state.meetings.forEach((m) => {
-    if (!m.tables || m.status === 'cancelled' || m.start.toDateString() !== date.toDateString()) return;
-    const a = minutesOf(m.start); const b = minutesOf(m.end);
-    if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
-  });
-  const free = (state.tables ?? []).filter((t) => !held.has(t.id) && (!onlineOnly || t.online));
+export function fitTables(state: BookingsState, party: number, date: Date, start: number, length: number, onlineOnly = true, area?: string, skip?: string): ReadonlyArray<Table> | undefined {
+  const held = heldTables(state, date, start, length, skip);
+  const free = (state.tables ?? []).filter((t) => !held.has(t.id) && (!onlineOnly || t.online) && (!area || t.area === area));
   const one = [...free].filter((t) => t.seats >= party).sort((a, b) => a.seats - b.seats)[0];
   if (one) return [one];
   const pairs = free.flatMap((a, i) => free.slice(i + 1).filter((b) => a.joinable && b.joinable && a.area === b.area && a.seats + b.seats >= party).map((b) => [a, b]));
   return pairs.sort((x, y) => x.reduce((t, z) => t + z.seats, 0) - y.reduce((t, z) => t + z.seats, 0))[0];
 }
+/** Tables taken then: booked and not cancelled, no-show or left (a seated table that's run over stays taken). */
+export function heldTables(state: BookingsState, date: Date, start: number, length: number, skip?: string): ReadonlySet<string> {
+  const held = new Set<string>();
+  state.meetings.forEach((m) => {
+    if (m.id === skip || !m.tables || m.status === 'cancelled' || m.status === 'no-show' || m.seating === 'left' || m.start.toDateString() !== date.toDateString()) return;
+    const a = minutesOf(m.start); const b = minutesOf(m.end);
+    if (start < b && a < start + length) m.tables.forEach((t) => held.add(t));
+  });
+  return held;
+}
+/** How long a table is held for a party: the page's turn time, longer for big parties. */
+export const turnFor = (page: BookingPage, party: number) => (page.bigTurn && party >= page.bigTurn.from ? page.bigTurn.minutes : lengthOf(page));
+/** Guests whose tables start at this time on this day. */
+export const coversAt = (state: BookingsState, pageId: string, date: Date, minutes: number) => state.meetings
+  .filter((m) => m.pageId === pageId && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString() && minutesOf(m.start) === minutes)
+  .reduce((n, m) => n + (m.party ?? 0), 0);
 
-export function openTimes(page: BookingPage, state: BookingsState, date: Date, now: Date, length = lengthOf(page), party = page.party?.min ?? 2): ReadonlyArray<number> {
+export function openTimes(page: BookingPage, state: BookingsState, date: Date, now: Date, length = lengthOf(page), party = page.party?.min ?? 2, area?: string): ReadonlyArray<number> {
   const startOfToday = dayFrom(now, 0);
   const ahead = Math.round((date.getTime() - startOfToday.getTime()) / 86_400_000);
   if (ahead < 0 || ahead > page.daysAhead) return [];
@@ -537,9 +573,15 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   const step = page.slotStep && page.slotStep > 0 ? page.slotStep : length < 30 ? 15 : 30;
   const out: number[] = [];
   day.ranges.forEach((r) => {
-    for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && (page.kind === 'table' ? fitTables(state, party, date, m, length) !== undefined : hostFor(state, page, date, m, m + length))) out.push(m);
+    for (let m = r.start; m + length <= r.end; m += step) if (m > earliest && (page.kind === 'table' ? tableOpen(page, state, date, m, length, party, area) : hostFor(state, page, date, m, m + length))) out.push(m);
   });
   return [...new Set(out)].sort((a, b) => a - b);
+}
+
+/** A table time is open when a table fits the party and the pacing cap has room for them. */
+function tableOpen(page: BookingPage, state: BookingsState, date: Date, m: number, length: number, party: number, area?: string): boolean {
+  if (page.pacing && page.pacing > 0 && coversAt(state, page.id, date, m) + party > page.pacing) return false;
+  return fitTables(state, party, date, m, length, true, area) !== undefined;
 }
 
 /** Meetings that busy time now overlaps. */
@@ -630,6 +672,7 @@ export function pageChanges(before: BookingPage, after: BookingPage): ReadonlyAr
     noticeHours: 'Notice', daysAhead: 'How far ahead', perDay: 'Most a day', perWeek: 'Most a week', hostMode: 'Who hosts', hosts: 'Hosts', shareOut: 'Round robin', questions: 'Questions',
     confirmFirst: 'Confirming', reminders: 'Reminders', emails: 'Emails', look: 'Look', socials: 'Social links', slotStep: 'Start times', visibility: 'Who can find it',
     cancelCutoff: 'Cancel cut-off', moveCutoff: 'Move cut-off', fileTo: 'Filed to', after: 'After they book', whoCanBook: 'Who can book',
+    price: 'Price', priceType: 'Price', categoryId: 'Category', party: 'Party size', pacing: 'Pacing', holdLate: 'Late hold', pickArea: 'Seating areas', bigTurn: 'Big party time',
   };
   const keys = Object.keys(names) as Array<keyof BookingPage>;
   return [...new Set(keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).map((k) => names[k] ?? String(k)))];

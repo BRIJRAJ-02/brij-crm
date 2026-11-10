@@ -5,7 +5,7 @@ import { CalendarDate } from '@internationalized/date';
 import { ArrowLeft, CalendarClock, ChevronRight, CalendarX2, Clock, Eye, EyeOff, Link2Off, Mail, Monitor, Smartphone } from 'lucide-react';
 import type { BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BrandCard } from '../BookingFlow/BookingFlow.tsx';
-import { VenueGuest } from './guest-venue.tsx';
+import { VenueGuest, type OnWaitlist } from './guest-venue.tsx';
 import { BookingChat, type BookingChatLine, type BookingChatBooked } from '../BookingChat/BookingChat.tsx';
 import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Button as AriaButton } from 'react-aria-components';
@@ -35,7 +35,9 @@ export interface GuestPlayerProps {
   readonly state: BookingsState;
   readonly onClose: () => void;
   /** A booking made as the guest; the host side plays it when the view closes. */
-  readonly onBooked: (page: BookingPage, r: BookingRequest & { readonly length: number; readonly place: PlaceKind; readonly party?: number }) => void;
+  readonly onBooked: (page: BookingPage, r: BookingRequest & { readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => void;
+  /** A restaurant guest asked to be told when a table frees up. */
+  readonly onWaitlist?: OnWaitlist;
   readonly onGuestCancel: (m: BookedMeeting, reason: string) => void;
   readonly onGuestMove: (m: BookedMeeting, start: Date) => void;
   /** The guest changes the booking they just made, on its success screen: the host side gets the change, not the original. */
@@ -46,7 +48,7 @@ export type BookedChange = { readonly kind: 'cancel' } | { readonly kind: 'move'
 
 /** Guest mode: the admin app steps aside for the public page exactly as a guest sees it, on the canvas, with a slim bar to switch
  *  Desktop / Phone and get Back to Bookings. Esc goes back too (unless a picker inside the page is open). */
-export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGuestMove, onBookedChange }: GuestPlayerProps) {
+export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: GuestPlayerProps) {
   const [device, setDevice] = useState<'desktop' | 'phone'>('desktop');
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -73,9 +75,9 @@ export function GuestMode({ play, state, onClose, onBooked, onGuestCancel, onGue
         <span className="tf-bkf__spacer" />
         <AriaButton ref={back} className="tf-bkf-guestmode__back" onPress={onClose}><ArrowLeft {...i14} aria-hidden="true" />Back to Bookings</AriaButton>
       </header>
-      <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || undefined}>
+      <main className="tf-bkf-guestmode__page" data-device={device} data-venue={scenario === 'profile' || (scenario === 'book' && page?.kind === 'table') || undefined}>
         <div className="tf-bkf-guestmode__frame" data-device={device}>
-          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} />
+          <Screen key={`${scenario}-${page.id}`} scenario={scenario} page={page} state={state} meetingId={play.meetingId} onBooked={onBooked} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} onBookedChange={onBookedChange} onWaitlist={onWaitlist} />
         </div>
       </main>
     </div>
@@ -96,7 +98,7 @@ function GuestCard({ children, align = 'center' }: { readonly children: ReactNod
   );
 }
 
-function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onGuestMove, onBookedChange }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange'>) {
+function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onGuestMove, onBookedChange, onWaitlist }: { readonly scenario: GuestScenario; readonly page: BookingPage; readonly state: BookingsState; readonly meetingId?: string } & Pick<GuestPlayerProps, 'onBooked' | 'onGuestCancel' | 'onGuestMove' | 'onBookedChange' | 'onWaitlist'>) {
   if (scenario === 'hidden' || (!page.isOn && scenario === 'book')) {
     return <GuestCard><EmptyState size="sm" icon={<EyeOff size={20} strokeWidth={1.75} />} title="This page isn't taking bookings right now" description={`${first(page.owner)} has paused ${page.name}. Try again later, or email them.`}
       action={<Button size="sm" icon={<Mail {...i14} />} onPress={() => window.open(`mailto:${first(page.owner).toLowerCase()}@northwind.com?subject=${encodeURIComponent(page.name)}`, '_blank', 'noopener')}>Email {first(page.owner)}</Button>} /></GuestCard>;
@@ -109,12 +111,14 @@ function Screen({ scenario, page, state, meetingId, onBooked, onGuestCancel, onG
   if (scenario === 'manage') return <Manage page={page} state={state} meeting={state.meetings.find((m) => m.id === meetingId) ?? state.meetings.find((m) => m.pageId === page.id && m.status === 'confirmed' && m.start > new Date())} onGuestCancel={onGuestCancel} onGuestMove={onGuestMove} />;
   if (scenario === 'offered') return <Offered page={page} onBooked={onBooked} />;
   if (scenario === 'chat') return <Chat page={page} state={state} onBooked={onBooked} />;
-  if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} />;
+  if (scenario === 'profile') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} />;
+  // A table page's own link opens the restaurant's page with the table card, as booking sites do.
+  if (page.kind === 'table') return <Profile owner={page.owner} state={state} onBooked={onBooked} onWaitlist={onWaitlist} />;
   return <Book page={page} state={state} onBooked={onBooked} onBookedChange={onBookedChange} failFirst={scenario === 'taken'} />;
 }
 
 /** The profile page (timefix.com/priya): every public page the person hosts; picking one opens it. */
-function Profile({ owner, state, onBooked }: { readonly owner: string; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked'>) {
+function Profile({ owner, state, onBooked, onWaitlist }: { readonly owner: string; readonly state: BookingsState } & Pick<GuestPlayerProps, 'onBooked' | 'onWaitlist'>) {
   const [open, setOpen] = useState<string>();
   const chosen = state.pages.find((p) => p.id === open);
   if (chosen) {
@@ -125,7 +129,7 @@ function Profile({ owner, state, onBooked }: { readonly owner: string; readonly 
       </div>
     );
   }
-  return <VenueGuest state={state} onBooked={onBooked} onOpenPage={(p) => setOpen(p.id)} />;
+  return <VenueGuest state={state} onBooked={onBooked} onWaitlist={onWaitlist} onOpenPage={(p) => setOpen(p.id)} />;
 }
 
 /** The booking page, with a length or place choice first when the page offers several. */

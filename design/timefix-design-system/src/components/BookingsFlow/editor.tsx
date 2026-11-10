@@ -26,6 +26,7 @@ import { NumberRoll, SuccessCheck, TextSwap } from '../Motion/Motion.tsx';
 import { formatDate, formatDay } from '../../lib/format.ts';
 import { Eyebrow, GuestView, Section, SettingRow, OnSwitch, PageMoreMenu, ScaledPreview, ShareMenu, i14, i16, noBook, type ShareHow } from './parts.tsx';
 import { uniqueSlug } from './seed.ts';
+import { TablePreview } from './guest-venue.tsx';
 import {
   HOST, PLACES, PLACE_ORDER, TEAM, afterSummary, openDaysAhead, pageChanges, dayFrom, first, hoursFor, isPaused, lookSummary, monthSpread, noHostsFree, parseDay, plural, questionsSummary, whenSummary, whoSummary,
   type BookingPage, type BookingsState, type HostMode, type LockedPart, type PlaceKind, type ShareOut,
@@ -125,7 +126,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
           <span><strong className="tf-num"><NumberRoll value={page.stats.bookings} /></strong> bookings</span>
           <span><strong className="tf-num"><NumberRoll value={page.stats.showRate} />%</strong> showed up</span>
           <span className="tf-bkf__muted">this month</span>
-          <span className="tf-bkf__stats-go">See meetings<ArrowRight {...i14} aria-hidden="true" /></span>
+          <span className="tf-bkf__stats-go">{draft.kind === 'table' ? 'See reservations' : 'See meetings'}<ArrowRight {...i14} aria-hidden="true" /></span>
         </AriaButton>
         <div className="tf-bkf__editor-scroll">
           <div className="tf-bkf__editor-grid">
@@ -166,21 +167,40 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <NumberField label="Largest party online" value={draft.party?.max ?? 8} minValue={draft.party?.min ?? 1} maxValue={20} onChange={(n) => set({ party: { min: draft.party?.min ?? 1, max: Number.isFinite(n) ? n : 8 } })} />
                     </div>
                   )}
-                  <ChoiceChips label={draft.kind === 'table' ? 'Table held for' : 'Lengths'} size="sm" selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
+                  <ChoiceChips label={draft.kind === 'table' ? 'Time at the table' : 'Lengths'} size="sm" selectionMode="multiple" selectedKeys={draft.durations.map(String)} items={LENGTHS.map((n) => ({ id: String(n), label: `${n} min` }))}
                     onSelectionChange={(keys) => { const d = [...keys].map(Number).sort((a, b) => a - b); if (d.length) set({ durations: d }); }} />
                   {draft.durations.length > 1 && <p className="tf-bkf__muted tf-bkf__hint">Guests choose the length. {draft.durations[0]} min is picked first.</p>}
                   {draft.kind === undefined || draft.kind === 'meeting' ? <ChoiceChips label="Places" size="sm" selectionMode="multiple" selectedKeys={draft.places} items={PLACE_ORDER.map((k) => ({ id: k, label: k === 'in-person' ? 'In person' : PLACES[k].label }))}
                     onSelectionChange={(keys) => { const p = PLACE_ORDER.filter((k) => keys.has(k)); if (p.length) set({ places: p }); }} /> : null}
                   {(draft.kind === undefined || draft.kind === 'meeting') && draft.places.includes('in-person') && <TextField label="Address" value={draft.address} onChange={(address) => set({ address })} placeholder="12 Harbour Street, Mumbai" />}
                   {draft.places.includes('phone') && <SegmentedControl aria-label="Who calls" size="sm" selectedKey={draft.phoneWho} onSelectionChange={(k) => set({ phoneWho: k === 'guest' ? 'guest' : 'host' })} items={[{ id: 'host', label: 'You call them' }, { id: 'guest', label: 'They call you' }]} />}
-                  <div className="tf-bkf__group">
+                  {draft.kind !== 'table' && <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Guests start in</span>
                     <SegmentedControl aria-label="Guests start in" size="sm" selectedKey={draft.defaultView ?? 'month'} onSelectionChange={(k) => set({ defaultView: k === 'list' ? 'list' : k === 'chat' ? 'chat' : 'month' })}
                       items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }, { id: 'chat', label: 'Chat' }]} />
                     <span className="tf-bkf__muted">They can switch any time; their last choice is remembered.</span>
-                  </div>
-                  <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder="What the meeting is for, in a line or two" />
+                  </div>}
+                  <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder={draft.kind === 'table' ? 'What guests should know, like a dress code or a set menu on Sundays' : draft.kind === 'service' ? 'What’s included, in a line or two' : 'What the meeting is for, in a line or two'} />
                   <ShowMore showLabel="More options" hideLabel="Fewer options">
+                    {draft.kind === 'table' && (
+                      <div className="tf-bkf__stack">
+                        <div className="tf-bkf__pair">
+                          <Select label="Most guests starting at once" description="Paces the kitchen: times fill once this many guests start together." value={String(draft.pacing ?? 0)} onChange={(v) => set({ pacing: Number(v ?? 0) })}
+                            items={[{ id: '0', label: 'No limit' }, ...[8, 12, 16, 20, 24, 30].map((n) => ({ id: String(n), label: `${n} guests` }))]} />
+                          <Select label="Late tables held for" description="Then the table can go to someone else." value={String(draft.holdLate ?? 15)} onChange={(v) => set({ holdLate: Number(v ?? 15) })}
+                            items={[10, 15, 20, 30].map((n) => ({ id: String(n), label: `${n} min` }))} />
+                        </div>
+                        <Switch isSelected={draft.bigTurn !== undefined} onChange={(on) => set({ bigTurn: on ? { from: 5, minutes: 120 } : undefined })}>Bigger parties stay longer</Switch>
+                        {draft.bigTurn && (
+                          <div className="tf-bkf__pair">
+                            <NumberField label="Parties of" value={draft.bigTurn.from} minValue={2} maxValue={20} onChange={(n) => set({ bigTurn: { from: Number.isFinite(n) ? n : 5, minutes: draft.bigTurn?.minutes ?? 120 } })} description="or more" />
+                            <Select label="Get the table for" value={String(draft.bigTurn.minutes)} onChange={(v) => set({ bigTurn: { from: draft.bigTurn?.from ?? 5, minutes: Number(v ?? 120) } })}
+                              items={[90, 120, 150, 180].map((n) => ({ id: String(n), label: n % 60 ? `${Math.floor(n / 60)} hr ${n % 60} min` : `${n / 60} hours` }))} />
+                          </div>
+                        )}
+                        {new Set((state.tables ?? []).map((t) => t.area)).size > 1 && <Switch isSelected={draft.pickArea ?? false} onChange={(pickArea) => set({ pickArea })}>Guests can ask for an area ({[...new Set((state.tables ?? []).map((t) => t.area))].join(', ')})</Switch>}
+                      </div>
+                    )}
                     <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Who can find it</span>
                     <SegmentedControl aria-label="Who can find it" size="sm" selectedKey={draft.visibility ?? 'public'} onSelectionChange={(k) => set({ visibility: k === 'link' ? 'link' : 'public' })}
@@ -427,7 +447,7 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
               <div className="tf-bkf-sheet__preview">
                 <div className="tf-bkf__soft" key={`${draft.durations[0]}-${draft.places[0] as PlaceKind}-${draft.hoursFrom}`}>
                   <ScaledPreview label="Booking page preview" designWidth={400}>
-                    <GuestView page={draft} state={state} onBook={noBook} />
+                    {draft.kind === 'table' ? <TablePreview state={{ ...state, pages: state.pages.map((x) => (x.id === draft.id ? draft : x)) }} table={draft} /> : <GuestView page={draft} state={state} onBook={noBook} />}
                   </ScaledPreview>
                 </div>
               </div>

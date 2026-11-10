@@ -2,7 +2,7 @@
 // (one table page, tables in Availability). Same team, same pages, same meetings: only the business fields are new.
 import type { DayHours, WeekHours } from '../HoursEditor/HoursEditor.tsx';
 import { FIRST_VISIT, newPage } from './seed.ts';
-import { HOST, PLACES, at, dayFrom, nextId, type BookedMeeting, type BookingPage, type BookingsState, type Table } from './state.ts';
+import { HOST, PLACES, at, dayFrom, isoDay, nextId, type BookedMeeting, type BookingPage, type BookingsState, type Table, type WaitParty } from './state.ts';
 
 const off: DayHours = { on: false, ranges: [] };
 const open = (id: string, from: number, to: number): DayHours => ({ on: true, ranges: [{ id, start: from * 60, end: to * 60 }] });
@@ -84,18 +84,32 @@ export function olive(now = new Date()): BookingsState {
   const tables: Table[] = [t('t1', 'T1', 2, 'Main room'), t('t2', 'T2', 2, 'Main room'), t('t3', 'T3', 4, 'Main room', true), t('t4', 'T4', 4, 'Main room', true), t('t5', 'T5', 6, 'Main room'),
     t('t6', 'T6', 2, 'Terrace', true), t('t7', 'T7', 2, 'Terrace', true), t('t8', 'T8', 4, 'Terrace'), { ...t('t9', 'T9', 8, 'Terrace'), online: false }];
   const table = newPage([], { id: 'p-table', name: 'Book a table', kind: 'table', party: { min: 1, max: 8 }, durations: [90], places: ['in-person'], address: '7 Apollo Bunder, Colaba',
-    hostMode: 'one', hosts: [HOST], noticeHours: 2, slotStep: 30, accent: 'green', stats: { views: 1840, bookings: 412, showRate: 93 } });
+    hostMode: 'one', hosts: [HOST], noticeHours: 1, slotStep: 15, accent: 'green', pacing: 16, holdLate: 15, pickArea: true, bigTurn: { from: 5, minutes: 120 }, cancelCutoff: 2,
+    stats: { views: 1840, bookings: 412, showRate: 93 } });
   const meetings: BookedMeeting[] = [];
-  const res = (h: number, m: number, party: number, tableIds: ReadonlyArray<string>, name: string, status?: BookedMeeting['status'], offset = 0) => {
-    const start = at(dayFrom(now, offset), h * 60 + m);
-    const end = new Date(start.getTime() + 90 * 60_000);
+  type Extra = { readonly status?: BookedMeeting['status']; readonly offset?: number; readonly tags?: ReadonlyArray<string>; readonly occasion?: string; readonly note?: string; readonly area?: string };
+  const res = (h: number, m: number, party: number, tableIds: ReadonlyArray<string>, name: string, x: Extra = {}) => {
+    const start = at(dayFrom(now, x.offset ?? 0), h * 60 + m);
+    const end = new Date(start.getTime() + (party >= 5 ? 120 : 90) * 60_000);
+    // Tonight as the host stand would have it: tables that started are seated, ones that ended have left.
+    const seating = x.status ? undefined : end <= now ? 'left' as const : start <= now ? 'seated' as const : undefined;
+    const digits = String(9800000000 + name.length * 7919 + h * 101 + m).slice(-10);
     meetings.push({ id: nextId('m'), pageId: table.id, host: HOST, start, end, title: `Table for ${party}`, invitee: { name, email: `${name.split(' ')[0]?.toLowerCase() ?? 'guest'}@mail.com` },
-      place: PLACES['in-person'].meeting, placeLabel: tableIds.map((x) => tables.find((y) => y.id === x)?.name ?? '').join(' + '), status: status ?? (end <= now ? 'completed' : 'confirmed'), guestZone: 'Asia/Kolkata',
-      notes: '', answers: [], activity: [], party, tables: tableIds });
+      place: PLACES['in-person'].meeting, placeLabel: tableIds.map((id) => tables.find((y) => y.id === id)?.name ?? '').join(' + '), status: x.status ?? (end <= now ? 'completed' : 'confirmed'), guestZone: 'Asia/Kolkata',
+      notes: x.note ?? '', answers: [], activity: [], party, tables: tableIds, seating, seatedAt: seating ? new Date(start.getTime() + 4 * 60_000) : undefined,
+      phone: `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`, tags: x.tags, occasion: x.occasion, area: x.area });
   };
-  res(12, 30, 2, ['t1'], 'Anika Desai'); res(13, 0, 4, ['t3'], 'Rohan Gupta'); res(19, 30, 2, ['t6'], 'Sara Fernandes'); res(20, 0, 6, ['t5'], 'Vikram Shetty');
-  res(20, 0, 4, ['t8'], 'Leela Menon', 'pending'); res(20, 30, 8, ['t3', 't4'], 'Dev Malhotra'); res(21, 0, 2, ['t2'], 'Priya Joshi');
-  res(20, 0, 4, ['t3'], 'Kiran Bose', undefined, 1); res(13, 0, 2, ['t6'], 'Lara Dias', undefined, 2);
+  res(12, 30, 2, ['t1'], 'Anika Desai', { tags: ['Regular'] }); res(13, 0, 4, ['t3'], 'Rohan Gupta'); res(13, 15, 2, ['t6'], 'Meera Pillai', { area: 'Terrace' }); res(14, 0, 3, ['t4'], 'Tom Walsh', { status: 'no-show' });
+  res(19, 0, 2, ['t2'], 'Aarav Nair', { occasion: 'Date night' }); res(19, 30, 2, ['t6'], 'Sara Fernandes', { area: 'Terrace', occasion: 'Anniversary' }); res(19, 30, 4, ['t8'], 'Neha Kapoor', { tags: ['VIP'], note: 'Owner’s guest. Send the octopus.' });
+  res(20, 0, 6, ['t5'], 'Vikram Shetty', { occasion: 'Birthday', note: 'Bringing a cake, candles at dessert.' }); res(20, 0, 4, ['t3'], 'Leela Menon', { status: 'pending' });
+  res(20, 30, 8, ['t3', 't4'], 'Dev Malhotra', { tags: ['Allergy'], note: 'One guest allergic to tree nuts.' }); res(21, 0, 2, ['t2'], 'Priya Joshi'); res(21, 15, 2, ['t7'], 'Kabir Rao', { area: 'Terrace' });
+  res(20, 0, 4, ['t3'], 'Kiran Bose', { offset: 1, tags: ['VIP'] }); res(13, 0, 2, ['t6'], 'Lara Dias', { offset: 2 }); res(20, 30, 6, ['t5'], 'Ishaan Mehta', { offset: 2, occasion: 'Birthday' });
+  const today = isoDay(now);
+  const waitlist: WaitParty[] = [
+    { id: nextId('w'), name: 'Rhea Sen', phone: '+91 98111 20456', party: 2, added: new Date(now.getTime() - 12 * 60_000), day: today, quote: 20 },
+    { id: nextId('w'), name: 'Arjun Das', phone: '+91 99300 77120', party: 4, added: new Date(now.getTime() - 5 * 60_000), day: today, quote: 35 },
+    { id: nextId('w'), name: 'Fatima Khan', phone: '+91 98670 33018', party: 2, added: new Date(now.getTime() - 90 * 60_000), day: today, wanted: 20 * 60 + 30, online: true },
+  ];
   meetings.sort((a, b) => a.start.getTime() - b.start.getTime());
   const hours: WeekHours = { mon: off, tue: two('ht', 12, 15, 19, 23), wed: two('hw', 12, 15, 19, 23), thu: two('hh', 12, 15, 19, 23), fri: two('hf', 12, 15, 19, 24), sat: two('hs', 12, 16, 19, 24), sun: two('hu', 12, 16, 19, 23) };
   return {
@@ -115,6 +129,6 @@ export function olive(now = new Date()): BookingsState {
       ], rating: 4.7, reviews: 1204, amenities: ['Outdoor seating', 'Vegetarian options', 'Card payments'], published: true,
       photos: [scene('dining', '#e8d9c3'), scene('terrace', '#f4c9a0'), scene('bar', '#d8c3a5')],
     },
-    tables,
+    tables, waitlist,
   };
 }
