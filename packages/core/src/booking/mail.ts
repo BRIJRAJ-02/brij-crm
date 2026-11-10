@@ -25,7 +25,7 @@ import { inWorkspace } from '../access/run.ts';
 import { schedulingManagers } from '../access/scheduling.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs, icsFilename } from './ics.ts';
-import { atLine, whenLine } from './mail-when.ts';
+import { atLine, whenLine, whenParts } from './mail-when.ts';
 import { answerWords, storedBookingAnswers } from './questions.ts';
 import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
@@ -69,6 +69,22 @@ export interface BookingMail {
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
   /** Who they meet, by name beside their initials: a round robin booking's assigned host (owner decision, 22 Oct). */
   readonly host?: { readonly label: string; readonly name: string };
+  /**
+   * The time in the reader's zone, which the email draws large with the zone under it (bookings redesign, 10 November
+   * 2026), struck through once it no longer stands (cancelled, declined). It is not repeated as a row.
+   */
+  readonly when?: { readonly line: string; readonly zone: string; readonly struck?: boolean };
+  /** Someone's own words, set apart: why the visitor's booking was cancelled or declined. */
+  readonly quote?: string;
+  /**
+   * The visitor's calendar file, on the app's origin by their own link (the guest page's Add to calendar), when no
+   * calendar event already put the meeting in their calendar. Only ever on the visitor's own mail.
+   */
+  readonly calendarUrl?: string;
+  /** The visitor's booking page, where they reschedule or cancel: "Need a change? Reschedule · Cancel". Visitor only. */
+  readonly change?: { readonly url: string };
+  /** The footer's line saying where a reply goes ("Reply to reach Ada Host"), set with `replyTo`. */
+  readonly reply?: string;
   /**
    * Where a reply goes: the host, on the visitor's mail once the booking stands. The visitor already has the host's
    * address there (the calendar invitation names them, whether ours or the host's calendar's), and the guest page's
@@ -125,6 +141,34 @@ function whereOf(
       return phone === undefined ? 'Phone call' : `Phone call to ${phone}`;
     default:
       return location.value ?? '';
+  }
+}
+
+/** A meeting's length in words: "30 min", "1 hour", "1 hour 30 min", "2 hours". */
+function lengthWords(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const hourWords = `${String(hours)} ${hours === 1 ? 'hour' : 'hours'}`;
+  return rest === 0 ? hourWords : `${hourWords} ${String(rest)} min`;
+}
+
+/** The call services a Join button names, by the call's host. */
+const CALL_SERVICES: readonly { readonly host: RegExp; readonly name: string }[] = [
+  { host: /^meet\.google\.com$/, name: 'Google Meet' },
+  { host: /(^|\.)zoom\.us$/, name: 'Zoom' },
+  { host: /^teams\.(microsoft|live)\.com$/, name: 'Microsoft Teams' },
+  { host: /(^|\.)webex\.com$/, name: 'Webex' },
+];
+
+/** The call's service by its address ("Google Meet"), or undefined for one we don't name. */
+function callService(url: string): string | undefined {
+  try {
+    const { hostname } = new URL(url);
+    return CALL_SERVICES.find((each) => each.host.test(hostname))?.name;
+  } catch {
+    return undefined;
   }
 }
 
@@ -259,7 +303,23 @@ export async function prepareBookingMail(
     const bookedByHost = answer(row.answers, 'bookedBy') === 'host';
     const byGuest = row.updatedByType === 'booking';
     const hasEvent = row.meetingId !== null;
-    const when = (zone: string) => ({ label: 'When', value: whenLine(row.startsAt, row.endsAt, zone) });
+    /** The time in `zone`, drawn large on its own (never a row), struck through once it no longer stands. */
+    const when = (zone: string, struck = false) => ({
+      when: { ...whenParts(row.startsAt, row.endsAt, zone), ...(struck ? { struck: true } : {}) },
+    });
+    // What it is and how long: "Intro call, 30 min".
+    const what = {
+      label: 'What',
+      value: `${page.title}, ${lengthWords(row.endsAt.getTime() - row.startsAt.getTime())}`,
+    };
+    /** The visitor's own one button when the meeting has a call: join it, the call's service named where it is known. */
+    const service = row.videoUrl === null ? undefined : callService(row.videoUrl);
+    const join =
+      row.videoUrl === null
+        ? undefined
+        : { label: service === undefined ? 'Join the call' : `Join ${service}`, url: row.videoUrl };
+    /** Where, beside a Join button: the call's service, since the button carries its address. */
+    const whereBesideJoin = row.videoUrl === null ? where : (service ?? 'Video call');
     const preview = (zone: string) => whenLine(row.startsAt, row.endsAt, zone);
     const was = (zone: string) =>
       row.previousStartsAt === null
@@ -280,6 +340,8 @@ export async function prepareBookingMail(
         ? [{ label: 'Their time', value: whenLine(row.startsAt, row.endsAt, row.visitorTimeZone) }]
         : [];
     const reasonRow = row.cancelReason === null ? [] : [{ label: 'Reason', value: row.cancelReason }];
+    /** A reason, in the reader's quote marks, for the visitor's own mail. */
+    const quoted = (reason: string | null) => (reason === null ? {} : { quote: `“${reason}”` });
     // The file's link opens the reader's own way back to the booking: the visitor's booking page, the host's booking on
     // Bookings, and for a guest the page itself, since a guest never gets the visitor's link (see the header).
     const fileUrl = { visitor: manageUrl, host: bookingsUrl, guest: bookAgainUrl } as const;
@@ -333,8 +395,8 @@ export async function prepareBookingMail(
             preview: preview(hostZone),
             heading: method === 'CANCEL' ? 'Off your calendar' : 'In your calendar',
             intro,
+            ...when(hostZone, method === 'CANCEL'),
             rows: [
-              when(hostZone),
               { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
               { label: 'Where', value: whereForHost },
             ],
@@ -342,7 +404,12 @@ export async function prepareBookingMail(
             why: hostWhy,
             ics: icsFile(method, everyone, 'host'),
           }));
-    const change = 'Need to change it? Move it to another time or cancel it from your booking page.';
+    // The visitor's way to change it: Reschedule and Cancel, both on their booking page.
+    const change = { change: { url: manageUrl } };
+    // The visitor's calendar file by their own link, on the app's origin, unless a calendar event already invited them.
+    const calendarLink = hasEvent
+      ? {}
+      : { calendarUrl: `${deps.appOrigin}/api/public/booking/manage/${encodeURIComponent(token)}/ics` };
     // Why each reader got their email, for the footer: the address that booked, a guest on it, or its host.
     const visitorWhy = bookedByHost
       ? `You got this email because ${hostName} booked a time with this address.`
@@ -355,7 +422,9 @@ export async function prepareBookingMail(
     // colleague's calendar, whose account may show another address as the organiser, so nothing is shared there.
     const bookedForColleague = bookedByHost && row.createdByMemberId !== row.hostMemberId;
     const replyToHost =
-      host === undefined || host.status !== 'active' || (hasEvent && bookedForColleague) ? {} : { replyTo: host.email };
+      host === undefined || host.status !== 'active' || (hasEvent && bookedForColleague)
+        ? {}
+        : { replyTo: host.email, reply: `Reply to reach ${host.name}` };
     const guestWhy = `You got this email because ${row.visitorName} added this address to ${page.title}.`;
     const hostWhy = `You got this email because you host ${page.title}.`;
     const newGuests = guests.filter((guest) => !invited.includes(guest));
@@ -366,7 +435,10 @@ export async function prepareBookingMail(
         preview: `${row.visitorName} added you to ${page.title}.`,
         heading: 'You’re invited',
         intro: `${row.visitorName} invited you to ${page.title}, hosted by ${hostName}.`,
-        rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+        ...when(row.visitorTimeZone),
+        rows: [what, { label: 'Where', value: join === undefined ? where : whereBesideJoin }],
+        // The call, when there is one, is the guest's one button (never the visitor's booking page: their key).
+        ...(join === undefined ? {} : { button: join }),
         why: guestWhy,
         ...(always
           ? { ics: icsFile('REQUEST', [{ name: guest, email: guest }], 'guest') }
@@ -379,21 +451,22 @@ export async function prepareBookingMail(
           to: row.visitorEmail,
           subject: bookedByHost ? `${hostName} booked a time with you` : `Booked: ${name}`,
           preview: preview(row.visitorTimeZone),
-          heading: bookedByHost ? `${hostName} booked a time with you` : 'You’re booked',
-          intro: bookedByHost
-            ? `You didn’t book this: ${hostName} did, and it’s in both your calendars.`
-            : `${hostName} has been told. Here are the details.`,
+          heading: bookedByHost ? `${hostName} booked a time with you` : `You’re booked with ${hostName}`,
+          // The heading names the host and the time follows: an intro would only say it again.
+          intro: bookedByHost ? `You didn’t book this: ${hostName} did, and it’s in both your calendars.` : '',
+          ...when(row.visitorTimeZone),
           rows: [
-            { label: 'What', value: page.title },
-            when(row.visitorTimeZone),
+            what,
             // A round robin booking names its assigned host beside their initials instead (`host`).
             ...(isTeam ? [] : [{ label: 'With', value: hostName }]),
-            { label: 'Where', value: where },
+            { label: 'Where', value: whereBesideJoin },
             ...(bookedByHost && note !== undefined ? [{ label: 'Message', value: `“${note}”` }] : []),
           ],
           ...(isTeam ? { host: { label: 'Your host', name: hostName } } : {}),
-          button: { label: 'View your booking', url: manageUrl },
-          footnote: change,
+          // The one button: the call when there is one (the booking page is a link under it), else the booking page.
+          button: join ?? { label: 'View your booking', url: manageUrl },
+          ...calendarLink,
+          ...change,
           why: visitorWhy,
           ...replyToHost,
           ...ics('REQUEST', everyone, 'visitor'),
@@ -410,8 +483,8 @@ export async function prepareBookingMail(
               preview: preview(hostZone),
               heading: 'New booking',
               intro: `${row.visitorName} booked ${page.title}.`,
+              ...when(hostZone),
               rows: [
-                when(hostZone),
                 // The guest's own clock (B-20): the host writes to them in it, so it is said when it isn't the host's.
                 ...theirTime,
                 { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
@@ -442,7 +515,8 @@ export async function prepareBookingMail(
           intro: byGuest
             ? `${remover} took you off ${page.title}, hosted by ${hostName}. Nothing else to do.`
             : `${remover} took you off ${page.title}. Nothing else to do.`,
-          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone)],
+          ...when(row.visitorTimeZone),
+          rows: [what],
           why: `You got this email because ${row.visitorName} had added this address to ${page.title}.`,
           ...guestFile('CANCEL', guest),
         }));
@@ -455,8 +529,8 @@ export async function prepareBookingMail(
                 preview: `${row.visitorName} invited ${newGuests.join(', ')}.`,
                 heading: 'Guests added',
                 intro: `${row.visitorName} invited ${newGuests.join(', ')} to ${page.title}. They have the calendar file.`,
+                ...when(hostZone),
                 rows: [
-                  when(hostZone),
                   { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
                   { label: 'Guests', value: guests.join(', ') },
                 ],
@@ -480,14 +554,11 @@ export async function prepareBookingMail(
           intro: byGuest
             ? `${hostName} has been told, and the calendar invitation has the new time.`
             : `${hostName} picked a new time. If it doesn’t suit you, move it again or cancel it.`,
-          rows: [
-            { label: 'What', value: page.title },
-            when(row.visitorTimeZone),
-            ...was(row.visitorTimeZone),
-            { label: 'Where', value: where },
-          ],
-          button: { label: 'View your booking', url: manageUrl },
-          footnote: change,
+          ...when(row.visitorTimeZone),
+          rows: [what, ...was(row.visitorTimeZone), { label: 'Where', value: whereBesideJoin }],
+          button: join ?? { label: 'View your booking', url: manageUrl },
+          ...calendarLink,
+          ...change,
           why: visitorWhy,
           ...replyToHost,
           ...ics('REQUEST', everyone, 'visitor'),
@@ -498,7 +569,9 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: 'A meeting you’re invited to moved',
           intro: `${page.title} has a new time.`,
-          rows: [when(row.visitorTimeZone), ...was(row.visitorTimeZone), { label: 'Where', value: where }],
+          ...when(row.visitorTimeZone),
+          rows: [...was(row.visitorTimeZone), { label: 'Where', value: join === undefined ? where : whereBesideJoin }],
+          ...(join === undefined ? {} : { button: join }),
           why: guestWhy,
           ...guestFile('REQUEST', guest),
         }));
@@ -514,11 +587,8 @@ export async function prepareBookingMail(
               preview: preview(hostZone),
               heading: 'A booking moved',
               intro: `${row.visitorName} moved ${page.title} to a new time.`,
-              rows: [
-                when(hostZone),
-                ...was(hostZone),
-                { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
-              ],
+              ...when(hostZone),
+              rows: [...was(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
               button: { label: 'Open booking', url: bookingsUrl },
               why: hostWhy,
               ...ics('REQUEST', everyone, 'host'),
@@ -536,7 +606,9 @@ export async function prepareBookingMail(
           intro: byHost
             ? `${hostName} cancelled ${page.title}. It comes off your calendar.`
             : `${hostName} has been told. Nothing else to do.`,
-          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), ...reasonRow],
+          ...when(row.visitorTimeZone, true),
+          rows: [what],
+          ...quoted(row.cancelReason),
           button: { label: byHost ? 'Book another time' : 'Book again', url: bookAgainUrl },
           why: visitorWhy,
           ...replyToHost,
@@ -548,7 +620,8 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: 'A meeting you’re invited to was cancelled',
           intro: `${page.title} won’t go ahead.`,
-          rows: [when(row.visitorTimeZone)],
+          ...when(row.visitorTimeZone, true),
+          rows: [what],
           why: guestWhy,
           ...guestFile('CANCEL', guest),
         }));
@@ -564,7 +637,8 @@ export async function prepareBookingMail(
               preview: preview(hostZone),
               heading: 'A booking was cancelled',
               intro: `${row.visitorName} cancelled ${page.title}. The time is free again.`,
-              rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }, ...reasonRow],
+              ...when(hostZone, true),
+              rows: [{ label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }, ...reasonRow],
               why: hostWhy,
               ...ics('CANCEL', everyone, 'host'),
             }));
@@ -574,16 +648,18 @@ export async function prepareBookingMail(
         // A link the host added by hand (B-07): the visitor and their guests get it, with a fresh calendar file
         // where no calendar event holds the meeting. The host added it, so they get nothing.
         if (row.videoUrl === null) return { messages: [], invited: [], skipped: 'no link' };
-        const join = { label: 'Join the call', url: row.videoUrl };
+        const call = join ?? { label: 'Join the call', url: row.videoUrl };
         const toVisitor: BookingMail = {
           to: row.visitorEmail,
           subject: `Meeting link: ${name}`,
           preview: preview(row.visitorTimeZone),
           heading: 'Your meeting link',
           intro: `${hostName} added the link for ${page.title}.`,
-          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
-          button: join,
-          footnote: change,
+          ...when(row.visitorTimeZone),
+          rows: [what, { label: 'Where', value: whereBesideJoin }],
+          button: call,
+          ...calendarLink,
+          ...change,
           why: visitorWhy,
           ...replyToHost,
           ...ics('REQUEST', everyone, 'visitor'),
@@ -594,8 +670,9 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: 'The meeting link',
           intro: `${hostName} added the link for ${page.title}.`,
-          rows: [when(row.visitorTimeZone), { label: 'Where', value: where }],
-          button: join,
+          ...when(row.visitorTimeZone),
+          rows: [{ label: 'Where', value: whereBesideJoin }],
+          button: call,
           why: guestWhy,
           ...guestFile('REQUEST', guest),
         }));
@@ -623,11 +700,8 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: 'Request received',
           intro: `${hostName} will confirm or decline it. You’ll get an email either way.`,
-          rows: [
-            { label: 'What', value: page.title },
-            when(row.visitorTimeZone),
-            ...(isTeam ? [] : [{ label: 'With', value: hostName }]),
-          ],
+          ...when(row.visitorTimeZone),
+          rows: [what, ...(isTeam ? [] : [{ label: 'With', value: hostName }])],
           button: { label: 'View your request', url: manageUrl },
           why: visitorWhy,
         };
@@ -640,8 +714,8 @@ export async function prepareBookingMail(
           preview: preview(hostZone),
           heading: 'A booking request',
           intro: `${row.visitorName} asked for ${page.title}. The time is held until you answer.`,
+          ...when(hostZone),
           rows: [
-            when(hostZone),
             { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
             ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
             ...answerRows,
@@ -664,11 +738,9 @@ export async function prepareBookingMail(
           intro: byNobody
             ? `${hostName} didn’t answer in time, so the time is free again.`
             : `${hostName} can’t take this time.`,
-          rows: [
-            { label: 'What', value: page.title },
-            when(row.visitorTimeZone),
-            ...(row.declineReason === null ? [] : [{ label: 'Reason', value: row.declineReason }]),
-          ],
+          ...when(row.visitorTimeZone, true),
+          rows: [what],
+          ...quoted(row.declineReason),
           button: { label: 'Book another time', url: bookAgainUrl },
           why: visitorWhy,
         };
@@ -686,7 +758,8 @@ export async function prepareBookingMail(
             preview: preview(hostZone),
             heading: 'A booking needs a host',
             intro: `Its host left the workspace and nobody else was free to take ${page.title} with ${row.visitorName}. Reassign it or cancel it from Bookings.`,
-            rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+            ...when(hostZone),
+            rows: [{ label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
             button: { label: 'Open booking', url: bookingsUrl },
             why: 'You got this email because you manage scheduling in this workspace.',
           })),
@@ -728,10 +801,12 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: `Your meeting is now with ${hostName}`,
           intro: `${page.title} has a new host. The time and place stay the same, and a new calendar invitation is on its way.`,
-          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+          ...when(row.visitorTimeZone),
+          rows: [what, { label: 'Where', value: whereBesideJoin }],
           host: { label: 'Your new host', name: hostName },
-          button: { label: 'View your booking', url: manageUrl },
-          footnote: change,
+          button: join ?? { label: 'View your booking', url: manageUrl },
+          ...calendarLink,
+          ...change,
           why: visitorWhy,
           ...replyToHost,
           ...ics('REQUEST', everyone, 'visitor'),
@@ -742,8 +817,8 @@ export async function prepareBookingMail(
           preview: preview(hostZone),
           heading: 'A booking is now yours',
           intro: `${page.title} with ${row.visitorName} came to you through its rotation.`,
+          ...when(hostZone),
           rows: [
-            when(hostZone),
             { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
             { label: 'Where', value: whereForHost },
             ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
@@ -758,7 +833,8 @@ export async function prepareBookingMail(
           preview: preview(hostZone),
           heading: 'A booking moved to someone else',
           intro: `${page.title} with ${row.visitorName} is now with ${hostName}. It’s off your calendar.`,
-          rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+          ...when(hostZone),
+          rows: [{ label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
           button: { label: 'Open booking', url: bookingsUrl },
           why: `You got this email because you hosted ${page.title}.`,
           // Off the calendar the file put it in: a cancel for this host alone.
@@ -777,13 +853,12 @@ export async function prepareBookingMail(
               preview: preview(row.visitorTimeZone),
               heading: `Your booking is ${soon}`,
               intro: `A reminder of your time with ${hostName}.`,
-              rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
-              button:
-                row.videoUrl === null
-                  ? { label: 'View your booking', url: manageUrl }
-                  : { label: 'Join the call', url: row.videoUrl },
-              // With Join the call as the button, the line under it points to the confirmation's booking page link.
-              footnote: row.videoUrl === null ? change : 'Need to change it? Use the link in your confirmation email.',
+              ...when(row.visitorTimeZone),
+              rows: [what, { label: 'Where', value: whereBesideJoin }],
+              // Join the call when there is one; the booking page is then the quiet Reschedule · Cancel under it.
+              button: join ?? { label: 'View your booking', url: manageUrl },
+              ...calendarLink,
+              ...change,
               why: visitorWhy,
               ...replyToHost,
             },
