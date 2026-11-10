@@ -104,6 +104,8 @@ export const NARROW = breakpointToken('bp-container-md');
 /** The type styles an email uses. */
 export const TYPE = {
   heading: typeToken('heading'),
+  /** A booking's time, the line the eye goes to first. */
+  title: typeToken('title'),
   body: typeToken('body'),
   bodyStrong: typeToken('body-strong'),
   label: typeToken('label'),
@@ -179,8 +181,9 @@ export function emailStylesheet(): string {
     ':root { color-scheme: light dark; supported-color-schemes: light dark; }',
     `@media (prefers-color-scheme: dark) {`,
     ...media.map((rule) => `  ${rule}`),
-    '  .tf-logo-light { display: none !important; }',
+    '  .tf-logo-light, .tf-mast-light { display: none !important; }',
     '  .tf-logo-dark { display: inline-block !important; max-height: none !important; overflow: visible !important; }',
+    '  .tf-mast-dark { display: block !important; max-height: none !important; overflow: visible !important; }',
     '}',
     ...outlookText,
     ...outlookGround,

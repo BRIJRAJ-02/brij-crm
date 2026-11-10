@@ -7,7 +7,7 @@
 // since Outlook on Windows draws with Word and ignores most of CSS layout.
 import { createElement as h, Fragment, type CSSProperties, type ReactNode } from 'react';
 import type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
-import { callUrl, onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } from './links.ts';
+import { callUrl, logoUrls, onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } from './links.ts';
 import { Button, Container, Head, Heading, Html, Link, Section, Text, renderHtml } from './react-email.ts';
 import {
   EMAIL_WIDTH,
@@ -73,6 +73,10 @@ const LOGO_HEIGHT = pixels(SPACE[16]);
 const BRAND_LOGO_HEIGHT = pixels(SPACE[32]);
 /** The wordmark files' shape (860 by 210), so the logo keeps it at any height. */
 const LOGO_WIDTH = Math.round((LOGO_HEIGHT * 860) / 210);
+/** The masthead's drawn height (a booking email's Timefix logo over its heading): the wordmark's, as the guest pages draw it. */
+const MAST_HEIGHT = pixels(SPACE[16]);
+/** The masthead files' shape (1181 by 210, `scripts/brand.ts`), so the logo keeps it: 90px wide at 16px. */
+const MAST_WIDTH = Math.round((MAST_HEIGHT * 1181) / 210);
 
 /** Text that keeps its own line breaks: each line, with a break between. */
 function lines(text: string): ReactNode {
@@ -179,6 +183,22 @@ function rows(block: Extract<EmailBlock, { type: 'rows' }>, origin: string, also
           h(Text, { className: value.className, style: { ...valueStyle, margin: '0' } }, rowValue(row, origin, alsoOn)),
         ),
       ),
+    ),
+  );
+}
+
+/** A hairline across the card: a one row table with a top border, which Outlook draws as it should. */
+function hairline(): ReactNode {
+  const rule = role('rule');
+  return layoutTable(
+    {},
+    h(
+      'tr',
+      null,
+      h('td', {
+        className: rule.className,
+        style: { ...rule.style, borderTopStyle: 'solid', borderTopWidth: HAIRLINE, fontSize: '0', lineHeight: '0' },
+      }),
     ),
   );
 }
@@ -302,6 +322,56 @@ function block(item: EmailBlock, origin: string, alsoOn: readonly string[] = [])
             ),
           ),
         ),
+      );
+    }
+    case 'when': {
+      const line = role(item.struck === true ? 'secondary' : 'text');
+      const zone = role('secondary');
+      return h(
+        Fragment,
+        null,
+        h(
+          Text,
+          {
+            className: line.className,
+            style: {
+              ...type(TYPE.title),
+              ...line.style,
+              margin: '0',
+              ...(item.struck === true ? { textDecoration: 'line-through' } : {}),
+            },
+          },
+          item.line,
+        ),
+        h(
+          Text,
+          { className: zone.className, style: { ...type(TYPE.label), ...zone.style, margin: `${SPACE[4]} 0 0` } },
+          item.zone,
+        ),
+      );
+    }
+    case 'rule':
+      return hairline();
+    case 'links': {
+      const lead = role('secondary');
+      const link = role('link');
+      return h(
+        Text,
+        { className: lead.className, style: { ...type(TYPE.label), ...lead.style, margin: '0' } },
+        `${item.lead} `,
+        ...item.links.flatMap((each, index) => [
+          index === 0 ? null : h('span', { key: `s${String(index)}`, 'aria-hidden': 'true' }, ' · '),
+          h(
+            Link,
+            {
+              key: `l${String(index)}`,
+              href: onAppOrigin(each.url, origin, alsoOn),
+              className: link.className,
+              style: { ...type(TYPE.label), ...link.style, textDecoration: 'underline' },
+            },
+            each.label,
+          ),
+        ]),
       );
     }
     case 'quote': {
@@ -458,6 +528,79 @@ function footer(document: EmailDocument, options: RenderOptions): ReactNode {
   );
 }
 
+/**
+ * The booking emails' footer, inside the card under a hairline (bookings redesign, 10 November 2026): where a reply
+ * goes and the reader's preferences on one quiet line, Powered by Timefix, and why the reader got it.
+ */
+function cardFooter(document: EmailDocument, options: RenderOptions): ReactNode {
+  const tertiary = role('tertiary');
+  const small: EmailStyle = { ...type(TYPE.label), ...tertiary.style, margin: '0' };
+  const preferences =
+    options.preferencesUrl === undefined
+      ? null
+      : h(
+          Link,
+          {
+            href: onAppOrigin(options.preferencesUrl, options.appOrigin),
+            className: tertiary.className,
+            style: { ...type(TYPE.label), ...tertiary.style, textDecoration: 'underline' },
+          },
+          'Email preferences',
+        );
+  const replyLine =
+    document.reply === undefined && preferences === null
+      ? null
+      : h(
+          Text,
+          { className: tertiary.className, style: { ...small, margin: `0 0 ${SPACE[8]}` } },
+          document.reply ?? null,
+          document.reply !== undefined && preferences !== null ? h('span', { 'aria-hidden': 'true' }, ' · ') : null,
+          preferences,
+        );
+  return h(
+    Fragment,
+    null,
+    h('div', { style: { padding: `${SPACE[24]} 0` } }, hairline()),
+    replyLine,
+    h(
+      Text,
+      { className: tertiary.className, style: { ...small, margin: `0 0 ${SPACE[8]}` } },
+      h(
+        Link,
+        {
+          href: poweredByUrl(options.medium),
+          className: tertiary.className,
+          style: { ...type(TYPE.label), ...tertiary.style, textDecoration: 'none' },
+        },
+        'Powered by Timefix',
+      ),
+    ),
+    h(Text, { className: tertiary.className, style: small }, document.why),
+  );
+}
+
+/** The booking emails' masthead: the Timefix logo, one image per theme, over the heading. */
+function masthead(options: RenderOptions): ReactNode {
+  const logos = logoUrls(options.appOrigin);
+  // Plain images, as the footer's: React Email's Img adds `outline`, which a fifth of clients can't read.
+  const logo = (scheme: 'light' | 'dark') =>
+    h('img', {
+      src: logos[scheme],
+      alt: scheme === 'light' ? 'Timefix' : '',
+      width: MAST_WIDTH,
+      height: MAST_HEIGHT,
+      className: `tf-mast-${scheme}`,
+      style: {
+        display: scheme === 'light' ? 'block' : 'none',
+        height: `${String(MAST_HEIGHT)}px`,
+        width: `${String(MAST_WIDTH)}px`,
+        border: '0',
+        ...(scheme === 'dark' ? { msoHide: 'all', maxHeight: '0', overflow: 'hidden' } : {}),
+      } satisfies EmailStyle,
+    });
+  return h('div', { style: { margin: `0 0 ${SPACE[24]}` } }, logo('light'), logo('dark'));
+}
+
 /** The whole email as React Email elements. */
 function EmailLayout({ document, options }: { readonly document: EmailDocument; readonly options: RenderOptions }) {
   const page = role('page');
@@ -526,6 +669,7 @@ function EmailLayout({ document, options }: { readonly document: EmailDocument; 
                       padding: SPACE[32],
                     },
                   },
+                  document.masthead === true ? masthead(options) : null,
                   document.logo === undefined
                     ? null
                     : h('img', {
@@ -575,8 +719,9 @@ function EmailLayout({ document, options }: { readonly document: EmailDocument; 
                       ),
                     ),
                   ),
+                  document.masthead === true ? cardFooter(document, options) : null,
                 ),
-                footer(document, options),
+                document.masthead === true ? null : footer(document, options),
               ),
             ),
           ),
@@ -626,6 +771,24 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
       case 'callButton':
         out.push(`${item.label}: ${callUrl(item.url)}`, '');
         break;
+      case 'when':
+        out.push(item.struck === true ? `${item.line} (cancelled)` : item.line, item.zone, '');
+        break;
+      case 'rule':
+        break;
+      case 'links': {
+        const urls = item.links.map((each) => onAppOrigin(each.url, options.appOrigin, options.publicOrigins));
+        // Links to one page ("Reschedule · Cancel", both on the booking's page) write that address once.
+        if (urls.length === 1) {
+          out.push(`${item.lead} ${urls[0] ?? ''}`, '');
+        } else if (urls.every((url) => url === urls[0])) {
+          const labels = item.links.map((each, index) => (index === 0 ? each.label : each.label.toLowerCase()));
+          out.push(`${item.lead} ${labels.join(' or ')}: ${urls[0] ?? ''}`, '');
+        } else {
+          out.push(item.lead, ...item.links.map((each, index) => `${each.label}: ${urls[index] ?? ''}`), '');
+        }
+        break;
+      }
       case 'rows':
         for (const row of item.rows) {
           const value =
@@ -639,6 +802,7 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
         break;
     }
   }
+  if (document.reply !== undefined) out.push(document.reply);
   out.push(`Powered by Timefix: ${poweredByUrl(options.medium)}`, document.why);
   if (options.unsubscribeUrl !== undefined) {
     out.push(`Unsubscribe: ${onAppOrigin(options.unsubscribeUrl, options.appOrigin)}`);
@@ -676,6 +840,8 @@ export async function renderDocument(document: EmailDocument, options: RenderOpt
   for (const item of document.blocks) {
     if (item.type === 'button') onAppOrigin(item.url, options.appOrigin, options.publicOrigins);
     if (item.type === 'callButton') callUrl(item.url);
+    if (item.type === 'links')
+      for (const each of item.links) onAppOrigin(each.url, options.appOrigin, options.publicOrigins);
     if (item.type === 'rows')
       for (const row of item.rows) if (row.url !== undefined) onAppOrigin(row.url, options.appOrigin);
   }

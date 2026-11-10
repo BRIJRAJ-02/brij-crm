@@ -34,7 +34,111 @@ describe('a booking email', () => {
         { type: 'note', text: WORDS.footnote },
       ],
       why: WORDS.why,
+      masthead: true,
     });
+  });
+
+  // The redesigned booking email (bookings redesign, 10 November 2026): the time large with its zone under it, a
+  // hairline, the facts, the one button, then the quiet links, and the footer inside the card.
+  const REDESIGNED: BookingWords = {
+    subject: 'Booked: Intro call with Ada Host',
+    preview: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
+    heading: 'You’re booked with Ada Host',
+    intro: '',
+    when: { line: 'Monday, 2 November 2026, 09:00 to 09:30', zone: 'London time (GMT)' },
+    rows: [
+      { label: 'What', value: 'Intro call, 30 min' },
+      { label: 'Where', value: 'Google Meet' },
+    ],
+    button: { label: 'Join Google Meet', url: 'https://meet.google.com/abc-defg-hij' },
+    calendarUrl: `${ORIGIN}/api/public/booking/manage/token/ics`,
+    change: { url: `${ORIGIN}/b/intro/manage?t=token` },
+    why: 'You got this email because this address was used to book Intro call with Ada Host.',
+    reply: 'Reply to reach Ada Host',
+  };
+
+  it('draws the time, a hairline, the facts, the call, then Add to calendar and Need a change', () => {
+    const document = bookingDocument(REDESIGNED, ORIGIN);
+    expect(document.blocks).toEqual([
+      { type: 'when', line: 'Monday, 2 November 2026, 09:00 to 09:30', zone: 'London time (GMT)' },
+      { type: 'rule' },
+      { type: 'rows', layout: 'compact', rows: REDESIGNED.rows },
+      { type: 'callButton', label: 'Join Google Meet', url: 'https://meet.google.com/abc-defg-hij' },
+      {
+        type: 'links',
+        lead: 'Add to calendar:',
+        links: [{ label: 'Calendar file (.ics)', url: `${ORIGIN}/api/public/booking/manage/token/ics` }],
+      },
+      {
+        type: 'links',
+        lead: 'Need a change?',
+        links: [
+          { label: 'Reschedule', url: `${ORIGIN}/b/intro/manage?t=token` },
+          { label: 'Cancel', url: `${ORIGIN}/b/intro/manage?t=token` },
+        ],
+      },
+    ]);
+    expect(document.reply).toBe('Reply to reach Ada Host');
+  });
+
+  it('heads the card with the Timefix logo in each theme, and keeps the footer inside the card', async () => {
+    const email = await renderBookingEmail(REDESIGNED, { appOrigin: ORIGIN, medium: 'email_booking' });
+    expect(email.html).toContain(`src="${ORIGIN}/brand/email/timefix-logo-light.png"`);
+    expect(email.html).toContain(`src="${ORIGIN}/brand/email/timefix-logo-dark.png"`);
+    expect(email.html).toContain('.tf-mast-dark { display: block !important;');
+    // Not the muted footer wordmark: the masthead is the one logo.
+    expect(email.html).not.toContain('timefix-wordmark-light.png');
+    expect(email.html).toContain('Reply to reach Ada Host');
+    expect(email.html).toContain('Powered by Timefix');
+    expect(email.text).toBe(
+      [
+        'You’re booked with Ada Host',
+        '',
+        'Monday, 2 November 2026, 09:00 to 09:30',
+        'London time (GMT)',
+        '',
+        'What: Intro call, 30 min',
+        'Where: Google Meet',
+        '',
+        'Join Google Meet: https://meet.google.com/abc-defg-hij',
+        '',
+        `Add to calendar: ${ORIGIN}/api/public/booking/manage/token/ics`,
+        '',
+        `Need a change? Reschedule or cancel: ${ORIGIN}/b/intro/manage?t=token`,
+        '',
+        'Reply to reach Ada Host',
+        'Powered by Timefix: https://www.timefix.com/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
+        REDESIGNED.why,
+      ].join('\n'),
+    );
+  });
+
+  it('strikes a time that no longer stands, and sets a reason apart as a quote', async () => {
+    const words: BookingWords = {
+      ...REDESIGNED,
+      when: { line: 'Monday, 2 November 2026, 09:00 to 09:30', zone: 'London time (GMT)', struck: true },
+      quote: '“Something came up.”',
+      button: { label: 'Book another time', url: `${ORIGIN}/ada/intro` },
+    };
+    const email = await renderBookingEmail(words, { appOrigin: ORIGIN, medium: 'email_booking' });
+    expect(email.html).toContain('text-decoration:line-through');
+    expect(email.html).toContain('“Something came up.”');
+    expect(email.text).toContain('Monday, 2 November 2026, 09:00 to 09:30 (cancelled)');
+  });
+
+  it('refuses a quiet link off our origins, as it would a button', async () => {
+    await expect(
+      renderBookingEmail(
+        { ...REDESIGNED, calendarUrl: 'https://calendar.google.com/calendar/render?action=TEMPLATE' },
+        { appOrigin: ORIGIN, medium: 'email_booking' },
+      ),
+    ).rejects.toThrow('An email link must be an address on the app origin.');
+    await expect(
+      renderBookingEmail(
+        { ...REDESIGNED, change: { url: 'https://evil.example/b/intro/manage' } },
+        { appOrigin: ORIGIN, medium: 'email_booking' },
+      ),
+    ).rejects.toThrow('An email link must be an address on the app origin.');
   });
 
   it('draws it with the design system, light and dark, in HTML and plain text', async () => {

@@ -22,53 +22,157 @@ import {
 
 const BRAND = path.resolve(import.meta.dirname, '../../../apps/web/public/brand');
 
-/** A booking confirmation's words, as core writes them for the visitor. */
+/** The visitor's booking page: the app path its links take (the origin is added when drawn). */
+const MANAGE = '/b/intro-call/manage?t=preview';
+const WHEN = { line: 'Monday, 2 November 2026, 09:00 to 09:30', zone: 'London time (GMT)' } as const;
+const VISITOR_WHY = 'You got this email because this address was used to book Intro call with Ada Lovelace.';
+
+/** A booking confirmation's words, as core writes them for the visitor of a meeting with a video call. */
 const BOOKING_CONFIRMATION: BookingWords = {
   subject: 'Booked: Intro call with Ada Lovelace',
-  preview: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)',
-  heading: 'You’re booked',
-  intro: 'Ada Lovelace has been told. Here are the details.',
+  preview: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
+  heading: 'You’re booked with Ada Lovelace',
+  intro: '',
+  when: WHEN,
   rows: [
-    { label: 'What', value: 'Intro call' },
-    { label: 'When', value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)' },
+    { label: 'What', value: 'Intro call, 30 min' },
     { label: 'With', value: 'Ada Lovelace' },
-    { label: 'Where', value: 'https://meet.google.com/abc-defg-hij' },
+    { label: 'Where', value: 'Google Meet' },
   ],
-  button: { label: 'View your booking', url: '/b/intro-call/manage?t=preview' },
-  footnote: 'Need to change it? Move it to another time or cancel it from your booking page.',
-  why: 'You got this email because this address was used to book Intro call with Ada Lovelace.',
+  button: { label: 'Join Google Meet', url: 'https://meet.google.com/abc-defg-hij' },
+  calendarUrl: '/api/public/booking/manage/preview/ics',
+  change: { url: MANAGE },
+  why: VISITOR_WHY,
+  reply: 'Reply to reach Ada Lovelace',
 };
 
-/** Every email the preview shows: the sign in code, a booking's two looks, then each kind with a template. */
+/** Each booking email the preview shows, as core writes it: the visitor's, a guest's and the host's. */
+const BOOKING_SAMPLES: Readonly<Record<string, { readonly words: BookingWords; readonly reminder?: boolean }>> = {
+  booking_confirmation: { words: BOOKING_CONFIRMATION },
+  booking_confirmation_place: {
+    words: {
+      ...BOOKING_CONFIRMATION,
+      rows: [
+        { label: 'What', value: 'Intro call, 30 min' },
+        { label: 'With', value: 'Ada Lovelace' },
+        { label: 'Where', value: '12 Hanover Square, London W1S 1JD' },
+      ],
+      button: { label: 'View your booking', url: MANAGE },
+    },
+  },
+  booking_reminder: {
+    reminder: true,
+    words: {
+      ...BOOKING_CONFIRMATION,
+      subject: 'Tomorrow: Intro call with Ada Lovelace',
+      heading: 'Your booking is tomorrow',
+      intro: 'A reminder of your time with Ada Lovelace.',
+    },
+  },
+  booking_moved: {
+    words: {
+      ...BOOKING_CONFIRMATION,
+      subject: 'Moved: Intro call with Ada Lovelace',
+      heading: 'Ada Lovelace moved your booking',
+      intro: 'Ada Lovelace picked a new time. If it doesn’t suit you, move it again or cancel it.',
+      rows: [
+        { label: 'What', value: 'Intro call, 30 min' },
+        { label: 'Was', value: 'Friday, 30 October 2026, 14:00 to 14:30, London time (GMT)' },
+        { label: 'Where', value: 'Google Meet' },
+      ],
+    },
+  },
+  booking_cancelled: {
+    words: {
+      subject: 'Cancelled: Intro call with Ada Lovelace',
+      preview: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
+      heading: 'Ada Lovelace cancelled your booking',
+      intro: 'Ada Lovelace cancelled Intro call. It comes off your calendar.',
+      when: { ...WHEN, struck: true },
+      rows: [{ label: 'What', value: 'Intro call, 30 min' }],
+      quote: '“Something came up at work. Sorry, please pick another time.”',
+      button: { label: 'Book another time', url: '/ada/intro-call' },
+      why: VISITOR_WHY,
+      reply: 'Reply to reach Ada Lovelace',
+    },
+  },
+  booking_request: {
+    words: {
+      subject: 'Request received: Intro call with Ada Lovelace',
+      preview: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
+      heading: 'Request received',
+      intro: 'Ada Lovelace will confirm or decline it. You’ll get an email either way.',
+      when: WHEN,
+      rows: [
+        { label: 'What', value: 'Intro call, 30 min' },
+        { label: 'With', value: 'Ada Lovelace' },
+      ],
+      button: { label: 'View your request', url: MANAGE },
+      why: VISITOR_WHY,
+    },
+  },
+  booking_invitation: {
+    words: {
+      subject: 'Invitation: Intro call with Ada Lovelace',
+      preview: 'Grace Hopper added you to Intro call.',
+      heading: 'You’re invited',
+      intro: 'Grace Hopper invited you to Intro call, hosted by Ada Lovelace.',
+      when: WHEN,
+      rows: [
+        { label: 'What', value: 'Intro call, 30 min' },
+        { label: 'Where', value: 'Google Meet' },
+      ],
+      button: { label: 'Join Google Meet', url: 'https://meet.google.com/abc-defg-hij' },
+      why: 'You got this email because Grace Hopper added this address to Intro call.',
+    },
+  },
+  booking_new: {
+    words: {
+      subject: 'New booking: Intro call with Grace Hopper',
+      preview: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
+      heading: 'New booking',
+      intro: 'Grace Hopper booked Intro call.',
+      when: WHEN,
+      rows: [
+        { label: 'Their time', value: 'Monday, November 2, 2026, 4:00 AM to 4:30 AM, New York time (GMT-5)' },
+        { label: 'Who', value: 'Grace Hopper (grace@navy.example)' },
+        { label: 'Where', value: 'https://meet.google.com/abc-defg-hij' },
+        { label: 'Note', value: 'About the compiler.' },
+      ],
+      button: { label: 'Open booking', url: '/w/acme/bookings/list?open=preview' },
+      why: 'You got this email because you host Intro call.',
+    },
+  },
+};
+
+/** Every email the preview shows: the sign in code, each booking email, then each kind with a template. */
 export const PREVIEW_KINDS: readonly string[] = [
   'sign_in_code',
-  'booking_confirmation',
-  'booking_reminder',
+  ...Object.keys(BOOKING_SAMPLES),
   ...Object.keys(CATALOG),
   'notifications',
 ];
 
 /** One email drawn with its sample params, its links on `origin`. */
 export function drawSample(kind: string, origin: string): Promise<RenderedEmail> {
-  const onOrigin = (words: BookingWords): BookingWords =>
-    words.button === undefined ? words : { ...words, button: { ...words.button, url: `${origin}${words.button.url}` } };
+  // A path becomes an address on the preview's origin; a call's own address stays as it is.
+  const onOrigin = (link: string) => (link.startsWith('/') ? `${origin}${link}` : link);
+  const sample = BOOKING_SAMPLES[kind];
+  if (sample !== undefined) {
+    const { words } = sample;
+    return renderBookingEmail(
+      {
+        ...words,
+        ...(words.button === undefined ? {} : { button: { ...words.button, url: onOrigin(words.button.url) } }),
+        ...(words.calendarUrl === undefined ? {} : { calendarUrl: onOrigin(words.calendarUrl) }),
+        ...(words.change === undefined ? {} : { change: { url: onOrigin(words.change.url) } }),
+      },
+      { appOrigin: origin, medium: sample.reminder === true ? 'email_reminder' : 'email_booking' },
+    );
+  }
   switch (kind) {
     case 'sign_in_code':
       return renderSignInCode('482913', { appOrigin: origin });
-    case 'booking_confirmation':
-      return renderBookingEmail(onOrigin(BOOKING_CONFIRMATION), { appOrigin: origin, medium: 'email_booking' });
-    case 'booking_reminder':
-      return renderBookingEmail(
-        {
-          ...BOOKING_CONFIRMATION,
-          subject: 'Tomorrow: Intro call with Ada Lovelace',
-          heading: 'Your booking is tomorrow',
-          intro: 'A reminder of your time with Ada Lovelace.',
-          button: { label: 'Join the call', url: 'https://meet.google.com/abc-defg-hij' },
-          footnote: 'Need to change it? Use the link in your confirmation email.',
-        },
-        { appOrigin: origin, medium: 'email_reminder' },
-      );
     case 'member_invite':
       return renderMemberInvite(CATALOG.member_invite.sample, { appOrigin: origin, workspaceName: 'Acme' });
     case 'notifications':
