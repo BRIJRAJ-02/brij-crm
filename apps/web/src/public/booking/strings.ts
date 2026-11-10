@@ -28,8 +28,10 @@ export const strings = {
   hours12: '12h',
   hours24: '24h',
   timeName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
-  book: 'Book',
-  bookAt: (day: string, time: string) => `Book ${day} at ${time}`,
+  // The pick step's button moves on to the details, where Confirm booking books (the owner's choice, 10 November
+  // 2026: "Next", as the mock has it), naming the time picked.
+  book: 'Next',
+  bookAt: (day: string, time: string) => `Next · ${day} at ${time}`,
   /** The Book band's quiet line while no time is picked (critic A10): a wide page only, a phone shows no band. */
   pickTime: 'Pick a time',
   /**
@@ -53,7 +55,7 @@ export const strings = {
   windowRule: (days: number) => `Up to ${String(days)} days ahead`,
   /** A page that confirms each booking first (spec 0062, AC-6203). */
   request: 'Request',
-  requestAt: (day: string, time: string) => `Request ${day} at ${time}`,
+  requestAt: (day: string, time: string) => `Request · ${day} at ${time}`,
   // The best match in words, for the dialog's question ("You’re both free at 9:30 AM on Tue 20 Oct").
   matchWhen: (time: string, day: string) => `${time} on ${day}`,
   zoneSearch: 'Search city or GMT offset',

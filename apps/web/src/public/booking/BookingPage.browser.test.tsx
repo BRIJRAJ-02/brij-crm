@@ -216,6 +216,32 @@ describe('the time zone picker in the rail', () => {
   });
 });
 
+describe('the pick step’s button (the owner’s Next, 10 November 2026)', () => {
+  it('reads Next until a time is picked, then names it, and moves on to the details', async () => {
+    const day = new Date(Date.now() + 86_400_000);
+    day.setUTCHours(9, 0, 0, 0);
+    fakeApi('month', [day.toISOString()]);
+    show();
+    const time = await vi.waitFor(() => {
+      const found = [...(host?.querySelectorAll('button') ?? [])].find((each) => /^9:00/.test(each.textContent));
+      if (found === undefined) throw new Error('No time yet.');
+      return found;
+    });
+    act(() => time.click());
+    const next = await vi.waitFor(() => {
+      const found = [...(host?.querySelectorAll('button') ?? [])].find((each) =>
+        each.textContent.startsWith('Next · '),
+      );
+      if (found === undefined) throw new Error('No Next yet.');
+      return found;
+    });
+    expect(next.textContent).toMatch(/^Next · .+ at 9:00/);
+    expect([...(host?.querySelectorAll('button') ?? [])].some((each) => /^Book /.test(each.textContent))).toBe(false);
+    act(() => next.click());
+    await vi.waitFor(() => expect(host?.textContent).toContain('Your name'));
+  });
+});
+
 describe('a next times chip’s time (spec 0061, AC-6110)', () => {
   /** A time tomorrow at 09:00 UTC, which a chip on the link page would have carried here. */
   const tomorrow = () => {
