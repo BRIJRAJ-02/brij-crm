@@ -132,7 +132,7 @@ export function northwind(now: Date = new Date()): BookingsState {
     savedHours: [{ id: 'working', name: 'Working hours', hours: weekdays(9, 17) }, { id: 'weekend', name: 'Weekend clinic', hours: WEEKEND_CLINIC }],
     defaultHoursId: 'working',
     memberHours: { 'Sam Kim': weekdays(8, 16, 's'), 'Ava Chen': weekdays(10, 18, 'a') },
-    timeOff: [{ id: 'off-jo', member: 'Jo Mendes', from: isoDay(thu), to: isoDay(fri), allDay: true, start: 0, end: 0, note: 'Family trip' }],
+    timeOff: [{ id: 'off-jo', member: 'Jo Mendes', from: isoDay(thu), to: isoDay(fri), allDay: true, start: 0, end: 0, note: 'Family trip', reason: 'vacation', cover: 'Ava Chen' }],
     // Ava covers the afternoon while Jo is away: a change for that date only.
     overrides: { [`Ava Chen|${isoDay(thu)}`]: { on: true, ranges: r('ov-a', 12, 20) } },
     calendars: [

@@ -126,7 +126,16 @@ export interface BookedMeeting extends Meeting {
 /** Time a member blocked or held by hand. */
 export interface TimeBlock { readonly id: string; readonly member: string; readonly day: string; readonly start: number; readonly end: number; readonly kind: 'block' | 'hold'; readonly label: string }
 /** Time off: a day or a range, all day or some hours, with a note. */
-export interface TimeOff { readonly id: string; readonly member: string; readonly from: string; readonly to: string; readonly allDay: boolean; readonly start: number; readonly end: number; readonly note: string }
+/** Why someone is away. */
+export type TimeOffReason = 'vacation' | 'sick' | 'travel' | 'holiday' | 'other';
+/** The reasons, as people say them. */
+export const TIME_OFF_REASONS: ReadonlyArray<{ readonly id: TimeOffReason; readonly label: string }> = [
+  { id: 'vacation', label: 'Vacation' }, { id: 'sick', label: 'Sick leave' }, { id: 'travel', label: 'Travel' }, { id: 'holiday', label: 'Public holiday' }, { id: 'other', label: 'Other' },
+];
+export interface TimeOff { readonly id: string; readonly member: string; readonly from: string; readonly to: string; readonly allDay: boolean; readonly start: number; readonly end: number; readonly note: string;
+  readonly reason?: TimeOffReason; /** Who takes their meetings while they're away; offered first when meetings are handed on. */ readonly cover?: string }
+/** Most meetings one person takes, across every page; 0 is no limit. */
+export interface MeetingLimits { readonly perDay: number; readonly perWeek: number }
 /** A named set of weekly hours. */
 export interface SavedHours { readonly id: string; readonly name: string; readonly hours: WeekHours }
 /** Time another calendar holds on one day. */
@@ -162,6 +171,8 @@ export interface BookingsState {
   readonly memberHours: Readonly<Record<string, WeekHours>>;
   /** One person's hours on one date only ("Name|YYYY-MM-DD"); the usual week applies everywhere else. */
   readonly overrides?: Readonly<Record<string, DayHours>>;
+  /** Per person meeting limits across all pages. */
+  readonly limits?: Readonly<Record<string, MeetingLimits>>;
   readonly timeOff: ReadonlyArray<TimeOff>;
   readonly calendars: ReadonlyArray<CalendarAccount>;
   readonly health: CalendarHealth;
@@ -186,6 +197,7 @@ export type BookingsAction =
   | { readonly type: 'timeoff/set'; readonly timeOff: ReadonlyArray<TimeOff> }
   | { readonly type: 'member/hours'; readonly name: string; readonly hours: WeekHours }
   /** Sets (or, with null, clears) date-only hours; keys are "Name|YYYY-MM-DD". */
+  | { readonly type: 'limits/set'; readonly name: string; readonly limits: MeetingLimits }
   | { readonly type: 'overrides/merge'; readonly patch: Readonly<Record<string, DayHours | null>> }
   | { readonly type: 'calendar/set'; readonly calendars: ReadonlyArray<CalendarAccount>; readonly health?: CalendarHealth }
   | { readonly type: 'busy/add'; readonly block: BusyBlock }
@@ -218,6 +230,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
     case 'hours/saved': return { ...state, savedHours: action.savedHours, defaultHoursId: action.defaultHoursId };
     case 'timeoff/set': return { ...state, timeOff: action.timeOff };
     case 'member/hours': return { ...state, memberHours: { ...state.memberHours, [action.name]: action.hours } };
+    case 'limits/set': return { ...state, limits: { ...(state.limits ?? {}), [action.name]: action.limits } };
     case 'overrides/merge': {
       const next: Record<string, DayHours> = { ...(state.overrides ?? {}) };
       Object.entries(action.patch).forEach(([k, v]) => { if (v) next[k] = v; else delete next[k]; });
@@ -317,8 +330,19 @@ export function noHostsFree(state: BookingsState, p: BookingPage, now: Date): bo
 }
 
 /** Whether one member is free for a span on a day: hours, time off, meetings (with the page's buffers) and busy time. */
+/** Whether someone has hit their own meeting limit (across every page) on that day or in that week. */
+export function atLimit(state: BookingsState, member: string, date: Date): 'day' | 'week' | undefined {
+  const l = state.limits?.[member];
+  if (!l) return undefined;
+  const theirs = state.meetings.filter((m) => m.host === member && m.status !== 'cancelled');
+  if (l.perDay > 0 && theirs.filter((m) => m.start.toDateString() === date.toDateString()).length >= l.perDay) return 'day';
+  const monday = mondayOf(date).getTime();
+  if (l.perWeek > 0 && theirs.filter((m) => mondayOf(m.start).getTime() === monday).length >= l.perWeek) return 'week';
+  return undefined;
+}
 function memberFree(state: BookingsState, page: BookingPage | undefined, member: string, date: Date, start: number, end: number): boolean {
   if (isOff(state, member, date, start, end)) return false;
+  if (atLimit(state, member, date)) return false;
   const before = page?.bufferBefore ?? 0;
   const after = page?.bufferAfter ?? 0;
   const clash = state.meetings.some((m) => m.host === member && m.status !== 'cancelled' && m.start.toDateString() === date.toDateString()

@@ -9,6 +9,7 @@ import { MenuTrigger, Menu, MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
 import { Dialog, ConfirmDialog } from '../Dialog/Dialog.tsx';
 import { TextField } from '../Field/Field.tsx';
 import { Select } from '../Select/Select.tsx';
+import { NumberField } from '../NumberField/NumberField.tsx';
 import { DateRangePicker } from '../DatePicker/DatePicker.tsx';
 import { TimeSelect } from '../TimeField/TimeField.tsx';
 import { Switch } from '../Checkbox/Checkbox.tsx';
@@ -23,7 +24,7 @@ import { formatDate, formatDay } from '../../lib/format.ts';
 import { Section, TabToolbar, i14, i16 } from './parts.tsx';
 import { weekdays } from './seed.ts';
 import {
-  HOST, TEAM, dayFrom, isoDay, nextId, parseDay, plural,
+  HOST, TEAM, TIME_OFF_REASONS, dayFrom, first, isoDay, nextId, parseDay, plural, type TimeOffReason,
   type BookedMeeting, type BookingsAction, type BookingsState, type TimeOff,
 } from './state.ts';
 
@@ -31,8 +32,8 @@ import {
 export interface AvailabilityTabProps {
   readonly state: BookingsState;
   readonly dispatch: (a: BookingsAction) => void;
-  /** Hands meetings on during time off; returns how many found a new host. */
-  readonly onReassignMany: (meetings: ReadonlyArray<BookedMeeting>) => number;
+  /** Hands meetings on during time off; `pool` lists who to try, in order. Returns how many found a new host. */
+  readonly onReassignMany: (meetings: ReadonlyArray<BookedMeeting>, pool?: ReadonlyArray<string>) => number;
 }
 
 /** The Availability tab. */
@@ -45,13 +46,37 @@ export function AvailabilityTab({ state, dispatch, onReassignMany }: Availabilit
     <div className="tf-bkf__tab">
       <TabToolbar start={set && <SavedHoursSwitch state={state} dispatch={dispatch} set={set} onPick={setCurrent} />} />
       <div className="tf-bkf__avail">
-        <div className="tf-bkf-cards tf-bkf__avail-main"><div className="tf-bkf-card">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div></div>
+        <div className="tf-bkf-cards tf-bkf__avail-main">
+          <div className="tf-bkf-card">{set && <HoursSection state={state} dispatch={dispatch} set={set} />}</div>
+          <div className="tf-bkf-card"><LimitsSection state={state} dispatch={dispatch} name={HOST} /></div>
+        </div>
         <div className="tf-bkf-cards tf-bkf__avail-side">
           <div className="tf-bkf-card"><TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} /></div>
           <div className="tf-bkf-card"><CalendarsSection state={state} dispatch={dispatch} /></div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Meeting limits for one person, across every page: most a day and most a week. Each is off until switched on. */
+export function LimitsSection({ state, dispatch, name }: { readonly state: BookingsState; readonly dispatch: (a: BookingsAction) => void; readonly name: string }) {
+  const l = state.limits?.[name] ?? { perDay: 0, perWeek: 0 };
+  const set = (patch: Partial<typeof l>) => dispatch({ type: 'limits/set', name, limits: { ...l, ...patch } });
+  const you = name === HOST;
+  return (
+    <Section title="Meeting limits" description={`Across all ${you ? 'your' : `${first(name)}’s`} pages. Once a limit is reached, guests see no more times that day or week.`}>
+      <div className="tf-bkf__limits">
+        <div className="tf-bkf__limit">
+          <Switch isSelected={l.perDay > 0} onChange={(on) => set({ perDay: on ? 4 : 0 })}>Most meetings a day</Switch>
+          {l.perDay > 0 && <NumberField aria-label="Meetings a day" value={l.perDay} minValue={1} maxValue={40} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ perDay: n }); }} />}
+        </div>
+        <div className="tf-bkf__limit">
+          <Switch isSelected={l.perWeek > 0} onChange={(on) => set({ perWeek: on ? 15 : 0 })}>Most meetings a week</Switch>
+          {l.perWeek > 0 && <NumberField aria-label="Meetings a week" value={l.perWeek} minValue={1} maxValue={200} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ perWeek: n }); }} />}
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -129,17 +154,19 @@ export function TimeOffSection({ state, dispatch, onReassignMany, adding, onAddi
   const [from, setFrom] = useState('13:00');
   const [to, setTo] = useState('17:00');
   const [note, setNote] = useState('');
+  const [reason, setReason] = useState<TimeOffReason>('vacation');
+  const [cover, setCover] = useState('none');
   const [clash, setClash] = useState<{ readonly entry: TimeOff; readonly meetings: ReadonlyArray<BookedMeeting> }>();
   const today = isoDay(new Date());
   const list = state.timeOff.filter((t) => t.to >= today && (only === undefined || t.member === only));
   useEffect(() => {
     if (!adding) return;
-    setMember(only ?? HOST); setRange({ start: parseDate(isoDay(dayFrom(new Date(), 7))), end: parseDate(isoDay(dayFrom(new Date(), 7))) }); setAllDay(true); setNote('');
+    setMember(only ?? HOST); setRange({ start: parseDate(isoDay(dayFrom(new Date(), 7))), end: parseDate(isoDay(dayFrom(new Date(), 7))) }); setAllDay(true); setNote(''); setReason('vacation'); setCover('none');
   }, [adding]);
   const mins = (v: string) => { const [h, m] = v.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
   const add = () => {
     if (!range) return;
-    const entry: TimeOff = { id: nextId('off'), member, from: range.start.toString(), to: range.end.toString(), allDay, start: allDay ? 0 : mins(from), end: allDay ? 0 : mins(to), note: note.trim() };
+    const entry: TimeOff = { id: nextId('off'), member, from: range.start.toString(), to: range.end.toString(), allDay, start: allDay ? 0 : mins(from), end: allDay ? 0 : mins(to), note: note.trim(), reason, cover: cover === 'none' ? undefined : cover };
     dispatch({ type: 'timeoff/set', timeOff: [...state.timeOff, entry] });
     setAdding(false);
     const inside = state.meetings.filter((m) => m.host === member && m.status !== 'cancelled' && entry.from <= isoDay(m.start) && isoDay(m.start) <= entry.to
@@ -158,7 +185,7 @@ export function TimeOffSection({ state, dispatch, onReassignMany, adding, onAddi
               <CalendarX2 {...i14} aria-hidden="true" />
               <Avatar name={t.member} size={20} />
               <span className="tf-num"><strong>{t.member === HOST ? 'You' : t.member}</strong> · {when(t)}</span>
-              <span className="tf-bkf__muted">{[t.note, t.member === HOST ? 'Your pages offer no times then.' : ''].filter(Boolean).join(' · ') || 'Time off'}</span>
+              <span className="tf-bkf__muted">{[TIME_OFF_REASONS.find((x) => x.id === t.reason)?.label, t.note, t.cover ? `${first(t.cover)} covers` : ''].filter(Boolean).join(' · ') || 'Time off'}</span>
               <span className="tf-bkf__spacer" />
               <Tooltip label="Remove"><IconButton size="sm" label={`Remove time off on ${when(t)}`} onPress={() => {
                 dispatch({ type: 'timeoff/set', timeOff: state.timeOff.filter((x) => x.id !== t.id) });
@@ -175,14 +202,19 @@ export function TimeOffSection({ state, dispatch, onReassignMany, adding, onAddi
           <DateRangePicker label="Dates" value={range} onChange={(r) => setRange(r ? { start: r.start, end: r.end } : null)} />
           <Switch isSelected={allDay} onChange={setAllDay}>All day</Switch>
           {!allDay && <div className="tf-bkf__pair"><TimeSelect label="From" value={from} hourCycle={12} onChange={(v) => { if (v) setFrom(v); }} /><TimeSelect label="To" value={to} hourCycle={12} onChange={(v) => { if (v) setTo(v); }} /></div>}
+          <div className="tf-bkf__pair">
+            <Select label="Reason" items={TIME_OFF_REASONS.map((x) => ({ id: x.id, label: x.label }))} value={reason} onChange={(v) => { if (v) setReason(v as TimeOffReason); }} />
+            <Select label="Who covers" items={[{ id: 'none', label: 'No one' }, ...TEAM.filter((n) => n !== member).map((n) => ({ id: n, label: n, icon: <Avatar name={n} size={20} /> }))]} value={cover} onChange={(v) => setCover(v ?? 'none')}
+              description="Their meetings go here first." />
+          </div>
           <TextField label="Note" aside="Optional" value={note} onChange={setNote} placeholder="Conference in Berlin" />
         </div>
       </Dialog>
       <Dialog isOpen={clash !== undefined} onOpenChange={(o) => { if (!o) setClash(undefined); }} size="md" title={`${plural(clash?.meetings.length ?? 0, 'meeting is', 'meetings are')} booked then`}
-        description="Hand them to a teammate who's free, or keep them and take them anyway."
+        description={clash?.entry.cover ? `Hand them to ${first(clash.entry.cover)}, who's covering (or whoever is free), or keep them and take them anyway.` : "Hand them to a teammate who's free, or keep them and take them anyway."}
         actions={<>
           <Button variant="ghost" onPress={() => { setClash(undefined); toast({ message: 'Time off added. The meetings stay with you.' }); }}>Keep them</Button>
-          <Button variant="primary" onPress={() => { if (!clash) return; const n = onReassignMany(clash.meetings); setClash(undefined); toast({ message: n === clash.meetings.length ? `${plural(n, 'meeting')} reassigned` : `${n} of ${clash.meetings.length} reassigned; no one was free for the rest`, tone: 'success' }); }}>Reassign</Button>
+          <Button variant="primary" onPress={() => { if (!clash) return; const n = onReassignMany(clash.meetings, clash.entry.cover ? [clash.entry.cover, ...TEAM] : undefined); setClash(undefined); toast({ message: n === clash.meetings.length ? `${plural(n, 'meeting')} reassigned` : `${n} of ${clash.meetings.length} reassigned; no one was free for the rest`, tone: 'success' }); }}>Reassign</Button>
         </>}>
         <ul className="tf-bkf__list-plain">
           {clash?.meetings.map((m) => <li key={m.id} className="tf-bkf__off"><span className="tf-num">{formatDay(m.start)}, {formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span><span>{m.title} with {m.invitee.name}</span></li>)}

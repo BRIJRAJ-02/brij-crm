@@ -21,7 +21,7 @@ import { formatClock } from '../WeekCalendar/clock.ts';
 import { formatDay, formatLongDay } from '../../lib/format.ts';
 import { cx } from '../../lib/cx.ts';
 import { Section, TabToolbar, i14, i16 } from './parts.tsx';
-import { TimeOffSection } from './availability.tsx';
+import { LimitsSection, TimeOffSection } from './availability.tsx';
 import { weekdays } from './seed.ts';
 import {
   HOST, TEAM, dayFrom, first, hoursOn, isOff, isoDay, memberHours, mondayOf, nextId, overrideKey, plural,
@@ -257,6 +257,7 @@ function PersonDrawer({ name, state, dispatch, onReassignMany, onClose }: { read
         <Section title="Usual week" description="When guests can book them, every week." className="tf-bkf-card">
           <HoursEditor value={hours} onChange={(h) => setHours(name, h)} />
         </Section>
+        <div className="tf-bkf-card"><LimitsSection state={state} dispatch={dispatch} name={name} /></div>
         <div className="tf-bkf-card"><TimeOffSection state={state} dispatch={dispatch} onReassignMany={onReassignMany} adding={adding} onAddingChange={setAdding} only={name} /></div>
         <Section title="Round robin" description="Paused people are skipped for new meetings." className="tf-bkf-card">
           {groups.length === 0 ? <p className="tf-bkf__muted">Not in any round robin.</p> : (

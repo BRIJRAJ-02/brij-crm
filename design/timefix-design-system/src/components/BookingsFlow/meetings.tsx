@@ -25,7 +25,7 @@ import { cx } from '../../lib/cx.ts';
 import { TabToolbar, i14, i16 } from './parts.tsx';
 import { Button as AriaButton, type Key } from 'react-aria-components';
 import {
-  HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, busyOn, conflicted, dayFrom, first, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
+  HOST, HOST_ZONE, PLACES, PLACE_ORDER, TEAM, at, atLimit, busyOn, conflicted, dayFrom, first, isOff, isoDay, lengthOf, mondayOf, nextId, placeLabel, placeOf, plural,
   type BookedMeeting, type BookingsState, type PlaceKind, type TimeBlock,
 } from './state.ts';
 
@@ -384,6 +384,13 @@ export function NewMeetingDialog({ isOpen, state, initial, onClose, onBook }: { 
           <DatePicker label="Day" value={date} onChange={(d) => { if (d) setDate(d); }} />
           <TimeSelect label="Start" value={time} hourCycle={12} onChange={(v) => { if (v) setTime(v); }} />
         </div>
+        {(() => {
+          // Booking by hand can go past a limit, but say so first.
+          const hostName = initial?.member ?? HOST;
+          const hit = atLimit(state, hostName, new Date(date.year, date.month - 1, date.day));
+          const l = state.limits?.[hostName];
+          return hit && l ? <Callout tone="warning">{hostName === HOST ? 'You have' : `${first(hostName)} has`} reached the limit of {hit === 'day' ? `${l.perDay} meetings that day` : `${l.perWeek} meetings that week`}. You can still book it.</Callout> : null;
+        })()}
         {who ? (
           <div className="tf-bkf__record"><span className="tf-bkf__muted">With</span><strong>{who.name}</strong><span className="tf-bkf__spacer" /><Button size="sm" variant="ghost" onPress={() => setWho(undefined)}>Change</Button></div>
         ) : <ReferencePicker label="With" placeholder="Search People…" recent={PEOPLE.filter((p) => p.kind === 'person').slice(0, 3)} search={searchPeople} onSelect={setWho} onCreate={(name) => setWho({ id: nextId('r'), name, kind: 'person' })} />}

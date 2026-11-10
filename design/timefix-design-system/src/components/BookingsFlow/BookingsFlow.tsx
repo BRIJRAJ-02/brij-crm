@@ -335,9 +335,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false }:
                   onToggle={toggle} onShare={onShare} onMore={onMore} onCreate={() => setCreating(true)} />
               </div>)}
               {tab === 'availability' && (<div className="tf-bkf__panel">
-                <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list) => reassignMany(list)} />
+                <AvailabilityTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} />
               </div>)}
-              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={dispatch} onReassignMany={(list) => reassignMany(list)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
+              {tab === 'roster' && isTeam && (<div className="tf-bkf__panel"><RosterTab state={state} dispatch={dispatch} onReassignMany={(list, pool) => reassignMany(list, pool)} onManageGroups={() => setGroupsOpen(true)} /></div>)}
               {tab === 'routing' && isTeam && (<div className="tf-bkf__panel"><RoutingTab state={state} dispatch={dispatch} /></div>)}
           </div>
         </>
