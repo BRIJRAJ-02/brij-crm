@@ -24,7 +24,7 @@ import { listTeamLinkPages } from '../profile/team-pages.ts';
 import { rescope, signedInNow } from '../testing.ts';
 import { peekInvite } from './invitations.ts';
 import { removeMember } from './members.ts';
-import { claimPageInvite } from './page-handover.ts';
+import { cancelPageInvite, claimPageInvite } from './page-handover.ts';
 import { cancelLoginInvite, inviteToClaimLogin, readMyLogin } from './partner-claim.ts';
 
 const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
@@ -315,6 +315,15 @@ describe('a connected app’s person getting their own Timefix login (AC-7023)',
     expect(await refusalOf(cancelLoginInvite(other, { member: hub.graceMember }))).toMatchObject({
       code: 'FORBIDDEN',
     });
+    // Nor through the page hand over's cancel, which the frame still reaches: a login invitation isn't a hand over.
+    expect(await refusalOf(cancelPageInvite(adminScope, { member: hub.graceMember }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // The frame's list never shows the invitation's address; Timefix's does.
+    const inFrame = await listTeamLinkPages(adminScope, new Date(), { fromFrame: true });
+    expect(inFrame.pages.find((each) => each.memberId === hub.graceMember)?.invite).toBeUndefined();
+    const inTimefix = await listTeamLinkPages(hub.owner);
+    expect(inTimefix.pages.find((each) => each.memberId === hub.graceMember)?.invite?.email).toBe(`x-${address}`);
     expect(await cancelLoginInvite(hub.owner, { member: hub.graceMember })).toEqual({ cancelled: true });
     expect(await refusalOf(claim(again.token))).toMatchObject({ code: 'INVITE_INVALID' });
   });
@@ -417,6 +426,20 @@ describe('a connected app’s person getting their own Timefix login (AC-7023)',
     );
     expect(back).toMatchObject({ created: false, member: { memberId: hub.graceMember, email: address } });
     expect(await rowsOf(hub.graceMember)).toMatchObject({ status: 'active', claimed: true, removed: false });
+    // Let go of again, then made an owner by the workspace: the app never takes an owner back.
+    await removePartnerMember(hub.partner, { connectionId: hub.connectionId, externalId: 'u-grace' }, { users });
+    await testQuery(ownerUrl, `update members set role = 'owner' where id = $1`, [hub.graceMember]);
+    const asOwner = putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-grace',
+        person: { email: hub.hubEmail, name: 'Grace Hopper', role: 'member' },
+      },
+      { users },
+    );
+    expect(await refusalOf(asOwner)).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await rowsOf(hub.graceMember)).toMatchObject({ removed: true });
   });
 
   it('never lets the app bring back a login the workspace removed', async () => {

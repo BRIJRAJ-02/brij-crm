@@ -67,7 +67,10 @@ async function mailHandover(
 // Page only people (9 Nov 2026): added with a page and removed again from Team pages, their identity made by the
 // identity login (`context.pageOnlyUsers`), never the app's.
 export const teamPagesRouter = member.teamPages.router({
-  list: member.teamPages.list.handler(({ context }) => listTeamLinkPages(context.scope)),
+  // Inside a connected app's frame, a login invitation's address is left out (spec 0070, AC-7023).
+  list: member.teamPages.list.handler(({ context }) =>
+    listTeamLinkPages(context.scope, new Date(), { fromFrame: context.embed !== undefined }),
+  ),
   claim: member.teamPages.claim.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       claimTeamHandle(context.scope, { member: input.member, handle: input.handle }, sourceOf(context)),

@@ -354,7 +354,9 @@ export async function putPartnerMember(
           };
         }
         const hasLogin = found.claimedAt !== null;
-        // Let go of while they kept their login, and asked for again: the partner manages them again.
+        // Let go of while they kept their login, and asked for again: the partner manages them again, unless the
+        // workspace made them an owner since (AC-7024: the app never manages an owner it didn't have).
+        if (found.removedAt !== null && active.role === 'owner') throw refuse('FORBIDDEN', OWNER_KEPT);
         if (found.removedAt !== null) {
           await tx
             .update(managedMembers)

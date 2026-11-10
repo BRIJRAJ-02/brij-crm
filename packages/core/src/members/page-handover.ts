@@ -309,7 +309,9 @@ export async function inviteToManagePage(
 
 /**
  * Cancels a page only person's open hand over: its link stops working at once. `link_pages.manage_team`, then
- * `members.invite`. One `invitation.revoked` History row. Answers `cancelled: false` when none was open.
+ * `members.invite`. Anyone who isn't a page only person here is `NOT_FOUND` (a connected app's person's login
+ * invitation is `cancelLoginInvite`'s). One `invitation.revoked` History row. Answers `cancelled: false` when none
+ * was open.
  */
 export async function cancelPageInvite(
   scope: EngineScope,
@@ -323,6 +325,9 @@ export async function cancelPageInvite(
     scope,
     async ({ tx }) => {
       await lockInvitations(tx, scope.workspaceId);
+      // A page only person's only: a connected app's person's login invitation is `cancelLoginInvite`'s, which the
+      // app's frame never reaches (security review, 10 Nov 2026).
+      checkHandable(await handedPerson(tx, scope, input.member, true));
       const open = await openHandover(tx, scope.workspaceId, input.member, true);
       if (open === undefined) return { cancelled: false };
       await tx

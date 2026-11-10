@@ -74,6 +74,7 @@ export async function pagesOf(
   self: string | undefined,
   people: readonly MemberRow[],
   month: { readonly from: string; readonly to: string },
+  options: { readonly fromFrame?: boolean } = {},
 ): Promise<readonly TeamLinkPage[]> {
   const userIds = people.flatMap((person) => (person.userId === null ? [] : [person.userId]));
   const held = await publicProfilesOf(tx, workspaceId, userIds);
@@ -133,7 +134,11 @@ export async function pagesOf(
     const hasLogin = kind?.hasLogin === true;
     // A claimed person's address is their login's: theirs, so no screen here starts anything from it.
     const email = hasLogin ? undefined : kind?.email;
-    const invite = kind === undefined || hasLogin ? undefined : handovers?.get(person.id);
+    // A login invitation is set up and followed in Timefix only: a connected app's frame never reads its address.
+    const invite =
+      kind === undefined || hasLogin || (isFromApp && options.fromFrame === true)
+        ? undefined
+        : handovers?.get(person.id);
     return {
       memberId: person.id,
       name: person.name,
@@ -162,7 +167,12 @@ export function selfOf(scope: EngineScope): string | undefined {
  * this calendar month (UTC). `link_pages.manage_team` first. Guests have no link page and aren't listed; a member made
  * without an identity of their own is listed with no page, since nobody can claim one for them. Four statements.
  */
-export async function listTeamLinkPages(scope: EngineScope, now: Date = new Date()): Promise<TeamLinkPages> {
+export async function listTeamLinkPages(
+  scope: EngineScope,
+  now: Date = new Date(),
+  /** Read from inside a connected app's frame: a login invitation's address is left out (spec 0070, AC-7023). */
+  options: { readonly fromFrame?: boolean } = {},
+): Promise<TeamLinkPages> {
   requirePermission(scope, 'link_pages.manage_team');
   const month = monthOf(now);
   const pages = await inWorkspace(scope, async (tx) => {
@@ -172,7 +182,7 @@ export async function listTeamLinkPages(scope: EngineScope, now: Date = new Date
       .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active'), ne(members.role, 'guest')))
       .orderBy(asc(members.name), asc(members.id))
       .limit(TEAM_MAX);
-    return pagesOf(tx, scope.workspaceId, selfOf(scope), people, month);
+    return pagesOf(tx, scope.workspaceId, selfOf(scope), people, month, options);
   });
   return { pages: [...pages], month: month.from };
 }
