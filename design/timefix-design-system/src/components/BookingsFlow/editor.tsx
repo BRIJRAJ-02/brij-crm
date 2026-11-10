@@ -1,9 +1,8 @@
 // Step 5: the page editor. One scroll of sections with live summaries, the guest's view beside it, Save changes at the foot.
 import { useEffect, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
-import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Check, Eye, History, Link2, MessageSquareText, Palette, Play, RotateCcw, Settings2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, Check, Eye, Link2, MessageSquareText, Palette, Play, RotateCcw, Settings2, Users } from 'lucide-react';
 import { Drawer } from '../Drawer/Drawer.tsx';
-import { InsightsTab } from './insights.tsx';
 import { TopBar } from '../AppShell/AppShell.tsx';
 import { Breadcrumbs } from '../Breadcrumbs/Breadcrumbs.tsx';
 import { Callout } from '../Callout/Callout.tsx';
@@ -117,9 +116,8 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
         actions={<>
           <OnSwitch page={page} onChange={onToggle} />
           <Button size="sm" variant="ghost" icon={<Play {...i14} />} onPress={onGuest}>See it as a guest</Button>
-          <Button size="sm" variant="ghost" icon={<History {...i14} />} onPress={() => setVersionsOpen(true)}>Versions</Button>
           <ShareMenu page={page} onShare={onShare} />
-          <PageMoreMenu page={page} withEdit={false} onAction={(k) => onMore(page, k)} />
+          <PageMoreMenu page={page} withEdit={false} withVersions onAction={(k) => { if (k === 'versions') setVersionsOpen(true); else onMore(page, k); }} />
         </>} />
       <div className="tf-bkf__editor">
         <AriaButton className="tf-bkf__stats" onPress={onMeetings} aria-label={`This month: ${page.stats.views} views, ${page.stats.bookings} bookings, ${page.stats.showRate}% showed up. Open Meetings.`}>
@@ -142,7 +140,6 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                   { id: 'questions', label: 'Questions', icon: <MessageSquareText {...i14} /> },
                   { id: 'after', label: 'After booking', icon: <Check {...i14} /> },
                   { id: 'look', label: 'Look', icon: <Palette {...i14} /> },
-                  { id: 'insights', label: 'Insights', icon: <BarChart3 {...i14} /> },
                 ]}>
               <TabPanel id="basics" className="tf-bkf__edpanel">
               <Section className="tf-bkf-card" title="Basics" description="What guests see first: the name, the link, how long and where.">
@@ -165,14 +162,16 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       items={[{ id: 'month', label: 'Month' }, { id: 'list', label: 'List' }, { id: 'chat', label: 'Chat' }]} />
                     <span className="tf-bkf__muted">They can switch any time; their last choice is remembered.</span>
                   </div>
-                  <div className="tf-bkf__group">
+                  <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder="What the meeting is for, in a line or two" />
+                  <ShowMore showLabel="More options" hideLabel="Fewer options">
+                    <div className="tf-bkf__group">
                     <span className="tf-bkf__label">Who can find it</span>
                     <SegmentedControl aria-label="Who can find it" size="sm" selectedKey={draft.visibility ?? 'public'} onSelectionChange={(k) => set({ visibility: k === 'link' ? 'link' : 'public' })}
                       items={[{ id: 'public', label: 'On your profile' }, { id: 'link', label: 'Only with the link' }]} />
                     <span className="tf-bkf__muted">{(draft.visibility ?? 'public') === 'link' ? 'It’s left off timefix.com/priya. Only people you send the link to can book.' : 'It’s listed on timefix.com/priya with your other pages.'}</span>
                     {draft.visibility === 'link' && <Switch isSelected={draft.inHeldTime ?? false} onChange={(inHeldTime) => set({ inHeldTime })}>Book inside time you’ve held, and skip minimum notice</Switch>}
                   </div>
-                  <TextArea label="Description" aside="Optional" rows={2} value={draft.description} onChange={(description) => set({ description })} placeholder="What the meeting is for, in a line or two" />
+                  </ShowMore>
                 </div>
               </Section>
               </TabPanel>
@@ -189,9 +188,6 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         <Select label="Before" isLabelHidden className="tf-bkf__inline-select" items={BUFFERS.map((x) => ({ ...x, label: x.id === '0' ? 'None before' : `${x.label} before` }))} value={String(draft.bufferBefore)} onChange={(v) => set({ bufferBefore: Number(v ?? 0) })} />
                         <Select label="After" isLabelHidden className="tf-bkf__inline-select" items={BUFFERS.map((x) => ({ ...x, label: x.id === '0' ? 'None after' : `${x.label} after` }))} value={String(draft.bufferAfter)} onChange={(v) => set({ bufferAfter: Number(v ?? 0) })} />
                       </span>
-                    </SettingRow>
- <SettingRow title="Start times" description="How often a time can start.">
-                      <Select label="Start times" isLabelHidden className="tf-bkf__inline-select" items={STEPS} value={String(draft.slotStep ?? 0)} onChange={(v) => set({ slotStep: Number(v ?? 0) })} />
                     </SettingRow>
                     <SettingRow title="Minimum notice" description="How soon before a meeting guests can book.">
                       <Select label="Minimum notice" isLabelHidden className="tf-bkf__inline-select" items={NOTICE} value={String(draft.noticeHours)} onChange={(v) => set({ noticeHours: Number(v ?? 0) })} />
@@ -211,6 +207,13 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                         {draft.perWeek > 0 && <NumberField aria-label="Most a week" value={draft.perWeek} minValue={1} maxValue={60} onChange={(n) => { if (Number.isFinite(n) && n > 0) set({ perWeek: n }); }} />}
                       </span>
                     </SettingRow>
+                    <ShowMore showLabel="More options" hideLabel="Fewer options">
+                      <div className="tf-bkf-settings">
+                        <SettingRow title="Start times" description="How often a time can start.">
+                      <Select label="Start times" isLabelHidden className="tf-bkf__inline-select" items={STEPS} value={String(draft.slotStep ?? 0)} onChange={(v) => set({ slotStep: Number(v ?? 0) })} />
+                    </SettingRow>
+                      </div>
+                    </ShowMore>
                     <SettingRow title="Time off" description={hostOff.length === 0 ? 'None planned. Time off is set under Availability.' : 'Guests see no times then.'}>
                       {hostOff.length > 0 ? <span className="tf-bkf__muted tf-num">{hostOff.map((t) => `${first(t.member)} · ${formatDate(parseDay(t.from))}${t.to !== t.from ? ` – ${formatDate(parseDay(t.to))}` : ''}`).join(', ')}</span> : null}
                     </SettingRow>
@@ -265,10 +268,6 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                             ))}
                           </div>
                         )}
-                        <SettingRow title="When a meeting moves" description={(draft.rrReschedule ?? 'same') === 'same' ? 'The same host keeps it if they’re free at the new time.' : 'The rotation picks again, as for a new booking.'}>
-                          <Select label="When a meeting moves" isLabelHidden className="tf-bkf__inline-select" value={draft.rrReschedule ?? 'same'} onChange={(k) => set({ rrReschedule: k === 'rotate' ? 'rotate' : 'same' })}
-                            items={[{ id: 'same', label: 'Keep the same host' }, { id: 'rotate', label: 'Ask the rotation again' }]} />
-                        </SettingRow>
                         <SettingRow title="Count meetings from" description="Who is ahead is judged over this window.">
                           <Select label="Count meetings from" isLabelHidden className="tf-bkf__inline-select" value={String(draft.countDays ?? 0)} onChange={(k) => set({ countDays: Number(k ?? 0) })}
                             items={[{ id: '0', label: 'This month' }, { id: '7', label: 'Last 7 days' }, { id: '30', label: 'Last 30 days' }, { id: '90', label: 'Last 90 days' }]} />
@@ -281,6 +280,14 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                             ))}
                           </span>
                         </SettingRow>
+                        <ShowMore showLabel="More options" hideLabel="Fewer options">
+                          <div className="tf-bkf-settings">
+                        <SettingRow title="When a meeting moves" description={(draft.rrReschedule ?? 'same') === 'same' ? 'The same host keeps it if they’re free at the new time.' : 'The rotation picks again, as for a new booking.'}>
+                          <Select label="When a meeting moves" isLabelHidden className="tf-bkf__inline-select" value={draft.rrReschedule ?? 'same'} onChange={(k) => set({ rrReschedule: k === 'rotate' ? 'rotate' : 'same' })}
+                            items={[{ id: 'same', label: 'Keep the same host' }, { id: 'rotate', label: 'Ask the rotation again' }]} />
+                        </SettingRow>
+                          </div>
+                        </ShowMore>
                         <div className="tf-bkf-setting__more tf-bkf__spread">
                           <span className="tf-bkf__label">{draft.countDays ? `Last ${draft.countDays} days` : 'This month so far'}</span>
                           {draft.hosts.map((h) => <Meter key={h} label={h} value={spread[h] ?? 0} maxValue={maxSpread} valueLabel={plural(spread[h] ?? 0, 'meeting')} warnAt={2} dangerAt={2} />)}
@@ -345,19 +352,9 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     <SettingRow title="Calendar" description="Where new bookings are added.">
                       <Select label="Add bookings to" isLabelHidden className="tf-bkf__inline-select" items={calendarsOf(state).length ? calendarsOf(state) : [{ id: 'work', label: 'Work', description: 'Connect a calendar first' }]} value={draft.calendarId} onChange={(v) => { if (v) set({ calendarId: v }); }} />
                     </SettingRow>
-                    <SettingRow title="File answers to" description={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'deals' ? 'Matched by email to the person’s open deal; a new deal if there is none.' : (draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'none' ? 'Answers stay on the meeting only.' : 'Matched by email; a new record if there is no match.'}>
-                      <Select label="File answers to" isLabelHidden className="tf-bkf__inline-select" items={FILE_TO} value={draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')}
-                        onChange={(v) => { if (v) set({ fileTo: v as 'people', addToPeople: v !== 'none' }); }} />
+                    <SettingRow title="Add to People" description="Guests become people, linked to their company.">
+                      <Switch aria-label="Add guests to People" isSelected={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) !== 'none'} onChange={(on) => set({ addToPeople: on, fileTo: on ? (draft.fileTo && draft.fileTo !== 'none' ? draft.fileTo : 'people') : 'none' })} />
                     </SettingRow>
-                    <SettingRow title="Guests can cancel" description="After this, the link in their invite shows your message instead.">
-                      <Select label="Guests can cancel" isLabelHidden className="tf-bkf__inline-select" items={CUTOFFS} value={String(draft.cancelCutoff ?? 0)} onChange={(v) => set({ cancelCutoff: Number(v ?? 0) })} />
-                    </SettingRow>
-                    <SettingRow title="Guests can move it" description="The same, for picking a new time.">
-                      <Select label="Guests can move it" isLabelHidden className="tf-bkf__inline-select" items={CUTOFFS} value={String(draft.moveCutoff ?? 0)} onChange={(v) => set({ moveCutoff: Number(v ?? 0) })} />
-                    </SettingRow>
-                    {((draft.cancelCutoff ?? 0) > 0 || (draft.moveCutoff ?? 0) > 0) && (
-                      <div className="tf-bkf-setting__more"><TextArea label="When it’s too late" rows={2} value={draft.tooLateMessage ?? ''} onChange={(tooLateMessage) => set({ tooLateMessage })} placeholder="It’s too close to the meeting to change it here. Reply to your invite instead." /></div>
-                    )}
                     <SettingRow title="Reminders" description="Emails to the guest before the meeting.">
                       <ChoiceChips label="Reminders" isLabelHidden selectionMode="multiple" size="sm" selectedKeys={draft.reminders}
                         items={[{ id: 'day', label: 'A day before' }, { id: 'hour', label: 'An hour before' }]} onSelectionChange={(k) => set({ reminders: [...k] })} />
@@ -376,6 +373,23 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                       <SegmentedControl aria-label="After they book" size="sm" selectedKey={draft.after} onSelectionChange={(v) => set({ after: v === 'redirect' ? 'redirect' : 'message' })}
                         items={[{ id: 'message', label: 'Thank-you' }, { id: 'redirect', label: 'Web page' }]} />
                     </SettingRow>
+ <ShowMore showLabel="More options" hideLabel="Fewer options">
+                      <div className="tf-bkf-settings">
+                    <SettingRow title="File answers to" description={(draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'deals' ? 'Matched by email to the person’s open deal; a new deal if there is none.' : (draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')) === 'none' ? 'Answers stay on the meeting only.' : 'Matched by email; a new record if there is no match.'}>
+                      <Select label="File answers to" isLabelHidden className="tf-bkf__inline-select" items={FILE_TO} value={draft.fileTo ?? (draft.addToPeople ? 'people' : 'none')}
+                        onChange={(v) => { if (v) set({ fileTo: v as 'people', addToPeople: v !== 'none' }); }} />
+                    </SettingRow>
+                    <SettingRow title="Guests can cancel" description="After this, the link in their invite shows your message instead.">
+                      <Select label="Guests can cancel" isLabelHidden className="tf-bkf__inline-select" items={CUTOFFS} value={String(draft.cancelCutoff ?? 0)} onChange={(v) => set({ cancelCutoff: Number(v ?? 0) })} />
+                    </SettingRow>
+                    <SettingRow title="Guests can move it" description="The same, for picking a new time.">
+                      <Select label="Guests can move it" isLabelHidden className="tf-bkf__inline-select" items={CUTOFFS} value={String(draft.moveCutoff ?? 0)} onChange={(v) => set({ moveCutoff: Number(v ?? 0) })} />
+                    </SettingRow>
+                    {((draft.cancelCutoff ?? 0) > 0 || (draft.moveCutoff ?? 0) > 0) && (
+                      <div className="tf-bkf-setting__more"><TextArea label="When it’s too late" rows={2} value={draft.tooLateMessage ?? ''} onChange={(tooLateMessage) => set({ tooLateMessage })} placeholder="It’s too close to the meeting to change it here. Reply to your invite instead." /></div>
+                    )}
+                      </div>
+                    </ShowMore>
                     {draft.after === 'redirect' && <TextField label="Web address" value={draft.redirectUrl} onChange={(redirectUrl) => set({ redirectUrl })} placeholder="https://northwind.com/thanks" type="url" />}
                   </div>
                 </Section></TabPanel>
@@ -389,7 +403,6 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
                     </div>
                   </div>
                 </Section></TabPanel>
-                <TabPanel id="insights" className="tf-bkf__edpanel"><InsightsTab state={state} pageId={page.id} /></TabPanel>
               </Tabs>
             </div>
             <aside className="tf-bkf__editor-preview" aria-label="Preview">
@@ -410,7 +423,6 @@ export function PageEditor({ page, draft, state, section, onDraft, onBack, onSav
             <TextSwap swapKey={dirty ? 'dirty' : 'clean'}>{dirty ? 'Guests still see the live version until you publish.' : 'Guests see what’s here.'}</TextSwap>
           </span>
           {(dirty || kept) && save !== 'saving' && <Button variant="ghost" onPress={() => { onDraft(page); onKeepDraft(page); }}>Discard</Button>}
-          {dirty && save !== 'saving' && <Button variant="secondary" onPress={() => onKeepDraft({ ...draft, isOn: page.isOn })}>Keep as draft</Button>}
           <Button variant="primary" isDisabled={!dirty || taken || nameless} isPending={save === 'saving'} onPress={doSave} aria-keyshortcuts="Meta+S">
             <TextSwap swapKey={save === 'saved' && !dirty ? 'saved' : 'save'}>{save === 'saved' && !dirty ? <span className="tf-bkf__saved"><SuccessCheck size={16} />Published</span> : 'Publish'}</TextSwap>
           </Button>

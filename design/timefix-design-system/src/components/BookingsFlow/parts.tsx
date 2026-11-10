@@ -2,7 +2,7 @@
 import { type Key } from 'react-aria-components';
 import { getLocalTimeZone, today as todayIn, type CalendarDate } from '@internationalized/date';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Clock, Code2, Copy, CopyPlus, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2 } from 'lucide-react';
+import { Clock, Code2, Copy, CopyPlus, History, LayoutList, Link2, Mail, MessageCircle, MoreHorizontal, Pencil, QrCode as QrIcon, Share, Share2, Ticket, Trash2 } from 'lucide-react';
 import { BookingFlow, type BookingFlowProps, type BookingRequest } from '../BookingFlow/BookingFlow.tsx';
 import { BookingPagePicture } from '../BookingPagePicture/BookingPagePicture.tsx';
 import { HOURS_DAYS } from '../HoursEditor/HoursEditor.tsx';
@@ -135,12 +135,13 @@ export function ShareMenu({ page, onShare, size = 'sm' }: { readonly page: Booki
 }
 
 /** The ⋯ menu of a page: Edit, Duplicate, then Delete under a line. */
-export function PageMoreMenu({ page, onAction, withEdit = true }: { readonly page: BookingPage; readonly onAction: (key: 'edit' | 'duplicate' | 'delete') => void; readonly withEdit?: boolean }) {
+export function PageMoreMenu({ page, onAction, withEdit = true, withVersions = false }: { readonly page: BookingPage; readonly onAction: (key: 'edit' | 'duplicate' | 'delete' | 'versions') => void; readonly withEdit?: boolean; readonly withVersions?: boolean }) {
   return (
     <MenuTrigger>
       <IconButton size="sm" label={`More for ${page.name}`}><MoreHorizontal {...i16} /></IconButton>
       <Menu aria-label={`More for ${page.name}`} placement="bottom end" onAction={(k: Key) => onAction(String(k) as 'edit')}>
         {withEdit && <MenuItem id="edit" icon={<Pencil {...i16} />}>Edit</MenuItem>}
+        {withVersions && <MenuItem id="versions" icon={<History {...i16} />} description="Restore an earlier one">Versions</MenuItem>}
         <MenuItem id="duplicate" icon={<CopyPlus {...i16} />}>Duplicate</MenuItem>
         <MenuSeparator />
         <MenuItem id="delete" icon={<Trash2 {...i16} />} isDanger>Delete</MenuItem>

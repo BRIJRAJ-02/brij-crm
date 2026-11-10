@@ -92,7 +92,7 @@ export function PagesTab({ state, fresh, leaving, onOpen, onFix, onToggle, onSha
                     ) : <span aria-hidden="true" />}
                     <OnSwitch page={p} onChange={(on) => onToggle(p.id, on)} />
                     <ShareMenu page={p} onShare={onShare} />
-                    <PageMoreMenu page={p} onAction={(k) => onMore(p, k)} />
+                    <PageMoreMenu page={p} onAction={(k) => { if (k !== 'versions') onMore(p, k); }} />
                     {noTimes && (
                       <p className="tf-bkf__pagerow-warn" role="status">
                         <AlertTriangle {...i14} aria-hidden="true" /><span>Guests can’t book: no open times in the next two months</span><span aria-hidden="true">·</span>
