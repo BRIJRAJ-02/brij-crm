@@ -300,11 +300,21 @@ function Face({ face, look, isPending, dot }: { face: ButtonFace; look: ButtonLo
       )}
       {face.children !== undefined &&
         (dot !== undefined ? (
-          <Suspense fallback={face.children}>
-            <LazyStatusDot hue={dot} isInherited isAnimated={look.animateLabel === true}>
-              {face.children}
-            </LazyStatusDot>
-          </Suspense>
+          <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
+            <Suspense fallback={face.children}>
+              <LazyStatusDot hue={dot} isInherited isAnimated={look.animateLabel === true}>
+                {face.children}
+              </LazyStatusDot>
+            </Suspense>
+            {/* The widest word's room, kept from the start, so a pill that swaps Live for Hidden never moves. */}
+            {look.labelReserve === undefined ? null : (
+              <span className={styles.reserve} aria-hidden="true">
+                <LazyStatusDot hue={dot} isInherited>
+                  {look.labelReserve}
+                </LazyStatusDot>
+              </span>
+            )}
+          </span>
         ) : look.animateLabel === true ? (
           <span className={styles.label} {...(look.labelReserve === undefined ? {} : { 'data-reserve': '' })}>
             <Suspense fallback={face.children}>

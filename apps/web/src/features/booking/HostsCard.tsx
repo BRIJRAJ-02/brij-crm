@@ -23,7 +23,6 @@ import {
   MenuTrigger,
   Modal,
   RecordChip,
-  SegmentedControl,
   Select,
   SettingsRow,
   Switch,
@@ -166,6 +165,8 @@ export function HostsCard({
     });
   };
   const switchFormOnly = (next: boolean) => {
+    // One host change at a time: a second waits until the first has answered.
+    if (isSaving) return;
     setFormOnlyShown(next);
     setSaving(true);
     setFailure(undefined);
@@ -201,15 +202,11 @@ export function HostsCard({
         </Callout>
       )}
       <Card>
-        <SegmentedControl
-          label={strings.host.whoMeets}
-          isLabelVisible
-          segments={[
-            { value: 'round_robin', label: strings.host.inTurns },
-            { value: 'collective', label: strings.host.together },
-          ]}
-          value={page.kind === 'collective' ? 'collective' : 'round_robin'}
-          isReadOnly
+        {/* The page's kind is set when it is made (a collective page can't be made yet), so it is said, not offered. */}
+        <SettingsRow
+          title={strings.host.whoMeets}
+          meta={<InfoTip label={strings.host.whoMeets}>{strings.host.whoMeetsHelp}</InfoTip>}
+          description={page.kind === 'collective' ? strings.host.together : strings.host.inTurns}
         />
         {/* Only on the page that books everyone (or was just switched off it): every team page shares the workspace's
             scope, and on one that books a team, one press would drop its team and its hosts unasked. */}
@@ -289,7 +286,7 @@ export function HostsCard({
               return (
                 <SettingsRow
                   key={rotationId}
-                  title={team?.name ?? strings.host.teamAt(index)}
+                  title={strings.host.teamAt(index)}
                   control="field"
                   {...(isOpen && members.length > 0
                     ? {
@@ -446,26 +443,21 @@ export function HostsCard({
             description={pickWord(firstTeam?.strategy)}
           />
           <SettingsRow title={strings.host.ifReschedules}>
-            <MenuTrigger>
-              <Button iconRight="chevron-down" isDisabled={isLocked}>
-                {rescheduleHost === 'same' ? strings.host.keepSame : strings.host.pickAgain}
-              </Button>
-              <Menu
-                label={strings.host.ifReschedules}
-                placement="bottom end"
-                selectionMode="single"
-                selectedKeys={[rescheduleHost]}
-                onSelectionChange={(keys) => {
-                  if (keys.has('same')) onRescheduleChange('same');
-                  if (keys.has('rotation')) onRescheduleChange('rotation');
-                }}
-              >
-                <MenuItem id="same" description={strings.host.keepSameLine}>
-                  {strings.host.keepSame}
-                </MenuItem>
-                <MenuItem id="rotation">{strings.host.pickAgain}</MenuItem>
-              </Menu>
-            </MenuTrigger>
+            <Select
+              label={strings.host.ifReschedules}
+              isLabelHidden
+              variant="inline"
+              optionDescription="below"
+              items={[
+                { id: 'same', label: strings.host.keepSame, description: strings.host.keepSameLine },
+                { id: 'rotation', label: strings.host.pickAgain },
+              ]}
+              value={rescheduleHost}
+              isReadOnly={isLocked}
+              onChange={(value) => {
+                if (value === 'same' || value === 'rotation') onRescheduleChange(value);
+              }}
+            />
           </SettingsRow>
           <SettingsRow
             title={strings.host.formOnly}

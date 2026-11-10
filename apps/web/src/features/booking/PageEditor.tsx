@@ -128,7 +128,7 @@ import { isDraftPage } from './draft-page.ts';
 import { canMatchVisitor } from './visitor-match.ts';
 import { SocialsCardSlot } from './socials-slot.tsx';
 import { PageStatusMenu } from './PageStatusMenu.tsx';
-import { setPageLive } from './page-status.ts';
+import { liveRefusal, setPageLive } from './page-status.ts';
 
 /** Props for the editor: the page its route loaded. */
 export interface PageEditorProps {
@@ -415,9 +415,18 @@ export function PageEditor({
   };
   // "Changes saved", once: a newer save's toast replaces the last one rather than stacking.
   const savedToast = useRef<string | undefined>(undefined);
-  const sayChangesSaved = () => {
+  // On a hidden page the toast offers Make live, since saving alone doesn't let guests book it.
+  const sayChangesSaved = (makeLive?: () => void) => {
     if (savedToast.current !== undefined) toasts.dismiss(savedToast.current);
-    savedToast.current = toasts.toast({ tone: 'success', message: strings.changesSaved });
+    savedToast.current = toasts.toast(
+      makeLive === undefined
+        ? { tone: 'success', message: strings.changesSaved }
+        : {
+            tone: 'success',
+            message: strings.changesSavedHidden,
+            action: { label: strings.makeLive, onAction: makeLive },
+          },
+    );
   };
   const [isVersionsOpen, setVersionsOpen] = useState(false);
   const [isVersionsFailed, setVersionsFailed] = useState(false);
@@ -518,9 +527,19 @@ export function PageEditor({
 
   // Live or Hidden (the pill in the header) saves at once, apart from Save changes, and its toast offers Undo. Live on
   // a page made as a draft and never published publishes it first (`setPageLive`).
+  // Shown at once while the change is out, so the pill answers the press; the page's own state follows the server.
+  const [liveShown, setLiveShown] = useState<boolean | undefined>(undefined);
+  // The page as it stands when an Undo runs, not as it stood when its toast was made.
+  const pageNow = useRef(page);
+  useLayoutEffect(() => {
+    pageNow.current = page;
+  });
   const setLive = (isLive: boolean) => {
-    setPageLive(data, slug, page, isLive).then(
+    if (liveShown !== undefined) return;
+    setLiveShown(isLive);
+    setPageLive(data, slug, pageNow.current, isLive).then(
       (next) => {
+        setLiveShown(undefined);
         setPage(next);
         setDraft((current) => ({ ...current, status: next.status }));
         toasts.toast({
@@ -529,16 +548,10 @@ export function PageEditor({
           action: { label: capturesStrings.undo, onAction: () => setLive(!isLive) },
         });
       },
-      (error: unknown) =>
-        toasts.toast({
-          tone: 'danger',
-          // Why, when the server says: Live with nobody to book was refused without a word (6 November 2026).
-          message: isDataError(error) ? error.message : strings.statusFailed(page.title),
-          // Refused for its hosts: the way to fix it, before the toast goes.
-          ...(isDataError(error) && error.code === 'HOSTS_INVALID'
-            ? { action: { label: strings.goTo(strings.hostsTab), onAction: () => onTabChange('hosts') } }
-            : {}),
-        }),
+      (error: unknown) => {
+        setLiveShown(undefined);
+        toasts.toast(liveRefusal(error, pageNow.current.title, () => onTabChange('hosts')));
+      },
     );
   };
   const duplicate = () => {
@@ -829,7 +842,7 @@ export function PageEditor({
             message: questionStrings.createdAttributes(made.length, choices.objectName ?? ''),
             action: { label: questionStrings.undo, onAction: () => undoAttributes(made) },
           });
-        } else sayChangesSaved();
+        } else sayChangesSaved(next.status === 'live' ? undefined : () => setLive(true));
         settle(true);
       },
       (error: unknown) => {
@@ -905,26 +918,38 @@ export function PageEditor({
       : tabs.some((id) => hasError[id] && id !== shown)
         ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
         : strings.fixPage;
-  /** Saves every unsaved change (Save changes and ⌘↵); false when nothing of the page's could go. */
-  const saveAll = (): boolean => {
+  /**
+   * Saves every unsaved change (Save changes and ⌘↵): the page's settings, which answer through `settle`, and the
+   * week, whose save answers itself. Undefined when a question stops the page's save before it starts.
+   */
+  const saveAll = (): { readonly page: boolean; readonly week: Promise<boolean> } | undefined => {
     // A question that would break the public page waits, shown in its section, as a form's publish does.
     if (isPageDirty && dirty.questions !== undefined && questionProblem !== undefined) {
       setProblemAsked(true);
       onTabChange('questions');
-      return false;
+      return undefined;
     }
     setProblemAsked(false);
-    if (isPageDirty || changes.length > 0) saveWithAttributes(dirty);
-    if (isWeekDirty) week.save();
-    return isPageDirty || changes.length > 0;
+    const sendsPage = isPageDirty || changes.length > 0;
+    if (sendsPage) saveWithAttributes(dirty);
+    return { page: sendsPage, week: isWeekDirty ? week.save() : Promise.resolve(true) };
   };
-  /** ⋯ Discard changes: the editor goes back to what is saved, here only (nothing on the server changes). */
+  /**
+   * ⋯ Discard changes: the editor goes back to what is saved, here only (nothing on the server changes); its toast
+   * offers Undo, which puts the edits back.
+   */
   const discardChanges = () => {
+    const kept = draft;
     week.discard();
     setDraft(saved);
     setSlugLeft(false);
     setFailure(undefined);
     setChipsError(undefined);
+    toasts.toast({
+      tone: 'success',
+      message: strings.changesDiscarded,
+      action: { label: capturesStrings.undo, onAction: () => setDraft(kept) },
+    });
   };
   // Save changes is on while anything is unsaved, or an earlier editor left settings unpublished.
   const canSave = !isLocked && (isDirty || changes.length > 0);
@@ -938,12 +963,18 @@ export function PageEditor({
       toasts.toast({ tone: 'danger', message: blockedReason });
       return Promise.resolve(false);
     }
-    const waited = new Promise<boolean>((resolve) => {
+    const pageSaved = new Promise<boolean>((resolve) => {
       saveWaiters.current = [...saveWaiters.current, resolve];
     });
-    // Only the week changed: the schedule's own save says how it went.
-    if (!saveAll()) settle(!isPageDirty);
-    return waited;
+    const sent = saveAll();
+    if (sent === undefined) {
+      settle(false);
+      return pageSaved;
+    }
+    // Only the week changed: the page has nothing to wait for.
+    if (!sent.page) settle(true);
+    // Both must land before the leave question lets the person go.
+    return Promise.all([pageSaved, sent.week]).then(([page, hours]) => page && hours);
   };
   // ⌘↵ (Ctrl+Enter elsewhere) saves from anywhere in the editor, as a dialog's primary takes it; a dialog open over
   // the editor keeps the key for its own.
@@ -955,7 +986,7 @@ export function PageEditor({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
-      if (!mod || event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return;
+      if (!mod || event.key !== 'Enter' || event.repeat || event.isComposing || event.defaultPrevented) return;
       if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="alertdialog"]') !== null)
         return;
       event.preventDefault();
@@ -1041,11 +1072,13 @@ export function PageEditor({
             }
           >
             {/* Live or Hidden, Copy link, Preview, ⋯, then Save changes, the page's one primary (the mock's header). */}
+            {/* A reader who can't change the page sees its state, turned off: the View only tag says why. */}
             <PageStatusMenu
               title={page.title}
-              isLive={page.status === 'live'}
+              isLive={liveShown ?? page.status === 'live'}
+              isPending={liveShown !== undefined}
+              isLocked={isLocked}
               onChange={setLive}
-              {...(isLocked ? { lockedReason: strings.notYours } : {})}
             />
             <Tooltip content={strings.copyLink}>
               <CopyButton
@@ -1123,22 +1156,18 @@ export function PageEditor({
                 )}
               </Menu>
             </MenuTrigger>
-            {!isLocked &&
-              (canSave ? (
-                <Button variant="primary" kbd="⌘↵" isPending={isSaving} onPress={() => void saveNow()}>
-                  {strings.saveChanges}
-                </Button>
-              ) : (
-                <Tooltip content={strings.noChangesYet} isTextTrigger>
-                  {/* A turned off button takes no focus: the wrapper does, so its reason reads by keyboard too. */}
-                  {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex */}
-                  <span tabIndex={0}>
-                    <Button variant="primary" isDisabled>
-                      {strings.saveChanges}
-                    </Button>
-                  </span>
-                </Tooltip>
-              ))}
+            {/* Save changes, the page's one primary: turned off until something changes, which its state says. */}
+            {!isLocked && (
+              <Button
+                variant="primary"
+                {...(canSave ? { kbd: '⌘↵' } : {})}
+                isDisabled={!canSave}
+                isPending={isSaving}
+                onPress={() => void saveNow()}
+              >
+                {strings.saveChanges}
+              </Button>
+            )}
           </TopBar>
         ),
         body: (
@@ -1235,11 +1264,13 @@ export function PageEditor({
             {/* Leaving with unsaved edits asks one compact question: Discard drops them, Save makes them live. Moving
                 between sections (`?tab=`) keeps the editor and its edits, so it never asks. */}
             <LeaveGuard
-              isDirty={isDirty}
+              // A version restored from Version history waits unpublished: leaving asks about it too.
+              isDirty={isDirty || (!isLocked && changes.length > 0)}
               searchStays
               save={{
-                title: strings.leaveTitle(page.title),
-                text: strings.leaveText,
+                title: strings.leaveTitle(draft.title.trim() === '' ? page.title : draft.title),
+                // A hidden page stays hidden when saved: the question says so rather than promising guests.
+                text: page.status === 'live' ? strings.leaveText : strings.leaveTextHidden,
                 onSave: saveNow,
               }}
             />

@@ -359,7 +359,15 @@ export const PageVariant: Story = {
 
 /** `page`, hidden: the title and the inset read quieter; Copy link stays. */
 export const PageHidden: Story = {
-  args: { ...PageVariant.args, isOff: true, footEnd: <Button dot="gray" iconRight="chevron-down">Hidden</Button> },
+  args: {
+    ...PageVariant.args,
+    isOff: true,
+    footEnd: (
+      <Button dot="gray" iconRight="chevron-down">
+        Hidden
+      </Button>
+    ),
+  },
   render: PageVariant.render,
 };
 
@@ -368,6 +376,31 @@ export const PageLoading: Story = {
   render: () => (
     <Stage width="narrow">
       <LinkCardSkeleton variant="page" />
+    </Stage>
+  ),
+};
+
+/** `page`, on its way (a copy being made): Copying, quieter, nothing works yet. */
+export const PagePending: Story = {
+  args: { ...PageVariant.args, isPending: true, badge: 'Copying' },
+  render: PageVariant.render,
+};
+
+/** `page`, view only (a member's look at the workspace link): no editor or ⋯, its state shown but not changed. */
+export const PageViewOnly: Story = {
+  args: {
+    ...PageVariant.args,
+    href: undefined,
+    badge: 'View only',
+    footEnd: (
+      <Button dot="green" iconRight="chevron-down" isDisabled>
+        Live
+      </Button>
+    ),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <LinkCard {...args} />
     </Stage>
   ),
 };

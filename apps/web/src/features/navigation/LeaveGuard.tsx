@@ -2,7 +2,7 @@
 // Purpose: ask before leaving an editor with unsaved changes (the booking page editor, Availability, Profile), in a Modal like
 // every other ending action (the owner's rule), not the browser's own confirm.
 // Main task: Keep editing (Esc), or Leave without saving; or, where saving is one press (the booking page editor),
-// Discard or Save (⌘↵), then go.
+// Keep editing, Discard or Save, then go.
 // Leaves out: closing the tab or reloading, which only the browser's own prompt can ask about (`enableBeforeUnload`).
 import { Button, Modal } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
@@ -55,6 +55,9 @@ export function LeaveGuard({ isDirty, searchStays = false, save }: LeaveGuardPro
         }}
         actions={
           <>
+            <Button slot="close" variant="ghost" isDisabled={isSaving}>
+              {strings.leaveStay}
+            </Button>
             <Button
               isDisabled={isSaving}
               onPress={() => {
@@ -65,7 +68,6 @@ export function LeaveGuard({ isDirty, searchStays = false, save }: LeaveGuardPro
             </Button>
             <Button
               variant="primary"
-              kbd="⌘↵"
               isPending={isSaving}
               onPress={() => {
                 setSaving(true);

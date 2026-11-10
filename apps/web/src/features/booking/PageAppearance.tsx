@@ -109,25 +109,48 @@ function ThemeCard({
   readonly brandHref: string;
 }) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const state = useBrand(store.kit(slug));
+  const held = store.kit(slug);
+  const state = useBrand(held);
   const kit = state.status === 'ready' ? state.value : undefined;
   const canEdit = kit?.canEdit === true;
-  const chosen = bookingTemplate(kit === undefined ? undefined : (kit.templateDraft ?? kit.template)) ?? 'classic';
+  const stored = kit === undefined ? undefined : (kit.templateDraft ?? kit.template);
+  const chosen = bookingTemplate(stored) ?? 'classic';
+  // Studio or Split, picked in Settings › Brand: booking pages wear Classic, and the card says so.
+  const isOtherLook = stored === 'studio' || stored === 'split';
   const colours = store.colours(kit?.accent, kit?.accentDark);
-  const pick = (template: 'classic' | 'night') => {
+  const [isPicking, setPicking] = useState(false);
+  const nameOf = (template: string) => LOOKS.find((look) => look.id === template)?.name ?? template;
+  /** Puts the workspace's theme live at once (it is every public page's); a refusal drops what waits and says why. */
+  const pick = (template: 'classic' | 'night', before: string | undefined) => {
+    setPicking(true);
     void store.saveTemplate(slug, template).then(async (refused) => {
       const failure = refused ?? (await store.publishTemplate(slug));
+      if (failure !== undefined && refused === undefined) await store.discardTemplate(slug);
+      setPicking(false);
       toasts.toast(
         failure === undefined
-          ? { tone: 'success', message: strings.themeSaved(template === 'night' ? LOOKS[1].name : LOOKS[0].name) }
+          ? {
+              tone: 'success',
+              message: strings.themeSaved(nameOf(template)),
+              ...(before === 'classic' || before === 'night'
+                ? { action: { label: capturesStrings.undo, onAction: () => pick(before, template) } }
+                : {}),
+            }
           : { tone: 'danger', message: failure.message },
       );
     });
   };
+  if (state.status === 'error') {
+    return (
+      <Card title={strings.themeSection}>
+        <EmptyState tone="error" title={capturesStrings.brandFailed} onRetry={() => held.retry()} />
+      </Card>
+    );
+  }
   return (
     <Card
       title={strings.themeSection}
-      description={strings.themeLine}
+      description={isOtherLook ? strings.themeOther(stored === 'studio' ? 'Studio' : 'Split') : strings.themeLine}
       isBusy={kit === undefined}
       {...(canEdit
         ? {
@@ -150,7 +173,8 @@ function ThemeCard({
           tiles={LOOKS.map((look) => ({
             id: look.id,
             name: look.name,
-            isDisabled: !canEdit,
+            isDisabled: !canEdit || isPicking,
+            ...(canEdit ? {} : { disabledReason: strings.themeAdminsOnly }),
             thumbnail: (
               <LinkPageThumbnail
                 theme={themeForTemplate(look.id, DEFAULT_PAGE_THEME)}
@@ -161,7 +185,8 @@ function ThemeCard({
             ),
           }))}
           onChange={(picked) => {
-            if ((picked === 'classic' || picked === 'night') && picked !== chosen) pick(picked);
+            if ((picked === 'classic' || picked === 'night') && (picked !== chosen || isOtherLook))
+              pick(picked, stored);
           }}
         />
       )}
