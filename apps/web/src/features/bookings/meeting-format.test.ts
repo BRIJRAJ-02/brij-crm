@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { clockOfMinute, clockRange, clockTime, longDay, minutesLabel, shortDay, zoneLabel } from './meeting-format.ts';
+import {
+  clockOfMinute,
+  clockRange,
+  clockRangeOfMinutes,
+  clockTime,
+  longDay,
+  minutesLabel,
+  shortDay,
+  zoneLabel,
+} from './meeting-format.ts';
 
 const at = Date.parse('2026-11-09T05:00:00Z');
 
@@ -31,5 +40,11 @@ describe('meeting formats', () => {
 
   it('writes a length in minutes', () => {
     expect(minutesLabel(45)).toBe('45 min');
+  });
+
+  it('writes a range of minutes of the day with one am or pm when both ends share it', () => {
+    expect(clockRangeOfMinutes(840, 1080)).toBe('2:00 – 6:00 pm');
+    expect(clockRangeOfMinutes(570, 780)).toBe('9:30 am – 1:00 pm');
+    expect(clockRangeOfMinutes(1200, 1440)).toBe('8:00 pm – 12:00 am');
   });
 });
