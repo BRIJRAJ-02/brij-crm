@@ -210,7 +210,7 @@
      reduced motion too. */
   .row[data-new] {
     border-radius: var(--radius-sm);
-    animation: rowArrive var(--duration-pulse) var(--ease-out) var(--duration-modal) both;
+    animation: rowArrive var(--duration-pulse) var(--ease-out) var(--duration-modal) backwards;
   }
 
   @keyframes rowArrive {
@@ -383,6 +383,15 @@
 
   /* A compact input row: a short column, as wide as a short Select's longest option ("Meeting length"), so a
      list of them lines up at the end of a narrow column without each taking half of it. */
+  /* Controls only an icon wide (a Switch, a "···"): they stay beside the text at any width, which wraps instead. */
+  .row[data-inline] {
+    flex-wrap: nowrap;
+  }
+
+  .row[data-inline] > .rowMain {
+    flex: 1 1 0;
+  }
+
   .rowControl[data-control='compact'] {
     flex: 0 0 var(--size-column);
   }

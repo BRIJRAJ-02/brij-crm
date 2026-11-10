@@ -61,4 +61,3 @@ Not in the artifact. No virtualisation yet: Bookings reads a page of 50 at a tim
 ## A row that just arrived
 
 `isNew` on a row (a guest booked while the list was open; Meetings hears it through `data.bookings.arrivals`) fades the row in on `accent-soft`, holding the fill for a moment and letting it go over `duration-pulse`, then it rests as every row does. Colour and opacity only, so it plays under reduced motion too. Why a variant: the arrival toast says a booking came, and the row it names dropped into the list with nothing to find it by (the motion pass, 10 November 2026).
-

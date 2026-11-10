@@ -495,9 +495,10 @@ export interface SettingsRowProps {
   /**
    * The control's width: `fit` its own (a Switch, a Button, a menu), or `field`, one column every input row
    * shares (a Field, a Select, a plain value), so a page's inputs start and end on the same lines; on a narrow
-   * page it takes the row's full width under the text.
+   * page it takes the row's full width under the text. `inline` is for controls only an icon wide (a Switch and a
+   * "···"): they stay beside the text at any width, and the text wraps instead.
    */
-  readonly control?: 'fit' | 'field' | 'compact';
+  readonly control?: 'fit' | 'field' | 'compact' | 'inline';
   /**
    * The row just arrived (an account connected a moment ago): it washes in the accent's soft fill once as it mounts,
    * then rests as every row does. Set it only for the render the thing arrives in.
@@ -525,7 +526,7 @@ export function SettingsRow({
   children,
 }: SettingsRowProps) {
   return (
-    <div className={styles.row} data-new={isNew ? '' : undefined}>
+    <div className={styles.row} data-new={isNew ? '' : undefined} data-inline={control === 'inline' ? '' : undefined}>
       <span className={styles.rowMain} data-align={leading === undefined ? undefined : leadingAlign}>
         {leading !== undefined && <span className={styles.rowLeading}>{leading}</span>}
         <span className={styles.rowText}>

@@ -1,7 +1,7 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { sessionNotes, takeConnectArrival } from '../features/calendars/connect-start.ts';
+import { readConnectArrival, sessionNotes } from '../features/calendars/connect-start.ts';
 import { CalendarScreen, CalendarsLoading } from '../features/settings/CalendarScreen.tsx';
 import { strings } from '../features/settings/calendar-strings.ts';
 import { isConnectResult, type ConnectResult } from '../features/settings/connect-result.ts';
@@ -10,7 +10,7 @@ import { SettingsFailed, SettingsMissing, SettingsPage } from '../features/setti
 // Bookings settings › Calendars (specs 0024 and 0026; the one place to connect a calendar, in Bookings settings since
 // 9 November 2026, out of Settings › Account): every member's own calendar connections, a Connect button per provider
 // in the empty state. Bookings links here for setup. `?calendar=` is how connecting went, as the API's callback sends the browser back (through
-// `/settings/calendar`); the screen says so once, and a new account (`takeConnectArrival`) opens the connect popup at
+// `/settings/calendar`); the screen says so once, and a new account (`readConnectArrival`) opens the connect popup at
 // its calendars.
 
 /** The page's address: how a connect just went, if one did. */
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/w/$slug/bookings_/settings/calendars')({
       const snapshot = view.getSnapshot();
       const arrival =
         deps.calendar === 'connected' && snapshot.status === 'ready'
-          ? takeConnectArrival(
+          ? readConnectArrival(
               sessionNotes(),
               snapshot.connections.map((connection) => connection.id),
               Date.now(),

@@ -119,7 +119,7 @@ export const strings = {
   dismiss: 'Dismiss',
   /** The connect popup (one popup, one title; the owner's mock, 9 November 2026). */
   connectTitle: 'Connect a calendar',
-  connectText: 'Guests only see times you’re free. Add as many accounts as you use.',
+  connectText: 'Guests only see times you’re free.',
   connectWith: (provider: string) => `Connect ${provider}`,
   /** Back from the provider with a new account: which of its calendars block your times. */
   chooseTitle: 'Which calendars should block your times?',

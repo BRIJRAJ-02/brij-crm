@@ -267,7 +267,7 @@
   /* A booking that arrived while the list was open fades in on the accent's soft fill, then rests as every row does:
      colour and opacity only, so it plays under reduced motion too. */
   .row[data-new] {
-    animation: row-arrive var(--duration-pulse) var(--ease-out) both;
+    animation: row-arrive var(--duration-pulse) var(--ease-out) backwards;
   }
 
   @keyframes row-arrive {
@@ -281,9 +281,7 @@
       background-color: var(--accent-soft);
     }
 
-    to {
-      background-color: transparent;
-    }
+    /* No last frame: it ends on the row's own fill, so hover, open and pressed still show once it rests. */
   }
 
   .root[data-layout='columns'] .row:last-child {
