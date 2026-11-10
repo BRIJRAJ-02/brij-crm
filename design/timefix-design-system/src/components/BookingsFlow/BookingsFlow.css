@@ -568,3 +568,23 @@
 .tf-bkf-roster__cover { color: var(--text-tertiary); font: 400 12px/16px var(--font-sans); }
 .tf-bkf__banner { padding: var(--space-12) var(--space-24) 0; }
 @media (max-width: 40rem) { .tf-bkf__banner { padding: var(--space-12) var(--space-16) 0; } }
+
+/* Week and Team day fill the page: the panel stops scrolling, the calendar takes what's left and scrolls its own hours. */
+.tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: var(--space-16); }
+.tf-bkf__meetings[data-view='week'], .tf-bkf__meetings[data-view='team'] { flex: 1; min-height: 0; }
+.tf-bkf__meetings > .tf-bkf__calfill { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { display: flex; flex-direction: column; flex: 1; min-height: calc(var(--size-row) * 6); }
+.tf-bkf__calfill .tf-week__scroll, .tf-bkf__calfill .tf-bkf-team__scroll { flex: 1; min-height: 0; max-height: none; }
+.tf-bkf__calfill .tf-bkf-team__head { flex: none; }
+/* Phone: the page scrolls again; the calendar keeps a tall, readable box. */
+@media (max-width: 40rem) {
+  .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='week']), .tf-bkf__panel:has(> .tf-bkf__meetings[data-view='team']) { overflow-y: auto; }
+  .tf-bkf__calfill > .tf-week, .tf-bkf__calfill > .tf-bkf-team { min-height: 70dvh; }
+}
+@container tf-bkf-panel (max-width: 34rem) {
+  /* Team day has no filter, so the view switch and New meeting share one row. */
+  .tf-bkf__toolbar:not(:has(.tf-bkf__whose)) > .tf-seg { flex: 1 1 0; }
+  /* Team day: each person keeps a readable column; the day scrolls sideways under the hours. */
+  .tf-bkf__calfill > .tf-bkf-team { overflow-x: auto; overscroll-behavior-x: contain; }
+  .tf-bkf__calfill .tf-bkf-team__head, .tf-bkf__calfill .tf-bkf-team__scroll { min-width: calc(var(--size-control-lg) + var(--space-8) + var(--tf-bkf-cols) * var(--space-48) * 2.4); }
+}

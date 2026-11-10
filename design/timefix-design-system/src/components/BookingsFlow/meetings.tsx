@@ -127,7 +127,7 @@ export function MeetingsTab(props: MeetingsTabProps) {
   const whoseItems = [{ id: 'mine', label: 'Mine' }, { id: 'everyone', label: 'Everyone' }, ...TEAM.filter((n) => n !== HOST).map((n) => ({ id: n, label: n, icon: <Avatar name={n} size={20} /> }))];
 
   return (
-    <div className="tf-bkf__meetings">
+    <div className="tf-bkf__meetings" data-view={view}>
       <TabToolbar
         start={<>
           <SegmentedControl aria-label="View" selectedKey={view} onSelectionChange={onView}
@@ -221,7 +221,7 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
   const first0 = days[0] ?? now;
   const last = days[days.length - 1] ?? now;
   return (
-    <div className="tf-bkf__stack tf-bkf__stack--12">
+    <div className="tf-bkf__stack tf-bkf__stack--12 tf-bkf__calfill">
       <div className="tf-bkf__bar">
         <span className="tf-bkf__weeknav">
           <IconButton size="sm" label="Previous week" onPress={() => onWeek(week - 1)}><ChevronLeft {...i16} /></IconButton>
@@ -233,7 +233,7 @@ function WeekView(props: MeetingsTabProps & { readonly scoped: ReadonlyArray<Boo
         <SegmentedControl aria-label="What the week shows" size="sm" selectedKey={all ? 'all' : 'bookings'} onSelectionChange={(k) => setAll(k === 'all')}
           items={[{ id: 'bookings', label: 'Bookings only' }, { id: 'all', label: 'All calendars' }]} />
       </div>
-      <WeekCalendar scrollHeight="max(calc(var(--tf-week-hour) * 6), calc(100dvh - 300px))" days={days.map((d, n) => ({ weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), isToday: n === todayIndex }))}
+      <WeekCalendar days={days.map((d, n) => ({ weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), isToday: n === todayIndex }))}
         events={events} busy={busy} startHour={startHour} endHour={endHour} now={todayIndex >= 0 ? { day: todayIndex, minutes: minutesOf(now) } : undefined}
         selectionMenu={(sel: WeekSelection, close) => {
           const d = days[sel.day];
@@ -281,7 +281,7 @@ function TeamDay({ state, week, onWeek, menu, onOpen, onReassignMany }: { readon
   };
   const counts = (d: Date) => state.meetings.filter((m) => m.status !== 'cancelled' && m.start.toDateString() === d.toDateString()).length;
   return (
-    <div className="tf-bkf__stack tf-bkf__stack--12">
+    <div className="tf-bkf__stack tf-bkf__stack--12 tf-bkf__calfill">
       <DayStrip label="Day" days={days.map((d) => ({ id: isoDay(d), weekday: formatDay(d).split(' ')[0] ?? '', date: d.getDate(), label: formatLongDay(d), count: counts(d), isToday: d.toDateString() === now.toDateString() }))}
         value={dayId} onChange={setDayId} onPrevious={() => onWeek(week - 1)} onNext={() => onWeek(week + 1)} />
       {(() => {
