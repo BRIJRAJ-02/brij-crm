@@ -26,7 +26,7 @@ export interface TeamDayPerson {
   readonly title?: string;
   /** At the head's end: their calendar's trouble chip, when there is any. */
   readonly extra?: ReactNode;
-  /** What `extra` says, for the column's name ("Reconnect needed"). */
+  /** What `extra` says, for the column's name ("Needs reconnecting"). */
   readonly extraLabel?: string;
   /** Time off over the day, as a band down the column: its word, and its minutes on the reader's clock. */
   readonly band?: WeekCalendarDay['band'];

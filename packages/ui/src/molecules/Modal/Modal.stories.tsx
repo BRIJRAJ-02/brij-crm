@@ -11,6 +11,7 @@ import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Form } from '../Form/Form.tsx';
+import { MonthRangeCalendar } from '../DatePicker/DatePicker.tsx';
 import { Modal, ModalTrigger } from './Modal.tsx';
 
 const meta = {
@@ -184,6 +185,48 @@ export const WindowAside: Story = {
       await expect(pane.getBoundingClientRect().left).toBeGreaterThan(
         within(dialog).getByText('Feedback').getBoundingClientRect().right,
       );
+    }
+  },
+};
+
+/** `lead`: a column at the body's start, beside the fields (the time off popup's month), stacked above them on a phone. */
+export const WindowLead: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="plus">Add time off</Button>
+        <Modal
+          variant="window"
+          title="Add time off"
+          lead={
+            <MonthRangeCalendar
+              label="Days"
+              value={{ start: '2026-10-19', end: '2026-10-20' }}
+              onChange={() => undefined}
+              minValue="2026-10-08"
+            />
+          }
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary">Add time off</Button>
+            </>
+          }
+        >
+          <Field label="Note" />
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await within(document.body).findByRole('dialog', { name: 'Add time off' });
+    const month = within(dialog).getByRole('application', { name: /Days/ });
+    const note = within(dialog).getByRole('textbox', { name: 'Note' });
+    // Beside the fields on a wide screen, above them on a phone.
+    if (globalThis.innerWidth >= 700) {
+      await expect(note.getBoundingClientRect().left).toBeGreaterThan(month.getBoundingClientRect().right);
+    } else {
+      await expect(note.getBoundingClientRect().top).toBeGreaterThan(month.getBoundingClientRect().bottom);
     }
   },
 };

@@ -501,6 +501,47 @@
     }
   }
 
+  /* A leaving row (`hasRowMotion`): it fades at the exit pace while it closes up at the dialog's, so the rows under it
+     rise into its place; with reduced motion it only fades. */
+  .frame[data-motion] {
+    interpolate-size: allow-keywords;
+  }
+
+  .frame[data-motion] .row[data-leaving] {
+    overflow: hidden;
+    pointer-events: none;
+    animation:
+      row-fade var(--duration-exit) var(--ease-out) forwards,
+      row-close var(--duration-modal) var(--ease-out) forwards;
+  }
+
+  @keyframes row-fade {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes row-close {
+    to {
+      min-block-size: 0;
+      block-size: 0;
+      padding-block: 0;
+      border-block-end-width: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame[data-motion] .row[data-leaving] {
+      animation: row-close-quiet var(--duration-exit) var(--ease-out) forwards;
+    }
+
+    @keyframes row-close-quiet {
+      to {
+        opacity: 0;
+      }
+    }
+  }
+
   /* Too narrow to hold a name and a price side by side (a phone): the words stack beside the tile, the name, then the
      price on a clear line, then the quiet facts, the tile and the end centred on all three. */
   @container (inline-size < 480px) {
