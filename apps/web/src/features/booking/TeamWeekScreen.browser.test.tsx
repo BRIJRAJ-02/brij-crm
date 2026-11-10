@@ -135,7 +135,7 @@ const SAM_TUESDAY = 'Tuesday 3 November, Sam Lee: 10:00 am to 2:00 pm, this date
 describe('the Team week', () => {
   it('names every cell, puts each zone and week under the name, and counts the footer', async () => {
     await render();
-    await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
+    await expect.element(page.getByRole('grid', { name: /^Team hours, / })).toBeVisible();
     await expect.element(page.getByRole('button', { name: SAM_TUESDAY })).toBeVisible();
     await expect.element(page.getByText('GMT+5:30 · 36 h')).toBeVisible();
     await expect.element(page.getByText('2 other schedules')).toBeVisible();
@@ -168,7 +168,7 @@ describe('the Team week', () => {
       .toBeInTheDocument();
     shown?.unmount();
     await render();
-    await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
+    await expect.element(page.getByRole('grid', { name: /^Team hours, / })).toBeVisible();
     expect(page.getByText('2 bookable').elements()).toHaveLength(0);
   });
 

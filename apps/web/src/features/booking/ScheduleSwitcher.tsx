@@ -1,10 +1,10 @@
 // Brief
 // Purpose: the Availability tab's schedule switcher (spec 0035, AC-962, AC-964, AC-967, AC-969): one plain Select of the member's schedules, each with its quiet facts ("Default · 4 pages"), and a ⋯ menu to rename, duplicate, set as default or delete the open one.
-// Main task: open another schedule, or act on the open one; Delete asks first, in the screen's confirm.
-// Leaves out: the hours (the tab's editor), New schedule (the TopBar's primary), and acting on the virtual default before its first save.
+// Main task: open another schedule, make a new one (the list's last option, as the mock has it), or act on the open one; Delete asks first, in the screen's confirm.
+// Leaves out: the hours (the tab's editor), and acting on the virtual default before its first save.
 import type { ScheduleView } from '@crm/data';
 import type { Ref } from 'react';
-import { Button, Menu, MenuItem, MenuTrigger, Select, type IconName } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuTrigger, Select, type IconName, type SelectItem } from '@crm/ui';
 import { scheduleStrings } from './schedule-strings.ts';
 
 /** Props for ScheduleSwitcher. */
@@ -13,7 +13,7 @@ export interface ScheduleSwitcherProps {
   readonly schedules: readonly ScheduleView[];
   /** The one open in the tab. */
   readonly current: ScheduleView;
-  /** The member holds as many schedules as they may: Duplicate is left out (the TopBar's New says why). */
+  /** The member holds as many schedules as they may: Duplicate is left out (New schedule in the list says why). */
   readonly isFull: boolean;
   /** Nothing is ready to act on yet (the switcher while the tab loads). */
   readonly isDisabled?: boolean;
@@ -30,7 +30,15 @@ export interface ScheduleSwitcherProps {
   readonly onDuplicate: () => void;
   /** Opens the screen's delete confirm. */
   readonly onDelete: () => void;
+  /**
+   * Opens New schedule: the list's last option, set apart (the mock, 10 November 2026: no primary in the TopBar).
+   * Absent where the reader can't make one (read only), so no dead option stands there.
+   */
+  readonly onNew?: () => void;
 }
+
+/** New schedule's key in the Select: never a schedule's id (those are uuids) nor the virtual default's. */
+const NEW_SCHEDULE = 'new-schedule';
 
 /** A schedule's key in the Select: its id, or the virtual default's. */
 const keyOf = (schedule: ScheduleView) => schedule.id ?? 'default';
@@ -55,6 +63,7 @@ export function ScheduleSwitcher({
   onSetDefault,
   onDuplicate,
   onDelete,
+  onNew,
 }: ScheduleSwitcherProps) {
   const isVirtual = current.id === null;
   const isPending = !isVirtual && current.updatedAt === null;
@@ -103,16 +112,35 @@ export function ScheduleSwitcher({
         size="sm"
         isDisabled={isDisabled}
         {...(triggerRef === undefined ? {} : { triggerRef })}
-        items={schedules.map((schedule) => ({
-          id: keyOf(schedule),
-          label: schedule.name,
-          // Quiet facts in the list, not a badge (the simplicity sweep's finding 7): "Default · 4 pages".
-          description: scheduleStrings.optionMeta(schedule.isDefault, schedule.pages.length),
-          // A copy on its way can't be opened until the server made it.
-          ...(schedule.id !== null && schedule.updatedAt === null ? { isDisabled: true } : {}),
-        }))}
+        items={schedules
+          .map((schedule): SelectItem => ({
+            id: keyOf(schedule),
+            label: schedule.name,
+            // Quiet facts in the list, not a badge (the simplicity sweep's finding 7): "Default · 4 pages".
+            description: scheduleStrings.optionMeta(schedule.isDefault, schedule.pages.length),
+            // A copy on its way can't be opened until the server made it.
+            ...(schedule.id !== null && schedule.updatedAt === null ? { isDisabled: true } : {}),
+          }))
+          .concat(
+            onNew === undefined
+              ? []
+              : [
+                  {
+                    id: NEW_SCHEDULE,
+                    label: scheduleStrings.newSchedule,
+                    icon: 'plus',
+                    isApart: true,
+                    // Full, it stays in the list, saying why it can't be made, rather than vanishing.
+                    ...(isFull ? { isDisabled: true, description: scheduleStrings.newScheduleFull } : {}),
+                  },
+                ],
+          )}
         value={keyOf(current)}
         onChange={(id) => {
+          if (id === NEW_SCHEDULE) {
+            onNew?.();
+            return;
+          }
           const chosen = schedules.find((each) => keyOf(each) === id);
           if (chosen !== undefined && keyOf(chosen) !== keyOf(current)) onOpen(chosen);
         }}

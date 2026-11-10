@@ -5,7 +5,6 @@
 import { isDataError, type DataLayer, type ScheduleView, type VisibleMember } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
 import {
-  Button,
   Callout,
   EmptyState,
   focusLater,
@@ -13,7 +12,6 @@ import {
   RelativeTime,
   SectionBar,
   Select,
-  Tooltip,
   TopBar,
   usePhoneWidth,
   ViewOnlyTag,
@@ -21,7 +19,7 @@ import {
 import { useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
@@ -29,7 +27,6 @@ import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
-import { LimitsCard, LimitsCardPending } from './LimitsCard.tsx';
 import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
 import type { StandinChoice } from './TimeOffDialog.tsx';
 import type { DaysOffSlot } from './DaysOff.tsx';
@@ -97,7 +94,6 @@ export function AvailabilityScreen({
   const hoursHeldBack = member !== undefined && viewed?.canManage === true && !canChange;
   const state = useSchedules(view);
   const slot = useBookingsToolbarSlot();
-  const actionSlot = useBookingsActionSlot();
   const isPhone = usePhoneWidth();
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleView | undefined>(undefined);
@@ -172,23 +168,20 @@ export function AvailabilityScreen({
     );
   };
   const whose = member === undefined || owner === undefined ? undefined : { id: member, name: owner };
-  // Time off (spec 0037, AC-1286), with the open schedule's days off inside it (critic A15), and meeting limits
-  // (AC-1299): the person's, beside whichever schedule is open.
+  // Time off (spec 0037, AC-1286), with the open schedule's days off inside it (critic A15). Meeting limits moved to
+  // Bookings settings › Meeting limits (10 November 2026, the mock's Meetings group).
   const timeOff = (daysOff?: DaysOffSlot) => (
-    <>
-      <TimeOffCard
-        data={data}
-        slug={slug}
-        member={whose}
-        me={me}
-        nameOf={nameOf}
-        people={people}
-        onNotice={toast}
-        onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
-        daysOff={daysOff}
-      />
-      <LimitsCard data={data} slug={slug} member={whose} />
-    </>
+    <TimeOffCard
+      data={data}
+      slug={slug}
+      member={whose}
+      me={me}
+      nameOf={nameOf}
+      people={people}
+      onNotice={toast}
+      onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
+      daysOff={daysOff}
+    />
   );
   const switcher =
     current === undefined ? (
@@ -205,19 +198,11 @@ export function AvailabilityScreen({
         onSetDefault={() => setDefault(current)}
         onDuplicate={() => duplicate(current)}
         onDelete={() => setDeleting(current)}
+        // New schedule is the list's last option (the mock, 10 November 2026), not a primary in the TopBar; read
+        // only, there is nothing to make, and the Callout above the week says why.
+        {...(canChange && memberId !== undefined ? { onNew: () => setCreating(true) } : {})}
       />
     );
-  // New schedule is the screen's one primary, at the TopBar's end in place of New meeting (the owner, 22 October
-  // 2026); with no TopBar slot it stays at the strip's end.
-  const newButton = (
-    <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
-  );
-  // Read only, there is nothing to make: the Callout above the week says why, so no dead button stands here.
-  const newAction = !canChange ? null : isFull ? (
-    <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip>
-  ) : (
-    newButton
-  );
   // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
   // the schedule switcher, and an admin's compact member filter (AC-971).
   // The team's week is Bookings › Roster, a tab of its own (31 October 2026), so no Mine | Team switch stands here.
@@ -243,7 +228,6 @@ export function AvailabilityScreen({
               }
             />
           )}
-          {actionSlot === null && newAction}
         </>
       }
     />
@@ -256,7 +240,6 @@ export function AvailabilityScreen({
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
-            {actionSlot !== null && createPortal(newAction, actionSlot)}
             {slot === null && tools}
             {state.status === 'error' ? (
               <PageColumn align="center">
@@ -446,40 +429,11 @@ function Viewing({
   );
 }
 
-/** New schedule, the screen's one primary. */
-function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boolean; readonly onPress: () => void }) {
-  // On a phone the label folds into the plus, so the bar keeps to one line (as Pages' New page does).
-  return (
-    <Button
-      variant="primary"
-      icon="plus"
-      label={scheduleStrings.newSchedule}
-      isLabelCollapsible
-      isDisabled={isDisabled}
-      onPress={onPress}
-    >
-      {scheduleStrings.newSchedule}
-    </Button>
-  );
-}
-
-/**
- * The tab while it loads: the editor's shape, and New schedule waiting in the TopBar, so the strip and the page land
- * where the skeleton put them.
- */
+/** The tab while it loads: the editor's shape, so the strip and the page land where the skeleton put them. */
 export function AvailabilityPending() {
   const slot = useBookingsToolbarSlot();
-  const actionSlot = useBookingsActionSlot();
-  // New schedule waits in the TopBar, so it doesn't move when the editor arrives. The Viewing Select shows only
-  // once colleagues are known, so it doesn't stand here.
-  const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
-  const tools = (
-    <SectionBar
-      variant={slot === null ? 'bar' : 'inline'}
-      start={<SwitcherPending />}
-      end={<>{actionSlot === null && waiting}</>}
-    />
-  );
+  // The Viewing Select shows only once colleagues are known, so it doesn't stand here.
+  const tools = <SectionBar variant={slot === null ? 'bar' : 'inline'} start={<SwitcherPending />} />;
   return (
     <WorkspacePage
       currentPage="bookings"
@@ -488,16 +442,8 @@ export function AvailabilityPending() {
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
-            {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
-            <ScheduleEditorPending
-              timeOff={
-                <>
-                  <TimeOffCardPending />
-                  <LimitsCardPending />
-                </>
-              }
-            />
+            <ScheduleEditorPending timeOff={<TimeOffCardPending />} />
           </>
         ),
       }}
