@@ -21,13 +21,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    padding: var(--space-20);
-  }
-
-  .heading {
-    margin: 0;
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    padding: var(--space-12) var(--space-20);
   }
 
   .actions {
@@ -43,9 +37,10 @@
     margin-inline-start: auto;
   }
 
-  /* On a phone the row can't hold all three, and Cancel booking wrapping alone to the end of a second row reads as
-     stray: the three stack instead, full width in the order they're needed, Cancel booking last. */
-  @container (width < 480px) {
+  /* Reschedule, Guests and Cancel are quiet words that share a phone's row (the v5 mock); a card too narrow even for
+     that stacks them, full width in the order they're needed, Cancel last. */
+  /* Only where even three quiet words can't share a row (a very narrow card) do they stack. */
+  @container (width < 320px) {
     .actions {
       flex-direction: column;
       align-items: stretch;
@@ -99,23 +94,31 @@
     color: var(--text-secondary);
   }
 
-  /* One email field and Add beside it, the field taking the room; on a narrow card Add goes under it, full width. */
-  .add {
+  /* Who is on it: each guest's initial and address, Remove at the row's end. */
+  .guestList {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-8);
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
-  .addField {
+  .guest {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-row);
+    animation: guest-fade var(--duration-move) var(--ease-out) backwards;
+  }
+
+  .guestEmail {
     flex: 1;
     min-inline-size: 0;
-  }
-
-  @container (width < 480px) {
-    .add {
-      flex-direction: column;
-      align-items: stretch;
-    }
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status {

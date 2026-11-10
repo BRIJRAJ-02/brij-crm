@@ -35,13 +35,11 @@ export const Default: Story = {
     await userEvent.type(canvas.getByRole('textbox', { name: /Your name/ }), 'Grace Hopper');
     await userEvent.type(canvas.getByRole('textbox', { name: /Email/ }), 'grace@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
-    await waitFor(() => expect(canvas.getByRole('textbox', { name: /^Guests/ })).toHaveFocus());
-    // Enter makes the first a chip; the second is still being typed when Confirm takes it.
-    await userEvent.type(
-      canvas.getByRole('textbox', { name: /^Guests/ }),
-      'alan@example.com{Enter}katherine@example.com',
-    );
-    await expect(canvas.getByRole('list', { name: 'Guests to invite' })).toHaveTextContent('alan@example.com');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 1 email' })).toHaveFocus());
+    // Enter in a filled last row opens the next one.
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Guest 1 email' }), 'alan@example.com{Enter}');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 2 email' })).toHaveFocus());
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Guest 2 email' }), 'katherine@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Confirm booking' }));
     await expect(args.onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -50,6 +48,32 @@ export const Default: Story = {
         guests: ['alan@example.com', 'katherine@example.com'],
       }),
     );
+  },
+};
+
+/**
+ * The booking page's step (`arrangement="paired"`, the v5 mock): Name and Email side by side at the public pages'
+ * taller field, the page's own questions, the guests' rows, then the note.
+ */
+export const Paired: Story = {
+  args: {
+    arrangement: 'paired',
+    questions: [
+      { id: 'cover', key: 'cover', label: 'What would you like to cover?', answerType: 'long_text', required: false },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingDetails {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const name = canvas.getByRole('textbox', { name: /Your name/ });
+    const email = canvas.getByRole('textbox', { name: /Email/ });
+    // Side by side on a wide card: one row.
+    await expect(Math.abs(name.getBoundingClientRect().top - email.getBoundingClientRect().top)).toBeLessThan(2);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Guest 1 email' })).toHaveFocus());
   },
 };
 

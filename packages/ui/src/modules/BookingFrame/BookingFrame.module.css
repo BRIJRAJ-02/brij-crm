@@ -415,6 +415,11 @@
      nothing: Book by chat scrolls its own thread, and its prompt box stays on screen, held to the window's foot while
      the card runs past it (a phone, 4 November 2026: it sat below Safari's toolbar). */
   .coverBody {
+    /* The cover's inset, read by a step whose foot band runs to the card's edges (BookingDetails' Back and Confirm),
+       and what of the inset's foot that band takes back so its padding is even above and below. */
+    --booking-card-inset: var(--space-20);
+    --booking-card-trim: 0%;
+
     justify-content: space-between;
     flex: 1;
     min-block-size: 0;
@@ -811,12 +816,18 @@
       padding: var(--space-24);
     }
 
+    .root:not([data-compact]) .coverBody {
+      --booking-card-inset: var(--space-24);
+      --booking-card-trim: var(--space-4);
+    }
+
     .root:not([data-compact]) .head {
       padding: var(--space-24) var(--space-24) 0;
     }
 
+    /* Even above and below Book (the v5 mock), the hairline over it. */
     .root:not([data-compact]) .footer {
-      padding: var(--space-16) var(--space-24) var(--space-24);
+      padding: var(--space-20) var(--space-24);
     }
 
     /* The times take the month's height and scroll inside it, behind a hairline, fading out at the foot. */

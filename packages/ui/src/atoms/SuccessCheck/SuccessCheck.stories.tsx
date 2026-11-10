@@ -27,3 +27,13 @@ export const Large: Story = {
     await expect(canvas.getByRole('img', { name: 'Published' })).toBeInTheDocument();
   },
 };
+
+/** The booked moment (a public page's confirmation): a soft green disc that lands with a scale and fade, then draws. */
+export const BookedMoment: Story = {
+  args: { size: 'xl' },
+  render: (args) => (
+    <Stage>
+      <SuccessCheck {...args} />
+    </Stage>
+  ),
+};

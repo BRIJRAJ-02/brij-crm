@@ -41,6 +41,9 @@ export type DeferredSelectProps = Pick<
   | 'placement'
   | 'onOpenChange'
   | 'popoverFoot'
+  | 'searchAside'
+  | 'searchPlaceholder'
+  | 'chosenLook'
 > & {
   readonly items: readonly DeferredSelectItem[];
   /**
@@ -229,6 +232,9 @@ export function DeferredSelectFrom({
     if (isDisabled) return;
     setWanted(true);
     setOpens(true);
+    // Said now: the real Select opens on its first render (defaultOpen), which React Aria doesn't report, so a caller
+    // that fills the list only while it is open (a booking page's time zones) would open on a list of one.
+    onOpenChange?.(true);
   };
   return (
     <div className={styles.root} data-disabled={isDisabled || undefined}>
@@ -278,7 +284,9 @@ export function DeferredSelectFrom({
             <>
               <span className={styles.plain}>{chosen.label}</span>
               {showsDescription && chosen.description !== undefined && (
-                <span className={styles.description}>{chosen.description}</span>
+                <span className={styles.description}>
+                  {chosen.trailing === undefined ? chosen.description : `${chosen.description} · ${chosen.trailing}`}
+                </span>
               )}
             </>
           )}

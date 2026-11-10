@@ -11,6 +11,8 @@ export const strings = {
   questions: 'Questions',
   /** The one primary action under the person: their contact card, downloaded as a vCard. */
   saveContact: 'Save contact',
+  /** A booking page's row: its next open time, quietly at the end ("Next Tue 10 Nov, 3:00 pm"). */
+  nextAt: (when: string) => `Next ${when}`,
   /** A menu block's dish and its price, in the line under its title (spec 0065, AC-6528). */
   dishPrice: (name: string, price: string) => `${name} ${price}`,
   /** Under Save contact: the page as a pass a visitor keeps in Apple Wallet (26 October 2026). */

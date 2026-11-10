@@ -233,6 +233,21 @@
     padding: var(--popover-inset) var(--popover-inset) 0;
   }
 
+  /* A setting beside the search (`searchAside`): the field takes the room, the setting its own width, and a hairline
+     under the row sets them apart from the list. */
+  .search[data-aside] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block-end: var(--popover-inset);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .search[data-aside] > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
   .empty {
     display: block;
     padding: var(--popover-item-block) var(--popover-item-inline);
@@ -337,6 +352,28 @@
     display: inline-flex;
     margin-inline-start: auto;
     color: var(--accent);
+  }
+
+  /* A quiet value at the option's end (`trailing`), before the check, in figures of one width. */
+  .trailing {
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .trailing + .check {
+    margin-inline-start: 0;
+  }
+
+  /* chosenLook="filled": the chosen option sits on the soft accent, its check beside it. */
+  .option[data-chosen-look='filled'][data-selected] {
+    background: var(--accent-soft);
+  }
+
+  /* The rest keep the check's room, so every option's trailing value lines up in one column. */
+  .option[data-chosen-look='filled']:not([data-selected]) {
+    padding-inline-end: calc(var(--popover-item-inline) + var(--size-icon-sm) + var(--space-8));
   }
 
   /* optionDescription="below": the label, its line under it (wrapping), and the check centred at the end. */

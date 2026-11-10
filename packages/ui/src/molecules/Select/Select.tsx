@@ -69,6 +69,13 @@ export interface SelectItem {
   readonly group?: string;
   /** The choice that means nothing (a spice level's None): reads as quietly as the placeholder does. */
   readonly isNothing?: boolean;
+  /**
+   * What the list shows in place of `label`, the closed field keeping `label`: a time zone's "London" in the list,
+   * "London time" in the rail.
+   */
+  readonly listLabel?: string;
+  /** A quiet value at the option's end, before its check: the time it is now in a time zone ("4:50 am"). */
+  readonly trailing?: string;
 }
 
 /** Props for Select. */
@@ -204,6 +211,15 @@ export interface SelectProps {
    * under its time zones, as Calendly keeps it: critic A24). Searchable lists only, under the list.
    */
   readonly popoverFoot?: ReactNode;
+  /**
+   * One setting drawn beside the search field, in its row (the booking page's 12h or 24h clock beside its time
+   * zones' search, the v5 mock). Searchable lists only.
+   */
+  readonly searchAside?: ReactNode;
+  /** The search field's placeholder ("Search a city or GMT+4"); left out, none (or the search's name, with marks). */
+  readonly searchPlaceholder?: string;
+  /** `filled`: the chosen option also takes the soft accent fill, beside its check (a time zone list's choice). */
+  readonly chosenLook?: 'check' | 'filled';
 }
 
 /** The event React Aria's search sends its list to mark the first match (`FOCUS_EVENT` in react-aria's autocomplete). */
@@ -346,6 +362,9 @@ export function SelectBase({
   onCreate,
   defaultSearch,
   popoverFoot,
+  searchAside,
+  searchPlaceholder,
+  chosenLook = 'check',
   showsMarks = false,
   onNew,
 }: SelectProps) {
@@ -462,8 +481,12 @@ export function SelectBase({
         {showsMarks &&
           !isAction &&
           (isMultiple ? <CheckboxMark isSelected={isSelected} /> : <RadioMark isSelected={isSelected} />)}
-        <Face item={item} optionStyle={isAction ? 'plain' : optionStyle} />
+        <Face
+          item={item.listLabel === undefined ? item : { ...item, label: item.listLabel }}
+          optionStyle={isAction ? 'plain' : optionStyle}
+        />
         {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
+        {item.trailing !== undefined && <span className={styles.trailing}>{item.trailing}</span>}
         {isSelected && !showsMarks && (
           <span className={styles.check}>
             <Icon name="check" size="sm" />
@@ -485,6 +508,7 @@ export function SelectBase({
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
       data-description={item.description === undefined ? undefined : optionDescription}
+      data-chosen-look={chosenLook === 'filled' ? 'filled' : undefined}
       {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
     >
       {({ isSelected }) => optionBody(item, isSelected)}
@@ -631,7 +655,12 @@ export function SelectBase({
               <>
                 <Face item={selected} optionStyle={optionStyle} />
                 {showsDescription && selected.description !== undefined && (
-                  <span className={styles.description}>{selected.description}</span>
+                  <span className={styles.description}>
+                    {/* With its trailing value too, as the line reads it: "GMT · 4:50 am". */}
+                    {selected.trailing === undefined
+                      ? selected.description
+                      : `${selected.description} · ${selected.trailing}`}
+                  </span>
                 )}
               </>
             );
@@ -670,15 +699,20 @@ export function SelectBase({
                   (canCreate || onNew !== undefined) && !items.some((item) => contains(item.label, typed))
                 }
               >
-                <div className={styles.search}>
+                <div className={styles.search} data-aside={searchAside === undefined ? undefined : ''}>
                   {/* A search over a list opens with its field focused (the scope's first stop), as React Aria expects. */}
                   <Field
                     label={searchLabel}
                     isLabelHidden
                     variant="search"
                     size="sm"
-                    {...(showsMarks ? { placeholder: searchLabel } : {})}
+                    {...(searchPlaceholder !== undefined
+                      ? { placeholder: searchPlaceholder }
+                      : showsMarks
+                        ? { placeholder: searchLabel }
+                        : {})}
                   />
+                  {searchAside}
                 </div>
                 {list}
               </Autocomplete>

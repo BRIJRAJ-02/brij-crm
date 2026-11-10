@@ -52,6 +52,34 @@
     }
   }
 
+  /* The booked moment (a public page's confirmation, the v5 mock): a soft green disc inside its ring, the tick in the
+     green's own ink, landing out of half its size with a fade on the public pages' pace, the tick drawing after. */
+  .root[data-size='xl'] {
+    --check-pace: var(--duration-public-move);
+
+    inline-size: calc(2 * var(--space-24) + var(--space-8));
+    block-size: calc(2 * var(--space-24) + var(--space-8));
+    animation-name: check-land;
+  }
+
+  .root[data-size='xl'] .disc {
+    fill: var(--tag-green-bg);
+    stroke: var(--tag-green-border);
+    stroke-width: calc(var(--border-width-hairline) / 2);
+  }
+
+  .root[data-size='xl'] .tick {
+    stroke: var(--tag-green-text);
+    stroke-width: calc(var(--border-width-thick) / 2);
+  }
+
+  @keyframes check-land {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+    }
+  }
+
   @keyframes check-draw {
     to {
       stroke-dashoffset: 0;

@@ -43,6 +43,10 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 - `group` on an option puts it under a heading: options with the same group follow one heading, in the order they come, after any without a group. Why a field: a booking page's "Add events to" lists each account's calendars under the account, as the Bookings calendars panel does.
 
+### The time zone picker's variant (10 November 2026)
+
+`searchAside` draws one setting beside the search field (the booking page's 12h / 24h), `searchPlaceholder` says what to type, an option's `listLabel` is what the list shows in place of `label` (the rail keeps "London time", the list "London"), its `trailing` is a quiet value at its end before the check (the time there now; the closed field reads it after the description, "GMT · 4:50 am"), and `chosenLook="filled"` gives the chosen option the soft accent fill beside its check, the others keeping the check's room so their trailing values line up. Story: DeferredSelect's ZonePicker.
+
 ## SelectBase
 
 `SelectBase` (`Select.tsx`) is Select's body; `Select` (`SelectWithFaces.tsx`) wraps it with the `dot` and `badge` faces, which bring StatusDot and Badge. Use `Select` everywhere. Only the hosted form's questions and CountryPicker use `SelectBase`, since they draw plain options only: it keeps StatusDot, Badge and their CSS out of the form's first load (about 1 kB of CSS gzipped, 31 October 2026). Under `SelectBase` a `dot` option reads as its plain label and a `badge` isn't drawn.
@@ -59,6 +63,8 @@ The inline Select whose list loads apart from the page's first paint: `<Deferred
 - A load that fails leaves the stand in showing the value, and opens nothing later; it is asked for again on the next hover, focus or press only (a browser may keep a failed import as failed). The left and right arrows and typing on the closed trigger, which change a loaded Select's value without opening it, do nothing on the stand in.
 - It is the `inline` variant only, with plain options (`DeferredSelectItem`: a label and a `description`, no icon, leading piece, badge or hue), and the caller names its empty state (`placeholder`), since Select's own default copy would load with it. Its stand in copies the inline trigger's rules (`DeferredSelect.module.css`): change the two together. Its stories hold the stand in to the loaded trigger's box, computed look, focus ring and name, and press the stand in itself through `DeferredSelectFrom`, which takes the loader (stories only).
 - `onCreate` works with `selectionMode="multiple"` too (30 October 2026): "Create "<typed>"" hands the label over and the values stay as they are; the caller adds the new option. A multi select outside a grid cell uses it, so its closed field shows the chosen tags.
+
+DeferredSelect reports `onOpenChange(true)` on the stand in's opening press, since the real Select opens on its first render and React Aria doesn't report a default open: a caller that fills its list only while open gets the whole list.
 
 ## States
 

@@ -25,29 +25,36 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Under the guest's booking: Need a change?, the two changes as equal toggles, and Cancel booking at the row's end. */
+/** At the booked card's foot: Reschedule and Guests as quiet toggles, and Cancel at the row's end. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => <OnReceipt {...args} />,
 };
 
-/** Guests: one list with Remove on each, then one field whose Add (or Enter) invites, and the count. */
+/**
+ * Guests: who is on it with Remove on each, then Invite more as one email a row, Add another guest, and Invite, live
+ * only once a row holds an address ("Invite 2" for two).
+ */
 export const Guests: Story = {
   args: { guests: ['ann@navy.example'] },
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
-    const toggle = canvas.getByRole('button', { name: 'Guests (1)' });
+    const toggle = canvas.getByRole('button', { name: 'Guests' });
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(canvas.getByRole('region', { name: 'Guests' })).toBeInTheDocument();
     await expect(canvas.getByText('1 of 10')).toBeInTheDocument();
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Add a guest by email' }), 'Bob@navy.example{Enter}');
-    await expect(args.onInvite).toHaveBeenCalledWith('bob@navy.example');
-    // Enter added them: the field is empty again and keeps focus.
-    await expect(canvas.getByRole('textbox', { name: 'Add a guest by email' })).toHaveValue('');
-    await expect(canvas.getByRole('textbox', { name: 'Add a guest by email' })).toHaveFocus();
-    await expect(canvas.getByText('2 of 10')).toBeInTheDocument();
-    await expect(await canvas.findByRole('status')).toHaveTextContent('Invited bob@navy.example.');
+    const invite = canvas.getByRole('button', { name: 'Invite' });
+    await expect(invite).toBeDisabled();
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 1 email' }), 'Bob@navy.example');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add another guest' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 2 email' }), 'cy@navy.example');
+    await userEvent.click(canvas.getByRole('button', { name: 'Invite 2' }));
+    await expect(args.onInvite).toHaveBeenCalledWith(['bob@navy.example', 'cy@navy.example']);
+    // Invited: one empty row again.
+    await expect(canvas.getByRole('textbox', { name: 'New guest 1 email' })).toHaveValue('');
+    await expect(canvas.getByText('3 of 10')).toBeInTheDocument();
+    await expect(await canvas.findByRole('status')).toHaveTextContent('Invited 2 guests.');
   },
 };
 
@@ -58,7 +65,7 @@ export const RemoveGuest: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
     const body = within(document.body);
-    await userEvent.click(canvas.getByRole('button', { name: 'Guests (2)' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
     const remove = canvas.getByRole('button', { name: 'Remove ann@navy.example' });
     await userEvent.click(remove);
     const dialog = await body.findByRole('alertdialog', { name: 'Remove ann@navy.example?' });
@@ -95,7 +102,7 @@ export const RemoveFailed: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas }) => {
     const body = within(document.body);
-    await userEvent.click(canvas.getByRole('button', { name: 'Guests (1)' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Remove ann@navy.example' }));
     await userEvent.click(await body.findByRole('button', { name: 'Remove guest' }));
     const dialog = body.getByRole('alertdialog', { name: 'Remove ann@navy.example?' });
@@ -103,16 +110,18 @@ export const RemoveFailed: Story = {
   },
 };
 
-/** A wrong address is named under the field, and nothing is sent. */
+/** A row that isn't an address is named under itself on Enter, and nothing is sent. */
 export const GuestInvalid: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
-    // Add with nothing typed says what's missing rather than looking disabled.
-    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
-    await expect(canvas.getByText('Give an email address such as name@example.com.')).toBeInTheDocument();
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Add a guest by email' }), 'not an email{Enter}');
+    await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
+    // Nothing typed: Invite waits, rather than saying what's missing.
+    await expect(canvas.getByRole('button', { name: 'Invite' })).toBeDisabled();
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 1 email' }), 'not an email');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add another guest' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 2 email' }), 'bob@navy.example');
+    await userEvent.click(canvas.getByRole('button', { name: 'Invite' }));
     await expect(canvas.getByText('Give an email address such as name@example.com.')).toBeInTheDocument();
     await expect(args.onInvite).not.toHaveBeenCalled();
   },
@@ -123,7 +132,7 @@ export const Cancel: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
     const body = within(document.body);
-    const trigger = canvas.getByRole('button', { name: 'Cancel booking' });
+    const trigger = canvas.getByRole('button', { name: 'Cancel' });
     await userEvent.click(trigger);
     const dialog = await body.findByRole('alertdialog', { name: 'Cancel Intro call with Ada Lovelace?' });
     const labels = within(dialog)
@@ -173,7 +182,7 @@ export const MoveOpen: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('region', { name: 'Pick a new time' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Move to another time' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('button', { name: 'Reschedule' })).toHaveAttribute('aria-expanded', 'true');
   },
 };
 
@@ -187,10 +196,11 @@ export const InviteFailed: Story = {
   },
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Add a guest by email' }), 'bob@navy.example{Enter}');
+    await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'New guest 1 email' }), 'bob@navy.example');
+    await userEvent.click(canvas.getByRole('button', { name: 'Invite' }));
     await expect(await canvas.findByText('Too many attempts just now.')).toBeInTheDocument();
-    await expect(canvas.getByRole('textbox', { name: 'Add a guest by email' })).toHaveValue('bob@navy.example');
+    await expect(canvas.getByRole('textbox', { name: 'New guest 1 email' })).toHaveValue('bob@navy.example');
   },
 };
 
@@ -201,8 +211,8 @@ export const NoMoveFull: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByRole('button', { name: 'Move to another time' })).toBeNull();
-    await userEvent.click(canvas.getByRole('button', { name: 'Guests (2)' }));
+    await expect(canvas.queryByRole('button', { name: 'Reschedule' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Guests' }));
     await expect(canvas.getByText('That’s the most guests a booking takes (2).')).toBeInTheDocument();
   },
 };
@@ -222,8 +232,8 @@ export const TooLate: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
-    await expect(canvas.queryByRole('button', { name: 'Move to another time' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Reschedule' })).toBeNull();
     await expect(canvas.getByText(/Too close to the meeting/)).toBeInTheDocument();
   },
 };
@@ -274,9 +284,9 @@ function OnReceipt(args: BookingChangesProps & { readonly notice?: string }) {
           <BookingChanges
             {...args}
             guests={guests}
-            onInvite={(email) =>
-              args.onInvite(email).then((outcome) => {
-                if (outcome.kind === 'done') setGuests((current) => [...current, email]);
+            onInvite={(emails) =>
+              args.onInvite(emails).then((outcome) => {
+                if (outcome.kind === 'done') setGuests((current) => [...current, ...emails]);
                 return outcome;
               })
             }

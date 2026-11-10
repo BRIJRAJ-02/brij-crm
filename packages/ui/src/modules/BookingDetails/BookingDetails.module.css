@@ -6,19 +6,36 @@
        eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
-    /* The blur a new guest chip resolves out of (transitions.dev's 2px), a literal because the token set has no blur
+    /* The blur the calm tick on a fixed field resolves out of (transitions.dev's 2px), a literal because the token set has no blur
        yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --chip-blur: 2px;
-    /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --panel-duration: 480ms;
 
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: var(--space-16);
     inline-size: 100%;
+    container-type: inline-size;
+    /* How far the card's inset runs past the form (BookingFrame sets it): the actions' band reaches the card's edges.
+       Outside a booking card nothing bleeds. */
+    --bleed: var(--booking-card-inset, 0%);
+    --bleed-trim: var(--booking-card-trim, 0%);
+  }
+
+  /* Paired: Name and Email side by side, stacked again where the card is narrow (a phone, an embed). */
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  @container (inline-size < 480px) {
+    .pair {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-16);
+    }
   }
 
   /* The fields span the card, lining up with Back and Confirm below them (the owner, 5 November 2026, over critic A11's
@@ -79,12 +96,6 @@
 
   /* A field's own wrapper, so a refused Confirm can shake the field it found wrong: twice side to side, small, then
      still. Two names for one shake, so the next refusal replays it. */
-  /* Add guests opens the Guests field as a card expansion (stageshow's ai-cards): it grows to its height, so Anything
-     the host should know moves down as one. Where a height can't animate, it fades in. */
-  .guests[data-opening] {
-    interpolate-size: allow-keywords;
-    animation: guests-open var(--panel-duration) var(--ease-out);
-  }
 
   .shaker,
   .guests {
@@ -107,12 +118,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-  }
-
-  /* Add guests sits close under what it adds to. */
-  .add {
-    display: flex;
-    margin-block-start: calc(-1 * var(--space-8));
   }
 
   .trap {
@@ -142,12 +147,25 @@
   /* Back and Confirm sit at the card's foot, where Book sat on the step before (as Cal.com keeps them), so the card
      keeps the month's size, nothing on the page shifts, and the press moves from Book to Confirm in one place. */
   .actions {
-    margin-block-start: auto;
+    margin-block: auto calc(-1 * var(--bleed-trim));
+    margin-inline: calc(-1 * var(--bleed));
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    padding-block-start: var(--space-16);
+    padding: var(--space-20) var(--bleed) 0;
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* Stacked on a phone, Back and Confirm stay in reach at the window's foot, as Book did (the v5 mock). */
+  @media (width < 1024px) {
+    .root[data-arrangement='paired'] > .actions {
+      position: sticky;
+      inset-block-end: 0;
+      z-index: var(--z-sticky);
+      margin-block-end: calc(-1 * var(--bleed));
+      padding-block-end: calc(var(--space-16) + env(safe-area-inset-bottom));
+      background: var(--surface-raised);
+    }
   }
 
   /* Confirm takes the band as Book did, at a time's height; Back keeps its words' width. */
@@ -190,30 +208,12 @@
     .actions[data-shake] {
       animation: none;
     }
-
-    .guests[data-opening]:not([data-shake]) {
-      animation-name: line-in;
-    }
   }
 
   /* The calm tick on a field put right: it opens out of a soft blur, as the guest chips do. */
   .fixed {
     display: inline-flex;
     animation: chip-in var(--duration-modal) var(--ease-out) backwards;
-  }
-
-  @keyframes guests-open {
-    from {
-      overflow: clip;
-      min-block-size: 0;
-      block-size: 0;
-      opacity: 0;
-    }
-
-    to {
-      overflow: clip;
-      min-block-size: 0;
-    }
   }
 
   @keyframes shake-even {

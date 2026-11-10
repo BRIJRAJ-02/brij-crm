@@ -47,3 +47,7 @@ One empty row, several rows, with errors, without roles, full (`max`), disabled,
 ## Differences from the artifact
 
 Not in the artifact yet; it goes with the next `pnpm ui:artifact`.
+
+## Guest rows (10 November 2026)
+
+`guests` turns the rows into a booking's guests, every word the screen's own: rows may run down to none (each row ends in its ×; with none only the add button shows, under `first`, and focus goes back to it when the last row goes), the column is named `label` with `aside` beside it ("Guests (up to 10)"), the add button says `another` under a row and carries the user-plus icon, `rowLabel` names each row for screen readers, `full` replaces the button at `max`, and `action` draws at the end of the add row (the guest page's Invite). `fieldSize="lg"` draws the public pages' taller fields with the × level with them. Why a variant: the booking form and the guest page add guests exactly as the invite form adds people. Story: BookingGuests.

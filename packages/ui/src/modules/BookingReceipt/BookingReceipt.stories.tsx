@@ -44,6 +44,54 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * The booked moment (the v5 mock, `headline`): the check lands over "You're booked", who will see you and where the
+ * details went, then the card: the whole time and its zone, What, Who and Where, Join the call across it, and Add to
+ * calendar and Share quiet under it.
+ */
+export const BookedMoment: Story = {
+  args: {
+    headline: { when: 'Friday 9 October, 9:30 – 10:00 AM', meta: 'London time (GMT+1) · tomorrow morning' },
+    sentTo: 'grace@example.com',
+    facts: [
+      { term: 'What', description: 'Intro call with Ada Lovelace, 30 min' },
+      { term: 'Who', description: 'Grace Hopper', address: 'grace@example.com' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'You’re booked' })).toHaveFocus();
+    await settleAnimations();
+    await expect(canvas.getByText('We sent the details to grace@example.com.')).toBeVisible();
+    await expect(canvas.getByText('Friday 9 October, 9:30 – 10:00 AM')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: /Join the call/ })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Add to calendar' }));
+    await expect(await screen.findByRole('menuitem', { name: /Apple Calendar/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** Opened again later from the email: the same card, without the celebration. */
+export const Returning: Story = {
+  args: {
+    ...BookedMoment.args,
+    isWelcome: false,
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'Your booking' })).toBeInTheDocument();
+    await expect(canvas.queryByText(/We sent the details/)).toBeNull();
+  },
+};
+
 /** Right after booking: "You're booked" and one warm line, then the summary with Join the call and Add to calendar. */
 export const Welcome: Story = {
   parameters: { crm: { preview: true } },

@@ -32,6 +32,8 @@ import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
+import { memoIntl } from '../../lib/intl-memo.ts';
+import { useFormatSettings } from '../../provider/context.ts';
 import type { PageTemplate } from '../../lib/page-template.ts';
 import styles from './LinkPage.module.css';
 // Types only: erased, so none of these chunks joins the first load.
@@ -162,8 +164,10 @@ export type LinkPageBlock =
       readonly title: string;
       /** The booking page's address, `/<handle>/<slug>`, opened in this tab. */
       readonly href: string;
-      /** Its lengths and kind, said once: "30 min · 60 min · Team". */
+      /** Its lengths and kind, said once: "15, 30 or 60 min · Team". */
       readonly facts: string;
+      /** Its next open times, once read (the v5 mock: "Next Tue 10 Nov, 3:00 pm" at the row's end). */
+      readonly times?: LinkPageTimes;
       readonly size?: LinkPageTileSize;
     }
   | {
@@ -630,8 +634,8 @@ function ownPath(href: string | undefined): string | undefined {
 }
 
 /**
- * The actions under the person: Save contact, the page's one primary action, when the owner keeps a card, with the
- * caller's Share beside it, and under them Add to Apple Wallet when the caller passes a pass address. Both are plain
+ * The actions under the person: the caller's Share and, when the owner keeps a card, Save contact, an equal pair of
+ * bordered buttons (the v5 mock), and under them Add to Apple Wallet when the caller passes a pass address. Both are plain
  * links to our own origin, so they work with no script and straight from a QR code, and a phone offers to add the
  * card to its contacts or opens Wallet. The wallet takes a row of its own rather than a third place in the first
  * row: at a thumb's size three controls leave no room for its words.
@@ -655,9 +659,11 @@ function Actions({
     <div className={styles.actions}>
       {(href !== undefined || share !== undefined) && (
         <div className={styles.actionRow}>
+          {/* Share first, then Save contact (the v5 mock). */}
+          {share}
           {href !== undefined && contact !== undefined && (
             <ButtonLink
-              variant="primary"
+              variant="secondary"
               size="touch"
               icon="contact"
               href={href}
@@ -667,7 +673,6 @@ function Actions({
               {strings.saveContact}
             </ButtonLink>
           )}
-          {share}
         </div>
       )}
       {wallet !== undefined && (
@@ -912,6 +917,88 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
   );
 }
 
+/** How far ahead of the screen a booking page's row asks for its next time, so it is there as it scrolls in. */
+const NEXT_NEAR = '200px';
+
+/**
+ * A booking page's row (the v5 mock): its tile, the title over its lengths, its next open time quietly at the end (left
+ * out on a phone), and the chevron. The next time is read once the row nears the screen, by the page's times reader.
+ */
+function PageRow({
+  block,
+  onPress,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'page' }>;
+  readonly onPress: (() => void) | undefined;
+}) {
+  const { onTimesNear } = useContext(PageActionsContext);
+  const { locale, timeZone } = useFormatSettings();
+  const rowRef = useRef<HTMLAnchorElement>(null);
+  const target = samePath(block.href);
+  const isWaiting = block.times === undefined;
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!isWaiting || onTimesNear === undefined || row === null) return undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      onTimesNear(block.id);
+      return undefined;
+    }
+    const watch = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          watch.disconnect();
+          onTimesNear(block.id);
+        }
+      },
+      { rootMargin: NEXT_NEAR },
+    );
+    watch.observe(row);
+    return () => {
+      watch.disconnect();
+    };
+  }, [isWaiting, onTimesNear, block.id]);
+  const first = block.times?.status === 'ready' ? block.times.starts[0] : undefined;
+  const next =
+    first === undefined
+      ? undefined
+      : strings.nextAt(
+          memoIntl(
+            `link-next:${locale}:${timeZone}`,
+            () =>
+              new Intl.DateTimeFormat(locale, {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZone,
+              }),
+          ).format(new Date(first)),
+        );
+  const body = (
+    <>
+      <LinkPageTile block={block} />
+      <BlockText title={block.title} line={block.facts} />
+    </>
+  );
+  if (target === undefined) {
+    return (
+      <span className={styles.block} data-inert="">
+        {body}
+      </span>
+    );
+  }
+  return (
+    <a ref={rowRef} className={styles.block} data-row="page" href={target} onClick={onPress}>
+      {body}
+      {next !== undefined && <span className={styles.next}>{next}</span>}
+      <span className={styles.end}>
+        <Icon name="chevron-right" size="sm" />
+      </span>
+    </a>
+  );
+}
+
 /** A link block, the kind most of spec 0061's choices are about. */
 type LinkBlock = Extract<LinkPageBlock, { kind: 'link' }>;
 
@@ -1111,30 +1198,7 @@ const RENDERERS: {
     />
   ),
   reserve: (block, onPress) => <PlaceRow block={block} onPress={onPress} />,
-  page: (block, onPress) => {
-    const target = samePath(block.href);
-    const body = (
-      <>
-        <LinkPageTile block={block} />
-        <BlockText title={block.title} line={block.facts} />
-      </>
-    );
-    if (target === undefined) {
-      return (
-        <span className={styles.block} data-inert="">
-          {body}
-        </span>
-      );
-    }
-    return (
-      <a className={styles.block} href={target} onClick={onPress}>
-        {body}
-        <span className={styles.end}>
-          <Icon name="chevron-right" size="sm" />
-        </span>
-      </a>
-    );
-  },
+  page: (block, onPress) => <PageRow block={block} onPress={onPress} />,
   // A second or third contact card (spec 0061, AC-6114): a row that saves that card, as the header's Save contact
   // saves the first. A plain link to its vCard on our origin, so it works with no script and a phone offers to add it.
   contact: (block, onPress) => {
@@ -2469,15 +2533,15 @@ export function LinkPage({
                 {heroBook.label}
               </ButtonLink>
             )}
-            {/* The one action under the person, then the way to pass the page on, then where else to find them.
+            {/* Where else to find them, under the bio (the v5 mock), then Share and Save contact as an equal pair.
               Share stands while the page loads: it shares the address the visitor is already on. */}
+            {!hasSocialsBlock && socials !== undefined && <div className={styles.heroSocials}>{socials}</div>}
             <Actions
               contact={contact}
               share={leadsWithCard ? undefined : share}
               onPress={onPress}
               {...(walletHref === undefined ? {} : { walletHref })}
             />
-            {!hasSocialsBlock && socials}
           </div>
           <div className={styles.content}>
             {toolbar}
