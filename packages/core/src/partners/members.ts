@@ -63,6 +63,8 @@ const NO_CONNECTION = 'There is no such connection.';
 const NO_MEMBER = 'This connection has no person with that external id.';
 const EMAIL_TAKEN =
   'Someone already in this workspace uses this email. A managed member needs an address nobody here uses.';
+const LOGIN_REMOVED =
+  'This person has their own Timefix login and is no longer in the workspace. Only the workspace can invite them back.';
 const OWNER_KEPT = 'This person is an owner of the workspace. Only the workspace’s owners can remove them in Timefix.';
 const REMOVED_IN_TIMEFIX =
   'This person was removed from the workspace in Timefix. Send DELETE for them first if they should come back.';
@@ -259,7 +261,6 @@ export async function putPartnerMember(
         removedAt: managedMembers.removedAt,
         claimedAt: managedMembers.claimedAt,
         status: members.status,
-        email: members.email,
       })
       .from(managedMembers)
       .innerJoin(
@@ -271,14 +272,17 @@ export async function putPartnerMember(
     if (row !== undefined && row.removedAt === null && row.status !== 'active') {
       throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
     }
+    // Someone with their own login whom the workspace removed (or who left) is the workspace's to bring back, by an
+    // invitation they accept: never the app's PUT, whatever its own DELETE did (security review, 10 Nov 2026).
+    if (row !== undefined && row.claimedAt !== null && row.status !== 'active') {
+      throw refuse('FORBIDDEN', LOGIN_REMOVED);
+    }
     // Someone with their own login stays a member when the partner lets go of them, so a PUT takes them back as they
     // are; their address is their login's, so the one given is never checked or used.
     const claimed = row !== undefined && row.claimedAt !== null && row.status === 'active';
     if (claimed) return;
     const keeps = row !== undefined && row.removedAt === null ? row.memberId : undefined;
-    // One the workspace removed after they set up their login comes back at their login's address.
-    const joining = row !== undefined && row.claimedAt !== null ? row.email : email;
-    if (await emailTaken(tx, scope.workspaceId, joining, keeps)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
+    if (await emailTaken(tx, scope.workspaceId, email, keeps)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
     if (keeps === undefined) await checkSeats(tx, scope, 1);
   });
   const userId = await deps.users.ensureManagedUser({
@@ -300,14 +304,14 @@ export async function putPartnerMember(
         if (found !== undefined && found.removedAt === null && active === undefined) {
           throw refuse('FORBIDDEN', REMOVED_IN_TIMEFIX);
         }
+        if (found !== undefined && found.claimedAt !== null && active === undefined) {
+          throw refuse('FORBIDDEN', LOGIN_REMOVED);
+        }
         if (found === undefined || active === undefined) {
-          // New, or back after the partner's own removal: a new member row on the same identity. Someone who set up
-          // their own login comes back at its address (their last member row's), never the partner's copy.
-          const joining =
-            found !== undefined && found.claimedAt !== null && found.member !== undefined ? found.member.email : email;
-          if (await emailTaken(tx, scope.workspaceId, joining)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
+          // New, or back after the partner's own removal: a new member row on the same identity.
+          if (await emailTaken(tx, scope.workspaceId, email)) throw refuse('UNIQUE_CONFLICT', EMAIL_TAKEN);
           await checkSeats(tx, scope, 1);
-          const added = await addMemberRow(context, { userId, name, email: joining, role });
+          const added = await addMemberRow(context, { userId, name, email, role });
           let addedAt: string | Date;
           if (found === undefined) {
             const [made] = await tx
@@ -345,13 +349,7 @@ export async function putPartnerMember(
           context.record({ members: [added.memberId], access: [added.memberId] });
           await recordJoinReach(context, scope.workspaceId, added.memberId);
           return {
-            member: viewOf(
-              externalId,
-              { id: added.memberId, name, email: joining, role },
-              addedAt,
-              added.handle,
-              found !== undefined && found.claimedAt !== null,
-            ),
+            member: viewOf(externalId, { id: added.memberId, name, email, role }, addedAt, added.handle),
             created: true,
           };
         }

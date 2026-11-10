@@ -37,6 +37,7 @@ import {
   readInvitation,
   senderOf,
   type InviteSender,
+  type HeldInvitation,
   type InviteWriteOptions,
 } from './invitations.ts';
 import {
@@ -129,6 +130,8 @@ export async function writeNamedInvite(
     readonly email: string;
     readonly open: { readonly id: string; readonly email: string | null } | undefined;
     readonly mark: { readonly page: true } | { readonly login: true };
+    /** The embedded session's connection it was sent from, if any (a login claim from inside the app's frame). */
+    readonly frameConnectionId?: string | undefined;
   },
   source: AuditSource | undefined,
 ): Promise<{ readonly token: string; readonly invitationId: string; readonly sendCount: number }> {
@@ -166,6 +169,7 @@ export async function writeNamedInvite(
         sendCount: sql`${invitations.sendCount} + 1`,
         lastSentAt: sql`now()`,
         expiresAt: INVITE_WINDOW,
+        frameConnectionId: named.frameConnectionId ?? null,
         ...by,
       })
       .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
@@ -198,6 +202,7 @@ export async function writeNamedInvite(
       role: 'member',
       customRoleId: null,
       memberId: named.memberId,
+      frameConnectionId: named.frameConnectionId ?? null,
       tokenHash: hash,
       maxUses: 1,
       sendCount: 1,
@@ -361,19 +366,27 @@ type Claimant =
   | { readonly kind: 'page'; readonly person: HandedPerson }
   | { readonly kind: 'login'; readonly person: ClaimingPerson };
 
-/** Whom an open invitation names, if they can still take it: a plain Member page only person, or a partner's person. */
+/**
+ * Whom an open invitation names, if they can still take it: a plain Member page only person, or a partner's person;
+ * one sent from inside a connected app's frame only while they still hold plain Member (security review, 10 Nov 2026:
+ * the app could otherwise make them its admin between sending and opening).
+ */
 async function claimantOf(
   tx: WorkspaceTx,
   scope: EngineScope,
-  memberId: string,
+  held: HeldInvitation,
   lock: boolean,
 ): Promise<Claimant | undefined> {
+  const memberId = held.memberId;
+  if (memberId === undefined) return undefined;
   const page = await handedPerson(tx, scope, memberId, lock);
   if (page !== undefined) {
     return page.role === 'member' && page.customRoleId === null ? { kind: 'page', person: page } : undefined;
   }
   const person = await claimingPerson(tx, scope, memberId, lock);
-  return person === undefined ? undefined : { kind: 'login', person };
+  if (person === undefined) return undefined;
+  if (held.fromFrame === true && (person.role !== 'member' || person.customRoleId !== null)) return undefined;
+  return { kind: 'login', person };
 }
 
 /**
@@ -405,7 +418,7 @@ export async function claimPageInvite(
       return { slug: held.slug, email: held.email, done: true as const };
     }
     if (!opensNow(held)) throw inviteInvalid();
-    const claimant = await claimantOf(tx, scope, held.memberId, false);
+    const claimant = await claimantOf(tx, scope, held, false);
     if (claimant === undefined) throw inviteInvalid();
     if (await addressTaken(tx, scope.workspaceId, held.email, claimant.person.memberId, held.id)) {
       throw refuseOn('UNIQUE_CONFLICT', ADDRESS_IN_USE, 'email');
@@ -464,7 +477,7 @@ async function takeOver(
   const { tx, scope } = context;
   const held = await readInvitation(tx, scope.workspaceId, entered, true);
   if (held?.memberId !== before.person.memberId || !opensNow(held)) throw inviteInvalid();
-  const now = await claimantOf(tx, scope, before.person.memberId, true);
+  const now = await claimantOf(tx, scope, held, true);
   if (now?.kind !== before.kind || now.person.userId !== before.person.userId) throw inviteInvalid();
   const { person } = now;
   if (await addressTaken(tx, scope.workspaceId, held.email, person.memberId, held.id)) {

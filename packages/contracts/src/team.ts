@@ -299,9 +299,9 @@ export const InvitePeek = z.object({
   isClaimed: z.boolean().optional(),
   /**
    * With `page`: a partner's person's own login (spec 0070, AC-7023), not a hand over. The app that added them keeps
-   * managing them; `app` is its name when the registry gave one.
+   * managing them; `app` is its name when the registry gave one, and `isSelf` when they asked for it themselves.
    */
-  login: z.object({ app: z.string().optional() }).optional(),
+  login: z.object({ app: z.string().optional(), isSelf: z.boolean().optional() }).optional(),
 });
 /** What an invitation shows before accepting. */
 export type InvitePeek = z.infer<typeof InvitePeek>;

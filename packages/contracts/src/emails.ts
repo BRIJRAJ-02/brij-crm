@@ -261,8 +261,9 @@ export const MemberInviteEmail = z.strictObject({
   /**
    * A partner's person's own login (spec 0070, AC-7023, with `page`): the email asks them to set up a Timefix login for
    * the page they already have, and says the app that added them (`app`, when known) keeps working as before.
+   * `isSelf`: they asked for it themselves, so no inviter is named.
    */
-  login: z.strictObject({ app: Line.optional() }).optional(),
+  login: z.strictObject({ app: Line.optional(), isSelf: z.literal(true).optional() }).optional(),
 });
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;

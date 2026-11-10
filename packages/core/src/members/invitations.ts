@@ -715,6 +715,10 @@ export interface HeldInvitation {
   readonly slug: string;
   /** The page only person whose page it hands over (Team pages), when it is one. */
   readonly memberId?: string;
+  /** The person it names sent it themselves (a connected app's person's own login, spec 0070, AC-7023). */
+  readonly isSelfSent?: boolean;
+  /** Sent from inside a connected app's frame (migration 0206): it opens only for a plain Member. */
+  readonly fromFrame?: boolean;
 }
 
 /**
@@ -755,6 +759,7 @@ export async function readInvitation(
       memberId: invitations.memberId,
       sentByType: invitations.updatedByType,
       sentByMember: invitations.updatedByMemberId,
+      frameConnectionId: invitations.frameConnectionId,
       inviterName: inviter.name,
       senderStatus: inviter.status,
       senderRole: inviter.role,
@@ -814,6 +819,8 @@ export async function readInvitation(
     workspaceName: row.workspaceName,
     slug: row.slug,
     ...(row.memberId === null ? {} : { memberId: row.memberId }),
+    ...(row.memberId !== null && row.sentByMember === row.memberId ? { isSelfSent: true } : {}),
+    ...(row.frameConnectionId === null ? {} : { fromFrame: true }),
   };
   return held;
 }
@@ -862,7 +869,14 @@ export async function peekInvite(
     ...(page === undefined
       ? {}
       : { page: { name: page.name, ...(page.handle === undefined ? {} : { handle: page.handle }) } }),
-    ...(partnerId === undefined ? {} : { login: app === undefined ? {} : { app } }),
+    ...(partnerId === undefined
+      ? {}
+      : {
+          login: {
+            ...(app === undefined ? {} : { app }),
+            ...(held.isSelfSent === true ? { isSelf: true } : {}),
+          },
+        }),
     ...(isClaimed ? { isClaimed: true } : {}),
   };
 }

@@ -21,6 +21,7 @@ import { addPageOnlyPerson } from '../profile/page-only.ts';
 import { listTeamLinkPages } from '../profile/team-pages.ts';
 import { rescope, signedInNow } from '../testing.ts';
 import { peekInvite } from './invitations.ts';
+import { removeMember } from './members.ts';
 import { claimPageInvite } from './page-handover.ts';
 import { cancelLoginInvite, inviteToClaimLogin, readMyLogin } from './partner-claim.ts';
 
@@ -228,6 +229,11 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     );
     expect(put.member).toMatchObject({ name: 'Grace B. Hopper', email: address, hasTimefixLogin: true });
     expect((await rowsOf(hub.graceMember))?.member_email).toBe(address);
+    // Her account's own name is hers, in every workspace: the app renames her on her member row here only.
+    const [account] = await testQuery<{ name: string }>(ownerUrl, 'select name from auth."user" where id = $1', [
+      hub.graceUser,
+    ]);
+    expect(account?.name).toBe('Grace Hopper');
     const launched = await launchPartnerScreen(hub.partner, {
       connectionId: hub.connectionId,
       launch: { externalId: 'u-grace', screen: 'link_pages.mine' },
@@ -359,5 +365,107 @@ describe('a connected app’s person setting up their own Timefix login (AC-7023
     );
     expect(back).toMatchObject({ created: false, member: { memberId: hub.graceMember, email: address } });
     expect(await rowsOf(hub.graceMember)).toMatchObject({ status: 'active', claimed: true, removed: false });
+  });
+
+  it('never lets the app bring back a login the workspace removed', async () => {
+    const hub = await connected();
+    const sent = await inviteToClaimLogin(hub.grace, {
+      member: hub.graceMember,
+      email: `grace-r-${tag()}@example.com`,
+    });
+    await claim(sent.token);
+    // The app lets go, then the workspace removes her.
+    await removePartnerMember(hub.partner, { connectionId: hub.connectionId, externalId: 'u-grace' }, { users });
+    await removeMember(hub.owner, { memberId: hub.graceMember });
+    const again = putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-grace',
+        person: { email: hub.hubEmail, name: 'Grace Hopper', role: 'member' },
+      },
+      { users },
+    );
+    expect(await refusalOf(again)).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await rowsOf(hub.graceMember)).toMatchObject({ status: 'removed' });
+  });
+});
+
+describe('inside a connected app’s frame (security review, 10 Nov 2026)', () => {
+  it('reaches only that app’s own people, holding plain Member', async () => {
+    const hub = await connected();
+    const frame = { frame: { connectionId: hub.connectionId } };
+    // Its own Member, from its own frame: allowed (the person, or the app's admin for them).
+    const mine = await inviteToClaimLogin(
+      hub.grace,
+      { member: hub.graceMember, email: `grace-f-${tag()}@example.com` },
+      [],
+      frame,
+    );
+    expect(mine.isSelf).toBe(true);
+    expect(await peekInvite({ db, partnerName }, mine.token)).toMatchObject({ login: { isSelf: true } });
+    // A frame of another app (a connection this workspace can't see) never reaches her.
+    const other = await connected();
+    expect(
+      await refusalOf(
+        inviteToClaimLogin(hub.owner, { member: hub.graceMember, email: `x-${tag()}@example.com` }, [], {
+          frame: { connectionId: other.connectionId },
+        }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect(
+      await refusalOf(
+        cancelLoginInvite(hub.owner, { member: hub.graceMember }, [], {}, { connectionId: other.connectionId }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    // The app's admin's own login is never set up from the frame: it would carry Admin out of it.
+    const admin = await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-admin',
+        person: { email: `admin-${tag()}@example.com`, name: 'Alan Admin', role: 'admin' },
+      },
+      { users },
+    );
+    const adminScope = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: await memberUser(admin.member.memberId), slug: hub.slug, session: signedInNow() },
+    );
+    expect(
+      await refusalOf(
+        inviteToClaimLogin(
+          adminScope,
+          { member: admin.member.memberId, email: `alan-${tag()}@example.com` },
+          [],
+          frame,
+        ),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    // Sent from the frame for a Member, then made the app's admin before it is opened: it opens nothing.
+    const late = await inviteToClaimLogin(
+      hub.grace,
+      { member: hub.graceMember, email: `grace-late-${tag()}@example.com` },
+      [],
+      frame,
+    );
+    await putPartnerMember(
+      hub.partner,
+      {
+        connectionId: hub.connectionId,
+        externalId: 'u-grace',
+        person: { email: hub.hubEmail, name: 'Grace Hopper', role: 'admin' },
+      },
+      { users },
+    );
+    expect(await refusalOf(claim(late.token))).toMatchObject({ code: 'INVITE_INVALID' });
+    expect(await rowsOf(hub.graceMember)).toMatchObject({ verified: false, claimed: false, identity_claimed: false });
+    expect(await identity.isManagedUser(hub.graceUser)).toBe(true);
+    // In Timefix, the workspace's owner sets it up for them.
+    const fromTimefix = await inviteToClaimLogin(hub.owner, {
+      member: admin.member.memberId,
+      email: `alan-${tag()}@example.com`,
+    });
+    expect(fromTimefix.isSelf).toBe(false);
   });
 });

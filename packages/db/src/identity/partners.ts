@@ -592,7 +592,8 @@ export function createPartnerIdentity(db: NodePgDatabase<Record<string, unknown>
 
 /**
  * The managed identity for this workspace, partner (none for a page only person) and external id, its name brought up
- * to date, or a new one under `.invalid`. Two calls at once answer the same id.
+ * to date (never a claimed login's, which is its person's own), or a new one under `.invalid`. Two calls at once
+ * answer the same id.
  */
 async function ensureManaged(
   db: NodePgDatabase<Record<string, unknown>>,
@@ -612,13 +613,15 @@ async function ensureManaged(
   );
   const existing = async (tx: Tx) => {
     const [row] = await tx
-      .select({ userId: managedUsers.userId, name: user.name })
+      .select({ userId: managedUsers.userId, name: user.name, claimedAt: managedUsers.claimedAt })
       .from(managedUsers)
       .innerJoin(user, eq(user.id, managedUsers.userId))
       .where(keyed)
       .limit(1);
     if (row === undefined) return undefined;
-    if (row.name !== name) {
+    // A claimed identity is the person's own login (AC-7023): its account name is theirs, in every workspace; the
+    // partner names them only on their member row here.
+    if (row.name !== name && row.claimedAt === null) {
       await tx
         .update(user)
         .set({ name, updatedAt: sql`now()` })

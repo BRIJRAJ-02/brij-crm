@@ -80,24 +80,27 @@ const ownLogin: Template<MemberInviteEmail> = (params, context) => {
   const until = formatShortDay(params.expiresAt);
   const handle = params.page?.handle;
   const page = handle === undefined ? 'your link page' : `your link page, /${handle}`;
-  const app = params.login?.app;
-  const keep = app === undefined ? 'Keep using the app you use now as before.' : `Keep using ${app} as before.`;
+  const app = params.login?.app ?? 'the app you use now';
+  const asked =
+    params.login?.isSelf === true
+      ? `You asked for a Timefix login in ${workspace}.`
+      : `${params.inviterName} asked for a Timefix login for you in ${workspace}.`;
   return {
     subject: 'Set up your Timefix login',
-    preheader: `Sign in to Timefix directly to manage ${page}. The invitation works until ${until}.`,
+    preheader: `Sign in to Timefix to manage ${page}. The invitation works until ${until}.`,
     eyebrow: workspace,
     heading: 'Set up your Timefix login',
     blocks: [
-      {
-        type: 'paragraph',
-        text: `${params.inviterName} asked for a Timefix login for you, so you can manage ${page} in ${workspace}. ${keep} You can also sign in to Timefix directly.`,
-      },
+      { type: 'paragraph', text: `${asked} Sign in to Timefix to manage ${page}. You can keep using ${app} too.` },
       { type: 'button', label: 'Set up your login', url: context.link(params.acceptPath) },
       {
         type: 'note',
         text: `The invitation works until ${until}, and only for this address. If you weren’t expecting it, you can ignore this email.`,
       },
     ],
-    why: `You got this email because ${params.inviterName} asked for a Timefix login for this address in ${workspace}.`,
+    why:
+      params.login?.isSelf === true
+        ? `You got this email because a Timefix login was asked for with this address in ${workspace}.`
+        : `You got this email because ${params.inviterName} asked for a Timefix login for this address in ${workspace}.`,
   };
 };

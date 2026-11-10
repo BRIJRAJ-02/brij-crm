@@ -56,8 +56,8 @@ export function PageInviteDialog({
   const send = () => {
     if (isBusy) return;
     const wanted = email.trim();
-    const wrong =
-      wanted === '' ? strings.inviteEmailMissing : EMAIL_SHAPE.test(wanted) ? undefined : strings.inviteEmailInvalid;
+    const missing = kind.kind === 'own' ? strings.ownEmailMissing : strings.inviteEmailMissing;
+    const wrong = wanted === '' ? missing : EMAIL_SHAPE.test(wanted) ? undefined : strings.inviteEmailInvalid;
     if (wrong !== undefined) {
       setProblem(wrong);
       field.current?.focus();
@@ -115,7 +115,7 @@ export function PageInviteDialog({
             {strings.cancel}
           </Button>
           <Button variant="primary" isPending={isBusy} onPress={send}>
-            {isBusy ? strings.inviting : strings.inviteAction}
+            {isBusy ? strings.inviting : kind.kind === 'own' ? strings.ownLoginSend : strings.inviteAction}
           </Button>
         </>
       }
@@ -148,6 +148,9 @@ export function PageInviteDialog({
   );
 }
 
+/** Whose invitation a cancel ends: their member id, name and the open invitation. */
+export type CancelledInvite = Pick<TeamLinkPage, 'memberId' | 'name' | 'invite'>;
+
 /**
  * Asks before an open invitation is cancelled (the owner: anything that ends something asks first): a danger Modal
  * naming the address whose link stops, busy while the server works, its refusal inside. The last person asked about
@@ -163,11 +166,14 @@ export function CancelPageInvite({
 }: {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly page: TeamLinkPage | undefined;
-  /** A page only person's hand over (`page`), or a connected app's person's login invitation (`login`). */
-  readonly kind?: 'page' | 'login';
+  readonly page: CancelledInvite | undefined;
+  /**
+   * A page only person's hand over (`page`), a connected app's person's login invitation (`login`), or the caller's
+   * own (`own`, in their own words).
+   */
+  readonly kind?: 'page' | 'login' | 'own';
   readonly onClose: () => void;
-  readonly onCancelled: (page: TeamLinkPage) => void;
+  readonly onCancelled: (page: CancelledInvite) => void;
 }) {
   const [last, setLast] = useState(page);
   if (page !== undefined && page !== last) setLast(page);
@@ -196,7 +202,7 @@ export function CancelPageInvite({
   };
   return (
     <Modal
-      title={strings.revokeInviteTitle(shown.name)}
+      title={kind === 'own' ? strings.ownLoginCancelTitle : strings.revokeInviteTitle(shown.name)}
       variant="confirm"
       tone="danger"
       isOpen={page !== undefined}
@@ -210,7 +216,7 @@ export function CancelPageInvite({
       actions={
         <>
           <Button slot="close" isDisabled={isBusy}>
-            {strings.keepInvite}
+            {kind === 'own' ? strings.ownLoginKeep : strings.keepInvite}
           </Button>
           <Button variant="danger-solid" isPending={isBusy} onPress={cancel}>
             {strings.revokeInvite}
@@ -219,7 +225,9 @@ export function CancelPageInvite({
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {strings.revokeInviteText(shown.invite?.email ?? '')}
+      {kind === 'own'
+        ? strings.ownLoginCancelText(shown.invite?.email ?? '')
+        : strings.revokeInviteText(shown.invite?.email ?? '')}
     </Modal>
   );
 }

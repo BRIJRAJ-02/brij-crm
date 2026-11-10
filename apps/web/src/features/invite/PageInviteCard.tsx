@@ -133,7 +133,7 @@ export function PageInviteCard({ data, token, invitation, user, onInvalid }: Pag
   const about = [
     login === undefined
       ? strings.pageInvited(invitation.inviterName, address, invitation.workspaceName)
-      : strings.loginInvited(invitation.inviterName, invitation.workspaceName, login.app),
+      : strings.loginInvited(invitation.inviterName, invitation.workspaceName, login),
     user === undefined ? strings.forAddress(masked) : '',
   ];
   return (

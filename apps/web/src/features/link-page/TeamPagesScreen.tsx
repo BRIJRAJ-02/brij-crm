@@ -82,14 +82,17 @@ export function TeamPagesScreen({ data, slug }: TeamPagesScreenProps) {
   // A page only person being handed their page, and one whose open invitation is being cancelled.
   const [inviting, setInviting] = useState<TeamLinkPage | undefined>(undefined);
   const [uninviting, setUninviting] = useState<TeamLinkPage | undefined>(undefined);
-  // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks).
-  // Inside a partner's frame the app's admin manages its people's logins too (spec 0070, AC-7023): the frame has no
-  // workspace access to read, so Team pages' own say stands in, and the server checks both permissions.
-  const canInviteInApp = useCan('members.invite');
-  const canInvite = place.isEmbedded ? place.canManageTeam : canInviteInApp;
-  // A connected app's person with no Timefix login yet: Set up their Timefix login, and their open invitation.
+  // Handing a page over lets someone in with a login, so it needs Members' invite permission too (the server checks);
+  // the frame has no workspace access to read, so it is never drawn there (AC-7046).
+  const canInvite = useCan('members.invite');
+  // A connected app's person with no Timefix login yet: Set up their Timefix login, and their open invitation (spec
+  // 0070, AC-7023). Inside the app's frame its admin sets them up (Team pages' own say stands in; the server checks
+  // both permissions and holds the frame to the app's own Members).
   const canSetUpLogin = (page: TeamLinkPage) =>
-    canInvite && page.isFromApp === true && page.hasLogin !== true && !page.isSelf;
+    (place.isEmbedded ? place.canManageTeam : canInvite) &&
+    page.isFromApp === true &&
+    page.hasLogin !== true &&
+    !page.isSelf;
   /** One row put back in the list as the server answered it. */
   const replaceRow = (memberId: string, change: (page: TeamLinkPage) => TeamLinkPage) => {
     setState((was) =>

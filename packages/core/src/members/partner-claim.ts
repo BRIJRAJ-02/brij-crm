@@ -30,12 +30,27 @@ import { actingRole, lockInvitations, senderOf, type InviteWriteOptions } from '
 import { addressTaken, openHandover, writeNamedInvite, type PageInviteToSend } from './page-handover.ts';
 import { claimingPerson, handoverView, type ClaimingPerson } from './page-handover-read.ts';
 
-const { invitations, managedMembers } = schema;
+const { invitations, managedMembers, partnerConnections } = schema;
 
 const NOT_THEIRS = 'That person wasn’t added by a connected app, or already has their own Timefix login.';
 const NOT_A_MEMBER = 'Only a member of this workspace asks for a Timefix login.';
 const OWNERS_ONLY = 'Only an owner sets up a login for an owner.';
 const ADDRESS_TAKEN = 'Someone in this workspace already uses this email, or was invited with it. Use another.';
+const FRAME_MEMBERS_ONLY =
+  'Inside a connected app, only a Member sets up a Timefix login. An owner or admin of the workspace sets one up for anyone else, in Timefix.';
+
+/**
+ * Where the call came from when it came from inside a connected app's embedded frame (spec 0070, AC-7031): that
+ * session's connection. The api passes it from the session, never from the input.
+ */
+export interface ClaimFrame {
+  readonly connectionId: string;
+}
+
+/** What asking for a login takes beside the invitation's options: the frame it was asked from, if any. */
+export interface ClaimLoginOptions extends InviteWriteOptions {
+  readonly frame?: ClaimFrame | undefined;
+}
 
 /** Whether the caller asks for their own login: a member acting as themselves, never through someone's page editor. */
 function isSelf(scope: EngineScope, memberId: string): boolean {
@@ -59,20 +74,39 @@ function checkClaimable(scope: EngineScope, person: ClaimingPerson | undefined):
 }
 
 /**
+ * Inside a connected app's frame (security review, 10 Nov 2026), the app itself controls who is "the person" and who
+ * its admin is, so: only that app's own people are reached (never another app's, AC-7021's line), and only one holding
+ * plain Member with no custom role. A login for anyone with more (an admin, an owner, a custom role) would carry a
+ * workspace role out of the frame (AC-7033), so it is set up from Timefix by someone holding both permissions there.
+ */
+async function checkFrame(tx: WorkspaceTx, frame: ClaimFrame | undefined, person: ClaimingPerson): Promise<void> {
+  if (frame === undefined) return;
+  const [connection] = await tx
+    .select({ partnerId: partnerConnections.partnerId })
+    .from(partnerConnections)
+    .where(eq(partnerConnections.id, frame.connectionId))
+    .limit(1);
+  if (connection?.partnerId !== person.partnerId) throw refuse('NOT_FOUND', NOT_THEIRS);
+  if (person.role !== 'member' || person.customRoleId !== null) throw refuse('FORBIDDEN', FRAME_MEMBERS_ONLY);
+}
+
+/**
  * Set up your Timefix login (AC-7023): an email invitation for a connected app's person to make their own identity a
  * login at `email`. The person themselves, or a holder of `link_pages.manage_team` and `members.invite`. Refused before
  * anything is written: anyone who isn't such a person here (`NOT_FOUND`), an owner by anyone but an owner or themselves
  * (`FORBIDDEN`), an address someone else here uses or another open invitation names (`UNIQUE_CONFLICT` on `email`),
- * past the open invitation cap (`INVITES_LIMIT`). Their open one is sent again in place to the same address, or
+ * past the open invitation cap (`INVITES_LIMIT`). From inside a connected app's frame (`options.frame`), only that
+ * app's own people, holding plain Member (`checkFrame`). Their open one is sent again in place to the same address, or
  * cancelled and replaced for another. Holds no seat. One `invitation.created` or `invitation.resent` History row
- * (`login`). Answers the invitation for the api to mail, with the partner for its words; the token is never stored.
+ * (`login`). Answers the invitation for the api to mail, with the partner and whether the person asked themselves
+ * (`isSelf`) for its words; the token is never stored.
  */
 export async function inviteToClaimLogin(
   scope: EngineScope,
   input: { readonly member: string; readonly email: string },
   hooks: readonly AfterWrite[] = [],
-  options: InviteWriteOptions = {},
-): Promise<PageInviteToSend & { readonly partnerId: string }> {
+  options: ClaimLoginOptions = {},
+): Promise<PageInviteToSend & { readonly partnerId: string; readonly isSelf: boolean }> {
   if (scope.actor.type !== 'member') throw refuse('FORBIDDEN', NOT_A_MEMBER);
   checkManager(scope, input.member);
   const email = input.email.trim().toLowerCase();
@@ -82,6 +116,7 @@ export async function inviteToClaimLogin(
   // Whom, and that the address is free, known before a send is counted (AC-808), so a refused one spends nothing.
   await inWorkspace(scope, async (tx) => {
     const person = checkClaimable(scope, await claimingPerson(tx, scope, input.member, false));
+    await checkFrame(tx, options.frame, person);
     const open = await openHandover(tx, scope.workspaceId, person.memberId, false);
     if (await addressTaken(tx, scope.workspaceId, email, person.memberId, open?.id)) {
       throw refuseOn('UNIQUE_CONFLICT', ADDRESS_TAKEN, 'email');
@@ -93,6 +128,7 @@ export async function inviteToClaimLogin(
     async ({ tx }) => {
       await lockInvitations(tx, scope.workspaceId);
       const person = checkClaimable(scope, await claimingPerson(tx, scope, input.member, true));
+      await checkFrame(tx, options.frame, person);
       const open = await openHandover(tx, scope.workspaceId, person.memberId, true);
       if (await addressTaken(tx, scope.workspaceId, email, person.memberId, open?.id)) {
         throw refuseOn('UNIQUE_CONFLICT', ADDRESS_TAKEN, 'email');
@@ -100,7 +136,13 @@ export async function inviteToClaimLogin(
       const { token, invitationId, sendCount } = await writeNamedInvite(
         tx,
         scope,
-        { memberId: person.memberId, email, open, mark: { login: true } },
+        {
+          memberId: person.memberId,
+          email,
+          open,
+          mark: { login: true },
+          frameConnectionId: options.frame?.connectionId,
+        },
         options.source,
       );
       const sent = await openHandover(tx, scope.workspaceId, person.memberId, false);
@@ -113,6 +155,7 @@ export async function inviteToClaimLogin(
         sendCount,
         page: { name: person.name, ...(person.handle === undefined ? {} : { handle: person.handle }) },
         partnerId: person.partnerId,
+        isSelf: isSelf(scope, person.memberId),
       };
     },
     hooks,
@@ -123,7 +166,8 @@ export async function inviteToClaimLogin(
 /**
  * Cancels the open login invitation naming a connected app's person: its link stops working at once. The person
  * themselves, or a holder of `link_pages.manage_team` and `members.invite`. Only a connected app's person's
- * (`NOT_FOUND` for anyone else: a page only person's hand over is Team pages' `cancelInvite`). One
+ * (`NOT_FOUND` for anyone else: a page only person's hand over is Team pages' `cancelInvite`); from inside a connected
+ * app's frame, as asking (`checkFrame`). One
  * `invitation.revoked` History row. Answers `cancelled: false` when none was open.
  */
 export async function cancelLoginInvite(
@@ -131,6 +175,7 @@ export async function cancelLoginInvite(
   input: { readonly member: string },
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
+  frame?: ClaimFrame,
 ): Promise<PageInviteCancelled> {
   if (scope.actor.type !== 'member') throw refuse('FORBIDDEN', NOT_A_MEMBER);
   checkManager(scope, input.member);
@@ -138,7 +183,7 @@ export async function cancelLoginInvite(
     scope,
     async ({ tx }) => {
       await lockInvitations(tx, scope.workspaceId);
-      checkClaimable(scope, await claimingPerson(tx, scope, input.member, true));
+      await checkFrame(tx, frame, checkClaimable(scope, await claimingPerson(tx, scope, input.member, true)));
       const open = await openHandover(tx, scope.workspaceId, input.member, true);
       if (open === undefined) return { cancelled: false };
       await tx
