@@ -31,7 +31,7 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 - Since spec 0026 the app sets the theme in Settings › Preferences, as a row with a Select, not in the sidebar footer; `ThemeSwitch` stays for pages outside the app shell (the status page).
 - `ThemeSwitch` takes the app's theme controller (`context.theme`), reads it, and sets it; System removes the saved choice and follows the OS.
 
-- A segment's `count` is a quiet number after its label in the secondary colour (Meetings' Requests 2), read after the label; each new number rolls up into place over `duration-popover` (the rolling count), and only fades under reduced motion. Why a prop: the count belongs to the choice, and a Badge read as an alert on a view switch. Story: WithCount.
+- A segment's `count` is a quiet number after its label in the secondary colour (Meetings' Requests 2), read after the label; each new number rolls up into place over `duration-popover` (the rolling count), and only fades under reduced motion. Why a prop: the count belongs to the choice, and a Badge read as an alert on a view switch. Story: WithCount. Its styles live in `SegmentCount` (its own module), loaded with the first segment that has a count, so a page whose controls never count (the booking page's views) carries none of them; until it loads, the number is said to screen readers only.
 
 ## States
 

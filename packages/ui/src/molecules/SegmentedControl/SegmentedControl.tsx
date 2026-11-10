@@ -1,4 +1,4 @@
-import { useId, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -12,6 +12,10 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ThemeChoice, ThemeController } from '../../theme/theme.ts';
 import styles from './SegmentedControl.module.css';
 import { strings } from './strings.ts';
+
+// A segment's count (Meetings' Requests 2) loads with the first segment that shows one, so the pages whose controls
+// never count (the booking page's views) carry none of its styles; until then the number shows plain.
+const LazySegmentCount = lazy(() => import('./SegmentCount.tsx').then((module) => ({ default: module.SegmentCount })));
 
 /** One segment. */
 export interface Segment {
@@ -179,7 +183,11 @@ export function SegmentedControl({
             ) : (
               <HueLabel label={segment.label} hue={segment.hue} />
             )}
-            {segment.count !== undefined && <SegmentCount count={segment.count} />}
+            {segment.count !== undefined && (
+              <Suspense fallback={<VisuallyHidden>{`, ${String(segment.count)}`}</VisuallyHidden>}>
+                <LazySegmentCount count={segment.count} />
+              </Suspense>
+            )}
           </RadioButton>
         </RadioField>
       ))}
@@ -193,22 +201,6 @@ export function SegmentedControl({
       </span>
       {group}
     </div>
-  );
-}
-
-/**
- * A segment's quiet count. Keyed by the number, so a new one rolls in rather than swapping in place; the first number
- * it shows just sits there (no roll as the page or its count first loads).
- */
-function SegmentCount({ count }: { readonly count: number }) {
-  const [first] = useState(count);
-  return (
-    <span className={styles.count}>
-      <VisuallyHidden>, </VisuallyHidden>
-      <span key={count} className={styles.countValue} data-roll={count === first ? undefined : ''}>
-        {count}
-      </span>
-    </span>
   );
 }
 
