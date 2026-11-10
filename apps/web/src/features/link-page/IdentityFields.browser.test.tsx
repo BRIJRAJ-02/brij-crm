@@ -94,10 +94,13 @@ describe('who the page is from', () => {
   });
 
   it('leaves the switch alone when a title is reworded, and sends Enter then Tab once', async () => {
+    // The save stays in flight until the Tab is done: a timer let it land first on a slow runner, and this harness
+    // never hands the kept title back, so the Tab then read as a second change (CI, 9 Nov 2026).
+    let land: () => void = () => undefined;
     const update = vi.fn(
       (_slug: string, _change: object) =>
         new Promise<MyProfile>((resolve) => {
-          setTimeout(() => resolve(profile({ jobTitle: 'Sales lead', showJobTitle: false })), 50);
+          land = () => resolve(profile({ jobTitle: 'Sales lead', showJobTitle: false }));
         }),
     );
     await render(update, TITLED);
@@ -106,6 +109,7 @@ describe('who the page is from', () => {
     await userEvent.tab();
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith('acme', { jobTitle: 'Sales lead' });
+    land();
   });
 
   it('saves the switch at once, with a title to show under the name', async () => {

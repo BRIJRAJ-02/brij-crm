@@ -671,6 +671,7 @@ async function removedManagedPages(
     for update of mm skip locked
   `);
   let purged = 0;
+  const unlinked: string[] = [];
   for (const row of found.rows) {
     const files = await tx.execute<{ path: string | null } & Record<string, unknown>>(
       sql`select path from crm_purge_managed_page(${row.user_id}::uuid)`,
@@ -692,8 +693,11 @@ async function removedManagedPages(
         updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
       where workspace_id = ${workspaceId}::uuid and id = ${row.member_id}::uuid and status = 'removed'
     `);
+    unlinked.push(row.member_id);
     purged += 1;
   }
+  // The member rows changed, so the outbox stores a members row and the relay's audiences catch up (AC-82, AC-85).
+  if (unlinked.length > 0) context.record({ members: unlinked });
   const last = found.rows.at(-1)?.id;
   const totals = plus(at.totals, { managedPages: purged });
   const next =
