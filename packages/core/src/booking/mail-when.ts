@@ -60,10 +60,22 @@ export function atLine(at: Date, zone: string): string {
   return `${dayOf(local, clock)}, ${timeOf(local, clock)}, ${zoneDisplay(zone, at.getTime())}`;
 }
 
-/** "Monday, November 2, 2026, 4:00 AM to 4:30 AM, New York time (GMT-5)", in `zone` and its clock. */
-export function whenLine(start: Date, end: Date, zone: string): string {
+/**
+ * A meeting's time in two parts, as a booking email draws it (bookings redesign, 10 November 2026): the line the eye
+ * goes to ("Monday, November 2, 2026, 4:00 AM to 4:30 AM") and its zone quietly under it ("New York time (GMT-5)").
+ */
+export function whenParts(start: Date, end: Date, zone: string): { readonly line: string; readonly zone: string } {
   const from = DateTime.fromJSDate(start, { zone });
   const to = DateTime.fromJSDate(end, { zone });
   const clock = mailClock(zone);
-  return `${dayOf(from, clock)}, ${timeOf(from, clock)} to ${timeOf(to, clock)}, ${zoneDisplay(zone, start.getTime())}`;
+  return {
+    line: `${dayOf(from, clock)}, ${timeOf(from, clock)} to ${timeOf(to, clock)}`,
+    zone: zoneDisplay(zone, start.getTime()),
+  };
+}
+
+/** "Monday, November 2, 2026, 4:00 AM to 4:30 AM, New York time (GMT-5)", in `zone` and its clock. */
+export function whenLine(start: Date, end: Date, zone: string): string {
+  const { line, zone: display } = whenParts(start, end, zone);
+  return `${line}, ${display}`;
 }

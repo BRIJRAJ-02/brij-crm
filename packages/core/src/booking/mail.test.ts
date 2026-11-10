@@ -86,13 +86,25 @@ describe('the confirmation (AC-636)', () => {
     const [visitor, host, guest] = prepared.messages;
     expect(visitor).toMatchObject({
       subject: 'Booked: Intro call with Ada Host',
-      heading: 'You’re booked',
+      heading: 'You’re booked with Ada Host',
+      // The heading names the host and the time follows, so there is no intro to repeat them.
+      intro: '',
       button: { label: 'View your booking', url: `${ORIGIN}/b/${b.page.publicKey}/manage?t=${b.manageToken}` },
+      // The redesigned email (10 November 2026): the time large with its zone under it, never also a row.
+      when: { line: 'Monday, 2 November 2026, 09:00 to 09:30', zone: 'London time (GMT)' },
+      // Reschedule and Cancel are on the visitor's own page, and Add to calendar is their file by their own link.
+      change: { url: `${ORIGIN}/b/${b.page.publicKey}/manage?t=${b.manageToken}` },
+      calendarUrl: `${ORIGIN}/api/public/booking/manage/${encodeURIComponent(b.manageToken)}/ics`,
+      reply: 'Reply to reach Ada Host',
     });
-    expect(visitor?.rows).toContainEqual({
-      label: 'When',
-      value: 'Monday, 2 November 2026, 09:00 to 09:30, London time (GMT)',
-    });
+    expect(visitor?.rows.map((row) => row.label)).not.toContain('When');
+    expect(visitor?.rows).toContainEqual({ label: 'What', value: 'Intro call, 30 min' });
+    expect(host?.when).toEqual({ line: 'Monday 2 November 2026, 9:00 AM to 9:30 AM', zone: 'UTC' });
+    // Only the visitor's own mail carries their booking page or their calendar link.
+    expect(host?.change).toBeUndefined();
+    expect(host?.calendarUrl).toBeUndefined();
+    expect(guest?.change).toBeUndefined();
+    expect(guest?.calendarUrl).toBeUndefined();
     expect(visitor?.ics?.method).toBe('REQUEST');
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
     // The file's link is the visitor's own booking page, not Book again; the host's opens the booking on Bookings.
@@ -134,7 +146,14 @@ describe('the confirmation (AC-636)', () => {
     expect(visitor?.ics).toBeUndefined();
     // The event is already in the host's calendar, so their email carries no file either.
     expect(host?.ics).toBeUndefined();
-    expect(visitor?.rows).toContainEqual({ label: 'Where', value: 'https://meet.example/abc' });
+    // The call is the one button, and Where names it; the booking page is the quiet Reschedule · Cancel under it.
+    expect(visitor?.button).toEqual({ label: 'Join the call', url: 'https://meet.example/abc' });
+    expect(visitor?.rows).toContainEqual({ label: 'Where', value: 'Video call' });
+    expect(visitor?.change).toEqual({ url: `${ORIGIN}/b/${b.page.publicKey}/manage?t=${b.manageToken}` });
+    // The calendar event already invited them: no second way to add it.
+    expect(visitor?.calendarUrl).toBeUndefined();
+    // The host still sees the call's own address.
+    expect(host?.rows).toContainEqual({ label: 'Where', value: 'https://meet.example/abc' });
   });
 
   it('replies to the host only where the visitor saw their address, and never to a member no longer active', async () => {
@@ -193,8 +212,13 @@ describe('changes (AC-638 to AC-640)', () => {
     expect(cancelled.messages[0]).toMatchObject({
       heading: 'Ada Host cancelled your booking',
       button: { label: 'Book another time', url: `${ORIGIN}/b/${b.page.publicKey}` },
+      // The time it was, struck through, and the reason set apart in the host's own words.
+      when: { line: 'Monday, 2 November 2026, 10:00 to 10:30', zone: 'London time (GMT)', struck: true },
+      quote: '“I’m ill.”',
     });
-    expect(cancelled.messages[0]?.rows).toContainEqual({ label: 'Reason', value: 'I’m ill.' });
+    // A cancelled booking offers no change and no calendar link.
+    expect(cancelled.messages[0]?.change).toBeUndefined();
+    expect(cancelled.messages[0]?.calendarUrl).toBeUndefined();
     expect(cancelled.messages[0]?.ics?.method).toBe('CANCEL');
     // Nothing else goes for a cancelled booking.
     expect((await b.prepare('reminder_1h', new Date('2026-11-02T08:30:00Z'))).skipped).toBe('cancelled');
@@ -307,10 +331,20 @@ describe('reminders (AC-637)', () => {
     expect((await b.prepare('reminder_24h', new Date('2026-11-01T09:00:00Z'))).messages[0]).toMatchObject({
       subject: 'Tomorrow: Intro call with Ada Host',
       button: { label: 'Join the call', url: 'https://meet.example/abc' },
+      // With the call as the button, the booking page is still a link away.
+      change: { url: `${ORIGIN}/b/${b.page.publicKey}/manage?t=${b.manageToken}` },
     });
     expect((await b.prepare('reminder_1h', new Date('2026-11-02T08:00:00Z'))).messages[0]?.subject).toBe(
       'In an hour: Intro call with Ada Host',
     );
+    // A call service we know is named on the button and as Where.
+    await testQuery(ownerUrl, `update bookings set video_url = $2 where id = $1`, [
+      b.bookingId,
+      'https://meet.google.com/abc-defg-hij',
+    ]);
+    const named = (await b.prepare('reminder_1h', new Date('2026-11-02T08:00:00Z'))).messages[0];
+    expect(named?.button).toEqual({ label: 'Join Google Meet', url: 'https://meet.google.com/abc-defg-hij' });
+    expect(named?.rows).toContainEqual({ label: 'Where', value: 'Google Meet' });
     // Too early (a reminder left from before a move) or after it started: nothing.
     expect((await b.prepare('reminder_1h', new Date('2026-11-01T09:00:00Z'))).skipped).toBe('stale');
     expect((await b.prepare('reminder_24h', new Date('2026-11-02T09:10:00Z'))).skipped).toBe('stale');
