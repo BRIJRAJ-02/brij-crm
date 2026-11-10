@@ -466,7 +466,9 @@
       flex-wrap: wrap;
     }
 
-    .root {
+    /* The navigation stacks above the page: beside it, a phone's page was a sliver a word wide. */
+    .root,
+    .root[data-has-nav] {
       grid-template-columns: minmax(0, 1fr);
     }
 

@@ -405,9 +405,10 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
         ? { kind: 'choose', connectionId: arrival.connectionId }
         : undefined,
   );
-  // The account that just arrived from the provider: its row washes in once.
-  const [arrivedId] = useState(() =>
-    arrival === undefined || arrival.kind === 'unknown' ? undefined : arrival.connectionId,
+  // The account that just arrived from the provider: its row washes in once, as the page shows (a reconnect), or as
+  // the popup over it closes (a new account), so the wash is seen rather than played behind the popup.
+  const [arrivedId, setArrivedId] = useState(() =>
+    arrival?.kind === 'reconnected' ? arrival.connectionId : undefined,
   );
 
   const connections = useMemo(() => (state.status === 'ready' ? state.connections : []), [state]);
@@ -643,7 +644,10 @@ export function CalendarScreen({ data, slug, view, result, arrival, onResultSeen
         onRetryCalendars={retryCalendars}
         onTryAgain={openConnect}
         onClose={() => {
-          if (step?.kind === 'choose') toasts.toast({ tone: 'success', message: strings.connected });
+          if (step?.kind === 'choose') {
+            toasts.toast({ tone: 'success', message: strings.connected });
+            setArrivedId(step.connectionId);
+          }
           setStep(undefined);
         }}
       />
