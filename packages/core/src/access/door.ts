@@ -1930,6 +1930,8 @@ export async function enterTimesBlock(
   deps: { readonly db: Database },
   handle: string,
   itemId: string,
+  /** Which block the caller says it is: a next times block, or a booking page's row. Only that kind answers. */
+  kind: 'times' | 'page' = 'times',
 ): Promise<{ readonly owner: HandleOwner; readonly entry: OwnedPageEntry }> {
   const missing = () => refuse('NOT_FOUND', 'There are no times here.');
   if (!isUuid(itemId)) throw missing();
@@ -1937,7 +1939,7 @@ export async function enterTimesBlock(
   if (owner === undefined) throw missing();
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<LinkPageRow>(
-      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind in ('times', 'page')`,
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind = ${kind}`,
     ),
   );
   const row = found.rows[0];

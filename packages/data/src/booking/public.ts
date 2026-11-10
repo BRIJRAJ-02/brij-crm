@@ -298,7 +298,14 @@ export interface HandleClient {
    * A next times block's next open times (spec 0061, AC-6110), in `tz`: read when the block nears the screen, and
    * answered with a minute of cache, so a page of three blocks is three light reads at most.
    */
-  times(handle: string, itemId: string, tz: string, signal?: AbortSignal): Promise<PublicProfileTimes>;
+  times(
+    handle: string,
+    itemId: string,
+    tz: string,
+    signal?: AbortSignal,
+    /** `page`: a booking page row's next time (the v5 mock), counted apart so rows never spend a times block's reads. */
+    row?: 'times' | 'page',
+  ): Promise<PublicProfileTimes>;
   /** The page `/<handle>/<slug>` names, by its public key, and the owner's current handle. */
   address(handle: string, slug: string): Promise<PublicAddress>;
   /**
@@ -341,9 +348,9 @@ export function createHandleClient(options: PublicClientOptions & { readonly bea
         isView || query.draft === true ? { credentials: 'same-origin' } : {},
       );
     },
-    times: (handle, itemId, tz, signal) =>
+    times: (handle, itemId, tz, signal, row) =>
       profiles.call<PublicProfileTimes>(
-        `${encodeURIComponent(handle)}/items/${encodeURIComponent(itemId)}/times?${new URLSearchParams({ tz }).toString()}`,
+        `${encodeURIComponent(handle)}/items/${encodeURIComponent(itemId)}/times?${new URLSearchParams({ tz, ...(row === 'page' ? { row } : {}) }).toString()}`,
         signal === undefined ? {} : { signal },
       ),
     press: (handle, itemId) => {
