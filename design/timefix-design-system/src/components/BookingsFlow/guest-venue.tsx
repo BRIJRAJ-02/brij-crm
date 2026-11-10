@@ -22,7 +22,7 @@ import { Store } from 'lucide-react';
 import { icsFor } from '../../lib/ics.ts';
 import { useToast } from '../Toast/Toast.tsx';
 
-type OnBooked = (page: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly date: CalendarDate; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => void;
+type OnBooked = (page: BookingPage, r: { readonly name: string; readonly email: string; readonly notes: string; readonly date: CalendarDate; readonly minutes: number; readonly timeZone: string; readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => boolean | void;
 /** A guest asking to be told when a table frees up. */
 export type OnWaitlist = (w: { readonly name: string; readonly phone: string; readonly party: number; readonly day: string; readonly wanted?: number }) => void;
 const OCCASIONS = ['Birthday', 'Anniversary', 'Date night', 'Business', 'Celebration'];
@@ -70,6 +70,8 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
   const [dayId, setDayId] = useState(isoDay(now));
   const [weekAt, setWeekAt] = useState(0);
   const [time, setTime] = useState<number>();
+  /** The time was taken while they filled in details: they pick again. */
+  const [taken, setTaken] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
@@ -102,8 +104,10 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
     if (!effective || !detailsOk) return;
     if (waitMode) { onWaitlist?.({ name: name.trim(), phone: phone.trim(), party, day: isoDay(day), wanted: time }); setDone(true); return; }
     if (time === undefined) return;
-    onBooked(effective, { name: name.trim(), email: email.trim(), notes, date: new CalendarDate(day.getFullYear(), day.getMonth() + 1, day.getDate()), minutes: time, timeZone: 'Asia/Kolkata', length: len, place: placeOf(effective), party: isTable ? party : undefined,
+    const ok = onBooked(effective, { name: name.trim(), email: email.trim(), notes, date: new CalendarDate(day.getFullYear(), day.getMonth() + 1, day.getDate()), minutes: time, timeZone: 'Asia/Kolkata', length: len, place: placeOf(effective), party: isTable ? party : undefined,
       phone: isTable ? phone.trim() : undefined, occasion: occasion || undefined, area: areaPick });
+    if (ok === false) { setTaken(true); setTime(undefined); if (!isTable) setStep(people.length > 1 ? 2 : 1); return; }
+    setTaken(false);
     setDone(true);
   };
   const addToCalendar = async () => {
@@ -171,6 +175,7 @@ function VenueGuestPage({ state, onBooked, onOpenPage, onWaitlist, onOpenMenu }:
   const title = step === 0 ? 'Select service' : page.kind === 'table' ? 'Your details' : steps[step] === 'Professional' ? 'Select professional' : steps[step] === 'Time' ? 'Select time' : 'Confirm';
   return (
     <VenueCheckout steps={steps} step={page.kind === 'table' ? 1 : step} title={waitMode ? 'Join the waitlist' : title} onBack={() => (step <= 1 ? setPageId(undefined) : setStep(step - 1))} summary={summary}>
+      {taken && <p className="tf-bkf__error" role="alert">Sorry, that time was just taken. Pick another.</p>}
       {steps[step] === 'Professional' && (
         <div className="tf-bkf-venue-tiles">
           <PersonTile any name="Any professional" title="For the most times" isSelected={who === 'any'} onPress={() => { setWho('any'); setTime(undefined); }} />

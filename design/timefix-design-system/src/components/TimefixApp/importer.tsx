@@ -9,7 +9,7 @@ import { Button } from '../Button/Button.tsx';
 import { Tag } from '../Tag/Tag.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { useToast } from '../Toast/Toast.tsx';
-import { newId, type AppAction, type AppState, type Person } from './data.ts';
+import { type ObjectSchema, newId, type AppAction, type AppState, type Person } from './data.ts';
 
 const SAMPLE = `Full name,Email address,Company,Role,Owner,Tags
 Leah Ortega,leah@acme.com,Acme Corp,Plant manager,Priya Raman,Champion
@@ -45,11 +45,12 @@ function parse(text: string): ReadonlyArray<ReadonlyArray<string>> {
 }
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** What an import changed, so Undo takes back exactly that: new records go, updated fields get their old values. */
-interface ImportUndo { readonly made: number; readonly updated: number; readonly skipped: ReadonlyArray<string>; readonly created: ReadonlyArray<string>; readonly newCompanies: ReadonlyArray<string>; readonly before: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> }
+interface ImportUndo { /** People's attributes before the import, when it added attributes or tag options. */ readonly schemaBefore?: ObjectSchema; readonly made: number; readonly updated: number; readonly skipped: ReadonlyArray<string>; readonly created: ReadonlyArray<string>; readonly newCompanies: ReadonlyArray<string>; readonly before: ReadonlyArray<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> }
 const undoImport = (dispatch: (a: AppAction) => void, object: 'people' | 'companies', u: ImportUndo, me: string) => {
   dispatch({ type: 'records/drop', object, ids: u.created, note: `${me} undid an import` });
   if (u.newCompanies.length) dispatch({ type: 'records/drop', object: 'companies', ids: u.newCompanies });
   if (u.before.length) dispatch({ type: 'records/fields', object, changes: u.before });
+  if (u.schemaBefore) dispatch({ type: 'object/set', object: u.schemaBefore });
 };
 /** Reads a dropped file: CSV only (any case), with a plain message when it can't. */
 const readCsv = (f: File | undefined, toast: (t: { readonly message: string; readonly tone?: 'danger' }) => void, then: (name: string, text: string) => void) => {
@@ -92,6 +93,7 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
   const run = () => {
     // New attribute columns become text attributes on People; new tags join the Tags options.
     const people = state.objects.find((o) => o.id === 'people');
+    const seen = new Map<string, string>();
     const attrIds = newAttrs.map(() => newId('attr'));
     if (people && (newAttrs.length || newTags.length)) dispatch({ type: 'object/set', object: { ...people, attributes: [...people.attributes.map((a) => (a.id === 'tags' ? { ...a, options: [...(a.options ?? []), ...newTags.map((t) => ({ id: t, label: t, hue: 'gray' as const }))] } : a)), ...newAttrs.map(({ h }, n) => ({ id: attrIds[n] ?? newId('attr'), name: h, type: 'text' as const }))] } });
     const created: string[] = []; const newCos: string[] = []; const before: Array<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }> = [];
@@ -101,16 +103,22 @@ export function ImportScreen({ state, dispatch, onDone, object = 'people' }: Imp
     plan.forEach(({ r, match }) => {
       const given = val(r, 'owner');
       const owner = given ? (owners[given] ?? (state.members.some((m) => m.name === given) ? given : state.me)) : undefined;
-      const tags = val(r, 'tags') ? val(r, 'tags').split(/;\s*/).filter(Boolean) : undefined;
+      // Tags are added to what someone already has, written the way the workspace already writes them.
+      const canon = (t: string) => (people?.attributes.find((a) => a.id === 'tags')?.options ?? []).find((o) => o.label.toLowerCase() === t.toLowerCase())?.label ?? newTags.find((n) => n.toLowerCase() === t.toLowerCase()) ?? t;
+      const fileTags = val(r, 'tags') ? val(r, 'tags').split(/;\s*/).filter(Boolean).map(canon) : undefined;
+      const sameEmail = val(r, 'email') ? seen.get(val(r, 'email').toLowerCase()) : undefined;
+      const match0 = match ?? (sameEmail ? { id: sameEmail } as unknown as typeof match : undefined);
+      const tags = fileTags ? [...new Set([...((match?.tags) ?? []), ...fileTags])] : undefined;
       const lastContact = val(r, 'lastContact') ? readDate(val(r, 'lastContact'), dateOrder) : undefined;
       const extraNew = Object.fromEntries(newAttrs.map(({ i }, n) => [attrIds[n] ?? '', r[i] ?? '']).filter(([, v]) => v !== ''));
       // Only what the file actually says: a blank cell never clears what's already there.
       const fields: Readonly<Record<string, unknown>> = Object.fromEntries(Object.entries({ name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner, tags, lastContact, extra: Object.keys(extraNew).length ? { ...(match?.extra ?? {}), ...extraNew } : undefined }).filter(([, v]) => v !== '' && v !== undefined));
+      if (!match && match0) return; // the same new email twice in one file: one person
       if (match) { updated++; before.push({ id: match.id, patch: Object.fromEntries(Object.keys(fields).map((k) => [k, (match as unknown as Readonly<Record<string, unknown>>)[k]])) }); dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: fields }] }); }
-      else { const id = newId('p'); created.push(id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
+      else { const id = newId('p'); created.push(id); if (val(r, 'email')) seen.set(val(r, 'email').toLowerCase(), id); dispatch({ type: 'person/set', person: { id, created: new Date(), name: val(r, 'name'), email: val(r, 'email'), title: val(r, 'title'), companyId: companyIds.get(val(r, 'company').toLowerCase()), owner: owner ?? state.me, tags: tags ?? [], lastContact, extra: Object.keys(extraNew).length ? extraNew : undefined } }); }
     });
     dispatch({ type: 'history/add', text: `${state.me} imported ${plural(created.length + updated, 'person', 'people')} from ${file?.name ?? 'a CSV'}` });
-    setDone({ made: created.length, updated, created, newCompanies: newCos, before, skipped: body.filter((r) => !val(r, 'name')).map((r) => r.join(', ')) }); setStep(4);
+    setDone({ schemaBefore: people && (newAttrs.length || newTags.length) ? people : undefined, made: created.length, updated, created, newCompanies: newCos, before, skipped: body.filter((r) => !val(r, 'name')).map((r) => r.join(', ')) }); setStep(4);
   };
   return (
     <div className="tf-imp">

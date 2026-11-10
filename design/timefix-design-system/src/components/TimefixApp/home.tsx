@@ -19,7 +19,7 @@ export interface HomeScreenProps {
   readonly dispatch: (a: AppAction) => void;
   readonly bookings: BookingsState | undefined;
   readonly onGo: (p: AppPage) => void;
-  readonly onBookings: (tab: string) => void;
+  readonly onBookings: (tab: string, who?: string) => void;
   /** The importer, Settings at a page, and a new task: where the checklist and empty states lead. */
   readonly onImport: () => void;
   readonly onSettings: (page: string) => void;
@@ -89,8 +89,8 @@ export function HomeScreen({ state, dispatch, bookings, onGo, onBookings, onImpo
                 return (
                   <li key={m.id} className="tf-home__meet" data-state={past ? 'past' : live ? 'live' : 'next'}>
                     <span className="tf-home__time tf-num">{formatClockRange(minutesOf(m.start), minutesOf(m.end))}</span>
-                    <button type="button" className="tf-home__what" onClick={() => onBookings('meetings')} aria-label={`${m.title} with ${m.invitee.name}, open in Meetings`}><strong>{m.title}</strong><span className="tf-home__muted">{m.invitee.name} · {m.place === 'in-person' ? <MapPin size={12} aria-hidden /> : <Video size={12} aria-hidden />} {m.placeLabel}</span></button>
-                    {live && m.place !== 'in-person' && <Button size="sm" variant="primary" onPress={() => { const url = `https://meet.google.com/${m.id.slice(-3)}-tfx-${m.id.slice(0, 4)}`; void navigator.clipboard.writeText(url).then(() => toast({ message: `${m.placeLabel} link copied. Paste it in your browser.`, tone: 'success' }), () => toast({ message: `Join at ${url}` })); }}>Join</Button>}
+                    <button type="button" className="tf-home__what" onClick={() => onBookings('meetings', m.invitee.name)} aria-label={`${m.title} with ${m.invitee.name}, open in Meetings`}><strong>{m.title}</strong><span className="tf-home__muted">{m.invitee.name} · {m.place === 'in-person' ? <MapPin size={12} aria-hidden /> : <Video size={12} aria-hidden />} {m.placeLabel}</span></button>
+                    {live && m.place !== 'in-person' && <Button size="sm" variant="primary" aria-label={`Copy the ${m.placeLabel} link`} onPress={() => { const url = `https://meet.google.com/${m.id.slice(-3)}-tfx-${m.id.slice(0, 4)}`; void navigator.clipboard.writeText(url).then(() => toast({ message: `${m.placeLabel} link copied. Paste it in your browser.`, tone: 'success' }), () => toast({ message: `Join at ${url}` })); }}>Copy link</Button>}
                     {live && <span className="tf-home__now">Now</span>}
                   </li>
                 );

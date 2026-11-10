@@ -27,7 +27,14 @@ const i16 = { size: 16, strokeWidth: 1.75 } as const;
 const ago = (d: Date) => { const m = Math.round((Date.now() - d.getTime()) / 60_000); return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 const statusOf = (f: AppForm) => (f.status === 'paused' ? 'closed' : f.status === 'live' ? 'live' : 'draft') as 'draft' | 'live' | 'closed';
 /** The settings a visitor sees besides the questions. */
-const configOf = (f: AppForm) => JSON.stringify({ name: f.name, mode: f.mode, after: f.after });
+const configOf = (f: AppForm) => JSON.stringify({ name: f.name, mode: f.mode, after: f.after, subtitle: f.subtitle, logic: f.logic, mapping: f.mapping });
+/** What visitors see now: the published questions and settings, or the draft before the first publish. */
+const liveView = (f: AppForm): Pick<AppForm, 'name' | 'mode' | 'after' | 'subtitle' | 'logic' | 'mapping' | 'questions'> => {
+  const cfg = f.liveConfig ? (JSON.parse(f.liveConfig) as Partial<AppForm>) : {};
+  return { name: cfg.name ?? f.name, mode: cfg.mode ?? f.mode, after: cfg.after ?? f.after, subtitle: cfg.subtitle, logic: cfg.logic, mapping: cfg.mapping ?? f.mapping, questions: f.live ?? f.questions };
+};
+/** The People attribute a question fills when nobody picked one: email, phone, name and job title are guessed from the question. */
+export const guessAttr = (q: FormQuestion) => (q.kind === 'email' ? 'email' : q.kind === 'phone' ? 'phone' : q.kind === 'short' && /name/i.test(q.title) ? 'name' : q.kind === 'short' && /title|role/i.test(q.title) ? 'title' : 'none');
 const edited = (f: AppForm) => f.status !== 'draft' && (JSON.stringify(f.questions) !== JSON.stringify(f.live) || (f.liveConfig !== undefined && f.liveConfig !== configOf(f)));
 /** Copies text, and says honestly whether it worked. */
 const copyText = (text: string) => navigator.clipboard.writeText(text).then(() => true, () => false);
@@ -111,32 +118,41 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
   const url = `timefix.com/f/${form.slug}`;
   const copy = () => { void copyText(`https://${url}`).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. The link is ${url}`, tone: 'danger' })); };
   const empty = form.questions.length === 0;
+  const slugTaken = state.forms.some((f) => f.id !== form.id && f.slug === form.slug);
   const publish = () => {
     if (empty) { setTab('questions'); toast({ message: 'Add a question first. A form needs at least one.', tone: 'danger' }); return; }
+    if (slugTaken) { setTab('settings'); toast({ message: 'Another form uses this link. Change it in Settings first.', tone: 'danger' }); return; }
     const first = form.status === 'draft'; set({ status: form.status === 'paused' ? 'paused' : 'live', live: form.questions, liveConfig: configOf(form) });
-    toast({ message: first ? 'Your form is live. Share the link.' : 'Published. Visitors see the new version.', tone: 'success', action: first ? { label: 'Copy link', onAction: copy } : undefined });
+    toast({ message: first ? 'Your form is live. Share the link.' : form.status === 'paused' ? 'Published. Visitors see it when you resume answers.' : 'Published. Visitors see the new version.', tone: 'success', action: first ? { label: 'Copy link', onAction: copy } : undefined });
   };
-  const questions = form.live ?? form.questions;
-  /** Name and email from the mapped questions first, then the usual guess. */
+  const shownToVisitors = liveView(form);
+  const questions = shownToVisitors.questions;
+  /** Each question's attribute: the one picked in Settings, else the guess. "Nothing" means the answer stays on the form only. */
+  const attrOf = (q: FormQuestion) => (shownToVisitors.mapping ?? {})[q.id] ?? guessAttr(q);
+  /** Name and email from the questions mapped to them. */
   const who = (r: FormResponse) => {
-    const m = form.mapping ?? {}; const by = (attr: string) => Object.entries(m).find(([, a]) => a === attr)?.[0];
-    const guess = formWho(questions, r.answers);
-    return { name: (by('name') && r.answers[by('name') ?? '']) || guess.name, email: (by('email') && r.answers[by('email') ?? '']) || guess.email };
+    const byAttr = (attr: string) => questions.find((q) => attrOf(q) === attr);
+    const n = byAttr('name'); const e = byAttr('email');
+    return { name: (n && r.answers[n.id]?.trim()) || '', email: (e && r.answers[e.id]?.trim()) || '' };
   };
   /** The other mapped answers, as fields on the person. */
   const mappedFields = (r: FormResponse) => {
     const out: Record<string, string> = {}; const extra: Record<string, string> = {};
-    for (const [qid, attr] of Object.entries(form.mapping ?? {})) { const v = r.answers[qid]; if (!v || attr === 'name' || attr === 'email' || attr === 'none') continue; if (attr === 'title' || attr === 'phone') out[attr] = v; else extra[attr] = v; }
+    for (const q of questions) { const attr = attrOf(q); const v = r.answers[q.id]; if (!v || attr === 'name' || attr === 'email' || attr === 'none') continue; if (attr === 'title' || attr === 'phone') out[attr] = v; else extra[attr] = v; }
     return { out, extra };
   };
   /** Files a response under People: the person with that email if there is one, else a new person. Never a second copy. */
-  const file = (r: FormResponse, quiet = false): string | undefined => {
+  const file = (r: FormResponse, quiet = false, madeNow?: Map<string, string>): string | undefined => {
     const w = who(r); if (!w.name && !w.email) { if (!quiet) toast({ message: 'This response has no name or email to file under.', tone: 'danger' }); return undefined; }
+    // Several answers filed at once: someone made a moment ago counts as already in People.
+    const already = w.email ? madeNow?.get(w.email.toLowerCase()) : undefined;
+    if (already) return already;
     const match = w.email ? state.people.find((p) => p.email.toLowerCase() === w.email.toLowerCase()) : undefined;
     const id = match?.id ?? newId('p');
     const { out, extra } = mappedFields(r);
     if (match) dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: { tags: [...new Set([...match.tags, form.name])], ...out, ...(Object.keys(extra).length ? { extra: { ...(match.extra ?? {}), ...extra } } : {}) } }] });
-    else dispatch({ type: 'person/set', person: { id, name: w.name || w.email, email: w.email, title: out.title ?? '', phone: out.phone, owner: form.owner, tags: [form.name], created: new Date(), extra: Object.keys(extra).length ? extra : undefined } });
+    else { if (w.email) madeNow?.set(w.email.toLowerCase(), id); }
+    if (!match) dispatch({ type: 'person/set', person: { id, name: w.name || w.email, email: w.email, title: out.title ?? '', phone: out.phone, owner: form.owner, tags: [form.name], created: new Date(), extra: Object.keys(extra).length ? extra : undefined } });
     dispatch({ type: 'activity/add', activity: { id: newId('a'), record: { object: 'people', id }, kind: 'form', actor: w.name || w.email, text: `sent ${form.name}`, at: r.at } });
     if (!quiet) toast({ message: match ? `Filed under ${match.name}, who was already in People` : `${w.name || w.email} added to People`, tone: 'success', action: { label: 'Open', onAction: () => onOpenPerson(id) } });
     return id;
@@ -148,14 +164,14 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
   const addToPeople = (r: FormResponse) => { const id = file(r); if (id) setResp({ ...r, personId: id }); };
   const finishes = form.responses.filter((r) => !r.spam).length;
   const live = form.status === 'live';
-  if (guest && toBooking) return <BookingCountdown name={toBooking.name} onGo={() => { const w = toBooking; setToBooking(undefined); setGuest(false); onBookGuest?.(w); }} onStay={() => setToBooking(undefined)} />;
+  if (guest && toBooking) return <BookingCountdown name={toBooking.name} onGo={() => { const w = toBooking; setToBooking(undefined); setGuest(false); onBookGuest?.(w); }} onStay={() => { setToBooking(undefined); setGuest(false); }} />;
   if (guest) {
     return (
       <div className="tf-forms__guest">
         <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setGuest(false)}>Back to the form</Button><span className="tf-rec__muted">{url}</span>
           {!live && <Tag size="sm" hue="orange">Preview · answers aren’t saved</Tag>}</div>
         {form.status === 'paused' ? <EmptyState icon={<Pause size={20} strokeWidth={1.75} />} title="This form is closed" description={`${form.owner.split(' ')[0]} isn't taking answers right now.`} /> : (
-          <HostedForm title={form.name} description={form.subtitle} logic={form.mode === 'one' ? form.logic : undefined} questions={live ? questions : form.questions} mode={form.mode} thanks={{ title: 'Thanks, we got it.', line: form.after.message }}
+          <HostedForm title={live ? shownToVisitors.name : form.name} description={live ? shownToVisitors.subtitle : form.subtitle} logic={(live ? shownToVisitors.mode : form.mode) === 'one' ? (live ? shownToVisitors.logic : form.logic) : undefined} questions={live ? questions : form.questions} mode={live ? shownToVisitors.mode : form.mode} thanks={{ title: 'Thanks, we got it.', line: form.after.message }}
             onSubmit={(answers) => new Promise<void>((resolve) => {
               const flat = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' || typeof v === 'number' ? String(v) : Array.isArray(v) ? v.join(', ') : '']));
               window.setTimeout(() => {
@@ -213,7 +229,7 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
               <SegmentedControl aria-label="Layout" selectedKey={form.mode} onSelectionChange={(k) => set({ mode: k === 'page' ? 'page' : 'one' })} items={[{ id: 'one', label: 'One question at a time' }, { id: 'page', label: 'Classic: all on one page' }]} /></div>
             <TextArea label="Subtitle" aside="Optional" rows={2} value={form.subtitle ?? ''} onChange={(subtitle) => set({ subtitle: subtitle || undefined })} description="A line under the title, like what it’s for or how long it takes." />
             <TextField label="Link" value={form.slug} onChange={(v) => set({ slug: v.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} onBlur={() => { const clean = form.slug.replace(/-+/g, '-').replace(/^-|-$/g, ''); if (clean !== form.slug || !clean) set({ slug: clean || `form-${form.id.slice(-4)}` }); }}
-              isInvalid={state.forms.some((f) => f.id !== form.id && f.slug === form.slug)} errorMessage={state.forms.some((f) => f.id !== form.id && f.slug === form.slug) ? 'Another form uses this link' : undefined} description="Old links keep working when you change it." />
+              isInvalid={state.forms.some((f) => f.id !== form.id && f.slug === form.slug)} errorMessage={state.forms.some((f) => f.id !== form.id && f.slug === form.slug) ? 'Another form uses this link' : undefined} description="The address of the form. Change it before you share it." />
             <Select label="Save answers to" value={form.saveTo} onChange={(v) => set({ saveTo: v === 'none' ? 'none' : 'people' })}
               items={[{ id: 'people', label: 'People', description: 'Matched by email; new people are added' }, { id: 'none', label: 'Keep answers only' }]} />
             {form.saveTo === 'people' && <MappingEditor form={form} state={state} onChange={(mapping) => set({ mapping })} />}
@@ -246,7 +262,14 @@ function FormEditor({ state, form, dispatch, onBack, onOpenPerson, onBookGuest, 
             items={[{ id: 'in', label: `Responses · ${finishes}` }, { id: 'spam', label: `Spam · ${form.responses.length - finishes}` }]} />
             <span className="tf-rec__spacer" />{form.responses.length > 3 && <SearchField label="Search answers" placeholder="Search answers" size="sm" value={respFind} onChange={setRespFind} />}</div>
           {(() => { const unfiled = form.responses.filter((r) => !r.spam && !r.personId); return form.saveTo === 'people' && !showSpam && unfiled.length > 0 ? (
-            <Callout tone="info" action={{ label: `File ${unfiled.length}`, onPress: () => { const ids = unfiled.map((r) => ({ id: r.id, personId: file(r, true) })); patchResponses((rs) => rs.map((x) => { const f = ids.find((y) => y.id === x.id); return f?.personId ? { ...x, personId: f.personId } : x; })); toast({ message: `${ids.filter((x) => x.personId).length} earlier ${ids.length === 1 ? 'answer' : 'answers'} filed in People`, tone: 'success' }); } }}>
+            <Callout tone="info" action={{ label: `File ${unfiled.length}`, onPress: () => {
+              const madeNow = new Map<string, string>(); const before = new Set(state.people.map((p) => p.id));
+              const ids = unfiled.map((r) => ({ id: r.id, personId: file(r, true, madeNow) })); const filed = ids.filter((x) => x.personId);
+              if (filed.length === 0) { toast({ message: 'None of these answers has a name or email to file under. Map a question to Name or Email in Settings.' }); return; }
+              patchResponses((rs) => rs.map((x) => { const f = ids.find((y) => y.id === x.id); return f?.personId ? { ...x, personId: f.personId } : x; }));
+              const made = [...new Set(filed.map((x) => x.personId).filter((pid): pid is string => pid !== undefined && !before.has(pid)))];
+              toast({ message: `${filed.length} earlier ${filed.length === 1 ? 'answer' : 'answers'} filed in People${made.length ? ` (${made.length} new)` : ''}`, tone: 'success', action: { label: 'Undo', onAction: () => { patchResponses((rs) => rs.map((x) => (filed.some((y) => y.id === x.id) ? { ...x, personId: undefined } : x))); if (made.length) dispatch({ type: 'records/drop', object: 'people', ids: made }); } } });
+            } }}>
               {unfiled.length === 1 ? '1 earlier answer isn’t in People yet.' : `${unfiled.length} earlier answers aren’t in People yet.`}</Callout>) : null; })()}
           {responses.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title={showSpam ? 'No spam' : 'No responses yet'} description={showSpam ? 'Bot answers are kept here, out of your way.' : 'Share the link; answers show up here as they arrive.'} /> : (
             <div className="tf-forms__resp">
@@ -322,7 +345,7 @@ function MappingEditor({ form, state, onChange }: { readonly form: AppForm; read
   const people = state.objects.find((o) => o.id === 'people');
   const attrs = [{ id: 'none', label: 'Nothing (answer only)' }, { id: 'name', label: 'Name' }, { id: 'email', label: 'Email' }, { id: 'phone', label: 'Phone' }, { id: 'title', label: 'Job title' },
     ...(people?.attributes ?? []).filter((a) => !['name', 'email', 'phone', 'title', 'company', 'tags', 'owner', 'created'].includes(a.id)).map((a) => ({ id: a.id, label: a.name }))];
-  const guess = (q: FormQuestion) => (q.kind === 'email' ? 'email' : q.kind === 'phone' ? 'phone' : q.kind === 'short' && /name/i.test(q.title) ? 'name' : q.kind === 'short' && /title|role/i.test(q.title) ? 'title' : 'none');
+  const guess = guessAttr;
   const m = form.mapping ?? {};
   return (
     <div className="tf-bkf__group"><span className="tf-bkf__label">Each answer fills</span>
@@ -349,7 +372,9 @@ function LogicEditor({ form, onChange }: { readonly form: AppForm; readonly onCh
           <span>is</span><Select label="Answer" isLabelHidden className="tf-you__select" value={r.is} onChange={(v) => { if (v) onChange(rules.map((x) => (x.id === r.id ? { ...x, is: v } : x))); }} items={(q?.options ?? []).map((o) => ({ id: o, label: o }))} />
           <span>go to</span><Select label="Go to" isLabelHidden className="tf-you__select" value={r.goto} onChange={(v) => { if (v) onChange(rules.map((x) => (x.id === r.id ? { ...x, goto: v } : x))); }} items={[...after.map((x) => ({ id: x.id, label: x.title })), { id: 'end', label: 'The end (send)' }]} />
           <Button size="sm" variant="ghost" onPress={() => onChange(rules.filter((x) => x.id !== r.id))}>Remove</Button>
-          <span className="tf-rec__muted tf-forms__rule-say">If “{title(r.when)}” is {r.is}, they go to {title(r.goto)}.</span>
+          {!q || !(q.options ?? []).includes(r.is) || (r.goto !== 'end' && !after.some((x) => x.id === r.goto))
+            ? <span className="tf-forms__rule-say tf-forms__rule-bad" role="alert">This rule no longer matches the questions (one was renamed, moved or deleted). Pick again or remove it.</span>
+            : <span className="tf-rec__muted tf-forms__rule-say">If “{title(r.when)}” is {r.is}, they go to {title(r.goto)}.</span>}
         </li>); })}</ul>
       <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={add}>Add a rule</Button>
     </div>

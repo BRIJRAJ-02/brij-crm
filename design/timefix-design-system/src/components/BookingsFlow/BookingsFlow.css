@@ -766,3 +766,4 @@
   .tf-bkf-dishform__top { grid-template-columns: minmax(0, 1fr); }
 }
 .tf-bkf-venue-sum__when { color: var(--text); font: 500 14px/20px var(--font-sans); }
+.tf-bkf__error { margin: 0; color: var(--danger); font: 500 13px/18px var(--font-sans); }

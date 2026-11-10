@@ -24,7 +24,7 @@ import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { companyPairs, duplicatePairs } from './duplicates.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
 import type { Attribute, AttributeValue } from '../AttributeField/AttributeField.tsx';
-import { BUILT_IN_ATTRIBUTES, STAGES, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
+import { BUILT_IN_ATTRIBUTES, STAGES, liveEntries, inr, newId, type AppAction, type AppState, type Company, type Deal, type ObjectId, type Person, type SavedView, type Stage } from './data.ts';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
 const i16 = { size: 16, strokeWidth: 1.75 } as const;
@@ -106,7 +106,8 @@ export function customColumns(state: AppState, object: string): ReadonlyArray<Gr
   }));
 }
 /** The signed-in person can change records (not when previewing as a role that can't). */
-export const canEditRecords = (state: AppState) => !state.previewRole || (state.prefs.grants[state.previewRole.toLowerCase()] ?? []).includes('records.edit');
+/** Records can be changed, except while previewing as another role: a preview never changes anything. */
+export const canEditRecords = (state: AppState) => !state.previewRole;
 
 /** One object's records. */
 export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDuplicates, startNew, onAttributes }: RecordsScreenProps) {
@@ -127,20 +128,20 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
   const [peek, setPeek] = useState<string>();
   const [creating, setCreating] = useState(startNew !== undefined);
   const [newStage, setNewStage] = useState<Stage>();
+  const [newOwner, setNewOwner] = useState<string>();
   const [naming, setNaming] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(false);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
-  // A short skeleton on arrival, the way the real list loads from the server.
-  const [loading, setLoading] = useState(true);
-  useEffect(() => { const t = window.setTimeout(() => setLoading(false), 350); return () => window.clearTimeout(t); }, [object]);
   /** Cell edits made here, newest last: ⌘Z takes back the latest one. */
   const edits = useRef<Array<{ readonly id: string; readonly patch: Readonly<Record<string, unknown>> }>>([]);
   const all = useMemo(() => def.rows(state), [state, object]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Duplicate pairs only change when the people or companies do, not on every keystroke.
+  const pairCount = useMemo(() => (!onDuplicates ? 0 : object === 'people' ? duplicatePairs(state, new Set(state.notDupes)).length : object === 'companies' ? companyPairs(state, new Set(state.notDupes)).length : 0), [state.people, state.companies, state.notDupes, object, onDuplicates]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey || document.querySelector('[role="dialog"][aria-modal="true"], .tf-scrim')) return;
       const t = e.target as HTMLElement | null; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
       const last = edits.current.pop(); if (!last) return;
       e.preventDefault(); dispatch({ type: 'records/fields', object, changes: [last] }); toast({ message: 'Edit undone' });
@@ -167,22 +168,22 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     options: c.type === 'person' ? state.members.map((m) => ({ id: m.name, label: m.name })) : c.options?.map((o) => ({ id: o.id, label: o.label, hue: o.hue, status: o.status })) }));
   const viewColumns: ReadonlyArray<ViewColumn> = def.columns.map((c) => ({ id: c.id, name: c.name, isShown: !view.hidden.includes(c.id), isLocked: c.id === 'name' }));
   /** One value as the record keeps it: dates as dates, amounts as numbers. */
-  const cellValue = (col: string, value: string): unknown => (col === 'amount' ? Number(value) || 0 : col === 'close' ? (dayOf(value) ?? new Date()) : value);
+  const cellValue = (col: string, value: string, rowId = ''): unknown => (col === 'amount' ? Number(value) || 0 : col === 'close' ? (dayOf(value) ?? recordOf(rowId)?.close) : value);
   const recordOf = (rowId: string): Readonly<Record<string, unknown>> | undefined => (object === 'people' ? state.people : object === 'companies' ? state.companies : state.deals).find((x) => x.id === rowId) as Readonly<Record<string, unknown>> | undefined;
   const isExtra = (col: string) => extras.some((c) => c.id === col);
   const setCell = (rowId: string, col: string, value: string) => {
     const rec = recordOf(rowId); if (!rec || !canEdit) return;
     if (col === 'email' && value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) { toast({ message: `“${value}” isn’t an email address. Nothing changed.`, tone: 'danger' }); return; }
     if (col === 'name' && !value.trim()) { toast({ message: 'A name can’t be empty. Nothing changed.', tone: 'danger' }); return; }
-    const patch = isExtra(col) ? { extra: { ...((rec.extra as Readonly<Record<string, string>> | undefined) ?? {}), [col]: value } } : { [col]: cellValue(col, value) };
+    const patch = isExtra(col) ? { extra: { ...((rec.extra as Readonly<Record<string, string>> | undefined) ?? {}), [col]: value } } : { [col]: cellValue(col, value, rowId) };
     edits.current.push({ id: rowId, patch: Object.fromEntries(Object.keys(patch).map((k) => [k, rec[k]])) });
     dispatch({ type: 'records/fields', object, changes: [{ id: rowId, patch }] });
   };
   /** Sets one field on many records; Undo puts back only that field, so later edits stay. */
   const setMany = (rowIds: ReadonlyArray<string>, col: string, value: unknown, message: string) => {
     const key = isExtra(col) ? 'extra' : col;
-    const was = rowIds.map((id) => ({ id, patch: { [key]: recordOf(id)?.[key] } }));
-    dispatch({ type: 'records/fields', object, changes: rowIds.map((id) => ({ id, patch: isExtra(col) ? { extra: { ...((recordOf(id)?.extra as Readonly<Record<string, string>> | undefined) ?? {}), [col]: String(value ?? '') } } : { [col]: value } })) });
+    const was = rowIds.map((id) => ({ id, patch: isExtra(col) ? { extra: { [col]: ((recordOf(id)?.extra as Readonly<Record<string, string>> | undefined) ?? {})[col] ?? '' } } : { [key]: recordOf(id)?.[key] } }));
+    dispatch({ type: 'records/fields', object, changes: rowIds.map((id) => ({ id, patch: isExtra(col) ? { extra: { [col]: String(value ?? '') } } : { [col]: value } })) });
     toast({ message, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: was }) } });
   };
   const exportCsv = async (only?: ReadonlyArray<string>, everyColumn = false) => {
@@ -201,7 +202,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
     cards: sorted.filter((r) => r.values[g.field] === g.id).map((r) => { const d = state.deals.find((x) => x.id === r.id); return { id: r.id, title: String(r.values.name), description: [r.values.company, Number(r.values.amount) ? inr(Number(r.values.amount)) : ''].filter(Boolean).join(' · '), people: d ? [d.owner] : [], date: d?.close }; }) }));
   const peekIndex = peek ? sorted.findIndex((r) => r.id === peek) : -1;
   const peekGone = peek !== undefined && !all.some((r) => r.id === peek);
-  const pairs = !onDuplicates ? 0 : object === 'people' ? duplicatePairs(state, new Set(state.notDupes)).length : object === 'companies' ? companyPairs(state, new Set(state.notDupes)).length : 0;
+  const pairs = pairCount;
   const shownRows = sorted.map((r) => (fresh.has(r.id) ? { ...r, isNew: true } : r));
   const total = object === 'deals' ? sorted.reduce((n, r) => n + Number(r.values.amount ?? 0), 0) : 0;
   const summary = `${sorted.length === all.length ? `${sorted.length}` : `${sorted.length} of ${all.length}`} ${sorted.length === 1 ? def.one : def.many}${object === 'deals' ? ` · ${inr(total)} total · ${inr(sorted.length ? Math.round(total / sorted.length) : 0)} average` : ''}`;
@@ -270,11 +271,11 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             onToggleCollapse={(id) => setFolded((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
             onMove={(m) => { if (!canEdit) return; const field = byOwner ? 'owner' : 'stage'; const to = m.toColumnId; const moved = m.cardIds.filter((id) => (state.deals.find((x) => x.id === id) as Readonly<Record<string, unknown>> | undefined)?.[field] !== to); if (moved.length === 0) return;
               setMany(moved, field, to, byOwner ? `${moved.length === 1 ? 'Deal' : `${moved.length} deals`} now owned by ${to}` : moved.length === 1 ? `Moved to ${to}` : `${moved.length} deals moved to ${to}`); }}
-            onAdd={canEdit ? (columnId) => { if (!byOwner) setNewStage(columnId as Stage); setCreating(true); } : undefined} />
+            onAdd={canEdit ? (columnId) => { if (byOwner) setNewOwner(columnId); else setNewStage(columnId as Stage); setCreating(true); } : undefined} />
         </div>
       ) : (
         <div className="tf-rec__grid">
-          <DataGrid label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} isLoading={loading} summary={summary}
+          <DataGrid label={def.many} columns={columns} rows={shownRows} selectedKeys={selected} onSelectionChange={setSelected} summary={summary}
             sortDescriptor={view.sorts[0] ? { column: view.sorts[0].field, direction: view.sorts[0].direction } : undefined}
             onSortChange={(d: SortDescriptor) => edit({ sorts: [{ field: String(d.column), direction: d.direction }] })}
             onCellChange={canEdit ? setCell : undefined} onRowAction={setPeek} onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${def.one}`}
@@ -282,20 +283,21 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
         </div>
       )}
       {peek !== undefined && !peekGone && <RecordPanel isOpen onClose={() => setPeek(undefined)} objectName={def.one[0]?.toUpperCase() + def.one.slice(1)} recordKey={peek ?? ''}
-        label={String(sorted[peekIndex]?.values.name ?? '')} onExpand={() => { if (peek) onOpen(object, peek); }}
+        label={String((sorted[peekIndex] ?? all.find((r) => r.id === peek))?.values.name ?? '')} onExpand={() => { if (peek) onOpen(object, peek); }}
         position={peekIndex >= 0 ? { index: peekIndex + 1, total: sorted.length, onPrevious: () => setPeek(sorted[Math.max(0, peekIndex - 1)]?.id), onNext: () => setPeek(sorted[Math.min(sorted.length - 1, peekIndex + 1)]?.id) } : undefined}>
         {peek && <PeekBody state={state} object={object} id={peek} onCell={(c, v) => setCell(peek, c, v)} onOpen={onOpen} />}
       </RecordPanel>}
       </div>
-      <BulkActionBar count={canEdit ? ids.length : 0} onClear={() => setSelected(new Set())}>
-        <BarButton icon={<Pencil {...i16} />} onPress={() => setBulkEdit(true)}>Edit field</BarButton>
-        <MenuTrigger>
+      <BulkActionBar count={ids.length} onClear={() => setSelected(new Set())}>
+        {!canEdit && <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>}
+        {canEdit && <BarButton icon={<Pencil {...i16} />} onPress={() => setBulkEdit(true)}>Edit field</BarButton>}
+        {canEdit && <MenuTrigger>
           <BarButton icon={<UserRound {...i16} />}>Owner</BarButton>
           <Menu aria-label="Set owner" onAction={(k) => {
             setMany(ids, 'owner', String(k), `${ids.length} ${ids.length === 1 ? def.one : def.many} now owned by ${String(k)}`); setSelected(new Set()); refocus();
           }}>{state.members.map((m) => <MenuItem key={m.id} id={m.name}>{m.name}</MenuItem>)}</Menu>
-        </MenuTrigger>
-        <MenuTrigger>
+        </MenuTrigger>}
+        {canEdit && <MenuTrigger>
           <BarButton icon={<ListPlus {...i16} />}>Add to list</BarButton>
           <Menu aria-label="Add to list" onAction={(k) => {
             const l = state.lists.find((x) => x.id === String(k)); if (!l) return;
@@ -307,23 +309,23 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
             setSelected(new Set());
           }}>
             {state.lists.filter((l) => l.object === object && !l.archived).length === 0 ? <MenuItem id="none" isDisabled>No lists of {def.many} yet</MenuItem>
-              : state.lists.filter((l) => l.object === object && !l.archived).map((l) => <MenuItem key={l.id} id={l.id} description={`${l.entries.length} on it`}>{l.name}</MenuItem>)}
+              : state.lists.filter((l) => l.object === object && !l.archived).map((l) => <MenuItem key={l.id} id={l.id} description={`${liveEntries(state, l).length} on it`}>{l.name}</MenuItem>)}
           </Menu>
-        </MenuTrigger>
-        <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>
-        <BarButton icon={<Trash2 {...i16} />} onPress={() => { const gone = [...ids]; dispatch({ type: 'records/remove', object, ids: gone }); toast({ message: `${gone.length} ${gone.length === 1 ? def.one : def.many} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: gone }) } }); setSelected(new Set()); refocus(); }}>Delete</BarButton>
+        </MenuTrigger>}
+        {canEdit && <BarButton icon={<Download {...i16} />} onPress={() => { void exportCsv(ids); }}>Export</BarButton>}
+        {canEdit && <BarButton icon={<Trash2 {...i16} />} onPress={() => { const gone = [...ids]; dispatch({ type: 'records/remove', object, ids: gone }); toast({ message: `${gone.length} ${gone.length === 1 ? def.one : def.many} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: gone }) } }); setSelected(new Set()); refocus(); }}>Delete</BarButton>}
       </BulkActionBar>
       {creating && <NewRecord state={state} object={object} one={def.one} initialName={startNew} onClose={() => { setCreating(false); setNewStage(undefined); }} onCreate={(name, extra, more) => {
         const id = newId(object.slice(0, 1));
         if (object === 'people') dispatch({ type: 'person/set', person: { id, name, email: extra.email ?? '', title: extra.title ?? '', companyId: extra.company || undefined, owner: state.me, tags: [], created: new Date() } });
-        else if (object === 'companies') dispatch({ type: 'company/set', company: { id, name, domain: extra.domain ?? '', industry: 'Software', size: '', city: '', owner: state.me, created: new Date() } });
-        else dispatch({ type: 'deal/set', deal: { id, name, companyId: extra.company ?? '', stage: newStage ?? 'Lead', amount: Number(extra.amount) || 0, owner: state.me, close: new Date(Date.now() + 30 * 86_400_000), created: new Date() } });
+        else if (object === 'companies') dispatch({ type: 'company/set', company: { id, name, domain: extra.domain ?? '', industry: '', size: '', city: '', owner: state.me, created: new Date() } });
+        else dispatch({ type: 'deal/set', deal: { id, name, companyId: extra.company ?? '', stage: newStage ?? 'Lead', amount: Number(extra.amount) || 0, owner: newOwner ?? state.me, close: new Date(Date.now() + 30 * 86_400_000), created: new Date() } });
         setFresh((f) => new Set(f).add(id));
         toast({ message: `${name} created`, tone: 'success', action: { label: 'Open', onAction: () => onOpen(object, id) } });
-        if (!more) { setCreating(false); setNewStage(undefined); }
+        if (!more) { setCreating(false); setNewStage(undefined); setNewOwner(undefined); }
       }} />}
       {renaming && <RenameDialog title="Rename view" label="Name" value={view.name} onClose={() => setRenaming(false)} onSave={(name) => { const next = { ...(saved ?? view), name }; dispatch({ type: 'views/set', object, views: views.map((v) => (v.id === view.id ? next : v)) }); if (draft) setDraft({ ...draft, name }); setRenaming(false); toast({ message: 'View renamed', tone: 'success' }); }} />}
-      {bulkEdit && <BulkEdit columns={def.columns.filter((c) => !c.isReadOnly && c.id !== 'name')} count={ids.length} members={state.members.map((m) => m.name)} onClose={() => setBulkEdit(false)}
+      {bulkEdit && <BulkEdit columns={def.columns.filter((c) => !c.isReadOnly && !['name', 'email', 'domain'].includes(c.id))} count={ids.length} members={state.members.map((m) => m.name)} onClose={() => setBulkEdit(false)}
         onApply={(col, value) => { const c = def.columns.find((x) => x.id === col); setMany(ids, col, col === 'amount' ? Number(value) || 0 : value, `${c?.name ?? 'Field'} ${value === '' ? 'cleared' : `set to ${c?.options?.find((o) => o.id === value)?.label ?? value}`} on ${ids.length} ${ids.length === 1 ? def.one : def.many}`); setBulkEdit(false); setSelected(new Set()); refocus(); }} />}
       {naming && <ViewNamer onClose={() => setNaming(false)} onSave={(name, isPrivate) => {
         const v: SavedView = { ...view, id: newId('v'), name, isPrivate };
@@ -335,7 +337,7 @@ export function RecordsScreen({ state, dispatch, object, onOpen, onImport, onDup
 
 /** The record beside the list: its fields, editable, and what it's linked to. */
 function PeekBody({ state, object, id, onCell, onOpen }: { readonly state: AppState; readonly object: ObjectId; readonly id: string; readonly onCell: (c: string, v: string) => void; readonly onOpen: (o: ObjectId, id: string) => void }) {
-  const owners = state.members.map((m) => ({ id: m.id, name: m.name }));
+  const owners = state.members.map((m) => ({ id: m.name, name: m.name }));
   const row = (a: Attribute, v: AttributeValue, col: string) => <AttributeRow key={a.id} attribute={a} value={v} onChange={(x) => onCell(col, typeof x === 'object' && x !== null && 'name' in x ? String((x as { name: string }).name) : String(x ?? ''))} />;
   const ownerAttr: Attribute = { id: 'owner', name: 'Owner', type: 'actor', candidates: owners };
   if (object === 'people') {

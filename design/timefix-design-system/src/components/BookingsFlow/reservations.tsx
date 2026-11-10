@@ -78,7 +78,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
   const seatedNow = live.filter((m) => stageOf(m, now, holdLate) === 'seated');
   const wait = (state.waitlist ?? []).filter((w) => w.day === isoDay(day));
   const services = servicesOn(state, day);
-  const tableName = (ids: ReadonlyArray<string> | undefined) => (ids ?? []).map((id) => state.tables?.find((t) => t.id === id)?.name ?? '').join(' + ') || 'No table';
+  const tableName = (ids: ReadonlyArray<string> | undefined) => (ids ?? []).map((id) => state.tables?.find((t) => t.id === id)?.name ?? '').filter(Boolean).join(' + ') || 'No table';
 
   const update = (m: BookedMeeting, text: string) => dispatch({ type: 'meeting/update', meeting: { ...m, activity: [...m.activity, { id: nextId('a'), text, at: new Date() }] } });
   const withUndo = (before: BookedMeeting, after: BookedMeeting, text: string, message: string) => {
@@ -215,7 +215,7 @@ export function ReservationsTab({ state, dispatch, fresh, openId, onOpened, onCa
                       if (k === 'notify') { dispatch({ type: 'waitlist/set', waitlist: list.map((x) => (x.id === w.id ? { ...x, notified: true } : x)) }); toast({ message: w.phone ? `Texted ${first(w.name)} at ${w.phone}: your table is ready` : `Marked as told. ${first(w.name)} left no phone, so call their name.`, tone: 'success' }); }
                       else if (k === 'remove') { dispatch({ type: 'waitlist/set', waitlist: list.filter((x) => x.id !== w.id) }); toast({ message: `${first(w.name)} left the waitlist`, action: { label: 'Undo', onAction: () => dispatch({ type: 'waitlist/set', waitlist: list }) } }); }
                     }}>
-                      <MenuItem id="notify" icon={<Clock {...i16} />} description={w.phone ?? 'No phone: call their name'}>{w.phone ? 'Text: table ready' : 'Table ready (told in person)'}</MenuItem>
+                      <MenuItem id="notify" icon={<Clock {...i16} />} description={w.phone || 'No phone: call their name'}>{w.phone ? 'Text: table ready' : 'Table ready (told in person)'}</MenuItem>
                       <MenuItem id="remove" icon={<X {...i16} />}>Remove</MenuItem>
                     </Menu>
                   </MenuTrigger>
@@ -384,7 +384,9 @@ function SeatDialog({ state, page, ask, now, onClose, onSeat }: { readonly state
   const nowMin = minutesOf(now);
   const turn = turnFor(page, party);
   const skip = ask.kind === 'move' ? ask.meeting.id : undefined;
-  const choices = freeChoices(state, party, now, nowMin, turn, skip);
+  // Moving a reservation checks tables at its own time; seating now checks now.
+  const at0 = ask.kind === 'move' ? ask.meeting.start : now;
+  const choices = freeChoices(state, party, at0, minutesOf(at0), ask.kind === 'move' ? Math.round((ask.meeting.end.getTime() - ask.meeting.start.getTime()) / 60_000) : turn, skip);
   const preset = ask.kind === 'walkin' && ask.table && choices.some((c) => c.id === ask.table?.id) ? ask.table.id : undefined;
   const [pick, setPick] = useState<string | undefined>(preset);
   const chosen = choices.find((c) => c.id === pick) ?? choices[0];

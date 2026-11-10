@@ -31,35 +31,47 @@ const copyText = (text: string) => navigator.clipboard.writeText(text).then(() =
 /** Whose address the links live under: the business's handle, or the host's own name on a team. */
 export const handleFor = (state: AppState, bookings: BookingsState | undefined) => bookings?.business?.handle || state.me.split(' ')[0]?.toLowerCase() || 'me';
 
-/** The link page editor: edit beside the phone; Publish keeps it in the workspace. */
+/** The link page editor: edit beside the phone; Publish keeps it in the workspace. Unpublished work is kept in the app, so See it and leaving never lose it. */
 export function LinkPageScreen({ state, dispatch, handle, onBack }: { readonly state: AppState; readonly dispatch: (a: AppAction) => void; readonly handle: string; readonly onBack: () => void }) {
   const { toast } = useToast();
   const live = state.linkPage ?? STARTER;
+  const published = state.linkPage !== undefined || state.setupDone.includes('link');
   const [seeing, setSeeing] = useState(false);
   const [qr, setQr] = useState(false);
   const url = `timefix.com/${handle}`;
   const copy = () => { void copyText(`https://${url}`).then((ok) => toast(ok ? { message: 'Link copied', tone: 'success' } : { message: `Copy didn’t work. Your link is ${url}`, tone: 'danger' })); };
-  if (seeing) {
-    return (
-      <div className="tf-grow__see">
-        <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setSeeing(false)}>Back to editing</Button><span className="tf-rec__muted">{url}</span></div>
-        <LinkPage {...live} booking={demoBooking} />
-      </div>
-    );
-  }
+  /** A visitor joins the list: they're filed in People (matched by email), tagged with the signup's heading. */
+  const signup = (email: string, heading: string) => {
+    const match = state.people.find((p) => p.email.toLowerCase() === email.toLowerCase());
+    if (match) dispatch({ type: 'records/fields', object: 'people', changes: [{ id: match.id, patch: { tags: [...new Set([...match.tags, heading])] } }] });
+    else dispatch({ type: 'person/set', person: { id: newId('p'), name: email.split('@')[0] ?? email, email, title: '', owner: state.me, tags: [heading], created: new Date() } });
+    toast({ message: `${email} joined “${heading}” and is in People`, tone: 'success' });
+  };
   return (
-    <div className="tf-grow">
-      <div className="tf-rec__bar">
-        <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>
-        <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={state.linkPage || state.setupDone.includes('link') ? 'green' : 'gray'}>{state.linkPage || state.setupDone.includes('link') ? 'Live' : 'Not published'}</Tag>
-        <span className="tf-rec__spacer" />
-        <Button variant="ghost" icon={<Copy {...i14} />} onPress={copy}>Copy link</Button>
-        <Button variant="ghost" icon={<QrIcon {...i14} />} onPress={() => setQr(true)}>QR code</Button>
-        <Button variant="secondary" icon={<ExternalLink {...i14} />} onPress={() => setSeeing(true)}>See it</Button>
+    <>
+      {seeing && (
+        <div className="tf-grow__see">
+          <div className="tf-forms__guestbar"><Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setSeeing(false)}>Back to editing</Button><span className="tf-rec__muted">{url}</span>
+            {state.linkDraft && <Tag size="sm" hue="orange">This is the live page; your changes aren’t published yet</Tag>}</div>
+          <LinkPage {...live} booking={demoBooking} onSignup={signup} />
+        </div>
+      )}
+      <div className="tf-grow" hidden={seeing}>
+        <div className="tf-rec__bar">
+          <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>Links</Button>
+          <span className="tf-grow__url tf-num">{url}</span><Tag size="sm" hue={published ? 'green' : 'gray'}>{published ? 'Live' : 'Not published'}</Tag>
+          <span className="tf-rec__spacer" />
+          <Button variant="ghost" icon={<Copy {...i14} />} isDisabled={!published} onPress={copy}>Copy link</Button>
+          <Button variant="ghost" icon={<QrIcon {...i14} />} isDisabled={!published} onPress={() => setQr(true)}>QR code</Button>
+          <Button variant="secondary" icon={<ExternalLink {...i14} />} isDisabled={!published} onPress={() => setSeeing(true)}>See it</Button>
+        </div>
+        <LinkEditor live={live} booking={demoBooking} initialDraft={state.linkDraft} neverPublished={!published}
+          forms={state.forms.map((f) => ({ slug: f.slug, name: f.name, live: f.status === 'live' }))}
+          onDraftChange={(d) => { if (JSON.stringify(d) !== JSON.stringify(state.linkDraft)) dispatch({ type: 'link/draft', page: d }); }}
+          onPublish={(page) => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'link/publish', page }); resolve(); }, 500); })} />
+        {qr && <QrSheet url={url} name="your link page" onClose={() => setQr(false)} />}
       </div>
-      <LinkEditor live={live} booking={demoBooking} onPublish={(page) => new Promise<void>((resolve) => { window.setTimeout(() => { dispatch({ type: 'link/publish', page }); resolve(); }, 500); })} />
-      {qr && <QrSheet url={url} name="your link page" onClose={() => setQr(false)} />}
-    </div>
+    </>
   );
 }
 
@@ -93,7 +105,7 @@ export function LinksScreen({ state, bookings, appsMenu, onLinkPage, onBookingPa
   const rows: ReadonlyArray<{ readonly title: string; readonly rows: ReadonlyArray<ShareRow> }> = [
     { title: 'Your page', rows: business
       ? [{ id: 'home', icon: <Store {...i16} />, name: bookings?.workspace ?? 'Your business page', url: `timefix.com/${handle}`, live: business.published, off: 'Not published', numbers: `${upcoming()} upcoming bookings`, open: () => onBookingPage(undefined, 'profile'), edit: () => onBookings('pages'), editLabel: 'Edit page' }]
-      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: `${(state.linkPage ?? STARTER).blocks.length} links`, open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
+      : [{ id: 'link', icon: <IdCard {...i16} />, name: 'Link page', url: `timefix.com/${handle}`, live: state.linkPage !== undefined || state.setupDone.includes('link'), off: 'Not published', numbers: `${(state.linkPage ?? STARTER).blocks.filter((b) => b.kind === 'link' && !b.hidden && b.href.trim()).length} links`, open: onLinkPage, edit: onLinkPage, editLabel: 'Edit page' }] },
     { title: business ? (business.kind === 'restaurant' ? 'Tables and bookings' : 'Services') : 'Booking pages', rows: (bookings?.pages ?? []).map((p) => ({ id: p.id, icon: <CalendarDays {...i16} />, name: p.name, url: `timefix.com/${handle}/${p.slug}`, live: p.isOn,
       numbers: `${upcoming(p.id)} upcoming`, open: () => onBookingPage(p.id, 'book'), edit: () => onBookings('pages'), editLabel: 'Edit in Bookings' })) },
     ...(bookings?.menu && appsMenu ? [{ title: 'Menu', rows: [{ id: 'menu', icon: <UtensilsCrossed {...i16} />, name: 'Menu', url: `timefix.com/${handle}/menu`, live: true, numbers: `${bookings.menu.dishes.length} dishes`, open: () => onBookingPage(undefined, 'menu'), edit: () => onBookings('menu'), editLabel: 'Edit menu' }] }] : []),
@@ -215,40 +227,36 @@ export function InsightsScreen({ state, dispatch, bookings, startTab, startRepor
           </div>
           <div className="tf-home__stats">
             <StatCard label="Bookings and answers" value={cur.length} delta={delta(cur.length, prev.length)} />
-            <StatCard label="Booked" value={booked} delta={delta(booked, prev.filter((e) => e.what === 'booking').length)} />
+            <StatCard label="Meetings in this period" value={booked} delta={delta(booked, prev.filter((e) => e.what === 'booking').length)} />
             <StatCard label="Form answers" value={answered} delta={delta(answered, prev.filter((e) => e.what === 'form').length)} />
             <StatCard label="Form views" value={formsShown.reduce((n, f) => n + f.views, 0)} delta={{ value: 'all time', direction: 'flat' }} />
           </div>
           <div className="tf-home__grid">
             <ChartCard title={step === 1 ? 'Per day' : `Per ${step} days`}><BarChart label="Bookings and answers over time" points={perDay.map((d, i) => ({ id: String(i), label: d.label, value: d.value }))} emptyText="Nothing came in yet in this period." /></ChartCard>
-            <ChartCard title={funnel.length && (formId || kind === 'forms') ? 'Where people stop' : 'Which pages and forms'}>
+            <ChartCard title={funnel.length && (formId || kind === 'forms') ? 'Where people stop (all time)' : 'Which pages and forms'}>
               {funnel.length && (formId || kind === 'forms') ? <BarList label="From opening to filed" items={funnel} /> : byPage.length ? <BarList label="By page" items={byPage} /> : <p className="tf-rec__muted">Nothing came in yet in this period.</p>}
             </ChartCard>
           </div>
-          <p className="tf-rec__muted">Visits and where people came from show once the pages are live; the prototype counts bookings, answers and form opens.</p>
+          <p className="tf-rec__muted">Counts bookings, form answers and form opens. Page visits and where people came from appear here once your pages have visitors.</p>
         </TabPanel>
         <TabPanel id="reports" className="tf-forms__panel">
           {reports.length === 0 ? <EmptyState icon={<FileText size={20} strokeWidth={1.75} />} title="No reports yet" description="Chart your deals, people or companies, and keep it for the team." action={<Button size="sm" variant="primary" onPress={() => setMaking('new')}>New report</Button>} /> : (
-            <Tabs aria-label="Reports" selectedKey={r?.id} onSelectionChange={setReport} items={reports.map((x) => ({ id: x.id, label: x.name }))}>
-              {reports.map((x) => (
-                <TabPanel key={x.id} id={x.id} className="tf-forms__panel">
-                  <div className="tf-rec__bar">
-                    <span className="tf-rec__muted">{(x.object ?? 'deals') === 'deals' ? 'Deals' : x.object === 'people' ? 'People' : 'Companies'} by {x.group}{x.owner ? `, owned by ${x.owner}` : ''}</span>
-                    <span className="tf-rec__spacer" />
-                    <Button size="sm" variant="ghost" icon={<Pencil {...i14} />} onPress={() => setMaking(x)}>Change</Button>
-                    <Button size="sm" variant="ghost" icon={<Trash2 {...i14} />} onPress={() => { const was = x; dispatch({ type: 'report/remove', id: x.id }); setReport(reports.find((y) => y.id !== x.id)?.id ?? ''); toast({ message: `${was.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'report/set', report: was }); setReport(was.id); } } }); }}>Delete</Button>
-                    <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={() => setMaking('new')}>New report</Button>
-                  </div>
-                  {x.id === r?.id && (points.every((p) => p.value === 0) ? <p className="tf-rec__muted">Nothing to count yet.</p> : (
-                    <div className="tf-home__grid">
-                      <ChartCard title={x.name}><BarChart label={x.name} points={points} /></ChartCard>
-                      <ChartCard title="Share of the total"><DonutChart label={x.name} segments={points.filter((p) => p.value > 0).map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
-                        total={x.measure === 'amount' && (x.object ?? 'deals') === 'deals' ? inr(points.reduce((n, p) => n + p.value, 0)) : String(points.reduce((n, p) => n + p.value, 0))} /></ChartCard>
-                    </div>
-                  ))}
-                </TabPanel>
+            <>
+              <div className="tf-rec__bar">
+                <Select label="Report" isLabelHidden className="tf-rec__view" value={r?.id ?? null} onChange={(v) => { if (v) setReport(v); }} items={reports.map((x) => ({ id: x.id, label: x.name, description: `${(x.object ?? 'deals') === 'deals' ? (x.measure === 'amount' ? 'Deal value' : 'Deals') : x.object === 'people' ? 'People' : 'Companies'} by ${x.group}${x.owner ? `, ${x.owner}'s` : ''}` }))} />
+                <span className="tf-rec__spacer" />
+                {r && <Button size="sm" variant="ghost" icon={<Pencil {...i14} />} onPress={() => setMaking(r)}>Change</Button>}
+                {r && <Button size="sm" variant="ghost" icon={<Trash2 {...i14} />} onPress={() => { const was = r; const at = reports.findIndex((y) => y.id === r.id); dispatch({ type: 'report/remove', id: r.id }); setReport(reports.find((y) => y.id !== r.id)?.id ?? ''); toast({ message: `${was.name} deleted`, action: { label: 'Undo', onAction: () => { dispatch({ type: 'report/set', report: was }); void at; setReport(was.id); } } }); }}>Delete</Button>}
+                <Button size="sm" variant="secondary" icon={<Plus {...i14} />} onPress={() => setMaking('new')}>New report</Button>
+              </div>
+              {r && (points.every((p) => p.value === 0) ? <p className="tf-rec__muted">Nothing to count yet.</p> : (
+                <div className="tf-home__grid">
+                  <ChartCard title={r.name}><BarChart label={r.name} points={points} /></ChartCard>
+                  <ChartCard title="Share of the total"><DonutChart label={r.name} segments={points.filter((p) => p.value > 0).map((p, n) => ({ id: p.id, label: p.label, value: p.value, valueText: p.valueText, hue: (['blue', 'purple', 'green', 'orange', 'sky', 'gray'] as const)[n % 6] ?? 'gray' }))}
+                    total={r.measure === 'amount' && (r.object ?? 'deals') === 'deals' ? inr(points.reduce((n, p) => n + p.value, 0)) : String(points.reduce((n, p) => n + p.value, 0))} /></ChartCard>
+                </div>
               ))}
-            </Tabs>
+            </>
           )}
         </TabPanel>
       </Tabs>

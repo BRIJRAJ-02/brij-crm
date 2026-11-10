@@ -1,6 +1,6 @@
 import { copyText } from '../../lib/copy.ts';
 import type { ReactNode } from 'react';
-import { useEffect, useReducer, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import { I18nProvider, type Key } from 'react-aria-components';
 import { AlertTriangle, BarChart3, Plus, CalendarDays, CalendarRange, Clock, FileText, FlaskConical, Home, UtensilsCrossed, Inbox, Link2, LogOut, PauseCircle, Play, RotateCcw, Route, Settings, User, Users } from 'lucide-react';
 import { AppShell, TabBar, TopBar } from '../AppShell/AppShell.tsx';
@@ -74,6 +74,8 @@ export interface BookingsFlowProps {
   readonly onAddToLinkPage?: (p: { readonly name: string; readonly minutes: number; readonly place: string }) => (() => void) | undefined;
   /** Switches the workspace from outside (the first run's answer); bump `n` to switch again. */
   readonly switchWorkspace?: { readonly id: WorkspaceId; readonly n: number };
+  /** Look but don't change: the app is previewing another role. */
+  readonly isReadOnly?: boolean;
   readonly openGuest?: { readonly prefill?: { readonly name: string; readonly email: string }; readonly pageId?: string; readonly scenario?: 'book' | 'profile' | 'menu'; readonly n: number };
 }
 
@@ -94,9 +96,12 @@ const SECTIONS = [
 /** One word each under the phone tab bar's icons. */
 const SHORT: Record<string, string> = { meetings: 'Meetings', pages: 'Pages', availability: 'Hours', roster: 'Roster', routing: 'Routing', insights: 'Insights', menu: 'Menu' };
 
-export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace }: BookingsFlowProps) {
-  const [state, dispatch] = useReducer(bookingsReducer, initialState);
+export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, onWorkspace, appNav, appContent, appMobileNav, onBookingsNav, onState, openTab, hiddenSections = [], person, onMenu, workspaceName, openGuest, onAddToLinkPage, switchWorkspace, isReadOnly = false }: BookingsFlowProps) {
+  const [state, rawDispatch] = useReducer(bookingsReducer, initialState);
   const { toast } = useToast();
+  const readOnlyRef = useRef(isReadOnly); readOnlyRef.current = isReadOnly;
+  /** While the app previews another role, Bookings looks but never changes (reading a notice still marks it read). */
+  const dispatch = useCallback((a: BookingsAction) => { if (readOnlyRef.current && a.type !== 'note/read') { toast({ message: 'You’re previewing as another role. Nothing changes until you stop previewing.' }); return; } rawDispatch(a); }, [toast]);
   const [tab, setTab] = useState('meetings');
   useEffect(() => { onState?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (openTab) { setTab(openTab.tab); if (openTab.meetingId) setMeetingId(openTab.meetingId); } }, [openTab?.n]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -240,7 +245,9 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     const start = at(day, r.minutes);
     const id = nextId('m');
     const name = r.name.trim() || 'Guest';
-    const host = hostFor(now, p, day, r.minutes, r.minutes + r.length) ?? p.hosts[0] ?? HOST;
+    const host = p.kind === 'table' ? (p.hosts[0] ?? HOST) : hostFor(now, p, day, r.minutes, r.minutes + r.length);
+    // Nobody free then (someone else took it a moment ago): the guest's page shows "Someone just booked that time".
+    if (!host || (p.kind === 'table' && !tables)) return false;
     pending.current.push({
       type: 'meeting/add',
       meeting: {
@@ -252,6 +259,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       notification: { id, actor: name, action: p.confirmFirst ? 'asked to book' : 'booked', object: p.kind === 'table' ? `a table for ${r.party ?? 2}` : `${p.name} · ${r.length} min`, excerpt: `${formatDay(start)}, ${formatClockRange(r.minutes, r.minutes + r.length)}`, time: 'Just now', group: 'Today', read: false },
     });
     setBooked((n) => n + 1);
+    return true;
   };
   /** The guest changed the booking they just made: the queued booking takes the change before the host side sees it. */
   const changeLastBooked = (c: BookedChange) => {
@@ -315,7 +323,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     const host = hostAt(m, start, end, p?.hostMode === 'roundrobin' && p.rrReschedule === 'rotate');
     if (!host) { toast({ message: `${first(m.host)} isn’t free then (another meeting, time off or outside hours). Pick another time.`, tone: 'danger' }); return; }
     update({ ...m, start, end, host }, `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}${host !== m.host ? `; ${host} takes it` : ''}`);
-    toast({ message: `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}. ${first(m.invitee.name)} ${how}.`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } });
+    toast({ message: `Moved to ${formatDay(start)}, ${formatClockRange(minutesOf(start), minutesOf(end))}. ${first(m.invitee.name)} ${how}.`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { start: m.start, end: m.end, host: m.host }, note: 'Move undone' }) } });
   };
   const freeTeammate = (m: BookedMeeting, pool: ReadonlyArray<string> = TEAM, given: ReadonlyArray<BookedMeeting> = []) => pool.find((n) => n !== m.host && !isOff(state, n, m.start, minutesOf(m.start), minutesOf(m.end))
     && ![...state.meetings, ...given].some((x) => x.id !== m.id && x.host === n && x.status !== 'cancelled' && x.start < m.end && m.start < x.end));
@@ -329,7 +337,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
     // Confirming checks again: the tables or the host may have been taken since they asked.
     if (m.tables?.length) { const held = heldTables(state, m.start, minutesOf(m.start), minutesOf(m.end) - minutesOf(m.start), m.id); const taken = m.tables.filter((t) => held.has(t)); if (taken.length) { toast({ message: `${taken.map((t) => state.tables?.find((x) => x.id === t)?.name ?? t).join(' + ')} is taken then. Edit the booking to give ${first(m.invitee.name)} another table first.`, tone: 'danger' }); return; } }
     else if (!m.tables && hostAt(m, m.start, m.end, false) === undefined) { toast({ message: `${first(m.host)} isn’t free then any more. Move it or decline.`, tone: 'danger' }); return; }
-    update({ ...m, status: 'confirmed' }, `Confirmed by ${HOST}`); dispatch({ type: 'note/read', id, read: true }); toast({ message: `Confirmed · ${first(m.invitee.name)} gets an invitation`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } }); };
+    update({ ...m, status: 'confirmed' }, `Confirmed by ${HOST}`); dispatch({ type: 'note/read', id, read: true }); toast({ message: `Confirmed · ${first(m.invitee.name)} gets an invitation`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'Confirm undone' }) } }); };
   const seeConflict = (m: Meeting) => {
     setView('week');
     setWeek(Math.round((mondayOf(m.start).getTime() - mondayOf(now).getTime()) / (7 * 86_400_000)));
@@ -475,7 +483,18 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
       <GuestMode play={guest} state={guestState} onClose={closeGuest} onBooked={book} onBookedChange={changeLastBooked}
         onWaitlist={(w) => dispatch({ type: 'waitlist/set', waitlist: [...(state.waitlist ?? []), { id: nextId('w'), name: w.name, phone: w.phone, party: w.party, day: w.day, wanted: w.wanted, added: new Date(), online: true }] })}
         onGuestCancel={(m, reason) => update({ ...m, status: 'cancelled' }, `Cancelled by ${m.invitee.name}${reason ? `: “${reason}”` : ''}`)}
-        onGuestMove={(m, start) => { const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime())); const host = hostAt(m, start, end, false) ?? m.host; update({ ...m, start, end, host }, `Moved by ${m.invitee.name} to ${formatDay(start)}${host !== m.host ? `; ${host} takes it` : ''}`); }} />
+        onGuestMove={(m, start) => {
+          const end = new Date(start.getTime() + (m.end.getTime() - m.start.getTime()));
+          // A table booking needs a table that fits then; a meeting needs someone free. Neither is forced through.
+          if (m.tables?.length) {
+            const len = Math.round((m.end.getTime() - m.start.getTime()) / 60_000);
+            const fit = fitTables(state, m.party ?? 2, start, minutesOf(start), len, false, m.area, m.id);
+            if (!fit) return false;
+            update({ ...m, start, end, tables: fit.map((t) => t.id), placeLabel: fit.map((t) => t.name).join(' + ') }, `Moved by ${m.invitee.name} to ${formatDay(start)}`); return true;
+          }
+          const host = hostAt(m, start, end, false); if (!host) return false;
+          update({ ...m, start, end, host }, `Moved by ${m.invitee.name} to ${formatDay(start)}${host !== m.host ? `; ${host} takes it` : ''}`); return true;
+        }} />
     ) : (
     <AppShell sidebar={sidebar} className="tf-bkf"
       mobileNav={appMobileNav ?? <TabBar aria-label="Bookings" current={tab}
@@ -519,7 +538,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
                 <MeetingsTab state={state} view={view} onView={(v) => { setView(v); if (v === 'list') setFocusHour(undefined); }} whose={whose} onWhose={setWhose}
                   week={week} onWeek={(w) => { setWeek(w); setFocusHour(undefined); }} focusHour={focusHour} fresh={freshMeeting}
                   onOpen={setMeetingId} onCancel={cancelNow} onUndoCancel={(m) => { const x = meetingById(m.id); if (!x) return; undone.current.add(x.id); update({ ...x, status: before.current.get(x.id)?.status ?? 'confirmed' }, 'Cancel undone'); }}
-                  onReschedule={setRescheduleId} onNoShow={(id) => { const m = meetingById(id); if (m) { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); } }}
+                  onReschedule={setRescheduleId} onNoShow={(id) => { const m = meetingById(id); if (m) { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'No-show undone' }) } }); } }}
                   onConfirm={confirm} onDecline={setDeclineId}
                   onCreatePage={() => setCreating(true)} onCopyFirstLink={() => { const p = state.pages.find((x) => x.isOn) ?? state.pages[0]; if (p) onShare(p, 'copy'); }}
                   onNewMeeting={(initial) => setNewMeeting({ initial })}
@@ -578,12 +597,12 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
         onConfirm={() => { dispatch({ type: 'reset', state: resetTo === 'fresh' ? FIRST_VISIT : northwind() }); setEditor(undefined); setTab('meetings'); if (resetTo === 'fresh') setOnboarding(true); setResetTo(undefined); }} />
       <MeetingDrawer meeting={restaurant ? undefined : openMeeting} page={pageById(openMeeting?.pageId)} onClose={() => setMeetingId(undefined)}
         onUpdate={(m) => update(m)} onCancel={cancelFromDrawer} onReschedule={(m) => setRescheduleId(m.id)} onReassign={(m) => setReassignId(m.id)}
-        onNoShow={(m) => { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => update(m) } }); }}
+        onNoShow={(m) => { update({ ...m, status: 'no-show' }, 'Marked as no-show'); toast({ message: `${first(m.invitee.name)} marked as no-show`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'No-show undone' }) } }); }}
         onJoin={(m) => { const x = meetingById(m.id); if (x) join(x); }} onConfirm={(m) => confirm(m.id)} onDecline={(m) => setDeclineId(m.id)} />
       <RescheduleDialog meeting={meetingById(rescheduleId)} state={state} onClose={() => setRescheduleId(undefined)}
         onMove={(m, start) => { setRescheduleId(undefined); move(m, start, 'gets an email with the new time'); }} />
       <ReassignDialog meeting={meetingById(reassignId)} state={state} onClose={() => setReassignId(undefined)}
-        onReassign={(m, host) => { setReassignId(undefined); update({ ...m, host }, `Reassigned from ${m.host} to ${host}`); toast({ message: `${m.title} is ${first(host)}'s now`, tone: 'success', action: { label: 'Undo', onAction: () => update(m) } }); }} />
+        onReassign={(m, host) => { setReassignId(undefined); update({ ...m, host }, `Reassigned from ${m.host} to ${host}`); toast({ message: `${m.title} is ${first(host)}'s now`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { host: m.host }, note: 'Reassign undone' }) } }); }} />
       <NewMeetingDialog isOpen={newMeeting !== undefined} state={state} initial={newMeeting?.initial} onClose={() => setNewMeeting(undefined)}
         onBook={(input) => {
           const m = meetingFrom(input, state);
@@ -594,7 +613,7 @@ export function BookingsFlow({ initialState = NORTHWIND, showDemoMenu = false, o
           toast({ message: `Booked · ${first(input.with.name)} gets an invitation`, tone: 'success', action: { label: 'Open', onAction: () => setMeetingId(m.id) } });
         }} />
       <DeclineDialog meeting={meetingById(declineId)} onClose={() => setDeclineId(undefined)}
-        onDecline={(m, reason) => { setDeclineId(undefined); setMeetingId(undefined); update({ ...m, status: 'cancelled' }, `Declined by ${HOST}${reason ? `: “${reason}”` : ''}`); dispatch({ type: 'note/read', id: m.id, read: true }); toast({ message: `Declined · ${first(m.invitee.name)} is told`, action: { label: 'Undo', onAction: () => update(m) } }); }} />
+        onDecline={(m, reason) => { setDeclineId(undefined); setMeetingId(undefined); update({ ...m, status: 'cancelled' }, `Declined by ${HOST}${reason ? `: “${reason}”` : ''}`); dispatch({ type: 'note/read', id: m.id, read: true }); toast({ message: `Declined · ${first(m.invitee.name)} is told`, action: { label: 'Undo', onAction: () => dispatch({ type: 'meeting/patch', id: m.id, patch: { status: m.status }, note: 'Decline undone' }) } }); }} />
       <HoldDialog picked={holdAt} onClose={() => setHoldAt(undefined)}
         onHold={(label) => { if (!holdAt) return; const block = { id: nextId('hold'), member: holdAt.member, day: isoDay(holdAt.day), start: holdAt.start, end: holdAt.end, kind: 'hold' as const, label: label ? `Held for ${label}` : 'Held' }; dispatch({ type: 'block/add', block }); setHoldAt(undefined); toast({ message: 'Time held', action: { label: 'Undo', onAction: () => dispatch({ type: 'block/remove', id: block.id }) } }); }} />
       <GroupsDialog isOpen={groupsOpen} state={state} onClose={() => setGroupsOpen(false)} dispatch={dispatch}

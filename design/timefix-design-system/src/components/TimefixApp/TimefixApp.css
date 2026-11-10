@@ -248,3 +248,5 @@
 .tf-home__team li { display: flex; justify-content: space-between; gap: var(--space-12); padding: var(--space-8) 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
 .tf-home__team li + li { border-top: var(--border-width-hairline) solid var(--border-subtle); }
 .tf-app__preview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-8) var(--space-16); background: var(--accent-soft); color: var(--text); font: 500 13px/18px var(--font-sans); }
+.tf-app__preview--fixed { position: fixed; z-index: 30; top: 0; left: 0; right: 0; justify-content: center; box-shadow: 0 1px 0 var(--border-subtle); }
+.tf-forms__rule-bad { color: var(--danger); font: 500 13px/18px var(--font-sans); }

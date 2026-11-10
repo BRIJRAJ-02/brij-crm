@@ -96,7 +96,7 @@ export function ListScreen({ state, dispatch, listId, onOpenRecord, onDeleted, o
               toast({ message: `Moved to ${m.toColumnId}`, action: { label: 'Undo', onAction: () => dispatch({ type: 'list/entries', id: list.id, stages: Object.fromEntries(moved.map((e) => [e.id, e.stage])) }) } }); }} /></div>
         ) : (
           <div className="tf-rec__grid"><DataGrid label={list.name} columns={columns.map((c) => ({ ...c, isSortable: false }))} rows={rows} selectedKeys={selected} onSelectionChange={setSelected} onRowAction={openEntry}
-            onCellChange={(rid, col, v) => { const e = list.entries.find((x) => x.id === rid); if (e) setEntry({ ...e, [col]: v } as ListEntry); }} /></div>
+            onCellChange={(rid, col, v) => { const e = list.entries.find((x) => x.id === rid); if (!e) return; setEntry({ ...e, [col]: v } as ListEntry); toast({ message: 'Saved', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'list/entries', id: list.id, patches: { [rid]: { [col]: (e as unknown as Readonly<Record<string, unknown>>)[col] } as Partial<ListEntry> } }) } }); }} /></div>
         )}
       <BulkActionBar count={ids.length} onClear={() => setSelected(new Set())}>
         <BarButton icon={<Trash2 {...i16} />} onPress={() => { const gone = list.entries.filter((e) => ids.includes(e.id)); dispatch({ type: 'list/entries', id: list.id, remove: gone.map((e) => e.id) }); setSelected(new Set());

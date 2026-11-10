@@ -1,5 +1,5 @@
 // Records of an object the owner made (Projects, Vendors): a table of its attributes, edited in place, with New, search, Export and Delete with Undo.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Selection } from 'react-aria-components';
 import { Boxes, Download, Plus, Settings2, Trash2 } from 'lucide-react';
 import { DataGrid, type GridColumn } from '../DataGrid/DataGrid.tsx';
@@ -11,7 +11,7 @@ import { TextField } from '../Field/Field.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { useToast } from '../Toast/Toast.tsx';
 import { saveFile } from '../../lib/saveFile.ts';
-import { newId, type AppAction, type AppState, type CustomRecord, type ObjectSchema } from './data.ts';
+import { newId, ymdOf, type AppAction, type AppState, type CustomRecord, type ObjectSchema } from './data.ts';
 import { canEditRecords } from './records.tsx';
 
 const i14 = { size: 14, strokeWidth: 1.75 } as const;
@@ -29,6 +29,7 @@ export function CustomRecordsScreen({ state, dispatch, schema, onAttributes }: C
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
   const canEdit = canEditRecords(state);
   const records = state.customRecords[schema.id] ?? [];
+  const latest = useRef(state.customRecords); latest.current = state.customRecords;
   const attrs = schema.attributes.filter((a) => a.id !== 'name');
   const columns: ReadonlyArray<GridColumn> = [
     { id: 'name', name: 'Name', type: 'name', width: 220, isSortable: true },
@@ -38,7 +39,7 @@ export function CustomRecordsScreen({ state, dispatch, schema, onAttributes }: C
   ];
   const q = query.trim().toLowerCase();
   const rows = records.filter((r) => !q || r.name.toLowerCase().includes(q) || Object.values(r.extra).some((v) => v.toLowerCase().includes(q)))
-    .map((r) => ({ id: r.id, kind: 'company' as const, isNew: fresh.has(r.id), values: { name: r.name, created: r.created.toISOString().slice(0, 10), ...r.extra } }));
+    .map((r) => ({ id: r.id, kind: 'company' as const, isNew: fresh.has(r.id), values: { name: r.name, created: ymdOf(r.created), ...r.extra } }));
   const ids = selected === 'all' ? rows.map((r) => r.id) : [...selected].map(String);
   const one = schema.one.toLowerCase(); const many = schema.many.toLowerCase();
   const set = (r: CustomRecord) => dispatch({ type: 'custom/set', object: schema.id, record: r });
@@ -62,7 +63,7 @@ export function CustomRecordsScreen({ state, dispatch, schema, onAttributes }: C
       ) : (
         <div className="tf-rec__grid">
           <DataGrid label={schema.many} columns={columns} rows={rows} selectedKeys={selected} onSelectionChange={setSelected} summary={`${rows.length === records.length ? rows.length : `${rows.length} of ${records.length}`} ${rows.length === 1 ? one : many}`}
-            onCellChange={canEdit ? (rid, col, v) => { const r = records.find((x) => x.id === rid); if (!r) return; if (col === 'name') { if (!v.trim()) { toast({ message: 'A name can’t be empty.', tone: 'danger' }); return; } set({ ...r, name: v.trim() }); } else set({ ...r, extra: { ...r.extra, [col]: v } }); } : undefined}
+            onCellChange={canEdit ? (rid, col, v) => { const r = records.find((x) => x.id === rid); if (!r) return; if (col === 'name' && !v.trim()) { toast({ message: 'A name can’t be empty.', tone: 'danger' }); return; } set(col === 'name' ? { ...r, name: v.trim() } : { ...r, extra: { ...r.extra, [col]: v } }); toast({ message: 'Saved', tone: 'success', action: { label: 'Undo', onAction: () => { const now = (latest.current[schema.id] ?? []).find((x) => x.id === rid); if (now) set(col === 'name' ? { ...now, name: r.name } : { ...now, extra: { ...now.extra, [col]: r.extra[col] ?? '' } }); } } }); } : undefined}
             onAddRow={canEdit ? () => { setCreating(true); return undefined; } : undefined} addLabel={`New ${one}`}
             emptyState={<span>No {many} match. <button type="button" className="tf-rec__link" onClick={() => setQuery('')}>Clear search</button></span>} />
         </div>

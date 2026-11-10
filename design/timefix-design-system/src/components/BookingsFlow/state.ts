@@ -335,6 +335,8 @@ export type BookingsAction =
   | { readonly type: 'page/restore'; readonly page: BookingPage; readonly index: number }
   | { readonly type: 'meeting/add'; readonly meeting: BookedMeeting; readonly notification?: Notification }
   | { readonly type: 'meeting/update'; readonly meeting: BookedMeeting }
+  /** Changes only these fields on the meeting as it is now, so an Undo never wipes a later note or move. */
+  | { readonly type: 'meeting/patch'; readonly id: string; readonly patch: Partial<BookedMeeting>; readonly note?: string }
   | { readonly type: 'note/read'; readonly id: string; readonly read: boolean }
   | { readonly type: 'note/read-all' }
   | { readonly type: 'note/archive'; readonly id: string }
@@ -370,6 +372,7 @@ export function bookingsReducer(state: BookingsState, action: BookingsAction): B
       meetings: [...state.meetings, action.meeting].sort(byStart),
       notifications: action.notification ? [action.notification, ...state.notifications] : state.notifications,
     };
+    case 'meeting/patch': return { ...state, meetings: state.meetings.map((m) => (m.id === action.id ? { ...m, ...action.patch, activity: action.note ? [...m.activity, { id: nextId('a'), text: action.note, at: new Date() }] : m.activity } : m)).sort(byStart) };
     case 'meeting/update': return { ...state, meetings: state.meetings.map((m) => (m.id === action.meeting.id ? action.meeting : m)).sort(byStart) };
     case 'note/read': return { ...state, notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: action.read } : n)) };
     case 'note/read-all': return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
@@ -525,6 +528,9 @@ export function atLimit(state: BookingsState, member: string, date: Date): 'day'
 /** Whether someone can take a meeting then: not off, not at their limit, no clash (with buffers) and not busy in a calendar. */
 export function memberFree(state: BookingsState, page: BookingPage | undefined, member: string, date: Date, start: number, end: number): boolean {
   if (isOff(state, member, date, start, end)) return false;
+  // They work then: their own hours that day (a date-only change wins) cover the whole meeting.
+  const h = hoursOn(state, member, date).hours;
+  if (!h.on || !h.ranges.some((r) => r.start <= start && end <= r.end)) return false;
   if (atLimit(state, member, date)) return false;
   const before = page?.bufferBefore ?? 0;
   const after = page?.bufferAfter ?? 0;
@@ -605,7 +611,8 @@ export function openTimes(page: BookingPage, state: BookingsState, date: Date, n
   const monday = mondayOf(date).getTime();
   if (page.perWeek > 0 && mine.filter((m) => mondayOf(m.start).getTime() === monday).length >= page.perWeek) return [];
   const notice = page.visibility === 'link' && page.inHeldTime ? 0 : page.noticeHours;
-  const earliest = ahead === 0 ? minutesOf(now) + notice * 60 : ahead * 1440 < notice * 60 ? Infinity : -1;
+  // Minimum notice counts in real minutes from now, across midnight: 24h notice at 3 PM opens tomorrow from 3 PM.
+  const earliest = minutesOf(now) + notice * 60 - ahead * 1440;
   const step = page.slotStep && page.slotStep > 0 ? page.slotStep : length < 30 ? 15 : 30;
   const out: number[] = [];
   day.ranges.forEach((r) => {

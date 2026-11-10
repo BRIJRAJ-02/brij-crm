@@ -26,7 +26,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 export function duplicatePairs(state: AppState, dismissed: ReadonlySet<string>): ReadonlyArray<readonly [Person, Person, string]> {
   const out: Array<readonly [Person, Person, string]> = [];
   state.people.forEach((a, i) => state.people.slice(i + 1).forEach((b) => {
-    const key = `${a.id}|${b.id}`; if (dismissed.has(key)) return;
+    const key = [a.id, b.id].sort().join('|'); if (dismissed.has(key)) return;
     if (a.email && a.email.toLowerCase() === b.email.toLowerCase()) out.push([a, b, 'Same email']);
     else if (a.companyId && a.companyId === b.companyId && norm(a.name.split(' ')[0] ?? '') === norm(b.name.split(' ')[0] ?? '')) out.push([a, b, 'Same name at the same company']);
   }));
@@ -38,7 +38,7 @@ export function companyPairs(state: AppState, dismissed: ReadonlySet<string>): R
   const base = (n: string) => norm(n.replace(/\b(inc|ltd|llc|pvt|corp|co|limited|private)\b\.?/gi, ''));
   const out: Array<readonly [Company, Company, string]> = [];
   state.companies.forEach((a, i) => state.companies.slice(i + 1).forEach((b) => {
-    const key = `${a.id}|${b.id}`; if (dismissed.has(key)) return;
+    const key = [a.id, b.id].sort().join('|'); if (dismissed.has(key)) return;
     if (a.domain && a.domain.toLowerCase() === b.domain.toLowerCase()) out.push([a, b, 'Same website']);
     else if (base(a.name) && base(a.name) === base(b.name)) out.push([a, b, 'Same name']);
   }));
@@ -71,7 +71,7 @@ export function DuplicatesScreen({ state, dispatch, onDone, object = 'people' }:
               {[a, b].map((p) => <span key={p.id} className="tf-dup__who"><Avatar name={p.name} size={36} shape={people ? 'round' : 'square'} /><span><strong>{p.name}</strong><span className="tf-rec__muted">{line(p)}</span></span></span>)}
               <span className="tf-dup__why tf-rec__muted">{why}</span>
               <span className="tf-dup__acts">
-                <Button size="sm" variant="ghost" onPress={() => { const key = `${a.id}|${b.id}`; dispatch({ type: 'dupes/dismiss', key, on: true }); toast({ message: 'Marked as not a duplicate. We won’t suggest them again.', action: { label: 'Undo', onAction: () => dispatch({ type: 'dupes/dismiss', key, on: false }) } }); }}>Not a duplicate</Button>
+                <Button size="sm" variant="ghost" onPress={() => { const key = [a.id, b.id].sort().join('|'); dispatch({ type: 'dupes/dismiss', key, on: true }); toast({ message: 'Marked as not a duplicate. We won’t suggest them again.', action: { label: 'Undo', onAction: () => dispatch({ type: 'dupes/dismiss', key, on: false }) } }); }}>Not a duplicate</Button>
                 <Button size="sm" variant="primary" icon={<GitMerge size={14} strokeWidth={1.75} />} onPress={() => { setPick({}); setMerging([a, b]); }}>Merge</Button>
               </span>
             </li>
@@ -88,8 +88,11 @@ export function DuplicatesScreen({ state, dispatch, onDone, object = 'people' }:
           <Dialog isOpen size="wide" onOpenChange={(o) => { if (!o) setMerging(undefined); }} title={`Merge into ${keep.name}`}
             description={`Pick what to keep. Everything linked to ${drop.name} (${people ? 'tasks, notes, comments, files, deals, lists and form answers' : 'its people, deals, tasks, notes, comments, files and lists'}) moves over, and the other record goes to Trash.`}
             actions={<><Button variant="ghost" slot="close">Cancel</Button><Button variant="primary" onPress={() => {
-              const patch: Readonly<Record<string, unknown>> = { ...Object.fromEntries(FIELDS.map((f) => [f.id, raw(f.id, chosen(f.id)) || undefined])), ...(people ? { tags: [...new Set([...((a.tags as ReadonlyArray<string> | undefined) ?? []), ...((b.tags as ReadonlyArray<string> | undefined) ?? [])])] } : {}) };
-              const was = Object.fromEntries(Object.keys(patch).map((k) => [k, keep[k]]));
+              const patch: Readonly<Record<string, unknown>> = { ...Object.fromEntries(FIELDS.map((f) => [f.id, raw(f.id, chosen(f.id)) || undefined])), ...(people ? { tags: [...new Set([...((a.tags as ReadonlyArray<string> | undefined) ?? []), ...((b.tags as ReadonlyArray<string> | undefined) ?? [])])] } : {}),
+                // Custom attributes come along (the kept record's value wins), and the latest contact date is kept.
+                extra: { ...((drop.extra as Readonly<Record<string, string>> | undefined) ?? {}), ...Object.fromEntries(Object.entries((keep.extra as Readonly<Record<string, string>> | undefined) ?? {}).filter(([, v]) => v)) },
+                ...(people && (a.lastContact || b.lastContact) ? { lastContact: [a.lastContact, b.lastContact].filter((d): d is Date => d instanceof Date).sort((x, y) => y.getTime() - x.getTime())[0] } : {}) };
+              const was = Object.fromEntries(Object.keys(patch).map((k) => [k, k === 'extra' ? Object.fromEntries(Object.keys(patch.extra as Record<string, string>).map((x) => [x, ((keep.extra as Readonly<Record<string, string>> | undefined) ?? {})[x] ?? ''])) : keep[k]]));
               const moved = linkedTo(state, object, drop.id);
               dispatch({ type: 'records/fields', object, changes: [{ id: keep.id, patch }] });
               dispatch({ type: 'records/relink', from: { object, id: drop.id }, to: { object, id: keep.id } });

@@ -36,11 +36,11 @@ export interface GuestPlayerProps {
   readonly state: BookingsState;
   readonly onClose: () => void;
   /** A booking made as the guest; the host side plays it when the view closes. */
-  readonly onBooked: (page: BookingPage, r: BookingRequest & { readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => void;
+  readonly onBooked: (page: BookingPage, r: BookingRequest & { readonly length: number; readonly place: PlaceKind; readonly party?: number; readonly phone?: string; readonly occasion?: string; readonly area?: string }) => boolean | void;
   /** A restaurant guest asked to be told when a table frees up. */
   readonly onWaitlist?: OnWaitlist;
   readonly onGuestCancel: (m: BookedMeeting, reason: string) => void;
-  readonly onGuestMove: (m: BookedMeeting, start: Date) => void;
+  readonly onGuestMove: (m: BookedMeeting, start: Date) => boolean | void;
   /** The guest changes the booking they just made, on its success screen: the host side gets the change, not the original. */
   readonly onBookedChange?: (c: BookedChange) => void;
 }
@@ -162,7 +162,7 @@ function Book({ page, state, onBooked, onBookedChange, failFirst = false, prefil
         onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => {
           tries.current += 1;
           if (failFirst && tries.current === 1) { reject(new Error('taken')); return; }
-          onBooked(page, { ...r, length, place });
+          if (onBooked(page, { ...r, length, place }) === false) { reject(new Error('taken')); return; }
           if (page.confirmFirst) setRequested(`${formatLongDay(new Date(r.date.year, r.date.month - 1, r.date.day))} · ${formatClockRange(r.minutes, r.minutes + length)}`);
           resolve();
         }, 700); })} />
@@ -212,14 +212,14 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
       <div className="tf-bkf__guest">
         <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={() => setMode('view')}>Back to your booking</Button>
         <GuestView page={page} state={{ ...state, meetings: state.meetings.filter((m) => m.id !== meeting.id) }} length={(meeting.end.getTime() - meeting.start.getTime()) / 60_000} guestIs={meeting.invitee}
-          onBook={(r) => new Promise<void>((resolve) => { window.setTimeout(() => { onGuestMove(meeting, at(new Date(r.date.year, r.date.month - 1, r.date.day), r.minutes)); setMode('moved'); resolve(); }, 600); })} />
+          onBook={(r) => new Promise<void>((resolve, reject) => { window.setTimeout(() => { if (onGuestMove(meeting, at(new Date(r.date.year, r.date.month - 1, r.date.day), r.minutes)) === false) { reject(new Error('taken')); return; } setMode('moved'); resolve(); }, 600); })} />
       </div>
     );
   }
   return (
     <GuestCard>
       <Avatar name={meeting.host} size={44} />
-      <h2 className="tf-bkf__guest-title">{meeting.title} with {meeting.host}</h2>
+      <h2 className="tf-bkf__guest-title">{meeting.tables?.length ? `${meeting.title} at ${state.workspace}` : `${meeting.title} with ${meeting.host}`}</h2>
       <dl className="tf-bkf__answers">
         <div><dt>When</dt><dd className="tf-num">{meetingWhen(meeting)}</dd></div>
         <div><dt>Where</dt><dd>{meeting.placeLabel}</dd></div>
@@ -233,9 +233,9 @@ function Manage({ page, state, meeting, onGuestCancel, onGuestMove }: { readonly
       ) : (() => {
         // The page's cut-offs hold here too: too close to the time, the guest is told who to contact instead.
         const hoursLeft = (meeting.start.getTime() - Date.now()) / 3_600_000;
-        const canMove = !page.moveCutoff || hoursLeft >= page.moveCutoff; const canCancel = !page.cancelCutoff || hoursLeft >= page.cancelCutoff;
+        const canMove = !page.moveCutoff || hoursLeft > page.moveCutoff; const canCancel = !page.cancelCutoff || hoursLeft > page.cancelCutoff;
         return (<>
-          {(!canMove || !canCancel) && <p className="tf-bkf__muted">{!canMove && !canCancel ? `It’s too close to change online` : !canMove ? 'It’s too close to move online' : 'It’s too close to cancel online'} (within {Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0)} hours). Reply to your confirmation email to reach {first(meeting.host)}.</p>}
+          {(!canMove || !canCancel) && <p className="tf-bkf__muted">{!canMove && !canCancel ? `It’s too close to change online` : !canMove ? 'It’s too close to move online' : 'It’s too close to cancel online'} (within {Math.max(page.moveCutoff ?? 0, page.cancelCutoff ?? 0)} hours). {page.tooLateMessage ?? `Reply to your confirmation email to reach ${first(meeting.host)}.`}</p>}
           <div className="tf-bkf__row">
             {canMove && <Button variant="secondary" icon={<CalendarClock {...i14} />} onPress={() => setMode('move')}>Reschedule</Button>}
             {canCancel && <Button variant="ghost" onPress={() => setMode('cancel')}>Cancel booking</Button>}
@@ -253,6 +253,7 @@ function Offered({ page, state, onBooked }: { readonly page: BookingPage; readon
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [done, setDone] = useState(false);
+  const [gone, setGone] = useState(false);
   if (!offer) return <GuestCard><EmptyState size="sm" icon={<Clock size={20} strokeWidth={1.75} />} title="No times offered yet" description="Use Share › Offer specific times on this page first." /></GuestCard>;
   const len = lengthOf(page);
   // An offered time is used up once someone books it, and gone once it has passed.
@@ -265,7 +266,8 @@ function Offered({ page, state, onBooked }: { readonly page: BookingPage; readon
     <GuestCard align="start">
       <Avatar name={page.owner} size={44} />
       <h2 className="tf-bkf__guest-title">{page.name} with {page.owner}</h2>
-      <p className="tf-bkf__muted">{first(page.owner)} picked these times for you. Choose one.</p>
+      <p className="tf-bkf__muted">{first(page.owner)} picked these times for you. Choose one. Times are India time (IST).</p>
+      {gone && <p className="tf-bkf__error" role="alert">That time was just taken. Pick another.</p>}
       <ChoiceChips label="Times" isLabelHidden size="md" selectedKeys={slot ? [slot] : []} onSelectionChange={(k) => setSlot([...k][0])}
         items={open.map((s) => ({ id: `${s.day}T${s.start}`, label: `${formatDay(parseDay(s.day))} · ${formatClockRange(s.start, s.start + len)}` }))} />
       <TextField label="Name" size="lg" value={name} onChange={setName} className="tf-bkf__full" />
@@ -273,7 +275,7 @@ function Offered({ page, state, onBooked }: { readonly page: BookingPage; readon
       <Button variant="primary" size="lg" className="tf-bkf__full" isDisabled={!slot || !name.trim() || !email.includes('@')} onPress={() => {
         const [day, start] = (slot ?? '').split('T');
         const d = parseDay(day ?? isoDay(new Date()));
-        onBooked(page, { name, email, notes: '', date: new CalendarDate(d.getFullYear(), d.getMonth() + 1, d.getDate()), minutes: Number(start), timeZone: 'Asia/Kolkata', length: len, place: placeOf(page) });
+        if (onBooked(page, { name, email, notes: '', date: new CalendarDate(d.getFullYear(), d.getMonth() + 1, d.getDate()), minutes: Number(start), timeZone: 'Asia/Kolkata', length: len, place: placeOf(page) }) === false) { setSlot(undefined); setGone(true); return; }
         setDone(true);
       }}>Book</Button>
     </GuestCard>
@@ -309,9 +311,9 @@ function Chat({ page, state, onBooked, embedded = false, onDone, length, place }
     window.setTimeout(() => {
       setThinking(false);
       const date = new CalendarDate(chosen.d.getFullYear(), chosen.d.getMonth() + 1, chosen.d.getDate());
-      onBooked(page, { name: who, email, notes: 'Booked by chat', date, minutes: chosen.m, timeZone: 'Asia/Kolkata', length: len, place: where });
+      if (onBooked(page, { name: who, email, notes: 'Booked by chat', date, minutes: chosen.m, timeZone: 'Asia/Kolkata', length: len, place: where }) === false) { setStage('time'); setChosen(undefined); say('Sorry, someone just took that time. When else works?'); return; }
       if (onDone) { onDone({ name: who, email, date, minutes: chosen.m }); return; }
-      setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + len)}`, where: PLACES[where].label, email, isRequest: page.confirmFirst, host: first(page.owner) });
+      setBooked({ title: `${page.name} with ${page.owner}`, when: `${formatLongDay(chosen.d)} · ${formatClockRange(chosen.m, chosen.m + len)}`, where: placeLabel(page, where), email, isRequest: page.confirmFirst, host: first(page.owner) });
     }, 800);
   };
   const send = (text: string) => {
@@ -342,7 +344,7 @@ function Chat({ page, state, onBooked, embedded = false, onDone, length, place }
       const later = pick.slice(0, 2);
       setThinking(false);
       setLines((l) => [...l, {
-        id: `h${l.length}`, role: 'host', text: later.length ? `Here's what's open${morning ? ' in the morning' : ''}:` : 'Nothing is open then. Try another week?',
+        id: `h${l.length}`, role: 'host', text: later.length ? `Here's what's open${morning ? ' in the morning' : ''} (India time):` : 'Nothing is open then. Try another week?',
         days: later.map(({ d, times }) => ({ day: formatDay(d), times: times.filter((t) => !morning || t < 12 * 60).slice(0, 4).map((t) => ({ id: `${isoDay(d)}T${t}`, label: formatClock(t) })) })),
       }]);
     }, 900);
@@ -356,7 +358,7 @@ function Chat({ page, state, onBooked, embedded = false, onDone, length, place }
         const m = Number(start);
         setChosen({ d, m }); setStage('name');
         setLines((l) => [...l, { id: `g${l.length}`, role: 'guest', text: `${formatDay(d)} at ${formatClock(m)}` }]);
-        reply(`${formatLongDay(d)} at ${formatClock(m)} is held for you. What name should I book it under?`, 500);
+        reply(`${formatLongDay(d)} at ${formatClock(m)} works. What name should I book it under?`, 500);
       }} />
   );
 }

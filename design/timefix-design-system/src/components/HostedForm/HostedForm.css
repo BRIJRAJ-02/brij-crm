@@ -202,3 +202,4 @@
   .tf-hq__typed-ink, .tf-hq__slots-day, .tf-hq__slot-list { animation: none; }
   .tf-hform__check path { animation: none; stroke-dashoffset: 0; }
 }
+.tf-hform__lede-one { display: block; color: var(--text-secondary); font: 400 13px/18px var(--font-sans); }

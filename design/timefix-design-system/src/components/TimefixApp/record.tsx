@@ -1,6 +1,6 @@
 // A record's full page: a header, then the work on it in tabs (Overview, Activity, Notes, Tasks, Comments), with its details down the side.
 // Log a call or meeting in two clicks; every change has Undo.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowLeft, Link2, ListPlus, Mail, Phone, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
 import { MenuItem, MenuSeparator } from '../Menu/Menu.tsx';
 import { Select } from '../Select/Select.tsx';
@@ -51,6 +51,9 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
   const [emailing, setEmailing] = useState(false);
   const [listing, setListing] = useState(false);
   const [taskOpen, setTaskOpen] = useState<string | 'new'>();
+  /** Each thread's latest replies, so undoing a resolve never drops a reply written after it. */
+  const latestReplies = useRef(new Map<string, ReadonlyArray<{ readonly id: string; readonly author: string; readonly body: string; readonly at: Date }>>());
+  state.comments.forEach((c) => latestReplies.current.set(c.id, c.replies));
   const link = { object, id };
   const same = (r: { readonly object: ObjectId; readonly id: string } | undefined) => r?.object === object && r.id === id;
   const { name, sub } = recordName(state, link);
@@ -102,7 +105,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       {deal && <>
         {fieldRow({ id: 'amount', name: 'Amount', type: 'currency', currency: 'INR' }, 'amount', deal.amount, (v) => Number(v) || 0)}
         {fieldRow({ id: 'close', name: 'Close date', type: 'date' }, 'close', ymdOf(deal.close), (v) => (typeof v === 'string' ? dayFrom(v) ?? deal.close : deal.close))}
-        {fieldRow({ id: 'company', name: 'Company', type: 'select', options: state.companies.map((c) => ({ id: c.id, label: c.name, hue: 'gray' as const })) }, 'companyId', deal.companyId, (v) => String(v ?? ''))}
+        {fieldRow({ id: 'company', name: 'Company', type: 'select', options: state.companies.map((c) => ({ id: c.id, label: c.name, hue: 'gray' as const })) }, 'companyId', deal.companyId, (v) => String(v || deal.companyId))}
       </>}
       {company && object === 'companies' && <>
         {fieldRow({ id: 'domain', name: 'Domain', type: 'domain' }, 'domain', company.domain)}
@@ -113,9 +116,9 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       {(state.objects.find((o) => o.id === object)?.attributes ?? []).filter((a) => customColumns(state, object).some((c) => c.id === a.id)).map((a) => (
         <AttributeRow key={a.id} attribute={a} value={(current.extra as Readonly<Record<string, string>> | undefined)?.[a.id]} onChange={(v) => {
           if (!canEdit) return;
-          const before = current.extra as Readonly<Record<string, string>> | undefined;
-          dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: { ...(before ?? {}), [a.id]: Array.isArray(v) ? v.join(', ') : String(v ?? '') } } }] });
-          toast({ message: `${a.name} saved`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: before } }] }) } });
+          const was = (current.extra as Readonly<Record<string, string>> | undefined)?.[a.id] ?? '';
+          dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: { [a.id]: Array.isArray(v) ? v.join(', ') : String(v ?? '') } } }] });
+          toast({ message: `${a.name} saved`, tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { extra: { [a.id]: was } } }] }) } });
         }} />
       ))}
       <RecordSection title="Lists" count={lists.length}>
@@ -134,7 +137,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
       <Button size="sm" variant="ghost" icon={<ArrowLeft {...i14} />} onPress={onBack}>{backLabel ? `Back to ${backLabel}` : 'Back'}</Button>
       <RecordHeader name={name} kind={object === 'people' ? 'person' : object === 'companies' ? 'company' : 'deal'} sub={sub}
         tags={person?.tags.map((t) => ({ label: t })) ?? []}
-        onRename={(n) => { if (person) dispatch({ type: 'person/set', person: { ...person, name: n } }); else if (deal) dispatch({ type: 'deal/set', deal: { ...deal, name: n } }); else if (company) dispatch({ type: 'company/set', company: { ...company, name: n } }); }}
+        onRename={canEdit ? (n) => { const was = name; if (!n.trim() || n.trim() === was) return; dispatch({ type: 'records/fields', object, changes: [{ id, patch: { name: n.trim() } }] }); toast({ message: 'Renamed', tone: 'success', action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object, changes: [{ id, patch: { name: was } }] }) } }); } : undefined}
         onEmail={person?.email ? () => setEmailing(true) : undefined}
         moreActions={<>
           <MenuItem id="copy" icon={<Link2 size={16} strokeWidth={1.75} />}>Copy link</MenuItem>
@@ -147,7 +150,7 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
           else if (k === 'list') setListing(true);
           else if (k === 'delete') { dispatch({ type: 'records/remove', object, ids: [id] }); onBack(); toast({ message: `${name} moved to Trash`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/untrash', ids: [id] }) } }); }
         }}
-        stage={deal ? { attribute: stageAttr, value: deal.stage, onChange: (v) => { const before = deal; dispatch({ type: 'deal/set', deal: { ...deal, stage: String(v) as Stage } }); toast({ message: `Moved to ${String(v)}`, action: { label: 'Undo', onAction: () => dispatch({ type: 'deal/set', deal: before }) } }); } } : undefined} />
+        stage={deal ? { attribute: stageAttr, value: deal.stage, onChange: (v) => { if (!canEdit) return; const was = deal.stage; dispatch({ type: 'records/fields', object: 'deals', changes: [{ id, patch: { stage: String(v) as Stage } }] }); toast({ message: `Moved to ${String(v)}`, action: { label: 'Undo', onAction: () => dispatch({ type: 'records/fields', object: 'deals', changes: [{ id, patch: { stage: was } }] }) } }); } } : undefined} />
       <div className="tf-recp__body">
         <div className="tf-recp__main">
           <Tabs aria-label="Record" selectedKey={tab} onSelectionChange={setTab}
@@ -205,13 +208,11 @@ export function RecordPage({ state, dispatch, object, id, onBack, onOpen, backLa
             <TabPanel id="comments" className="tf-recp__panel">
               <CommentThread me={state.me} people={people}
                 comments={comments.flatMap((c) => [{ id: c.id, author: c.author, time: ago(c.at), body: c.body, resolved: c.resolved, reactions: state.reactions[c.id] }, ...c.replies.map((r) => ({ id: r.id, author: r.author, time: ago(r.at), body: r.body, replyTo: c.author, reactions: state.reactions[r.id] }))])}
-                onResolve={(cid, resolved) => { const c = comments.find((x) => x.id === cid); if (!c) return; dispatch({ type: 'comment/set', comment: { ...c, resolved } }); toast({ message: resolved ? 'Thread resolved' : 'Thread reopened', action: { label: 'Undo', onAction: () => dispatch({ type: 'comment/set', comment: c }) } }); }}
+                onResolve={(cid, resolved) => { const c = comments.find((x) => x.id === cid); if (!c) return; dispatch({ type: 'comment/set', comment: { ...c, resolved } }); toast({ message: resolved ? 'Thread resolved' : 'Thread reopened', action: { label: 'Undo', onAction: () => { const now = state.comments.find((x) => x.id === cid) ?? c; dispatch({ type: 'comment/set', comment: { ...now, replies: latestReplies.current.get(cid) ?? now.replies, resolved: !resolved } }); } } }); }}
                 onReact={(cid, kind) => dispatch({ type: 'reaction/toggle', id: cid, kind })}
                 onSend={(body, _replyTo, replyId) => new Promise<void>((resolve) => {
                   // A reply files under its thread, whether they answered the first comment or a reply in it.
                   const parent = comments.find((c) => c.id === replyId || c.replies.some((r) => r.id === replyId));
-                  const named = state.members.filter((m) => m.name !== state.me && body.includes(`@${m.name}`)).map((m) => m.name.split(' ')[0]);
-                  if (named.length) toast({ message: `${named.join(' and ')} ${named.length === 1 ? 'gets' : 'get'} this in their Inbox`, tone: 'success' });
                   if (parent) dispatch({ type: 'comment/set', comment: { ...parent, replies: [...parent.replies, { id: newId('cr'), author: state.me, body, at: new Date() }] } });
                   else dispatch({ type: 'comment/set', comment: { id: newId('cm'), record: link, author: state.me, body, at: new Date(), resolved: false, replies: [] } });
                   resolve();

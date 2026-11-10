@@ -124,11 +124,15 @@ export interface LinkPageProps {
   /** In the editor's phone preview: links don't navigate. */
   readonly isPreview?: boolean;
   readonly showClicks?: boolean;
+  /** A visitor joined the email list (the live page only; the preview never sends). */
+  readonly onSignup?: (email: string, heading: string) => void;
 }
 
 /** A person's public link page, Linktree simple: avatar, name and bio, their social marks, then their blocks in order (buttons, tiles, a featured card, headings, dividers, a booking block), and "Powered by Timefix". */
-export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACCENT_SWATCHES[0]?.hex ?? '#1F5FD6', booking, isPreview = false, showClicks = false }: LinkPageProps) {
-  const shown = blocks.filter((b) => !b.hidden);
+export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACCENT_SWATCHES[0]?.hex ?? '#1F5FD6', booking, isPreview = false, showClicks = false, onSignup }: LinkPageProps) {
+  // Hidden blocks, and blocks with nothing in them yet, don't show.
+  const shown = blocks.filter((b) => !b.hidden && !(b.kind === 'link' && !b.href.trim()) && !(b.kind === 'text' && !b.body.trim()) && !(b.kind === 'faq' && !b.items.some((x) => x.q.trim()))
+    && !(b.kind === 'testimonial' && !b.quote.trim()) && !(b.kind === 'form' && !b.slug));
   const socialsInBlocks = blocks.some((b) => b.kind === 'social');
   const socialRow = <SocialLinks links={socials} label={`${profile.name}'s social links`} isPreview={isPreview} />;
   const style = look === 'custom'
@@ -163,7 +167,7 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
     else if (b.kind === 'faq') out.push(<section key={b.id} className="tf-linkpage__faq" aria-label="Questions">{b.items.filter((x) => x.q.trim()).map((x, n) => <details key={n}><summary>{x.q}</summary><p>{x.a}</p></details>)}</section>);
     else if (b.kind === 'testimonial') out.push(<figure key={b.id} className="tf-linkpage__quote"><blockquote>“{b.quote}”</blockquote><figcaption>{b.name}{b.role ? `, ${b.role}` : ''}</figcaption></figure>);
     else if (b.kind === 'form') out.push(<LinkCard key={b.id} item={{ id: b.id, title: b.title, href: `https://timefix.com/f/${b.slug}`, icon: <FileText size={20} strokeWidth={1.75} /> }} isPreview={isPreview} />);
-    else if (b.kind === 'signup') out.push(<SignupBlock key={b.id} block={b} isPreview={isPreview} />);
+    else if (b.kind === 'signup') out.push(<SignupBlock key={b.id} block={b} isPreview={isPreview} onSignup={onSignup} />);
     else out.push(<BookingBlock key={b.id} block={b} host={profile.name} booking={booking} />);
   }
   flush();
@@ -189,15 +193,15 @@ export function LinkPage({ profile, socials, blocks, look = 'calm', accent = ACC
 }
 
 /** An email signup on the page: one field, one button, and a thank-you once it's sent. */
-function SignupBlock({ block, isPreview }: { readonly block: Extract<LinkBlock, { kind: 'signup' }>; readonly isPreview: boolean }) {
+function SignupBlock({ block, isPreview, onSignup }: { readonly block: Extract<LinkBlock, { kind: 'signup' }>; readonly isPreview: boolean; readonly onSignup?: (email: string, heading: string) => void }) {
   const [email, setEmail] = useState('');
   const [done, setDone] = useState(false);
   const [bad, setBad] = useState(false);
   const id = useId();
-  if (done) return <p className="tf-linkpage__signup tf-linkpage__signup--done" role="status">You’re on the list. Check {email} for a hello.</p>;
+  if (done) return <p className="tf-linkpage__signup tf-linkpage__signup--done" role="status">{isPreview ? 'Preview: this is what visitors see. Nothing was sent.' : 'You’re on the list. Thank you.'}</p>;
   return (
-    <form className="tf-linkpage__signup" onSubmit={(e) => { e.preventDefault(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setBad(true); return; } setDone(true); }}>
-      <label htmlFor={id} className="tf-linkpage__signup-title">{block.title}</label>
+    <form className="tf-linkpage__signup" onSubmit={(e) => { e.preventDefault(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setBad(true); return; } if (!isPreview) onSignup?.(email.trim(), block.title || 'Join my list'); setDone(true); }}>
+      <label htmlFor={id} className="tf-linkpage__signup-title">{block.title || 'Join my list'}</label>
       <span className="tf-linkpage__signup-row">
         <input id={id} type="email" className="tf-linkpage__signup-input" placeholder="you@example.com" value={email} aria-invalid={bad || undefined} onChange={(e) => { setEmail(e.target.value); setBad(false); }} />
         <Button type="submit" variant="primary">{block.button}</Button>

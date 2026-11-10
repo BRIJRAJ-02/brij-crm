@@ -59,7 +59,7 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
         <SegmentedControl aria-label="Box" selectedKey={box} onSelectionChange={(k) => setBox(k === 'done' ? 'done' : 'inbox')}
           items={[{ id: 'inbox', label: `Inbox · ${state.inbox.filter((x) => !x.done).length}` }, { id: 'done', label: 'Done' }]} />
         <Select label="Kind" isLabelHidden className="tf-you__select" value={kind} onChange={(v) => setKind((v ?? 'all') as typeof kind)}
-          items={[{ id: 'all', label: 'Everything' }, { id: 'due', label: 'Tasks due today' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
+          items={[{ id: 'all', label: 'Everything' }, { id: 'due', label: 'Tasks due by today' }, ...(Object.keys(KIND_WORD) as InboxItem['kind'][]).map((k) => ({ id: k, label: KIND_WORD[k] }))]} />
         <Switch isSelected={unread} onChange={setUnread}>Unread only</Switch>
         <span className="tf-rec__spacer" />
       </div>
@@ -74,7 +74,8 @@ export function InboxScreen({ state, dispatch, onOpenRecord, onBookings }: YouPr
             onArchive={(id) => { const x = state.inbox.find((y) => y.id === id); if (x) set(x, { done: !x.done, read: true }); }} />
         </div>
       )}
-      {task && <TaskDialog state={state} task={task} onClose={() => setTaskId(undefined)} onSave={(t) => { dispatch({ type: 'task/set', task: t }); setTaskId(undefined); toast({ message: 'Task saved', tone: 'success' }); }} />}
+      {task && <TaskDialog state={state} task={task} onClose={() => setTaskId(undefined)} onOpenRecord={onOpenRecord} onSave={(t) => { dispatch({ type: 'task/set', task: t }); setTaskId(undefined); toast({ message: 'Task saved', tone: 'success' }); }}
+        onDelete={() => { const t = task; dispatch({ type: 'task/remove', id: t.id }); setTaskId(undefined); toast({ message: 'Task deleted', action: { label: 'Undo', onAction: () => dispatch({ type: 'task/set', task: t }) } }); }} />}
     </div>
   );
 }
@@ -143,7 +144,7 @@ export function TaskDialog({ state, task, onClose, onSave, onDelete, onOpenRecor
           <Select label="Assignee" value={assignee} onChange={(v) => setAssignee(v ?? state.me)} items={state.members.map((m) => ({ id: m.name, label: m.name }))} />
         </div>
         <Select label="About" searchable value={rec || null} onChange={(v) => setRec(v ?? '')} placeholder="A person, company or deal" items={records} />
-        {rec && onOpenRecord && <button type="button" className="tf-rec__link tf-you__open" onClick={() => { const l = link(); if (l) { onClose(); onOpenRecord(l.object, l.id); } }}>Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</button>}
+        {rec && onOpenRecord && <button type="button" className="tf-rec__link tf-you__open" onClick={() => { const l = link(); if (!l) return; if (title.trim()) save(); else onClose(); onOpenRecord(l.object, l.id); }}>Open {recordName(state, link() ?? { object: 'people', id: '' }).name}</button>}
         <TextArea label="Details" aside="Optional" rows={3} value={description} onChange={setDescription} />
       </div>
     </Dialog>

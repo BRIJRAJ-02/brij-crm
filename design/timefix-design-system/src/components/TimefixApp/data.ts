@@ -135,6 +135,8 @@ export interface AppState {
   readonly notDupes: ReadonlyArray<string>;
   /** The published link page; until someone publishes, the starter page shows. */
   readonly linkPage?: LinkPageDraft;
+  /** Link page changes not published yet: kept while you move around the app. */
+  readonly linkDraft?: LinkPageDraft;
   /** Saved charts in Insights › Reports. */
   readonly reports: ReadonlyArray<Report>;
   /** Records of objects owners made (Projects, Vendors), by object id. */
@@ -160,7 +162,7 @@ export type AppAction =
   | { readonly type: 'records/drop'; readonly object: ObjectId; readonly ids: ReadonlyArray<string>; readonly note?: string }
   | { readonly type: 'records/relink'; readonly from: RecordLink; readonly to: RecordLink; readonly only?: ReadonlyArray<string> }
   | { readonly type: 'dupes/dismiss'; readonly key: string; readonly on: boolean }
-  | { readonly type: 'list/entries'; readonly id: string; readonly add?: ReadonlyArray<ListEntry>; readonly remove?: ReadonlyArray<string>; readonly stages?: Readonly<Record<string, string>> }
+  | { readonly type: 'list/entries'; readonly id: string; readonly add?: ReadonlyArray<ListEntry>; readonly remove?: ReadonlyArray<string>; readonly stages?: Readonly<Record<string, string>>; /** Any fields on entries, by entry id. */ readonly patches?: Readonly<Record<string, Partial<ListEntry>>> }
   | { readonly type: 'list/insert'; readonly list: CrmList; readonly at: number }
   | { readonly type: 'comment/set'; readonly comment: Comment }
   | { readonly type: 'activity/add'; readonly activity: Activity }
@@ -173,6 +175,7 @@ export type AppAction =
   | { readonly type: 'form/remove'; readonly id: string }
   | { readonly type: 'form/insert'; readonly form: AppForm; readonly at: number }
   | { readonly type: 'link/publish'; readonly page: LinkPageDraft }
+  | { readonly type: 'link/draft'; readonly page: LinkPageDraft | undefined }
   | { readonly type: 'report/set'; readonly report: Report }
   | { readonly type: 'report/remove'; readonly id: string }
   | { readonly type: 'custom/set'; readonly object: string; readonly record: CustomRecord }
@@ -189,6 +192,8 @@ export type AppAction =
   | { readonly type: 'file/remove'; readonly id: string }
   | { readonly type: 'reaction/toggle'; readonly id: string; readonly kind: string }
   | { readonly type: 'prefs/set'; readonly prefs: Partial<Prefs>; readonly note?: string }
+  /** A change worked out from the current prefs, so an Undo puts back one item without touching later changes. */
+  | { readonly type: 'prefs/update'; readonly fn: (p: Prefs) => Partial<Prefs> }
   | { readonly type: 'member/set'; readonly member: Member; readonly note?: string }
   | { readonly type: 'member/remove'; readonly id: string; readonly reassignTo?: string }
   | { readonly type: 'me/rename'; readonly name: string };
@@ -218,7 +223,8 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     }
     case 'records/fields': {
       const by = new Map(a.changes.map((c) => [c.id, c.patch]));
-      const apply = <T extends { readonly id: string }>(x: T): T => { const patch = by.get(x.id); return patch ? { ...x, ...patch } : x; };
+      // `extra` merges key by key, so an Undo of one custom field never touches the others.
+      const apply = <T extends { readonly id: string }>(x: T): T => { const patch = by.get(x.id); if (!patch) return x; const ex = patch.extra as Readonly<Record<string, string>> | undefined; return { ...x, ...patch, ...(ex ? { extra: { ...((x as { readonly extra?: Readonly<Record<string, string>> }).extra ?? {}), ...ex } } : {}) }; };
       return a.object === 'people' ? { ...state, people: state.people.map(apply) } : a.object === 'companies' ? { ...state, companies: state.companies.map(apply) } : { ...state, deals: state.deals.map(apply) };
     }
     case 'records/untrash': {
@@ -243,7 +249,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
         forms: a.from.object === 'people' ? state.forms.map((f) => ({ ...f, responses: f.responses.map((r) => (r.personId === a.from.id && ok(r.id) ? { ...r, personId: a.to.id } : r)) })) : state.forms };
     }
     case 'dupes/dismiss': return { ...state, notDupes: a.on ? [...state.notDupes.filter((k) => k !== a.key), a.key] : state.notDupes.filter((k) => k !== a.key) };
-    case 'list/entries': return { ...state, lists: state.lists.map((l) => (l.id !== a.id ? l : { ...l, entries: [...l.entries.filter((e) => !(a.remove ?? []).includes(e.id)).map((e) => (a.stages?.[e.id] !== undefined ? { ...e, stage: a.stages[e.id] ?? e.stage } : e)), ...(a.add ?? [])] })) };
+    case 'list/entries': return { ...state, lists: state.lists.map((l) => (l.id !== a.id ? l : { ...l, entries: [...l.entries.filter((e) => !(a.remove ?? []).includes(e.id)).map((e) => (a.stages?.[e.id] !== undefined ? { ...e, stage: a.stages[e.id] ?? e.stage } : e)).map((e) => (a.patches?.[e.id] ? { ...e, ...a.patches[e.id] } : e)), ...(a.add ?? [])] })) };
     case 'list/insert': return { ...state, lists: [...state.lists.slice(0, a.at), a.list, ...state.lists.slice(a.at)].filter((l, n, all) => all.findIndex((x) => x.id === l.id) === n) };
     case 'comment/set': return { ...state, comments: upsert(state.comments, a.comment) };
     case 'activity/add': return { ...state, activity: [a.activity, ...state.activity] };
@@ -255,7 +261,8 @@ export function appReducer(state: AppState, a: AppAction): AppState {
     case 'form/set': return { ...state, forms: upsert(state.forms, a.form) };
     case 'form/remove': return { ...state, forms: state.forms.filter((f) => f.id !== a.id) };
     case 'form/insert': return { ...state, forms: [...state.forms.slice(0, a.at), a.form, ...state.forms.slice(a.at)].filter((f, n, all) => all.findIndex((x) => x.id === f.id) === n) };
-    case 'link/publish': return { ...state, linkPage: a.page, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
+    case 'link/draft': return { ...state, linkDraft: a.page };
+    case 'link/publish': return { ...state, linkPage: a.page, linkDraft: undefined, setupDone: state.setupDone.includes('link') ? state.setupDone : [...state.setupDone, 'link'], history: [line(`${state.me} published the link page`), ...state.history] };
     case 'report/set': return { ...state, reports: state.reports.some((r) => r.id === a.report.id) ? state.reports.map((r) => (r.id === a.report.id ? a.report : r)) : [...state.reports, a.report] };
     case 'report/remove': return { ...state, reports: state.reports.filter((r) => r.id !== a.id) };
     case 'custom/set': { const list = state.customRecords[a.object] ?? []; return { ...state, customRecords: { ...state.customRecords, [a.object]: list.some((r) => r.id === a.record.id) ? list.map((r) => (r.id === a.record.id ? a.record : r)) : [a.record, ...list] } }; }
@@ -277,6 +284,7 @@ export function appReducer(state: AppState, a: AppAction): AppState {
       const next = who.includes(state.me) ? who.filter((x) => x !== state.me) : [...who, state.me];
       return { ...state, reactions: { ...state.reactions, [a.id]: { ...cur, [a.kind]: next } } };
     }
+    case 'prefs/update': return { ...state, prefs: { ...state.prefs, ...a.fn(state.prefs) } };
     case 'prefs/set': return { ...state, prefs: { ...state.prefs, ...a.prefs }, history: a.note ? [line(a.note), ...state.history] : state.history };
     case 'member/set': return { ...state, members: state.members.some((m) => m.id === a.member.id) ? state.members.map((m) => (m.id === a.member.id ? a.member : m)) : [...state.members, a.member], history: a.note ? [line(a.note), ...state.history] : state.history };
     case 'member/remove': {
@@ -524,3 +532,10 @@ function builtInObjects(owners: ReadonlyArray<{ readonly id: string; readonly na
 
 /** The attribute ids every built-in object draws itself; anything else in Settings › Objects is the owner's own, kept in `extra`. */
 export const BUILT_IN_ATTRIBUTES: ReadonlySet<string> = new Set(['name', 'email', 'phone', 'title', 'company', 'tags', 'owner', 'created', 'domain', 'industry', 'size', 'city', 'stage', 'amount', 'close', 'lastContact', 'contact']);
+
+/** Entries whose record still exists: a deleted record's entry waits in the list until it's restored, and isn't counted. */
+export const liveEntries = (state: AppState, l: CrmList): ReadonlyArray<ListEntry> => {
+  const pool: ReadonlyArray<{ readonly id: string }> = l.object === 'people' ? state.people : l.object === 'companies' ? state.companies : state.deals;
+  const ids = new Set(pool.map((r) => r.id));
+  return l.entries.filter((e) => ids.has(e.recordId));
+};

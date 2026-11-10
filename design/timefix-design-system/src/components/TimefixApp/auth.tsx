@@ -90,7 +90,7 @@ export function DoorScreen({ door, onDone, onDoor, ctx, onFinish, onRestore, onF
             {door === 'invite-wrong' ? <>
               <AuthHeading title="This invitation is for someone else" description={`It was sent to rahul@${ctx.slug}.com, and you’re signed in as ${ctx.email}.`} />
               <Button variant="primary" size="lg" onPress={() => onDoor('signin')}>Sign in as rahul@{ctx.slug}.com</Button>
-              <Button variant="ghost" onPress={() => onDoor('join')}>Ask to join {ctx.workspace} as {ctx.email.split('@')[0]}</Button>
+              <Button variant="ghost" onPress={onDone}>Stay signed in as {ctx.email}</Button>
             </> : <>
               <AuthHeading title="This invitation was already used" description={`Each link works once. If it was you, sign in. If not, ask whoever invited you for a new one.`} />
               <Button variant="primary" size="lg" onPress={() => onDoor('signin')}>Sign in</Button>
@@ -155,15 +155,13 @@ function JoinRequest({ onDone, onOwn, workspace, slug }: { readonly onDone: () =
 }
 
 function Deleted({ workspace, onRestore, onSignOut }: { readonly workspace: string; readonly onRestore: () => void; readonly onSignOut: () => void }) {
-  const [sure, setSure] = useState(false);
   const until = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   return (
     <AuthLayout aria-label="Deleted workspace">
       <div className="tf-door__card">
         <span className="tf-door__icon"><Building2 size={24} strokeWidth={1.75} /></span>
-        <AuthHeading title={`${workspace} is deleted`} description={sure ? `Everyone gets access back, with everything as it was.` : `It’s kept until ${until}, then everything in it is gone for good. Restore it to bring everyone back.`} />
-        {sure ? <><Button variant="primary" size="lg" icon={<RotateCcw size={16} strokeWidth={1.75} />} onPress={onRestore}>Yes, restore {workspace}</Button><Button variant="ghost" onPress={() => setSure(false)}>Not now</Button></>
-          : <><Button variant="primary" size="lg" icon={<RotateCcw size={16} strokeWidth={1.75} />} onPress={() => setSure(true)}>Restore workspace</Button><Button variant="ghost" onPress={onSignOut}>Sign out</Button></>}
+        <AuthHeading title={`${workspace} is deleted`} description={`It’s kept until ${until}, then everything in it is gone for good. Restore it to bring everyone back, with everything as it was.`} />
+        <Button variant="primary" size="lg" icon={<RotateCcw size={16} strokeWidth={1.75} />} onPress={onRestore}>Restore {workspace}</Button><Button variant="ghost" onPress={onSignOut}>Sign out</Button>
       </div>
     </AuthLayout>
   );

@@ -136,17 +136,20 @@ export function FinishLater({ onSave }: { readonly onSave: () => Promise<string>
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [failedCopy, setFailedCopy] = useState(false);
   const save = async () => {
     setState('saving');
     try { setLink(await onSave()); setState('saved'); } catch { setState('failed'); }
   };
   const copy = async () => {
-    try { await navigator.clipboard.writeText(link); } catch { /* the link is still shown on the button's title */ }
+    // Only say "copied" when it was; otherwise the link stays on screen to select.
+    try { await navigator.clipboard.writeText(link); } catch { setFailedCopy(true); return; }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
   return (
     <div className="tf-hform__later" data-open={state === 'saved' || undefined}>
+      {failedCopy && <p className="tf-hform__error" role="alert">Copy didn’t work. Select this link and copy it: {link}</p>}
       {state !== 'saved' && (
         <AriaButton className="tf-hform__later-btn" onPress={() => { void save(); }} isDisabled={state === 'saving'}>
           {state === 'saving' ? 'Saving…' : state === 'failed' ? "Couldn't save. Try again" : 'Finish later'}
@@ -190,6 +193,7 @@ function Thanks({ show, title, line, children }: { readonly show: boolean; reado
  */
 export function HostedForm({ title, description, questions, mode = 'one', onSubmit, onFinishLater, booking, onUpload, logic = [], thanks = { title: 'Thanks, we got it.', line: 'Your answers are in. You can close this page.' } }: HostedFormProps) {
   const [answers, setAnswers] = useState<FormAnswers>({});
+  const answersRef = useRef(answers); answersRef.current = answers;
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [attempt, setAttempt] = useState(0);
   const [step, setStep] = useState(0);
@@ -216,9 +220,11 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
   };
 
   const refuse = (found: Readonly<Record<string, string>>) => { setErrors(found); setAttempt((n) => n + 1); };
-  const send = async () => {
+  const send = async (only?: ReadonlySet<string>) => {
+    if (sending) return;
     setSending(true); setFailed(false);
-    try { await onSubmit(answers); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
+    const out = only && logic.length ? Object.fromEntries(Object.entries(answers).filter(([k]) => only.has(k))) : answers;
+    try { await onSubmit(out); setSent(true); } catch { setFailed(true); } finally { setSending(false); }
   };
   const last = questions.length - 1;
   /** Where the visitor came from, so Back retraces a jump instead of landing on a skipped question. */
@@ -231,7 +237,9 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     if (rule) { if (rule.goto === 'end') return 'end'; const to = questions.findIndex((x) => x.id === rule.goto); if (to > at) return to; }
     return at === last ? 'end' : at + 1;
   };
-  const go = (at: number) => { const to = after(at, answers); if (to === 'end') void send(); else { trail.current.push(at); setStep(to); } };
+  const go = (at: number, all: FormAnswers = answers) => { const to = after(at, all); if (to === 'end') void send(visited(at)); else { trail.current.push(at); setStep(to); } };
+  /** The questions on the path they took: answers left behind on a branch they backed out of aren't sent. */
+  const visited = (at: number) => new Set([...trail.current, at].map((n) => questions[n]?.id).filter((x): x is string => x !== undefined));
   const next = () => {
     window.clearTimeout(advance.current);
     const q = questions[step];
@@ -241,12 +249,12 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     setErrors({});
     go(step);
   };
-  const back = () => { window.clearTimeout(advance.current); setErrors({}); setStep((s) => trail.current.pop() ?? Math.max(0, s - 1)); };
+  const back = () => { window.clearTimeout(advance.current); setErrors({}); const prev = trail.current.pop(); setStep((s) => prev ?? Math.max(0, s - 1)); };
   // A single choice picked by pointer or letter goes on by itself after a short look at the tick, never from the last question.
   const picked = () => {
     if (step === last) return;
     window.clearTimeout(advance.current);
-    advance.current = window.setTimeout(() => setAnswers((all) => { const to = after(step, all); if (to !== 'end') { trail.current.push(step); setStep(to); } return all; }), 450);
+    advance.current = window.setTimeout(() => { const to = after(step, answersRef.current); if (to !== 'end') { trail.current.push(step); setStep(to); } }, 450);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter' || e.shiftKey || e.defaultPrevented || e.nativeEvent.isComposing) return;
@@ -287,7 +295,7 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
     <div className="tf-hform__one" onKeyDown={onKeyDown}>
       <div className="tf-hform__bar" data-hidden={sent || undefined}>
         <IconButton label="Previous question" size="sm" onPress={back} isDisabled={step === 0 || sent}><ArrowLeft size={16} strokeWidth={1.75} /></IconButton>
-        <span className="tf-hform__form-name">{title}</span>
+        <span className="tf-hform__form-name">{title}{description && step === 0 && !sent ? <span className="tf-hform__lede-one">{description}</span> : null}</span>
         <span className="tf-hform__count tf-num" aria-hidden="true">{Math.min(step + 1, questions.length)} / {questions.length}</span>
       </div>
       <ProgressBar size="sm" aria-label="Progress" value={sent ? questions.length : step} maxValue={questions.length} className="tf-hform__progress" />
@@ -296,12 +304,13 @@ export function HostedForm({ title, description, questions, mode = 'one', onSubm
           <div key={q.id} className="tf-hform__step">
             {slot(q, n, true)}
             <div className="tf-hform__actions">
-              <Button variant="primary" size="lg" onPress={next} isPending={sending && n === last} iconEnd={n === last ? undefined : <Check size={16} strokeWidth={2} aria-hidden="true" />}>
-                {n === last ? 'Submit' : 'OK'}
-              </Button>
+              {(() => { const ends = n === last || after(n, answers) === 'end'; return (
+                <Button variant="primary" size="lg" onPress={next} isPending={sending && n === step} iconEnd={ends ? undefined : <Check size={16} strokeWidth={2} aria-hidden="true" />}>
+                  {ends ? 'Submit' : 'OK'}
+                </Button>); })()}
               <span className="tf-hform__hint" aria-hidden="true">press <Kbd>Enter</Kbd><CornerDownLeft size={12} strokeWidth={1.75} /></span>
             </div>
-            {n === last && alert}
+            {n === step && alert}
           </div>
         )),
         done,

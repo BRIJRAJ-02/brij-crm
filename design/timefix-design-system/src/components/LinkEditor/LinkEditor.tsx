@@ -35,6 +35,13 @@ export interface LinkEditorProps {
   /** Resolves once the draft is live. */
   readonly onPublish: (page: LinkPageDraft) => Promise<void>;
   readonly booking?: LinkPageBooking;
+  /** Unpublished work kept by the app, so leaving the editor (or opening "See it") never loses it. */
+  readonly initialDraft?: LinkPageDraft;
+  readonly onDraftChange?: (draft: LinkPageDraft | undefined) => void;
+  /** Never published: the bar offers Publish straight away. */
+  readonly neverPublished?: boolean;
+  /** The workspace's forms, for the Form block. */
+  readonly forms?: ReadonlyArray<{ readonly slug: string; readonly name: string; readonly live: boolean }>;
 }
 
 type Kind = LinkBlock['kind'];
@@ -77,18 +84,22 @@ function newBlock(kind: Kind): LinkBlock {
   if (kind === 'link') return { kind, id, title: '', href: '' };
   if (kind === 'header') return { kind, id, title: 'New section' };
   if (kind === 'booking') return { kind, id, title: 'Intro call', durationMinutes: 15, location: { kind: 'video', label: 'Google Meet' } };
-  if (kind === 'text') return { kind, id, title: '', body: 'A few words about what you do.' };
-  if (kind === 'faq') return { kind, id, items: [{ q: 'How long does a session take?', a: 'About an hour.' }] };
-  if (kind === 'testimonial') return { kind, id, quote: 'Working with them was the best decision this year.', name: 'A happy client' };
-  if (kind === 'form') return { kind, id, title: 'Tell me about your project', slug: 'contact' };
-  if (kind === 'signup') return { kind, id, title: 'Get my monthly letter', button: 'Sign up' };
+  // New blocks start empty; empty blocks don't show on the page, so nothing made up is ever published.
+  if (kind === 'text') return { kind, id, title: '', body: '' };
+  if (kind === 'faq') return { kind, id, items: [{ q: '', a: '' }] };
+  if (kind === 'testimonial') return { kind, id, quote: '', name: '' };
+  if (kind === 'form') return { kind, id, title: '', slug: '' };
+  if (kind === 'signup') return { kind, id, title: '', button: 'Sign up' };
   return { kind, id } as LinkBlock;
 }
 
 /** The link page editor: blocks on the left (drag to reorder, switch to hide, press to edit in a side panel), a live phone preview on the right, and the PublishBar once the draft differs from the live page. */
-export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProps) {
+export function LinkEditor({ live: initial, onPublish, booking, initialDraft, onDraftChange, neverPublished = false, forms = [] }: LinkEditorProps) {
   const [live, setLive] = useState(initial);
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(initialDraft ?? initial);
+  const [published, setPublished] = useState(!neverPublished);
+  const reportDraft = useRef(onDraftChange); reportDraft.current = onDraftChange;
+  useEffect(() => { reportDraft.current?.(changesBetween(draft, live) > 0 ? draft : undefined); }, [draft, live]);
   const [editing, setEditing] = useState<string>();
   const [fresh, setFresh] = useState<string>();
   const [washed, setWashed] = useState<string>();
@@ -99,7 +110,7 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
   const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   const changes = changesBetween(draft, live);
-  const barStatus: PublishBarStatus = status ?? (changes > 0 ? 'draft' : 'live');
+  const barStatus: PublishBarStatus = status ?? (changes > 0 || !published ? 'draft' : 'live');
   const setBlocks = (fn: (b: ReadonlyArray<LinkBlock>) => ReadonlyArray<LinkBlock>) => setDraft((d) => ({ ...d, blocks: fn(d.blocks) }));
   const patch = (id: string, p: Partial<LinkBlock>) => setBlocks((bs) => bs.map((b) => (b.id === id ? ({ ...b, ...p } as LinkBlock) : b)));
   // The panel keeps showing what it edited while it slides away.
@@ -110,8 +121,8 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
 
   const publish = async () => {
     setStatus('publishing');
-    await onPublish(draft);
-    setLive(draft); setStatus('published');
+    try { await onPublish(draft); } catch { setStatus(undefined); return; }
+    setLive(draft); setPublished(true); setStatus('published');
     later(1400, () => setStatus(undefined));
   };
   const add = (kind: Kind) => {
@@ -209,7 +220,7 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
       return (
         <>
           <TextField label="Title" value={block.title} placeholder="What the button says" onChange={(title) => patch(block.id, { title })} />
-          <TextField label="Address" type="url" value={block.href} placeholder="https://" onChange={(href) => patch(block.id, { href, ...(block.title ? {} : { title: titleFromUrl(href) }) })}
+          <TextField label="Address" type="url" value={block.href} placeholder="https://" onChange={(href) => patch(block.id, { href, ...(!block.title || block.title === titleFromUrl(block.href) ? { title: titleFromUrl(href) } : {}) })}
             icon={<span className="tf-linked__detected" key={net ?? 'none'}>{net ? <SocialMark network={net} size={16} /> : <Link2 {...i16} />}</span>} />
           <TextField label="Line under the title" aside="Optional" value={block.subtitle ?? ''} onChange={(subtitle) => patch(block.id, { subtitle: subtitle || undefined })} />
           <Select label="Shown as" items={[{ id: 'button', label: 'Button' }, { id: 'tile', label: 'Tile, two to a row' }, { id: 'featured', label: 'Featured card with picture' }]}
@@ -230,10 +241,12 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
         </>
       );
     }
-    if (block.kind === 'text') return <><TextField label="Title" aside="Optional" value={block.title ?? ''} onChange={(title) => patch(block.id, { title: title || undefined })} /><TextArea label="Text" rows={5} value={block.body} onChange={(body) => patch(block.id, { body })} /></>;
-    if (block.kind === 'testimonial') return <><TextArea label="Quote" rows={3} value={block.quote} onChange={(quote) => patch(block.id, { quote })} /><TextField label="Their name" value={block.name} onChange={(name) => patch(block.id, { name })} /><TextField label="Role or company" aside="Optional" value={block.role ?? ''} onChange={(role) => patch(block.id, { role: role || undefined })} /></>;
-    if (block.kind === 'form') return <><TextField label="Button" value={block.title} onChange={(title) => patch(block.id, { title })} /><TextField label="Form link" value={block.slug} icon={<span className="tf-bkf__prefix">timefix.com/f/</span>} onChange={(slug) => patch(block.id, { slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} /></>;
-    if (block.kind === 'signup') return <><TextField label="Heading" value={block.title} onChange={(title) => patch(block.id, { title })} /><TextField label="Button" value={block.button} onChange={(button) => patch(block.id, { button })} /><p className="tf-linked__note">Emails land in People, tagged with this heading.</p></>;
+    if (block.kind === 'text') return <><TextField label="Title" aside="Optional" value={block.title ?? ''} onChange={(title) => patch(block.id, { title: title || undefined })} /><TextArea label="Text" rows={5} value={block.body} placeholder="A few words about what you do" onChange={(body) => patch(block.id, { body })} /></>;
+    if (block.kind === 'testimonial') return <><TextArea label="Quote" rows={3} value={block.quote} placeholder="What they said, in their words" onChange={(quote) => patch(block.id, { quote })} /><TextField label="Their name" value={block.name} onChange={(name) => patch(block.id, { name })} /><TextField label="Role or company" aside="Optional" value={block.role ?? ''} onChange={(role) => patch(block.id, { role: role || undefined })} /></>;
+    if (block.kind === 'form') return forms.length === 0 ? <p className="tf-linked__note">Make a form first, in Forms. Then pick it here.</p> : <>
+      <Select label="Form" value={block.slug || null} placeholder="Pick a form" onChange={(slug) => { const f = forms.find((x) => x.slug === slug); if (f) patch(block.id, { slug: f.slug, title: block.title || f.name }); }} items={forms.map((f) => ({ id: f.slug, label: f.name, description: f.live ? 'Live' : 'Draft: publish it before it works' }))} />
+      <TextField label="Button" value={block.title} placeholder="What the button says" onChange={(title) => patch(block.id, { title })} /></>;
+    if (block.kind === 'signup') return <><TextField label="Heading" value={block.title} placeholder="Join my list" onChange={(title) => patch(block.id, { title })} /><TextField label="Button" value={block.button} onChange={(button) => patch(block.id, { button })} /><p className="tf-linked__note">Emails land in People, tagged with this heading.</p></>;
     if (block.kind === 'faq') {
       const items = block.items;
       const put = (next: ReadonlyArray<{ readonly q: string; readonly a: string }>) => patch(block.id, { items: next });
@@ -241,7 +254,7 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
         <>
           {items.map((x, n) => (
             <div key={n} className="tf-linked__faq">
-              <TextField label={`Question ${n + 1}`} value={x.q} onChange={(q) => put(items.map((y, k) => (k === n ? { ...y, q } : y)))} />
+              <TextField label={`Question ${n + 1}`} value={x.q} placeholder="What do people often ask?" onChange={(q) => put(items.map((y, k) => (k === n ? { ...y, q } : y)))} />
               <TextArea label="Answer" rows={2} value={x.a} onChange={(a) => put(items.map((y, k) => (k === n ? { ...y, a } : y)))} />
               {items.length > 1 && <Button size="sm" variant="ghost" icon={<Trash2 {...i16} />} onPress={() => put(items.filter((_, k) => k !== n))}>Remove question</Button>}
             </div>
@@ -276,7 +289,7 @@ export function LinkEditor({ live: initial, onPublish, booking }: LinkEditorProp
           <LinkPage profile={draft.profile} socials={draft.socials} blocks={draft.blocks} look={draft.look} accent={draft.accent} booking={booking} isPreview />
         </div>
       </div>
-      <PublishBar status={barStatus} changes={changes} onPublish={() => { void publish(); }} onDiscard={() => { setDraft(live); setEditing(undefined); setDeleted(undefined); }} />
+       <PublishBar status={barStatus} changes={Math.max(changes, published ? 0 : 1)} onPublish={() => { void publish(); }} onDiscard={() => { setDraft(live); setEditing(undefined); setDeleted(undefined); }} />
     </div>
     </div>
   );
