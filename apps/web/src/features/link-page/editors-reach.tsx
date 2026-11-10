@@ -4,7 +4,20 @@
 // Main task: fill a block's few fields and see it as a visitor will, then Add or Save; it shows on the list at once.
 // Leaves out: saving itself (the screen does, through the data layer, optimistic), and drawing the blocks, which is
 // the library's LinkPage.
-import type { BlockDraft, BlockProblems, ProfilePageChoice, ProfilePlaceChoice } from '@crm/data';
+import { describeLink } from '@crm/contracts/social';
+import {
+  isDataError,
+  type BlockDraft,
+  type BlockProblems,
+  type DataLayer,
+  type ProfilePageChoice,
+  type ProfilePlaceChoice,
+  type SocialLink,
+  type SocialLinksAccess,
+  type SocialLinksHeld,
+  type SocialLinksState,
+} from '@crm/data';
+import { useSocialLinks } from '@crm/data/react';
 import {
   Button,
   ButtonLink,
@@ -15,12 +28,19 @@ import {
   FileDrop,
   focusLater,
   Form,
+  isSocialLinksDraftChanged,
   Select,
   Skeleton,
+  SocialLinksEditor,
+  socialLinksDraftOf,
+  socialLinksOfDraft,
+  type SocialLinkDraft,
+  type SocialLinkItem,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
+import { strings as socialsStrings } from '../booking/socials-strings.ts';
 import { businessSettingsHref } from '../settings/nav.ts';
 import {
   heldPicture,
@@ -34,7 +54,7 @@ import { DraftPage } from './draft-look.tsx';
 import { EditorModal, useFocusesFirstField } from './editors.tsx';
 import { PICTURE_PICK_MAX_BYTES } from './photo-prep.ts';
 import { reachStrings as words } from './reach-strings.ts';
-import type { BlockEditorProps } from './registry.tsx';
+import type { BlockEditorProps, SocialsKeeper } from './registry.tsx';
 import { strings } from './strings.ts';
 import { useLinkPagePlace } from './place.tsx';
 
@@ -42,20 +62,190 @@ import { useLinkPagePlace } from './place.tsx';
 const errorOf = (problems: BlockProblems, key: keyof BlockProblems) =>
   problems[key] === undefined ? {} : { error: problems[key] };
 
+/** A person's links as a page draws them: each with what it reads as ("@ada", "ada.dev"). */
+export function drawnSocials(links: readonly SocialLink[]): readonly SocialLinkItem[] {
+  return links.map((link) => ({ network: link.network, href: link.href, label: describeLink(link.href).label }));
+}
+
+/** The draft's links that check now, in order, for "How it looks" while they are typed. */
+function draftLinks(rows: readonly SocialLinkDraft[]): readonly SocialLink[] {
+  return rows.flatMap((row) => {
+    const checked = socialLinksOfDraft([row]);
+    return checked.ok ? checked.links : [];
+  });
+}
+
+/** What stands in for the person's own links store until it has loaded: loading, read never. */
+const LOADING_SOCIALS: SocialLinksState = { status: 'loading' };
+const NO_SOCIALS: SocialLinksHeld = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => LOADING_SOCIALS,
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+
 /**
- * A socials row (AC-6104): nothing of its own to type, since the icons are the person's social links. The Modal says
- * where those are changed, and draws the row as it will show; with none yet it says so.
+ * The person's own links store (`data.profile.loadSocials()`), loaded on first use: undefined until then, or when
+ * the page isn't theirs; `failed` when its module didn't load, with a way to ask again.
  */
-export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSubmit, onClose }: BlockEditorProps) {
+function useOwnSocials(data: DataLayer, isOwn: boolean) {
+  const [access, setAccess] = useState<SocialLinksAccess | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    if (!isOwn) return undefined;
+    let isCurrent = true;
+    data.profile.loadSocials().then(
+      (loaded) => {
+        if (isCurrent) setAccess(loaded);
+      },
+      () => {
+        if (isCurrent) setFailed(true);
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, isOwn, tries]);
+  return {
+    access,
+    failed,
+    retry: () => {
+      setFailed(false);
+      setTries((count) => count + 1);
+    },
+  };
+}
+
+/**
+ * A socials row (AC-6104), with the links themselves (10 Nov 2026, the owner: added where the block is added, as on
+ * Linktree, so inside a partner's frame and on Team pages there is somewhere to add them). Whose set it is decides who
+ * may change it: your own (`self`, through your own links store, read before the fields show so a draft never starts
+ * from an older set), a person with no login whose links a team page manager keeps (`team`), or someone who keeps
+ * their own (`kept`), shown read only.
+ */
+export function SocialsEditor(props: BlockEditorProps) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const keeper: SocialsKeeper = props.socialsKeeper ?? { kind: 'kept' };
+  const own = useOwnSocials(data, keeper.kind === 'self');
+  const held = own.access?.of(props.slug) ?? NO_SOCIALS;
+  const ownState = useSocialLinks(held);
+  const editing = props.item?.kind === 'socials' ? props.item : undefined;
+  if (keeper.kind === 'self' && ownState.status !== 'ready') {
+    const failed = own.failed || ownState.status === 'error';
+    return (
+      <EditorModal
+        title={editing === undefined ? words.newSocials : words.editSocials}
+        formId=""
+        submitLabel={editing === undefined ? strings.add : strings.save}
+        onClose={props.onClose}
+        canSubmit={false}
+        {...(props.chrome === undefined ? {} : { chrome: props.chrome })}
+      >
+        {failed ? (
+          <Callout
+            tone="danger"
+            title={socialsStrings.failed}
+            actions={<Button onPress={own.failed ? own.retry : held.retry}>{socialsStrings.tryAgain}</Button>}
+          >
+            {ownState.status === 'error' ? ownState.message : undefined}
+          </Callout>
+        ) : (
+          <SocialLinksEditor rows={[]} onChange={() => undefined} tone="bare" isLoading />
+        )}
+      </EditorModal>
+    );
+  }
+  // Your own set as your store holds it now; anyone else's as their page was read (or last saved here).
+  const stored = keeper.kind === 'self' && ownState.status === 'ready' ? ownState.links : props.socialLinks;
+  const isReadOnly = keeper.kind === 'kept' || (ownState.status === 'ready' && !ownState.canChange);
+  return (
+    <SocialsFields
+      {...props}
+      keeper={keeper}
+      stored={stored}
+      isReadOnly={isReadOnly}
+      {...(own.access === undefined ? {} : { own: own.access })}
+    />
+  );
+}
+
+/** The links and the block's own fields, once the set they start from is known. */
+function SocialsFields({
+  item,
+  items,
+  linkPage,
+  slug,
+  chrome,
+  onSubmit,
+  onClose,
+  keeper,
+  stored,
+  isReadOnly,
+  own,
+}: BlockEditorProps & {
+  readonly keeper: SocialsKeeper;
+  readonly stored: readonly SocialLink[];
+  readonly isReadOnly: boolean;
+  readonly own?: SocialLinksAccess;
+}) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'socials' ? item : undefined;
   const extras = useBlockExtras(editing, true);
+  const [rows, setRows] = useState<readonly SocialLinkDraft[]>(() => socialLinksDraftOf(stored));
+  const [errorFocus, setErrorFocus] = useState(0);
+  // One save per Modal: a second press, or ⌘↵, while it closes sends nothing more.
+  const isSent = useRef(false);
+  const shown = draftLinks(rows);
+  /** Their set saved through Team pages: shown on the phone at once, put back with Try again if refused. */
+  const saveFor = (
+    member: string,
+    onShow: (links: readonly SocialLinkItem[]) => void,
+    links: readonly SocialLink[],
+  ) => {
+    onShow(drawnSocials(links));
+    data.teamPages.setSocials(slug, member, links).then(
+      (saved) => {
+        onShow(drawnSocials(saved));
+      },
+      (error: unknown) => {
+        onShow(drawnSocials(stored));
+        toasts.toast({
+          tone: 'danger',
+          message: isDataError(error) ? `${words.socialsNotSaved} ${error.message}` : words.socialsNotSaved,
+          action: {
+            label: socialsStrings.tryAgain,
+            onAction: () => {
+              saveFor(member, onShow, links);
+            },
+          },
+        });
+      },
+    );
+  };
   const submit = () => {
-    const draft: BlockDraft = { kind: 'socials', ...extras.draft };
-    const checked = linkPage.check(draft, items, editing?.id);
+    if (isSent.current) return;
+    const checked = socialLinksOfDraft(rows);
     if (!checked.ok) {
-      extras.take(checked.problems);
+      setRows(checked.rows);
+      setErrorFocus((count) => count + 1);
       return;
+    }
+    // A row with no links draws nothing on the page (⌘↵ submits a form with no submit shown).
+    if (checked.links.length === 0) return;
+    const draft: BlockDraft = { kind: 'socials', ...extras.draft };
+    const block = linkPage.check(draft, items, editing?.id);
+    if (!block.ok) {
+      extras.take(block.problems);
+      return;
+    }
+    isSent.current = true;
+    if (!isReadOnly && isSocialLinksDraftChanged(rows, stored)) {
+      // Your own: shown at once on the card and the phone; a refusal puts the set back and says so with Try again.
+      if (keeper.kind === 'self' && own !== undefined) void own.change(slug, checked.links);
+      else if (keeper.kind === 'team') saveFor(keeper.member, keeper.onShow, checked.links);
     }
     onSubmit(draft);
   };
@@ -65,22 +255,31 @@ export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSu
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
-      // A row with no links draws nothing on the page, so there is nothing to add until there are some.
-      canSubmit={socialLinks.length > 0}
+      // A row with no links draws nothing on the page, so there is nothing to add until there is one.
+      canSubmit={shown.length > 0}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        socialLinks.length === 0 ? undefined : (
+        shown.length === 0 ? undefined : (
           <DraftPage
             layout="blocks"
             caption={strings.howItLooks}
-            blocks={[{ kind: 'socials', id: editing?.id ?? 'draft', links: socialLinks }]}
+            blocks={[{ kind: 'socials', id: editing?.id ?? 'draft', links: drawnSocials(shown) }]}
           />
         )
       }
     >
-      <Form id={formId} onSubmit={submit} label={words.newSocials}>
-        {/* With links, the preview above says it all; only an empty row needs words. */}
-        {socialLinks.length === 0 && <Callout tone="info">{words.socialsNone}</Callout>}
+      <Form id={formId} onSubmit={submit} label={words.newSocials} focusesFirstField={focusFirst}>
+        {/* Read only, the one line says whose they are; with none, it is all there is to say. */}
+        {isReadOnly && <Callout tone="info">{words.socialsKept}</Callout>}
+        {(!isReadOnly || rows.length > 0) && (
+          <SocialLinksEditor
+            rows={rows}
+            onChange={setRows}
+            tone="bare"
+            errorFocus={errorFocus}
+            {...(isReadOnly ? { isReadOnly: true } : {})}
+          />
+        )}
         {extras.fields}
       </Form>
     </EditorModal>

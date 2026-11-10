@@ -3,7 +3,8 @@
 // allowed one to the session's workspace, and asks on every call that its connection is still live with the module.
 //
 // Link pages is the one module today: the person's own page and its editor, and Team pages for someone who may
-// manage them. Left out on purpose:
+// manage them. `teamPages.setSocials` (10 Nov 2026) is reached on purpose: the app's admin keeps the social links of
+// its own people with no login and of the page only people, and core holds it to that connection's people. Left out on purpose:
 // - the choices of other modules' things to put on a page (booking pages, forms, places), which belong to modules the
 //   connection doesn't share, so the frame offers no such block;
 // - the workspace's brand kit's writes (Settings › Brand): an embedded admin keeps Team pages management and nothing

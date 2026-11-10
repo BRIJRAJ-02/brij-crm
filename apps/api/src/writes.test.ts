@@ -870,6 +870,27 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
     ];
   },
+  // Added first, then their social links kept by the manager (10 Nov 2026): the person's own, so a `members` row.
+  'teamPages.setSocials': async (m, mutationId) => {
+    const added = await m.client.teamPages.addPerson({
+      workspace: m.slug,
+      name: 'Sol Page',
+      handle: freeHandle(),
+      mutationId: newId(),
+    });
+    const saved = await m.client.teamPages.setSocials({
+      workspace: m.slug,
+      member: added.memberId,
+      socials: [{ network: 'linkedin', href: 'https://www.linkedin.com/in/solpage' }],
+      mutationId,
+    });
+    expect(saved.socials).toHaveLength(1);
+    return [
+      { kind: 'members' },
+      { kind: 'access' },
+      { kind: 'members', item_ids: [added.memberId], mutation_id: mutationId },
+    ];
+  },
   // A page only person added first, then invited to manage their page (9 Nov 2026): an invitation nobody's screen
   // follows live, so no row of its own.
   'teamPages.invitePerson': async (m, mutationId) => {
@@ -3645,6 +3666,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'teamPages.removePerson': 2,
   // A page only person added first, then named (9 Nov 2026).
   'teamPages.namePerson': 2,
+  // A page only person added first, then their social links set (10 Nov 2026).
+  'teamPages.setSocials': 2,
   // A page only person added first, then invited; invited, then cancelled; or invited, then taken over.
   'teamPages.invitePerson': 2,
   'teamPages.cancelInvite': 3,

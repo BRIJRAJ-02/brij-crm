@@ -126,7 +126,10 @@ export const profileRouter = member.profile.router({
   // look as their page shows them. What only the session knows (the Google picture, Sync) is the caller's own alone.
   get: member.profile.get.handler(async ({ context, input }) => {
     const page = await pageOf(context, input.member);
-    return page === context.scope ? getMyProfile(page, await extrasOf(context)) : getMyProfile(page);
+    // Someone else's page from inside a connected app's frame says what that frame may keep (their social links).
+    return page === context.scope
+      ? getMyProfile(page, await extrasOf(context))
+      : getMyProfile(page, { fromConnection: context.embed?.connectionId });
   }),
   update: member.profile.update.handler(async ({ context, input }) => {
     const extras = await extrasOf(context);
@@ -157,7 +160,9 @@ export const profileRouter = member.profile.router({
       input.jobTitle !== undefined ||
       input.showJobTitle !== undefined ||
       input.site !== undefined ||
-      input.footLine !== undefined;
+      input.footLine !== undefined ||
+      // Their social links are drawn on the page too, live on save like the name.
+      input.socials !== undefined;
     if (identityChanged && saved.handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(saved.handle));
     return saved;
   }),

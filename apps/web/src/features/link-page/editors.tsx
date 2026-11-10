@@ -61,7 +61,7 @@ export function useFocusesFirstField(): boolean {
 
 /**
  * The first field of the chosen kind: the first control in its form, outside the picker. A picture's kinds open on
- * their drop zone's browse button, and Social icons, which has nothing to type, on its Schedule fold.
+ * their drop zone's browse button, and Social icons on its first link, or Add social link while it has none.
  */
 function firstFieldOutside(picker: HTMLElement): HTMLElement | undefined {
   const dialog = picker.closest('[role="dialog"]');

@@ -381,6 +381,92 @@ describe('/api/partner/v1', () => {
     await expect(frame.embed.session()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
   });
 
+  it('keeps the social links of its own people from the frame, never another app’s (10 Nov 2026)', async () => {
+    const owner = await memberWithWorkspace(app);
+    /** A partner connected to the owner's workspace, with one person of its own; its admin launched into the frame. */
+    const connect = async (admin: boolean) => {
+      const made = await partner();
+      const { request: asked, verifier } = request(made.partner.clientId);
+      const approved = await owner.client.partnerConnect.approve({
+        workspace: owner.slug,
+        request: asked,
+        modules: ['link_pages'],
+        mutationId: newId(),
+      });
+      const swapped = (await (
+        await token(
+          {
+            grant_type: 'authorization_code',
+            code: new URL(approved.redirectTo).searchParams.get('code') ?? '',
+            redirect_uri: REDIRECT,
+            code_verifier: verifier,
+          },
+          { id: made.partner.clientId, secret: made.secret },
+        )
+      ).json()) as { access_token: string; connection_id: string };
+      const bearer = { authorization: `Bearer ${swapped.access_token}`, 'content-type': 'application/json' };
+      const base = `/api/partner/v1/connections/${swapped.connection_id}`;
+      const people = admin ? (['hub-admin', 'hub-member'] as const) : (['hub-member'] as const);
+      const ids: Record<string, string> = {};
+      for (const externalId of people) {
+        const put = await app.request(`${base}/members/${externalId}`, {
+          method: 'PUT',
+          headers: bearer,
+          body: JSON.stringify({
+            email: `${externalId}-${newId().slice(-12)}@example.com`,
+            name: externalId,
+            role: externalId === 'hub-admin' ? 'admin' : 'member',
+          }),
+        });
+        const body = (await put.json()) as { memberId: string };
+        if (put.status !== 201) throw new Error(JSON.stringify(body));
+        ids[externalId] = body.memberId;
+      }
+      if (!admin) return { ids };
+      const launched = await app.request(`${base}/launch`, {
+        method: 'POST',
+        headers: bearer,
+        body: JSON.stringify({ externalId: 'hub-admin', screen: 'link_pages.team' }),
+      });
+      const { url } = (await launched.json()) as { url: string };
+      const code = new URLSearchParams(new URL(url).hash.slice(1)).get('code') ?? '';
+      let cookie = '';
+      const frame = rpcClient(app, undefined, () => ({ 'x-crm-embed': '1', ...(cookie === '' ? {} : { cookie }) }), {
+        onResponse: (response) => {
+          const set = response.headers.getSetCookie().find((line) => line.startsWith('tf_embed='));
+          if (set !== undefined) cookie = set.split(';')[0] ?? '';
+        },
+      });
+      await frame.embed.start({ code });
+      return { ids, frame };
+    };
+    const hub = await connect(true);
+    const other = await connect(false);
+    const frame = hub.frame;
+    if (frame === undefined) throw new Error('No frame.');
+    const ours = hub.ids['hub-member'] ?? '';
+    const theirs = other.ids['hub-member'] ?? '';
+    const links = [{ network: 'linkedin' as const, href: 'https://www.linkedin.com/in/hubmember' }];
+    // Its own person: editable from the frame, and saved.
+    expect(await frame.profile.get({ workspace: owner.slug, member: ours })).toMatchObject({ socialsByManager: true });
+    const saved = await frame.teamPages.setSocials({
+      workspace: owner.slug,
+      member: ours,
+      socials: links,
+      mutationId: newId(),
+    });
+    expect(saved.socials).toHaveLength(1);
+    // Another app's person on the same workspace: read only from this frame, and refused as absent.
+    expect(await frame.profile.get({ workspace: owner.slug, member: theirs })).not.toHaveProperty('socialsByManager');
+    await expect(
+      frame.teamPages.setSocials({ workspace: owner.slug, member: theirs, socials: links, mutationId: newId() }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // In Timefix itself, the workspace's own manager keeps either.
+    await expect(
+      owner.client.teamPages.setSocials({ workspace: owner.slug, member: theirs, socials: links, mutationId: newId() }),
+    ).resolves.toMatchObject({ socials: [{ network: 'linkedin' }] });
+  });
+
   it('answers a partner’s frame origins for the edge, and none for an unknown client id', async () => {
     const made = await partner();
     const known = await app.request(`/api/public/partners/${made.partner.clientId}/frame`);

@@ -75,7 +75,9 @@ import {
   type AddableKind,
   type AfterSave,
   type ChosenFacts,
+  type SocialsKeeper,
 } from './registry.tsx';
+import { drawnSocials } from './editors-reach.tsx';
 import { reachStrings } from './reach-strings.ts';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
@@ -518,13 +520,25 @@ function Blocks({
   // Their social links as the card below holds them now, so the phone follows an edit before the profile is read
   // again; undefined until the card has loaded its store, when the profile's own set stands.
   const [socialPreview, setSocialPreview] = useState<readonly PublicSocialLink[] | undefined>(undefined);
-  // The card's set once it has one, else what the profile was read with; either way labelled as a visitor sees it.
+  // On someone else's page, their set as the Social icons editor last saved it, for the profile read it was saved over:
+  // a new read (or another person's page) stands again on its own.
+  const [savedFor, setSavedFor] = useState<
+    { readonly over: MyProfile['socials']; readonly links: readonly PublicSocialLink[] } | undefined
+  >(undefined);
+  const saved = savedFor !== undefined && savedFor.over === profile.socials ? savedFor.links : undefined;
+  // The card's (or the editor's) set once there is one, else what the profile was read with, labelled as a visitor
+  // sees it.
   const shownSocials = useMemo(
-    () =>
-      socialPreview ??
-      (profile.socials ?? []).map((link) => ({ ...link, label: link.href.replace(/^https?:\/\//, '') })),
-    [socialPreview, profile.socials],
+    () => (isTeam ? saved : socialPreview) ?? drawnSocials(profile.socials ?? []),
+    [isTeam, saved, socialPreview, profile.socials],
   );
+  // Who keeps those links, for the Social icons editor (10 Nov 2026): you, your own; someone else's page, the manager
+  // when that person has no login of their own (a page only person, or a connected app's), else the person, read only.
+  const socialsKeeper: SocialsKeeper = !isTeam
+    ? { kind: 'self' }
+    : member !== undefined && profile.socialsByManager === true
+      ? { kind: 'team', member, onShow: (links) => setSavedFor({ over: profile.socials, links }) }
+      : { kind: 'kept' };
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
@@ -993,7 +1007,8 @@ function Blocks({
   // A button opens the modal on the kind it names, unless that kind is full: then it opens on the first kind that
   // isn't, so the picker never opens on a choice that can't be taken. Every kind full disables the button.
   // Email signup makes a form block, so what it needs room for is a form (`blockKindOf`), not a kind of its own.
-  // Why a kind can't be added now: its limit's sentence, or, for Social icons, that there are no links to show yet.
+  // Why a kind can't be added now: its limit's sentence. Social icons is never off for want of links: its editor holds
+  // the links themselves (10 Nov 2026), so they are added where the block is, here, on Team pages and in a frame.
   // Menu and Reserve (spec 0065, AC-6528) are offered only where they can be placed: while Menu or Table seating is
   // installed in this workspace, read once as the screen opens. Elsewhere the Add modal never mentions them.
   const [placeKinds, setPlaceKinds] = useState<ReadonlySet<AddableKind>>(() => new Set());
@@ -1026,7 +1041,10 @@ function Blocks({
   );
   const offReason = (kind: AddableKind) =>
     linkPage.limit(items, blockKindOf(kind)) ??
-    (kind === 'socials' && shownSocials.length === 0 ? reachStrings.socialsNone : undefined);
+    // Someone who keeps their own links and has none: theirs to add, in their own Profile.
+    (kind === 'socials' && socialsKeeper.kind === 'kept' && shownSocials.length === 0
+      ? reachStrings.socialsKept
+      : undefined);
   const roomFor = (kind: AddableKind) => offReason(kind) === undefined;
   const openAdd = (kind: AddableKind) => {
     const open = roomFor(kind) ? kind : addable.find(roomFor);
@@ -1430,6 +1448,7 @@ function Blocks({
               socialNetworks={socialNetworks}
               ownerName={identity.name}
               socialLinks={shownSocials}
+              socialsKeeper={socialsKeeper}
               onSubmit={submit}
               onClose={() => setEditing(undefined)}
             />

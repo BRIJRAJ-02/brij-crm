@@ -280,6 +280,7 @@ export const ACCESS_TABLE = {
   cancelLoginInvite: { permission: 'link_pages.manage_team' },
   readMyLogin: { anyMember: true },
   namePageOnlyPerson: { permission: 'link_pages.manage_team' },
+  setManagedSocials: { permission: 'link_pages.manage_team' },
   checkTeamHandle: { permission: 'link_pages.manage_team' },
   suggestTeamHandle: { permission: 'link_pages.manage_team' },
   readLinkPageEditedBy: { anyMember: true },

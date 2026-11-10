@@ -84,6 +84,8 @@ export interface BlockEditorProps {
   readonly ownerName: string;
   /** The person's social links as the page draws them, for a socials row's "How it looks" (spec 0061). */
   readonly socialLinks: readonly SocialLinkItem[];
+  /** Who keeps those links, so a socials row's editor saves them the right way, or shows them read only. */
+  readonly socialsKeeper?: SocialsKeeper;
   /**
    * Checked and ready: the screen saves it (shown at once) and closes the Modal. A booking page comes with its
    * facts, so its row shows them before the server answers.
@@ -95,6 +97,20 @@ export interface BlockEditorProps {
   readonly onSubmit: (draft: BlockDraft, facts?: ChosenFacts, after?: AfterSave) => void;
   readonly onClose: () => void;
 }
+
+/**
+ * Who keeps a page's social links (10 Nov 2026): the page's own person (`self`, through their own links store); a
+ * team page manager, for someone with no login (`team`, `teamPages.setSocials`), whose set the phone shows through
+ * `onShow`; or the person themselves, elsewhere (`kept`): shown read only.
+ */
+export type SocialsKeeper =
+  | { readonly kind: 'self' }
+  | {
+      readonly kind: 'team';
+      readonly member: string;
+      readonly onShow: (links: readonly SocialLinkItem[]) => void;
+    }
+  | { readonly kind: 'kept' };
 
 /** What follows a save once it lands. */
 export interface AfterSave {

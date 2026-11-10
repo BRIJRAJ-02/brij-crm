@@ -254,6 +254,8 @@ export {
   type PageOnlyUserEnder,
   type PageOnlyUserMaker,
 } from './profile/page-only.ts';
+// The social links of someone with no login of their own (10 Nov 2026), kept by a team page manager.
+export { setManagedSocials, type ManagerPlace } from './profile/managed-socials.ts';
 // A page only person's page handed over (9 Nov 2026): Invite to manage their page, its cancel, and taking it over.
 export {
   cancelPageInvite,

@@ -37,6 +37,7 @@ import { touched } from '../engine/definitions.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { identityOf, saveIdentity, type ProfileIdentity } from '../profile/identity.ts';
+import { managerKeepsSocials } from '../profile/managed-socials.ts';
 import { touchLinkPage } from '../profile/page-touch.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
@@ -48,6 +49,11 @@ export interface ProfileExtras {
   readonly image?: string | undefined;
   /** Whether the account has Google linked, for Sync Google photo; undefined where Google sign in is off. */
   readonly google?: 'linked' | 'unlinked' | undefined;
+  /**
+   * A team page manager's read from inside a connected app's frame (spec 0070): the frame's connection, so
+   * `socialsByManager` says what that frame may keep. Absent in Timefix itself.
+   */
+  readonly fromConnection?: string | undefined;
 }
 
 /** The caller's member id, or a refusal: only a member has a profile. */
@@ -141,10 +147,16 @@ async function readProfile(
           .limit(1)
       )[0]
     : undefined;
+  // Whether the manager keeps their social links here (10 Nov 2026): someone with no login of their own.
+  const socialsByManager =
+    forTeam && managed !== undefined
+      ? await managerKeepsSocials(tx, scope.workspaceId, memberId, { fromConnection: extras.fromConnection })
+      : false;
   return {
     memberId,
     name: row.name,
     ...(managed === undefined ? {} : { managedBy: managed.partnerId === null ? 'team' : 'partner' }),
+    ...(socialsByManager ? { socialsByManager: true as const } : {}),
     email: row.email,
     workspaceTimeZone: row.workspaceTimeZone,
     workspaceName: row.workspaceName,

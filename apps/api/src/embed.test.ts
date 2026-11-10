@@ -10,5 +10,7 @@ describe('the frame’s procedures', () => {
     expect(embedReachOf('teamPages.cancelLoginInvite')).toBeUndefined();
     expect(embedReachOf('teamPages.myLogin')).toBe('link_pages');
     expect(embedReachOf('teamPages.list')).toBe('link_pages');
+    // A managed person's social links (10 Nov 2026): the app's admin keeps its own people's from inside the frame.
+    expect(embedReachOf('teamPages.setSocials')).toBe('link_pages');
   });
 });

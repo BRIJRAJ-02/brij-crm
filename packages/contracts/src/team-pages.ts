@@ -5,7 +5,7 @@
 // list, the claim of a handle for someone, and the one line a member reads about who last changed their page.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { JobTitle, PublicHandle } from './profile.ts';
+import { JobTitle, PublicHandle, SocialLink, SocialLinks } from './profile.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -146,6 +146,22 @@ export const NamePageOnlyPersonInput = WorkspaceScoped.extend({
 export type NamePageOnlyPersonInput = z.infer<typeof NamePageOnlyPersonInput>;
 
 /**
+ * The social links of someone with no login of their own, changed from their page's editor (10 Nov 2026, the owner:
+ * socials are added where the Social icons block is added): a page only person, or a connected app's person who has
+ * not set up a login (inside that app's frame, only its own people). The whole set, in order, replacing theirs; an
+ * empty list removes them all. Anyone with a login changes their own in Profile, so they are `NOT_FOUND` here, and
+ * one made an owner or admin is `FORBIDDEN`.
+ */
+export const SetManagedSocialsInput = WorkspaceScoped.extend({ member: Uuid, socials: SocialLinks, mutationId: Uuid });
+/** A managed person's whole set of social links. */
+export type SetManagedSocialsInput = z.infer<typeof SetManagedSocialsInput>;
+
+/** Their social links as saved, in order. */
+export const ManagedSocialsSaved = z.object({ socials: z.array(SocialLink) });
+/** Their social links as saved. */
+export type ManagedSocialsSaved = z.infer<typeof ManagedSocialsSaved>;
+
+/**
  * A page only person's name and title as saved, and whether the title shows under the name on their page: a title
  * given here is meant to show, so it does; one cleared shows nothing.
  */
@@ -258,7 +274,8 @@ export type LinkPageEditedBy = z.infer<typeof LinkPageEditedBy>;
 
 /**
  * The team pages namespace. Everything but `editedBy` and `myLogin` (any member's own) needs
- * `link_pages.manage_team`: the list, a claim, and adding, removing and naming a page only person; `inviteLogin` and
+ * `link_pages.manage_team`: the list, a claim, adding, removing and naming a page only person, and a managed
+ * person's social links; `inviteLogin` and
  * `cancelLoginInvite` take it with `members.invite`, from Timefix only (never an app's frame).
  */
 export const teamPagesContract = {
@@ -267,6 +284,7 @@ export const teamPagesContract = {
   addPerson: oc.input(AddPageOnlyPersonInput).output(TeamLinkPage),
   removePerson: oc.input(RemovePageOnlyPersonInput).output(PageOnlyRemoved),
   namePerson: oc.input(NamePageOnlyPersonInput).output(PageOnlyNamed),
+  setSocials: oc.input(SetManagedSocialsInput).output(ManagedSocialsSaved),
   invitePerson: oc.input(InviteToManagePageInput).output(PageInviteSent),
   cancelInvite: oc.input(CancelPageInviteInput).output(PageInviteCancelled),
   inviteLogin: oc.input(InviteLoginInput).output(PageInviteSent),

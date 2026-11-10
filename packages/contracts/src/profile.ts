@@ -241,6 +241,13 @@ export const MyProfile = z.object({
    * `partner` is a partner's person, kept by the partner's app. Absent for anyone with a login, who changes their own.
    */
   managedBy: z.enum(['team', 'partner']).optional(),
+  /**
+   * Read by a team page manager for someone else's page only (10 Nov 2026): true when the person has no login of their
+   * own and the manager may change their social links from the editor (`teamPages.setSocials`): a page only person,
+   * or a connected app's person with no login (inside an app's frame, only that app's own). Absent otherwise: the
+   * person changes their own in Profile.
+   */
+  socialsByManager: z.literal(true).optional(),
   /** Whether their job title shows under their name on their link page and booking pages (3 Nov 2026); absent with no handle. */
   showJobTitle: z.boolean().optional(),
   /** Their link page's site address, which the workspace's logo and name link to (3 Nov 2026); absent when none. */

@@ -12,6 +12,7 @@ import {
   readLinkPageEditedBy,
   readMyLogin,
   removePageOnlyPerson,
+  setManagedSocials,
   suggestTeamHandle,
   type PageInviteToSend,
 } from '@crm/core';
@@ -111,6 +112,18 @@ export const teamPagesRouter = member.teamPages.router({
     );
     if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
     return named;
+  }),
+  // The social links of someone with no login of their own (10 Nov 2026), from their page's editor. Inside a connected
+  // app's frame only that app's people and the workspace's page only people (core checks the connection). Their page
+  // draws the links, so the edge's copies of it are deleted once the change has committed.
+  setSocials: member.teamPages.setSocials.handler(async ({ context, input }) => {
+    const { handle, ...saved } = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setManagedSocials(context.scope, { member: input.member, socials: input.socials }, hooks, sourceOf(context), {
+        fromConnection: context.embed?.connectionId,
+      }),
+    );
+    if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
+    return saved;
   }),
   // Invite to manage their page (9 Nov 2026): the hand over's invitation, counted against the same send limits as any
   // invitation (AC-808), and mailed once it committed.

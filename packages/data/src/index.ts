@@ -6599,6 +6599,20 @@ export function createDataLayer({
         members.delete(workspace);
         return named;
       },
+      /**
+       * The social links of someone with no login of their own (10 Nov 2026), from their page's editor: the whole set,
+       * replacing theirs. The screen shows the set at once and puts it back if this refuses; answers the set as saved.
+       */
+      setSocials: async (
+        workspace: string,
+        member: string,
+        socials: readonly SocialLink[],
+      ): Promise<readonly SocialLink[]> => {
+        const saved = await call((options) =>
+          api.teamPages.setSocials({ workspace, member, socials: [...socials], mutationId: mintId() }, options),
+        );
+        return saved.socials;
+      },
       /** Whether a handle can be claimed now, for Add a page as it is typed. */
       checkHandle: (workspace: string, handle: string, signal?: AbortSignal): Promise<TeamHandleCheck> =>
         call((options) => api.teamPages.checkHandle({ workspace, handle }, options), signal),
