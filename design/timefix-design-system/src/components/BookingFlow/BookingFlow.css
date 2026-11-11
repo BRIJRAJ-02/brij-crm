@@ -73,7 +73,7 @@
 .tf-booking__day[data-today]::after { content: ''; position: absolute; bottom: 18%; left: 50%; width: var(--space-4); height: var(--space-4); border-radius: var(--radius-full); background: currentColor; transform: translateX(-50%); }
 /* A nearly full day: how many times are left, on the tile's corner. */
 .tf-booking__left { position: absolute; top: calc(var(--space-4) * -1); right: calc(var(--space-4) * -1); display: grid; place-items: center; min-width: var(--space-16); height: var(--space-16); padding: 0 var(--space-4); border: var(--border-width-hairline) solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font: 600 10px/1 var(--font-sans); font-variant-numeric: tabular-nums; box-shadow: var(--shadow-xs); pointer-events: none; }
-.tf-booking__day[data-selected]:not([data-outside-month]) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.tf-booking__day[data-selected]:not([data-outside-month]):not([data-unavailable]):not([data-disabled]) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .tf-booking__day[data-focus-visible] { outline: var(--border-width-focus) solid var(--focus-ring); outline-offset: 2px; }
 
 .tf-booking__slots { display: flex; flex-direction: column; gap: var(--space-12); min-width: 0; }
